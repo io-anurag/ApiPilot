@@ -35,12 +35,12 @@ Web application monorepo (per [plan.md](./plan.md) Project Structure):
 
 **Purpose**: Project initialization and basic monorepo structure
 
-- [ ] T001 Create root `package.json` with npm workspaces (`backend`, `frontend`, `packages/shared-domain`) and `tsconfig.base.json` at repository root
-- [ ] T002 [P] Initialize backend workspace: `backend/package.json`, `backend/tsconfig.json`, add Express + TypeScript + `@types/express` dependencies
-- [ ] T003 [P] Initialize frontend workspace: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`, add React 18 + Vite 5 + TypeScript dependencies
-- [ ] T004 [P] Initialize shared-domain workspace: `packages/shared-domain/package.json`, `packages/shared-domain/tsconfig.json`
-- [ ] T005 [P] Configure ESLint + Prettier at repository root (`.eslintrc.cjs`, `.prettierrc`) covering `backend/`, `frontend/`, `packages/shared-domain/`
-- [ ] T006 Configure a root Vitest workspace config (`vitest.workspace.ts`) covering `backend/`, `frontend/` (jsdom environment), and `packages/shared-domain/`, and add Supertest + React Testing Library dev dependencies
+- [X] T001 Create root `package.json` with npm workspaces (`backend`, `frontend`, `packages/shared-domain`) and `tsconfig.base.json` at repository root
+- [X] T002 [P] Initialize backend workspace: `backend/package.json`, `backend/tsconfig.json`, add Express + TypeScript + `@types/express` dependencies
+- [X] T003 [P] Initialize frontend workspace: `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`, add React 18 + Vite 5 + TypeScript dependencies
+- [X] T004 [P] Initialize shared-domain workspace: `packages/shared-domain/package.json`, `packages/shared-domain/tsconfig.json`
+- [X] T005 [P] Configure ESLint + Prettier at repository root (`.eslintrc.cjs`, `.prettierrc`) covering `backend/`, `frontend/`, `packages/shared-domain/`
+- [X] T006 Configure a root Vitest workspace config (`vitest.workspace.ts`) covering `backend/`, `frontend/` (jsdom environment), and `packages/shared-domain/`, and add Supertest + React Testing Library dev dependencies
 
 **Checkpoint**: Monorepo installs cleanly with `npm install` (SC-001 prerequisite)
 
@@ -52,13 +52,13 @@ Web application monorepo (per [plan.md](./plan.md) Project Structure):
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Create `HealthStatus` shared type (`status`, `timestamp`) in `packages/shared-domain/src/index.ts` per [data-model.md](./data-model.md)
-- [ ] T008 Add `packages/shared-domain` as a workspace dependency of `backend` and `frontend` (package.json `dependencies` + TS path/reference wiring) so the type is importable from both
-- [ ] T009 [P] Create Express app skeleton: `backend/src/app.ts` (app + middleware wiring) and `backend/src/server.ts` (HTTP listener entry point, reads `BACKEND_PORT`)
-- [ ] T010 [P] Create React app skeleton: `frontend/src/main.tsx` and a root `frontend/src/App.tsx` component
-- [ ] T011 Add environment configuration: `.env.example` with `BACKEND_PORT` and `FRONTEND_DEV_PORT`, and a small config loader used by `backend/src/server.ts`
-- [ ] T012 Add centralized error-handling middleware in `backend/src/app.ts` that catches unhandled errors and returns a safe JSON `5xx` response instead of a stack trace (constitution XIX, Fail Safely)
-- [ ] T013 Add root `package.json` scripts: `dev` (runs backend + frontend dev servers in parallel via `concurrently`) and `test` (runs Vitest across all workspaces)
+- [X] T007 Create `HealthStatus` shared type (`status`, `timestamp`) in `packages/shared-domain/src/index.ts` per [data-model.md](./data-model.md)
+- [X] T008 Add `packages/shared-domain` as a workspace dependency of `backend` and `frontend` (package.json `dependencies` + TS path/reference wiring) so the type is importable from both
+- [X] T009 [P] Create Express app skeleton: `backend/src/app.ts` (app + middleware wiring) and `backend/src/server.ts` (HTTP listener entry point, reads `BACKEND_PORT`)
+- [X] T010 [P] Create React app skeleton: `frontend/src/main.tsx` and a root `frontend/src/App.tsx` component
+- [X] T011 Add environment configuration: `.env.example` with `BACKEND_PORT` and `FRONTEND_DEV_PORT`, and a small config loader used by `backend/src/server.ts`
+- [X] T012 Add centralized error-handling middleware in `backend/src/app.ts` that catches unhandled errors and returns a safe JSON `5xx` response instead of a stack trace (constitution XIX, Fail Safely)
+- [X] T013 Add root `package.json` scripts: `dev` (runs backend + frontend dev servers in parallel via `concurrently`) and `test` (runs Vitest across all workspaces)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
@@ -74,17 +74,17 @@ in a browser → confirm `GET /api/health` returns the documented shape.
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Integration test for `GET /api/health` in `backend/tests/integration/health.test.ts` using Supertest, asserting the response shape from [contracts/health-api.md](./contracts/health-api.md) (write first; confirm it fails before T015)
+- [X] T014 [P] [US1] Integration test for `GET /api/health` in `backend/tests/integration/health.test.ts` using Supertest, asserting the response shape from [contracts/health-api.md](./contracts/health-api.md) (write first; confirm it fails before T015)
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Implement `GET /api/health` route in `backend/src/api/health.ts` returning a `HealthStatus` value (depends on T007, T014)
-- [ ] T016 [US1] Register the health route in `backend/src/app.ts` (depends on T015)
-- [ ] T017 [US1] Implement a small API client in `frontend/src/services/healthClient.ts` that calls `GET /api/health`
-- [ ] T018 [US1] Display backend connection status (ok / unreachable) in `frontend/src/App.tsx` using `healthClient`
-- [ ] T019 [US1] Configure a Vite dev-server proxy for `/api` in `frontend/vite.config.ts` so the frontend can reach the backend without a CORS workaround
-- [ ] T020 [US1] Write the setup/startup section of root `README.md` (`npm install`, `npm run dev`, how to verify the frontend and health check) covering FR-006 and FR-012
-- [ ] T021 [US1] Manually validate: run `npm run dev`, stop it, and restart it, confirming the application returns to the same working state (Acceptance Scenario 1.2)
+- [X] T015 [US1] Implement `GET /api/health` route in `backend/src/api/health.ts` returning a `HealthStatus` value (depends on T007, T014)
+- [X] T016 [US1] Register the health route in `backend/src/app.ts` (depends on T015)
+- [X] T017 [US1] Implement a small API client in `frontend/src/services/healthClient.ts` that calls `GET /api/health`
+- [X] T018 [US1] Display backend connection status (ok / unreachable) in `frontend/src/App.tsx` using `healthClient`
+- [X] T019 [US1] Configure a Vite dev-server proxy for `/api` in `frontend/vite.config.ts` so the frontend can reach the backend without a CORS workaround
+- [X] T020 [US1] Write the setup/startup section of root `README.md` (`npm install`, `npm run dev`, how to verify the frontend and health check) covering FR-006 and FR-012
+- [X] T021 [US1] Manually validate: run `npm run dev`, stop it, and restart it, confirming the application returns to the same working state (Acceptance Scenario 1.2)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable/demoable
 
@@ -100,14 +100,14 @@ documented conventions; confirm no unrelated files needed changes.
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] Unit test for a second shared domain type (e.g., `VersionInfo`) in `packages/shared-domain/tests/unit/version-info.test.ts` (write first; confirm it fails before T024)
+- [X] T022 [P] [US2] Unit test for a second shared domain type (e.g., `VersionInfo`) in `packages/shared-domain/tests/unit/version-info.test.ts` (write first; confirm it fails before T024)
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Add an example second backend route `GET /api/version` in `backend/src/api/version.ts` and register it in `backend/src/app.ts`, without modifying `frontend/` or existing `packages/shared-domain` exports
-- [ ] T024 [US2] Add a `VersionInfo` type to `packages/shared-domain/src/index.ts` (depends on T022)
-- [ ] T025 [US2] Consume `VersionInfo` from both `backend/src/api/version.ts` and a new `frontend/src/components/VersionBadge.tsx`, proving reuse without duplication (depends on T024)
-- [ ] T026 [US2] Document the project structure and module boundaries (what lives in `backend/`, `frontend/`, `packages/shared-domain/`) in an "Architecture" section of root `README.md`, covering FR-004 and FR-011
+- [X] T023 [US2] Add an example second backend route `GET /api/version` in `backend/src/api/version.ts` and register it in `backend/src/app.ts`, without modifying `frontend/` or existing `packages/shared-domain` exports
+- [X] T024 [US2] Add a `VersionInfo` type to `packages/shared-domain/src/index.ts` (depends on T022)
+- [X] T025 [US2] Consume `VersionInfo` from both `backend/src/api/version.ts` and a new `frontend/src/components/VersionBadge.tsx`, proving reuse without duplication (depends on T024)
+- [X] T026 [US2] Document the project structure and module boundaries (what lives in `backend/`, `frontend/`, `packages/shared-domain/`) in an "Architecture" section of root `README.md`, covering FR-004 and FR-011
 
 **Checkpoint**: User Stories 1 AND 2 both work independently
 
@@ -123,11 +123,11 @@ tests execute across all three workspaces and results are stable across repeated
 
 ### Implementation for User Story 3
 
-- [ ] T027 [P] [US3] Unit test for `HealthStatus` shape/validation in `packages/shared-domain/tests/unit/health-status.test.ts`
-- [ ] T028 [P] [US3] Component smoke test for `frontend/src/App.tsx` using React Testing Library in `frontend/tests/unit/App.test.tsx`
-- [ ] T029 [US3] Configure the root Vitest workspace reporter so `npm test` output clearly labels pass/fail per workspace (`backend`, `frontend`, `packages/shared-domain`), satisfying FR-008
-- [ ] T030 [US3] Document the `npm test` command and how to read its output in a "Testing" section of root `README.md`
-- [ ] T031 [US3] Manually validate determinism: run `npm test` twice with no code changes and confirm identical pass/fail results (Acceptance Scenario 3.3)
+- [X] T027 [P] [US3] Unit test for `HealthStatus` shape/validation in `packages/shared-domain/tests/unit/health-status.test.ts`
+- [X] T028 [P] [US3] Component smoke test for `frontend/src/App.tsx` using React Testing Library in `frontend/tests/unit/App.test.tsx`
+- [X] T029 [US3] Configure the root Vitest workspace reporter so `npm test` output clearly labels pass/fail per workspace (`backend`, `frontend`, `packages/shared-domain`), satisfying FR-008
+- [X] T030 [US3] Document the `npm test` command and how to read its output in a "Testing" section of root `README.md`
+- [X] T031 [US3] Manually validate determinism: run `npm test` twice with no code changes and confirm identical pass/fail results (Acceptance Scenario 3.3)
 
 **Checkpoint**: All user stories are independently functional, and the test suite validates them (SC-002, SC-003)
 
@@ -137,11 +137,11 @@ tests execute across all three workspaces and results are stable across repeated
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T032 [P] Add actionable startup error handling in `backend/src/server.ts` for a port already in use and for an unsupported Node.js version, per spec Edge Cases
-- [ ] T033 [P] Add a clear frontend connection-error state in `frontend/src/App.tsx` for when the backend is unreachable, per spec Edge Cases
-- [ ] T034 [P] Pin the Node.js version via an `engines` field in root `package.json` and an `.nvmrc` file (Node 20 LTS)
-- [ ] T035 Final pass on root `README.md` to confirm setup, startup, architecture, and testing instructions are complete and accurate (FR-012)
-- [ ] T036 Execute the full [quickstart.md](./quickstart.md) validation checklist end-to-end and confirm every item passes
+- [X] T032 [P] Add actionable startup error handling in `backend/src/server.ts` for a port already in use and for an unsupported Node.js version, per spec Edge Cases
+- [X] T033 [P] Add a clear frontend connection-error state in `frontend/src/App.tsx` for when the backend is unreachable, per spec Edge Cases
+- [X] T034 [P] Pin the Node.js version via an `engines` field in root `package.json` and an `.nvmrc` file (Node 20 LTS)
+- [X] T035 Final pass on root `README.md` to confirm setup, startup, architecture, and testing instructions are complete and accurate (FR-012)
+- [X] T036 Execute the full [quickstart.md](./quickstart.md) validation checklist end-to-end and confirm every item passes
 
 ---
 
@@ -228,3 +228,9 @@ With multiple developers, after Setup + Foundational are done:
 - No AI, persistence, or authentication tasks are included, per spec Assumptions and FR-009/FR-010
 - Commit after each task or logical group
 - Stop at any checkpoint to validate a story independently
+
+---
+
+## Phase 7: Convergence
+
+- [ ] T037 Add a pre-flight dependency guard (e.g. a `pretest`/`predev` script check) that fails with a clear, actionable "run `npm install` first" message when `node_modules`/`vitest` is missing, instead of the raw shell "command not recognized" error, per spec.md Edge Cases (partial)
