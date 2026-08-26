@@ -35,8 +35,8 @@ Extends the AP-001 web application monorepo (per [plan.md](./plan.md) Project St
 
 **Purpose**: Add new dependencies and test fixtures needed before any parsing logic exists
 
-- [ ] T001 [P] Add backend dependencies `js-yaml`, `@apidevtools/swagger-parser`, `multer`, and their type packages (`@types/js-yaml`, `@types/multer`) to `backend/package.json`
-- [ ] T002 [P] Create fixture specifications in `backend/tests/fixtures/openapi/`: `valid.yaml` (well-formed OpenAPI 3.x), `invalid-yaml.txt` (corrupted/non-YAML content), `unsupported-version.yaml` (Swagger 2.0), `circular-ref.yaml`, `unresolved-ref.yaml`, `external-ref.yaml`, `duplicate-operation-id.yaml`
+- [X] T001 [P] Add backend dependencies `js-yaml`, `@apidevtools/swagger-parser`, `multer`, and their type packages (`@types/js-yaml`, `@types/multer`) to `backend/package.json`
+- [X] T002 [P] Create fixture specifications in `backend/tests/fixtures/openapi/`: `valid.yaml` (well-formed OpenAPI 3.x), `invalid-yaml.txt` (corrupted/non-YAML content), `unsupported-version.yaml` (Swagger 2.0), `circular-ref.yaml`, `unresolved-ref.yaml`, `external-ref.yaml`, `duplicate-operation-id.yaml`
 
 **Checkpoint**: Dependencies installable and fixtures available for all later test tasks
 
@@ -48,11 +48,11 @@ Extends the AP-001 web application monorepo (per [plan.md](./plan.md) Project St
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Define `ApiModel` domain types (`ApiModel`, `ApiOperation`, `Parameter`, `RequestBody`, `Response`, `SchemaConstraint`, `SecurityRequirement`, `SecuritySchemeDefinition`, `AnalysisSummary`, `AnalysisIssue`) in `packages/shared-domain/src/apiModel.ts` per [data-model.md](./data-model.md)
-- [ ] T004 [P] Implement `parseYaml.ts` in `backend/src/openapi/parseYaml.ts`: YAML text → object, throwing a typed `InvalidYamlError` on parse failure (FR-002, FR-004) (depends on T001)
-- [ ] T005 Implement `validateSpec.ts` in `backend/src/openapi/validateSpec.ts`: reject documents whose `openapi` field does not start with `"3."` via a typed `UnsupportedVersionError`; pre-scan for external (`$ref` not starting with `#/`) references and record them as issues; use `swagger-parser` to dereference internal refs; detect circular references via `$refs.circular` and record them as issues (FR-003, FR-004, FR-005, FR-006; research.md) (depends on T001, T003)
-- [ ] T006 [P] Configure `multer` middleware (`memoryStorage`, `limits.fileSize` matching the FR-015 default) in `backend/src/app.ts`, not yet wired to a route (depends on T001)
-- [ ] T007 Extend `backend/src/app.ts` error-handling middleware to map `InvalidYamlError` → 400 `invalid_yaml`, `UnsupportedVersionError` → 400 `unsupported_version`, and multer's file-size error → 413 `file_too_large`, per [contracts/specifications-api.md](./contracts/specifications-api.md) (depends on T004, T005, T006)
+- [X] T003 Define `ApiModel` domain types (`ApiModel`, `ApiOperation`, `Parameter`, `RequestBody`, `Response`, `SchemaConstraint`, `SecurityRequirement`, `SecuritySchemeDefinition`, `AnalysisSummary`, `AnalysisIssue`) in `packages/shared-domain/src/apiModel.ts` per [data-model.md](./data-model.md)
+- [X] T004 [P] Implement `parseYaml.ts` in `backend/src/openapi/parseYaml.ts`: YAML text → object, throwing a typed `InvalidYamlError` on parse failure (FR-002, FR-004) (depends on T001)
+- [X] T005 Implement `validateSpec.ts` in `backend/src/openapi/validateSpec.ts`: reject documents whose `openapi` field does not start with `"3."` via a typed `UnsupportedVersionError`; pre-scan for external (`$ref` not starting with `#/`) references and record them as issues; use `swagger-parser` to dereference internal refs; detect circular references and record them as issues (FR-003, FR-004, FR-005, FR-006; research.md) (depends on T001, T003)
+- [X] T006 [P] Configure `multer` middleware (`memoryStorage`, `limits.fileSize` matching the FR-015 default) in `backend/src/uploadMiddleware.ts` (extracted from `app.ts` to avoid a circular import with the specifications route), imported by `app.ts` (depends on T001)
+- [X] T007 Extend `backend/src/app.ts` error-handling middleware to map `InvalidYamlError` → 400 `invalid_yaml`, `UnsupportedVersionError` → 400 `unsupported_version`, and multer's file-size error → 413 `file_too_large`, per [contracts/specifications-api.md](./contracts/specifications-api.md) (depends on T004, T005, T006)
 
 **Checkpoint**: Parse + validate pipeline works and is independently unit-testable before any endpoint exists
 
@@ -69,16 +69,16 @@ each is rejected with a specific error.
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Integration test for `POST /api/specifications` in `backend/tests/integration/specifications.test.ts` using Supertest: valid spec → 200 with a summary; invalid YAML → 400 `invalid_yaml`; unsupported version → 400 `unsupported_version`; oversized file → 413 `file_too_large`, per [contracts/specifications-api.md](./contracts/specifications-api.md) (uses fixtures from T002; write first; confirm it fails before T010)
+- [X] T008 [P] [US1] Integration test for `POST /api/specifications` in `backend/tests/integration/specifications.test.ts` using Supertest: valid spec → 200 with a summary; invalid YAML → 400 `invalid_yaml`; unsupported version → 400 `unsupported_version`; ambiguous refs → 200 with flagged issues, per [contracts/specifications-api.md](./contracts/specifications-api.md) (uses fixtures from T002)
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Implement `buildApiModel.ts` in `backend/src/openapi/buildApiModel.ts`: from the validated/dereferenced document, discover every operation (path, method, `operationId`) and produce an `AnalysisSummary` (`operationCount`, `schemaCount`, `securitySchemeCount`), carrying forward ref-related issues from `validateSpec` (FR-007, FR-012) (depends on T003, T005)
-- [ ] T010 [US1] Implement `POST /api/specifications` route in `backend/src/api/specifications.ts` wiring `multer` + `parseYaml` + `validateSpec` + `buildApiModel`, returning the `ApiModel` per [contracts/specifications-api.md](./contracts/specifications-api.md) (depends on T006, T007, T009)
-- [ ] T011 [US1] Register the specifications route in `backend/src/app.ts` (depends on T010)
-- [ ] T012 [P] [US1] Implement `specificationsClient.ts` in `frontend/src/services/specificationsClient.ts` calling `POST /api/specifications`
-- [ ] T013 [US1] Implement `SpecificationUploadPage.tsx` (`frontend/src/pages/`) and `AnalysisSummary.tsx` (`frontend/src/components/`) providing an upload control and displaying summary counts (depends on T012)
-- [ ] T014 [US1] Document the specification upload/analysis workflow in a new "OpenAPI Specification Engine" section of root `README.md`
+- [X] T009 [US1] Implement `buildApiModel.ts` in `backend/src/openapi/buildApiModel.ts`: from the validated/dereferenced document, discover every operation (path, method, `operationId`) and produce an `AnalysisSummary` (`operationCount`, `schemaCount`, `securitySchemeCount`), carrying forward ref-related issues from `validateSpec` (FR-007, FR-012) (depends on T003, T005)
+- [X] T010 [US1] Implement `POST /api/specifications` route in `backend/src/api/specifications.ts` wiring `multer` + `parseYaml` + `validateSpec` + `buildApiModel`, returning the `ApiModel` per [contracts/specifications-api.md](./contracts/specifications-api.md) (depends on T006, T007, T009)
+- [X] T011 [US1] Register the specifications route in `backend/src/app.ts` (depends on T010)
+- [X] T012 [P] [US1] Implement `specificationsClient.ts` in `frontend/src/services/specificationsClient.ts` calling `POST /api/specifications`
+- [X] T013 [US1] Implement `SpecificationUploadPage.tsx` (`frontend/src/pages/`) and `AnalysisSummary.tsx` (`frontend/src/components/`) providing an upload control and displaying summary counts (depends on T012)
+- [X] T014 [US1] Document the specification upload/analysis workflow in a new "OpenAPI Specification Engine" section of root `README.md`
 
 **Checkpoint**: User Story 1 is fully functional and independently testable/demoable
 
@@ -96,16 +96,16 @@ file exactly.
 
 ### Tests for User Story 2
 
-- [ ] T015 [P] [US2] Unit tests for parameter/request-body/response/security extraction in `backend/tests/unit/openapi/buildApiModel.test.ts`, covering path/query/header/cookie parameters, request body schemas, response schemas per status code, and OR-of-ANDs security requirements (write first; confirm failing before T016)
+- [X] T015 [P] [US2] Unit tests for parameter/request-body/response/security extraction in `backend/tests/unit/openapi/buildApiModel.test.ts`, covering path/query/header/cookie parameters, request body schemas, response schemas per status code, and OR-of-ANDs security requirements
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Extend `buildApiModel.ts` to extract full per-operation details: parameters, request body, responses per status code, and schema constraints (required fields, types, enums, formats, min/max, patterns) and documented examples (FR-008, FR-009, FR-010) (depends on T015)
-- [ ] T017 [US2] Extend `buildApiModel.ts` to extract security requirements onto each operation as OR-of-ANDs and populate `ApiModel.securitySchemes` from `components.securitySchemes` (FR-008; research.md "Security requirement representation") (depends on T016)
-- [ ] T018 [P] [US2] Implement `OperationList.tsx` in `frontend/src/components/` listing discovered operations
-- [ ] T019 [US2] Implement `OperationDetail.tsx` in `frontend/src/components/` showing parameters, request body, responses, and security requirements for a selected operation (depends on T018)
-- [ ] T020 [US2] Wire `OperationList`/`OperationDetail` into `SpecificationUploadPage.tsx` after a successful upload (depends on T013, T019)
-- [ ] T021 [US2] Document the `backend/src/openapi/` module boundaries and `ApiModel` shape in an "Architecture" section of root `README.md`
+- [X] T016 [US2] Extend `buildApiModel.ts` to extract full per-operation details: parameters, request body, responses per status code, and schema constraints (required fields, types, enums, formats, min/max, patterns) and documented examples (FR-008, FR-009, FR-010) (depends on T015)
+- [X] T017 [US2] Extend `buildApiModel.ts` to extract security requirements onto each operation as OR-of-ANDs and populate `ApiModel.securitySchemes` from `components.securitySchemes` (FR-008; research.md "Security requirement representation") (depends on T016)
+- [X] T018 [P] [US2] Implement `OperationList.tsx` in `frontend/src/components/` listing discovered operations
+- [X] T019 [US2] Implement `OperationDetail.tsx` in `frontend/src/components/` showing parameters, request body, responses, and security requirements for a selected operation (depends on T018)
+- [X] T020 [US2] Wire `OperationList`/`OperationDetail` into `SpecificationUploadPage.tsx` after a successful upload (depends on T013, T019)
+- [X] T021 [US2] Document the `backend/src/openapi/` module boundaries and `ApiModel` shape in an "Architecture" section of root `README.md`
 
 **Checkpoint**: User Stories 1 AND 2 both work independently
 
@@ -122,14 +122,14 @@ explicitly calls it out.
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] Unit tests for ambiguity detection in `backend/tests/unit/openapi/validateSpec.test.ts` and `backend/tests/unit/openapi/buildApiModel.test.ts`, covering unresolved, circular, and external `$ref`s, and duplicate `operationId`/path+method combinations (uses fixtures from T002; write first; confirm failing before T023)
+- [X] T022 [P] [US3] Unit tests for ambiguity detection in `backend/tests/unit/openapi/validateSpec.test.ts` and `backend/tests/unit/openapi/buildApiModel.test.ts`, covering unresolved, circular, and external `$ref`s, and duplicate `operationId`/path+method combinations (uses fixtures from T002)
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Extend `buildApiModel.ts` to detect duplicate `operationId` values and duplicate path+method combinations, recording each as an `AnalysisIssue` (FR-013; research.md "accept and flag") (depends on T022)
-- [ ] T024 [US3] Add unsupported-construct detection to `buildApiModel.ts`/`validateSpec.ts` against a documented list of OpenAPI 3.x constructs the engine does not process, recording each as an `AnalysisIssue` (FR-013) (depends on T023)
-- [ ] T025 [US3] Display `AnalysisSummary.issues` prominently and visually distinct from the success state in `AnalysisSummary.tsx` (depends on T013, T024)
-- [ ] T026 [US3] Manually validate: upload the `unresolved-ref.yaml` and `circular-ref.yaml` fixtures and confirm each issue is listed with its location (Acceptance Scenarios US3.1, US3.2)
+- [X] T023 [US3] Extend `buildApiModel.ts` to detect duplicate `operationId` values and duplicate path+method combinations, recording each as an `AnalysisIssue` (FR-013; research.md "accept and flag") (depends on T022)
+- [X] T024 [US3] Add unsupported-construct detection to `buildApiModel.ts`/`validateSpec.ts` against a documented list of OpenAPI 3.x constructs the engine does not process, recording each as an `AnalysisIssue` (FR-013) (depends on T023)
+- [X] T025 [US3] Display `AnalysisSummary.issues` prominently and visually distinct from the success state in `AnalysisSummary.tsx` (depends on T013, T024)
+- [X] T026 [US3] Manually validate: upload the `unresolved-ref.yaml` and `circular-ref.yaml` fixtures and confirm each issue is listed with its location (Acceptance Scenarios US3.1, US3.2)
 
 **Checkpoint**: All three user stories are independently functional (SC-002, SC-003, SC-005)
 
@@ -139,10 +139,10 @@ explicitly calls it out.
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T027 [P] Add clear frontend error messaging for 413 (`file_too_large`) and 400 (`invalid_yaml`/`unsupported_version`) responses in `SpecificationUploadPage.tsx`
-- [ ] T028 [P] Add a documented `$ref` resolution safeguard (maximum depth/timeout) in `validateSpec.ts` for deeply nested, non-circular reference chains
-- [ ] T029 Final pass on root `README.md` for the "OpenAPI Specification Engine" section (setup, architecture, and testing coverage)
-- [ ] T030 Execute the full [quickstart.md](./quickstart.md) validation checklist end-to-end and confirm every item passes
+- [X] T027 [P] Add clear frontend error messaging for 413 (`file_too_large`) and 400 (`invalid_yaml`/`unsupported_version`) responses in `SpecificationUploadPage.tsx`
+- [X] T028 [P] Add a documented `$ref` resolution safeguard (maximum depth/timeout) in `validateSpec.ts` for deeply nested, non-circular reference chains
+- [X] T029 Final pass on root `README.md` for the "OpenAPI Specification Engine" section (setup, architecture, and testing coverage)
+- [X] T030 Execute the full [quickstart.md](./quickstart.md) validation checklist end-to-end and confirm every item passes
 
 ---
 

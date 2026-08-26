@@ -20,3 +20,5 @@ export interface VersionInfo {
 export function createVersionInfo(version: string, commit: string): VersionInfo {
   return { version, commit };
 }
+
+export * from "./apiModel";

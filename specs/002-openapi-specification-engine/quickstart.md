@@ -38,8 +38,8 @@ This guide validates that AP-002 works end-to-end on top of the AP-001 foundatio
 
 ## Validation Checklist
 
-- [ ] A well-formed OpenAPI 3.x spec produces a complete, accurate Analysis Summary (SC-001, SC-002)
-- [ ] An invalid (non-YAML) upload is rejected with a specific error, not a generic failure (FR-004)
-- [ ] An unresolved/circular `$ref` is explicitly flagged, never silently dropped (FR-006, FR-013, SC-003)
-- [ ] Every parameter/response/security requirement shown matches the source file exactly, with nothing invented (SC-005)
-- [ ] `npm test` passes with zero failures
+- [X] A well-formed OpenAPI 3.x spec produces a complete, accurate Analysis Summary (SC-001, SC-002)
+- [X] An invalid (non-YAML) upload is rejected with a specific error, not a generic failure (FR-004)
+- [X] An unresolved/circular `$ref` is explicitly flagged, never silently dropped (FR-006, FR-013, SC-003)
+- [X] Every parameter/response/security requirement shown matches the source file exactly, with nothing invented (SC-005)
+- [X] `npm test` passes with zero failures
