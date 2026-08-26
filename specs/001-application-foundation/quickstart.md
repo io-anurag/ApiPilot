@@ -59,9 +59,9 @@ Expected outcome:
 
 ## Validation Checklist
 
-- [ ] `npm install` completes without errors on a clean clone
-- [ ] `npm run dev` starts both frontend and backend; frontend loads in a browser
-- [ ] `GET /api/health` returns a 200 with the documented shape
-- [ ] No AI/cloud credentials are required at any step (FR-009, FR-010)
-- [ ] `npm test` passes 100% on a clean checkout (SC-002)
-- [ ] The whole flow above completes in under 10 minutes (SC-001)
+- [x] `npm install` completes without errors on a clean clone
+- [x] `npm run dev` starts both frontend and backend; frontend loads in a browser
+- [x] `GET /api/health` returns a 200 with the documented shape
+- [x] No AI/cloud credentials are required at any step (FR-009, FR-010)
+- [x] `npm test` passes 100% on a clean checkout (SC-002)
+- [x] The whole flow above completes in under 10 minutes (SC-001)
