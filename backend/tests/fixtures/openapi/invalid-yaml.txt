@@ -1,0 +1,4 @@
+this is: not: valid: yaml: [unterminated
+  - broken
+	indentation mixing tabs and spaces
+::: garbage :::

@@ -1,0 +1,17 @@
+openapi: 3.0.3
+info:
+  title: Duplicate Operation Example
+  version: 1.0.0
+paths:
+  /items:
+    get:
+      operationId: getItems
+      responses:
+        "200":
+          description: OK
+  /items/legacy:
+    get:
+      operationId: getItems
+      responses:
+        "200":
+          description: OK

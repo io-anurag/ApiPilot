@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { VersionBadge } from "./components/VersionBadge";
+import { SpecificationUploadPage } from "./pages/SpecificationUploadPage";
 
 export function App() {
   const [health, setHealth] = useState<HealthCheckResult | null>(null);
@@ -32,6 +33,7 @@ export function App() {
           Backend unreachable: {health.error}
         </p>
       )}
+      <SpecificationUploadPage />
     </main>
   );
 }

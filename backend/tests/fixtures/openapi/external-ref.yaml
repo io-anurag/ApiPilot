@@ -1,0 +1,15 @@
+openapi: 3.0.3
+info:
+  title: External Ref Example
+  version: 1.0.0
+paths:
+  /gadgets:
+    get:
+      operationId: listGadgets
+      responses:
+        "200":
+          description: A gadget
+          content:
+            application/json:
+              schema:
+                $ref: "./shared-schemas.yaml#/Gadget"
