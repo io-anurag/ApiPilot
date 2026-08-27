@@ -30,6 +30,12 @@ components:
         tag:
           type: string
           pattern: "^[a-z]+$"
+        photoUrls:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
 paths:
   /pets:
     get:

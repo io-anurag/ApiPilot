@@ -1,20 +1,28 @@
 import { useState, type ChangeEvent } from "react";
-import type { ApiOperation } from "@apipilot/shared-domain";
+import type { ApiOperation, TestScenario } from "@apipilot/shared-domain";
 import { AnalysisSummary } from "../components/AnalysisSummary";
 import { OperationDetail } from "../components/OperationDetail";
 import { OperationList } from "../components/OperationList";
+import { TestScenarioDetail } from "../components/TestScenarioDetail";
+import { TestScenarioList } from "../components/TestScenarioList";
 import { uploadSpecification, type UploadResult } from "../services/specificationsClient";
+import { generateBaselineTestSuite, type GenerateTestModelResult } from "../services/testModelsClient";
 
 export function SpecificationUploadPage() {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [selected, setSelected] = useState<ApiOperation | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [testModelResult, setTestModelResult] = useState<GenerateTestModelResult | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState<TestScenario | null>(null);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setSelected(null);
+    setTestModelResult(null);
+    setSelectedScenario(null);
     const uploadResult = await uploadSpecification(file);
     setResult(uploadResult);
     setUploading(false);
@@ -22,6 +30,15 @@ export function SpecificationUploadPage() {
   }
 
   const apiModel = result?.ok ? result.apiModel : null;
+
+  async function handleGenerateTestSuite() {
+    if (!apiModel) return;
+    setGenerating(true);
+    setSelectedScenario(null);
+    const generateResult = await generateBaselineTestSuite(apiModel);
+    setTestModelResult(generateResult);
+    setGenerating(false);
+  }
 
   return (
     <section>
@@ -44,8 +61,26 @@ export function SpecificationUploadPage() {
           <AnalysisSummary summary={apiModel.summary} />
           <OperationList operations={apiModel.operations} onSelect={setSelected} />
           {selected && <OperationDetail operation={selected} />}
+          <div>
+            <button type="button" onClick={handleGenerateTestSuite} disabled={generating}>
+              Generate Baseline Test Suite
+            </button>
+            {generating && <p>Generating...</p>}
+          </div>
+          {testModelResult !== null && !testModelResult.ok && (
+            <p role="alert" data-testid="test-model-error">
+              {testModelResult.error}: {testModelResult.message}
+            </p>
+          )}
+          {testModelResult?.ok && (
+            <>
+              <TestScenarioList scenarios={testModelResult.testModel.scenarios} onSelect={setSelectedScenario} />
+              {selectedScenario && <TestScenarioDetail scenario={selectedScenario} />}
+            </>
+          )}
         </>
       )}
     </section>
   );
 }
+

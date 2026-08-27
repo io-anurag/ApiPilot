@@ -54,4 +54,16 @@ describe("buildApiModel", () => {
     expect(model.operations).toHaveLength(2);
     expect(model.summary.issues.some((issue) => issue.kind === "duplicate-operation")).toBe(true);
   });
+
+  it("extracts minLength/maxLength/minItems/maxItems boundary constraints", async () => {
+    const raw = loadFixture("valid.yaml");
+    const { document, issues } = await validateSpec(raw);
+
+    const model = buildApiModel(document, issues);
+
+    const createPet = model.operations.find((op) => op.operationId === "createPet");
+    const petSchema = createPet?.requestBody?.contentTypes["application/json"];
+    expect(petSchema?.properties.name).toEqual(expect.objectContaining({ minLength: 1, maxLength: 100 }));
+    expect(petSchema?.properties.photoUrls).toEqual(expect.objectContaining({ minItems: 1, maxItems: 5 }));
+  });
 });
