@@ -49,6 +49,10 @@ function extractSchemaConstraint(
   if (typeof node.minimum === "number") constraint.minimum = node.minimum;
   if (typeof node.maximum === "number") constraint.maximum = node.maximum;
   if (typeof node.pattern === "string") constraint.pattern = node.pattern;
+  if (typeof node.minLength === "number") constraint.minLength = node.minLength;
+  if (typeof node.maxLength === "number") constraint.maxLength = node.maxLength;
+  if (typeof node.minItems === "number") constraint.minItems = node.minItems;
+  if (typeof node.maxItems === "number") constraint.maxItems = node.maxItems;
   if (isPlainObject(node.properties)) {
     for (const [key, value] of Object.entries(node.properties)) {
       constraint.properties[key] = extractSchemaConstraint(value, seen, depth + 1);

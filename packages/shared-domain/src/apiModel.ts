@@ -46,6 +46,10 @@ export interface SchemaConstraint {
   minimum?: number;
   maximum?: number;
   pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
 }
 
 /** One requirement set (AND); ApiOperation.security is a list of these (OR). */

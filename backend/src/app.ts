@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import multer from "multer";
 import { healthRouter } from "./api/health";
 import { specificationsRouter } from "./api/specifications";
+import { testModelsRouter } from "./api/testModels";
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
@@ -13,6 +14,7 @@ export function createApp() {
   app.use("/api", healthRouter);
   app.use("/api", versionRouter);
   app.use("/api", specificationsRouter);
+  app.use("/api", testModelsRouter);
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):
   // never leak stack traces, always respond with a safe JSON shape.

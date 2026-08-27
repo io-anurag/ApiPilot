@@ -11,6 +11,10 @@ This repository currently implements:
 - **AP-002: OpenAPI Specification Engine** — upload an OpenAPI 3.x YAML specification and
   receive a normalized analysis of its operations, schemas, and security requirements (see
   [OpenAPI Specification Engine](#openapi-specification-engine) below).
+- **AP-003: Deterministic Test Designer** — generate a deterministic baseline suite of
+  test scenarios (positive, boundary, and negative) from an analyzed specification, with
+  no AI/randomness involved (see [Deterministic Test Designer](#deterministic-test-designer)
+  below).
 
 ## Setup
 
@@ -143,3 +147,57 @@ duplicate `operationId`/path+method combinations — is accepted and flagged as 
 ambiguities in the source specification, not reasons to fail. See
 [specs/002-openapi-specification-engine/](./specs/002-openapi-specification-engine/)
 for the full spec, plan, and API contract.
+
+## Deterministic Test Designer
+
+After uploading a specification, click **"Generate Baseline Test Suite"** to deterministically
+generate a `TestModel` — a framework-independent list of `TestScenario`s — from the analyzed
+`ApiModel`. No AI/LLM and no randomness are involved anywhere in this pipeline: every scenario
+and every generated value is produced by a fixed rule evaluated against the specification's own
+declared constraints.
+
+### Module boundaries
+
+The rule-evaluation pipeline lives entirely in `backend/src/testDesign/`, independent of Express:
+
+- `valueGenerators.ts` — deterministic synthetic values: specification-conformant, incompatible-type,
+  format/pattern-violating, enum-violating, and boundary-adjacent (below/at/above) numeric, string, and
+  array values.
+- `requestHelpers.ts` — builds a fully conformant base `GeneratedRequest` for an operation and provides
+  dotted-path get/set/delete helpers plus a depth-guarded recursive field walker for nested request bodies.
+- `assertions.ts` — selects the expected `status-code`/`schema-conformance` assertions for positive and
+  negative scenarios from the operation's own documented responses, or returns an explicit gap
+  (empty assertions + a `Provenance.description`) when no applicable documented response exists.
+- `rules/` — one rule module per scenario category (`positiveScenario.ts`, `requiredFieldScenarios.ts`,
+  `invalidTypeScenarios.ts`, `invalidFormatScenarios.ts`, `invalidEnumScenarios.ts`,
+  `numericBoundaryScenarios.ts`, `stringBoundaryScenarios.ts`, `arrayBoundaryScenarios.ts`), each an
+  independently unit-testable pure function `(operation) => TestScenario[]`.
+- `deduplicate.ts` — merges scenarios sharing an identical request and assertions within the same
+  operation, keeping one representative and recording every merged rule in its `Provenance.duplicateOfRules`.
+- `generateTestModel.ts` — the orchestrator: iterates every operation, skips ones flagged with an
+  unresolved-ref/unsupported-construct issue rather than fabricating a scenario, runs every rule module,
+  and deduplicates the result.
+
+`backend/src/api/testModels.ts` wires this pipeline behind `POST /api/test-models` (see
+[contracts/test-models-api.md](./specs/003-deterministic-test-designer/contracts/test-models-api.md)).
+The `TestModel`/`TestScenario`/`ScenarioCategory`/`GeneratedRequest`/`Assertion`/`Provenance` types are
+defined once in `packages/shared-domain/src/testModel.ts`.
+
+### Understanding a scenario
+
+Each `TestScenario` carries:
+
+- `category` — which rule family produced it (e.g. `missing-field`, `invalid-enum`, `numeric-boundary`).
+- `request` — the exact `GeneratedRequest` (path/query/header parameters and body) to send.
+- `assertions` — the expected `status-code`/`schema-conformance` outcome(s), taken only from what the
+  specification itself documents. An **empty `assertions` array is not a bug** — it means the operation
+  did not document an applicable response (e.g. no 4xx documented for a negative scenario), and the gap is
+  explained in `provenance.description` rather than a status code being invented.
+- `provenance` — `{ source: "RULE", rule, description, duplicateOfRules }`, identifying exactly which
+  deterministic rule produced the scenario and which other rules would have produced an identical one
+  (merged via dedup).
+
+The frontend's `TestScenarioList` groups scenarios by operation and category (FR-016); selecting one
+shows its full detail via `TestScenarioDetail`, including the rule, request, and assertions/gap above. See
+[specs/003-deterministic-test-designer/](./specs/003-deterministic-test-designer/) for the full spec,
+plan, and API contract.
