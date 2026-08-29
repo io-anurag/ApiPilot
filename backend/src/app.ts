@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from "express";
 import multer from "multer";
+import { aiStatusRouter } from "./api/aiStatus";
 import { healthRouter } from "./api/health";
 import { specificationsRouter } from "./api/specifications";
 import { testModelsRouter } from "./api/testModels";
@@ -15,6 +16,7 @@ export function createApp() {
   app.use("/api", versionRouter);
   app.use("/api", specificationsRouter);
   app.use("/api", testModelsRouter);
+  app.use("/api", aiStatusRouter);
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):
   // never leak stack traces, always respond with a safe JSON shape.

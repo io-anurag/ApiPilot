@@ -23,3 +23,4 @@ export function createVersionInfo(version: string, commit: string): VersionInfo 
 
 export * from "./apiModel";
 export * from "./testModel";
+export * from "./aiProvider";

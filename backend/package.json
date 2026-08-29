@@ -8,11 +8,14 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "vitest run --root ."
+    "test": "vitest run --root .",
+    "test:ai-real": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/localProvider.real.test.ts",
+    "ai:benchmark": "tsx src/ai/benchmark/runBenchmark.ts"
   },
   "dependencies": {
     "@apipilot/shared-domain": "*",
     "@apidevtools/swagger-parser": "^10.1.1",
+    "@huggingface/transformers": "^4.2.0",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "multer": "^1.4.5-lts.1"
@@ -22,6 +25,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/multer": "^1.4.12",
     "@types/supertest": "^6.0.2",
+    "cross-env": "^7.0.3",
     "supertest": "^7.0.0",
     "tsx": "^4.19.1"
   }
