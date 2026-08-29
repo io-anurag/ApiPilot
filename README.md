@@ -15,6 +15,11 @@ This repository currently implements:
   test scenarios (positive, boundary, and negative) from an analyzed specification, with
   no AI/randomness involved (see [Deterministic Test Designer](#deterministic-test-designer)
   below).
+- **AP-004: AI Provider & Local Inference Foundation** — a fully offline, local AI
+  inference provider (Transformers.js) plus a deterministic mock provider for tests, a
+  readiness-status endpoint, and a model-selection benchmarking harness (see
+  [AI Provider & Local Inference Foundation](#ai-provider--local-inference-foundation)
+  below).
 
 ## Setup
 
@@ -31,7 +36,9 @@ Installs dependencies for every workspace (`backend/`, `frontend/`,
 `packages/shared-domain`) in a single step.
 
 Optionally copy [.env.example](./.env.example) to `.env` to override the default ports
-(`BACKEND_PORT`, `FRONTEND_DEV_PORT`).
+(`BACKEND_PORT`, `FRONTEND_DEV_PORT`) or the AI provider settings (`AI_PROVIDER_MODE`,
+`AI_MODEL_ID`, `AI_MODEL_CACHE_DIR`, `AI_INFERENCE_TIMEOUT_MS`, `AI_USE_ACCELERATOR`) —
+see [AI Provider & Local Inference Foundation](#ai-provider--local-inference-foundation).
 
 ## Running the application
 
@@ -121,6 +128,11 @@ with no code changes produces identical results.
 - `npm run build` — builds all workspaces (TypeScript compilation; Vite production
   build for the frontend)
 - `npm run lint` — runs ESLint across the repository
+- `npm run ai:benchmark -w backend` — runs the AI model-selection benchmarking harness
+  (downloads candidate models on first run; see
+  [AI Provider & Local Inference Foundation](#ai-provider--local-inference-foundation))
+- `npm run test:ai-real -w backend` — runs the opt-in real-model integration test
+  (downloads and loads the configured model; excluded from the default `npm test` run)
 
 ## OpenAPI Specification Engine
 
@@ -201,3 +213,59 @@ The frontend's `TestScenarioList` groups scenarios by operation and category (FR
 shows its full detail via `TestScenarioDetail`, including the rule, request, and assertions/gap above. See
 [specs/003-deterministic-test-designer/](./specs/003-deterministic-test-designer/) for the full spec,
 plan, and API contract.
+
+## AI Provider & Local Inference Foundation
+
+AI-powered features run entirely on the local machine by default — no prompt or response
+content is ever sent to a cloud API, and requests never silently fall back to a cloud
+provider on failure. This foundation introduces the `AIProvider` abstraction that all
+future AI-enhanced features (e.g. AP-005) will depend on, plus the infrastructure needed
+to develop and test against it without a real model.
+
+- **`AI_PROVIDER_MODE`** (`local` | `mock`) selects the active provider; defaults to
+  `mock` during automated tests (`NODE_ENV=test`/Vitest) and `local` otherwise.
+- **`GET /api/ai/status`** reports the current readiness state (`not-loaded`, `loading`,
+  `ready`, or `unavailable`, the latter always with a non-empty `reason`), whether an
+  accelerator was requested and whether it is actually active, and the loaded `modelId`
+  (see [contracts/ai-status-api.md](./specs/004-ai-provider-local-inference/contracts/ai-status-api.md)).
+- The default `npm test` run always exercises the **mock provider** — it derives
+  deterministic output from a hash of the request, never touches the network, and never
+  loads a real model, so AI-dependent tests are fast and fully reproducible.
+- A **benchmarking harness** (`npm run ai:benchmark -w backend`) evaluates a shortlist of
+  candidate local models against representative sample workloads and records comparable
+  metrics (structured-output success rate, average latency, peak memory) plus a
+  traceable selection rationale, so the initial local model is chosen with evidence
+  rather than by default.
+
+### Module boundaries
+
+- `backend/src/ai/modelConfig.ts` — env-driven configuration loader (`AI_MODEL_ID`,
+  `AI_MODEL_CACHE_DIR`, `AI_INFERENCE_TIMEOUT_MS`, `AI_USE_ACCELERATOR`), mirroring the
+  existing `backend/src/config.ts` convention.
+- `backend/src/ai/errors.ts` — shared error-response construction from a closed
+  `AIErrorCategory` union (`NOT_READY`, `LOAD_FAILED`, `TIMEOUT`, `INVALID_REQUEST`,
+  `INVALID_RESPONSE`, `PROVIDER_UNAVAILABLE`).
+- `backend/src/ai/readiness.ts` — the readiness state machine; a failed load is never
+  auto-retried, only an explicit `retryLoad()` call attempts loading again.
+- `backend/src/ai/requestQueue.ts` — an in-process FIFO queue that serializes inference
+  calls (no external broker).
+- `backend/src/ai/localProvider.ts` — **the only module that imports
+  `@huggingface/transformers`**; wraps a local text-generation model with a
+  configurable per-request timeout and automatic-with-visible-notice CPU fallback when
+  an enabled accelerator is unavailable at runtime.
+- `backend/src/ai/mockProvider.ts` — the deterministic test double described above.
+- `backend/src/ai/index.ts` — the provider factory that selects `localProvider.ts` or
+  `mockProvider.ts` based on `modelConfig.ts`.
+- `backend/src/ai/benchmark/` — `workloads.ts` (representative sample prompts),
+  `report.ts` (builds and validates a `BenchmarkReport`), and `runBenchmark.ts` (the
+  harness entry point, writing results to
+  `specs/004-ai-provider-local-inference/benchmark-results.json`).
+- `backend/src/api/aiStatus.ts` — the `GET /api/ai/status` route, built as a testable
+  `createAiStatusRouter(provider)` factory so tests can inject a fake `AIProvider`.
+
+Every AI request/response type (`InferenceRequest`, `InferenceResponse`, `ReadinessState`,
+`ModelConfig`, `AIProvider`, `BenchmarkReport`, etc.) is defined once in
+`packages/shared-domain/src/aiProvider.ts` per
+[data-model.md](./specs/004-ai-provider-local-inference/data-model.md). See
+[specs/004-ai-provider-local-inference/](./specs/004-ai-provider-local-inference/) for the
+full spec, plan, research, and API contract.

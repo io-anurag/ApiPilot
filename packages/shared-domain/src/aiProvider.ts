@@ -1,0 +1,86 @@
+/** Discriminates which AIProvider implementation is active (constitution XXIX). */
+export type AIProviderMode = "local" | "mock";
+
+/** Closed set of distinguishable AI inference failure categories (FR-010). */
+export type AIErrorCategory =
+  | "NOT_READY"
+  | "LOAD_FAILED"
+  | "TIMEOUT"
+  | "INVALID_REQUEST"
+  | "INVALID_RESPONSE"
+  | "PROVIDER_UNAVAILABLE";
+
+/** Structured input for a single inference call (FR-009). */
+export interface InferenceRequest {
+  contractVersion: 1;
+  requestId: string;
+  input: string;
+  expectedOutputFormat: "text" | "json";
+  maxOutputTokens?: number;
+  /** Overrides the configured default timeout for this request only (FR-017). */
+  timeoutMs?: number;
+}
+
+/** Structured, validated output of a single inference call (FR-009, FR-010). */
+export interface InferenceResponse {
+  contractVersion: 1;
+  requestId: string;
+  status: "success" | "error";
+  content?: string;
+  errorCategory?: AIErrorCategory;
+  errorMessage?: string;
+  modelId: string;
+  provider: AIProviderMode;
+  durationMs: number;
+}
+
+/** Current lifecycle status of local inference (FR-004). */
+export interface ReadinessState {
+  state: "not-loaded" | "loading" | "ready" | "unavailable";
+  /** Required (non-empty) when state is "unavailable"; MAY be present otherwise. */
+  reason?: string;
+  modelId?: string;
+  acceleratorRequested: boolean;
+  acceleratorActive: boolean;
+  updatedAt: string;
+}
+
+/** Describes which local model is selected and how it loads (FR-003). */
+export interface ModelConfig {
+  modelId: string;
+  cacheDir: string;
+  useAccelerator: boolean;
+  inferenceTimeoutMs: number;
+}
+
+/** The single abstraction every AI-powered feature depends on (FR-001). */
+export interface AIProvider {
+  mode: AIProviderMode;
+  getReadiness(): ReadinessState;
+  infer(request: InferenceRequest): Promise<InferenceResponse>;
+}
+
+/** Fixed configuration for the deterministic mock provider (FR-011). */
+export interface MockProviderConfig {
+  modelId: string;
+}
+
+/** Recorded outcome of evaluating one candidate model against sample workloads (FR-014). */
+export interface BenchmarkCandidateResult {
+  modelId: string;
+  /** Fraction (0-1) of sample workloads producing parseable output in the expected format. */
+  structuredOutputSuccessRate: number;
+  averageLatencyMs: number;
+  peakMemoryMb?: number;
+  notes?: string;
+}
+
+/** Traceable record of a model-selection decision (FR-015). */
+export interface BenchmarkReport {
+  runAt: string;
+  workloadSetId: string;
+  candidates: BenchmarkCandidateResult[];
+  /** Must match one entry in `candidates`. */
+  selectedModelId: string;
+  selectionRationale: string;
+}
