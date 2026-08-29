@@ -1,26 +1,26 @@
 {
-  "runAt": "2026-08-29T09:40:14.706Z",
+  "runAt": "2026-08-29T10:41:28.778Z",
   "workloadSetId": "ap004-representative-v1",
   "candidates": [
     {
       "modelId": "onnx-community/Qwen2.5-0.5B-Instruct",
       "structuredOutputSuccessRate": 0.3333333333333333,
-      "averageLatencyMs": 74561.87223333334,
-      "peakMemoryMb": 2727.78515625
+      "averageLatencyMs": 14124.497166666666,
+      "peakMemoryMb": 2744.59765625
     },
     {
       "modelId": "Xenova/LaMini-Flan-T5-248M",
       "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 441.2178666666635,
-      "peakMemoryMb": 860.828125
+      "averageLatencyMs": 10.629533333330377,
+      "peakMemoryMb": 2741.98828125
     },
     {
       "modelId": "onnx-community/Phi-3-mini-4k-instruct",
       "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 98.41346666665049,
-      "peakMemoryMb": 1036.18359375
+      "averageLatencyMs": 316.35133333333215,
+      "peakMemoryMb": 502.99609375
     }
   ],
   "selectedModelId": "onnx-community/Qwen2.5-0.5B-Instruct",
-  "selectionRationale": "Highest structured-output success rate (33%) among evaluated candidates; average latency 74562ms is acceptable for interactive CPU use (research.md #2, constitution VII, Model Selection Is an Engineering Decision)."
+  "selectionRationale": "Highest structured-output success rate (33%) among evaluated candidates; average latency 14124ms is acceptable for interactive CPU use (research.md #2, constitution VII, Model Selection Is an Engineering Decision)."
 }
