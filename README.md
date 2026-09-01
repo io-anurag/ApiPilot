@@ -1,10 +1,10 @@
 # ApiPilot
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript\&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-24-green?logo=node.js\&logoColor=white)](https://nodejs.org/)
-[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative\&logoColor=white)](https://www.openapis.org/)
-[![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest\&logoColor=white)](https://vitest.dev/)
-[![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint\&logoColor=white)](https://eslint.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
+[![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
+[![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml)
 [![stars - ApiPilot](https://img.shields.io/github/stars/io-anurag/ApiPilot?style=social)](https://github.com/io-anurag/ApiPilot)
@@ -32,6 +32,10 @@ This repository currently implements:
   readiness-status endpoint, and a model-selection benchmarking harness (see
   [AI Provider & Local Inference Foundation](#ai-provider--local-inference-foundation)
   below).
+- **AP-005: AI Test Scenario Designer** — optionally enhance a deterministic `TestModel`
+  with validated, explainable AI scenarios while preserving the baseline and recording
+  provider, model, rationale, confidence, assumptions, and duplicate provenance (see
+  [AI Test Scenario Designer](#ai-test-scenario-designer) below).
 
 ## Setup
 
@@ -226,6 +230,52 @@ shows its full detail via `TestScenarioDetail`, including the rule, request, and
 [specs/003-deterministic-test-designer/](./specs/003-deterministic-test-designer/) for the full spec,
 plan, and API contract.
 
+## AI Test Scenario Designer
+
+AP-005 adds a stateless enhancement step after deterministic test generation. It asks the
+configured `AIProvider` for structured scenario candidates, validates each candidate against
+the normalized `ApiModel`, and merges only executable, non-duplicate scenarios into the
+caller-supplied `TestModel`.
+
+The HTTP boundary is:
+
+```text
+POST /api/test-models/enhance
+Content-Type: application/json
+```
+
+Send the normalized models produced by AP-002 and AP-003:
+
+```json
+{
+  "apiModel": { "operations": [] },
+  "testModel": { "scenarios": [] }
+}
+```
+
+The response contains the enhanced model plus candidate outcome partitions:
+
+- `added` — validated AI scenarios added to the executable model.
+- `deduplicated` — valid candidates equivalent to a retained deterministic or AI scenario.
+- `rejected` — candidates with malformed structure or invalid metadata.
+- `nonExecutable` — structurally valid candidates that reference unsupported API elements.
+
+AI scenarios use `provenance.source: "AI"` and include their candidate identity, provider,
+model, rationale, confidence, assumptions, and duplicate information. Deterministic RULE
+provenance remains distinct, and deterministic scenarios are retained first when an equivalent
+AI scenario is supplied.
+
+Provider failures return `200` with the unchanged deterministic model and an explicit
+`aiProviderOutcome` such as `unavailable`, `timeout`, or `invalid-response`. Invalid request
+shapes return `400`; non-POST methods return `405`. AP-005 does not execute, approve, persist,
+or generate artifacts from scenarios, and does not send specifications or prompts to a cloud
+provider.
+
+The enhancement contract and focused validation steps are documented in
+[specs/005-ai-test-scenario-designer/](./specs/005-ai-test-scenario-designer/), including the
+[API contract](./specs/005-ai-test-scenario-designer/contracts/enhanced-test-models-api.md) and
+[quickstart](./specs/005-ai-test-scenario-designer/quickstart.md).
+
 ## AI Provider & Local Inference Foundation
 
 AI-powered features run entirely on the local machine by default — no prompt or response
@@ -281,8 +331,6 @@ Every AI request/response type (`InferenceRequest`, `InferenceResponse`, `Readin
 [data-model.md](./specs/004-ai-provider-local-inference/data-model.md). See
 [specs/004-ai-provider-local-inference/](./specs/004-ai-provider-local-inference/) for the
 full spec, plan, research, and API contract.
-
-
 
 ## License
 

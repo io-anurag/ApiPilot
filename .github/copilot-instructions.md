@@ -180,7 +180,7 @@ Do not add Express, React, browser-specific, or Node-specific dependencies to it
 
 Respect the repository's existing technology choices.
 
-Current baseline includes:
+The current repository baseline includes:
 
 - Node.js 20 LTS
 - npm
@@ -194,7 +194,8 @@ Current baseline includes:
 - React Testing Library
 - jsdom
 - Transformers.js for local AI inference
-- Tailwind CSS v4 for frontend styling
+- Tailwind CSS v4 as the intended frontend styling direction; preserve the Tailwind
+  conventions below when frontend styling is introduced or migrated
 
 Do not replace an existing framework, package manager, test framework, or styling system simply because another technology is personally preferred.
 
@@ -215,7 +216,10 @@ Avoid dependency proliferation.
 
 ApiPilot follows specification-driven development.
 
-The `specs/` directory is part of the engineering source of truth.
+The specification artifacts are part of the engineering source of truth. If
+`.specify/memory/constitution.md` exists, treat it as authoritative for governance;
+otherwise use the available `specs/` artifacts and report any apparent governance drift
+between them.
 
 When implementing a feature:
 
@@ -604,16 +608,25 @@ Real-model tests must remain explicitly opt-in.
 
 ---
 
-# 17. No Silent Cloud AI
+# 17. Explicit AI Provider Selection
 
-AI must remain local-first.
+AI must remain local-first for the current product scope. The current AP-004 implementation
+supports local and mock providers only. A future cloud or hybrid provider may be added only
+through an explicit specification, configuration mode, privacy review, and provider
+abstraction.
 
 Never silently:
 
 - send API specifications to a cloud AI service
 - send prompts to an external provider
 - fall back from local AI to cloud AI
-- introduce an external AI dependency
+
+An explicitly configured future external provider must still:
+
+- keep provider credentials server-side
+- clearly indicate when data leaves the local machine
+- preserve structured contracts, validation, provenance, and error handling
+- never be substituted automatically when local inference fails
 
 If the configured provider is unavailable:
 
@@ -622,7 +635,7 @@ If the configured provider is unavailable:
 - return a structured error
 - support explicit retry where specified
 
-Do not introduce hidden background retries.
+Do not introduce hidden background retries or implicit provider switching.
 
 ---
 
@@ -1898,7 +1911,8 @@ A feature is complete only when:
 - [ ] TypeScript passes.
 - [ ] Lint passes.
 - [ ] Build passes.
-- [ ] Frontend styling follows Tailwind conventions.
+- [ ] Frontend styling follows the project's Tailwind conventions when frontend styling is
+      changed or introduced.
 - [ ] Responsive behavior is considered.
 - [ ] Accessibility is considered.
 - [ ] Dark-mode implications are considered.

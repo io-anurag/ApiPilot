@@ -1,4 +1,5 @@
 import type { SchemaConstraint } from "./apiModel";
+import type { AIProviderMode } from "./aiProvider";
 
 /** Classification of a generated scenario's intent, per data-model.md. */
 export type ScenarioCategory =
@@ -29,12 +30,29 @@ export interface Assertion {
 }
 
 /** Identifies which deterministic rule produced a scenario (constitution XIII). */
-export interface Provenance {
+export interface RuleProvenance {
   source: "RULE";
   rule: string;
   description: string;
   duplicateOfRules: string[];
+  duplicateOfAICandidates?: string[];
 }
+
+/** Explains the model and reasoning behind a validated AI-derived scenario. */
+export interface AIProvenance {
+  source: "AI";
+  aiCandidateId?: string;
+  description: string;
+  duplicateOfRules: string[];
+  duplicateOfAICandidates: string[];
+  aiModel: string;
+  aiProvider: AIProviderMode;
+  aiRationale: string;
+  aiConfidence: number;
+  aiAssumptions: string[];
+}
+
+export type Provenance = RuleProvenance | AIProvenance;
 
 /** A single deterministic test case tied to one operation. */
 export interface TestScenario {
