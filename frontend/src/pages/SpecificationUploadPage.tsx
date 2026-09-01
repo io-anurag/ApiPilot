@@ -1,20 +1,23 @@
 import { useState, type ChangeEvent } from "react";
-import type { ApiOperation, TestScenario } from "@apipilot/shared-domain";
+import type { ApiOperation } from "@apipilot/shared-domain";
 import { AnalysisSummary } from "../components/AnalysisSummary";
 import { OperationDetail } from "../components/OperationDetail";
 import { OperationList } from "../components/OperationList";
-import { TestScenarioDetail } from "../components/TestScenarioDetail";
-import { TestScenarioList } from "../components/TestScenarioList";
 import { uploadSpecification, type UploadResult } from "../services/specificationsClient";
-import { generateBaselineTestSuite, type GenerateTestModelResult } from "../services/testModelsClient";
+import {
+  generateBaselineTestSuite,
+  type GenerateTestModelResult,
+} from "../services/testModelsClient";
+import { TestScenarioReviewPage } from "./TestScenarioReviewPage";
 
 export function SpecificationUploadPage() {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [selected, setSelected] = useState<ApiOperation | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [testModelResult, setTestModelResult] = useState<GenerateTestModelResult | null>(null);
+  const [testModelResult, setTestModelResult] = useState<GenerateTestModelResult | null>(
+    null,
+  );
   const [generating, setGenerating] = useState(false);
-  const [selectedScenario, setSelectedScenario] = useState<TestScenario | null>(null);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -22,7 +25,6 @@ export function SpecificationUploadPage() {
     setUploading(true);
     setSelected(null);
     setTestModelResult(null);
-    setSelectedScenario(null);
     const uploadResult = await uploadSpecification(file);
     setResult(uploadResult);
     setUploading(false);
@@ -34,7 +36,6 @@ export function SpecificationUploadPage() {
   async function handleGenerateTestSuite() {
     if (!apiModel) return;
     setGenerating(true);
-    setSelectedScenario(null);
     const generateResult = await generateBaselineTestSuite(apiModel);
     setTestModelResult(generateResult);
     setGenerating(false);
@@ -73,14 +74,13 @@ export function SpecificationUploadPage() {
             </p>
           )}
           {testModelResult?.ok && (
-            <>
-              <TestScenarioList scenarios={testModelResult.testModel.scenarios} onSelect={setSelectedScenario} />
-              {selectedScenario && <TestScenarioDetail scenario={selectedScenario} />}
-            </>
+            <TestScenarioReviewPage
+              apiModel={apiModel}
+              testModel={testModelResult.testModel}
+            />
           )}
         </>
       )}
     </section>
   );
 }
-
