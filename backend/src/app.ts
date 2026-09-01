@@ -4,11 +4,14 @@ import { aiStatusRouter } from "./api/aiStatus";
 import { healthRouter } from "./api/health";
 import { specificationsRouter } from "./api/specifications";
 import { testModelsRouter } from "./api/testModels";
+import { enhancedTestModelsRouter } from "./api/enhancedTestModels";
+import { createEnhancedTestModelsRouter } from "./api/enhancedTestModels";
+import type { AIProvider } from "@apipilot/shared-domain";
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 
-export function createApp() {
+export function createApp(provider?: AIProvider) {
   const app = express();
 
   app.use(express.json());
@@ -16,6 +19,10 @@ export function createApp() {
   app.use("/api", versionRouter);
   app.use("/api", specificationsRouter);
   app.use("/api", testModelsRouter);
+  app.use(
+    "/api",
+    provider ? createEnhancedTestModelsRouter(provider) : enhancedTestModelsRouter,
+  );
   app.use("/api", aiStatusRouter);
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):

@@ -1,7 +1,11 @@
 import type { TestScenario } from "@apipilot/shared-domain";
 
-/** Shows a single scenario's category, rule, generated request, and expected assertions (US2). */
+/** Shows a single scenario's category, provenance, generated request, and expected assertions (US2). */
 export function TestScenarioDetail({ scenario }: { scenario: TestScenario }) {
+  const provenanceLabel =
+    scenario.provenance.source === "RULE"
+      ? scenario.provenance.rule
+      : `${scenario.provenance.aiProvider} / ${scenario.provenance.aiModel}`;
   return (
     <article data-testid="test-scenario-detail">
       <h4>
@@ -12,8 +16,8 @@ export function TestScenarioDetail({ scenario }: { scenario: TestScenario }) {
         {scenario.operationMethod} {scenario.operationPath}
       </p>
       <section>
-        <h5>Rule</h5>
-        <p data-testid="scenario-rule">{scenario.provenance.rule}</p>
+        <h5>{scenario.provenance.source === "RULE" ? "Rule" : "AI source"}</h5>
+        <p data-testid="scenario-rule">{provenanceLabel}</p>
         <p>{scenario.provenance.description}</p>
       </section>
       <section>
