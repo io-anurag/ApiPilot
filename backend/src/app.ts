@@ -21,7 +21,11 @@ import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 export function createApp(provider?: AIProvider) {
   const app = express();
 
-  app.use(express.json());
+  // Downstream endpoints (test-model generation/enhancement/review, Postman export) receive
+  // the ApiModel/TestModel derived from an uploaded spec as a JSON body. Match express.json's
+  // limit to the upload contract (MAX_UPLOAD_BYTES, FR-015) so a spec accepted at upload time
+  // is not silently rejected one step later by body-parser's much smaller 100kb default.
+  app.use(express.json({ limit: MAX_UPLOAD_BYTES }));
   app.use("/api", healthRouter);
   app.use("/api", versionRouter);
   app.use("/api", specificationsRouter);
@@ -52,6 +56,17 @@ export function createApp(provider?: AIProvider) {
       res.status(413).json({
         error: "file_too_large",
         message: `Uploaded file exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes`,
+      });
+      return;
+    }
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      (err as { type?: string }).type === "entity.too.large"
+    ) {
+      res.status(413).json({
+        error: "payload_too_large",
+        message: `Request body exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes`,
       });
       return;
     }
