@@ -10,7 +10,16 @@ function isEnhancementRequest(
   const body = value as Record<string, unknown>;
   const apiModel = body.apiModel as Record<string, unknown> | undefined;
   const testModel = body.testModel as Record<string, unknown> | undefined;
-  return Array.isArray(apiModel?.operations) && Array.isArray(testModel?.scenarios);
+  const summary = apiModel?.summary as Record<string, unknown> | null | undefined;
+  return (
+    Array.isArray(apiModel?.operations) &&
+    typeof apiModel?.securitySchemes === "object" &&
+    apiModel.securitySchemes !== null &&
+    typeof summary === "object" &&
+    summary !== null &&
+    Array.isArray(summary.issues) &&
+    Array.isArray(testModel?.scenarios)
+  );
 }
 
 export function createEnhancedTestModelsRouter(provider = getAIProvider()) {
