@@ -4,8 +4,14 @@ import { aiStatusRouter } from "./api/aiStatus";
 import { healthRouter } from "./api/health";
 import { specificationsRouter } from "./api/specifications";
 import { testModelsRouter } from "./api/testModels";
-import { enhancedTestModelsRouter } from "./api/enhancedTestModels";
-import { createEnhancedTestModelsRouter } from "./api/enhancedTestModels";
+import {
+  createEnhancedTestModelsRouter,
+  enhancedTestModelsRouter,
+} from "./api/enhancedTestModels";
+import {
+  createTestScenarioReviewsRouter,
+  testScenarioReviewsRouter,
+} from "./api/testScenarioReviews";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
@@ -22,6 +28,10 @@ export function createApp(provider?: AIProvider) {
   app.use(
     "/api",
     provider ? createEnhancedTestModelsRouter(provider) : enhancedTestModelsRouter,
+  );
+  app.use(
+    "/api",
+    provider ? createTestScenarioReviewsRouter(provider) : testScenarioReviewsRouter,
   );
   app.use("/api", aiStatusRouter);
 
