@@ -38,10 +38,16 @@ function toReviewResponse(workspace: ReviewWorkspace) {
 }
 
 function isApiModel(value: unknown): value is ApiModel {
+  if (typeof value !== "object" || value === null) return false;
+  const model = value as Record<string, unknown>;
+  const summary = model.summary as Record<string, unknown> | null | undefined;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as Record<string, unknown>).operations)
+    Array.isArray(model.operations) &&
+    typeof model.securitySchemes === "object" &&
+    model.securitySchemes !== null &&
+    typeof summary === "object" &&
+    summary !== null &&
+    Array.isArray(summary.issues)
   );
 }
 
