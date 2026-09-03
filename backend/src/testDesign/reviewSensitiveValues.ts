@@ -1,33 +1,21 @@
 import type { GeneratedRequest } from "@apipilot/shared-domain";
+import {
+  isBearerTokenValue,
+  isSensitiveFieldName,
+  isSensitiveHeaderName,
+} from "./sensitiveValueDetection";
 
 const REDACTED = "[redacted]";
 
-const SENSITIVE_HEADER_NAMES = new Set([
-  "authorization",
-  "proxy-authorization",
-  "cookie",
-  "set-cookie",
-  "x-api-key",
-  "api-key",
-]);
-
-const SENSITIVE_FIELD_NAME_PATTERN =
-  /(password|secret|token|api[-_]?key|credential|bearer)/i;
-const BEARER_TOKEN_PATTERN = /^Bearer\s+\S+/i;
-
-function isSensitiveHeaderName(name: string): boolean {
-  return SENSITIVE_HEADER_NAMES.has(name.toLowerCase());
-}
-
 function redactHeaderValue(name: string, value: unknown): unknown {
   if (isSensitiveHeaderName(name)) return REDACTED;
-  if (typeof value === "string" && BEARER_TOKEN_PATTERN.test(value)) return REDACTED;
+  if (isBearerTokenValue(value)) return REDACTED;
   return value;
 }
 
 function redactBodyValue(key: string, value: unknown): unknown {
-  if (SENSITIVE_FIELD_NAME_PATTERN.test(key)) return REDACTED;
-  if (typeof value === "string" && BEARER_TOKEN_PATTERN.test(value)) return REDACTED;
+  if (isSensitiveFieldName(key)) return REDACTED;
+  if (isBearerTokenValue(value)) return REDACTED;
   return redactUnknown(value);
 }
 
@@ -47,6 +35,8 @@ function redactUnknown(value: unknown): unknown {
 /**
  * Redacts credential-like headers, bearer tokens, and sensitive request-body fields while
  * preserving the rest of the test intent, for display and diagnostic boundaries (FR-018).
+ * Detection is shared with the export substituter (`sensitiveValueDetection.ts`); only the
+ * replacement differs.
  */
 export function redactSensitiveRequestValues(
   request: GeneratedRequest,

@@ -14,8 +14,12 @@ import { TestScenarioReviewSummary } from "../components/TestScenarioReviewSumma
 import { TestScenarioReviewDetail } from "../components/TestScenarioReviewDetail";
 import { TestScenarioReviewDecision } from "../components/TestScenarioReviewDecision";
 import { TestScenarioReviewRefinement } from "../components/TestScenarioReviewRefinement";
+import { PostmanExportPanel } from "../components/PostmanExportPanel";
 
-/** Orchestrates scenario review: inspection, decisions, and AI refinement (AP-006 US1-US3). */
+/**
+ * Orchestrates scenario review: inspection, decisions, AI refinement (AP-006 US1-US3), and the
+ * Postman export of the approved scenarios (AP-007 US1).
+ */
 export function TestScenarioReviewPage({
   apiModel,
   testModel,
@@ -24,6 +28,7 @@ export function TestScenarioReviewPage({
   testModel: TestModel;
 }) {
   const [workspace, setWorkspace] = useState<ReviewWorkspaceWire | null>(null);
+  const [approvedTestModel, setApprovedTestModel] = useState<TestModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
@@ -38,6 +43,7 @@ export function TestScenarioReviewPage({
       if (cancelled) return;
       if (result.ok) {
         setWorkspace(result.review);
+        setApprovedTestModel(result.approvedTestModel);
       } else {
         setLoadError(result.message);
       }
@@ -61,6 +67,7 @@ export function TestScenarioReviewPage({
       return;
     }
     setWorkspace(result.review);
+    setApprovedTestModel(result.approvedTestModel);
     const outcome = result.outcomes.find((o) => o.scenarioId === scenarioId);
     if (outcome && !outcome.applied) {
       setActionError(outcome.finding?.message ?? "The request could not be applied.");
@@ -180,6 +187,9 @@ export function TestScenarioReviewPage({
             onRegenerate={() => handleRegenerate(selected)}
           />
         </>
+      )}
+      {approvedTestModel && (
+        <PostmanExportPanel apiModel={apiModel} testModel={approvedTestModel} />
       )}
     </section>
   );

@@ -34,6 +34,7 @@ Thumbs.db
 .vite/
 
 .github/
+.claude/skills
 .qodo/
 .specify/*
 .playwright-mcp/

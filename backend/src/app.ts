@@ -13,6 +13,7 @@ import {
   testScenarioReviewsRouter,
 } from "./api/testScenarioReviews";
 import type { AIProvider } from "@apipilot/shared-domain";
+import { postmanCollectionsRouter } from "./api/postmanCollections";
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
@@ -33,6 +34,7 @@ export function createApp(provider?: AIProvider) {
     "/api",
     provider ? createTestScenarioReviewsRouter(provider) : testScenarioReviewsRouter,
   );
+  app.use("/api", postmanCollectionsRouter);
   app.use("/api", aiStatusRouter);
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):
