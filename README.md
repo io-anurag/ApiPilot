@@ -36,6 +36,14 @@ This repository currently implements:
   with validated, explainable AI scenarios while preserving the baseline and recording
   provider, model, rationale, confidence, assumptions, and duplicate provenance (see
   [AI Test Scenario Designer](#ai-test-scenario-designer) below).
+- **AP-006: Test Scenario Review** — inspect a generated `TestModel` in one workspace, accept
+  or reject individual scenarios, edit or regenerate AI-derived suggestions, and produce the
+  approved `TestModel` that later artifact-generation features consume (see
+  [Test Scenario Review](#test-scenario-review) below).
+- **AP-007: Postman Collection Generator** — export the scenarios accepted in review as a
+  runnable Postman collection, a companion environment, and a README describing coverage
+  and limitations, deterministically and with no credential written into the collection
+  (see [Postman Collection Generator](#postman-collection-generator) below).
 
 ## Setup
 
@@ -331,6 +339,137 @@ Every AI request/response type (`InferenceRequest`, `InferenceResponse`, `Readin
 [data-model.md](./specs/004-ai-provider-local-inference/data-model.md). See
 [specs/004-ai-provider-local-inference/](./specs/004-ai-provider-local-inference/) for the
 full spec, plan, research, and API contract.
+
+## Test Scenario Review
+
+AP-006 is a stateless review boundary between deterministic/AI test generation and downstream
+artifact generation: it never executes API requests, and accepting a scenario is a review
+decision, not execution authorization.
+
+**`POST /api/test-models/reviews`** takes the normalized `ApiModel` (AP-002), a `TestModel`
+(AP-003/AP-005), and an optional prior review snapshot plus a batch of `accept`/`reject`
+updates, and returns the current review state, an approved `TestModel` view, and a per-update
+outcome. The approved view contains only scenarios the reviewer has explicitly **accepted** —
+a pending or rejected scenario, regardless of origin, is never represented as approved (FR-009).
+A batch applies partially: each update's outcome (`scenario-not-found`,
+`invalid-rejection-reason`, `stale-revision`, `duplicate-scenario`, `invalid-edit`,
+`policy-requires-review`) is reported independently, so one bad update never blocks the rest.
+
+Two further endpoints refine individual scenarios, each identified by scenario ID and the
+caller's observed revision, each returning `409` on a stale revision, and each leaving the
+current scenario unchanged on failure:
+
+- **`POST /api/test-models/reviews/edit`** validates a supported edit to a scenario's request or
+  assertions against the `ApiModel` before replacing it; a successful edit is marked
+  user-modified, returned as `pending`, and keeps the prior content in `history`.
+- **`POST /api/test-models/reviews/regenerate`** asks the configured `AIProvider` for a
+  replacement for one AI-derived scenario; a successful replacement is returned as `pending` and
+  keeps the prior AI provenance in `history`, and a provider failure, timeout, or unsupported
+  response leaves the existing scenario untouched with an explicit failure outcome.
+
+Every response redacts sensitive request values (bearer tokens, credential-shaped headers and
+body fields) into a separate `displayRequest` for safe rendering, while the round-trippable
+`scenario.request` used for hydration and the approved-model projection is left unaltered.
+`DEFAULT_REVIEW_POLICY` marks `AI` and `USER`-modified origins as requiring explicit review; a
+scenario's `summary.requiresReview` count reflects this, but approval always requires an
+explicit accept regardless of origin.
+
+### Module boundaries
+
+- `backend/src/testDesign/reviewTestModel.ts` — the review workspace state machine: hydrating a
+  workspace from a caller-supplied snapshot, applying accept/reject updates and edits, computing
+  summary counts, and projecting the approved `TestModel` (deduplicated via the same
+  `deduplicate.ts` key used by AP-003).
+- `backend/src/testDesign/regenerateReviewScenario.ts` — requests one AI replacement scenario
+  through the existing `AIProvider` boundary and validates it before it can replace the current
+  scenario.
+- `backend/src/testDesign/sensitiveValueDetection.ts` — credential-detection predicates shared
+  with AP-007's export redaction, so one definition of "this value is a credential" serves both.
+- `backend/src/testDesign/reviewSensitiveValues.ts` — builds the redacted `displayRequest` from
+  those predicates.
+- `backend/src/api/testScenarioReviews.ts` — wires the three endpoints above behind
+  `createTestScenarioReviewsRouter(provider)`, injectable for tests.
+- `frontend/src/pages/TestScenarioReviewPage.tsx` and its `TestScenarioReview*` components
+  (`List`, `Summary`, `Detail`, `Decision`, `Refinement`) — the review workspace UI, including
+  loading, empty, success, and error states, and the entry point to AP-007's export panel once
+  scenarios are accepted.
+
+The `ReviewState`, `ReviewScenario`, `ReviewDecision`, `ReviewPolicy`, `ReviewSummary`, and
+`ReviewWorkspace` types are defined once in `packages/shared-domain/src/testScenarioReview.ts`.
+See [specs/006-test-scenario-review/](./specs/006-test-scenario-review/) for the full spec, plan,
+data model, [API contract](./specs/006-test-scenario-review/contracts/test-scenario-review-api.md),
+and [quickstart](./specs/006-test-scenario-review/quickstart.md).
+
+## Postman Collection Generator
+
+AP-007 turns the scenarios a reviewer accepted into three deliverable artifacts. It is a purely
+deterministic transformation: it uses **no AI**, issues **no request** to any API described by the
+specification, and retains nothing.
+
+**`POST /api/test-models/postman-collection`** takes the normalized `ApiModel` (AP-002), the
+approved `TestModel` (AP-006), and optional export options, and returns all three artifacts in one
+response:
+
+- `collection` — one runnable request per approved scenario, grouped into folders derived from the
+  operation's tags (falling back to the first path segment, then a single `Ungrouped` folder). Each
+  request carries the approved method, path, path/query parameters, headers, and body exactly as
+  approved, including values that deliberately violate the schema, and executable checks for
+  exactly the assertions the scenario carried.
+- `environment` — every variable the collection references, with credential variables typed
+  `secret`. Supplied values appear here and nowhere else.
+- `readme` — coverage, folder organization, counts by origin, the variables to supply, how to run
+  the artifacts, and every recorded limitation.
+
+Alongside them, `validation` reports the pre-delivery check, `limitations` reports what could not
+be expressed, and `summary` reports the request, folder, and per-origin counts.
+
+**Variables, never values.** Every request URL is built from `{{baseUrl}}`; the specification
+carries no server address and none is invented. Declared security schemes map to `{{token}}`,
+`{{username}}`/`{{password}}`, or `{{apiKey}}`; schemes the export cannot configure (such as
+`oauth2`) are recorded as limitations rather than substituted with a plausible-looking guess. A
+credential found in an approved request is replaced by a variable reference so the request still
+runs. `collection.variable` declares every variable with an empty value, so no value ever lives in
+the collection artifact.
+
+**Refusals, not broken artifacts.** An empty approved model, a scenario referencing an unknown
+operation, a supplied value for a variable the collection does not reference, and a model carrying
+multi-step workflow intent are each refused with `400` and an explicit code. A collection that
+fails the pre-delivery check is refused with `500 collection_validation_failed` and its artifacts
+are withheld — an invalid artifact is never presented as a successful export. Recorded limitations
+never block an export.
+
+**Determinism.** Item ids are a SHA-256 digest of the scenario id and the collection id a digest of
+the approved scenario set, so identical input produces byte-identical artifacts and removing one
+accepted scenario changes only that scenario's request. Ordering uses a fixed code-unit comparison
+rather than `localeCompare`, so output does not vary with the runtime's locale data.
+
+### Module boundaries
+
+- `backend/src/postman/generateCollection.ts` — the whole transformation: refusals, grouping,
+  variable aggregation, the validation gate, and artifact assembly.
+- `backend/src/postman/requestItem.ts` — one approved scenario to one request, including URL
+  composition, body content type re-derived from the `ApiModel`, and credential substitution.
+- `backend/src/postman/assertionScripts.ts` — assertions to executable checks, plus
+  `SchemaConstraint` to JSON Schema, copying only constraints the specification declared.
+- `backend/src/postman/authMapping.ts` — declared security schemes to collection auth.
+- `backend/src/postman/folders.ts`, `ordering.ts`, `identifiers.ts`, `artifactVariables.ts` — the
+  grouping, ordering, identifier, and variable-declaration primitives that make the output stable.
+- `backend/src/postman/validateCollection.ts` — the pre-delivery check over the emitted subset of
+  the v2.1.0 format; problems name a location and an expectation, never a payload or a value.
+- `backend/src/postman/environment.ts`, `readme.ts` — the companion environment and the
+  accompanying document.
+- `backend/src/testDesign/sensitiveValueDetection.ts` — credential-detection predicates shared with
+  AP-006's review redaction, so one definition of "this value is a credential" serves both.
+- `frontend/src/components/PostmanExportPanel.tsx` and
+  `frontend/src/services/postmanCollectionsClient.ts` — the export action, its loading, success,
+  empty, and failure states, and the three downloads.
+
+The export renders single-operation scenarios only. Multi-step workflow rendering waits on AP-008,
+which owns the workflow contract; a model carrying workflow intent is refused explicitly rather
+than flattened into unrelated requests. See
+[specs/007-postman-collection-generator/](./specs/007-postman-collection-generator/) for the spec,
+plan, research, [API contract](./specs/007-postman-collection-generator/contracts/postman-collection-api.md),
+and [quickstart](./specs/007-postman-collection-generator/quickstart.md).
 
 ## License
 

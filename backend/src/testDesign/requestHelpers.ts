@@ -28,11 +28,20 @@ export function* walkFields(
   }
 }
 
-/** Picks the request body content-type schema to generate values from (prefers application/json). */
-export function primaryRequestBodySchema(operation: ApiOperation): SchemaConstraint | undefined {
+/** Picks the request body content type to generate values for (prefers application/json). */
+export function primaryRequestBodyContentType(operation: ApiOperation): string | undefined {
   const contentTypes = operation.requestBody?.contentTypes;
   if (!contentTypes) return undefined;
-  return contentTypes["application/json"] ?? Object.values(contentTypes)[0];
+  return "application/json" in contentTypes
+    ? "application/json"
+    : Object.keys(contentTypes)[0];
+}
+
+/** Picks the request body content-type schema to generate values from (prefers application/json). */
+export function primaryRequestBodySchema(operation: ApiOperation): SchemaConstraint | undefined {
+  const contentType = primaryRequestBodyContentType(operation);
+  if (contentType === undefined) return undefined;
+  return operation.requestBody?.contentTypes[contentType];
 }
 
 /** Builds a fully specification-conformant request for `operation` (used as the base for every mutation). */
