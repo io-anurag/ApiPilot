@@ -18,6 +18,8 @@ import { RequestQueue } from "./requestQueue";
 /** Minimal shape of a loaded model this provider needs, independent of the runtime. */
 export interface TextGenerationEngine {
   generate(input: string, options: { maxNewTokens?: number }): Promise<string>;
+  /** Tokenizer's max context length in tokens, if known; used only for batch planning. */
+  contextWindowTokens?: number;
 }
 
 /** Loads the configured model into a TextGenerationEngine for the given device. */
@@ -25,6 +27,25 @@ export type EngineLoader = (
   config: ModelConfig,
   device: "cpu" | "gpu",
 ) => Promise<TextGenerationEngine>;
+
+/**
+ * Shared safety margin (in tokens) reserved below the model's real context window, to
+ * absorb the discrepancy between `tokenizer.encode()`'s count and what the
+ * text-generation pipeline feeds the model internally. Used both by the exact guard in
+ * `loadTransformersEngine()` below and by `getInputBudget()`'s conservative estimate, so
+ * the two never disagree about how much headroom is reserved.
+ */
+export const CONTEXT_SAFETY_MARGIN_TOKENS = 64;
+
+/**
+ * Conservative characters-per-token estimate used only to plan batches before sending a
+ * request (specs/011-ai-prompt-batching/research.md Decision 2) — deliberately on the
+ * low side (JSON-heavy prompts full of punctuation/numbers tokenize less efficiently than
+ * prose) because `loadTransformersEngine()`'s exact tokenizer guard remains the real,
+ * authoritative fits/doesn't-fit check (Decision 1); this estimate only needs to usually
+ * avoid tripping that guard, not match it exactly.
+ */
+export const CHARS_PER_TOKEN_ESTIMATE = 3;
 
 /**
  * Only this function (and this module) imports `@huggingface/transformers` (constitution
@@ -42,7 +63,14 @@ async function loadTransformersEngine(
     ...(config.dtype ? { dtype: config.dtype } : {}),
   });
 
+  const rawContextLimit = generator.tokenizer.model_max_length;
+  const contextWindowTokens =
+    typeof rawContextLimit === "number" && Number.isFinite(rawContextLimit)
+      ? rawContextLimit
+      : undefined;
+
   return {
+    contextWindowTokens,
     async generate(input, options) {
       const maxNewTokens = options.maxNewTokens ?? 256;
 
@@ -51,10 +79,19 @@ async function loadTransformersEngine(
       // embedding Gather node once the position index exceeds the model's context
       // window, surfacing as an opaque native error rather than a typed one. Fail
       // explicitly here instead (constitution 8.4 — Explicit Failure).
+      //
+      // `tokenizer.encode()` (add_special_tokens: true by default) does not necessarily
+      // count the exact same tokens the text-generation pipeline feeds the model
+      // internally, so a prompt sitting right at the boundary can still overflow by a
+      // few tokens even though this check passed — CONTEXT_SAFETY_MARGIN_TOKENS absorbs
+      // that discrepancy instead of relying on an exact token-for-token match.
       const contextLimit = generator.tokenizer.model_max_length;
       if (typeof contextLimit === "number" && Number.isFinite(contextLimit)) {
         const inputTokenCount = generator.tokenizer.encode(input).length;
-        if (inputTokenCount + maxNewTokens > contextLimit) {
+        if (
+          inputTokenCount + maxNewTokens + CONTEXT_SAFETY_MARGIN_TOKENS >
+          contextLimit
+        ) {
           throw new AIProviderError(
             "INVALID_REQUEST",
             `InferenceRequest.input requires ${inputTokenCount} tokens plus ${maxNewTokens} reserved for ` +
@@ -88,7 +125,13 @@ async function loadTransformersEngine(
 function logAIEvent(event: {
   requestId?: string;
   modelId: string;
-  stage: "load_start" | "load_success" | "load_failed" | "inference_start" | "inference_success" | "inference_error";
+  stage:
+    | "load_start"
+    | "load_success"
+    | "load_failed"
+    | "inference_start"
+    | "inference_success"
+    | "inference_error";
   durationMs?: number;
   errorCategory?: string;
 }): void {
@@ -101,7 +144,9 @@ class TimeoutError extends Error {}
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new TimeoutError(`Inference exceeded the configured timeout of ${timeoutMs}ms`));
+      reject(
+        new TimeoutError(`Inference exceeded the configured timeout of ${timeoutMs}ms`),
+      );
     }, timeoutMs);
     promise.then(
       (value) => {
@@ -139,6 +184,33 @@ export class LocalProvider implements AIProvider {
     return this.readiness.getState();
   }
 
+  /**
+   * Conservative character budget for InferenceRequest.input, derived from the loaded
+   * tokenizer's context window (specs/011-ai-prompt-batching/research.md Decision 2).
+   * Loads the engine if not already loaded (same lazy path as `infer()`). Returns
+   * `undefined` if the engine fails to load here or the tokenizer reports no finite
+   * `model_max_length` — callers must treat that as "unknown, assume it fits" and rely on
+   * the exact guard inside `infer()` as the real safety net.
+   */
+  async getInputBudget(maxOutputTokens = 256): Promise<number | undefined> {
+    let engine: TextGenerationEngine;
+    try {
+      engine = await this.ensureEngine();
+    } catch {
+      return undefined;
+    }
+    const contextWindowTokens = engine.contextWindowTokens;
+    if (
+      typeof contextWindowTokens !== "number" ||
+      !Number.isFinite(contextWindowTokens)
+    ) {
+      return undefined;
+    }
+    const availableTokens =
+      contextWindowTokens - maxOutputTokens - CONTEXT_SAFETY_MARGIN_TOKENS;
+    return Math.max(0, Math.floor(availableTokens * CHARS_PER_TOKEN_ESTIMATE));
+  }
+
   /** Explicit user action required to attempt loading again after a failure (FR-019). */
   retryLoad(): void {
     this.enginePromise = undefined;
@@ -165,7 +237,8 @@ export class LocalProvider implements AIProvider {
       return buildErrorResponse({
         requestId: request.requestId,
         errorCategory: "NOT_READY",
-        errorMessage: "Local model is unavailable; an explicit retry is required before inference can proceed",
+        errorMessage:
+          "Local model is unavailable; an explicit retry is required before inference can proceed",
         modelId: this.config.modelId,
         provider: this.mode,
         durationMs: Date.now() - startedAt,
@@ -176,8 +249,15 @@ export class LocalProvider implements AIProvider {
     return this.queue.enqueue(() => this.runInference(request, startedAt));
   }
 
-  private async runInference(request: InferenceRequest, startedAt: number): Promise<InferenceResponse> {
-    logAIEvent({ requestId: request.requestId, modelId: this.config.modelId, stage: "inference_start" });
+  private async runInference(
+    request: InferenceRequest,
+    startedAt: number,
+  ): Promise<InferenceResponse> {
+    logAIEvent({
+      requestId: request.requestId,
+      modelId: this.config.modelId,
+      stage: "inference_start",
+    });
 
     let engine: TextGenerationEngine;
     try {
@@ -213,7 +293,12 @@ export class LocalProvider implements AIProvider {
         timeoutMs,
       );
       const durationMs = Date.now() - startedAt;
-      logAIEvent({ requestId: request.requestId, modelId: this.config.modelId, stage: "inference_success", durationMs });
+      logAIEvent({
+        requestId: request.requestId,
+        modelId: this.config.modelId,
+        stage: "inference_success",
+        durationMs,
+      });
       return {
         contractVersion: 1,
         requestId: request.requestId,
@@ -232,7 +317,13 @@ export class LocalProvider implements AIProvider {
             : "PROVIDER_UNAVAILABLE";
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
-      logAIEvent({ requestId: request.requestId, modelId: this.config.modelId, stage: "inference_error", errorCategory, durationMs });
+      logAIEvent({
+        requestId: request.requestId,
+        modelId: this.config.modelId,
+        stage: "inference_error",
+        errorCategory,
+        durationMs,
+      });
       return buildErrorResponse({
         requestId: request.requestId,
         errorCategory,
@@ -286,7 +377,8 @@ export class LocalProvider implements AIProvider {
         modelId: this.config.modelId,
         acceleratorRequested: true,
         acceleratorActive: false,
-        reason: "Accelerator was requested but unavailable at runtime; using CPU inference instead",
+        reason:
+          "Accelerator was requested but unavailable at runtime; using CPU inference instead",
       });
       logAIEvent({ modelId: this.config.modelId, stage: "load_success" });
       return engine;

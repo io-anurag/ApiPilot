@@ -47,6 +47,18 @@ deterministic model and an explicit `aiProviderOutcome` such as `unavailable`, `
 `invalid-response`. `aiErrorCategory` and a safe `aiErrorMessage` explain the outcome.
 This prevents an AI outage from hiding the deterministic baseline.
 
+### Partial Completion Response: `200 OK`
+
+When `apiModel` is large enough to require multiple AI batches (specs/011-ai-prompt-batching),
+`aiProviderOutcome` may instead be `partial`: at least one batch succeeded while at least one
+other failed, timed out, or was not attempted. `enhancedTestModel.scenarios` includes the
+deterministic baseline plus whatever AI scenarios the successful batches produced, and
+`aiErrorCategory`/`aiErrorMessage` describe the failing/not-attempted batches (see
+specs/011-ai-prompt-batching/contracts/ai-batching-outcome.md for the full outcome-derivation
+rationale). `partial` is never returned when every batch fails — that case still reports the
+same `aiProviderOutcome` values (`unavailable`, `timeout`, `invalid-response`) as a single-batch
+failure, for backward compatibility.
+
 ### Error Responses
 
 - **400 Bad Request** — missing or minimally invalid `apiModel` or `testModel`.

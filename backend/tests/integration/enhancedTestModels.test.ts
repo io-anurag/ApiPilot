@@ -40,6 +40,7 @@ function fixedProvider(content = candidateResponse): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (input): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: input.requestId,
@@ -99,20 +100,31 @@ describe("POST /api/test-models/enhance", () => {
   });
 
   it("reports non-executable candidates without adding them", async () => {
-    const response = await request(createApp(fixedProvider(JSON.stringify({
-      responseVersion: 1,
-      candidates: [{
-        ...JSON.parse(candidateResponse).candidates[0],
-        candidateId: "unknown-field",
-        targetField: "missing",
-      }],
-    })))).post("/api/test-models/enhance")
+    const response = await request(
+      createApp(
+        fixedProvider(
+          JSON.stringify({
+            responseVersion: 1,
+            candidates: [
+              {
+                ...JSON.parse(candidateResponse).candidates[0],
+                candidateId: "unknown-field",
+                targetField: "missing",
+              },
+            ],
+          }),
+        ),
+      ),
+    )
+      .post("/api/test-models/enhance")
       .send({ apiModel: aiScenarioApiModel, testModel: aiScenarioBaseline });
 
     expect(response.status).toBe(200);
     expect(response.body.aiCandidates.nonExecutable).toHaveLength(1);
     expect(response.body.enhancedTestModel).toEqual(aiScenarioBaseline);
-    expect(response.body.aiCandidates.nonExecutable[0].findings[0].executable).toBe(false);
+    expect(response.body.aiCandidates.nonExecutable[0].findings[0].executable).toBe(
+      false,
+    );
   });
 
   it("preserves the deterministic baseline during provider degradation", async () => {
@@ -133,10 +145,20 @@ describe("POST /api/test-models/enhance", () => {
 
   it("deduplicates equivalent AI candidates and preserves their identities", async () => {
     const parsedCandidate = JSON.parse(candidateResponse).candidates[0];
-    const response = await request(createApp(fixedProvider(JSON.stringify({
-      responseVersion: 1,
-      candidates: [parsedCandidate, { ...parsedCandidate, candidateId: "route-candidate-2" }],
-    })))).post("/api/test-models/enhance")
+    const response = await request(
+      createApp(
+        fixedProvider(
+          JSON.stringify({
+            responseVersion: 1,
+            candidates: [
+              parsedCandidate,
+              { ...parsedCandidate, candidateId: "route-candidate-2" },
+            ],
+          }),
+        ),
+      ),
+    )
+      .post("/api/test-models/enhance")
       .send({ apiModel: aiScenarioApiModel, testModel: aiScenarioBaseline });
 
     expect(response.status).toBe(200);

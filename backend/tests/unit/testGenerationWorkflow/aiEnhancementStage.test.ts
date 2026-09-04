@@ -9,8 +9,15 @@ import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReview
 import { runAiEnhancement } from "../../../src/testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
 import { StageNotActiveError } from "../../../src/testGenerationWorkflow/errors";
-import { applyScenarioDecisions, finalizeScenarioReview } from "../../../src/testGenerationWorkflow/scenarioReviewStage";
-import { getCurrentWorkflow, resetStore, startWorkflow } from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  applyScenarioDecisions,
+  finalizeScenarioReview,
+} from "../../../src/testGenerationWorkflow/scenarioReviewStage";
+import {
+  getCurrentWorkflow,
+  resetStore,
+  startWorkflow,
+} from "../../../src/testGenerationWorkflow/workflowStore";
 
 async function validApiModel() {
   const content = readFileSync(
@@ -29,6 +36,7 @@ const mockProvider: AIProvider = {
     acceleratorActive: false,
     updatedAt: new Date(0).toISOString(),
   }),
+  getInputBudget: async () => undefined,
   infer: async (request) => ({
     contractVersion: 1,
     requestId: request.requestId,
@@ -59,7 +67,9 @@ describe("aiEnhancementStage (happy path)", () => {
     const wf = await runAiEnhancement(mockProvider);
     expect(wf.stages.aiEnhancement.status).toBe("complete");
     expect(wf.aiEnhancement?.aiProviderOutcome).toBe("success");
-    expect(wf.reviewWorkspace?.scenarios.length).toBe(wf.aiEnhancement?.enhancedTestModel.scenarios.length);
+    expect(wf.reviewWorkspace?.scenarios.length).toBe(
+      wf.aiEnhancement?.enhancedTestModel.scenarios.length,
+    );
     expect(wf.activeStageId).toBe("scenarioReview");
     expect(wf.stages.scenarioReview.status).toBe("active");
   });
@@ -74,6 +84,7 @@ const unavailableProvider: AIProvider = {
     acceleratorActive: false,
     updatedAt: new Date(0).toISOString(),
   }),
+  getInputBudget: async () => undefined,
   infer: async () => {
     throw Object.assign(new Error("unavailable"), { category: "PROVIDER_UNAVAILABLE" });
   },
@@ -89,7 +100,12 @@ const aiCandidateResponse = JSON.stringify({
       category: "invalid-format",
       targetLocation: "body",
       targetField: "name",
-      request: { pathParameters: {}, queryParameters: {}, headers: {}, body: { name: "" } },
+      request: {
+        pathParameters: {},
+        queryParameters: {},
+        headers: {},
+        body: { name: "" },
+      },
       assertions: [{ type: "status-code", expectedStatusCode: "201" }],
       rationale: "Exercise an empty pet name.",
       confidence: 0.8,
@@ -135,15 +151,52 @@ describe("aiEnhancementStage (skip/retry, US4)", () => {
     expect(wf.stages.aiEnhancement.status).toBe("complete");
     expect(wf.reviewWorkspace?.scenarios.length).toBe(beforeRetryCount + 1);
     // Existing deterministic scenarios are untouched, not reset to a fresh workspace.
-    const added = wf.reviewWorkspace?.scenarios.find((s) => s.scenario.provenance.source === "AI");
+    const added = wf.reviewWorkspace?.scenarios.find(
+      (s) => s.scenario.provenance.source === "AI",
+    );
     expect(added?.state).toBe("pending");
+  });
+
+  it("a partial outcome (some batches fail) marks the stage 'partial', not 'skipped', records the error, and still advances (FR-011, T028)", async () => {
+    await reachAiEnhancement();
+    let callCount = 0;
+    const partialProvider: AIProvider = {
+      ...mockProvider,
+      // Small enough budget to split the fixture's 3 operations into per-operation batches.
+      getInputBudget: async () => 10,
+      infer: async (request) => {
+        callCount += 1;
+        if (callCount === 1) {
+          throw Object.assign(new Error("timed out"), { category: "TIMEOUT" });
+        }
+        return {
+          contractVersion: 1,
+          requestId: request.requestId,
+          status: "success",
+          content: JSON.stringify({ responseVersion: 1, candidates: [] }),
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+
+    const wf = await runAiEnhancement(partialProvider);
+
+    expect(callCount).toBeGreaterThan(1);
+    expect(wf.aiEnhancement?.aiProviderOutcome).toBe("partial");
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.stages.aiEnhancement.aiErrorCategory).toBe("TIMEOUT");
+    expect(wf.activeStageId).toBe("scenarioReview");
   });
 
   it("refuses a retry once scenarioReview has been finalized", async () => {
     await reachAiEnhancement();
     await runAiEnhancement(unavailableProvider);
     const first = getCurrentWorkflow()!.reviewWorkspace!.scenarios[0];
-    applyScenarioDecisions([{ scenarioId: first.scenarioId, revision: first.revision, action: "accept" }]);
+    applyScenarioDecisions([
+      { scenarioId: first.scenarioId, revision: first.revision, action: "accept" },
+    ]);
     await finalizeScenarioReview();
 
     await expect(runAiEnhancement(successProvider)).rejects.toThrow(StageNotActiveError);

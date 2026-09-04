@@ -17,6 +17,7 @@ function fixedProvider(content: string): AIProvider {
       acceleratorActive: false,
       updatedAt: new Date(0).toISOString(),
     }),
+    getInputBudget: async () => undefined,
     infer: async (req) => ({
       contractVersion: 1,
       requestId: req.requestId,
@@ -79,16 +80,24 @@ describe("test generation workflow orchestration", () => {
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     expect(started.status).toBe(200);
 
-    const afterReview = await request(app).post("/api/test-generation-workflow/api-review/continue");
+    const afterReview = await request(app).post(
+      "/api/test-generation-workflow/api-review/continue",
+    );
     expect(afterReview.status).toBe(200);
     expect(afterReview.body.workflow.activeStageId).toBe("deterministicGeneration");
 
-    const afterGeneration = await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    const afterGeneration = await request(app).post(
+      "/api/test-generation-workflow/deterministic-generation",
+    );
     expect(afterGeneration.status).toBe(200);
     expect(afterGeneration.body.workflow.activeStageId).toBe("aiEnhancement");
-    expect(afterGeneration.body.workflow.deterministicTestModel.scenarios.length).toBeGreaterThan(0);
+    expect(
+      afterGeneration.body.workflow.deterministicTestModel.scenarios.length,
+    ).toBeGreaterThan(0);
 
-    const afterEnhancement = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const afterEnhancement = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
     expect(afterEnhancement.status).toBe(200);
     expect(afterEnhancement.body.workflow.stages.aiEnhancement.status).toBe("complete");
     expect(afterEnhancement.body.workflow.activeStageId).toBe("scenarioReview");
@@ -96,11 +105,21 @@ describe("test generation workflow orchestration", () => {
     const scenario = afterEnhancement.body.workflow.reviewWorkspace.scenarios[0];
     const afterDecision = await request(app)
       .post("/api/test-generation-workflow/scenario-review/decisions")
-      .send({ updates: [{ scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" }] });
+      .send({
+        updates: [
+          {
+            scenarioId: scenario.scenarioId,
+            revision: scenario.revision,
+            action: "accept",
+          },
+        ],
+      });
     expect(afterDecision.status).toBe(200);
     expect(afterDecision.body.outcomes[0].applied).toBe(true);
 
-    const afterFinalize = await request(app).post("/api/test-generation-workflow/scenario-review/finalize");
+    const afterFinalize = await request(app).post(
+      "/api/test-generation-workflow/scenario-review/finalize",
+    );
     expect(afterFinalize.status).toBe(200);
     expect(afterFinalize.body.workflow.stages.scenarioReview.status).toBe("complete");
     expect(afterFinalize.body.workflow.stages.dependencyAnalysis.status).toBe("complete");
@@ -113,25 +132,39 @@ describe("test generation workflow orchestration", () => {
       if (discovered.length > 0) {
         await request(app)
           .post("/api/test-generation-workflow/workflow-review/decisions")
-          .send({ decisions: discovered.map((w: { id: string }) => ({ workflowId: w.id, state: "approved" })) });
+          .send({
+            decisions: discovered.map((w: { id: string }) => ({
+              workflowId: w.id,
+              state: "approved",
+            })),
+          });
       }
-      const afterWorkflowReview = await request(app).post("/api/test-generation-workflow/workflow-review/continue");
+      const afterWorkflowReview = await request(app).post(
+        "/api/test-generation-workflow/workflow-review/continue",
+      );
       expect(afterWorkflowReview.status).toBe(200);
       currentWorkflow = afterWorkflowReview.body.workflow;
     }
     expect(currentWorkflow.stages.workflowReview.status).toBe("complete");
     expect(currentWorkflow.activeStageId).toBe("postmanGeneration");
 
-    const afterPostman = await request(app).post("/api/test-generation-workflow/postman-generation").send({});
+    const afterPostman = await request(app)
+      .post("/api/test-generation-workflow/postman-generation")
+      .send({});
     expect(afterPostman.status).toBe(200);
     expect(afterPostman.body.workflow.stages.postmanGeneration.status).toBe("complete");
-    expect(afterPostman.body.workflow.postmanArtifact.collection.item.length).toBeGreaterThan(0);
+    expect(
+      afterPostman.body.workflow.postmanArtifact.collection.item.length,
+    ).toBeGreaterThan(0);
     const approvedScenarioIds = new Set(
-      afterPostman.body.workflow.approvedTestModel.scenarios.map((s: { id: string }) => s.id),
+      afterPostman.body.workflow.approvedTestModel.scenarios.map(
+        (s: { id: string }) => s.id,
+      ),
     );
-    const requestItemNames = afterPostman.body.workflow.postmanArtifact.collection.item.flatMap(
-      (folder: { item: { name: string }[] }) => folder.item.map((item) => item.name),
-    );
+    const requestItemNames =
+      afterPostman.body.workflow.postmanArtifact.collection.item.flatMap(
+        (folder: { item: { name: string }[] }) => folder.item.map((item) => item.name),
+      );
     expect(requestItemNames.length).toBe(approvedScenarioIds.size);
   });
 
@@ -141,12 +174,18 @@ describe("test generation workflow orchestration", () => {
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     await request(app).post("/api/test-generation-workflow/api-review/continue");
-    const afterGeneration = await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    const afterGeneration = await request(app).post(
+      "/api/test-generation-workflow/deterministic-generation",
+    );
 
     const resumed = await request(app).get("/api/test-generation-workflow");
     expect(resumed.status).toBe(200);
-    expect(resumed.body.workflow.activeStageId).toBe(afterGeneration.body.workflow.activeStageId);
-    expect(resumed.body.workflow.deterministicTestModel).toEqual(afterGeneration.body.workflow.deterministicTestModel);
+    expect(resumed.body.workflow.activeStageId).toBe(
+      afterGeneration.body.workflow.activeStageId,
+    );
+    expect(resumed.body.workflow.deterministicTestModel).toEqual(
+      afterGeneration.body.workflow.deterministicTestModel,
+    );
   });
 
   it("revising an approved scenario after completing the workflow marks downstream stages stale (US3, SC-003)", async () => {
@@ -156,12 +195,24 @@ describe("test generation workflow orchestration", () => {
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     await request(app).post("/api/test-generation-workflow/api-review/continue");
     await request(app).post("/api/test-generation-workflow/deterministic-generation");
-    const afterEnhancement = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const afterEnhancement = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
     const scenario = afterEnhancement.body.workflow.reviewWorkspace.scenarios[0];
     await request(app)
       .post("/api/test-generation-workflow/scenario-review/decisions")
-      .send({ updates: [{ scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" }] });
-    const afterFinalize = await request(app).post("/api/test-generation-workflow/scenario-review/finalize");
+      .send({
+        updates: [
+          {
+            scenarioId: scenario.scenarioId,
+            revision: scenario.revision,
+            action: "accept",
+          },
+        ],
+      });
+    const afterFinalize = await request(app).post(
+      "/api/test-generation-workflow/scenario-review/finalize",
+    );
 
     let workflow = afterFinalize.body.workflow;
     if (workflow.stages.workflowReview.status === "active") {
@@ -169,9 +220,16 @@ describe("test generation workflow orchestration", () => {
       if (discovered.length > 0) {
         await request(app)
           .post("/api/test-generation-workflow/workflow-review/decisions")
-          .send({ decisions: discovered.map((w: { id: string }) => ({ workflowId: w.id, state: "approved" })) });
+          .send({
+            decisions: discovered.map((w: { id: string }) => ({
+              workflowId: w.id,
+              state: "approved",
+            })),
+          });
       }
-      const afterWorkflowReview = await request(app).post("/api/test-generation-workflow/workflow-review/continue");
+      const afterWorkflowReview = await request(app).post(
+        "/api/test-generation-workflow/workflow-review/continue",
+      );
       workflow = afterWorkflowReview.body.workflow;
     }
     await request(app).post("/api/test-generation-workflow/postman-generation").send({});
@@ -181,7 +239,12 @@ describe("test generation workflow orchestration", () => {
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
-          { scenarioId: scenario.scenarioId, revision: scenario.revision, action: "reject", reason: "changed mind" },
+          {
+            scenarioId: scenario.scenarioId,
+            revision: scenario.revision,
+            action: "reject",
+            reason: "changed mind",
+          },
         ],
       });
     expect(revision.status).toBe(200);
@@ -193,7 +256,9 @@ describe("test generation workflow orchestration", () => {
     const resumed = await request(app).get("/api/test-generation-workflow");
     expect(resumed.body.workflow.stages.postmanGeneration.status).toBe("stale");
 
-    const blockedRetry = await request(app).post("/api/test-generation-workflow/postman-generation").send({});
+    const blockedRetry = await request(app)
+      .post("/api/test-generation-workflow/postman-generation")
+      .send({});
     expect(blockedRetry.status).toBe(409);
     expect(blockedRetry.body.error).toBe("stage_not_active");
   });
@@ -208,9 +273,12 @@ describe("test generation workflow orchestration", () => {
         acceleratorActive: false,
         updatedAt: new Date(0).toISOString(),
       }),
+      getInputBudget: async () => undefined,
       infer: async (req) => {
         if (!providerAvailable) {
-          throw Object.assign(new Error("unavailable"), { category: "PROVIDER_UNAVAILABLE" });
+          throw Object.assign(new Error("unavailable"), {
+            category: "PROVIDER_UNAVAILABLE",
+          });
         }
         return {
           contractVersion: 1,
@@ -231,23 +299,37 @@ describe("test generation workflow orchestration", () => {
     await request(app).post("/api/test-generation-workflow/api-review/continue");
     await request(app).post("/api/test-generation-workflow/deterministic-generation");
 
-    const skipped = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const skipped = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
     expect(skipped.status).toBe(200);
     expect(skipped.body.workflow.stages.aiEnhancement.status).toBe("skipped");
     expect(skipped.body.workflow.activeStageId).toBe("scenarioReview");
 
     providerAvailable = true;
-    const retried = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const retried = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
     expect(retried.status).toBe(200);
     expect(retried.body.workflow.stages.aiEnhancement.status).toBe("complete");
 
     const scenario = retried.body.workflow.reviewWorkspace.scenarios[0];
     await request(app)
       .post("/api/test-generation-workflow/scenario-review/decisions")
-      .send({ updates: [{ scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" }] });
+      .send({
+        updates: [
+          {
+            scenarioId: scenario.scenarioId,
+            revision: scenario.revision,
+            action: "accept",
+          },
+        ],
+      });
     await request(app).post("/api/test-generation-workflow/scenario-review/finalize");
 
-    const afterFinalizeRetry = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const afterFinalizeRetry = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
     expect(afterFinalizeRetry.status).toBe(409);
     expect(afterFinalizeRetry.body.error).toBe("stage_not_active");
   });
@@ -257,7 +339,9 @@ describe("test generation workflow orchestration", () => {
     await request(app)
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    const response = await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    const response = await request(app).post(
+      "/api/test-generation-workflow/deterministic-generation",
+    );
     expect(response.status).toBe(409);
     expect(response.body.error).toBe("stage_not_active");
   });

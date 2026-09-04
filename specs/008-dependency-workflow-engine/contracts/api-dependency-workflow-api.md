@@ -30,7 +30,11 @@ scenarios.
     "relationships": [
       {
         "id": "a1b2c3d4e5f6...",
-        "producer": { "operationPath": "/users", "operationMethod": "POST", "field": "id" },
+        "producer": {
+          "operationPath": "/users",
+          "operationMethod": "POST",
+          "field": "id"
+        },
         "consumer": {
           "operationPath": "/users/{userId}",
           "operationMethod": "GET",
@@ -50,7 +54,11 @@ scenarios.
       },
       {
         "id": "b2c3d4e5f6a1...",
-        "producer": { "operationPath": "/accounts", "operationMethod": "POST", "field": "accountId" },
+        "producer": {
+          "operationPath": "/accounts",
+          "operationMethod": "POST",
+          "field": "accountId"
+        },
         "consumer": {
           "operationPath": "/transfers",
           "operationMethod": "POST",
@@ -73,10 +81,34 @@ scenarios.
     {
       "id": "w1a2b3c4...",
       "steps": [
-        { "position": 0, "operationPath": "/users", "operationMethod": "POST", "producesVariableNames": ["userId"], "consumesVariableNames": [] },
-        { "position": 1, "operationPath": "/users/{userId}", "operationMethod": "GET", "producesVariableNames": [], "consumesVariableNames": ["userId"] },
-        { "position": 2, "operationPath": "/users/{userId}", "operationMethod": "PUT", "producesVariableNames": [], "consumesVariableNames": ["userId"] },
-        { "position": 3, "operationPath": "/users/{userId}", "operationMethod": "DELETE", "producesVariableNames": [], "consumesVariableNames": ["userId"] }
+        {
+          "position": 0,
+          "operationPath": "/users",
+          "operationMethod": "POST",
+          "producesVariableNames": ["userId"],
+          "consumesVariableNames": []
+        },
+        {
+          "position": 1,
+          "operationPath": "/users/{userId}",
+          "operationMethod": "GET",
+          "producesVariableNames": [],
+          "consumesVariableNames": ["userId"]
+        },
+        {
+          "position": 2,
+          "operationPath": "/users/{userId}",
+          "operationMethod": "PUT",
+          "producesVariableNames": [],
+          "consumesVariableNames": ["userId"]
+        },
+        {
+          "position": 3,
+          "operationPath": "/users/{userId}",
+          "operationMethod": "DELETE",
+          "producesVariableNames": [],
+          "consumesVariableNames": ["userId"]
+        }
       ],
       "variables": [
         {
@@ -112,16 +144,18 @@ effort (not contractually byte-identical) against a live local model.
 
 `aiOutcome` reports what happened to the AI-assisted pass:
 
-| Value | Meaning |
-| ----- | ------- |
-| `success` | The AI call returned and its candidates were processed (accepted, merged, or rejected) |
-| `unavailable` | The configured AI provider was not ready; deterministic relationships are still returned |
-| `timeout` | The AI call did not return within its request-scoped timeout; deterministic relationships are still returned |
-| `invalid-response` | The AI call returned output that failed shape/semantic validation; deterministic relationships are still returned |
-| `skipped` | No `AIProvider` was supplied to this analysis run |
+| Value              | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `success`          | The AI call returned and its candidates were processed (accepted, merged, or rejected)                                                                                                                                                                                                                                                                                                                                                                 |
+| `unavailable`      | The configured AI provider was not ready; deterministic relationships are still returned                                                                                                                                                                                                                                                                                                                                                               |
+| `timeout`          | The AI call did not return within its request-scoped timeout; deterministic relationships are still returned                                                                                                                                                                                                                                                                                                                                           |
+| `invalid-response` | The AI call returned output that failed shape/semantic validation; deterministic relationships are still returned                                                                                                                                                                                                                                                                                                                                      |
+| `skipped`          | No `AIProvider` was supplied to this analysis run                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `partial`          | The `apiModel` was large enough to require multiple AI batches (specs/011-ai-prompt-batching) and at least one batch succeeded while at least one other failed, timed out, or was not attempted due to the overall analysis budget being exhausted; deterministic relationships plus whatever AI relationships the successful batches produced are returned, alongside `aiErrorCategory`/`aiErrorMessage` describing the failing/not-attempted batches |
 
 An `aiOutcome` other than `success` never fails the request (FR-018); it only means the `graph`
-contains deterministic relationships only.
+contains deterministic relationships only — except for `partial`, where `graph` also contains the
+AI relationships produced by whichever batches succeeded (specs/011-ai-prompt-batching/contracts/ai-batching-outcome.md).
 
 ### Error Response: `400 Bad Request`
 
@@ -129,8 +163,8 @@ contains deterministic relationships only.
 { "error": "invalid_request", "message": "apiModel.operations must be an array" }
 ```
 
-| Code | Meaning |
-| ---- | ------- |
+| Code              | Meaning                                                        |
+| ----------------- | -------------------------------------------------------------- |
 | `invalid_request` | The body is missing `apiModel` or it is not the expected shape |
 
 ### Error Response: `500 Internal Server Error`
@@ -140,7 +174,10 @@ performance budget (SC-008). This is distinct from an AI failure, which never pr
 response.
 
 ```json
-{ "error": "analysis_timeout", "message": "Dependency analysis did not complete within the performance budget." }
+{
+  "error": "analysis_timeout",
+  "message": "Dependency analysis did not complete within the performance budget."
+}
 ```
 
 ## Guarantees asserted by contract tests

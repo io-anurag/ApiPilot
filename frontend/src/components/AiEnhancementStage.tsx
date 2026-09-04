@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { runAiEnhancement, type WorkflowResult } from "../services/testGenerationWorkflowClient";
+import {
+  runAiEnhancement,
+  type WorkflowResult,
+} from "../services/testGenerationWorkflowClient";
 import type { AIErrorCategory } from "@apipilot/shared-domain";
 
 function RetryIcon({ className }: { className?: string }) {
@@ -15,16 +18,18 @@ function RetryIcon({ className }: { className?: string }) {
 }
 
 /**
- * Triggers AI enhancement. A `skipped` outcome (FR-008) is shown as a banner with a retry action
- * (FR-008a) rather than as a failure — the workflow already advanced past this stage.
+ * Triggers AI enhancement. A `skipped` outcome (FR-008) or a `partial` outcome (some but not
+ * all batches succeeded, FR-011) is shown as a banner with a retry action (FR-008a) rather than
+ * as a failure — the workflow already advanced past this stage either way, and for `partial` the
+ * scenarios that *did* succeed are already included below.
  */
 export function AiEnhancementStage({
-  skipped,
+  status,
   aiErrorCategory,
   aiErrorMessage,
   onAdvanced,
 }: {
-  skipped: boolean;
+  status?: "skipped" | "partial";
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
   onAdvanced: (result: WorkflowResult) => void;
@@ -44,12 +49,21 @@ export function AiEnhancementStage({
     onAdvanced(result);
   }
 
-  if (skipped) {
+  if (status === "skipped" || status === "partial") {
+    const isPartial = status === "partial";
     return (
-      <section data-testid="ai-enhancement-skipped" className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4">
-        <p role="status" data-testid="ai-enhancement-skip-banner" className="text-sm text-warning-700">
-          AI enhancement was skipped ({aiErrorCategory}): {aiErrorMessage}. You can continue with
-          the deterministic scenarios below, or retry now.
+      <section
+        data-testid={isPartial ? "ai-enhancement-partial" : "ai-enhancement-skipped"}
+        className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4"
+      >
+        <p
+          role="status"
+          data-testid="ai-enhancement-skip-banner"
+          className="text-sm text-warning-700"
+        >
+          {isPartial
+            ? `AI enhancement partially completed (${aiErrorCategory}): ${aiErrorMessage}. The scenarios that were successfully generated are included below. You can continue, or retry now to attempt the rest.`
+            : `AI enhancement was skipped (${aiErrorCategory}): ${aiErrorMessage}. You can continue with the deterministic scenarios below, or retry now.`}
         </p>
         <button
           type="button"
@@ -61,7 +75,11 @@ export function AiEnhancementStage({
           {running ? "Retrying…" : "Retry AI enhancement"}
         </button>
         {error && (
-          <p role="alert" data-testid="ai-enhancement-error" className="text-sm font-medium text-danger-700">
+          <p
+            role="alert"
+            data-testid="ai-enhancement-error"
+            className="text-sm font-medium text-danger-700"
+          >
             {error}
           </p>
         )}
@@ -70,9 +88,14 @@ export function AiEnhancementStage({
   }
 
   return (
-    <section data-testid="ai-enhancement-stage" className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
+    <section
+      data-testid="ai-enhancement-stage"
+      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
       <h2 className="text-base font-semibold text-slate-900">Enhance With Local AI</h2>
-      <p className="text-sm text-slate-600">Enhance the deterministic baseline with semantic AI-generated scenarios.</p>
+      <p className="text-sm text-slate-600">
+        Enhance the deterministic baseline with semantic AI-generated scenarios.
+      </p>
       <button
         type="button"
         onClick={handleRun}
@@ -82,7 +105,11 @@ export function AiEnhancementStage({
         {running ? "Enhancing…" : "Enhance with AI"}
       </button>
       {error && (
-        <p role="alert" data-testid="ai-enhancement-error" className="text-sm font-medium text-danger-700">
+        <p
+          role="alert"
+          data-testid="ai-enhancement-error"
+          className="text-sm font-medium text-danger-700"
+        >
           {error}
         </p>
       )}

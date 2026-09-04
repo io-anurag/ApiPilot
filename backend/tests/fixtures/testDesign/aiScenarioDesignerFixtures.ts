@@ -44,3 +44,60 @@ export const aiScenarioApiModel: ApiModel = {
 };
 
 export const aiScenarioBaseline: TestModel = { scenarios: [] };
+
+/**
+ * Generates a large ApiModel of independent single-operation resources for the batching
+ * feature's multi-batch enhancement tests (specs/011-ai-prompt-batching): each `POST
+ * /resourceN` requires an "email" field, mirroring `aiScenarioApiModel`'s shape so the same
+ * kind of AI scenario candidate (`invalid-format` on `email`) can target any of them.
+ */
+export function buildLargeAiScenarioApiModel(operationCount = 20): ApiModel {
+  const operations: ApiModel["operations"] = [];
+  for (let i = 0; i < operationCount; i += 1) {
+    operations.push({
+      path: `/resource${i}`,
+      method: "POST",
+      operationId: `createResource${i}`,
+      parameters: [],
+      requestBody: {
+        required: true,
+        contentTypes: {
+          "application/json": {
+            type: "object",
+            required: ["email"],
+            properties: {
+              email: { type: "string", format: "email", required: [], properties: {} },
+            },
+          },
+        },
+      },
+      responses: [
+        {
+          statusCode: "201",
+          description: "Created",
+          contentTypes: {
+            "application/json": {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string", required: [], properties: {} } },
+            },
+          },
+          examples: {},
+        },
+        { statusCode: "409", description: "Conflict", contentTypes: {}, examples: {} },
+      ],
+      security: [],
+      tags: [`resource${i}`],
+    });
+  }
+  return {
+    operations,
+    securitySchemes: {},
+    summary: {
+      operationCount,
+      schemaCount: operationCount * 2,
+      securitySchemeCount: 0,
+      issues: [],
+    },
+  };
+}

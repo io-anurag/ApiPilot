@@ -10,10 +10,20 @@ import { validateSpec } from "../../../src/openapi/validateSpec";
 import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReviewStage";
 import { runAiEnhancement } from "../../../src/testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
-import { recordWorkflowDecisions, continueWorkflowReview } from "../../../src/testGenerationWorkflow/workflowReviewStage";
+import {
+  recordWorkflowDecisions,
+  continueWorkflowReview,
+} from "../../../src/testGenerationWorkflow/workflowReviewStage";
 import { runPostmanGeneration } from "../../../src/testGenerationWorkflow/postmanGenerationStage";
-import { applyScenarioDecisions, finalizeScenarioReview } from "../../../src/testGenerationWorkflow/scenarioReviewStage";
-import { getCurrentWorkflow, resetStore, startWorkflow } from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  applyScenarioDecisions,
+  finalizeScenarioReview,
+} from "../../../src/testGenerationWorkflow/scenarioReviewStage";
+import {
+  getCurrentWorkflow,
+  resetStore,
+  startWorkflow,
+} from "../../../src/testGenerationWorkflow/workflowStore";
 
 const mockProvider: AIProvider = {
   mode: "mock",
@@ -23,6 +33,7 @@ const mockProvider: AIProvider = {
     acceleratorActive: false,
     updatedAt: new Date(0).toISOString(),
   }),
+  getInputBudget: async () => undefined,
   infer: async (request) => ({
     contractVersion: 1,
     requestId: request.requestId,
@@ -54,7 +65,10 @@ describe("test generation workflow network isolation", () => {
       throw new Error("workflow orchestration must not issue a network request");
     });
 
-    const content = readFileSync(path.join(__dirname, "..", "..", "fixtures", "openapi", "valid.yaml"), "utf-8");
+    const content = readFileSync(
+      path.join(__dirname, "..", "..", "fixtures", "openapi", "valid.yaml"),
+      "utf-8",
+    );
     const { document, issues } = await validateSpec(parseYaml(content));
     const apiModel = buildApiModel(document, issues);
     startWorkflow({ specificationFilename: "valid.yaml", apiModel });
@@ -63,12 +77,16 @@ describe("test generation workflow network isolation", () => {
     await runAiEnhancement(mockProvider);
 
     const scenario = getCurrentWorkflow()!.reviewWorkspace!.scenarios[0];
-    applyScenarioDecisions([{ scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" }]);
+    applyScenarioDecisions([
+      { scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" },
+    ]);
     await finalizeScenarioReview(mockProvider);
 
     const discovered = getCurrentWorkflow()!.dependencyAnalysis!.workflows;
     if (discovered.length > 0) {
-      recordWorkflowDecisions(discovered.map((w) => ({ workflowId: w.id, state: "approved" as const })));
+      recordWorkflowDecisions(
+        discovered.map((w) => ({ workflowId: w.id, state: "approved" as const })),
+      );
       continueWorkflowReview();
     }
     runPostmanGeneration();

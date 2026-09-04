@@ -16,6 +16,7 @@ function mockProvider(): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (input): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: input.requestId,

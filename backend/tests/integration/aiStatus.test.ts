@@ -8,6 +8,7 @@ function fakeProvider(state: ReadinessState): AIProvider {
   return {
     mode: "local",
     getReadiness: () => state,
+    getInputBudget: async () => undefined,
     infer: async () => {
       throw new Error("not used in this test");
     },

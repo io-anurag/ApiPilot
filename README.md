@@ -53,6 +53,13 @@ This repository currently implements:
   through AP-008 into one resumable, server-tracked workflow and is now the application's
   sole UI entry point (see
   [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow) below).
+- **Bounded AI Prompt Batching** (spec `011-ai-prompt-batching`) — large specifications whose
+  full `ApiModel` would exceed the configured AI provider's usable request capacity are
+  automatically split into multiple smaller AI requests and merged, instead of AI-assisted
+  dependency detection (AP-008) and scenario enhancement (AP-005) silently falling back to
+  deterministic-only output (see [AI Test Scenario Designer](#ai-test-scenario-designer) and
+  [API Dependency & Integration Workflow Engine](#api-dependency--integration-workflow-engine)
+  below).
 
 ## Setup
 
@@ -294,16 +301,25 @@ model, rationale, confidence, assumptions, and duplicate information. Determinis
 provenance remains distinct, and deterministic scenarios are retained first when an equivalent
 AI scenario is supplied.
 
+When the supplied `apiModel` is large enough that a single AI request would exceed the
+provider's usable capacity, the request is deterministically split into multiple smaller
+batches (one `infer()` call per batch, strictly sequential) and every successful batch's
+scenarios are merged into the response; specifications that already fit in one request are
+completely unaffected (spec [011-ai-prompt-batching](./specs/011-ai-prompt-batching/)).
+
 Provider failures return `200` with the unchanged deterministic model and an explicit
-`aiProviderOutcome` such as `unavailable`, `timeout`, or `invalid-response`. Invalid request
-shapes return `400`; non-POST methods return `405`. AP-005 does not execute, approve, persist,
-or generate artifacts from scenarios, and does not send specifications or prompts to a cloud
-provider.
+`aiProviderOutcome` such as `unavailable`, `timeout`, `invalid-response`, or — once one batch
+succeeds while another fails, times out, or is skipped once the analysis budget is exhausted —
+`partial`, alongside `aiErrorCategory`/`aiErrorMessage` describing the failing batches. Invalid
+request shapes return `400`; non-POST methods return `405`. AP-005 does not execute, approve,
+persist, or generate artifacts from scenarios, and does not send specifications or prompts to a
+cloud provider.
 
 The enhancement contract and focused validation steps are documented in
 [specs/005-ai-test-scenario-designer/](./specs/005-ai-test-scenario-designer/), including the
 [API contract](./specs/005-ai-test-scenario-designer/contracts/enhanced-test-models-api.md) and
-[quickstart](./specs/005-ai-test-scenario-designer/quickstart.md).
+[quickstart](./specs/005-ai-test-scenario-designer/quickstart.md); the batching mechanism
+itself is documented in [specs/011-ai-prompt-batching/](./specs/011-ai-prompt-batching/).
 
 ## AI Provider & Local Inference Foundation
 
@@ -327,6 +343,11 @@ to develop and test against it without a real model.
   metrics (structured-output success rate, average latency, peak memory) plus a
   traceable selection rationale, so the initial local model is chosen with evidence
   rather than by default.
+- **`getInputBudget()`** on `AIProvider` reports the provider's current usable input capacity
+  in characters (`undefined` when unbounded); `backend/src/ai/requestBatching.ts` uses it to
+  deterministically split a large `ApiModel` into multiple smaller batches per AI-assisted
+  pass, so large specifications are no longer skipped outright (spec
+  [011-ai-prompt-batching](./specs/011-ai-prompt-batching/)).
 
 ### Module boundaries
 
@@ -345,6 +366,10 @@ to develop and test against it without a real model.
   configurable per-request timeout and automatic-with-visible-notice CPU fallback when
   an enabled accelerator is unavailable at runtime.
 - `backend/src/ai/mockProvider.ts` — the deterministic test double described above.
+- `backend/src/ai/requestBatching.ts` — deterministic recursive splitting of a batch of
+  operations into smaller batches that fit a provider's `getInputBudget()`, plus
+  `runBatchedInference()`, which issues one `infer()` call per batch strictly sequentially
+  and derives an aggregate `success`/`partial`/failure outcome.
 - `backend/src/ai/index.ts` — the provider factory that selects `localProvider.ts` or
   `mockProvider.ts` based on `modelConfig.ts`.
 - `backend/src/ai/benchmark/` — `workloads.ts` (representative sample prompts),
@@ -516,9 +541,11 @@ returns the full analysis in one response:
   rather than silently included or discarded.
 - `cycles` — contradictory relationship sets (each operation depending on the other), reported
   explicitly rather than assembled into an invalid workflow.
-- `aiOutcome` — `success`, `unavailable`, `timeout`, `invalid-response`, or `skipped`, so an AI
-  provider that is absent, slow, or wrong never fails the request or fabricates a relationship
-  (FR-018); deterministic relationships are always returned regardless.
+- `aiOutcome` — `success`, `unavailable`, `timeout`, `invalid-response`, `skipped`, or `partial`
+  (some batches succeeded while others failed, timed out, or were skipped once the analysis
+  budget was exhausted — spec [011-ai-prompt-batching](./specs/011-ai-prompt-batching/)), so an
+  AI provider that is absent, slow, or wrong never fails the request or fabricates a
+  relationship (FR-018); deterministic relationships are always returned regardless.
 
 **Conservative by construction (constitution XV).** A field-name match alone can never reach
 `CONFIRMED` or `LIKELY`; deterministic classification requires corroborating evidence (matching
@@ -538,8 +565,11 @@ workflows are identical for identical input, including under shuffled operation 
 200-operation `ApiModel` completes full analysis — deterministic matching, one AI-assisted pass,
 and workflow assembly — in under 15 seconds, or fails explicitly with `500 analysis_timeout` rather
 than returning a partial result; the AI call itself uses an 8-second request-scoped timeout so a
-slow or unavailable provider cannot exhaust that budget. No request is ever issued to any API
-described by the `ApiModel`.
+slow or unavailable provider cannot exhaust that budget. A specification whose full `ApiModel`
+would exceed the provider's usable capacity is split into multiple smaller batches (one
+`infer()` call per batch, within that same overall 15-second budget) instead of the AI-assisted
+pass being skipped outright (spec [011-ai-prompt-batching](./specs/011-ai-prompt-batching/)). No
+request is ever issued to any API described by the `ApiModel`.
 
 ### Module boundaries
 
@@ -549,8 +579,9 @@ described by the `ApiModel`.
 - `backend/src/dependencies/deterministicMatching.ts` — the five-signal evidence computation and
   the exhaustive classification table.
 - `backend/src/dependencies/aiDependencyPrompt.ts`, `parseAIDependencyResponse.ts`,
-  `validateAIDependencyCandidate.ts` — the AI-assisted pass: one batched request, response
-  parsing, and shape/semantic validation against the `ApiModel`.
+  `validateAIDependencyCandidate.ts` — the AI-assisted pass: prompt construction (batched via
+  `backend/src/ai/requestBatching.ts` when the `ApiModel` is large), response parsing, and
+  shape/semantic validation against the `ApiModel`.
 - `backend/src/dependencies/mergeRelationships.ts` — producer disambiguation (FR-013a) and the
   deterministic/AI merge rule (FR-006a).
 - `backend/src/dependencies/buildDependencyGraph.ts` — the operation-level graph and Kahn's-
@@ -564,7 +595,9 @@ described by the `ApiModel`.
 See [specs/008-dependency-workflow-engine/](./specs/008-dependency-workflow-engine/) for the spec,
 plan, research,
 [API contract](./specs/008-dependency-workflow-engine/contracts/api-dependency-workflow-api.md),
-and [quickstart](./specs/008-dependency-workflow-engine/quickstart.md).
+and [quickstart](./specs/008-dependency-workflow-engine/quickstart.md); the batching mechanism
+shared with AP-005 is documented in
+[specs/011-ai-prompt-batching/](./specs/011-ai-prompt-batching/).
 
 ## End-to-End Test Generation Workflow
 

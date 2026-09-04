@@ -1,4 +1,9 @@
-import { WORKFLOW_STAGE_ORDER, type StageStatus, type TestGenerationWorkflow, type WorkflowStageId } from "@apipilot/shared-domain";
+import {
+  WORKFLOW_STAGE_ORDER,
+  type StageStatus,
+  type TestGenerationWorkflow,
+  type WorkflowStageId,
+} from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 
 function CheckIcon({ className }: { className?: string }) {
@@ -21,6 +26,7 @@ const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
   complete: "border-success-500/30 bg-success-50",
   stale: "border-warning-500/40 bg-warning-50",
   skipped: "border-border bg-slate-50",
+  partial: "border-warning-500/40 bg-warning-50",
 };
 
 const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
@@ -29,6 +35,7 @@ const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
   complete: "bg-success-600 text-white",
   stale: "bg-warning-500 text-white",
   skipped: "bg-slate-300 text-slate-600",
+  partial: "bg-warning-500 text-white",
 };
 
 const STAGE_LABELS: Record<WorkflowStageId, string> = {
@@ -49,6 +56,7 @@ const STATUS_LABELS: Record<StageStatus, string> = {
   complete: "Complete",
   stale: "Needs to be redone",
   skipped: "Skipped",
+  partial: "Partially completed",
 };
 
 const STATUS_TONES: Record<StageStatus, StatusTone> = {
@@ -57,6 +65,7 @@ const STATUS_TONES: Record<StageStatus, StatusTone> = {
   complete: "success",
   stale: "warning",
   skipped: "neutral",
+  partial: "warning",
 };
 
 /**
@@ -80,13 +89,19 @@ export function WorkflowStageTracker({
   const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
 
   return (
-    <nav aria-label="Workflow progress" data-testid="workflow-stage-tracker" className="space-y-3">
+    <nav
+      aria-label="Workflow progress"
+      data-testid="workflow-stage-tracker"
+      className="space-y-3"
+    >
       <ol className="flex flex-wrap gap-2">
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
           const stage = workflow.stages[stageId];
           const isActive = workflow.activeStageId === stageId;
           const isRevisitable =
-            onViewStage && REVISABLE_STAGES.has(stageId) && (stage.status === "complete" || stage.status === "stale");
+            onViewStage &&
+            REVISABLE_STAGES.has(stageId) &&
+            (stage.status === "complete" || stage.status === "stale");
           return (
             <li
               key={stageId}
@@ -97,7 +112,11 @@ export function WorkflowStageTracker({
                 aria-hidden="true"
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${INDEX_TONE_CLASSES[stage.status]}`}
               >
-                {stage.status === "complete" ? <CheckIcon className="h-3 w-3" /> : index + 1}
+                {stage.status === "complete" ? (
+                  <CheckIcon className="h-3 w-3" />
+                ) : (
+                  index + 1
+                )}
               </span>
               <span>{STAGE_LABELS[stageId]}</span>
               {isRevisitable ? (
@@ -107,11 +126,17 @@ export function WorkflowStageTracker({
                   onClick={() => onViewStage!(stageId)}
                   className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
-                  <StatusBadge label={`${STATUS_LABELS[stage.status]} — revisit`} tone={STATUS_TONES[stage.status]} />
+                  <StatusBadge
+                    label={`${STATUS_LABELS[stage.status]} — revisit`}
+                    tone={STATUS_TONES[stage.status]}
+                  />
                 </button>
               ) : (
                 <span data-testid={`stage-status-${stageId}`}>
-                  <StatusBadge label={STATUS_LABELS[stage.status]} tone={STATUS_TONES[stage.status]} />
+                  <StatusBadge
+                    label={STATUS_LABELS[stage.status]}
+                    tone={STATUS_TONES[stage.status]}
+                  />
                 </span>
               )}
             </li>
@@ -119,7 +144,11 @@ export function WorkflowStageTracker({
         })}
       </ol>
       {issues.length > 0 && (
-        <div role="status" data-testid="workflow-analysis-issues" className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+        <div
+          role="status"
+          data-testid="workflow-analysis-issues"
+          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+        >
           <p>{issues.length} specification analysis issue(s) were found:</p>
           <ul className="ml-4 list-disc">
             {issues.map((issue) => (
@@ -131,9 +160,13 @@ export function WorkflowStageTracker({
         </div>
       )}
       {dependencyAiIssue && (
-        <p role="status" data-testid="workflow-dependency-ai-issue" className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
-          AI-assisted dependency detection did not complete ({dependencyAiIssue}); deterministic
-          relationships are still shown.
+        <p
+          role="status"
+          data-testid="workflow-dependency-ai-issue"
+          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+        >
+          AI-assisted dependency detection did not complete ({dependencyAiIssue});
+          deterministic relationships are still shown.
         </p>
       )}
     </nav>

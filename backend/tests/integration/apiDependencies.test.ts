@@ -13,9 +13,19 @@ const dependencyCandidateResponse = JSON.stringify({
   candidates: [
     {
       candidateId: "ai-candidate-1",
-      producer: { operationPath: "/accounts", operationMethod: "POST", field: "accountId" },
-      consumer: { operationPath: "/transfers", operationMethod: "POST", field: "accountRef", location: "body" },
-      rationale: "accountRef semantically refers to the account identifier returned by account creation.",
+      producer: {
+        operationPath: "/accounts",
+        operationMethod: "POST",
+        field: "accountId",
+      },
+      consumer: {
+        operationPath: "/transfers",
+        operationMethod: "POST",
+        field: "accountRef",
+        location: "body",
+      },
+      rationale:
+        "accountRef semantically refers to the account identifier returned by account creation.",
       confidence: 0.9,
     },
   ],
@@ -30,6 +40,7 @@ function fixedProvider(content = dependencyCandidateResponse): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (input): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: input.requestId,
@@ -60,7 +71,9 @@ function errorProvider(errorCategory: "PROVIDER_UNAVAILABLE" | "TIMEOUT"): AIPro
 
 describe("POST /api/api-models/dependencies", () => {
   it("rejects a request without an apiModel", async () => {
-    const response = await request(createApp()).post("/api/api-models/dependencies").send({});
+    const response = await request(createApp())
+      .post("/api/api-models/dependencies")
+      .send({});
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("invalid_request");
@@ -88,15 +101,20 @@ describe("POST /api/api-models/dependencies", () => {
 
     const created = response.body.graph.relationships.find(
       (r: { producer: { operationPath: string }; consumer: { operationPath: string } }) =>
-        r.producer.operationPath === "/users" && r.consumer.operationPath === "/users/{userId}",
+        r.producer.operationPath === "/users" &&
+        r.consumer.operationPath === "/users/{userId}",
     );
     expect(created).toMatchObject({ confidence: "CONFIRMED", source: "deterministic" });
   });
 
   it("returns an identical response body for a repeated identical request", async () => {
     const app = createApp();
-    const first = await request(app).post("/api/api-models/dependencies").send({ apiModel: crudChainApiModel });
-    const second = await request(app).post("/api/api-models/dependencies").send({ apiModel: crudChainApiModel });
+    const first = await request(app)
+      .post("/api/api-models/dependencies")
+      .send({ apiModel: crudChainApiModel });
+    const second = await request(app)
+      .post("/api/api-models/dependencies")
+      .send({ apiModel: crudChainApiModel });
 
     expect(second.body).toEqual(first.body);
   });
@@ -109,12 +127,17 @@ describe("POST /api/api-models/dependencies", () => {
     expect(response.status).toBe(200);
     expect(response.body.workflows.length).toBeGreaterThan(0);
     for (const workflow of response.body.workflows) {
-      expect(workflow.steps[0]).toMatchObject({ operationPath: "/users", operationMethod: "POST" });
+      expect(workflow.steps[0]).toMatchObject({
+        operationPath: "/users",
+        operationMethod: "POST",
+      });
       for (const variable of workflow.variables) {
         expect(variable.producerStepIndex).toBeLessThan(variable.consumerStepIndex);
       }
     }
-    const targets = response.body.workflows.map((w: { steps: { operationMethod: string }[] }) => w.steps.at(-1)?.operationMethod);
+    const targets = response.body.workflows.map(
+      (w: { steps: { operationMethod: string }[] }) => w.steps.at(-1)?.operationMethod,
+    );
     expect(targets).toEqual(expect.arrayContaining(["GET", "PUT", "DELETE"]));
   });
 
@@ -163,8 +186,17 @@ describe("POST /api/api-models/dependencies", () => {
       candidates: [
         {
           candidateId: "bad-candidate",
-          producer: { operationPath: "/accounts", operationMethod: "POST", field: "accountId" },
-          consumer: { operationPath: "/transfers", operationMethod: "POST", field: "doesNotExist", location: "body" },
+          producer: {
+            operationPath: "/accounts",
+            operationMethod: "POST",
+            field: "accountId",
+          },
+          consumer: {
+            operationPath: "/transfers",
+            operationMethod: "POST",
+            field: "doesNotExist",
+            location: "body",
+          },
           rationale: "invalid",
           confidence: 0.9,
         },

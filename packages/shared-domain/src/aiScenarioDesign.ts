@@ -71,7 +71,7 @@ export interface AICandidateOutcomes {
 }
 
 export type AIProviderOutcome =
-  "success" | "unavailable" | "timeout" | "invalid-response";
+  "success" | "unavailable" | "timeout" | "invalid-response" | "partial";
 
 export interface EnhancementResult {
   enhancedTestModel: TestModel;

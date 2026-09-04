@@ -18,6 +18,7 @@ function provider(content: string): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (req): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: req.requestId,

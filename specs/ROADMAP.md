@@ -612,6 +612,47 @@ their screens rather than introducing new ones.
 
 ---
 
+## Hardening — Bounded AI Prompt Batching (`011-ai-prompt-batching`)
+
+### Objective
+
+Let AI-assisted dependency detection (AP-008) and AI-assisted scenario enhancement (AP-005)
+actually run against large OpenAPI specifications, instead of being silently skipped whenever a
+specification's full `ApiModel` exceeds the configured AI provider's usable request capacity.
+This is a hardening spec against two already-shipped features, not a new pipeline stage, so it
+is intentionally not numbered `AP-###` in the Feature Decomposition above.
+
+### Scope
+
+- Deterministically split a large `ApiModel` into multiple smaller batches of operations, each
+  sized to fit the provider's usable capacity (`AIProvider.getInputBudget()`).
+- Issue one AI request per batch, strictly sequentially, and merge every successful batch's
+  results with the deterministic baseline using the same validation, deduplication, and
+  provenance rules as a single-request call today.
+- Report a `"partial"` outcome — distinct from full success and full failure — when at least
+  one batch succeeds while at least one other fails, times out, or is skipped once the existing
+  analysis time budget is exhausted.
+
+### Constraints
+
+- Specifications that already fit in a single AI request MUST see no behavior change (same
+  single `infer()` call, identical output).
+- Batching MUST be fully deterministic: the same specification and provider configuration MUST
+  always produce the same batch grouping (constitution: Determinism First / XXIV
+  Reproducibility).
+- Batching MUST NOT exceed the overall performance budget the enhanced analysis already
+  respects (e.g. AP-008's existing 15-second dependency-analysis budget).
+- A total failure (every batch fails) MUST remain reported identically in meaning to today's
+  single-request failure — never surfaced as `"partial"`.
+
+### Dependencies
+
+Requires AP-004 (`AIProvider` abstraction), AP-005 (AI Test Scenario Designer), and AP-008 (API
+Dependency & Integration Workflow Engine) to already exist, since it extends their AI-assisted
+passes rather than introducing a new one.
+
+---
+
 # Post-MVP Features
 
 ## AP-011 — Test Execution & Results

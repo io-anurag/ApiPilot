@@ -1,11 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { WORKFLOW_STAGE_ORDER, type StageStatus, type TestGenerationWorkflow } from "@apipilot/shared-domain";
+import {
+  WORKFLOW_STAGE_ORDER,
+  type StageStatus,
+  type TestGenerationWorkflow,
+} from "@apipilot/shared-domain";
 import { WorkflowStageTracker } from "../../src/components/WorkflowStageTracker";
 
-function workflowWithStatuses(statuses: Partial<Record<string, StageStatus>>): TestGenerationWorkflow {
+function workflowWithStatuses(
+  statuses: Partial<Record<string, StageStatus>>,
+): TestGenerationWorkflow {
   const stages = Object.fromEntries(
-    WORKFLOW_STAGE_ORDER.map((stageId) => [stageId, { stageId, status: statuses[stageId] ?? "not-yet-reached" }]),
+    WORKFLOW_STAGE_ORDER.map((stageId) => [
+      stageId,
+      { stageId, status: statuses[stageId] ?? "not-yet-reached" },
+    ]),
   ) as TestGenerationWorkflow["stages"];
   return {
     id: "wf-1",
@@ -31,9 +40,24 @@ describe("WorkflowStageTracker", () => {
     );
     expect(screen.getByTestId("stage-status-upload")).toHaveTextContent("Complete");
     expect(screen.getByTestId("stage-status-apiReview")).toHaveTextContent("Active");
-    expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent("Needs to be redone");
+    expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
+      "Needs to be redone",
+    );
     expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent("Skipped");
-    expect(screen.getByTestId("stage-status-postmanGeneration")).toHaveTextContent("Not yet reached");
+    expect(screen.getByTestId("stage-status-postmanGeneration")).toHaveTextContent(
+      "Not yet reached",
+    );
+  });
+
+  it("renders a 'partial' AI enhancement status distinctly from 'skipped' (FR-011)", () => {
+    render(
+      <WorkflowStageTracker
+        workflow={workflowWithStatuses({ aiEnhancement: "partial" })}
+      />,
+    );
+    expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent(
+      "Partially completed",
+    );
   });
 
   it("does not render its own AI-unavailable notice — AiEnhancementStage's skip banner is the sole surface for it (FR-013, research.md D6)", () => {
@@ -53,16 +77,27 @@ describe("WorkflowStageTracker", () => {
         operationCount: 0,
         schemaCount: 0,
         securitySchemeCount: 0,
-        issues: [{ kind: "unresolved-ref", location: "#/paths/~1pets", message: "cannot resolve" }],
+        issues: [
+          {
+            kind: "unresolved-ref",
+            location: "#/paths/~1pets",
+            message: "cannot resolve",
+          },
+        ],
       },
     };
     render(<WorkflowStageTracker workflow={workflow} />);
-    expect(screen.getByTestId("workflow-analysis-issues")).toHaveTextContent("1 specification analysis issue");
+    expect(screen.getByTestId("workflow-analysis-issues")).toHaveTextContent(
+      "1 specification analysis issue",
+    );
   });
 
   it("lets a completed scenarioReview be revisited, but not a completed apiReview (research.md D3)", () => {
     const onViewStage = vi.fn();
-    const workflow = workflowWithStatuses({ apiReview: "complete", scenarioReview: "complete" });
+    const workflow = workflowWithStatuses({
+      apiReview: "complete",
+      scenarioReview: "complete",
+    });
     render(<WorkflowStageTracker workflow={workflow} onViewStage={onViewStage} />);
 
     fireEvent.click(screen.getByTestId("stage-status-scenarioReview"));
@@ -83,6 +118,8 @@ describe("WorkflowStageTracker", () => {
       aiErrorMessage: "not ready",
     };
     render(<WorkflowStageTracker workflow={workflow} />);
-    expect(screen.getByTestId("workflow-dependency-ai-issue")).toHaveTextContent("PROVIDER_UNAVAILABLE");
+    expect(screen.getByTestId("workflow-dependency-ai-issue")).toHaveTextContent(
+      "PROVIDER_UNAVAILABLE",
+    );
   });
 });
