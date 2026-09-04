@@ -15,6 +15,10 @@ import {
 import type { AIProvider } from "@apipilot/shared-domain";
 import { postmanCollectionsRouter } from "./api/postmanCollections";
 import { createApiDependenciesRouter, apiDependenciesRouter } from "./api/apiDependencies";
+import {
+  createTestGenerationWorkflowRouter,
+  testGenerationWorkflowRouter,
+} from "./api/testGenerationWorkflow";
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
@@ -43,6 +47,10 @@ export function createApp(provider?: AIProvider) {
   app.use(
     "/api",
     provider ? createApiDependenciesRouter(provider) : apiDependenciesRouter,
+  );
+  app.use(
+    "/api",
+    provider ? createTestGenerationWorkflowRouter(provider) : testGenerationWorkflowRouter,
   );
   app.use("/api", aiStatusRouter);
 

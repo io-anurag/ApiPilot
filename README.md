@@ -1,7 +1,7 @@
 # ApiPilot
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-24-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
 [![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 [![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
@@ -44,6 +44,15 @@ This repository currently implements:
   runnable Postman collection, a companion environment, and a README describing coverage
   and limitations, deterministically and with no credential written into the collection
   (see [Postman Collection Generator](#postman-collection-generator) below).
+- **AP-008: API Dependency & Integration Workflow Engine** — analyze an `ApiModel` for
+  relationships between operations and assemble the confident ones into ordered,
+  multi-step integration workflows, conservatively and without fabricating a relationship
+  (see [API Dependency & Integration Workflow Engine](#api-dependency--integration-workflow-engine)
+  below).
+- **AP-009: End-to-End Test Generation Workflow** — the guided journey that chains AP-002
+  through AP-008 into one resumable, server-tracked workflow and is now the application's
+  sole UI entry point (see
+  [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow) below).
 
 ## Setup
 
@@ -73,11 +82,14 @@ npm run dev
 This starts the backend and frontend dev servers in parallel:
 
 - Backend: `http://localhost:4000` (health check at `GET /api/health`)
-- Frontend: `http://localhost:5173` (opens the ApiPilot UI, proxies `/api/*` to the
-  backend, so no CORS configuration is needed in development)
+- Frontend: `http://localhost:5173` (opens the guided test-generation workflow described in
+  [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow), proxies
+  `/api/*` to the backend, so no CORS configuration is needed in development)
 
 Stopping (`Ctrl+C`) and re-running `npm run dev` returns the application to the same
-working state.
+working state. Because the workflow is tracked server-side, reloading the page or
+re-running `npm run dev` without restarting the backend resumes the in-progress workflow
+rather than losing it.
 
 ## Architecture
 
@@ -92,10 +104,17 @@ The repository is an npm-workspaces monorepo with three packages:
     with actionable error messages.
   - `src/api/` — one file per route module (e.g., `health.ts`, `version.ts`).
 - `frontend/` — React 18 + Vite 5 + TypeScript UI shell.
-  - `src/App.tsx` — root component; shows backend connection status and a
-    connection-error state if the backend is unreachable.
-  - `src/services/` — API clients (e.g., `healthClient.ts`) that call the backend.
-  - `src/components/` — reusable UI components (e.g., `VersionBadge.tsx`).
+  - `src/App.tsx` — root component; shows backend connection status, a
+    connection-error state if the backend is unreachable, and renders
+    `TestGenerationWorkflowPage` as the application's sole workflow entry point.
+  - `src/pages/TestGenerationWorkflowPage.tsx` — the guided workflow's composition root
+    (see [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow)).
+  - `src/services/` — API clients (e.g., `healthClient.ts`,
+    `testGenerationWorkflowClient.ts`) that call the backend.
+  - `src/components/` — reusable UI components (e.g., `VersionBadge.tsx`) and the
+    per-stage workflow components (`WorkflowStageTracker.tsx`, `ApiReviewStage.tsx`,
+    `AiEnhancementStage.tsx`, `ScenarioReviewStage.tsx`, `WorkflowReviewStage.tsx`,
+    `PostmanGenerationStage.tsx`).
 - `packages/shared-domain/` — framework-agnostic TypeScript types and small pure
   functions shared by both `backend/` and `frontend/` (e.g., `HealthStatus`,
   `VersionInfo`), imported as the `@apipilot/shared-domain` workspace package.
@@ -165,8 +184,10 @@ read-only analysis — no data is persisted beyond the request.
 
 1. Start the app with `npm run dev` and open the frontend at
    `http://localhost:5173`.
-2. Under "Upload OpenAPI Specification", choose a `.yaml`/`.yml` file.
-3. On success, the page shows an analysis summary (operation count, schema count,
+2. On the guided workflow's `upload` stage, choose a `.yaml`/`.yml` file — this starts a
+   new `TestGenerationWorkflow` (see
+   [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow)).
+3. The `analysis` stage shows an analysis summary (operation count, schema count,
    security scheme count, and any flagged issues), a list of discovered operations, and
    — once an operation is selected — its parameters, request body, responses, and
    security requirements.
@@ -186,8 +207,8 @@ for the full spec, plan, and API contract.
 
 ## Deterministic Test Designer
 
-After uploading a specification, click **"Generate Baseline Test Suite"** to deterministically
-generate a `TestModel` — a framework-independent list of `TestScenario`s — from the analyzed
+After the `apiReview` stage of the guided workflow, advancing to `deterministicGeneration`
+deterministically generates a `TestModel` — a framework-independent list of `TestScenario`s — from the analyzed
 `ApiModel`. No AI/LLM and no randomness are involved anywhere in this pipeline: every scenario
 and every generated value is produced by a fixed rule evaluated against the specification's own
 declared constraints.
@@ -389,10 +410,11 @@ explicit accept regardless of origin.
   those predicates.
 - `backend/src/api/testScenarioReviews.ts` — wires the three endpoints above behind
   `createTestScenarioReviewsRouter(provider)`, injectable for tests.
-- `frontend/src/pages/TestScenarioReviewPage.tsx` and its `TestScenarioReview*` components
-  (`List`, `Summary`, `Detail`, `Decision`, `Refinement`) — the review workspace UI, including
-  loading, empty, success, and error states, and the entry point to AP-007's export panel once
-  scenarios are accepted.
+- `frontend/src/components/TestScenarioReview*` (`List`, `Summary`, `Detail`, `Decision`,
+  `Refinement`) — the review workspace UI, including loading, empty, success, and error states.
+  These are reused unmodified by AP-009's `ScenarioReviewStage.tsx`, which is now the only page
+  that renders them (the standalone `TestScenarioReviewPage.tsx` was superseded and removed —
+  see [End-to-End Test Generation Workflow](#end-to-end-test-generation-workflow)).
 
 The `ReviewState`, `ReviewScenario`, `ReviewDecision`, `ReviewPolicy`, `ReviewSummary`, and
 `ReviewWorkspace` types are defined once in `packages/shared-domain/src/testScenarioReview.ts`.
@@ -462,7 +484,8 @@ rather than `localeCompare`, so output does not vary with the runtime's locale d
   AP-006's review redaction, so one definition of "this value is a credential" serves both.
 - `frontend/src/components/PostmanExportPanel.tsx` and
   `frontend/src/services/postmanCollectionsClient.ts` — the export action, its loading, success,
-  empty, and failure states, and the three downloads.
+  empty, and failure states, and the three downloads. Reused unmodified by AP-009's
+  `PostmanGenerationStage.tsx`, the workflow's final stage.
 
 The export renders single-operation scenarios only. Multi-step workflow rendering waits on AP-008,
 which owns the workflow contract; a model carrying workflow intent is refused explicitly rather
@@ -475,8 +498,9 @@ and [quickstart](./specs/007-postman-collection-generator/quickstart.md).
 
 AP-008 analyzes a normalized `ApiModel` for relationships between operations — where one
 operation's response can plausibly supply a value another operation consumes — and assembles the
-confident ones into ordered, multi-step integration workflows. It introduces no frontend page;
-relationship/workflow review and approval are delegated to AP-006's extension.
+confident ones into ordered, multi-step integration workflows. AP-008 itself introduces no
+frontend page; relationship/workflow review and approval are surfaced by AP-009's
+`workflowReview` stage (`WorkflowReviewStage.tsx`).
 
 **`POST /api/api-models/dependencies`** takes the `ApiModel` (AP-002, no `TestModel` involved) and
 returns the full analysis in one response:
@@ -541,6 +565,74 @@ See [specs/008-dependency-workflow-engine/](./specs/008-dependency-workflow-engi
 plan, research,
 [API contract](./specs/008-dependency-workflow-engine/contracts/api-dependency-workflow-api.md),
 and [quickstart](./specs/008-dependency-workflow-engine/quickstart.md).
+
+## End-to-End Test Generation Workflow
+
+AP-009 turns the eight capabilities above into one guided journey: upload → analysis → API review
+→ deterministic generation → AI enhancement → scenario review → dependency analysis → workflow
+review/approval → Postman generation. It is the first feature to introduce server-side state — a
+single in-memory `TestGenerationWorkflow` instance, shared by the whole running backend process
+rather than isolated per browser session — and it is the app's exclusive way to reach any of the
+screens above; the underlying stateless endpoints each capability already defined remain
+unchanged and independently usable.
+
+**`GET /api/test-generation-workflow`** returns the current workflow (`204` when none is in
+progress), so a reload or a second browser tab always resumes exactly where the workflow was left.
+**`POST /api/test-generation-workflow`** starts a new one from an uploaded specification, refusing
+with `409 workflow_in_progress` unless `?discardExisting=true` confirms discarding the one already
+running. Each subsequent stage has its own `POST /api/test-generation-workflow/<stage>/...`
+transition endpoint — see
+[contracts/test-generation-workflow-api.md](./specs/009-e2e-test-generation-workflow/contracts/test-generation-workflow-api.md)
+for the full list.
+
+**Progress is always visible.** Every stage's status —`not-yet-reached`, `active`, `complete`,
+`stale`, or (AI enhancement only) `skipped` — is reported on the workflow itself, along with any
+specification analysis issue or AI-unavailability condition, so the guided UI never has to guess
+what happened inside an individual stage.
+
+**Revising a decision never leaves stale work in place.** Reopening a completed scenario review or
+workflow review to change a decision marks every currently-complete downstream stage `stale`
+rather than silently keeping an outdated Postman collection around; regenerating is blocked until
+the stale stages are redone.
+
+**AI unavailability is recoverable, not fatal.** If the local AI provider is not ready during
+enhancement, the workflow proceeds on the deterministic-only baseline with the condition recorded,
+and enhancement can be retried at any point before scenario review is finalized.
+
+**A deliberate scope boundary.** Approved integration workflows (AP-008) are retained on the
+workflow for traceability and require their own explicit review/approval, but are never rendered
+into the Postman artifact — that rendering remains explicitly out of scope for AP-007 and AP-008
+alike, and building it here would be new Postman-generation logic under a different name. The
+Postman-generation stage always exports the approved scenario set only.
+
+### Module boundaries
+
+- `backend/src/testGenerationWorkflow/workflowStore.ts` — the single in-memory instance and its
+  validated stage-status transitions.
+- `backend/src/testGenerationWorkflow/workflowStages.ts` — the fixed nine-stage order and
+  entry-gating rules.
+- `backend/src/testGenerationWorkflow/staleness.ts` — the downstream-staleness computation shared
+  by every revisable stage.
+- `backend/src/testGenerationWorkflow/*Stage.ts` — one module per stage, each wrapping the
+  corresponding AP-002–AP-008 function unmodified.
+- `backend/src/api/testGenerationWorkflow.ts` — the thin route layer.
+- `frontend/src/pages/TestGenerationWorkflowPage.tsx` — the sole composition root; supersedes the
+  earlier per-feature pages (`SpecificationUploadPage.tsx`, `TestScenarioReviewPage.tsx`, both
+  removed).
+- `frontend/src/components/WorkflowStageTracker.tsx` — renders the nine-stage progress indicator
+  from each stage's reported status.
+- `frontend/src/components/ApiReviewStage.tsx`, `AiEnhancementStage.tsx`,
+  `ScenarioReviewStage.tsx`, `WorkflowReviewStage.tsx`, `PostmanGenerationStage.tsx` — one
+  component per stage past analysis, each wrapping the corresponding pre-existing
+  presentational UI (e.g. `ScenarioReviewStage.tsx` wraps the `TestScenarioReview*` components
+  from AP-006) behind the workflow's transition endpoints.
+- `frontend/src/services/testGenerationWorkflowClient.ts` — the HTTP client for every
+  `/api/test-generation-workflow*` endpoint.
+
+See [specs/009-e2e-test-generation-workflow/](./specs/009-e2e-test-generation-workflow/) for the
+spec, plan, research,
+[API contract](./specs/009-e2e-test-generation-workflow/contracts/test-generation-workflow-api.md),
+and [quickstart](./specs/009-e2e-test-generation-workflow/quickstart.md).
 
 ## License
 
