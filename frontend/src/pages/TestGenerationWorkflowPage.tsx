@@ -93,8 +93,8 @@ export function TestGenerationWorkflowPage() {
           className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4"
         >
           <p className="text-sm text-warning-700">
-            A workflow is already in progress. Starting a new one from &ldquo;{pendingFile.name}&rdquo;
-            discards it. Continue?
+            A workflow is already in progress. Starting a new one from &ldquo;
+            {pendingFile.name}&rdquo; discards it. Continue?
           </p>
           <div className="flex gap-2">
             <button
@@ -118,7 +118,9 @@ export function TestGenerationWorkflowPage() {
       )}
       {!workflow && (
         <div className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900">Upload OpenAPI Specification</h2>
+          <h2 className="text-base font-semibold text-slate-900">
+            Upload OpenAPI Specification
+          </h2>
           <input
             type="file"
             accept=".yaml,.yml"
@@ -150,7 +152,11 @@ export function TestGenerationWorkflowPage() {
       )}
       {uploading && <p className="text-sm text-muted">Uploading…</p>}
       {uploadError && (
-        <p role="alert" data-testid="upload-error" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+        <p
+          role="alert"
+          data-testid="upload-error"
+          className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        >
           {uploadError}
         </p>
       )}
@@ -160,7 +166,11 @@ export function TestGenerationWorkflowPage() {
             <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
           </div>
           {displayStageId !== workflow.activeStageId && (
-            <p role="status" data-testid="revisiting-notice" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700">
+            <p
+              role="status"
+              data-testid="revisiting-notice"
+              className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+            >
               Revisiting a completed stage. Making a change here will mark later stages as
               needing to be redone.
             </p>
@@ -172,13 +182,14 @@ export function TestGenerationWorkflowPage() {
             <DeterministicGenerationTrigger onAdvanced={handleAdvanced} />
           )}
           {displayStageId === "aiEnhancement" && (
-            <AiEnhancementStage skipped={false} onAdvanced={handleAdvanced} />
+            <AiEnhancementStage onAdvanced={handleAdvanced} />
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
             <>
-              {workflow.stages.aiEnhancement.status === "skipped" && (
+              {(workflow.stages.aiEnhancement.status === "skipped" ||
+                workflow.stages.aiEnhancement.status === "partial") && (
                 <AiEnhancementStage
-                  skipped
+                  status={workflow.stages.aiEnhancement.status}
                   aiErrorCategory={workflow.stages.aiEnhancement.aiErrorCategory}
                   aiErrorMessage={workflow.stages.aiEnhancement.aiErrorMessage}
                   onAdvanced={handleAdvanced}
@@ -195,7 +206,10 @@ export function TestGenerationWorkflowPage() {
             />
           )}
           {displayStageId === "postmanGeneration" && (
-            <PostmanGenerationStage postmanArtifact={workflow.postmanArtifact} onGenerated={handleAdvanced} />
+            <PostmanGenerationStage
+              postmanArtifact={workflow.postmanArtifact}
+              onGenerated={handleAdvanced}
+            />
           )}
         </>
       )}
@@ -203,7 +217,11 @@ export function TestGenerationWorkflowPage() {
   );
 }
 
-function DeterministicGenerationTrigger({ onAdvanced }: { onAdvanced: (result: WorkflowResult) => void }) {
+function DeterministicGenerationTrigger({
+  onAdvanced,
+}: {
+  onAdvanced: (result: WorkflowResult) => void;
+}) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -220,8 +238,13 @@ function DeterministicGenerationTrigger({ onAdvanced }: { onAdvanced: (result: W
   }
 
   return (
-    <section data-testid="deterministic-generation-stage" className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-base font-semibold text-slate-900">Generate Deterministic Test Suite</h2>
+    <section
+      data-testid="deterministic-generation-stage"
+      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">
+        Generate Deterministic Test Suite
+      </h2>
       <button
         type="button"
         onClick={handleGenerate}
@@ -231,7 +254,11 @@ function DeterministicGenerationTrigger({ onAdvanced }: { onAdvanced: (result: W
         {generating ? "Generating…" : "Generate Baseline Test Suite"}
       </button>
       {error && (
-        <p role="alert" data-testid="deterministic-generation-error" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+        <p
+          role="alert"
+          data-testid="deterministic-generation-error"
+          className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        >
           {error}
         </p>
       )}

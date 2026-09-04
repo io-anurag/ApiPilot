@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { AIProvider, InferenceResponse } from "@apipilot/shared-domain";
+import type {
+  AIProvider,
+  InferenceRequest,
+  InferenceResponse,
+} from "@apipilot/shared-domain";
 import {
   aiScenarioApiModel,
   aiScenarioBaseline,
+  buildLargeAiScenarioApiModel,
 } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
 import { enhanceTestModel } from "../../../src/testDesign/enhanceTestModel";
+import { buildAIScenarioPrompt } from "../../../src/testDesign/aiScenarioPrompt";
 
 function provider(content: string): AIProvider {
   return {
@@ -15,6 +21,7 @@ function provider(content: string): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (request): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: request.requestId,
@@ -24,6 +31,47 @@ function provider(content: string): AIProvider {
       provider: "mock",
       durationMs: 0,
     }),
+  };
+}
+
+const emptyCandidatesContent = JSON.stringify({ responseVersion: 1, candidates: [] });
+
+function successResponse(request: InferenceRequest): InferenceResponse {
+  return {
+    contractVersion: 1,
+    requestId: request.requestId,
+    status: "success",
+    content: emptyCandidatesContent,
+    modelId: "scripted-model",
+    provider: "mock",
+    durationMs: 0,
+  };
+}
+
+/**
+ * A test-only AIProvider that enforces a fixed input-character budget (forcing
+ * `splitOperationsIntoBatches` to split a large ApiModel into multiple batches, FR-004) and
+ * whose per-call behavior can be scripted via `scriptResponse`.
+ */
+function scriptedBatchProvider(options: {
+  budgetChars: number | undefined;
+  scriptResponse?: (request: InferenceRequest) => InferenceResponse | undefined;
+}): AIProvider & { calls: string[] } {
+  const calls: string[] = [];
+  return {
+    mode: "mock",
+    calls,
+    getReadiness: () => ({
+      state: "ready",
+      acceleratorRequested: false,
+      acceleratorActive: false,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }),
+    getInputBudget: async () => options.budgetChars,
+    infer: async (request): Promise<InferenceResponse> => {
+      calls.push(request.requestId);
+      return options.scriptResponse?.(request) ?? successResponse(request);
+    },
   };
 }
 
@@ -224,5 +272,102 @@ describe("enhanceTestModel", () => {
     );
 
     expect(second).toEqual(first);
+  });
+});
+
+describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
+  it("regression: a small ApiModel produces exactly one provider.infer() call (FR-006)", async () => {
+    const scripted = scriptedBatchProvider({ budgetChars: undefined });
+
+    const result = await enhanceTestModel(
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      scripted,
+    );
+
+    expect(scripted.calls).toHaveLength(1);
+    expect(result.aiProviderOutcome).toBe("success");
+  });
+
+  it("splits a large ApiModel into multiple batches, all succeeding (T013)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(20);
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(largeModel, aiScenarioBaseline).length / 3,
+    );
+    const scripted = scriptedBatchProvider({ budgetChars });
+
+    const result = await enhanceTestModel(largeModel, aiScenarioBaseline, scripted);
+
+    expect(scripted.calls.length).toBeGreaterThan(1);
+    expect(new Set(scripted.calls).size).toBe(scripted.calls.length);
+    expect(result.aiProviderOutcome).toBe("success");
+  });
+
+  it("reports 'partial' when one of several batches times out while others succeed (T024)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(20);
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(largeModel, aiScenarioBaseline).length / 3,
+    );
+    let timedOutOnce = false;
+    const scripted = scriptedBatchProvider({
+      budgetChars,
+      scriptResponse: (request) => {
+        if (!timedOutOnce) {
+          timedOutOnce = true;
+          return {
+            contractVersion: 1,
+            requestId: request.requestId,
+            status: "error",
+            errorCategory: "TIMEOUT",
+            errorMessage: "provider timed out",
+            modelId: "scripted-model",
+            provider: "mock",
+            durationMs: 0,
+          };
+        }
+        return undefined;
+      },
+    });
+
+    const result = await enhanceTestModel(largeModel, aiScenarioBaseline, scripted);
+
+    expect(scripted.calls.length).toBeGreaterThan(1);
+    expect(result.aiProviderOutcome).toBe("partial");
+    expect(result.aiErrorCategory).toBe("TIMEOUT");
+    expect(result.aiErrorMessage).toMatch(/timed out/);
+    expect(result.aiErrorMessage).toMatch(/of \d+ batches/);
+    expect(result.enhancedTestModel.scenarios).toEqual(aiScenarioBaseline.scenarios);
+  });
+
+  it("never reports 'partial' when every batch fails, matching today's single-batch failure semantics (T026)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(20);
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(largeModel, aiScenarioBaseline).length / 3,
+    );
+    const scripted = scriptedBatchProvider({
+      budgetChars,
+      scriptResponse: (request) => ({
+        contractVersion: 1,
+        requestId: request.requestId,
+        status: "error",
+        errorCategory: "TIMEOUT",
+        errorMessage: "provider timed out",
+        modelId: "scripted-model",
+        provider: "mock",
+        durationMs: 0,
+      }),
+    });
+
+    const result = await enhanceTestModel(largeModel, aiScenarioBaseline, scripted);
+
+    expect(scripted.calls.length).toBeGreaterThan(1);
+    expect(result.aiProviderOutcome).toBe("timeout");
+    expect(result.enhancedTestModel).toEqual(aiScenarioBaseline);
+    expect(result.aiCandidates).toEqual({
+      added: [],
+      deduplicated: [],
+      rejected: [],
+      nonExecutable: [],
+    });
   });
 });

@@ -1,6 +1,25 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.1.0 → 2.1.1 (patch: traceability note, no principle changes)
+
+Trigger: implementation of `011-ai-prompt-batching`, a hardening spec that lets AI-assisted
+dependency detection (AP-008) and scenario enhancement (AP-005) run against large
+specifications via deterministic request batching instead of being silently skipped.
+
+Added principles: none.
+Modified principles: none — the plan's Constitution Check confirmed the design satisfies
+  existing principles (II. Deterministic Before AI, VI. AI Provider Independence,
+  IX. Separation of Concerns, XVI. Executable Artifacts Must Be Deterministic,
+  XXI. Testability at Every Boundary, XXIV. Reproducibility) without requiring an amendment.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.0.0 → 2.1.0 (minor: new principles added)
 
 Trigger: a real end-to-end usability test of the shipped AP-009 guided workflow, run against a
@@ -519,4 +538,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.1.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-04
+**Version**: 2.1.1 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-04

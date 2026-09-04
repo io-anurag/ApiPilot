@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { WORKFLOW_STAGE_ORDER, type StageStatus, type TestGenerationWorkflow } from "@apipilot/shared-domain";
+import {
+  WORKFLOW_STAGE_ORDER,
+  type StageStatus,
+  type TestGenerationWorkflow,
+} from "@apipilot/shared-domain";
 import { WorkflowStageTracker } from "../../src/components/WorkflowStageTracker";
 import { ApiReviewStage } from "../../src/components/ApiReviewStage";
 import { AiEnhancementStage } from "../../src/components/AiEnhancementStage";
 import { WorkflowReviewStage } from "../../src/components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../../src/components/PostmanGenerationStage";
 
-function workflowWithStatuses(statuses: Partial<Record<string, StageStatus>>): TestGenerationWorkflow {
+function workflowWithStatuses(
+  statuses: Partial<Record<string, StageStatus>>,
+): TestGenerationWorkflow {
   const stages = Object.fromEntries(
-    WORKFLOW_STAGE_ORDER.map((stageId) => [stageId, { stageId, status: statuses[stageId] ?? "not-yet-reached" }]),
+    WORKFLOW_STAGE_ORDER.map((stageId) => [
+      stageId,
+      { stageId, status: statuses[stageId] ?? "not-yet-reached" },
+    ]),
   ) as TestGenerationWorkflow["stages"];
   return {
     id: "wf-1",
@@ -25,11 +34,17 @@ describe("Test generation workflow accessibility", () => {
   it("communicates every stage's status through visible text, not color alone (FR-004)", () => {
     render(
       <WorkflowStageTracker
-        workflow={workflowWithStatuses({ upload: "complete", apiReview: "active", scenarioReview: "stale" })}
+        workflow={workflowWithStatuses({
+          upload: "complete",
+          apiReview: "active",
+          scenarioReview: "stale",
+        })}
       />,
     );
     expect(screen.getByTestId("stage-status-upload")).toHaveTextContent("Complete");
-    expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent("Needs to be redone");
+    expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
+      "Needs to be redone",
+    );
   });
 
   it("uses a native, keyboard-focusable button to revisit a completed stage", () => {
@@ -49,7 +64,12 @@ describe("Test generation workflow accessibility", () => {
         apiModel={{
           operations: [],
           securitySchemes: {},
-          summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] },
+          summary: {
+            operationCount: 0,
+            schemaCount: 0,
+            securitySchemeCount: 0,
+            issues: [],
+          },
         }}
         onAdvanced={() => {}}
       />,
@@ -59,10 +79,17 @@ describe("Test generation workflow accessibility", () => {
 
   it("surfaces the AI-enhancement skip condition through role=status, not color alone", () => {
     render(
-      <AiEnhancementStage skipped aiErrorCategory="PROVIDER_UNAVAILABLE" aiErrorMessage="not ready" onAdvanced={() => {}} />,
+      <AiEnhancementStage
+        status="skipped"
+        aiErrorCategory="PROVIDER_UNAVAILABLE"
+        aiErrorMessage="not ready"
+        onAdvanced={() => {}}
+      />,
     );
     expect(screen.getByTestId("ai-enhancement-skip-banner")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry AI enhancement" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Retry AI enhancement" }),
+    ).toBeInTheDocument();
   });
 
   it("gives every workflow-review approve/reject control an accessible name", () => {

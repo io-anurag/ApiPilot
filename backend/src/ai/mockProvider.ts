@@ -18,9 +18,11 @@ const DEFAULT_MOCK_MODEL_ID = "mock-provider";
 export class MockProvider implements AIProvider {
   readonly mode: AIProviderMode = "mock";
   private readonly modelId: string;
+  private readonly inputBudgetCharsOverride: number | undefined;
 
   constructor(config: MockProviderConfig = { modelId: DEFAULT_MOCK_MODEL_ID }) {
     this.modelId = config.modelId;
+    this.inputBudgetCharsOverride = config.inputBudgetCharsOverride;
   }
 
   getReadiness(): ReadinessState {
@@ -31,6 +33,11 @@ export class MockProvider implements AIProvider {
       acceleratorActive: false,
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /** No limit by default; tests can fix a small budget via MockProviderConfig (FR-011). */
+  async getInputBudget(): Promise<number | undefined> {
+    return this.inputBudgetCharsOverride;
   }
 
   async infer(request: InferenceRequest): Promise<InferenceResponse> {

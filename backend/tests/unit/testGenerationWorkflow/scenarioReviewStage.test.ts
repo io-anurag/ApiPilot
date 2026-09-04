@@ -8,12 +8,19 @@ import { validateSpec } from "../../../src/openapi/validateSpec";
 import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReviewStage";
 import { runAiEnhancement } from "../../../src/testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
-import { EmptyApprovedScenariosError, StageNotActiveError } from "../../../src/testGenerationWorkflow/errors";
+import {
+  EmptyApprovedScenariosError,
+  StageNotActiveError,
+} from "../../../src/testGenerationWorkflow/errors";
 import {
   applyScenarioDecisions,
   finalizeScenarioReview,
 } from "../../../src/testGenerationWorkflow/scenarioReviewStage";
-import { getCurrentWorkflow, resetStore, startWorkflow } from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  getCurrentWorkflow,
+  resetStore,
+  startWorkflow,
+} from "../../../src/testGenerationWorkflow/workflowStore";
 
 const unavailableProvider: AIProvider = {
   mode: "mock",
@@ -24,6 +31,7 @@ const unavailableProvider: AIProvider = {
     acceleratorActive: false,
     updatedAt: new Date(0).toISOString(),
   }),
+  getInputBudget: async () => undefined,
   infer: async () => {
     throw Object.assign(new Error("unavailable"), { category: "PROVIDER_UNAVAILABLE" });
   },
@@ -56,9 +64,10 @@ describe("scenarioReviewStage", () => {
       { scenarioId: first.scenarioId, revision: first.revision, action: "accept" },
     ]);
     expect(outcomes[0].applied).toBe(true);
-    expect(workflow.reviewWorkspace?.scenarios.find((s) => s.scenarioId === first.scenarioId)?.state).toBe(
-      "accepted",
-    );
+    expect(
+      workflow.reviewWorkspace?.scenarios.find((s) => s.scenarioId === first.scenarioId)
+        ?.state,
+    ).toBe("accepted");
   });
 
   it("finalize refuses with EmptyApprovedScenariosError when nothing was approved", async () => {
@@ -74,17 +83,30 @@ describe("scenarioReviewStage", () => {
     ]);
     const afterFinalize = await finalizeScenarioReview();
     expect(afterFinalize.stages.scenarioReview.status).toBe("complete");
-    const completeDownstream = ["dependencyAnalysis", "workflowReview", "postmanGeneration"].filter(
-      (id) => (afterFinalize.stages as Record<string, { status: string }>)[id].status === "complete",
+    const completeDownstream = [
+      "dependencyAnalysis",
+      "workflowReview",
+      "postmanGeneration",
+    ].filter(
+      (id) =>
+        (afterFinalize.stages as Record<string, { status: string }>)[id].status ===
+        "complete",
     );
 
     const rejected = getCurrentWorkflow()!.reviewWorkspace!.scenarios[0];
     const { workflow: reopened } = applyScenarioDecisions([
-      { scenarioId: rejected.scenarioId, revision: rejected.revision, action: "reject", reason: "changed my mind" },
+      {
+        scenarioId: rejected.scenarioId,
+        revision: rejected.revision,
+        action: "reject",
+        reason: "changed my mind",
+      },
     ]);
     expect(reopened.stages.scenarioReview.status).toBe("active");
     for (const id of completeDownstream) {
-      expect((reopened.stages as Record<string, { status: string }>)[id].status).toBe("stale");
+      expect((reopened.stages as Record<string, { status: string }>)[id].status).toBe(
+        "stale",
+      );
     }
   });
 

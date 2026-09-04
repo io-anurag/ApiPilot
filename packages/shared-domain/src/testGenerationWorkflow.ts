@@ -34,15 +34,16 @@ export const WORKFLOW_STAGE_ORDER: readonly WorkflowStageId[] = [
   "postmanGeneration",
 ];
 
-/** data-model.md: StageStatus. `skipped` applies only to `aiEnhancement`. */
-export type StageStatus = "not-yet-reached" | "active" | "complete" | "stale" | "skipped";
+/** data-model.md: StageStatus. `skipped` and `partial` apply only to `aiEnhancement`. */
+export type StageStatus =
+  "not-yet-reached" | "active" | "complete" | "stale" | "skipped" | "partial";
 
 export interface WorkflowStageState {
   stageId: WorkflowStageId;
   status: StageStatus;
   enteredAt?: string;
   completedAt?: string;
-  /** Present only for aiEnhancement when status is "skipped" (FR-008). */
+  /** Present only for aiEnhancement when status is "skipped" or "partial" (FR-008). */
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
 }

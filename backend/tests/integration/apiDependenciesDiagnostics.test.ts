@@ -2,7 +2,10 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider, InferenceResponse } from "@apipilot/shared-domain";
 import { createApp } from "../../src/app";
-import { crudChainApiModel, dissimilarNameAiApiModel } from "../fixtures/dependencies/dependencyFixtures";
+import {
+  crudChainApiModel,
+  dissimilarNameAiApiModel,
+} from "../fixtures/dependencies/dependencyFixtures";
 
 const ENDPOINT = "/api/api-models/dependencies";
 const AI_RATIONALE_MARKER = "unique-ai-rationale-marker-for-diagnostics-test";
@@ -16,6 +19,7 @@ function providerThatLeaksIfLogged(): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (input): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: input.requestId,

@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider, InferenceResponse } from "@apipilot/shared-domain";
 import { createApp } from "../../src/app";
 import { resetStore } from "../../src/testGenerationWorkflow/workflowStore";
-import { VALID_SPECIFICATION_FILENAME, validSpecificationBuffer } from "../fixtures/testGenerationWorkflow/workflowFixtures";
+import {
+  VALID_SPECIFICATION_FILENAME,
+  validSpecificationBuffer,
+} from "../fixtures/testGenerationWorkflow/workflowFixtures";
 
 const AI_RATIONALE_MARKER = "unique-ai-rationale-marker-for-workflow-diagnostics-test";
 const SPEC_MARKER = "listPets"; // an operationId present in valid.yaml
@@ -17,6 +20,7 @@ function providerThatLeaksIfLogged(): AIProvider {
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
+    getInputBudget: async () => undefined,
     infer: async (input): Promise<InferenceResponse> => ({
       contractVersion: 1,
       requestId: input.requestId,
@@ -55,7 +59,9 @@ describe("test generation workflow diagnostics", () => {
     await request(app).post("/api/test-generation-workflow/api-review/continue");
     await request(app).post("/api/test-generation-workflow/deterministic-generation");
 
-    const response = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const response = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
 
     expect(response.status).toBe(200);
     expect(response.body.workflow.stages.aiEnhancement.status).toBe("skipped");

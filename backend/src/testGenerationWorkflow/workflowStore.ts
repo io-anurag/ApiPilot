@@ -35,7 +35,10 @@ function freshWorkflowId(now: Date): string {
 
 function initialStages(): Record<WorkflowStageId, WorkflowStageState> {
   return Object.fromEntries(
-    WORKFLOW_STAGE_ORDER.map((stageId) => [stageId, { stageId, status: "not-yet-reached" as StageStatus }]),
+    WORKFLOW_STAGE_ORDER.map((stageId) => [
+      stageId,
+      { stageId, status: "not-yet-reached" as StageStatus },
+    ]),
   ) as Record<WorkflowStageId, WorkflowStageState>;
 }
 
@@ -43,12 +46,25 @@ function initialStages(): Record<WorkflowStageId, WorkflowStageState> {
  * Creates a fresh workflow from an already-built ApiModel (upload + analysis complete
  * atomically, research.md D4) and makes it the current one, replacing any prior workflow.
  */
-export function startWorkflow(input: { specificationFilename: string; apiModel: ApiModel }): TestGenerationWorkflow {
+export function startWorkflow(input: {
+  specificationFilename: string;
+  apiModel: ApiModel;
+}): TestGenerationWorkflow {
   const now = new Date();
   const nowIso = now.toISOString();
   const stages = initialStages();
-  stages.upload = { stageId: "upload", status: "complete", enteredAt: nowIso, completedAt: nowIso };
-  stages.analysis = { stageId: "analysis", status: "complete", enteredAt: nowIso, completedAt: nowIso };
+  stages.upload = {
+    stageId: "upload",
+    status: "complete",
+    enteredAt: nowIso,
+    completedAt: nowIso,
+  };
+  stages.analysis = {
+    stageId: "analysis",
+    status: "complete",
+    enteredAt: nowIso,
+    completedAt: nowIso,
+  };
   stages.apiReview = { stageId: "apiReview", status: "active", enteredAt: nowIso };
 
   currentWorkflow = {
@@ -63,17 +79,31 @@ export function startWorkflow(input: { specificationFilename: string; apiModel: 
   return currentWorkflow;
 }
 
-/** Valid `from -> to` StageStatus transitions (data-model.md). Skip/retry is aiEnhancement-only. */
-function isValidTransition(stageId: WorkflowStageId, from: StageStatus, to: StageStatus): boolean {
+/** Valid `from -> to` StageStatus transitions (data-model.md). Skip/retry/partial is aiEnhancement-only. */
+const GENERAL_TRANSITIONS: ReadonlySet<string> = new Set([
+  "not-yet-reached->active",
+  "active->complete",
+  "complete->stale",
+  "complete->active",
+  "stale->active",
+]);
+
+const AI_ENHANCEMENT_ONLY_TRANSITIONS: ReadonlySet<string> = new Set([
+  "active->skipped",
+  "active->partial",
+  "skipped->active",
+  "partial->active",
+]);
+
+function isValidTransition(
+  stageId: WorkflowStageId,
+  from: StageStatus,
+  to: StageStatus,
+): boolean {
   if (from === to) return false;
-  if (from === "not-yet-reached" && to === "active") return true;
-  if (from === "active" && to === "complete") return true;
-  if (from === "active" && to === "skipped") return stageId === "aiEnhancement";
-  if (from === "skipped" && to === "active") return stageId === "aiEnhancement";
-  if (from === "complete" && to === "stale") return true;
-  if (from === "complete" && to === "active") return true;
-  if (from === "stale" && to === "active") return true;
-  return false;
+  const transition = `${from}->${to}`;
+  if (GENERAL_TRANSITIONS.has(transition)) return true;
+  return stageId === "aiEnhancement" && AI_ENHANCEMENT_ONLY_TRANSITIONS.has(transition);
 }
 
 export interface UpdateStageOptions {
@@ -108,8 +138,10 @@ export function updateStage(
     status,
     enteredAt: current.enteredAt ?? now,
     completedAt,
-    aiErrorCategory: status === "skipped" ? options.aiErrorCategory : undefined,
-    aiErrorMessage: status === "skipped" ? options.aiErrorMessage : undefined,
+    aiErrorCategory:
+      status === "skipped" || status === "partial" ? options.aiErrorCategory : undefined,
+    aiErrorMessage:
+      status === "skipped" || status === "partial" ? options.aiErrorMessage : undefined,
   };
   currentWorkflow = {
     ...currentWorkflow,
@@ -136,7 +168,9 @@ export function advanceActiveStage(stageId: WorkflowStageId): TestGenerationWork
 }
 
 /** Merges arbitrary top-level fields (produced artifacts, activeStageId) onto the current workflow. */
-export function patchWorkflow(patch: Partial<TestGenerationWorkflow>): TestGenerationWorkflow {
+export function patchWorkflow(
+  patch: Partial<TestGenerationWorkflow>,
+): TestGenerationWorkflow {
   if (!currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }

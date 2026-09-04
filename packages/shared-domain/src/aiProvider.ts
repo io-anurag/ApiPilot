@@ -53,14 +53,7 @@ export interface ReadinessState {
  * per model instead of the harness/provider silently accepting whatever fp32 costs.
  */
 export type ModelDType =
-  | "fp32"
-  | "fp16"
-  | "q8"
-  | "int8"
-  | "uint8"
-  | "q4"
-  | "q4f16"
-  | "bnb4";
+  "fp32" | "fp16" | "q8" | "int8" | "uint8" | "q4" | "q4f16" | "bnb4";
 
 /** Describes which local model is selected and how it loads (FR-003). */
 export interface ModelConfig {
@@ -77,11 +70,26 @@ export interface AIProvider {
   mode: AIProviderMode;
   getReadiness(): ReadinessState;
   infer(request: InferenceRequest): Promise<InferenceResponse>;
+  /**
+   * Maximum number of characters of serialized InferenceRequest.input this provider can
+   * safely accept for the given output budget, or undefined if it has no meaningful limit
+   * (e.g. MockProvider). A conservative estimate, not an exact count — see
+   * specs/011-ai-prompt-batching/research.md Decision 1/2. Callers use this only to plan
+   * batches; LocalProvider's existing exact-token guard inside infer() remains the
+   * authoritative fits/doesn't-fit check.
+   */
+  getInputBudget(maxOutputTokens?: number): Promise<number | undefined>;
 }
 
 /** Fixed configuration for the deterministic mock provider (FR-011). */
 export interface MockProviderConfig {
   modelId: string;
+  /**
+   * Test-only fixed value for `getInputBudget()`, letting unit tests exercise real
+   * multi-batch splitting without a real model (specs/011-ai-prompt-batching/data-model.md;
+   * constitution XXI). Omitted means "no limit", matching production MockProvider behavior.
+   */
+  inputBudgetCharsOverride?: number;
 }
 
 /** Recorded outcome of evaluating one candidate model against sample workloads (FR-014). */

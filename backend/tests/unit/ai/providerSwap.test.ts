@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AIProvider, InferenceRequest, ReadinessState } from "@apipilot/shared-domain";
+import type {
+  AIProvider,
+  InferenceRequest,
+  ReadinessState,
+} from "@apipilot/shared-domain";
 import { MockProvider } from "../../../src/ai/mockProvider";
 
 /** A tiny feature harness that depends only on the AIProvider abstraction (SC-003). */
@@ -27,6 +31,7 @@ function fakeLocalProvider(): AIProvider {
       acceleratorActive: false,
       updatedAt: new Date().toISOString(),
     }),
+    getInputBudget: async () => undefined,
     infer: async (request) => ({
       contractVersion: 1,
       requestId: request.requestId,

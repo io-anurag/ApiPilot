@@ -88,9 +88,7 @@ export interface IntegrationWorkflow {
 
 /** Why a relationship needs human confirmation before it becomes part of a workflow (FR-012, FR-013a, FR-014). */
 export type ManualConfirmationReason =
-  | "possible-confidence"
-  | "excluded-by-disambiguation"
-  | "chain-length-exceeded";
+  "possible-confidence" | "excluded-by-disambiguation" | "chain-length-exceeded";
 
 /** A POSSIBLE relationship, or a disambiguation-excluded relationship, needing human confirmation. */
 export interface ManualConfirmationCandidate {
@@ -107,7 +105,8 @@ export interface DependencyCycleFinding {
 }
 
 /** What happened to the AI-assisted pass during one analysis run. */
-export type DependencyAIOutcome = "success" | "unavailable" | "timeout" | "invalid-response" | "skipped";
+export type DependencyAIOutcome =
+  "success" | "unavailable" | "timeout" | "invalid-response" | "skipped" | "partial";
 
 /** The single value the analysis returns and the endpoint serializes. */
 export interface DependencyAnalysisResult {
@@ -135,10 +134,7 @@ export interface AIDependencyCandidate {
 
 /** Distinguishable reasons an AI dependency candidate was rejected (mirrors AIValidationFindingCode). */
 export type AIDependencyValidationFindingCode =
-  | "invalid-shape"
-  | "operation-not-found"
-  | "field-not-found"
-  | "duplicate";
+  "invalid-shape" | "operation-not-found" | "field-not-found" | "duplicate";
 
 export interface AIDependencyValidationFinding {
   code: AIDependencyValidationFindingCode;

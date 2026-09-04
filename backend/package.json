@@ -16,6 +16,7 @@
     "@apipilot/shared-domain": "*",
     "@apidevtools/swagger-parser": "^10.1.1",
     "@huggingface/transformers": "^4.2.0",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "multer": "^1.4.5-lts.1"
