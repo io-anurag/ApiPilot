@@ -46,7 +46,7 @@ format rather than the format itself. It can therefore pass an artifact that a r
 would reject. The mitigation is that the validator is written against the published v2.1.0 field
 list and is paired with fixture artifacts checked into the repository, and that SC-007 (import and
 run in a standard collection runner) remains a manual acceptance step for this feature. Adding
-official-schema validation, and automated import verification once AP-010 introduces a runner, are
+official-schema validation, and automated import verification once AP-011 introduces a runner, are
 the two named follow-ups.
 
 **Alternatives considered**:
@@ -54,7 +54,7 @@ the two named follow-ups.
 - Vendor the official v2.1.0 JSON Schema and validate with `ajv`: deferred rather than rejected;
   it is the stronger guarantee, but requires a licence review and a large vendored artifact that
   this feature does not otherwise need.
-- Validate by importing into Newman: rejected because Newman is an AP-010 concern, would make the
+- Validate by importing into Newman: rejected because Newman is an AP-011 concern, would make the
   test suite depend on a runner, and FR-023/SC-012 forbid this feature from executing anything.
 
 ## Decision: Deterministic identifiers derived from content

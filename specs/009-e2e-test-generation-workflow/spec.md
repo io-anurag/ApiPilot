@@ -302,14 +302,14 @@ deterministic TestModel, with the AI-unavailable condition visibly recorded.
   feature's requirements are scoped to sequencing, progress visibility, staleness handling, and
   the AI-unavailable continuation path across those stages.
 - Producing a downloadable Postman collection is this workflow's terminal state; executing that
-  collection and reporting results is out of scope, per AP-010.
+  collection and reporting results is out of scope, per AP-011.
 
 ## Out of Scope
 
 - Any new OpenAPI parsing, deterministic scenario generation, AI enhancement, review, dependency
   detection, or Postman generation logic beyond what AP-002 through AP-008 already specify.
-- Executing generated Postman collections or reporting execution results (AP-010) and AI failure
-  analysis (AP-011).
+- Executing generated Postman collections or reporting execution results (AP-011) and AI failure
+  analysis (AP-012).
 - Multi-user or multi-tenant workflow session management, including concurrent workflows across
   different users or browser sessions.
 - Persisting workflow history or in-progress workflow state across an application restart.

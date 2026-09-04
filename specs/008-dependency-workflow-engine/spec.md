@@ -317,7 +317,7 @@ score and rationale.
 - Reviewing, approving, rejecting, or editing relationships and workflows as a user-facing
   experience; this feature produces the relationships and workflow candidates that a review
   capability (AP-006 or its extension) acts upon.
-- Executing any generated workflow or reporting execution results (AP-010, AP-011).
+- Executing any generated workflow or reporting execution results (AP-011, AP-012).
 - Modifying the ApiModel or TestModel contracts produced by AP-002 and AP-003.
 - Detecting dependencies that require information outside the parsed specification, such as runtime
   API behavior, live response sampling, or external documentation.

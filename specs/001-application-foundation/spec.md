@@ -45,7 +45,7 @@ As a developer, I want a clear, documented project structure with shared domain
 packages, so that I can add a new feature (frontend, backend, or shared domain logic)
 without having to restructure existing code.
 
-**Why this priority**: AP-002 through AP-010 will each add new modules on top of this
+**Why this priority**: AP-002 through AP-012 will each add new modules on top of this
 foundation. If the structure isn't in place, every subsequent feature pays a
 structural tax.
 

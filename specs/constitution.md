@@ -1,6 +1,30 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.0.0 → 2.1.0 (minor: new principles added)
+
+Trigger: a real end-to-end usability test of the shipped AP-009 guided workflow, run against a
+real production OpenAPI specification (51 operations, 371 generated scenarios, 8 detected
+dependency workflows), surfaced two gaps this constitution had no principle covering: review
+screens with no bulk decision actions (impractical at real API sizes), and a fully-wired UI
+shipped with no consistent presentation applied (raw unstyled markup).
+
+Added principles:
+  - XXXII. Human Review Must Remain Practical at Real Scale (extends XI)
+  - XXXIII. Presentation Must Be Consistent, Coherent, and Usable (tightens XXXI)
+
+Modified principles (expanded, not redefined):
+  - XXXI. Definition of Done — now explicitly cross-references XXXII and XXXIII for features
+    that include a review interface or user-facing UI.
+
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 1.0.0 → 2.0.0 (major governance restructuring)
 
 Modified principles (renamed / redefined / expanded):
@@ -423,12 +447,45 @@ without anyone noticing the original reasoning.
 A feature is not complete merely because the code compiles or the UI appears functional. A
 feature is complete only when its specification is satisfied, acceptance criteria pass,
 appropriate automated tests exist, security requirements are satisfied, architectural
-boundaries are respected, constitution principles are satisfied, documentation is updated
-where necessary, known limitations are documented, and the implementation has been reviewed
-against the specification and plan.
+boundaries are respected, constitution principles are satisfied — including, where the feature
+includes a human review interface or user-facing UI, the review-scalability requirements of
+XXXII and the presentation-consistency requirements of XXXIII — documentation is updated where
+necessary, known limitations are documented, and the implementation has been reviewed against
+the specification and plan.
 
 **Rationale**: A single, explicit bar for "done" prevents partially-finished work from being
 treated as shippable.
+
+### XXXII. Human Review Must Remain Practical at Real Scale
+
+Any interface where a user reviews, accepts, rejects, approves, or otherwise decides on
+deterministically-derived or AI-generated content (including but not limited to test scenarios,
+API dependency relationships, and integration workflows) MUST remain practical to complete
+against realistic API specifications, not only against small fixtures. Where the number of
+reviewable items can reasonably exceed what a person can decide on individually, the interface
+MUST provide efficient grouped or bulk decision actions (e.g., accept/reject/approve by filter,
+category, operation, or selection) in addition to per-item review; a per-item-only interaction
+pattern MUST NOT be treated as sufficient once realistic scale is known. A review gate MUST NOT
+block progress in a way that is impractical to satisfy at real-world scale.
+
+**Rationale**: A review step a QA engineer cannot realistically complete does not provide human
+oversight — it replaces automation with an impractical bottleneck, defeating the purpose
+Human-in-the-Loop (XI) is meant to serve.
+
+### XXXIII. Presentation Must Be Consistent, Coherent, and Usable
+
+ApiPilot MUST present specification-derived, deterministic, AI-generated, and user-provided
+information through one internally consistent visual and interaction system, applied uniformly
+across the product, rather than through ad hoc, inconsistent, or unstyled default markup. The
+specific presentation technology remains replaceable (XXVIII) and is chosen in project
+engineering conventions, not this constitution. A feature MUST NOT be considered done merely
+because its markup is functionally wired and renders without error; it MUST also be visually
+legible, consistent with the rest of the product's established presentation system, and
+accessible.
+
+**Rationale**: A feature that works but cannot be comfortably read or operated does not deliver
+the trust and clarity the product exists to provide — "it renders" is not the same bar as "a QA
+engineer can use it."
 
 ## Governance
 
@@ -462,4 +519,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.0.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-08-26
+**Version**: 2.1.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-04

@@ -336,7 +336,7 @@ that the difference between the two artifacts is limited to the affected scenari
 
 ## Out of Scope
 
-- Executing the generated collection, reporting run results, or analyzing failures (AP-010, AP-011).
+- Executing the generated collection, reporting run results, or analyzing failures (AP-011, AP-012).
 - Inferring API dependencies or deciding which operations relate to each other (AP-008).
 - Implementing multi-step workflow rendering and response-value chaining; FR-029 states the required
   behavior as a target, but the implementation waits on the AP-008 workflow contract.

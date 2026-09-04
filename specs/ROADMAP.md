@@ -556,9 +556,65 @@ The workflow must preserve provenance and traceability throughout the generation
 
 ---
 
+## AP-010 — Presentation System & Review Scalability
+
+### Objective
+
+Make the AP-001–AP-009 guided workflow actually usable by a QA engineer against real-world
+specifications, not only against small fixtures. This closes gaps found during a real
+end-to-end usability pass against a production specification (51 operations, 371 generated
+scenarios, 8 detected dependency workflows): every workflow screen renders as unstyled default
+HTML, and the Scenario Review (AP-006) and Workflow Review (AP-008/AP-009) screens support only
+one-at-a-time decisions with no bulk action, making full review of 371 scenarios or several
+dozen workflows impractical.
+
+This feature satisfies constitution principles XXXII (Human Review Must Remain Practical at
+Real Scale) and XXXIII (Presentation Must Be Consistent, Coherent, and Usable), introduced in
+response to this same finding.
+
+### Scope
+
+- Apply the project's established presentation system (Tailwind CSS v4, per
+  `.claude/CLAUDE.md` / `.github/copilot-instructions.md`) consistently across every existing
+  workflow screen and component (`TestGenerationWorkflowPage` and its stage components; the
+  AP-002 analysis/operation views; the AP-006 scenario-review components; the AP-008/AP-009
+  workflow-review view; the AP-007/AP-009 Postman export view), including HTTP-method
+  badges, status/severity indicators, and consistent loading/empty/error states.
+- Add grouped/bulk decision actions to Scenario Review: accept/reject by the existing
+  operation and category filters, and accept/reject a multi-selection, alongside the existing
+  per-scenario decision (which remains available for individual overrides).
+- Add a bulk approve/reject action to Workflow Review for the discovered integration
+  workflows.
+- Remove the duplicate AI-enhancement-skipped banner currently shown twice on Scenario Review
+  (`WorkflowStageTracker` and `AiEnhancementStage` both render it).
+- Accessibility pass over the affected screens (keyboard operability of bulk selection,
+  focus management, accessible names for grouped actions).
+
+### Constraints
+
+- Presentation-only and additive-interaction changes: this feature MUST NOT alter `ApiModel`,
+  `TestModel`, review/workflow domain contracts, or any deterministic generation, AI, or
+  dependency-analysis behavior.
+- A bulk decision MUST resolve to the same explicit per-scenario/per-workflow decision records
+  already produced by the existing single-item endpoints — bulk actions are a UI convenience
+  over the existing review/decision model, not a new decision semantics.
+- Existing single-item accept/reject/approve/reject actions MUST remain available; bulk actions
+  are additive.
+- No new frontend styling framework may be introduced (constitution XXVIII, and
+  `.claude/CLAUDE.md` §26–27); this feature applies the framework the project has already
+  chosen.
+
+### Dependencies
+
+Requires AP-006 (Test Scenario Review), AP-008 (API Dependency & Integration Workflow Engine),
+and AP-009 (End-to-End Test Generation Workflow) to already exist, since it styles and extends
+their screens rather than introducing new ones.
+
+---
+
 # Post-MVP Features
 
-## AP-010 — Test Execution & Results
+## AP-011 — Test Execution & Results
 
 ### Objective
 
@@ -640,7 +696,7 @@ Sensitive payload logging must remain disabled by default.
 
 ---
 
-## AP-011 — AI Failure Analysis
+## AP-012 — AI Failure Analysis
 
 ### Objective
 
@@ -719,13 +775,18 @@ AI failure analysis must be evaluated using the same evidence-driven evaluation 
                             ▼
                          AP-009
                             │
+                            ▼
+                         AP-010
+                       Presentation &
+                     Review Scalability
+                            │
                      ───── MVP ─────
                             │
                             ▼
-                         AP-010
+                         AP-011
                             │
                             ▼
-                         AP-011
+                         AP-012
 ```
 
 AP-007 and AP-008 may be developed in parallel after their prerequisites are satisfied, provided their shared domain contracts are stable.
@@ -746,13 +807,18 @@ AP-006  Test Scenario Review
 AP-007  Postman Collection Generator
 AP-008  API Dependency & Integration Workflow Engine
 AP-009  End-to-End Test Generation Workflow
+AP-010  Presentation System & Review Scalability
 ```
+
+AP-010 is part of the MVP boundary, not a post-MVP feature: an MVP whose guided workflow is
+impractical to review at real scale, or is presented as unstyled default markup, does not meet
+the "viable" bar (constitution XXXII, XXXIII).
 
 The following are explicitly outside the first MVP:
 
 ```text
-AP-010  Test Execution & Results
-AP-011  AI Failure Analysis
+AP-011  Test Execution & Results
+AP-012  AI Failure Analysis
 ```
 
 ---
@@ -850,6 +916,9 @@ Workflow
   ↓
 Postman
 ```
+
+This pipeline is only genuinely viable once AP-010 (Presentation System & Review Scalability)
+is complete — see the MVP Boundary note above.
 
 ## M8 — Execution Platform
 
