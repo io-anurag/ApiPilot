@@ -2,25 +2,42 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import type { BenchmarkCandidateResult } from "@apipilot/shared-domain";
+import type { BenchmarkCandidateResult, ModelDType } from "@apipilot/shared-domain";
 import { LocalProvider } from "../localProvider";
 import { loadAIConfig } from "../modelConfig";
 import { buildBenchmarkReport } from "./report";
 import { SAMPLE_WORKLOADS, WORKLOAD_SET_ID } from "./workloads";
 
+interface BenchmarkCandidate {
+  modelId: string;
+  /** Pins an ONNX quantization instead of Transformers.js's fp32-on-CPU default, which
+   * is an impractically large download/runtime footprint for a multi-billion-parameter
+   * model (e.g. Phi-3-mini's fp32 weights are ~16GB vs. ~2.5GB at q4). */
+  dtype?: ModelDType;
+}
+
 /** Shortlisted candidates evaluated by this harness (research.md #2, constitution VII). */
-const CANDIDATE_MODEL_IDS = [
-  "onnx-community/Qwen2.5-0.5B-Instruct",
-  "Xenova/LaMini-Flan-T5-248M",
-  "onnx-community/Phi-3-mini-4k-instruct",
+const CANDIDATES: BenchmarkCandidate[] = [
+  { modelId: "onnx-community/Qwen2.5-0.5B-Instruct" },
+  { modelId: "Xenova/LaMini-Flan-T5-248M" },
+  // Corrected repo ids (previously missing the "-ONNX" suffix, which does not exist on
+  // Hugging Face and made these candidates fail to load in every prior benchmark run).
+  { modelId: "onnx-community/Phi-3-mini-4k-instruct-ONNX", dtype: "q4" },
+  // Added to evaluate whether a larger context window (128k vs. Qwen2.5's 32768) avoids
+  // the context-limit failures observed enhancing large ApiModel/TestModel prompts in
+  // production; MIT-licensed, meeting the permissive-license shortlist criterion
+  // (research.md #2). Pinned to q4 (~2.5GB) rather than the ~16GB fp32 default.
+  { modelId: "onnx-community/Phi-3-mini-128k-instruct-ONNX", dtype: "q4" },
 ];
 
-async function evaluateCandidate(modelId: string, cacheDir: string): Promise<BenchmarkCandidateResult> {
+async function evaluateCandidate(candidate: BenchmarkCandidate, cacheDir: string): Promise<BenchmarkCandidateResult> {
+  const { modelId, dtype } = candidate;
   const provider = new LocalProvider({
     modelId,
     cacheDir,
     useAccelerator: false,
     inferenceTimeoutMs: 120_000,
+    dtype,
   });
 
   let successCount = 0;
@@ -48,6 +65,7 @@ async function evaluateCandidate(modelId: string, cacheDir: string): Promise<Ben
     structuredOutputSuccessRate: successCount / SAMPLE_WORKLOADS.length,
     averageLatencyMs: totalLatencyMs / SAMPLE_WORKLOADS.length,
     peakMemoryMb,
+    notes: dtype ? `dtype=${dtype}` : undefined,
   };
 }
 
@@ -86,14 +104,15 @@ async function main(): Promise<void> {
   const { model } = loadAIConfig();
   const candidates: BenchmarkCandidateResult[] = [];
 
-  for (const modelId of CANDIDATE_MODEL_IDS) {
+  for (const candidate of CANDIDATES) {
+    const dtypeSuffix = candidate.dtype ? " (dtype=" + candidate.dtype + ")" : "";
     // eslint-disable-next-line no-console
-    console.log(`Benchmarking ${modelId}...`);
+    console.log(`Benchmarking ${candidate.modelId}${dtypeSuffix}...`);
     try {
-      candidates.push(await evaluateCandidate(modelId, model.cacheDir));
+      candidates.push(await evaluateCandidate(candidate, model.cacheDir));
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error(`Skipping ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`Skipping ${candidate.modelId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

@@ -1,26 +1,34 @@
 {
-  "runAt": "2026-08-29T10:41:28.778Z",
+  "runAt": "2026-09-04T12:04:11.030Z",
   "workloadSetId": "ap004-representative-v1",
   "candidates": [
     {
       "modelId": "onnx-community/Qwen2.5-0.5B-Instruct",
       "structuredOutputSuccessRate": 0.3333333333333333,
-      "averageLatencyMs": 14124.497166666666,
-      "peakMemoryMb": 2744.59765625
+      "averageLatencyMs": 12654.346633333334,
+      "peakMemoryMb": 2749.265625
     },
     {
       "modelId": "Xenova/LaMini-Flan-T5-248M",
       "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 10.629533333330377,
-      "peakMemoryMb": 2741.98828125
+      "averageLatencyMs": 4.53203333333416,
+      "peakMemoryMb": 2749.875
     },
     {
-      "modelId": "onnx-community/Phi-3-mini-4k-instruct",
+      "modelId": "onnx-community/Phi-3-mini-4k-instruct-ONNX",
+      "structuredOutputSuccessRate": 0.3333333333333333,
+      "averageLatencyMs": 322867.8621333334,
+      "peakMemoryMb": 4279.8125,
+      "notes": "dtype=q4"
+    },
+    {
+      "modelId": "onnx-community/Phi-3-mini-128k-instruct-ONNX",
       "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 316.35133333333215,
-      "peakMemoryMb": 502.99609375
+      "averageLatencyMs": 270339.21760000003,
+      "peakMemoryMb": 3552.875,
+      "notes": "dtype=q4"
     }
   ],
   "selectedModelId": "onnx-community/Qwen2.5-0.5B-Instruct",
-  "selectionRationale": "Highest structured-output success rate (33%) among evaluated candidates; average latency 14124ms is acceptable for interactive CPU use (research.md #2, constitution VII, Model Selection Is an Engineering Decision)."
+  "selectionRationale": "Highest structured-output success rate (33%) among evaluated candidates; average latency 12654ms is acceptable for interactive CPU use (research.md #2, constitution VII, Model Selection Is an Engineering Decision)."
 }

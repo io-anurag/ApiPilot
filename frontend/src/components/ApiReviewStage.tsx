@@ -33,17 +33,22 @@ export function ApiReviewStage({
   }
 
   return (
-    <section data-testid="api-review-stage">
-      <h2>Review Discovered APIs</h2>
+    <section data-testid="api-review-stage" className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-900">Review Discovered APIs</h2>
       <AnalysisSummary summary={apiModel.summary} />
       <OperationList operations={apiModel.operations} onSelect={setSelected} />
       {selected && <OperationDetail operation={selected} />}
-      <div>
-        <button type="button" onClick={handleContinue} disabled={continuing}>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={continuing}
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           {continuing ? "Continuing…" : "Continue"}
         </button>
         {error && (
-          <p role="alert" data-testid="api-review-error">
+          <p role="alert" data-testid="api-review-error" className="text-sm font-medium text-danger-700">
             {error}
           </p>
         )}
