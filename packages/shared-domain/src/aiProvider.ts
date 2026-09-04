@@ -45,12 +45,31 @@ export interface ReadinessState {
   updatedAt: string;
 }
 
+/**
+ * Closed set of ONNX weight quantizations Transformers.js can load (mirrors that
+ * library's `DataType` union). Left unset, Transformers.js chooses fp32 on CPU, which is
+ * appropriate for small models but downloads/runs an impractically large file for a
+ * multi-billion-parameter model — `dtype` lets `ModelConfig` pin a lighter quantization
+ * per model instead of the harness/provider silently accepting whatever fp32 costs.
+ */
+export type ModelDType =
+  | "fp32"
+  | "fp16"
+  | "q8"
+  | "int8"
+  | "uint8"
+  | "q4"
+  | "q4f16"
+  | "bnb4";
+
 /** Describes which local model is selected and how it loads (FR-003). */
 export interface ModelConfig {
   modelId: string;
   cacheDir: string;
   useAccelerator: boolean;
   inferenceTimeoutMs: number;
+  /** ONNX weight quantization to load; omitted defers to Transformers.js's own default. */
+  dtype?: ModelDType;
 }
 
 /** The single abstraction every AI-powered feature depends on (FR-001). */

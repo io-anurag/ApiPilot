@@ -21,19 +21,29 @@ export function App() {
   }, []);
 
   return (
-    <main>
-      <h1>ApiPilot</h1>
-      <VersionBadge />
-      {health === null && <p data-testid="connection-status">Checking backend...</p>}
-      {health?.ok === true && (
-        <p data-testid="connection-status">Backend connected ({health.data.status})</p>
-      )}
-      {health?.ok === false && (
-        <p data-testid="connection-status" role="alert">
-          Backend unreachable: {health.error}
-        </p>
-      )}
-      <TestGenerationWorkflowPage />
+    <main className="min-h-screen bg-background text-slate-900">
+      <header className="flex items-center gap-3 border-b border-border bg-surface px-6 py-4">
+        <h1 className="text-lg font-semibold tracking-tight">ApiPilot</h1>
+        <VersionBadge />
+        {health === null && (
+          <p data-testid="connection-status" className="ml-auto text-sm text-muted">
+            Checking backend…
+          </p>
+        )}
+        {health?.ok === true && (
+          <p data-testid="connection-status" className="ml-auto text-sm text-success-700">
+            Backend connected ({health.data.status})
+          </p>
+        )}
+        {health?.ok === false && (
+          <p data-testid="connection-status" role="alert" className="ml-auto text-sm font-medium text-danger-700">
+            Backend unreachable: {health.error}
+          </p>
+        )}
+      </header>
+      <div className="mx-auto max-w-5xl px-6 py-6">
+        <TestGenerationWorkflowPage />
+      </div>
     </main>
   );
 }

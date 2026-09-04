@@ -39,12 +39,32 @@ async function loadTransformersEngine(
 
   const generator = await pipeline("text-generation", config.modelId, {
     device: device === "gpu" ? "gpu" : "cpu",
+    ...(config.dtype ? { dtype: config.dtype } : {}),
   });
 
   return {
     async generate(input, options) {
+      const maxNewTokens = options.maxNewTokens ?? 256;
+
+      // Transformers.js does not truncate or validate context length itself: an
+      // oversized prompt reaches onnxruntime and crashes deep inside the RoPE/position
+      // embedding Gather node once the position index exceeds the model's context
+      // window, surfacing as an opaque native error rather than a typed one. Fail
+      // explicitly here instead (constitution 8.4 — Explicit Failure).
+      const contextLimit = generator.tokenizer.model_max_length;
+      if (typeof contextLimit === "number" && Number.isFinite(contextLimit)) {
+        const inputTokenCount = generator.tokenizer.encode(input).length;
+        if (inputTokenCount + maxNewTokens > contextLimit) {
+          throw new AIProviderError(
+            "INVALID_REQUEST",
+            `InferenceRequest.input requires ${inputTokenCount} tokens plus ${maxNewTokens} reserved for ` +
+              `generation, exceeding the model's ${contextLimit}-token context window`,
+          );
+        }
+      }
+
       const output = await generator(input, {
-        max_new_tokens: options.maxNewTokens ?? 256,
+        max_new_tokens: maxNewTokens,
         do_sample: false,
       });
       const first = Array.isArray(output) ? output[0] : output;

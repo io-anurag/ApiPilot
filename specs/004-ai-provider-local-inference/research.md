@@ -33,8 +33,30 @@ All unknowns from the Technical Context are resolved below before Phase 1 design
   1. `onnx-community/Qwen2.5-0.5B-Instruct` — smallest candidate; fastest CPU startup/latency.
   2. `Xenova/LaMini-Flan-T5-248M` — very small, instruction-tuned, sequence-to-sequence
      baseline for lightweight structured output.
-  3. `onnx-community/Phi-3-mini-4k-instruct` — larger, higher quality-ceiling candidate used
-     to measure the latency/memory cost of materially better output quality.
+  3. `onnx-community/Phi-3-mini-4k-instruct-ONNX` — larger, higher quality-ceiling candidate
+     used to measure the latency/memory cost of materially better output quality. (The repo
+     id originally recorded here, `onnx-community/Phi-3-mini-4k-instruct`, does not exist on
+     Hugging Face and made this candidate silently fail to load in every benchmark run prior
+     to 2026-09-04; corrected to the real `-ONNX`-suffixed repo.)
+  4. `onnx-community/Phi-3-mini-128k-instruct-ONNX` (loaded at `dtype: "q4"`, ~2.5GB, rather
+     than Transformers.js's fp32-on-CPU default of ~16GB) — added after production
+     AI-enhancement calls on large `ApiModel`/`TestModel` prompts exceeded
+     Qwen2.5-0.5B-Instruct's 32768-token context window; MIT-licensed, evaluated for
+     whether its 128k context window resolves oversized-prompt failures without an
+     unacceptable latency/memory cost (shortlist extension anticipated by this section's
+     original wording).
+  - **Outcome (2026-09-04)**: with the repo-id bug fixed, `Phi-3-mini-4k-instruct-ONNX`
+    (q4) matched Qwen2.5-0.5B-Instruct's 33% structured-output success rate but averaged
+    **322,868ms/request — ~25x Qwen's 12,654ms** on the same CPU;
+    `Phi-3-mini-128k-instruct-ONNX` (q4) failed every workload by exceeding the 120s
+    per-request timeout (durations of 560s/122s/129s) before producing any output. A
+    larger context window is moot if the model cannot complete a request inside any
+    reasonable budget: this disqualifies the Phi-3-mini family for interactive CPU
+    inference in this environment on latency grounds, independent of context-window size.
+    `onnx-community/Qwen2.5-0.5B-Instruct` remains the selected default (see
+    `benchmark-results.json`); resolving oversized-prompt failures instead requires
+    bounding what `enhanceTestModel`/`analyzeDependencies` send in the request body, which
+    is a separate, spec-level change.
   - Metrics captured per candidate (FR-014, constitution VII, XXII): structured-output
     success rate (does the output parse as the requested shape), average/95th-percentile
     latency, peak memory, model size on disk, and startup/load time.

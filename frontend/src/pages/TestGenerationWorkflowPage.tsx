@@ -77,36 +77,57 @@ export function TestGenerationWorkflowPage() {
   const displayStageId = viewedStageId ?? workflow?.activeStageId ?? null;
 
   if (loading) {
-    return <p data-testid="workflow-loading">Loading…</p>;
+    return (
+      <p data-testid="workflow-loading" className="text-sm text-muted">
+        Loading…
+      </p>
+    );
   }
 
   return (
-    <section data-testid="test-generation-workflow-page">
+    <section data-testid="test-generation-workflow-page" className="space-y-4">
       {pendingFile && (
-        <div role="alertdialog" data-testid="discard-existing-confirmation">
-          <p>
+        <div
+          role="alertdialog"
+          data-testid="discard-existing-confirmation"
+          className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4"
+        >
+          <p className="text-sm text-warning-700">
             A workflow is already in progress. Starting a new one from &ldquo;{pendingFile.name}&rdquo;
             discards it. Continue?
           </p>
-          <button type="button" onClick={() => doUpload(pendingFile, true)} disabled={uploading}>
-            Discard and start new
-          </button>
-          <button type="button" onClick={() => setPendingFile(null)} disabled={uploading}>
-            Cancel
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => doUpload(pendingFile, true)}
+              disabled={uploading}
+              className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Discard and start new
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingFile(null)}
+              disabled={uploading}
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
       {!workflow && (
-        <>
-          <h2>Upload OpenAPI Specification</h2>
+        <div className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Upload OpenAPI Specification</h2>
           <input
             type="file"
             accept=".yaml,.yml"
             aria-label="Upload OpenAPI specification"
             onChange={handleFileChange}
             disabled={uploading}
+            className="block text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
           />
-        </>
+        </div>
       )}
       {workflow && (
         <div>
@@ -114,6 +135,7 @@ export function TestGenerationWorkflowPage() {
             type="button"
             aria-label="Start a new workflow from a different specification"
             onClick={() => document.getElementById("workflow-restart-input")?.click()}
+            className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             Start a new workflow
           </button>
@@ -126,17 +148,19 @@ export function TestGenerationWorkflowPage() {
           />
         </div>
       )}
-      {uploading && <p>Uploading…</p>}
+      {uploading && <p className="text-sm text-muted">Uploading…</p>}
       {uploadError && (
-        <p role="alert" data-testid="upload-error">
+        <p role="alert" data-testid="upload-error" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
           {uploadError}
         </p>
       )}
       {workflow && (
         <>
-          <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
+          <div className="rounded-lg border border-border bg-surface p-4 shadow-sm">
+            <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
+          </div>
           {displayStageId !== workflow.activeStageId && (
-            <p role="status" data-testid="revisiting-notice">
+            <p role="status" data-testid="revisiting-notice" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700">
               Revisiting a completed stage. Making a change here will mark later stages as
               needing to be redone.
             </p>
@@ -196,13 +220,18 @@ function DeterministicGenerationTrigger({ onAdvanced }: { onAdvanced: (result: W
   }
 
   return (
-    <section data-testid="deterministic-generation-stage">
-      <h2>Generate Deterministic Test Suite</h2>
-      <button type="button" onClick={handleGenerate} disabled={generating}>
+    <section data-testid="deterministic-generation-stage" className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-900">Generate Deterministic Test Suite</h2>
+      <button
+        type="button"
+        onClick={handleGenerate}
+        disabled={generating}
+        className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
         {generating ? "Generating…" : "Generate Baseline Test Suite"}
       </button>
       {error && (
-        <p role="alert" data-testid="deterministic-generation-error">
+        <p role="alert" data-testid="deterministic-generation-error" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
           {error}
         </p>
       )}

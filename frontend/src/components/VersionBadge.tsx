@@ -30,7 +30,7 @@ export function VersionBadge() {
   }
 
   return (
-    <span data-testid="version-badge">
+    <span data-testid="version-badge" className="font-mono text-xs text-muted">
       v{version.version} ({version.commit})
     </span>
   );

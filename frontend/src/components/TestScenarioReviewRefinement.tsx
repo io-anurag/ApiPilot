@@ -40,38 +40,52 @@ export function TestScenarioReviewRefinement({
   }
 
   return (
-    <div data-testid="review-scenario-refinement">
-      <label htmlFor="review-edit-body">Request body</label>
-      <textarea
-        id="review-edit-body"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        disabled={submitting}
-      />
+    <div data-testid="review-scenario-refinement" className="space-y-2 border-t border-border pt-4">
+      <div className="flex flex-col gap-1">
+        <label htmlFor="review-edit-body" className="text-xs font-medium text-muted">
+          Request body
+        </label>
+        <textarea
+          id="review-edit-body"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          disabled={submitting}
+          rows={6}
+          className="w-full rounded-md border border-border bg-surface p-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+        />
+      </div>
       {bodyError && (
-        <p role="alert" data-testid="review-edit-body-error">
+        <p role="alert" data-testid="review-edit-body-error" className="text-sm font-medium text-danger-700">
           {bodyError}
         </p>
       )}
-      <button type="button" onClick={handleSubmitEdit} disabled={submitting}>
-        Save edit
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSubmitEdit}
+          disabled={submitting}
+          className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Save edit
+        </button>
 
-      <button
-        type="button"
-        onClick={onRegenerate}
-        disabled={submitting || !canRegenerate}
-      >
-        Regenerate with AI
-      </button>
-      {!canRegenerate && (
-        <p data-testid="review-regenerate-unavailable">
-          Only AI-suggested scenarios can be regenerated.
-        </p>
-      )}
+        <button
+          type="button"
+          onClick={onRegenerate}
+          disabled={submitting || !canRegenerate}
+          className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Regenerate with AI
+        </button>
+        {!canRegenerate && (
+          <p data-testid="review-regenerate-unavailable" className="text-sm text-muted">
+            Only AI-suggested scenarios can be regenerated.
+          </p>
+        )}
+      </div>
 
       {error && (
-        <p role="alert" data-testid="review-refinement-error">
+        <p role="alert" data-testid="review-refinement-error" className="text-sm font-medium text-danger-700">
           {error}
         </p>
       )}

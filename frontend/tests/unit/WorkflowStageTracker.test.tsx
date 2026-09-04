@@ -36,12 +36,12 @@ describe("WorkflowStageTracker", () => {
     expect(screen.getByTestId("stage-status-postmanGeneration")).toHaveTextContent("Not yet reached");
   });
 
-  it("surfaces an AI-unavailable condition at the tracker level (User Story 2 Acceptance Scenario 2)", () => {
+  it("does not render its own AI-unavailable notice — AiEnhancementStage's skip banner is the sole surface for it (FR-013, research.md D6)", () => {
     const workflow = workflowWithStatuses({ aiEnhancement: "skipped" });
     workflow.stages.aiEnhancement.aiErrorCategory = "PROVIDER_UNAVAILABLE";
     workflow.stages.aiEnhancement.aiErrorMessage = "local model not ready";
     render(<WorkflowStageTracker workflow={workflow} />);
-    expect(screen.getByTestId("workflow-ai-unavailable")).toHaveTextContent("PROVIDER_UNAVAILABLE");
+    expect(screen.queryByTestId("workflow-ai-unavailable")).not.toBeInTheDocument();
   });
 
   it("surfaces specification analysis issues at the tracker level", () => {

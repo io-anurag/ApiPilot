@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { WORKFLOW_STAGE_ORDER, type StageStatus, type TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { WorkflowStageTracker } from "../../src/components/WorkflowStageTracker";
 import { ApiReviewStage } from "../../src/components/ApiReviewStage";
@@ -87,5 +87,37 @@ describe("Test generation workflow accessibility", () => {
   it("associates the Postman generation base-URL input with a visible, accessible label", () => {
     render(<PostmanGenerationStage onGenerated={() => {}} />);
     expect(screen.getByLabelText("Base address (optional)")).toBeInTheDocument();
+  });
+
+  it("gives Workflow Review's bulk-selection checkboxes and bulk buttons distinguishing accessible names and keyboard focus, mirroring Scenario Review (FR-014, FR-015, `/speckit-analyze` finding C1)", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={{
+          requestId: "req-1",
+          graph: { relationships: [] },
+          workflows: [
+            { id: "wf-1", steps: [], variables: [], relationshipIds: [] },
+            { id: "wf-2", steps: [], variables: [], relationshipIds: [] },
+          ],
+          manualConfirmationCandidates: [],
+          cycles: [],
+          aiOutcome: "skipped",
+        }}
+        decisions={undefined}
+        onAdvanced={() => {}}
+      />,
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes[0]).toHaveAccessibleName(/wf-1/);
+    expect(checkboxes[1]).toHaveAccessibleName(/wf-2/);
+    checkboxes[0].focus();
+    expect(document.activeElement).toBe(checkboxes[0]);
+
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    const approveSelected = screen.getByRole("button", { name: "Approve selected (2)" });
+    approveSelected.focus();
+    expect(document.activeElement).toBe(approveSelected);
   });
 });

@@ -22,7 +22,7 @@ export function PostmanExportLimitations({
 }) {
   if (limitations.length === 0) {
     return (
-      <p data-testid="export-limitations-none">
+      <p data-testid="export-limitations-none" className="text-sm text-success-700">
         No limitations recorded: every approved scenario was expressed in full.
       </p>
     );
@@ -31,11 +31,11 @@ export function PostmanExportLimitations({
   const kinds = [...new Set(limitations.map((limitation) => limitation.kind))];
 
   return (
-    <section aria-labelledby="export-limitations-heading" data-testid="export-limitations">
-      <h4 id="export-limitations-heading">
+    <section aria-labelledby="export-limitations-heading" data-testid="export-limitations" className="space-y-2 rounded-md border border-warning-200 bg-warning-50 p-3">
+      <h4 id="export-limitations-heading" className="text-sm font-semibold text-warning-700">
         Known limitations ({limitations.length})
       </h4>
-      <p>
+      <p className="text-sm text-warning-700">
         These cases could not be expressed in the collection. They are reported rather than
         filled in with an assumed value.
       </p>
@@ -43,13 +43,13 @@ export function PostmanExportLimitations({
         const forKind = limitations.filter((limitation) => limitation.kind === kind);
         return (
           <div key={kind} data-testid={`export-limitation-${kind}`}>
-            <h5>
+            <h5 className="text-xs font-medium uppercase tracking-wide text-warning-700">
               {LIMITATION_HEADINGS[kind]} ({forKind.length})
             </h5>
-            <ul>
+            <ul className="mt-1 ml-4 list-disc text-sm text-slate-700">
               {forKind.map((limitation, index) => (
                 <li key={`${limitation.location}-${limitation.scenarioId ?? index}`}>
-                  <code>{limitation.location}</code>
+                  <code className="font-mono text-xs">{limitation.location}</code>
                   {limitation.scenarioId ? ` (${limitation.scenarioId})` : ""}: {limitation.message}
                 </li>
               ))}

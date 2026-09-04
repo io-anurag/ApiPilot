@@ -157,7 +157,7 @@ requiring any other AI-powered feature to exist.
 - [X] T024 [US4] Implement `report.ts` in `backend/src/ai/benchmark/report.ts`: builds and validates a `BenchmarkReport` from a list of `BenchmarkCandidateResult`s plus a `selectedModelId` and `selectionRationale` (FR-015) (depends on T003, T022)
 - [X] T025 [US4] Implement `runBenchmark.ts` in `backend/src/ai/benchmark/runBenchmark.ts`: runs the candidate shortlist from [research.md](./research.md) #2 against `workloads.ts`, measuring structured-output success rate, average latency, and peak memory per candidate, and writes the resulting `BenchmarkReport` to `specs/004-ai-provider-local-inference/benchmark-results.json` (FR-014) (depends on T004, T023, T024)
 - [X] T026 [US4] Add an `ai:benchmark` npm script to `backend/package.json` that invokes `runBenchmark.ts` (depends on T025)
-- [ ] T027 [US4] Run the benchmarking harness once against the shortlist, set the selected model as the default `AI_MODEL_ID` in `modelConfig.ts`, and commit the resulting `benchmark-results.json` for traceability (FR-015, SC-006) (depends on T025, T026)
+- [X] T027 [US4] Run the benchmarking harness once against the shortlist, set the selected model as the default `AI_MODEL_ID` in `modelConfig.ts`, and commit the resulting `benchmark-results.json` for traceability (FR-015, SC-006) (depends on T025, T026) — run 2026-09-04 after fixing two wrong Phi-3 repo ids in the shortlist (research.md #2 outcome); `onnx-community/Qwen2.5-0.5B-Instruct` confirmed as the selected default
 
 **Checkpoint**: All four user stories should now be independently functional
 
