@@ -27,3 +27,4 @@ export * from "./aiProvider";
 export * from "./aiScenarioDesign";
 export * from "./testScenarioReview";
 export * from "./postmanArtifact";
+export * from "./apiDependency";

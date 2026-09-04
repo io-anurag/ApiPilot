@@ -471,6 +471,77 @@ than flattened into unrelated requests. See
 plan, research, [API contract](./specs/007-postman-collection-generator/contracts/postman-collection-api.md),
 and [quickstart](./specs/007-postman-collection-generator/quickstart.md).
 
+## API Dependency & Integration Workflow Engine
+
+AP-008 analyzes a normalized `ApiModel` for relationships between operations — where one
+operation's response can plausibly supply a value another operation consumes — and assembles the
+confident ones into ordered, multi-step integration workflows. It introduces no frontend page;
+relationship/workflow review and approval are delegated to AP-006's extension.
+
+**`POST /api/api-models/dependencies`** takes the `ApiModel` (AP-002, no `TestModel` involved) and
+returns the full analysis in one response:
+
+- `graph.relationships` — every candidate relationship found, each classified `CONFIRMED`,
+  `LIKELY`, or `POSSIBLE` and carrying an `explanation` that names its specific evidence
+  (deterministic) or its model/confidence/rationale (AI-derived).
+- `workflows` — ordered `IntegrationWorkflow`s assembled from `CONFIRMED`/`LIKELY` relationships,
+  each step naming the variables it produces and consumes and tracing back to the relationships
+  that produced it.
+- `manualConfirmationCandidates` — `POSSIBLE` relationships, relationships excluded by producer
+  disambiguation, and chains that would exceed the step limit — reported for human confirmation
+  rather than silently included or discarded.
+- `cycles` — contradictory relationship sets (each operation depending on the other), reported
+  explicitly rather than assembled into an invalid workflow.
+- `aiOutcome` — `success`, `unavailable`, `timeout`, `invalid-response`, or `skipped`, so an AI
+  provider that is absent, slow, or wrong never fails the request or fabricates a relationship
+  (FR-018); deterministic relationships are always returned regardless.
+
+**Conservative by construction (constitution XV).** A field-name match alone can never reach
+`CONFIRMED` or `LIKELY`; deterministic classification requires corroborating evidence (matching
+type, format, a shared resource path, or a shared tag), and an AI-only relationship is capped at
+`LIKELY` even at high reported confidence — never `CONFIRMED` from inference alone. When both the
+deterministic and AI passes independently find the same field pair, they merge into one
+relationship that keeps the deterministic classification primary and records the AI output as
+corroboration only (FR-006a).
+
+**Never fabricated, never silently dropped.** No operation or field is invented: an AI candidate
+referencing one the `ApiModel` does not contain is rejected before it can appear in a result
+(FR-008). Cycles, low-confidence relationships, and disambiguation losers are always visible
+somewhere in the response, never discarded.
+
+**Determinism and performance.** The deterministic relationships, classifications, and assembled
+workflows are identical for identical input, including under shuffled operation order. A
+200-operation `ApiModel` completes full analysis — deterministic matching, one AI-assisted pass,
+and workflow assembly — in under 15 seconds, or fails explicitly with `500 analysis_timeout` rather
+than returning a partial result; the AI call itself uses an 8-second request-scoped timeout so a
+slow or unavailable provider cannot exhaust that budget. No request is ever issued to any API
+described by the `ApiModel`.
+
+### Module boundaries
+
+- `backend/src/dependencies/fieldExtraction.ts` — candidate producer fields (2xx responses only)
+  and candidate consumer fields (parameters and request-body fields), reusing the same
+  `walkFields` traversal AP-003 already established.
+- `backend/src/dependencies/deterministicMatching.ts` — the five-signal evidence computation and
+  the exhaustive classification table.
+- `backend/src/dependencies/aiDependencyPrompt.ts`, `parseAIDependencyResponse.ts`,
+  `validateAIDependencyCandidate.ts` — the AI-assisted pass: one batched request, response
+  parsing, and shape/semantic validation against the `ApiModel`.
+- `backend/src/dependencies/mergeRelationships.ts` — producer disambiguation (FR-013a) and the
+  deterministic/AI merge rule (FR-006a).
+- `backend/src/dependencies/buildDependencyGraph.ts` — the operation-level graph and Kahn's-
+  algorithm cycle detection.
+- `backend/src/dependencies/assembleWorkflows.ts` — bounded maximal-path enumeration into ordered
+  workflows, plus the manual-confirmation and chain-length-exceeded reporting.
+- `backend/src/dependencies/analyzeDependencies.ts` — orchestrates the full pipeline and the
+  explicit performance-budget guard.
+- `backend/src/dependencies/identifiers.ts` — content-derived, deterministic ids.
+
+See [specs/008-dependency-workflow-engine/](./specs/008-dependency-workflow-engine/) for the spec,
+plan, research,
+[API contract](./specs/008-dependency-workflow-engine/contracts/api-dependency-workflow-api.md),
+and [quickstart](./specs/008-dependency-workflow-engine/quickstart.md).
+
 ## License
 
 Released under [MIT](/LICENSE) by [@io-anurag](https://github.com/io-anurag).
