@@ -82,6 +82,7 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
   return lines;
 }
 
+/** Renders the accompanying README markdown deterministically from the export result and declared variables. */
 export function renderReadme(
   result: Omit<ExportResult, "readme">,
   variables: ArtifactVariable[],

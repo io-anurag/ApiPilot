@@ -39,6 +39,7 @@ export function toJsonSchema(constraint: SchemaConstraint): Record<string, unkno
   return schema;
 }
 
+/** Result of translating a scenario's assertions: the resulting test event, if any, plus limitations for assertions that had no expressible check. */
 export interface AssertionTranslation {
   event?: PostmanEvent;
   limitations: GenerationLimitation[];

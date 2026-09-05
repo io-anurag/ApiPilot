@@ -22,7 +22,11 @@ import {
 import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
+import { createLogger } from "./logger";
 
+const logger = createLogger("api.errorHandler");
+
+/** Assembles the Express app: JSON body parsing sized to the upload contract, every `/api` router, and the centralized error handler. `provider` (when supplied) is threaded into the routers that support AI-assisted behavior instead of each using the process-wide default. */
 export function createApp(provider?: AIProvider) {
   const app = express();
 
@@ -56,36 +60,53 @@ export function createApp(provider?: AIProvider) {
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):
   // never leak stack traces, always respond with a safe JSON shape.
-  const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+    let statusCode: number;
+    let errorCategory: string;
+    let body: Record<string, unknown>;
+
     if (err instanceof InvalidYamlError) {
-      res.status(400).json({ error: "invalid_yaml", message: err.message });
-      return;
-    }
-    if (err instanceof UnsupportedVersionError) {
-      res.status(400).json({ error: "unsupported_version", message: err.message });
-      return;
-    }
-    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({
+      statusCode = 400;
+      errorCategory = "invalid_yaml";
+      body = { error: "invalid_yaml", message: err.message };
+    } else if (err instanceof UnsupportedVersionError) {
+      statusCode = 400;
+      errorCategory = "unsupported_version";
+      body = { error: "unsupported_version", message: err.message };
+    } else if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      statusCode = 413;
+      errorCategory = "file_too_large";
+      body = {
         error: "file_too_large",
         message: `Uploaded file exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes`,
-      });
-      return;
-    }
-    if (
+      };
+    } else if (
       typeof err === "object" &&
       err !== null &&
       (err as { type?: string }).type === "entity.too.large"
     ) {
-      res.status(413).json({
+      statusCode = 413;
+      errorCategory = "payload_too_large";
+      body = {
         error: "payload_too_large",
         message: `Request body exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes`,
-      });
-      return;
+      };
+    } else {
+      statusCode = 500;
+      errorCategory = "internal_server_error";
+      body = { error: "internal_server_error" };
     }
-    // eslint-disable-next-line no-console
-    console.error("Unhandled error:", err instanceof Error ? err.message : err);
-    res.status(500).json({ error: "internal_server_error" });
+
+    // Server-side only: method/path/statusCode/errorCategory, never the raw error
+    // message or stack (constitution XX) — the client response above is unaffected.
+    logger.error("unhandled_error", {
+      method: req.method,
+      path: req.path,
+      statusCode,
+      errorCategory,
+    });
+
+    res.status(statusCode).json(body);
   };
   app.use(errorHandler);
 

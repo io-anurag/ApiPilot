@@ -1,7 +1,11 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { AnalysisIssue } from "@apipilot/shared-domain";
 import { UnsupportedVersionError } from "./errors";
+import { createLogger } from "../logger";
 
+const logger = createLogger("openapi.validateSpec");
+
+/** Internal-$ref-dereferenced document plus every ref/version issue found while validating it. */
 export interface ValidatedSpec {
   document: Record<string, unknown>;
   issues: AnalysisIssue[];
@@ -88,7 +92,10 @@ function detectCircularRefs(node: unknown, path: string, issues: AnalysisIssue[]
  * rejecting the upload (FR-006).
  */
 export async function validateSpec(rawDoc: unknown): Promise<ValidatedSpec> {
+  logger.info("validate_start");
+
   if (!isPlainObject(rawDoc)) {
+    logger.error("validate_error", { errorCategory: "unsupported_version" });
     throw new UnsupportedVersionError(
       "Only OpenAPI 3.x documents are supported; found: an empty or non-object document",
     );
@@ -98,6 +105,7 @@ export async function validateSpec(rawDoc: unknown): Promise<ValidatedSpec> {
   if (!version || !version.startsWith("3.")) {
     const found =
       version ?? (typeof rawDoc.swagger === "string" ? `Swagger ${rawDoc.swagger}` : "an unrecognized document");
+    logger.error("validate_error", { errorCategory: "unsupported_version" });
     throw new UnsupportedVersionError(`Only OpenAPI 3.x documents are supported; found: ${found}`);
   }
 
@@ -121,5 +129,6 @@ export async function validateSpec(rawDoc: unknown): Promise<ValidatedSpec> {
     dereferenced = stripped;
   }
 
+  logger.info("validate_success", { issueCount: issues.length });
   return { document: dereferenced as Record<string, unknown>, issues };
 }

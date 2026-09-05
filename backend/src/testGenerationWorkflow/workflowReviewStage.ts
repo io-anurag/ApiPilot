@@ -1,7 +1,10 @@
 import type { TestGenerationWorkflow, WorkflowReviewDecision, WorkflowReviewState } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
 import { PendingWorkflowDecisionsError, StageNotActiveError, UnknownWorkflowIdError } from "./errors";
 import { computeDownstreamStaleness } from "./staleness";
 import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
+
+const logger = createLogger("testGenerationWorkflow.workflowReviewStage");
 
 function requireActive(): TestGenerationWorkflow {
   const workflow = getCurrentWorkflow();
@@ -34,6 +37,7 @@ function reopenIfComplete(): void {
   patchWorkflow({ activeStageId: "workflowReview" });
 }
 
+/** One caller-supplied approve/reject decision for a discovered IntegrationWorkflow, passed to `recordWorkflowDecisions`. */
 export interface WorkflowDecisionInput {
   workflowId: string;
   state: Exclude<WorkflowReviewState, "pending">;
@@ -78,14 +82,32 @@ function completeWorkflowReview(): TestGenerationWorkflow {
  * Refuses with `PendingWorkflowDecisionsError` while any remain undecided.
  */
 export function continueWorkflowReview(): TestGenerationWorkflow {
-  const workflow = requireActive();
-  const pending = workflow.dependencyAnalysis!.workflows.filter(
-    (w) => (workflow.workflowDecisions?.[w.id]?.state ?? "pending") === "pending",
-  );
-  if (pending.length > 0) {
-    throw new PendingWorkflowDecisionsError(pending.length);
+  const startedAt = Date.now();
+  try {
+    const workflow = requireActive();
+    const pending = workflow.dependencyAnalysis!.workflows.filter(
+      (w) => (workflow.workflowDecisions?.[w.id]?.state ?? "pending") === "pending",
+    );
+    if (pending.length > 0) {
+      throw new PendingWorkflowDecisionsError(pending.length);
+    }
+    const result = completeWorkflowReview();
+    logger.info("stage_complete", {
+      stage: "workflowReview",
+      workflowId: result.id,
+      approvedWorkflowCount: result.approvedWorkflowIds?.length ?? 0,
+      durationMs: Date.now() - startedAt,
+    });
+    return result;
+  } catch (error) {
+    logger.error("stage_error", {
+      stage: "workflowReview",
+      workflowId: getCurrentWorkflow()?.id,
+      errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
   }
-  return completeWorkflowReview();
 }
 
 /**

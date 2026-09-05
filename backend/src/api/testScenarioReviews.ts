@@ -18,6 +18,33 @@ import {
 } from "../testDesign/reviewTestModel";
 import { regenerateReviewScenario } from "../testDesign/regenerateReviewScenario";
 import { redactSensitiveRequestValues } from "../testDesign/reviewSensitiveValues";
+import { createLogger } from "../logger";
+
+const logger = createLogger("api.testScenarioReviews");
+
+/** Logs a request-received event and returns the start timestamp used to compute `durationMs` later. */
+function logRequestReceived(req: { method: string; path: string }): number {
+  logger.info("request_received", { method: req.method, path: req.path });
+  return Date.now();
+}
+
+/** Logs a request-succeeded (statusCode < 400) or request-failed event with duration and, on failure, an error category. */
+function logRequestOutcome(
+  req: { method: string; path: string },
+  startedAt: number,
+  statusCode: number,
+  extra: { scenarioId?: string; errorCategory?: string } = {},
+): void {
+  const fields = {
+    method: req.method,
+    path: req.path,
+    statusCode,
+    durationMs: Date.now() - startedAt,
+    ...extra,
+  };
+  if (statusCode >= 400) logger.error("request_failed", fields);
+  else logger.info("request_succeeded", fields);
+}
 
 /**
  * Adds a redacted `displayRequest` alongside each scenario's request for safe rendering,
@@ -148,13 +175,18 @@ function isReviewEditContent(value: unknown): value is ReviewEditContent {
   );
 }
 
+/** Builds the routers for the scenario-review workspace endpoints (bulk update, single-scenario edit, regenerate); `provider` defaults to the process-wide AI provider but can be injected for testing. */
 export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
   const router = Router();
 
   router
     .route("/test-models/reviews")
     .post((req, res) => {
+      const startedAt = logRequestReceived(req);
       if (!isReviewRequestBody(req.body)) {
+        logRequestOutcome(req, startedAt, 400, {
+          errorCategory: "invalid_test_scenario_review_request",
+        });
         res
           .status(400)
           .json(
@@ -177,6 +209,7 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
         approvedTestModel: projectApprovedTestModel(next),
         outcomes,
       });
+      logRequestOutcome(req, startedAt, 200);
     })
     .all((_req, res) => {
       res.status(405).json({ error: "method_not_allowed" });
@@ -185,7 +218,11 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
   router
     .route("/test-models/reviews/edit")
     .post((req, res) => {
+      const startedAt = logRequestReceived(req);
       if (!isScenarioActionBody(req.body) || !isReviewEditContent(req.body.edit)) {
+        logRequestOutcome(req, startedAt, 400, {
+          errorCategory: "invalid_test_scenario_review_request",
+        });
         res
           .status(400)
           .json(
@@ -203,10 +240,15 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
         req.body.revision,
         req.body.edit,
       );
-      res.status(statusForOutcome(outcome)).json({
+      const statusCode = statusForOutcome(outcome);
+      res.status(statusCode).json({
         review: toReviewResponse(next),
         approvedTestModel: projectApprovedTestModel(next),
         outcomes: [outcome],
+      });
+      logRequestOutcome(req, startedAt, statusCode, {
+        scenarioId: req.body.scenarioId,
+        ...(statusCode >= 400 ? { errorCategory: outcome.finding?.code } : {}),
       });
     })
     .all((_req, res) => {
@@ -216,7 +258,11 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
   router
     .route("/test-models/reviews/regenerate")
     .post(async (req, res) => {
+      const startedAt = logRequestReceived(req);
       if (!isScenarioActionBody(req.body)) {
+        logRequestOutcome(req, startedAt, 400, {
+          errorCategory: "invalid_test_scenario_review_request",
+        });
         res
           .status(400)
           .json(
@@ -233,10 +279,15 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
         req.body.revision,
       );
       if ("error" in started) {
-        res.status(statusForOutcome(started.error)).json({
+        const statusCode = statusForOutcome(started.error);
+        res.status(statusCode).json({
           review: toReviewResponse(workspace),
           approvedTestModel: projectApprovedTestModel(workspace),
           outcomes: [started.error],
+        });
+        logRequestOutcome(req, startedAt, statusCode, {
+          scenarioId: req.body.scenarioId,
+          ...(statusCode >= 400 ? { errorCategory: started.error.finding?.code } : {}),
         });
         return;
       }
@@ -251,6 +302,7 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
           approvedTestModel: projectApprovedTestModel(workspace),
           outcomes: [regenerationFailureOutcome(started.existing, result.message)],
         });
+        logRequestOutcome(req, startedAt, 200, { scenarioId: req.body.scenarioId });
         return;
       }
       const { workspace: next, outcome } = applyRegeneratedScenario(
@@ -263,6 +315,7 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
         approvedTestModel: projectApprovedTestModel(next),
         outcomes: [outcome],
       });
+      logRequestOutcome(req, startedAt, 200, { scenarioId: req.body.scenarioId });
     })
     .all((_req, res) => {
       res.status(405).json({ error: "method_not_allowed" });
@@ -271,4 +324,5 @@ export function createTestScenarioReviewsRouter(provider = getAIProvider()) {
   return router;
 }
 
+/** Default router instance wired to the process-wide AI provider (see `getAIProvider`). */
 export const testScenarioReviewsRouter = createTestScenarioReviewsRouter();

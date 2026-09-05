@@ -9,6 +9,7 @@ export interface AppConfig {
 
 const DEFAULT_BACKEND_PORT = 4000;
 
+/** Reads `BACKEND_PORT` from `env` (defaulting to `process.env`), falling back to 4000 when unset, non-numeric, or non-positive. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const rawPort = env.BACKEND_PORT;
   const parsedPort = rawPort ? Number.parseInt(rawPort, 10) : DEFAULT_BACKEND_PORT;

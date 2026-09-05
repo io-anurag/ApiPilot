@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ApiOperation, GeneratedRequest, ScenarioCategory, TestScenario } from "@apipilot/shared-domain";
 import type { AssertionResult } from "./assertions";
 
+/** Input to `buildScenario`: the target operation/field, the generated request, and the assertions/rule/description that give the resulting TestScenario its provenance. */
 export interface BuildScenarioInput {
   operation: ApiOperation;
   category: ScenarioCategory;

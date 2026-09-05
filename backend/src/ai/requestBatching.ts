@@ -29,6 +29,7 @@ const UNAVAILABLE_CATEGORIES: readonly AIErrorCategory[] = [
   "LOAD_FAILED",
 ];
 
+/** Per-run rollup of every batch's outcome, returned by `deriveAggregateOutcome`/`runBatchedInference`. */
 export interface AggregateOutcomeResult {
   outcome: AggregateOutcome;
   /** The representative category for the aggregate: the last failing/not-attempted batch's category, if any. */
@@ -144,6 +145,7 @@ export function splitOperationsIntoBatches<TOperation>(
   ];
 }
 
+/** One batch's outcome plus (on success) the caller-defined data `runBatch` produced for it. */
 export interface BatchRun<TOperation, TBatchData> {
   batch: Batch<TOperation>;
   outcome: BatchOutcome;
@@ -151,6 +153,7 @@ export interface BatchRun<TOperation, TBatchData> {
   data?: TBatchData;
 }
 
+/** `runBatchedInference`'s full result: the aggregate outcome plus every individual batch's run. */
 export interface BatchedInferenceSummary<
   TOperation,
   TBatchData,

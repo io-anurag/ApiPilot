@@ -16,7 +16,10 @@ import type {
 } from "@apipilot/shared-domain";
 import { DEFAULT_REVIEW_POLICY } from "@apipilot/shared-domain";
 import { dedupeKey } from "./deduplicate";
+import { createLogger } from "../logger";
 import { primaryRequestBodySchema, walkFields } from "./requestHelpers";
+
+const logger = createLogger("testDesign.reviewTestModel");
 
 /** Builds a fresh, all-pending review workspace from a generated TestModel (data-model.md: Review Workspace). */
 export function createReviewWorkspace(
@@ -206,6 +209,11 @@ function applyOneUpdate(
     decision,
     history: [...existing.history, { type: "decision", decision }],
   };
+  logger.info("review_decision_applied", {
+    scenarioId: updated.scenarioId,
+    decision: decisionState,
+    revision: updated.revision,
+  });
   return {
     scenarios: scenarios.map((scenario) =>
       scenario.scenarioId === existing.scenarioId ? updated : scenario,

@@ -34,6 +34,55 @@ import {
   recordWorkflowDecisions,
   type WorkflowDecisionInput,
 } from "../testGenerationWorkflow/workflowReviewStage";
+import { createLogger } from "../logger";
+
+const logger = createLogger("api.testGenerationWorkflow");
+
+/** Minimal request shape the logging helpers below need — `Request` narrowed to avoid importing it solely for typing. */
+interface LoggableRequest {
+  method: string;
+  path: string;
+}
+
+/** Logs a request-received event and returns the start timestamp used to compute `durationMs` for the matching outcome log. */
+function logRequestReceived(req: LoggableRequest): number {
+  logger.info("request_received", { method: req.method, path: req.path });
+  return Date.now();
+}
+
+/** Logs a request-succeeded event alongside the response status code and duration. */
+function logRequestSucceeded(
+  req: LoggableRequest,
+  startedAt: number,
+  statusCode: number,
+  extra: { scenarioId?: string } = {},
+): void {
+  logger.info("request_succeeded", {
+    method: req.method,
+    path: req.path,
+    statusCode,
+    durationMs: Date.now() - startedAt,
+    ...extra,
+  });
+}
+
+/** Logs a request-failed event with the response status code, a non-sensitive error category, and duration. */
+function logRequestFailed(
+  req: LoggableRequest,
+  startedAt: number,
+  statusCode: number,
+  errorCategory: string,
+  extra: { scenarioId?: string } = {},
+): void {
+  logger.error("request_failed", {
+    method: req.method,
+    path: req.path,
+    statusCode,
+    errorCategory,
+    durationMs: Date.now() - startedAt,
+    ...extra,
+  });
+}
 
 /** Shared `409 stage_not_active` refusal, reused by every stage-transition route (FR-002). */
 export function stageNotActive(res: Response, message: string): void {
@@ -107,28 +156,37 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
 
   router
     .route("/test-generation-workflow")
-    .get((_req, res) => {
+    .get((req, res) => {
+      const startedAt = logRequestReceived(req);
       const workflow = getCurrentWorkflow();
       if (!workflow) {
         res.status(204).end();
+        logRequestSucceeded(req, startedAt, 204);
         return;
       }
       res.status(200).json({ workflow: toWorkflowResponse(workflow) });
+      logRequestSucceeded(req, startedAt, 200);
     })
     .post(upload.single("file"), async (req, res, next) => {
+      const startedAt = logRequestReceived(req);
       try {
         if (!req.file) {
+          logRequestFailed(req, startedAt, 400, "invalid_yaml");
           res.status(400).json({ error: "invalid_yaml", message: "No file was uploaded under the 'file' field" });
           return;
         }
         const discardExisting = req.query.discardExisting === "true";
         const workflow = await startWorkflowFromUpload(req.file.buffer, req.file.originalname, discardExisting);
         res.status(200).json({ workflow: toWorkflowResponse(workflow) });
+        logRequestSucceeded(req, startedAt, 200);
       } catch (err) {
         if (err instanceof WorkflowInProgressError) {
+          logRequestFailed(req, startedAt, 409, "workflow_in_progress");
           res.status(409).json({ error: "workflow_in_progress", message: err.message });
           return;
         }
+        // Forwarded to app.ts's centralized error handler, which logs this generically —
+        // not duplicated here.
         next(err);
       }
     })
@@ -136,55 +194,84 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       res.status(405).json({ error: "method_not_allowed" });
     });
 
-  router.post("/test-generation-workflow/api-review/continue", (_req, res) => {
+  router.post("/test-generation-workflow/api-review/continue", (req, res) => {
+    const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(continueApiReview()) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      // Synchronous throw: Express forwards this to app.ts's centralized error handler,
+      // which logs it generically — not duplicated here.
       throw err;
     }
   });
 
-  router.post("/test-generation-workflow/deterministic-generation", (_req, res) => {
+  router.post("/test-generation-workflow/deterministic-generation", (req, res) => {
+    const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(runDeterministicGeneration()) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       throw err;
     }
   });
 
-  router.post("/test-generation-workflow/ai-enhancement", async (_req, res) => {
+  router.post("/test-generation-workflow/ai-enhancement", async (req, res) => {
+    const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(await runAiEnhancement(provider)) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
+      // does not forward to the error middleware (pre-existing behavior of this route, not
+      // changed here) — log it explicitly so it is not silently invisible.
+      logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
       throw err;
     }
   });
 
   router.post("/test-generation-workflow/scenario-review/decisions", (req, res) => {
+    const startedAt = logRequestReceived(req);
     const updates = (req.body as Record<string, unknown> | undefined)?.updates;
     if (!isReviewUpdateRequestArray(updates)) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
       res.status(400).json({ error: "invalid_request", message: "Request must include an 'updates' array" });
       return;
     }
     try {
       const { workflow, outcomes } = applyScenarioDecisions(updates);
       res.status(200).json({ workflow: toWorkflowResponse(workflow), outcomes });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       throw err;
     }
   });
 
   router.post("/test-generation-workflow/scenario-review/edit", (req, res) => {
+    const startedAt = logRequestReceived(req);
     const body = req.body as Record<string, unknown> | undefined;
     if (
       typeof body?.scenarioId !== "string" ||
       typeof body?.revision !== "number" ||
       !isReviewEditContent(body?.edit)
     ) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
       res
         .status(400)
         .json({ error: "invalid_request", message: "Request must include scenarioId, revision, and edit" });
@@ -193,15 +280,21 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     try {
       const { workflow, outcome } = editScenario(body.scenarioId, body.revision, body.edit);
       res.status(200).json({ workflow: toWorkflowResponse(workflow), outcome });
+      logRequestSucceeded(req, startedAt, 200, { scenarioId: body.scenarioId });
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active", { scenarioId: body.scenarioId });
+        return stageNotActive(res, err.message);
+      }
       throw err;
     }
   });
 
   router.post("/test-generation-workflow/scenario-review/regenerate", async (req, res) => {
+    const startedAt = logRequestReceived(req);
     const body = req.body as Record<string, unknown> | undefined;
     if (typeof body?.scenarioId !== "string" || typeof body?.revision !== "number") {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
       res
         .status(400)
         .json({ error: "invalid_request", message: "Request must include scenarioId and revision" });
@@ -210,36 +303,67 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     try {
       const { workflow, outcome } = await regenerateScenario(body.scenarioId, body.revision, provider);
       res.status(200).json({ workflow: toWorkflowResponse(workflow), outcome });
+      logRequestSucceeded(req, startedAt, 200, { scenarioId: body.scenarioId });
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active", { scenarioId: body.scenarioId });
+        return stageNotActive(res, err.message);
+      }
+      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
+      // does not forward to the error middleware (pre-existing behavior of this route, not
+      // changed here) — log it explicitly so it is not silently invisible.
+      logRequestFailed(
+        req,
+        startedAt,
+        500,
+        err instanceof Error ? err.name : "unknown_error",
+        { scenarioId: body.scenarioId },
+      );
       throw err;
     }
   });
 
-  router.post("/test-generation-workflow/scenario-review/finalize", async (_req, res) => {
+  router.post("/test-generation-workflow/scenario-review/finalize", async (req, res) => {
+    const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(await finalizeScenarioReview(provider)) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       if (err instanceof EmptyApprovedScenariosError) {
+        logRequestFailed(req, startedAt, 409, "empty_approved_scenarios");
         res.status(409).json({ error: "empty_approved_scenarios", message: err.message });
         return;
       }
+      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
+      // does not forward to the error middleware (pre-existing behavior of this route, not
+      // changed here) — log it explicitly so it is not silently invisible.
+      logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
       throw err;
     }
   });
 
   router.post("/test-generation-workflow/workflow-review/decisions", (req, res) => {
+    const startedAt = logRequestReceived(req);
     const decisions = (req.body as Record<string, unknown> | undefined)?.decisions;
     if (!isWorkflowDecisionArray(decisions)) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
       res.status(400).json({ error: "invalid_request", message: "Request must include a 'decisions' array" });
       return;
     }
     try {
       res.status(200).json({ workflow: toWorkflowResponse(recordWorkflowDecisions(decisions)) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       if (err instanceof UnknownWorkflowIdError) {
+        logRequestFailed(req, startedAt, 400, "unknown_workflow_id");
         res.status(400).json({ error: "unknown_workflow_id", message: err.message });
         return;
       }
@@ -247,12 +371,18 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     }
   });
 
-  router.post("/test-generation-workflow/workflow-review/continue", (_req, res) => {
+  router.post("/test-generation-workflow/workflow-review/continue", (req, res) => {
+    const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(continueWorkflowReview()) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       if (err instanceof PendingWorkflowDecisionsError) {
+        logRequestFailed(req, startedAt, 409, "pending_workflow_decisions");
         res.status(409).json({ error: "pending_workflow_decisions", message: err.message });
         return;
       }
@@ -261,18 +391,26 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
   });
 
   router.post("/test-generation-workflow/postman-generation", (req, res) => {
+    const startedAt = logRequestReceived(req);
     const options = (req.body as Record<string, unknown> | undefined)?.options as ExportOptions | undefined;
     try {
       res.status(200).json({ workflow: toWorkflowResponse(runPostmanGeneration(options)) });
+      logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
-      if (err instanceof StageNotActiveError) return stageNotActive(res, err.message);
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       if (err instanceof EmptyApprovedScenariosError) {
+        logRequestFailed(req, startedAt, 409, "empty_approved_scenarios");
         res.status(409).json({ error: "empty_approved_scenarios", message: err.message });
         return;
       }
       if (err instanceof PostmanGenerationRefusedError) {
+        const statusCode = err.code === "collection_validation_failed" ? 500 : 400;
+        logRequestFailed(req, startedAt, statusCode, err.code);
         res
-          .status(err.code === "collection_validation_failed" ? 500 : 400)
+          .status(statusCode)
           .json({ error: err.code, message: err.message, ...(err.problems ? { problems: err.problems } : {}) });
         return;
       }
@@ -283,4 +421,5 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
   return router;
 }
 
+/** Default router instance wired to the process-wide AI provider (see `getAIProvider`). */
 export const testGenerationWorkflowRouter = createTestGenerationWorkflowRouter();

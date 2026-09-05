@@ -9,6 +9,7 @@ import { selectNegativeAssertions, selectPositiveAssertions } from "./assertions
 import { buildConformantRequest, cloneRequest, primaryRequestBodySchema, setAtPath, walkFields } from "./requestHelpers";
 import { buildScenario } from "./scenario";
 
+/** One boundary-adjacent value to try against a schema, plus whether it is expected to pass or fail validation. */
 export interface BoundaryVariant {
   /** Slug used to build the specific rule identifier, e.g. "below-minimum" (FR-013). */
   key: string;
@@ -17,6 +18,7 @@ export interface BoundaryVariant {
   outcome: "valid" | "invalid";
 }
 
+/** Configures `generateBoundaryScenarios` for one boundary rule (numeric/string/array): its category, rule-name prefix, description builder, and variant source. */
 export interface BoundaryMutationRuleOptions {
   category: ScenarioCategory;
   rulePrefix: string;

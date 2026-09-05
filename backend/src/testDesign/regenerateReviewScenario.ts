@@ -12,7 +12,11 @@ import {
   validateAICandidateShape,
 } from "./validateAICandidate";
 import { candidateToScenario } from "./aiScenarioCandidate";
+import { createLogger } from "../logger";
 
+const logger = createLogger("testDesign.regenerateReviewScenario");
+
+/** Outcome of one regeneration attempt: either the AI-derived replacement, or a non-throwing failure with a display message (never partial). */
 export type RegenerationResult =
   { ok: true; scenario: TestScenario } | { ok: false; message: string };
 
@@ -23,6 +27,19 @@ export type RegenerationResult =
  * replacement so the caller can preserve the last valid state.
  */
 export async function regenerateReviewScenario(
+  apiModel: ApiModel,
+  reviewScenario: ReviewScenario,
+  provider: AIProvider,
+): Promise<RegenerationResult> {
+  const result = await attemptRegeneration(apiModel, reviewScenario, provider);
+  logger.info("regeneration_resolved", {
+    scenarioId: reviewScenario.scenarioId,
+    outcome: result.ok ? "success" : "failure",
+  });
+  return result;
+}
+
+async function attemptRegeneration(
   apiModel: ApiModel,
   reviewScenario: ReviewScenario,
   provider: AIProvider,

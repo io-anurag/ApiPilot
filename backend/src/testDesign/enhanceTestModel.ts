@@ -7,7 +7,11 @@ import type {
   EnhancementResult,
   TestModel,
 } from "@apipilot/shared-domain";
-import { buildAIScenarioRequest, buildAIScenarioPrompt } from "./aiScenarioPrompt";
+import {
+  AI_SCENARIO_MAX_OUTPUT_TOKENS,
+  buildAIScenarioRequest,
+  buildAIScenarioPrompt,
+} from "./aiScenarioPrompt";
 import { parseAIScenarioResponse, isCandidateShape } from "./parseAIScenarioResponse";
 import {
   validateAICandidateSemantics,
@@ -20,6 +24,9 @@ import {
   splitOperationsIntoBatches,
   type Batch,
 } from "../ai/requestBatching";
+import { createLogger } from "../logger";
+
+const logger = createLogger("testDesign.enhanceTestModel");
 
 type ApiModelArg = Parameters<typeof validateAICandidateSemantics>[1];
 
@@ -106,6 +113,14 @@ async function runOneBatch(
   return aiScenarios;
 }
 
+/**
+ * Enhances a deterministic baseline `TestModel` with AI-suggested scenarios (FR-*, AP-005):
+ * batches the ApiModel's operations, runs inference through `AIProvider` for each batch, then
+ * validates, deduplicates, and merges the resulting candidates into the baseline. Always
+ * falls back to returning the unmodified deterministic `testModel` (with an empty
+ * `aiCandidates` set) when every batch fails, so AI failures never remove or block
+ * deterministically-generated scenarios.
+ */
 export async function enhanceTestModel(
   apiModel: ApiModelArg,
   testModel: TestModel,
@@ -121,7 +136,7 @@ export async function enhanceTestModel(
   const outcomes = emptyOutcomes();
   const candidateIds = new Set<string>();
 
-  const budgetChars = await provider.getInputBudget();
+  const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) =>
@@ -188,6 +203,14 @@ export async function enhanceTestModel(
       });
     }
   }
+
+  logger.info("enhancement_complete", {
+    outcome: summary.outcome,
+    addedCount: outcomes.added.length,
+    rejectedCount: outcomes.rejected.length,
+    deduplicatedCount: outcomes.deduplicated.length,
+    totalBatches: summary.totalCount,
+  });
 
   if (summary.outcome === "success") {
     return {

@@ -20,6 +20,7 @@ export interface RequestSortKey {
   scenarioId: string;
 }
 
+/** Types a `RequestSortKey` literal so call sites build the key through one typed function rather than an untyped object literal. */
 export function requestSortKey(key: RequestSortKey): RequestSortKey {
   return key;
 }

@@ -33,9 +33,7 @@ describe("App", () => {
 
     expect(screen.getByText("ApiPilot")).toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByTestId("connection-status")).toHaveTextContent(
-        "Backend connected (ok)",
-      ),
+      expect(screen.getByTestId("connection-status")).toHaveTextContent("Connected"),
     );
   });
 
@@ -52,9 +50,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() =>
-      expect(screen.getByTestId("connection-status")).toHaveTextContent(
-        "Backend unreachable",
-      ),
+      expect(screen.getByTestId("connection-status")).toHaveTextContent("Disconnected"),
     );
   });
 

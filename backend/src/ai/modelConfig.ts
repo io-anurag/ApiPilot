@@ -16,6 +16,7 @@ const VALID_DTYPES: readonly ModelDType[] = [
   "bnb4",
 ];
 
+/** Resolved AI configuration for the current process: which provider to construct, and its model settings. */
 export interface AIConfig {
   providerMode: AIProviderMode;
   model: ModelConfig;

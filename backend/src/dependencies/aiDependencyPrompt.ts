@@ -1,5 +1,6 @@
 import type { ApiModel, InferenceRequest } from "@apipilot/shared-domain";
 
+/** Response-shape version the AI is asked to produce and `parseAIDependencyResponse` validates against. */
 export const AI_DEPENDENCY_RESPONSE_VERSION = 1;
 
 /**
@@ -8,6 +9,7 @@ export const AI_DEPENDENCY_RESPONSE_VERSION = 1;
  */
 export const AI_DEPENDENCY_TIMEOUT_MS = 8000;
 
+/** Builds the JSON prompt string sent to the AI provider for one dependency-analysis batch. */
 export function buildAIDependencyPrompt(apiModel: ApiModel): string {
   return JSON.stringify({
     responseVersion: AI_DEPENDENCY_RESPONSE_VERSION,

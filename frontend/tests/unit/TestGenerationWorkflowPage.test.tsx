@@ -158,6 +158,41 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
+  it("lets the user preview the starting page from an in-progress workflow, and return without discarding it (FR-010)", async () => {
+    stubFetch([{ workflow: workflowAt("apiReview") }]);
+
+    render(<TestGenerationWorkflowPage />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
+    );
+
+    const file = new File(["openapi: 3.0.3"], "valid.yaml", {
+      type: "application/x-yaml",
+    });
+    fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
+      target: { files: [file] },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("api-review-stage")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start a new workflow from a different specification" }),
+    );
+
+    // Back on the starting page — no workflow content, no discard, no confirmation yet.
+    expect(screen.getByText("Turn an OpenAPI specification into a test suite")).toBeInTheDocument();
+    expect(screen.queryByTestId("api-review-stage")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel — return to my in-progress workflow" }));
+
+    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Turn an OpenAPI specification into a test suite"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the AI-enhancement partial banner (not skipped) alongside scenario review when the stage status is 'partial' (FR-011)", async () => {
     const stages = baseStages() as Record<
       string,

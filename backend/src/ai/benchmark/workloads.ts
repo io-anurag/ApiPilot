@@ -13,6 +13,7 @@ export interface BenchmarkWorkload {
  */
 export const WORKLOAD_SET_ID = "ap004-representative-v1";
 
+/** The fixed workload set benchmarked under `WORKLOAD_SET_ID`. */
 export const SAMPLE_WORKLOADS: BenchmarkWorkload[] = [
   {
     id: "structured-list",

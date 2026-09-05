@@ -6,11 +6,15 @@ import type {
   WorkflowStageState,
 } from "@apipilot/shared-domain";
 import { WORKFLOW_STAGE_ORDER } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
+
+const logger = createLogger("testGenerationWorkflow.workflowStore");
 
 /** The single global instance (FR-018, research.md D7). No database, no session identity. */
 let currentWorkflow: TestGenerationWorkflow | undefined;
 let nextWorkflowSequence = 0;
 
+/** Thrown by `updateStage` when the requested `from -> to` StageStatus change is not permitted (data-model.md). */
 export class InvalidStageTransitionError extends Error {
   constructor(stageId: WorkflowStageId, from: StageStatus, to: StageStatus) {
     super(`Cannot transition stage "${stageId}" from "${from}" to "${to}".`);
@@ -18,6 +22,7 @@ export class InvalidStageTransitionError extends Error {
   }
 }
 
+/** Returns the single in-progress workflow, or `undefined` if none has been started yet. */
 export function getCurrentWorkflow(): TestGenerationWorkflow | undefined {
   return currentWorkflow;
 }
@@ -106,6 +111,7 @@ function isValidTransition(
   return stageId === "aiEnhancement" && AI_ENHANCEMENT_ONLY_TRANSITIONS.has(transition);
 }
 
+/** Optional extras for `updateStage`: aiEnhancement-only error details and an active-stage move. */
 export interface UpdateStageOptions {
   aiErrorCategory?: WorkflowStageState["aiErrorCategory"];
   aiErrorMessage?: string;
@@ -143,6 +149,14 @@ export function updateStage(
     aiErrorMessage:
       status === "skipped" || status === "partial" ? options.aiErrorMessage : undefined,
   };
+  // updateStage is the sole validated per-stage status transition, so it is the one place that
+  // can log every "advance" and every "marked stale/complete" event without duplicating callers.
+  logger.info("stage_transition", {
+    workflowId: currentWorkflow.id,
+    stageId,
+    fromStatus: current.status,
+    toStatus: status,
+  });
   currentWorkflow = {
     ...currentWorkflow,
     updatedAt: now,
