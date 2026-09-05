@@ -1,8 +1,11 @@
 import type { AIProvider, TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { analyzeDependencies } from "../dependencies/analyzeDependencies";
+import { createLogger } from "../logger";
 import { StageNotActiveError } from "./errors";
 import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
 import { maybeAutoCompleteWorkflowReview } from "./workflowReviewStage";
+
+const logger = createLogger("testGenerationWorkflow.dependencyAnalysisStage");
 
 /**
  * Runs the unmodified AP-008 `analyzeDependencies` over the workflow's `apiModel` (independent
@@ -11,13 +14,31 @@ import { maybeAutoCompleteWorkflowReview } from "./workflowReviewStage";
  * Has no separate HTTP trigger — called automatically once `scenarioReview` is finalized.
  */
 export async function runDependencyAnalysis(provider?: AIProvider): Promise<TestGenerationWorkflow> {
-  const workflow = getCurrentWorkflow();
-  if (!workflow || workflow.stages.dependencyAnalysis.status !== "active") {
-    throw new StageNotActiveError("dependencyAnalysis is not the active stage.");
+  const startedAt = Date.now();
+  try {
+    const workflow = getCurrentWorkflow();
+    if (!workflow || workflow.stages.dependencyAnalysis.status !== "active") {
+      throw new StageNotActiveError("dependencyAnalysis is not the active stage.");
+    }
+    const dependencyAnalysis = await analyzeDependencies(workflow.apiModel!, provider);
+    patchWorkflow({ dependencyAnalysis });
+    updateStage("dependencyAnalysis", "complete");
+    advanceActiveStage("workflowReview");
+    const result = maybeAutoCompleteWorkflowReview();
+    logger.info("stage_complete", {
+      stage: "dependencyAnalysis",
+      workflowId: result.id,
+      workflowCount: dependencyAnalysis.workflows.length,
+      durationMs: Date.now() - startedAt,
+    });
+    return result;
+  } catch (error) {
+    logger.error("stage_error", {
+      stage: "dependencyAnalysis",
+      workflowId: getCurrentWorkflow()?.id,
+      errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
   }
-  const dependencyAnalysis = await analyzeDependencies(workflow.apiModel!, provider);
-  patchWorkflow({ dependencyAnalysis });
-  updateStage("dependencyAnalysis", "complete");
-  advanceActiveStage("workflowReview");
-  return maybeAutoCompleteWorkflowReview();
 }

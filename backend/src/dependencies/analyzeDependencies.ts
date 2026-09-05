@@ -24,6 +24,9 @@ import {
   validateAIDependencyCandidateSemantics,
   validateAIDependencyCandidateShape,
 } from "./validateAIDependencyCandidate";
+import { createLogger } from "../logger";
+
+const logger = createLogger("dependencies.analyze");
 
 /** Thrown when analysis and workflow assembly cannot complete within the performance budget (SC-008). */
 export class DependencyAnalysisTimeoutError extends Error {
@@ -36,6 +39,7 @@ export class DependencyAnalysisTimeoutError extends Error {
 /** Default wall-clock budget for the deterministic-analysis-plus-workflow-assembly pipeline (SC-008). */
 export const ANALYSIS_TIMEOUT_MS = 15_000;
 
+/** Options for one `analyzeDependencies` call. */
 export interface AnalyzeDependenciesOptions {
   /** Overrides `ANALYSIS_TIMEOUT_MS` for this call only; test-only hook (T026). */
   timeoutMs?: number;
@@ -192,8 +196,15 @@ export async function analyzeDependencies(
   const timeoutMs = options.timeoutMs ?? ANALYSIS_TIMEOUT_MS;
   const startedAt = Date.now();
   const requestId = analysisRequestId(apiModel);
+  logger.info("analysis_start", { operationCount: apiModel.operations.length });
   const deterministicRelationships = computeDeterministicRelationships(apiModel);
-  if (Date.now() - startedAt > timeoutMs) throw new DependencyAnalysisTimeoutError();
+  if (Date.now() - startedAt > timeoutMs) {
+    logger.error("analysis_error", {
+      errorCategory: "timeout",
+      durationMs: Date.now() - startedAt,
+    });
+    throw new DependencyAnalysisTimeoutError();
+  }
 
   let relationships = deterministicRelationships;
   let aiOutcome: DependencyAIOutcome = "skipped";
@@ -223,8 +234,18 @@ export async function analyzeDependencies(
   // not discarded by this guard, which otherwise protects the deterministic-matching +
   // workflow-assembly portion of the pipeline against exceeding the SC-008 performance budget.
   if (!hadNotAttemptedBatch && Date.now() - startedAt > timeoutMs) {
+    logger.error("analysis_error", {
+      errorCategory: "timeout",
+      durationMs: Date.now() - startedAt,
+    });
     throw new DependencyAnalysisTimeoutError();
   }
+
+  logger.info("analysis_finish", {
+    relationshipCount: relationships.length,
+    aiOutcome,
+    durationMs: Date.now() - startedAt,
+  });
 
   return {
     requestId,

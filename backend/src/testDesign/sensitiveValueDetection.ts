@@ -27,14 +27,17 @@ const PASSWORD_FIELD_PATTERN = /password/i;
 /** The artifact variable a detected credential is expressed through (data-model.md). */
 export type CredentialKind = "token" | "apiKey" | "password";
 
+/** True for a known credential-carrying HTTP header name (authorization, cookie, api-key, etc.), case-insensitive. */
 export function isSensitiveHeaderName(name: string): boolean {
   return SENSITIVE_HEADER_NAMES.has(name.toLowerCase());
 }
 
+/** True when `value` is a string of the form `Bearer <token>`. */
 export function isBearerTokenValue(value: unknown): boolean {
   return typeof value === "string" && BEARER_TOKEN_PATTERN.test(value);
 }
 
+/** True when `name` matches a credential-suggestive pattern (password/secret/token/api-key/credential/bearer). */
 export function isSensitiveFieldName(name: string): boolean {
   return SENSITIVE_FIELD_NAME_PATTERN.test(name);
 }

@@ -1,6 +1,9 @@
 import { Router } from "express";
 import type { ApiModel, ExportFailureCode, ExportOptions, TestModel } from "@apipilot/shared-domain";
 import { generateCollection } from "../postman/generateCollection";
+import { createLogger } from "../logger";
+
+const logger = createLogger("api.postmanCollections");
 
 /**
  * Stateless export boundary (contracts/postman-collection-api.md). The route adapts and
@@ -65,13 +68,23 @@ function isExportRequestBody(value: unknown): value is ExportRequestBody {
   return isApiModel(body.apiModel) && isTestModel(body.testModel) && isExportOptions(body.options);
 }
 
+/** Builds the router for POST /test-models/postman-collection, the stateless Postman export endpoint. */
 export function createPostmanCollectionsRouter() {
   const router = Router();
 
   router
     .route("/test-models/postman-collection")
     .post((req, res) => {
+      const startedAt = Date.now();
+      logger.info("request_received", { method: req.method, path: req.path });
       if (!isExportRequestBody(req.body)) {
+        logger.error("request_failed", {
+          method: req.method,
+          path: req.path,
+          statusCode: 400,
+          errorCategory: "invalid_request",
+          durationMs: Date.now() - startedAt,
+        });
         res.status(400).json({
           error: "invalid_request",
           message:
@@ -83,6 +96,13 @@ export function createPostmanCollectionsRouter() {
       const outcome = generateCollection(req.body.apiModel, req.body.testModel, req.body.options);
       if (!outcome.ok) {
         const { code, message, problems } = outcome.failure;
+        logger.error("request_failed", {
+          method: req.method,
+          path: req.path,
+          statusCode: FAILURE_STATUS[code],
+          errorCategory: code,
+          durationMs: Date.now() - startedAt,
+        });
         res.status(FAILURE_STATUS[code]).json({
           error: code,
           message,
@@ -92,6 +112,12 @@ export function createPostmanCollectionsRouter() {
       }
 
       res.status(200).json(outcome.result);
+      logger.info("request_succeeded", {
+        method: req.method,
+        path: req.path,
+        statusCode: 200,
+        durationMs: Date.now() - startedAt,
+      });
     })
     .all((_req, res) => {
       res.status(405).json({ error: "method_not_allowed" });
@@ -100,4 +126,5 @@ export function createPostmanCollectionsRouter() {
   return router;
 }
 
+/** Default router instance (this endpoint takes no AI provider — export is deterministic). */
 export const postmanCollectionsRouter = createPostmanCollectionsRouter();

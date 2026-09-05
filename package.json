@@ -12,7 +12,9 @@
     "packages/shared-domain"
   ],
   "scripts": {
+    "predev": "node scripts/dev-stop.mjs",
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "stop": "node scripts/dev-stop.mjs",
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"

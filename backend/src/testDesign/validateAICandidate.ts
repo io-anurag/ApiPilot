@@ -8,6 +8,7 @@ import type {
 import { isCandidateShape } from "./parseAIScenarioResponse";
 import { primaryRequestBodySchema, walkFields } from "./requestHelpers";
 
+/** Scenario categories an AI candidate is permitted to declare; any other category fails shape validation. */
 export const SUPPORTED_AI_CATEGORIES: readonly ScenarioCategory[] = [
   "positive",
   "missing-field",
@@ -21,6 +22,7 @@ export const SUPPORTED_AI_CATEGORIES: readonly ScenarioCategory[] = [
   "array-boundary",
 ];
 
+/** Validates an AI candidate's structural shape independent of the ApiModel: field types (via `isCandidateShape`), category support, non-empty rationale, and a confidence in [0,1]. Returns one finding per problem, or an empty array when the candidate is well-formed. */
 export function validateAICandidateShape(value: unknown): AIValidationFinding[] {
   const candidateId =
     isRecord(value) && typeof value.candidateId === "string"
@@ -70,6 +72,7 @@ export function validateAICandidateShape(value: unknown): AIValidationFinding[] 
   return findings;
 }
 
+/** Validates an AI candidate against the ApiModel it claims to target: the operation, parameter/body field references, and assertion status codes/schemas must all exist in the specification. Returns one finding per unsupported reference, or an empty array when everything resolves. */
 export function validateAICandidateSemantics(
   candidate: AIScenarioCandidate,
   apiModel: ApiModel,

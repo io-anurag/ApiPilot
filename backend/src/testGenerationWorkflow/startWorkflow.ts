@@ -1,9 +1,12 @@
 import { buildApiModel } from "../openapi/buildApiModel";
 import { parseYaml } from "../openapi/parseYaml";
 import { validateSpec } from "../openapi/validateSpec";
+import { createLogger } from "../logger";
 import { WorkflowInProgressError } from "./errors";
 import { getCurrentWorkflow, startWorkflow as startWorkflowInStore } from "./workflowStore";
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
+
+const logger = createLogger("testGenerationWorkflow.startWorkflow");
 
 /**
  * Starts a new workflow from an uploaded specification (upload + analysis stages, atomically —
@@ -18,12 +21,21 @@ export async function startWorkflowFromUpload(
   filename: string,
   discardExisting: boolean,
 ): Promise<TestGenerationWorkflow> {
-  if (getCurrentWorkflow() && !discardExisting) {
+  const existing = getCurrentWorkflow();
+  if (existing && !discardExisting) {
     throw new WorkflowInProgressError();
+  }
+  if (existing) {
+    logger.info("workflow_discarded", { workflowId: existing.id });
   }
   const content = fileBuffer.toString("utf-8");
   const rawDoc = parseYaml(content);
   const { document, issues } = await validateSpec(rawDoc);
   const apiModel = buildApiModel(document, issues);
-  return startWorkflowInStore({ specificationFilename: filename, apiModel });
+  const workflow = startWorkflowInStore({ specificationFilename: filename, apiModel });
+  logger.info("workflow_started", {
+    workflowId: workflow.id,
+    operationCount: apiModel.summary.operationCount,
+  });
+  return workflow;
 }

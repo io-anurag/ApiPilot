@@ -22,6 +22,9 @@ import { compareCodeUnits } from "./ordering";
 import { renderReadme } from "./readme";
 import { buildRequestItem } from "./requestItem";
 import { validateCollection } from "./validateCollection";
+import { createLogger } from "../logger";
+
+const logger = createLogger("postman.generateCollection");
 
 /**
  * Turns an approved TestModel plus its ApiModel into the three deliverable artifacts (FR-001).
@@ -163,11 +166,20 @@ function authByOperation(
   return { byKey, variables, limitations };
 }
 
+/**
+ * Turns an approved TestModel plus its ApiModel into a complete Postman collection artifact
+ * (collection, environment, and readme), honoring the caller's `ExportOptions` (base URL,
+ * collection name, supplied variable values). Refuses outright — rather than emitting a
+ * partial or silently altered artifact — when the test model carries unsupported multi-step
+ * workflow intent, is empty, references an unknown operation, supplies a value for an
+ * undeclared variable, or fails the generator's own pre-delivery validation.
+ */
 export function generateCollection(
   apiModel: ApiModel,
   testModel: TestModel,
   options: ExportOptions = {},
 ): ExportOutcome {
+  const startedAt = Date.now();
   const workflowKey = workflowIntentKey(testModel);
   if (workflowKey !== undefined) {
     return {
@@ -311,6 +323,12 @@ export function generateCollection(
       byProvenance: countByProvenance(testModel.scenarios),
     },
   };
+
+  logger.info("collection_generated", {
+    requestItemCount: withoutReadme.summary.requestCount,
+    folderCount: withoutReadme.summary.folderCount,
+    durationMs: Date.now() - startedAt,
+  });
 
   return {
     ok: true,

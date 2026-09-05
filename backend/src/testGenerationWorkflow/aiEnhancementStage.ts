@@ -9,6 +9,7 @@ import {
   createReviewWorkspace,
 } from "../testDesign/reviewTestModel";
 import { enhanceTestModel } from "../testDesign/enhanceTestModel";
+import { createLogger } from "../logger";
 import { StageNotActiveError } from "./errors";
 import {
   advanceActiveStage,
@@ -16,6 +17,8 @@ import {
   patchWorkflow,
   updateStage,
 } from "./workflowStore";
+
+const logger = createLogger("testGenerationWorkflow.aiEnhancementStage");
 
 /** ReviewScenario wrappers for scenarios in `testModel` not already present in `existingIds`. */
 function newlyAddedReviewScenarios(
@@ -51,70 +54,105 @@ function newlyAddedReviewScenarios(
 export async function runAiEnhancement(
   provider: AIProvider,
 ): Promise<TestGenerationWorkflow> {
-  const workflow = getCurrentWorkflow();
-  if (!workflow) {
-    throw new StageNotActiveError("aiEnhancement is not the active stage.");
-  }
-  const status = workflow.stages.aiEnhancement.status;
-  if (status === "active") {
-    // first attempt
-  } else if (status === "skipped" || status === "partial") {
-    if (workflow.stages.scenarioReview.status === "complete") {
-      throw new StageNotActiveError(
-        "AI enhancement can no longer be retried: scenario review is already finalized.",
-      );
+  const startedAt = Date.now();
+  try {
+    const workflow = getCurrentWorkflow();
+    if (!workflow) {
+      throw new StageNotActiveError("aiEnhancement is not the active stage.");
     }
-    updateStage("aiEnhancement", "active");
-  } else {
-    throw new StageNotActiveError("aiEnhancement is not the active stage.");
-  }
-
-  const result = await enhanceTestModel(
-    workflow.apiModel!,
-    workflow.deterministicTestModel!,
-    provider,
-  );
-  patchWorkflow({ aiEnhancement: result });
-
-  const existingIds = new Set(
-    (workflow.reviewWorkspace?.scenarios ?? []).map((s) => s.scenarioId),
-  );
-  const isRetry = workflow.reviewWorkspace !== undefined;
-
-  if (result.aiProviderOutcome === "success" || result.aiProviderOutcome === "partial") {
-    updateStage(
-      "aiEnhancement",
-      result.aiProviderOutcome === "success" ? "complete" : "partial",
-      result.aiProviderOutcome === "partial"
-        ? {
-            aiErrorCategory: result.aiErrorCategory,
-            aiErrorMessage: result.aiErrorMessage,
-          }
-        : {},
-    );
-    if (isRetry) {
-      const added = newlyAddedReviewScenarios(result.enhancedTestModel, existingIds);
-      const scenarios = [...workflow.reviewWorkspace!.scenarios, ...added];
-      patchWorkflow({
-        reviewWorkspace: {
-          ...workflow.reviewWorkspace!,
-          scenarios,
-          summary: computeReviewSummary(scenarios, workflow.reviewWorkspace!.policy),
-        },
-      });
+    const status = workflow.stages.aiEnhancement.status;
+    if (status === "active") {
+      // first attempt
+    } else if (status === "skipped" || status === "partial") {
+      if (workflow.stages.scenarioReview.status === "complete") {
+        throw new StageNotActiveError(
+          "AI enhancement can no longer be retried: scenario review is already finalized.",
+        );
+      }
+      updateStage("aiEnhancement", "active");
     } else {
-      patchWorkflow({ reviewWorkspace: createReviewWorkspace(result.enhancedTestModel) });
+      throw new StageNotActiveError("aiEnhancement is not the active stage.");
     }
-    return advanceActiveStage("scenarioReview");
-  }
 
-  updateStage("aiEnhancement", "skipped", {
-    aiErrorCategory: result.aiErrorCategory,
-    aiErrorMessage: result.aiErrorMessage,
-  });
-  if (!isRetry) {
-    patchWorkflow({ reviewWorkspace: createReviewWorkspace(result.enhancedTestModel) });
-    return advanceActiveStage("scenarioReview");
+    const result = await enhanceTestModel(
+      workflow.apiModel!,
+      workflow.deterministicTestModel!,
+      provider,
+    );
+    patchWorkflow({ aiEnhancement: result });
+
+    const existingIds = new Set(
+      (workflow.reviewWorkspace?.scenarios ?? []).map((s) => s.scenarioId),
+    );
+    const isRetry = workflow.reviewWorkspace !== undefined;
+
+    if (result.aiProviderOutcome === "success" || result.aiProviderOutcome === "partial") {
+      updateStage(
+        "aiEnhancement",
+        result.aiProviderOutcome === "success" ? "complete" : "partial",
+        result.aiProviderOutcome === "partial"
+          ? {
+              aiErrorCategory: result.aiErrorCategory,
+              aiErrorMessage: result.aiErrorMessage,
+            }
+          : {},
+      );
+      if (isRetry) {
+        const added = newlyAddedReviewScenarios(result.enhancedTestModel, existingIds);
+        const scenarios = [...workflow.reviewWorkspace!.scenarios, ...added];
+        patchWorkflow({
+          reviewWorkspace: {
+            ...workflow.reviewWorkspace!,
+            scenarios,
+            summary: computeReviewSummary(scenarios, workflow.reviewWorkspace!.policy),
+          },
+        });
+      } else {
+        patchWorkflow({ reviewWorkspace: createReviewWorkspace(result.enhancedTestModel) });
+      }
+      const advanced = advanceActiveStage("scenarioReview");
+      logger.info("stage_complete", {
+        stage: "aiEnhancement",
+        workflowId: advanced.id,
+        outcome: result.aiProviderOutcome,
+        scenarioCount: result.enhancedTestModel.scenarios.length,
+        durationMs: Date.now() - startedAt,
+      });
+      return advanced;
+    }
+
+    updateStage("aiEnhancement", "skipped", {
+      aiErrorCategory: result.aiErrorCategory,
+      aiErrorMessage: result.aiErrorMessage,
+    });
+    if (!isRetry) {
+      patchWorkflow({ reviewWorkspace: createReviewWorkspace(result.enhancedTestModel) });
+      const advanced = advanceActiveStage("scenarioReview");
+      logger.info("stage_complete", {
+        stage: "aiEnhancement",
+        workflowId: advanced.id,
+        outcome: "skipped",
+        errorCategory: result.aiErrorCategory,
+        durationMs: Date.now() - startedAt,
+      });
+      return advanced;
+    }
+    const current = getCurrentWorkflow()!;
+    logger.info("stage_complete", {
+      stage: "aiEnhancement",
+      workflowId: current.id,
+      outcome: "skipped",
+      errorCategory: result.aiErrorCategory,
+      durationMs: Date.now() - startedAt,
+    });
+    return current;
+  } catch (error) {
+    logger.error("stage_error", {
+      stage: "aiEnhancement",
+      workflowId: getCurrentWorkflow()?.id,
+      errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
   }
-  return getCurrentWorkflow()!;
 }

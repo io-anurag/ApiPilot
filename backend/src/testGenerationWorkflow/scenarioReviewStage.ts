@@ -14,10 +14,13 @@ import {
   regenerationFailureOutcome,
 } from "../testDesign/reviewTestModel";
 import { regenerateReviewScenario } from "../testDesign/regenerateReviewScenario";
+import { createLogger } from "../logger";
 import { EmptyApprovedScenariosError, StageNotActiveError } from "./errors";
 import { computeDownstreamStaleness } from "./staleness";
 import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
 import { runDependencyAnalysis } from "./dependencyAnalysisStage";
+
+const logger = createLogger("testGenerationWorkflow.scenarioReviewStage");
 
 /** Allows a revision (FR-006): decisions/edit/regenerate may reopen an already-finalized review. */
 function requireReviewable(workflow: TestGenerationWorkflow | undefined): TestGenerationWorkflow {
@@ -49,6 +52,7 @@ function reopenIfComplete(): void {
   patchWorkflow({ activeStageId: "scenarioReview" });
 }
 
+/** Applies one or more approve/reject/comment decisions to the review workspace, reopening a finalized review first if needed (FR-006). */
 export function applyScenarioDecisions(
   updates: ReviewUpdateRequest[],
 ): { workflow: TestGenerationWorkflow; outcomes: ReviewUpdateOutcome[] } {
@@ -59,6 +63,7 @@ export function applyScenarioDecisions(
   return { workflow: next, outcomes };
 }
 
+/** Applies a user edit to one scenario's content in the review workspace, reopening a finalized review first if needed (FR-006). */
 export function editScenario(
   scenarioId: string,
   revision: number,
@@ -77,6 +82,7 @@ export function editScenario(
   return { workflow: next, outcome };
 }
 
+/** Re-runs AI generation for one scenario via `regenerateReviewScenario`, replacing it in the workspace on success (reopening a finalized review first if needed). */
 export async function regenerateScenario(
   scenarioId: string,
   revision: number,
@@ -107,13 +113,31 @@ export async function regenerateScenario(
  * no separate trigger (data-model.md). Refuses when nothing was approved (FR-011).
  */
 export async function finalizeScenarioReview(provider?: AIProvider): Promise<TestGenerationWorkflow> {
-  const workflow = requireActive(getCurrentWorkflow());
-  const approvedTestModel = projectApprovedTestModel(workflow.reviewWorkspace!);
-  if (approvedTestModel.scenarios.length === 0) {
-    throw new EmptyApprovedScenariosError();
+  const startedAt = Date.now();
+  try {
+    const workflow = requireActive(getCurrentWorkflow());
+    const approvedTestModel = projectApprovedTestModel(workflow.reviewWorkspace!);
+    if (approvedTestModel.scenarios.length === 0) {
+      throw new EmptyApprovedScenariosError();
+    }
+    patchWorkflow({ approvedTestModel });
+    updateStage("scenarioReview", "complete");
+    advanceActiveStage("dependencyAnalysis");
+    const result = await runDependencyAnalysis(provider);
+    logger.info("stage_complete", {
+      stage: "scenarioReview",
+      workflowId: result.id,
+      scenarioCount: approvedTestModel.scenarios.length,
+      durationMs: Date.now() - startedAt,
+    });
+    return result;
+  } catch (error) {
+    logger.error("stage_error", {
+      stage: "scenarioReview",
+      workflowId: getCurrentWorkflow()?.id,
+      errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
   }
-  patchWorkflow({ approvedTestModel });
-  updateStage("scenarioReview", "complete");
-  advanceActiveStage("dependencyAnalysis");
-  return runDependencyAnalysis(provider);
 }

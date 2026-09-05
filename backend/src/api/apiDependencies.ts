@@ -4,6 +4,9 @@ import {
   analyzeDependencies,
   DependencyAnalysisTimeoutError,
 } from "../dependencies/analyzeDependencies";
+import { createLogger } from "../logger";
+
+const logger = createLogger("api.apiDependencies");
 
 function isDependencyAnalysisRequest(value: unknown): value is { apiModel: ApiModel } {
   if (typeof value !== "object" || value === null) return false;
@@ -26,7 +29,16 @@ export function createApiDependenciesRouter(provider?: AIProvider) {
   router
     .route("/api-models/dependencies")
     .post(async (req, res) => {
+      const startedAt = Date.now();
+      logger.info("request_received", { method: req.method, path: req.path });
       if (!isDependencyAnalysisRequest(req.body)) {
+        logger.error("request_failed", {
+          method: req.method,
+          path: req.path,
+          statusCode: 400,
+          errorCategory: "invalid_request",
+          durationMs: Date.now() - startedAt,
+        });
         res.status(400).json({
           error: "invalid_request",
           message:
@@ -37,11 +49,27 @@ export function createApiDependenciesRouter(provider?: AIProvider) {
       try {
         const result = await analyzeDependencies(req.body.apiModel, provider);
         res.status(200).json(result);
+        logger.info("request_succeeded", {
+          method: req.method,
+          path: req.path,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+        });
       } catch (error) {
         if (error instanceof DependencyAnalysisTimeoutError) {
+          logger.error("request_failed", {
+            method: req.method,
+            path: req.path,
+            statusCode: 500,
+            errorCategory: "analysis_timeout",
+            durationMs: Date.now() - startedAt,
+          });
           res.status(500).json({ error: "analysis_timeout", message: error.message });
           return;
         }
+        // Rethrown unchanged (existing error-propagation behavior of this handler) —
+        // not logged again here to avoid duplicating whatever logging the error
+        // eventually reaches.
         throw error;
       }
     })
@@ -51,4 +79,5 @@ export function createApiDependenciesRouter(provider?: AIProvider) {
   return router;
 }
 
+/** Default router instance wired to no AI provider (deterministic-only dependency analysis); `createApiDependenciesRouter` should be used directly when AI assistance is available. */
 export const apiDependenciesRouter = createApiDependenciesRouter();

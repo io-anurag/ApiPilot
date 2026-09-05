@@ -76,6 +76,7 @@ function substituteCredentialsInBody(
   );
 }
 
+/** Input to `buildRequestItem`: the approved scenario, the operation it targets, its assigned request name, and the auth mapped for that operation, if any. */
 export interface BuildRequestItemInput {
   scenario: TestScenario;
   operation: ApiOperation;
@@ -83,6 +84,7 @@ export interface BuildRequestItemInput {
   auth?: PostmanAuth;
 }
 
+/** Output of `buildRequestItem`: the built request item plus any limitations and variables its parts introduced. */
 export interface RequestItemResult {
   item: PostmanRequestItem;
   limitations: GenerationLimitation[];
@@ -224,6 +226,7 @@ function buildUrl(
   };
 }
 
+/** Assembles the full request item (URL, headers, body, auth, assertions) for one scenario, collecting the limitations and variables its parts introduced along the way. */
 export function buildRequestItem(input: BuildRequestItemInput): RequestItemResult {
   const { scenario, operation, requestName, auth } = input;
   const location = `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath}`;

@@ -22,10 +22,12 @@ const CREDENTIAL_PURPOSE: Record<ArtifactCredentialName, string> = {
   username: "Username for the declared basic authentication scheme.",
 };
 
+/** Declares the credential variable of the given kind: secret, with no value until the environment supplies one. */
 export function credentialVariable(name: ArtifactCredentialName): ArtifactVariable {
   return { name, purpose: CREDENTIAL_PURPOSE[name], secret: true, value: "" };
 }
 
+/** Declares the `baseUrl` variable, seeded with the supplied address (or empty if none was given). */
 export function baseUrlVariable(value: string): ArtifactVariable {
   return {
     name: BASE_URL_VARIABLE,
@@ -35,6 +37,7 @@ export function baseUrlVariable(value: string): ArtifactVariable {
   };
 }
 
+/** Declares a placeholder variable for a path parameter the approved scenario left unresolved. */
 export function pathParameterVariable(name: string): ArtifactVariable {
   return {
     name,

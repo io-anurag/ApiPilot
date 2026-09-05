@@ -11,6 +11,9 @@ import {
   isBearerTokenValue,
 } from "../testDesign/sensitiveValueDetection";
 import { compareCodeUnits } from "./ordering";
+import { createLogger } from "../logger";
+
+const logger = createLogger("postman.validateCollection");
 
 /**
  * Pre-delivery validation of the collection ApiPilot emits (FR-014).
@@ -131,6 +134,12 @@ function validateRequestItem(
   }
 }
 
+/**
+ * Validates the generated collection against the subset of the Postman v2.1.0 schema this
+ * generator actually needs to satisfy, plus ApiPilot-specific invariants (declared variable
+ * coverage, folder/item ordering, credential-literal detection). See the module doc comment
+ * above for why this checks a subset rather than the official JSON Schema.
+ */
 export function validateCollection(
   collection: PostmanCollection,
   declaredVariables: ArtifactVariable[],
@@ -181,5 +190,11 @@ export function validateCollection(
     });
   });
 
-  return { valid: problems.length === 0, problems };
+  const valid = problems.length === 0;
+  if (valid) {
+    logger.info("validation_outcome", { valid: true });
+  } else {
+    logger.warn("validation_outcome", { valid: false, issueCount: problems.length });
+  }
+  return { valid, problems };
 }

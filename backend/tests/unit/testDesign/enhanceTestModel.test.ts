@@ -10,7 +10,10 @@ import {
   buildLargeAiScenarioApiModel,
 } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
 import { enhanceTestModel } from "../../../src/testDesign/enhanceTestModel";
-import { buildAIScenarioPrompt } from "../../../src/testDesign/aiScenarioPrompt";
+import {
+  AI_SCENARIO_MAX_OUTPUT_TOKENS,
+  buildAIScenarioPrompt,
+} from "../../../src/testDesign/aiScenarioPrompt";
 
 function provider(content: string): AIProvider {
   return {
@@ -56,18 +59,23 @@ function successResponse(request: InferenceRequest): InferenceResponse {
 function scriptedBatchProvider(options: {
   budgetChars: number | undefined;
   scriptResponse?: (request: InferenceRequest) => InferenceResponse | undefined;
-}): AIProvider & { calls: string[] } {
+}): AIProvider & { calls: string[]; getInputBudgetCalls: (number | undefined)[] } {
   const calls: string[] = [];
+  const getInputBudgetCalls: (number | undefined)[] = [];
   return {
     mode: "mock",
     calls,
+    getInputBudgetCalls,
     getReadiness: () => ({
       state: "ready",
       acceleratorRequested: false,
       acceleratorActive: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
     }),
-    getInputBudget: async () => options.budgetChars,
+    getInputBudget: async (maxOutputTokens) => {
+      getInputBudgetCalls.push(maxOutputTokens);
+      return options.budgetChars;
+    },
     infer: async (request): Promise<InferenceResponse> => {
       calls.push(request.requestId);
       return options.scriptResponse?.(request) ?? successResponse(request);
@@ -287,6 +295,18 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
 
     expect(scripted.calls).toHaveLength(1);
     expect(result.aiProviderOutcome).toBe("success");
+  });
+
+  it("regression: requests an input budget sized for a real candidate response, not LocalProvider's tiny unset default", async () => {
+    // A candidate's request/assertions/rationale/assumptions make it far heavier than a
+    // one-line reply; budgeting off the unset default (256, LocalProvider's own fallback)
+    // left no room for a real candidate and always truncated mid-JSON (INVALID_RESPONSE on
+    // every real request, regardless of provider health).
+    const scripted = scriptedBatchProvider({ budgetChars: undefined });
+
+    await enhanceTestModel(aiScenarioApiModel, aiScenarioBaseline, scripted);
+
+    expect(scripted.getInputBudgetCalls).toEqual([AI_SCENARIO_MAX_OUTPUT_TOKENS]);
   });
 
   it("splits a large ApiModel into multiple batches, all succeeding (T013)", async () => {

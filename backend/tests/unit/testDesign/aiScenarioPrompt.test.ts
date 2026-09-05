@@ -4,7 +4,10 @@ import {
   aiScenarioApiModel,
   aiScenarioBaseline,
 } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
-import { buildAIScenarioRequest } from "../../../src/testDesign/aiScenarioPrompt";
+import {
+  AI_SCENARIO_MAX_OUTPUT_TOKENS,
+  buildAIScenarioRequest,
+} from "../../../src/testDesign/aiScenarioPrompt";
 import { parseAIScenarioResponse } from "../../../src/testDesign/parseAIScenarioResponse";
 
 describe("AI scenario prompt and response contract", () => {
@@ -17,6 +20,11 @@ describe("AI scenario prompt and response contract", () => {
     const prompt = JSON.parse(request.input) as Record<string, unknown>;
 
     expect(request.expectedOutputFormat).toBe("json");
+    // A generous-enough bound that a multi-field candidate (request, assertions, rationale,
+    // assumptions) doesn't get truncated mid-JSON — LocalProvider's own unset-default (256)
+    // was enough for at most one small candidate and always failed strict JSON parsing above
+    // that (regression: AI enhancement failing with INVALID_RESPONSE on every real request).
+    expect(request.maxOutputTokens).toBe(AI_SCENARIO_MAX_OUTPUT_TOKENS);
     expect(prompt.responseVersion).toBe(1);
     expect(prompt.apiModel).toEqual(aiScenarioApiModel);
     expect(prompt.deterministicTestModel).toEqual(aiScenarioBaseline);

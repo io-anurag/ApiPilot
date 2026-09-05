@@ -1,7 +1,8 @@
 /**
  * Logging contract (constitution XX — Observability Without Sensitive Logging): every
- * log line emitted by this module carries only `requestId`, `modelId`, `stage`,
- * `durationMs`, and `errorCategory`. Raw prompt/response content is never logged.
+ * log line emitted by this module (via the shared `../logger`) carries only `requestId`,
+ * `modelId`, `durationMs`, and `errorCategory` fields alongside an event name (e.g.
+ * `inference_start`, `load_success`). Raw prompt/response content is never logged.
  */
 import type {
   AIProvider,
@@ -14,6 +15,9 @@ import type {
 import { AIProviderError, buildErrorResponse } from "./errors";
 import { ReadinessTracker } from "./readiness";
 import { RequestQueue } from "./requestQueue";
+import { createLogger } from "../logger";
+
+const logger = createLogger("ai.localProvider");
 
 /** Minimal shape of a loaded model this provider needs, independent of the runtime. */
 export interface TextGenerationEngine {
@@ -51,7 +55,7 @@ export const CHARS_PER_TOKEN_ESTIMATE = 3;
  * Only this function (and this module) imports `@huggingface/transformers` (constitution
  * VI, XXVIII; FR-013) — everything else depends solely on the `AIProvider` abstraction.
  */
-async function loadTransformersEngine(
+export async function loadTransformersEngine(
   config: ModelConfig,
   device: "cpu" | "gpu",
 ): Promise<TextGenerationEngine> {
@@ -103,6 +107,10 @@ async function loadTransformersEngine(
       const output = await generator(input, {
         max_new_tokens: maxNewTokens,
         do_sample: false,
+        // `input` is a plain string, not a chat array, so return_full_text defaults to
+        // true — without this, generated_text is the prompt itself plus the completion
+        // concatenated together, which then fails strict JSON parsing every time.
+        return_full_text: false,
       });
       const first = Array.isArray(output) ? output[0] : output;
       const text = (first as { generated_text?: unknown } | undefined)?.generated_text;
@@ -115,28 +123,6 @@ async function loadTransformersEngine(
       return text;
     },
   };
-}
-
-/**
- * Emits a single structured, non-sensitive log line (constitution XX): only
- * requestId/modelId/stage/durationMs/errorCategory are logged, never raw prompt or
- * response content.
- */
-function logAIEvent(event: {
-  requestId?: string;
-  modelId: string;
-  stage:
-    | "load_start"
-    | "load_success"
-    | "load_failed"
-    | "inference_start"
-    | "inference_success"
-    | "inference_error";
-  durationMs?: number;
-  errorCategory?: string;
-}): void {
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify({ component: "ai.localProvider", ...event }));
 }
 
 class TimeoutError extends Error {}
@@ -253,10 +239,9 @@ export class LocalProvider implements AIProvider {
     request: InferenceRequest,
     startedAt: number,
   ): Promise<InferenceResponse> {
-    logAIEvent({
+    logger.info("inference_start", {
       requestId: request.requestId,
       modelId: this.config.modelId,
-      stage: "inference_start",
     });
 
     let engine: TextGenerationEngine;
@@ -269,10 +254,9 @@ export class LocalProvider implements AIProvider {
         acceleratorRequested: this.config.useAccelerator,
         acceleratorActive: this.acceleratorActive,
       });
-      logAIEvent({
+      logger.error("inference_error", {
         requestId: request.requestId,
         modelId: this.config.modelId,
-        stage: "inference_error",
         errorCategory: "LOAD_FAILED",
         durationMs: Date.now() - startedAt,
       });
@@ -293,10 +277,9 @@ export class LocalProvider implements AIProvider {
         timeoutMs,
       );
       const durationMs = Date.now() - startedAt;
-      logAIEvent({
+      logger.info("inference_success", {
         requestId: request.requestId,
         modelId: this.config.modelId,
-        stage: "inference_success",
         durationMs,
       });
       return {
@@ -317,10 +300,9 @@ export class LocalProvider implements AIProvider {
             : "PROVIDER_UNAVAILABLE";
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
-      logAIEvent({
+      logger.error("inference_error", {
         requestId: request.requestId,
         modelId: this.config.modelId,
-        stage: "inference_error",
         errorCategory,
         durationMs,
       });
@@ -344,7 +326,7 @@ export class LocalProvider implements AIProvider {
   }
 
   private async loadWithAcceleratorFallback(): Promise<TextGenerationEngine> {
-    logAIEvent({ modelId: this.config.modelId, stage: "load_start" });
+    logger.info("load_start", { modelId: this.config.modelId });
 
     if (!this.config.useAccelerator) {
       const engine = await this.loadEngine(this.config, "cpu");
@@ -354,7 +336,7 @@ export class LocalProvider implements AIProvider {
         acceleratorRequested: false,
         acceleratorActive: false,
       });
-      logAIEvent({ modelId: this.config.modelId, stage: "load_success" });
+      logger.info("load_success", { modelId: this.config.modelId });
       return engine;
     }
 
@@ -366,7 +348,7 @@ export class LocalProvider implements AIProvider {
         acceleratorRequested: true,
         acceleratorActive: true,
       });
-      logAIEvent({ modelId: this.config.modelId, stage: "load_success" });
+      logger.info("load_success", { modelId: this.config.modelId });
       return engine;
     } catch {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
@@ -380,7 +362,7 @@ export class LocalProvider implements AIProvider {
         reason:
           "Accelerator was requested but unavailable at runtime; using CPU inference instead",
       });
-      logAIEvent({ modelId: this.config.modelId, stage: "load_success" });
+      logger.info("load_success", { modelId: this.config.modelId });
       return engine;
     }
   }

@@ -6,6 +6,7 @@ interface ParsedResponse {
   candidates: unknown[];
 }
 
+/** Parses and structurally validates a raw AIProvider inference response into a candidate list; throws `AIProviderError` for a provider error, empty content, invalid JSON, or an unsupported response shape. */
 export function parseAIScenarioResponse(response: InferenceResponse): ParsedResponse {
   if (response.status === "error") {
     throw new AIProviderError(
@@ -41,6 +42,7 @@ export function parseAIScenarioResponse(response: InferenceResponse): ParsedResp
   return { responseVersion: 1, candidates: value.candidates };
 }
 
+/** Type guard confirming `value` has every field an `AIScenarioCandidate` requires, without checking whether they reference real operation/schema content. */
 export function isCandidateShape(value: unknown): value is AIScenarioCandidate {
   if (!isRecord(value)) return false;
   return (

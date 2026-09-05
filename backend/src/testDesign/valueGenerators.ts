@@ -124,6 +124,7 @@ export function enumViolatingValue(schema: SchemaConstraint): unknown {
   return sentinel ?? { __invalidEnumMarker: true };
 }
 
+/** The boundary-adjacent numeric values `numericBoundaryValues` can produce; each field is present only when the corresponding constraint (minimum/maximum) is declared on the schema. */
 export interface NumericBoundaryValues {
   belowMinimum?: number;
   atMinimum?: number;
@@ -146,6 +147,7 @@ export function numericBoundaryValues(schema: SchemaConstraint): NumericBoundary
   return values;
 }
 
+/** The boundary-adjacent string-length values `stringBoundaryValues` can produce; each field is present only when the corresponding constraint (minLength/maxLength) is declared on the schema. */
 export interface StringBoundaryValues {
   belowMinLength?: string;
   atMinLength?: string;
@@ -167,6 +169,7 @@ export function stringBoundaryValues(schema: SchemaConstraint): StringBoundaryVa
   return values;
 }
 
+/** The boundary-adjacent array-length values `arrayBoundaryValues` can produce; each field is present only when the corresponding constraint (minItems/maxItems) is declared on the schema. */
 export interface ArrayBoundaryValues {
   belowMinItems?: unknown[];
   atMinItems?: unknown[];

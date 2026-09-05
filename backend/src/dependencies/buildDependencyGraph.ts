@@ -17,6 +17,7 @@ function consumerNode(relationship: ApiDependencyRelationship): OperationNode {
   return { path: relationship.consumer.operationPath, method: relationship.consumer.operationMethod };
 }
 
+/** Return shape of `buildDependencyGraph`: the acyclic relationship set plus any cycle findings excluded from it. */
 export interface DependencyGraphBuildResult {
   acyclicRelationships: ApiDependencyRelationship[];
   cycles: DependencyCycleFinding[];

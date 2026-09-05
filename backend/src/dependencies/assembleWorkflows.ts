@@ -140,6 +140,7 @@ function enumerateWorkflows(
   return { workflows, oversizedChainRelationshipIds };
 }
 
+/** Return shape of `assembleWorkflows`: the assembled workflows plus every relationship it did not include. */
 export interface WorkflowAssemblyResult {
   workflows: IntegrationWorkflow[];
   manualConfirmationCandidates: ManualConfirmationCandidate[];

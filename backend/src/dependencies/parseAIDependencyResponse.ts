@@ -31,6 +31,7 @@ export function parseAIDependencyResponse(response: InferenceResponse): ParsedRe
   return { responseVersion: 1, candidates: value.candidates };
 }
 
+/** Type guard for one raw candidate's structural shape; does not validate against the ApiModel (see `validateAIDependencyCandidate.ts`). */
 export function isDependencyCandidateShape(value: unknown): value is AIDependencyCandidate {
   if (!isRecord(value)) return false;
   const producer = value.producer;

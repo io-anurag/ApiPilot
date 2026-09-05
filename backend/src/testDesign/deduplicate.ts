@@ -13,6 +13,7 @@ function sortKeysDeep(value: unknown): unknown {
   return value;
 }
 
+/** Stable, order-independent identity key for a scenario's method/path/request/assertions, used to detect equivalent scenarios. */
 export function dedupeKey(scenario: TestScenario): string {
   return JSON.stringify(
     sortKeysDeep({
@@ -24,6 +25,7 @@ export function dedupeKey(scenario: TestScenario): string {
   );
 }
 
+/** True when two scenarios share the same method/path/request/assertions (their `dedupeKey`s match). */
 export function scenariosAreEquivalent(left: TestScenario, right: TestScenario): boolean {
   return dedupeKey(left) === dedupeKey(right);
 }

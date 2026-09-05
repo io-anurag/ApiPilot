@@ -10,6 +10,9 @@ import type {
   SecurityRequirement,
   SecuritySchemeDefinition,
 } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
+
+const logger = createLogger("openapi.buildApiModel");
 
 const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
 
@@ -210,6 +213,7 @@ function extractSecuritySchemes(document: Record<string, unknown>): Record<strin
  * duplicate-operation and unsupported-construct issues.
  */
 export function buildApiModel(document: Record<string, unknown>, priorIssues: AnalysisIssue[]): ApiModel {
+  logger.info("build_start");
   const issues: AnalysisIssue[] = [...priorIssues];
   const operations: ApiOperation[] = [];
   const seenOperationIds = new Map<string, number>();
@@ -294,5 +298,10 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
     issues,
   };
 
+  logger.info("build_success", {
+    operationCount: summary.operationCount,
+    schemaCount: summary.schemaCount,
+    issueCount: summary.issues.length,
+  });
   return { operations, securitySchemes, summary };
 }

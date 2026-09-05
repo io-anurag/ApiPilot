@@ -1,4 +1,5 @@
 import type { AnalysisIssue, ApiModel, ApiOperation, TestModel, TestScenario } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
 import { deduplicate } from "./deduplicate";
 import { arrayBoundaryScenarios } from "./rules/arrayBoundaryScenarios";
 import { invalidEnumScenarios } from "./rules/invalidEnumScenarios";
@@ -8,6 +9,8 @@ import { numericBoundaryScenarios } from "./rules/numericBoundaryScenarios";
 import { positiveScenario } from "./rules/positiveScenario";
 import { requiredFieldScenarios } from "./rules/requiredFieldScenarios";
 import { stringBoundaryScenarios } from "./rules/stringBoundaryScenarios";
+
+const logger = createLogger("testDesign.generateTestModel");
 
 const RULES: ((operation: ApiOperation) => TestScenario[])[] = [
   positiveScenario,
@@ -36,6 +39,7 @@ function hasBlockingIssue(operation: ApiOperation, issues: AnalysisIssue[]): boo
 
 /** Generates the deterministic baseline TestModel for an analyzed specification (ApiModel -> TestModel). */
 export function generateTestModel(apiModel: ApiModel): TestModel {
+  const startedAt = Date.now();
   const scenarios: TestScenario[] = [];
   for (const operation of apiModel.operations) {
     if (hasBlockingIssue(operation, apiModel.summary.issues)) continue;
@@ -43,5 +47,11 @@ export function generateTestModel(apiModel: ApiModel): TestModel {
       scenarios.push(...rule(operation));
     }
   }
-  return { scenarios: deduplicate(scenarios) };
+  const deduped = deduplicate(scenarios);
+  logger.info("deterministic_generation_complete", {
+    operationCount: apiModel.operations.length,
+    scenarioCount: deduped.length,
+    durationMs: Date.now() - startedAt,
+  });
+  return { scenarios: deduped };
 }

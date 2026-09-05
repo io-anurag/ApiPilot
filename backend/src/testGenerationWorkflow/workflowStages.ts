@@ -8,6 +8,7 @@ export function previousStageId(stageId: WorkflowStageId): WorkflowStageId | und
   return index > 0 ? WORKFLOW_STAGE_ORDER[index - 1] : undefined;
 }
 
+/** The stage immediately after `stageId` in WORKFLOW_STAGE_ORDER, or undefined for the last stage ("postmanGeneration"). */
 export function nextStageId(stageId: WorkflowStageId): WorkflowStageId | undefined {
   const index = WORKFLOW_STAGE_ORDER.indexOf(stageId);
   return index >= 0 && index < WORKFLOW_STAGE_ORDER.length - 1

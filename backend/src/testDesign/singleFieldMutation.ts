@@ -9,6 +9,7 @@ import { selectNegativeAssertions } from "./assertions";
 import { buildConformantRequest, cloneRequest, primaryRequestBodySchema, setAtPath, walkFields } from "./requestHelpers";
 import { buildScenario } from "./scenario";
 
+/** Configures `generateSingleFieldMutationScenarios` for one single-field rule (invalid-type/format/enum): its category, rule name, description builder, and mutated-value source. */
 export interface SingleFieldMutationRuleOptions {
   category: ScenarioCategory;
   rule: string;

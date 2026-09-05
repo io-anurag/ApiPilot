@@ -39,15 +39,18 @@ export function requestNameForScenario(scenario: TestScenario): string {
   return `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath} — ${scenario.category}`;
 }
 
+/** A scenario paired with the operation it targets, before naming or grouping. */
 export interface ScenarioWithOperation {
   scenario: TestScenario;
   operation: ApiOperation;
 }
 
+/** A `ScenarioWithOperation` with its disambiguated request name assigned. */
 export interface NamedEntry extends ScenarioWithOperation {
   requestName: string;
 }
 
+/** One ordered, uniquely-named folder of named entries, ready to become a collection folder. */
 export interface GroupedFolder {
   name: string;
   entries: NamedEntry[];
