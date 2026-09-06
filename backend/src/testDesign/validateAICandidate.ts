@@ -5,22 +5,16 @@ import type {
   SchemaConstraint,
   ScenarioCategory,
 } from "@apipilot/shared-domain";
+import { SCENARIO_CATEGORIES } from "@apipilot/shared-domain";
 import { isCandidateShape } from "./parseAIScenarioResponse";
 import { primaryRequestBodySchema, walkFields } from "./requestHelpers";
 
-/** Scenario categories an AI candidate is permitted to declare; any other category fails shape validation. */
-export const SUPPORTED_AI_CATEGORIES: readonly ScenarioCategory[] = [
-  "positive",
-  "missing-field",
-  "null-value",
-  "empty-value",
-  "invalid-type",
-  "invalid-format",
-  "invalid-enum",
-  "numeric-boundary",
-  "string-boundary",
-  "array-boundary",
-];
+/**
+ * Re-exported from shared-domain, where the vocabulary now lives so the AI prompt can enumerate the
+ * same list without importing this module — which would close a cycle through
+ * `parseAIScenarioResponse` (specs/014-ai-batching-policy).
+ */
+export const SUPPORTED_AI_CATEGORIES: readonly ScenarioCategory[] = SCENARIO_CATEGORIES;
 
 /** Validates an AI candidate's structural shape independent of the ApiModel: field types (via `isCandidateShape`), category support, non-empty rationale, and a confidence in [0,1]. Returns one finding per problem, or an empty array when the candidate is well-formed. */
 export function validateAICandidateShape(value: unknown): AIValidationFinding[] {

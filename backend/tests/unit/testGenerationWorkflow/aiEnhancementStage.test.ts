@@ -330,8 +330,19 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
     expect(accepted?.length).toBe(1);
   });
 
-  it("a single-batch run's progress, if observed at all, never implies a multi-step process (FR-005)", async () => {
+  /**
+   * Supersedes specs/012's FR-005 premise that a realistic specification is one batch. It never was
+   * a design goal — it was a consequence of sizing batches by remaining context window, which is
+   * what specs/014-ai-batching-policy replaces. A multi-operation specification now plans one unit
+   * per operation, which is what makes progress, cancellation, and partial results reachable at all.
+   * The invariant the original test protected — progress cleared once the stage settles — still
+   * holds and is asserted here.
+   */
+  it("plans one unit per operation for a multi-operation specification (specs/014-ai-batching-policy FR-001)", async () => {
     await reachAiEnhancement();
+    const operationCount = getCurrentWorkflow()!.apiModel!.operations.length;
+    expect(operationCount).toBeGreaterThan(1);
+
     let capturedProgress: { totalBatches: number } | undefined;
     const provider: AIProvider = {
       ...mockProvider,
@@ -343,9 +354,8 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
 
     const wf = await runAiEnhancement(provider);
 
-    if (capturedProgress) {
-      expect(capturedProgress.totalBatches).toBe(1);
-    }
+    expect(capturedProgress?.totalBatches).toBe(operationCount);
+    // Progress is cleared the moment the stage reaches a terminal status.
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
     expect(wf.stages.aiEnhancement.status).toBe("complete");
   });

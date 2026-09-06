@@ -26,6 +26,7 @@ import {
   type Batch,
   type BatchOutcome,
 } from "../ai/requestBatching";
+import { loadAIConfig } from "../ai/modelConfig";
 import { createLogger } from "../logger";
 
 const logger = createLogger("testDesign.enhanceTestModel");
@@ -143,6 +144,17 @@ async function runOneBatch(
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
 export interface EnhanceTestModelOptions {
   /**
+   * Operations per AI request, overriding the configured default. Test-facing seam
+   * (specs/014-ai-batching-policy FR-001) so unit sizing can be exercised without touching env.
+   */
+  operationsPerUnit?: number;
+  /**
+   * Wall-clock ceiling for the whole run, overriding the configured default (FR-009). Once
+   * exceeded, no further unit is started; remaining units are recorded `not-attempted` and the run
+   * settles `partial` with everything already produced retained.
+   */
+  runBudgetMs?: number;
+  /**
    * Fires once the provider is loaded and ready, immediately before batch planning
    * (specs/013-ai-enhancement-viability FR-018). Lets a caller distinguish time spent preparing
    * the model — which on a first run includes a large download — from time spent generating.
@@ -205,6 +217,9 @@ export async function enhanceTestModel(
   const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
   options.onPrepared?.();
 
+  // Work-bounded sizing (specs/014-ai-batching-policy FR-001): a unit covers a small fixed number
+  // of operations rather than however many happen to fit the remaining context. `budgetChars`
+  // remains the upper bound, so the work bound can never produce a request the model cannot accept.
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) =>
@@ -213,6 +228,7 @@ export async function enhanceTestModel(
         scopeBaselineToOperations(testModel, operations),
       ),
     budgetChars,
+    options.operationsPerUnit ?? loadAIConfig().planning.enhancementOperationsPerUnit,
   );
 
   // Per-batch results, populated as each batch's own `runBatch` closure resolves, so
@@ -244,24 +260,37 @@ export async function enhanceTestModel(
     {
       isCancelled: options.isCancelled,
       onBatchStart: options.onBatchStart,
-      onBatchSettled: options.onBatchComplete
-        ? (index, total, outcome) => {
-            const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
-            if (thisBatchScenarios.length === 0) {
-              options.onBatchComplete!(index, total, outcome, []);
-              return;
-            }
-            allAiScenariosSoFar.push(...thisBatchScenarios);
-            const mergedSoFar = deduplicate([
-              ...testModel.scenarios,
-              ...allAiScenariosSoFar.map((item) => item.scenario),
-            ]);
-            const newlyRetained = thisBatchScenarios
-              .map((item) => item.scenario)
-              .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
-            options.onBatchComplete!(index, total, outcome, newlyRetained);
-          }
-        : undefined,
+      onBatchSettled: (index, total, outcome) => {
+        // Per-unit diagnostics (specs/014-ai-batching-policy FR-018, constitution XX). Without
+        // this, a run where every unit failed logged nothing at all about why: the
+        // `successCount === 0` path below returns before `enhancement_complete` is reached, so the
+        // only trace was a provider-level `inference_success` followed by an unexplained
+        // `INVALID_RESPONSE`. Categories and counts only — never prompt or reply content.
+        logger.info("unit_settled", {
+          unitIndex: index,
+          totalUnits: total,
+          operationCount: batches[index]?.operations.length,
+          status: outcome.status,
+          errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
+          retainedCount: (batchScenariosByIndex[index] ?? []).length,
+        });
+
+        if (!options.onBatchComplete) return;
+        const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
+        if (thisBatchScenarios.length === 0) {
+          options.onBatchComplete(index, total, outcome, []);
+          return;
+        }
+        allAiScenariosSoFar.push(...thisBatchScenarios);
+        const mergedSoFar = deduplicate([
+          ...testModel.scenarios,
+          ...allAiScenariosSoFar.map((item) => item.scenario),
+        ]);
+        const newlyRetained = thisBatchScenarios
+          .map((item) => item.scenario)
+          .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
+        options.onBatchComplete(index, total, outcome, newlyRetained);
+      },
     },
   );
 
@@ -272,6 +301,16 @@ export async function enhanceTestModel(
     // once fully parsed), so the baseline passes through unchanged, exactly like a
     // single-batch failure did before batching existed.
     const category = summary.errorCategory ?? "INVALID_RESPONSE";
+    // Logged here as well as per-unit above, because this early return skips the
+    // `enhancement_complete` line at the end — which is precisely why a total failure previously
+    // left no diagnostic trace at all.
+    logger.error("enhancement_failed", {
+      outcome: summary.outcome,
+      errorCategory: category,
+      totalUnits: summary.totalCount,
+      failureCount: summary.failureCount,
+      notAttemptedCount: summary.notAttemptedCount,
+    });
     return {
       requestId,
       enhancedTestModel: testModel,

@@ -559,16 +559,18 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
     expect(result.aiProviderOutcome).toBe("success");
     for (const input of scripted.inputs) {
       // specs/013-ai-enhancement-viability replaced the serialized ApiModel/TestModel pair with an
-      // operation-contract projection: the baseline is now a compact `existingCoverage` list of
-      // "METHOD /path category[:field]" strings. The invariant under test is unchanged — a batch
-      // must only be shown baseline coverage for its own operations.
+      // operation-contract projection, and specs/014-ai-batching-policy nested `existingCoverage`
+      // by operation then category (the flat "METHOD /path category:field" form repeated the
+      // operation label on every entry, which at one operation per unit was 47% of the prompt).
+      // The invariant under test is unchanged — a batch must only be shown coverage for its own
+      // operations.
       const parsed = JSON.parse(input) as {
         operations: { path: string }[];
-        existingCoverage: string[];
+        existingCoverage: Record<string, Record<string, string[]>>;
       };
       const batchOperationPaths = new Set(parsed.operations.map((op) => op.path));
-      for (const entry of parsed.existingCoverage) {
-        const [, path] = entry.split(" ");
+      for (const operationKey of Object.keys(parsed.existingCoverage)) {
+        const [, path] = operationKey.split(" ");
         expect(batchOperationPaths.has(path)).toBe(true);
       }
     }
@@ -604,5 +606,213 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
       rejected: [],
       nonExecutable: [],
     });
+  });
+});
+
+/**
+ * specs/014-ai-batching-policy: work-bounded units. Sizing a request by operation rather than by
+ * remaining context is what makes a reply short enough to be usable, and turns one oversized failure
+ * into many small isolated ones (research.md Decision 1).
+ */
+describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", () => {
+  it("sends one request per operation, so AI contribution scales with specification size (FR-001, FR-003)", async () => {
+    const operationCount = 7;
+    const largeModel = buildLargeAiScenarioApiModel(operationCount);
+    const provider = perOperationCandidateProvider(1_000_000);
+
+    await enhanceTestModel(largeModel, { scenarios: [] }, provider, { operationsPerUnit: 1 });
+
+    expect(provider.calls).toHaveLength(operationCount);
+  });
+
+  it("asks each request about exactly one operation", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(4);
+    const seenOperationCounts: number[] = [];
+    const base = perOperationCandidateProvider(1_000_000);
+    const spy: AIProvider = {
+      ...base,
+      infer: async (request) => {
+        const parsed = JSON.parse(request.input) as { operations: unknown[] };
+        seenOperationCounts.push(parsed.operations.length);
+        return base.infer(request);
+      },
+    };
+
+    await enhanceTestModel(largeModel, { scenarios: [] }, spy, { operationsPerUnit: 1 });
+
+    expect(seenOperationCounts).toEqual([1, 1, 1, 1]);
+  });
+
+  it("honours a configured unit size larger than one, so faster hardware can raise it", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(6);
+    const provider = perOperationCandidateProvider(1_000_000);
+
+    await enhanceTestModel(largeModel, { scenarios: [] }, provider, { operationsPerUnit: 3 });
+
+    expect(provider.calls).toHaveLength(2);
+  });
+
+  it("keeps scenarios from successful units when another unit fails, reporting the run partial (FR-007, FR-008)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(4);
+    const base = perOperationCandidateProvider(1_000_000);
+    let call = 0;
+    const flaky: AIProvider = {
+      ...base,
+      infer: async (request) => {
+        call += 1;
+        if (call === 2) {
+          return {
+            contractVersion: 1,
+            requestId: request.requestId,
+            status: "error",
+            errorCategory: "INVALID_RESPONSE",
+            errorMessage: "unusable",
+            modelId: "scripted-model",
+            provider: "mock",
+            durationMs: 0,
+          } satisfies InferenceResponse;
+        }
+        return base.infer(request);
+      },
+    };
+
+    const result = await enhanceTestModel(largeModel, { scenarios: [] }, flaky, {
+      operationsPerUnit: 1,
+    });
+
+    expect(result.aiProviderOutcome).toBe("partial");
+    const aiScenarios = result.enhancedTestModel.scenarios.filter(
+      (scenario) => scenario.provenance.source === "AI",
+    );
+    // Three of four units succeeded; a failing unit costs only its own contribution.
+    expect(aiScenarios).toHaveLength(3);
+  });
+
+  it("attempts every remaining unit after one fails, rather than abandoning the run (FR-008)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(5);
+    const base = perOperationCandidateProvider(1_000_000);
+    const attempted: string[] = [];
+    let call = 0;
+    const flaky: AIProvider = {
+      ...base,
+      infer: async (request) => {
+        attempted.push(request.requestId);
+        call += 1;
+        if (call === 1) throw new Error("first unit explodes");
+        return base.infer(request);
+      },
+    };
+
+    await enhanceTestModel(largeModel, { scenarios: [] }, flaky, { operationsPerUnit: 1 });
+
+    expect(attempted).toHaveLength(5);
+  });
+
+  it("preserves every deterministic scenario when no unit succeeds (FR-022, SC-005)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(3);
+    const baseline = buildLargeAiScenarioBaseline(3);
+    const alwaysFails = provider("this is not a candidate document");
+
+    const result = await enhanceTestModel(largeModel, baseline, alwaysFails, {
+      operationsPerUnit: 1,
+    });
+
+    expect(result.enhancedTestModel.scenarios).toEqual(baseline.scenarios);
+    expect(result.aiProviderOutcome).not.toBe("success");
+  });
+
+  it("produces the same units on repeated runs of an unchanged specification (SC-008)", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(6);
+
+    const runOnce = async () => {
+      const seen: string[] = [];
+      const base = perOperationCandidateProvider(1_000_000);
+      const spy: AIProvider = {
+        ...base,
+        infer: async (request) => {
+          const parsed = JSON.parse(request.input) as { operations: { path: string }[] };
+          seen.push(parsed.operations.map((op) => op.path).join(","));
+          return base.infer(request);
+        },
+      };
+      await enhanceTestModel(largeModel, { scenarios: [] }, spy, { operationsPerUnit: 2 });
+      return seen;
+    };
+
+    expect(await runOnce()).toEqual(await runOnce());
+  });
+});
+
+/**
+ * specs/014-ai-batching-policy FR-024: a unit shows the model one operation, but validation still
+ * runs against the whole ApiModel. Narrowing the model's *view* must never narrow the validator's,
+ * or a suggestion referencing something outside the real contract would slip through (constitution
+ * I, IV).
+ */
+describe("enhanceTestModel validates against the full ApiModel, not the unit (specs/014-ai-batching-policy)", () => {
+  function candidateProvider(candidate: Record<string, unknown>): AIProvider {
+    return provider(JSON.stringify({ responseVersion: 3, candidates: [candidate] }));
+  }
+
+  it("rejects a candidate naming an operation that exists in no part of the specification", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(3);
+
+    const result = await enhanceTestModel(
+      largeModel,
+      { scenarios: [] },
+      candidateProvider({
+        candidateId: "ghost",
+        operationPath: "/not-in-the-specification",
+        operationMethod: "POST",
+        category: "invalid-format",
+        request: { pathParameters: {}, queryParameters: {}, headers: {}, body: {} },
+        assertions: [{ type: "status-code", expectedStatusCode: "400" }],
+        rationale: "References an operation the contract does not contain.",
+        confidence: 0.9,
+        assumptions: [],
+      }),
+      { operationsPerUnit: 1 },
+    );
+
+    expect(
+      result.enhancedTestModel.scenarios.filter((s) => s.provenance.source === "AI"),
+    ).toHaveLength(0);
+  });
+
+  it("accepts a candidate for a real operation even though the unit showed the model only one", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(3);
+    // Names the *last* operation, which most units never saw — validation must still recognise it
+    // as a genuine contract fact rather than rejecting it for being outside the unit.
+    const target = largeModel.operations[largeModel.operations.length - 1];
+
+    const result = await enhanceTestModel(
+      largeModel,
+      { scenarios: [] },
+      candidateProvider({
+        candidateId: "real-operation",
+        operationPath: target.path,
+        operationMethod: target.method,
+        category: "invalid-format",
+        targetLocation: "body",
+        targetField: "email",
+        request: {
+          pathParameters: {},
+          queryParameters: {},
+          headers: {},
+          body: { email: "not-an-email" },
+        },
+        assertions: [{ type: "status-code", expectedStatusCode: "409" }],
+        rationale: "Exercises a malformed email value.",
+        confidence: 0.9,
+        assumptions: [],
+      }),
+      { operationsPerUnit: 1 },
+    );
+
+    const aiScenarios = result.enhancedTestModel.scenarios.filter(
+      (s) => s.provenance.source === "AI",
+    );
+    expect(aiScenarios.length).toBeGreaterThan(0);
+    expect(aiScenarios[0].operationPath).toBe(target.path);
   });
 });

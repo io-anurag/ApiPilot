@@ -115,34 +115,87 @@ export function deriveAggregateOutcome(
 }
 
 /**
- * Splits `operations` into one or more batches whose serialized prompt (via `buildPrompt`)
- * fits within `budgetChars`, using deterministic recursive halving
- * (specs/011-ai-prompt-batching/research.md Decision 3). Every operation from the input
- * appears in exactly one batch (FR-004); batch order matches input order (FR-009). A single
- * operation that still doesn't fit becomes its own one-operation batch (FR-011) rather than
- * being dropped or split further — it is still sent, and is expected to fail via the
- * provider's own exact-fit guard (INVALID_REQUEST).
+ * Splits `operations` so every batch's serialized prompt (via `buildPrompt`) fits within
+ * `budgetChars`, using deterministic recursive halving (specs/011-ai-prompt-batching/research.md
+ * Decision 3). This is the context-capacity bound only; `splitOperationsIntoBatches` applies the
+ * work bound before calling it.
+ */
+function splitByContextBudget<TOperation>(
+  operations: TOperation[],
+  buildPrompt: (operations: TOperation[]) => string,
+  budgetChars: number | undefined,
+): Batch<TOperation>[] {
+  if (operations.length === 0) return [];
+  if (budgetChars === undefined || operations.length === 1) {
+    return [{ operations }];
+  }
+  if (buildPrompt(operations).length <= budgetChars) {
+    return [{ operations }];
+  }
+
+  const mid = Math.ceil(operations.length / 2);
+  return [
+    ...splitByContextBudget(operations.slice(0, mid), buildPrompt, budgetChars),
+    ...splitByContextBudget(operations.slice(mid), buildPrompt, budgetChars),
+  ];
+}
+
+/**
+ * Splits `operations` into batches bounded first by work and second by context capacity
+ * (specs/014-ai-batching-policy/contracts/batch-sizing.md).
+ *
+ * `maxOperationsPerBatch` is the work bound: batches are formed from at most that many operations,
+ * taken in input order, and each is then still checked against `budgetChars`. Sizing by work rather
+ * than by remaining context is what makes a batch's *reply* short enough to be usable — measured,
+ * one operation per batch produced a valid reply for 6 of 6 operations of a real specification,
+ * while two and three both truncated mid-document, and the whole-specification batch that
+ * context-only sizing produced made the model echo the request back instead of answering it
+ * (research.md Decisions 1 and 2).
+ *
+ * The bound is supplied per caller rather than fixed, because the two AI passes have opposite
+ * pressures: scenario enhancement reasons about one operation's contract, so the smallest batch is
+ * the best batch, while dependency analysis infers relationships *between* operations and cannot
+ * find one whose two ends land in different batches (research.md Decision 7).
+ *
+ * Omitting the bound — or passing a non-positive or non-finite value — preserves the previous
+ * context-only behavior exactly, so callers not yet migrated are unaffected.
+ *
+ * Every operation appears in exactly one batch (FR-004, FR-006); batch order matches input order
+ * (FR-005, FR-009). A single operation that still doesn't fit `budgetChars` becomes its own
+ * one-operation batch (FR-011) rather than being dropped or split further — it is still sent, and
+ * is expected to fail via the provider's own exact-fit guard (INVALID_REQUEST), which is what makes
+ * it a visible, named exclusion rather than a silent one.
  */
 export function splitOperationsIntoBatches<TOperation>(
   operations: readonly TOperation[],
   buildPrompt: (operations: TOperation[]) => string,
   budgetChars: number | undefined,
+  maxOperationsPerBatch?: number,
 ): Batch<TOperation>[] {
   if (operations.length === 0) return [];
 
-  const asArray = [...operations];
-  if (budgetChars === undefined || asArray.length === 1) {
-    return [{ operations: asArray }];
-  }
-  if (buildPrompt(asArray).length <= budgetChars) {
-    return [{ operations: asArray }];
+  const workBound =
+    typeof maxOperationsPerBatch === "number" &&
+    Number.isFinite(maxOperationsPerBatch) &&
+    maxOperationsPerBatch >= 1
+      ? Math.floor(maxOperationsPerBatch)
+      : undefined;
+
+  if (workBound === undefined) {
+    return splitByContextBudget([...operations], buildPrompt, budgetChars);
   }
 
-  const mid = Math.ceil(asArray.length / 2);
-  return [
-    ...splitOperationsIntoBatches(asArray.slice(0, mid), buildPrompt, budgetChars),
-    ...splitOperationsIntoBatches(asArray.slice(mid), buildPrompt, budgetChars),
-  ];
+  const batches: Batch<TOperation>[] = [];
+  for (let start = 0; start < operations.length; start += workBound) {
+    batches.push(
+      ...splitByContextBudget(
+        operations.slice(start, start + workBound) as TOperation[],
+        buildPrompt,
+        budgetChars,
+      ),
+    );
+  }
+  return batches;
 }
 
 /** One batch's outcome plus (on success) the caller-defined data `runBatch` produced for it. */

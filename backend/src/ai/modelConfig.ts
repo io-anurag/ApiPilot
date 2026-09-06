@@ -28,8 +28,20 @@ const DEFAULT_CONTEXT_FLOOR_TOKENS = 2048;
  * These are seeds only: the provider refines them by exponentially-weighted moving average from
  * observed inferences. They gate *whether* a run is attempted and never influence prompt content,
  * validation, deduplication order, or which scenarios are retained (constitution XXIV).
+ *
+ * The prefill seed was 2.0 ms/token, inherited from an estimate rather than a measurement. Direct
+ * measurement against the reference profile puts it at **~42 ms/token** — 21x higher — and
+ * remarkably linear: holding the output allowance fixed at 32 tokens and varying only prompt size
+ * gave 43.4, 41.3 and 42.1 ms/prompt-token at 441, 828 and 1,132 prompt tokens respectively.
+ *
+ * That single number reframes the whole cost model. Prefill, not generation, is what a request
+ * spends its time on: a ~1,130-token prompt costs roughly 47 seconds before the first output token
+ * exists, which is why a single-operation request over a large request body exceeded the 60-second
+ * default even with the output allowance cut to 96 tokens. Prompt size is the dominant lever, and
+ * an estimator seeded at 2.0 would have declared every such run viable
+ * (specs/014-ai-batching-policy).
  */
-const DEFAULT_PREFILL_MS_PER_TOKEN = 2.0;
+const DEFAULT_PREFILL_MS_PER_TOKEN = 42;
 const DEFAULT_DECODE_MS_PER_TOKEN = 130;
 
 /**
@@ -39,6 +51,33 @@ const DEFAULT_DECODE_MS_PER_TOKEN = 130;
  * ~6.9x), not to police borderline ones.
  */
 const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.5;
+
+/**
+ * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy research.md
+ * Decision 1).
+ *
+ * One, because that is what measurement supports rather than what seems generous: across the six
+ * operations of a real springdoc-style specification, one operation per request produced a validly
+ * shaped reply for all six, while two and three operations both truncated mid-document even at a
+ * larger output allowance, and a whole-specification request made the model echo the request back
+ * instead of answering it.
+ *
+ * Configurable rather than fixed because that result describes this CPU and this 0.5B model, not
+ * the domain: a faster machine or a stronger model may well manage more, and should be able to try
+ * without a code change.
+ */
+const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
+
+/**
+ * Wall-clock ceiling for a whole enhancement run (research.md Decision 5).
+ *
+ * Five minutes. At a measured ~21 seconds per single-operation unit, total run time is now linear in
+ * specification size — roughly 2 minutes for 6 operations, 17 for 50, 70 for 200 — so a ceiling is
+ * what stops work-bounded batching from replacing "fails in one minute" with "runs for an hour".
+ * Five minutes covers roughly 14 operations, which is about as long as a user will watch scenarios
+ * stream in, and the run settles as `partial` with everything generated retained.
+ */
+const DEFAULT_ENHANCEMENT_RUN_BUDGET_MS = 300_000;
 const VALID_DTYPES: readonly ModelDType[] = [
   "fp32",
   "fp16",
@@ -60,6 +99,18 @@ export interface InferencePlanningConfig {
   prefillMsPerToken: number;
   decodeMsPerToken: number;
   viabilitySafetyFactor: number;
+  /**
+   * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy FR-001).
+   * Sizing a request by work rather than by remaining context is what keeps its reply short enough
+   * to be usable.
+   */
+  enhancementOperationsPerUnit: number;
+  /**
+   * Wall-clock ceiling for a whole enhancement run (FR-009), distinct from `inferenceTimeoutMs`,
+   * which bounds a single request. Work-bounded units make total run time grow with specification
+   * size, so a run needs a bound of its own.
+   */
+  enhancementRunBudgetMs: number;
 }
 
 /** Resolved AI configuration for the current process: which provider to construct, and its model settings. */
@@ -116,6 +167,18 @@ export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
     viabilitySafetyFactor: readPositiveNumber(
       env.AI_VIABILITY_SAFETY_FACTOR,
       DEFAULT_VIABILITY_SAFETY_FACTOR,
+    ),
+    enhancementOperationsPerUnit: Math.floor(
+      readPositiveNumber(
+        env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT,
+        DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT,
+      ),
+    ),
+    enhancementRunBudgetMs: Math.floor(
+      readPositiveNumber(
+        env.AI_ENHANCEMENT_RUN_BUDGET_MS,
+        DEFAULT_ENHANCEMENT_RUN_BUDGET_MS,
+      ),
     ),
   };
 

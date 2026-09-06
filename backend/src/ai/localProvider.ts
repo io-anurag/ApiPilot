@@ -42,6 +42,8 @@ const DEFAULT_PLANNING: InferencePlanningConfig = {
   prefillMsPerToken: 2.0,
   decodeMsPerToken: 130,
   viabilitySafetyFactor: 1.5,
+  enhancementOperationsPerUnit: 1,
+  enhancementRunBudgetMs: 300_000,
 };
 
 /** Weight given to each new observation when folding it into the running rate estimate. */
