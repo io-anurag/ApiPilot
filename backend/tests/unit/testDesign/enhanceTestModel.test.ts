@@ -8,6 +8,7 @@ import {
   aiScenarioApiModel,
   aiScenarioBaseline,
   buildLargeAiScenarioApiModel,
+  buildLargeAiScenarioBaseline,
 } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
 import { enhanceTestModel } from "../../../src/testDesign/enhanceTestModel";
 import {
@@ -59,12 +60,18 @@ function successResponse(request: InferenceRequest): InferenceResponse {
 function scriptedBatchProvider(options: {
   budgetChars: number | undefined;
   scriptResponse?: (request: InferenceRequest) => InferenceResponse | undefined;
-}): AIProvider & { calls: string[]; getInputBudgetCalls: (number | undefined)[] } {
+}): AIProvider & {
+  calls: string[];
+  inputs: string[];
+  getInputBudgetCalls: (number | undefined)[];
+} {
   const calls: string[] = [];
+  const inputs: string[] = [];
   const getInputBudgetCalls: (number | undefined)[] = [];
   return {
     mode: "mock",
     calls,
+    inputs,
     getInputBudgetCalls,
     getReadiness: () => ({
       state: "ready",
@@ -78,6 +85,7 @@ function scriptedBatchProvider(options: {
     },
     infer: async (request): Promise<InferenceResponse> => {
       calls.push(request.requestId);
+      inputs.push(request.input);
       return options.scriptResponse?.(request) ?? successResponse(request);
     },
   };
@@ -283,6 +291,170 @@ describe("enhanceTestModel", () => {
   });
 });
 
+/**
+ * A scripted provider whose response, for any batch, contains exactly one `invalid-format`
+ * candidate per operation present in that batch's request (parsed from the real serialized
+ * prompt, mirroring how a real model would respond per-operation). Used to verify
+ * `onBatchComplete`'s incremental reveal against a batching split where each batch covers a
+ * disjoint set of operations.
+ */
+function perOperationCandidateProvider(budgetChars: number): AIProvider & {
+  calls: string[];
+} {
+  const calls: string[] = [];
+  return {
+    mode: "mock",
+    calls,
+    getReadiness: () => ({
+      state: "ready",
+      acceleratorRequested: false,
+      acceleratorActive: false,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }),
+    getInputBudget: async () => budgetChars,
+    infer: async (request): Promise<InferenceResponse> => {
+      calls.push(request.requestId);
+      const parsed = JSON.parse(request.input) as {
+        apiModel: { operations: { path: string; method: string }[] };
+      };
+      const candidates = parsed.apiModel.operations.map((op) => ({
+        candidateId: `cand-${op.path}`,
+        operationPath: op.path,
+        operationMethod: op.method,
+        category: "invalid-format",
+        targetLocation: "body",
+        targetField: "email",
+        request: { pathParameters: {}, queryParameters: {}, headers: {}, body: { email: "bad" } },
+        assertions: [{ type: "status-code", expectedStatusCode: "409" }],
+        rationale: `Exercise a malformed email value for ${op.path}.`,
+        confidence: 0.8,
+        assumptions: [],
+      }));
+      return {
+        contractVersion: 1,
+        requestId: request.requestId,
+        status: "success",
+        content: JSON.stringify({ responseVersion: 1, candidates }),
+        modelId: "scripted-model",
+        provider: "mock",
+        durationMs: 0,
+      };
+    },
+  };
+}
+
+describe("enhanceTestModel (progress + incremental reveal, specs/012-ai-enhancement-progress)", () => {
+  it("invokes onBatchComplete once per batch, each time with exactly that batch's newly-retained scenarios", async () => {
+    const operationCount = 5;
+    const largeModel = buildLargeAiScenarioApiModel(operationCount);
+    const emptyBaseline = { scenarios: [] };
+    // Tight budget forces one operation per batch (5 batches).
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(
+        { ...largeModel, operations: [largeModel.operations[0]] },
+        emptyBaseline,
+      ).length * 1.2,
+    );
+    const provider = perOperationCandidateProvider(budgetChars);
+
+    const calls: { index: number; total: number; outcome: string; paths: string[] }[] = [];
+    const result = await enhanceTestModel(largeModel, emptyBaseline, provider, {
+      onBatchComplete: (index, total, outcome, newlyRetainedScenarios) => {
+        calls.push({
+          index,
+          total,
+          outcome: outcome.status,
+          paths: newlyRetainedScenarios.map((s) => s.operationPath),
+        });
+      },
+    });
+
+    expect(provider.calls.length).toBe(operationCount);
+    expect(calls).toHaveLength(operationCount);
+    // Each batch reports exactly its own operation's scenario, never another batch's.
+    calls.forEach((call, i) => {
+      expect(call).toMatchObject({ index: i, total: operationCount, outcome: "success" });
+      expect(call.paths).toEqual([`/resource${i}`]);
+    });
+    // The union across all calls matches the final result exactly (no under/over-reporting).
+    const allReportedPaths = calls.flatMap((c) => c.paths).sort();
+    const finalAiPaths = result.enhancedTestModel.scenarios
+      .filter((s) => s.provenance.source === "AI")
+      .map((s) => s.operationPath)
+      .sort();
+    expect(allReportedPaths).toEqual(finalAiPaths);
+  });
+
+  it("never re-reports or removes a scenario already retained from an earlier batch (FR-012 proof-in-practice)", async () => {
+    const operationCount = 4;
+    const largeModel = buildLargeAiScenarioApiModel(operationCount);
+    const emptyBaseline = { scenarios: [] };
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(
+        { ...largeModel, operations: [largeModel.operations[0]] },
+        emptyBaseline,
+      ).length * 1.2,
+    );
+    const provider = perOperationCandidateProvider(budgetChars);
+
+    const seenScenarioIds = new Set<string>();
+    let duplicateReported = false;
+    await enhanceTestModel(largeModel, emptyBaseline, provider, {
+      onBatchComplete: (_index, _total, _outcome, newlyRetainedScenarios) => {
+        for (const scenario of newlyRetainedScenarios) {
+          if (seenScenarioIds.has(scenario.id)) duplicateReported = true;
+          seenScenarioIds.add(scenario.id);
+        }
+      },
+    });
+
+    expect(duplicateReported).toBe(false);
+    expect(seenScenarioIds.size).toBe(operationCount);
+  });
+
+  it("a single-batch run fires onBatchComplete exactly once with total: 1, and output is byte-identical to a run with no callbacks (FR-005 regression)", async () => {
+    const provider = perOperationCandidateProvider(1_000_000);
+    const calls: { index: number; total: number }[] = [];
+
+    const withCallback = await enhanceTestModel(aiScenarioApiModel, aiScenarioBaseline, provider, {
+      onBatchComplete: (index, total) => calls.push({ index, total }),
+    });
+    const without = await enhanceTestModel(
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      perOperationCandidateProvider(1_000_000),
+    );
+
+    expect(calls).toEqual([{ index: 0, total: 1 }]);
+    expect(withCallback).toEqual(without);
+  });
+
+  it("produces identical output whether or not onBatchComplete/onBatchStart are provided", async () => {
+    const largeModel = buildLargeAiScenarioApiModel(3);
+    const emptyBaseline = { scenarios: [] };
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(
+        { ...largeModel, operations: [largeModel.operations[0]] },
+        emptyBaseline,
+      ).length * 1.2,
+    );
+
+    const without = await enhanceTestModel(
+      largeModel,
+      emptyBaseline,
+      perOperationCandidateProvider(budgetChars),
+    );
+    const withCallbacks = await enhanceTestModel(
+      largeModel,
+      emptyBaseline,
+      perOperationCandidateProvider(budgetChars),
+      { onBatchStart: () => undefined, onBatchComplete: () => undefined },
+    );
+
+    expect(withCallbacks).toEqual(without);
+  });
+});
+
 describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
   it("regression: a small ApiModel produces exactly one provider.infer() call (FR-006)", async () => {
     const scripted = scriptedBatchProvider({ budgetChars: undefined });
@@ -357,6 +529,44 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
     expect(result.aiErrorMessage).toMatch(/timed out/);
     expect(result.aiErrorMessage).toMatch(/of \d+ batches/);
     expect(result.enhancedTestModel.scenarios).toEqual(aiScenarioBaseline.scenarios);
+  });
+
+  it("scopes each batch's deterministic baseline to its own operations, not the whole specification's baseline", async () => {
+    // Regression: aiScenarioBaseline is empty in every other test here, so it can never
+    // reveal a bug where the full baseline is embedded in every batch's prompt regardless of
+    // how far operations were split. A baseline that scales with operation count (mirroring
+    // the real deterministic test designer's output) does reveal it: if scoping is missing,
+    // every batch's prompt would carry all 100 scenarios instead of only its own operations',
+    // and the budget-driven split below would never shrink batches to fewer operations.
+    const operationCount = 20;
+    const largeModel = buildLargeAiScenarioApiModel(operationCount);
+    const largeBaseline = buildLargeAiScenarioBaseline(operationCount, 5);
+    // Sized for roughly one operation's own scenarios plus its own operation entry, not the
+    // whole specification.
+    const budgetChars = Math.floor(
+      buildAIScenarioPrompt(
+        { ...largeModel, operations: [largeModel.operations[0]] },
+        { scenarios: largeBaseline.scenarios.slice(0, 5) },
+      ).length * 1.5,
+    );
+    const scripted = scriptedBatchProvider({ budgetChars });
+
+    const result = await enhanceTestModel(largeModel, largeBaseline, scripted);
+
+    expect(scripted.calls.length).toBeGreaterThan(1);
+    expect(result.aiProviderOutcome).toBe("success");
+    for (const input of scripted.inputs) {
+      const parsed = JSON.parse(input) as {
+        apiModel: { operations: { path: string }[] };
+        deterministicTestModel: { scenarios: { operationPath: string }[] };
+      };
+      const batchOperationPaths = new Set(
+        parsed.apiModel.operations.map((op) => op.path),
+      );
+      for (const scenario of parsed.deterministicTestModel.scenarios) {
+        expect(batchOperationPaths.has(scenario.operationPath)).toBe(true);
+      }
+    }
   });
 
   it("never reports 'partial' when every batch fails, matching today's single-batch failure semantics (T026)", async () => {

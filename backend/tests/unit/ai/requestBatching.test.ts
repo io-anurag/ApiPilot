@@ -183,4 +183,70 @@ describe("runBatchedInference", () => {
     expect(summary.runs[1].outcome).toEqual({ status: "not-attempted" });
     expect(summary.outcome).toBe("partial");
   });
+
+  it("fires onBatchStart/onBatchSettled once per batch, in order, with the correct index/total/outcome (specs/012-ai-enhancement-progress)", async () => {
+    const batches: Batch<number>[] = [
+      { operations: [1] },
+      { operations: [2] },
+      { operations: [3] },
+    ];
+    const events: string[] = [];
+    const onBatchStart = vi.fn((index: number, total: number) => {
+      events.push(`start:${index}/${total}`);
+    });
+    const onBatchSettled = vi.fn((index: number, total: number, outcome) => {
+      events.push(`settled:${index}/${total}:${outcome.status}`);
+    });
+
+    await runBatchedInference(
+      batches,
+      async (batch) => {
+        if (batch.operations[0] === 2) {
+          throw new AIProviderError("TIMEOUT", "batch 2 timed out");
+        }
+        return `result-${batch.operations[0]}`;
+      },
+      { onBatchStart, onBatchSettled },
+    );
+
+    expect(onBatchStart).toHaveBeenCalledTimes(3);
+    expect(onBatchSettled).toHaveBeenCalledTimes(3);
+    expect(events).toEqual([
+      "start:0/3",
+      "settled:0/3:success",
+      "start:1/3",
+      "settled:1/3:failed",
+      "start:2/3",
+      "settled:2/3:success",
+    ]);
+  });
+
+  it("calls onBatchSettled (not onBatchStart) for a batch skipped via isTimedOut, with a not-attempted outcome", async () => {
+    const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
+    let calls = 0;
+    const onBatchStart = vi.fn();
+    const onBatchSettled = vi.fn();
+
+    await runBatchedInference(
+      batches,
+      async () => {
+        calls++;
+        return "ok";
+      },
+      { isTimedOut: () => calls >= 1, onBatchStart, onBatchSettled },
+    );
+
+    expect(onBatchStart).toHaveBeenCalledTimes(1);
+    expect(onBatchStart).toHaveBeenCalledWith(0, 2);
+    expect(onBatchSettled).toHaveBeenCalledTimes(2);
+    expect(onBatchSettled).toHaveBeenNthCalledWith(2, 1, 2, { status: "not-attempted" });
+  });
+
+  it("behaves identically to today when onBatchStart/onBatchSettled are omitted (analyzeDependencies.ts's existing call site is unaffected)", async () => {
+    const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
+    const summary = await runBatchedInference(batches, async (batch) => batch.operations[0]);
+
+    expect(summary.outcome).toBe("success");
+    expect(summary.runs.map((run) => run.data)).toEqual([1, 2]);
+  });
 });

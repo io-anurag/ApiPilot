@@ -345,4 +345,110 @@ describe("test generation workflow orchestration", () => {
     expect(response.status).toBe(409);
     expect(response.body.error).toBe("stage_not_active");
   });
+
+  it("GET returns stages.aiEnhancement.progress while a multi-batch run is active, identically across independent polls, and absent again once it finishes (specs/012-ai-enhancement-progress)", async () => {
+    const progressPairs: { a: unknown; b: unknown }[] = [];
+    // Small budget splits the fixture's 3 operations into one batch each (mirrors the existing
+    // "partial outcome" convention in aiEnhancementStage.test.ts).
+    const provider: AIProvider = {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date(0).toISOString(),
+      }),
+      getInputBudget: async () => 10,
+      infer: async (req) => {
+        // Two independent GET calls "mid-batch" simulate two different browser
+        // tabs/reconnects polling at the same moment — both must see identical state.
+        const pollA = await request(app).get("/api/test-generation-workflow");
+        const pollB = await request(app).get("/api/test-generation-workflow");
+        progressPairs.push({
+          a: pollA.body.workflow.stages.aiEnhancement.progress,
+          b: pollB.body.workflow.stages.aiEnhancement.progress,
+        });
+        return {
+          contractVersion: 1,
+          requestId: req.requestId,
+          status: "success",
+          content: emptyCandidates,
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+    const app = createApp(provider);
+
+    await request(app)
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await request(app).post("/api/test-generation-workflow/api-review/continue");
+    await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
+    expect(afterEnhancement.status).toBe(200);
+    expect(afterEnhancement.body.workflow.stages.aiEnhancement.status).toBe("complete");
+
+    expect(progressPairs).toHaveLength(3);
+    progressPairs.forEach((pair, index) => {
+      expect(pair.a).toBeDefined();
+      // A second, independent poll at the same instant sees exactly the same state (FR-007
+      // edge case: reconnecting/another tab is never told something different).
+      expect(pair.a).toEqual(pair.b);
+      expect((pair.a as { totalBatches: number }).totalBatches).toBe(3);
+      expect(
+        (pair.a as { batches: { index: number; status: string }[] }).batches[index].status,
+      ).toBe("in-progress");
+    });
+
+    // Final state: progress absent, terminal status present (FR-006).
+    expect(afterEnhancement.body.workflow.stages.aiEnhancement.progress).toBeUndefined();
+  });
+
+  it("POST ai-enhancement returns 409 ai_enhancement_already_running when a run is already in progress (specs/012-ai-enhancement-progress FR-008)", async () => {
+    let concurrentResponse: { status: number; body: { error?: string } } | undefined;
+    const provider: AIProvider = {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date(0).toISOString(),
+      }),
+      getInputBudget: async () => 10,
+      infer: async (req) => {
+        if (req.requestId.endsWith("-batch1") && !concurrentResponse) {
+          concurrentResponse = await request(app).post(
+            "/api/test-generation-workflow/ai-enhancement",
+          );
+        }
+        return {
+          contractVersion: 1,
+          requestId: req.requestId,
+          status: "success",
+          content: emptyCandidates,
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+    const app = createApp(provider);
+
+    await request(app)
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await request(app).post("/api/test-generation-workflow/api-review/continue");
+    await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await request(app).post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
+
+    expect(afterEnhancement.status).toBe(200);
+    expect(concurrentResponse?.status).toBe(409);
+    expect(concurrentResponse?.body.error).toBe("ai_enhancement_already_running");
+  });
 });

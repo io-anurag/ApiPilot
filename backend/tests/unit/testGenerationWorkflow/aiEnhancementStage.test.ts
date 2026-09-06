@@ -8,7 +8,10 @@ import { validateSpec } from "../../../src/openapi/validateSpec";
 import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReviewStage";
 import { runAiEnhancement } from "../../../src/testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
-import { StageNotActiveError } from "../../../src/testGenerationWorkflow/errors";
+import {
+  AiEnhancementAlreadyRunningError,
+  StageNotActiveError,
+} from "../../../src/testGenerationWorkflow/errors";
 import {
   applyScenarioDecisions,
   finalizeScenarioReview,
@@ -200,5 +203,201 @@ describe("aiEnhancementStage (skip/retry, US4)", () => {
     await finalizeScenarioReview();
 
     await expect(runAiEnhancement(successProvider)).rejects.toThrow(StageNotActiveError);
+  });
+});
+
+/**
+ * A scripted provider whose response, for any batch, contains one `positive` candidate per
+ * operation present in that batch's request (parsed from the real serialized prompt) —
+ * fixture-agnostic (no assertions/targetField, so it passes semantic validation against
+ * whatever operations `valid.yaml` defines) and deterministic across calls with the same
+ * input. `getInputBudget` returns 10, which — per the existing "partial outcome" test above —
+ * is small enough to split `valid.yaml`'s 3 operations into one batch each.
+ */
+function perOperationCandidateProvider(): AIProvider & { infer: AIProvider["infer"] } {
+  return {
+    ...mockProvider,
+    getInputBudget: async () => 10,
+    infer: async (request) => {
+      const parsed = JSON.parse(request.input) as {
+        apiModel: { operations: { path: string; method: string }[] };
+      };
+      const candidates = parsed.apiModel.operations.map((op, i) => ({
+        candidateId: `cand-${op.method}-${op.path}-${i}`,
+        operationPath: op.path,
+        operationMethod: op.method,
+        category: "positive",
+        request: { pathParameters: {}, queryParameters: {}, headers: {}, body: {} },
+        assertions: [],
+        rationale: `Exercise ${op.method} ${op.path}.`,
+        confidence: 0.7,
+        assumptions: [],
+      }));
+      return {
+        contractVersion: 1,
+        requestId: request.requestId,
+        status: "success",
+        content: JSON.stringify({ responseVersion: 1, candidates }),
+        modelId: "mock-model",
+        provider: "mock",
+        durationMs: 1,
+      };
+    },
+  };
+}
+
+describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhancement-progress)", () => {
+  beforeEach(() => resetStore());
+
+  it("populates and updates stages.aiEnhancement.progress as batches start/settle, revealing scenarios incrementally before the run finishes", async () => {
+    await reachAiEnhancement();
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    const progressSnapshots: unknown[] = [];
+    const reviewCountSnapshots: number[] = [];
+    provider.infer = async (request) => {
+      progressSnapshots.push(getCurrentWorkflow()!.stages.aiEnhancement.progress);
+      reviewCountSnapshots.push(getCurrentWorkflow()!.reviewWorkspace!.scenarios.length);
+      return originalInfer(request);
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    expect(progressSnapshots).toHaveLength(3);
+    expect(progressSnapshots[0]).toMatchObject({
+      totalBatches: 3,
+      batches: [
+        { index: 0, status: "in-progress" },
+        { index: 1, status: "pending" },
+        { index: 2, status: "pending" },
+      ],
+    });
+    expect(progressSnapshots[1]).toMatchObject({
+      totalBatches: 3,
+      batches: [
+        { index: 0, status: "succeeded" },
+        { index: 1, status: "in-progress" },
+        { index: 2, status: "pending" },
+      ],
+    });
+    expect(progressSnapshots[2]).toMatchObject({
+      totalBatches: 3,
+      batches: [
+        { index: 0, status: "succeeded" },
+        { index: 1, status: "succeeded" },
+        { index: 2, status: "in-progress" },
+      ],
+    });
+    // reviewWorkspace already grew before later batches even started (FR-009).
+    expect(reviewCountSnapshots[1]).toBeGreaterThan(reviewCountSnapshots[0]);
+    expect(reviewCountSnapshots[2]).toBeGreaterThan(reviewCountSnapshots[1]);
+    // Final state: progress cleared, exactly one unambiguous terminal status (FR-006/FR-007).
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+  });
+
+  it("preserves a review decision made on an early-revealed scenario after later batches subsequently settle, during a retry (FR-012)", async () => {
+    // FR-012 is only reachable once scenarioReview is actually active/reachable, which today
+    // happens only once a run finishes (the fresh-run case builds reviewWorkspace
+    // incrementally too, but it isn't reviewable by the user until then) — a retry, per
+    // FR-008a, is the realistic case where a user can be actively deciding on already-revealed
+    // scenarios while a new, still-running batch set settles.
+    await reachAiEnhancement();
+    await runAiEnhancement(unavailableProvider);
+
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    let decided = false;
+    provider.infer = async (request) => {
+      if (!decided) {
+        const firstAi = getCurrentWorkflow()!.reviewWorkspace!.scenarios.find(
+          (s) => s.scenario.provenance.source === "AI",
+        );
+        if (firstAi) {
+          applyScenarioDecisions([
+            { scenarioId: firstAi.scenarioId, revision: firstAi.revision, action: "accept" },
+          ]);
+          decided = true;
+        }
+      }
+      return originalInfer(request);
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    expect(decided).toBe(true);
+    const accepted = wf.reviewWorkspace?.scenarios.filter((s) => s.state === "accepted");
+    expect(accepted?.length).toBe(1);
+  });
+
+  it("a single-batch run's progress, if observed at all, never implies a multi-step process (FR-005)", async () => {
+    await reachAiEnhancement();
+    let capturedProgress: { totalBatches: number } | undefined;
+    const provider: AIProvider = {
+      ...mockProvider,
+      infer: async (request) => {
+        capturedProgress = getCurrentWorkflow()!.stages.aiEnhancement.progress;
+        return mockProvider.infer(request);
+      },
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    if (capturedProgress) {
+      expect(capturedProgress.totalBatches).toBe(1);
+    }
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+  });
+});
+
+describe("aiEnhancementStage (concurrency guard, specs/012-ai-enhancement-progress FR-008)", () => {
+  beforeEach(() => resetStore());
+
+  it("rejects a second call while a run is already in progress, without disturbing the original run's progress", async () => {
+    await reachAiEnhancement();
+    let rejectionObserved = false;
+    let progressAfterRejection: unknown;
+    const provider: AIProvider = {
+      ...mockProvider,
+      getInputBudget: async () => 10,
+      infer: async (request) => {
+        if (request.requestId.endsWith("-batch1")) {
+          await expect(runAiEnhancement(mockProvider)).rejects.toThrow(
+            AiEnhancementAlreadyRunningError,
+          );
+          rejectionObserved = true;
+          progressAfterRejection = getCurrentWorkflow()!.stages.aiEnhancement.progress;
+        }
+        return {
+          contractVersion: 1,
+          requestId: request.requestId,
+          status: "success",
+          content: JSON.stringify({ responseVersion: 1, candidates: [] }),
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    expect(rejectionObserved).toBe(true);
+    // The rejected concurrent call must not have cleared the original run's own progress.
+    expect(progressAfterRejection).toMatchObject({
+      batches: [
+        { index: 0, status: "succeeded" },
+        { index: 1, status: "in-progress" },
+        { index: 2, status: "pending" },
+      ],
+    });
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+  });
+
+  it("clears progress immediately once the stage reaches a terminal status", async () => {
+    await reachAiEnhancement();
+    const wf = await runAiEnhancement(mockProvider);
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
   });
 });

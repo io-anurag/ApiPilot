@@ -38,6 +38,31 @@ export const WORKFLOW_STAGE_ORDER: readonly WorkflowStageId[] = [
 export type StageStatus =
   "not-yet-reached" | "active" | "complete" | "stale" | "skipped" | "partial";
 
+/**
+ * The per-batch status of one AI enhancement run, as known at the moment a client polls
+ * (specs/012-ai-enhancement-progress/data-model.md: BatchProgress). "not-attempted"
+ * (specs/011-ai-prompt-batching's BatchOutcome) is not applicable here — scenario enhancement
+ * has no overall wall-clock budget (specs/011 research.md Decision 5), so every batch is
+ * always attempted.
+ */
+export interface BatchProgress {
+  index: number;
+  status: "pending" | "in-progress" | "succeeded" | "failed";
+  /** Present only when status is "failed". */
+  errorCategory?: AIErrorCategory;
+}
+
+/**
+ * The live state of one in-flight AI enhancement run (specs/012-ai-enhancement-progress/data-model.md:
+ * AiEnhancementProgress). Present on WorkflowStageState only for the aiEnhancement stage, and
+ * only while a run is active.
+ */
+export interface AiEnhancementProgress {
+  totalBatches: number;
+  batches: BatchProgress[];
+  startedAt: string;
+}
+
 export interface WorkflowStageState {
   stageId: WorkflowStageId;
   status: StageStatus;
@@ -46,6 +71,11 @@ export interface WorkflowStageState {
   /** Present only for aiEnhancement when status is "skipped" or "partial" (FR-008). */
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
+  /**
+   * Present only for aiEnhancement while a run is actively in progress; absent once the run
+   * reaches a terminal status (specs/012-ai-enhancement-progress FR-006/FR-007).
+   */
+  progress?: AiEnhancementProgress;
 }
 
 /** data-model.md: WorkflowReviewDecision — mirrors ReviewState/ReviewDecision (research.md D5). */

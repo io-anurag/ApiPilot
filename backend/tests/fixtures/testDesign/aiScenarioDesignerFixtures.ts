@@ -101,3 +101,39 @@ export function buildLargeAiScenarioApiModel(operationCount = 20): ApiModel {
     },
   };
 }
+
+/**
+ * A deterministic baseline that scales with `operationCount`, mirroring how the real
+ * deterministic test designer produces several scenarios per operation for a full
+ * specification (unlike `aiScenarioBaseline`, which is empty and so cannot exercise
+ * batching's handling of a baseline that grows with the spec). Used to regression-test that
+ * a batch's prompt only embeds the scenarios for its own operations, not the whole
+ * specification's baseline (specs/011-ai-prompt-batching).
+ */
+export function buildLargeAiScenarioBaseline(
+  operationCount = 20,
+  scenariosPerOperation = 5,
+): TestModel {
+  const scenarios: TestModel["scenarios"] = [];
+  for (let i = 0; i < operationCount; i += 1) {
+    for (let j = 0; j < scenariosPerOperation; j += 1) {
+      scenarios.push({
+        id: `resource${i}-scenario${j}`,
+        operationPath: `/resource${i}`,
+        operationMethod: "POST",
+        category: "missing-field",
+        targetLocation: "body",
+        targetField: "email",
+        request: { pathParameters: {}, queryParameters: {}, headers: {} },
+        assertions: [{ type: "status-code", expectedStatusCode: "400" }],
+        provenance: {
+          source: "RULE",
+          rule: "missing-required-field",
+          description: "email is required",
+          duplicateOfRules: [],
+        },
+      });
+    }
+  }
+  return { scenarios };
+}

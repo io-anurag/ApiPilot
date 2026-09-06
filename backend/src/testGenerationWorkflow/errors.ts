@@ -22,6 +22,17 @@ export class EmptyApprovedScenariosError extends Error {
   }
 }
 
+/**
+ * `ai-enhancement` was called while a run is already in progress for the current workflow
+ * (specs/012-ai-enhancement-progress FR-008).
+ */
+export class AiEnhancementAlreadyRunningError extends Error {
+  constructor() {
+    super("AI enhancement is already in progress; wait for it to finish before retrying.");
+    this.name = "AiEnhancementAlreadyRunningError";
+  }
+}
+
 /** `workflow-review/continue` was called while a discovered workflow still has no decision. */
 export class PendingWorkflowDecisionsError extends Error {
   constructor(pendingCount: number) {

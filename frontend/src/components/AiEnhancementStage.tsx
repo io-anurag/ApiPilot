@@ -1,9 +1,62 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  fetchCurrentWorkflow,
   runAiEnhancement,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
-import type { AIErrorCategory } from "@apipilot/shared-domain";
+import type { AIErrorCategory, AiEnhancementProgress } from "@apipilot/shared-domain";
+import { StatusBadge, type StatusTone } from "./StatusBadge";
+
+/** How often the frontend polls workflow status while a run is in progress (research.md Decision 6). */
+const PROGRESS_POLL_INTERVAL_MS = 2000;
+
+const BATCH_STATUS_LABEL: Record<AiEnhancementProgress["batches"][number]["status"], string> = {
+  pending: "Pending",
+  "in-progress": "In progress",
+  succeeded: "Succeeded",
+  failed: "Failed",
+};
+
+const BATCH_STATUS_TONE: Record<AiEnhancementProgress["batches"][number]["status"], StatusTone> = {
+  pending: "neutral",
+  "in-progress": "info",
+  succeeded: "success",
+  failed: "danger",
+};
+
+/**
+ * Live batch-by-batch progress for a multi-batch run (specs/012-ai-enhancement-progress
+ * FR-002/FR-003). Renders nothing for a single-batch run (`totalBatches <= 1`) so the
+ * already-fast single-batch experience is unchanged (FR-005) — the plain "Enhancing…" label
+ * on the trigger button is the only signal shown in that case, exactly as before this feature.
+ */
+function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
+  if (progress.totalBatches <= 1) return null;
+  const currentIndex = progress.batches.findIndex((batch) => batch.status === "in-progress");
+  const settledCount = progress.batches.filter(
+    (batch) => batch.status === "succeeded" || batch.status === "failed",
+  ).length;
+
+  return (
+    <div data-testid="ai-enhancement-progress" className="space-y-2">
+      <p className="text-sm text-slate-600">
+        {currentIndex >= 0
+          ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
+          : `${settledCount} of ${progress.totalBatches} batches complete`}
+      </p>
+      <ul className="flex flex-wrap gap-1.5" aria-label="Batch progress">
+        {progress.batches.map((batch) => (
+          <li key={batch.index}>
+            <StatusBadge
+              label={`Batch ${batch.index + 1}: ${BATCH_STATUS_LABEL[batch.status]}`}
+              tone={BATCH_STATUS_TONE[batch.status]}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function RetryIcon({ className }: { className?: string }) {
   return (
@@ -36,12 +89,37 @@ export function AiEnhancementStage({
 }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<AiEnhancementProgress | undefined>(undefined);
+  const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopPolling() {
+    if (pollHandleRef.current !== null) {
+      clearInterval(pollHandleRef.current);
+      pollHandleRef.current = null;
+    }
+  }
+
+  // Stop polling if the component unmounts mid-run (e.g. the user navigates away) — the run
+  // itself keeps going server-side regardless (FR-007); this only stops this component's own
+  // polling requests.
+  useEffect(() => stopPolling, []);
 
   async function handleRun() {
     setRunning(true);
     setError(null);
+    setProgress(undefined);
+    pollHandleRef.current = setInterval(() => {
+      void fetchCurrentWorkflow().then((result) => {
+        if (result.ok && result.workflow) {
+          setProgress(result.workflow.stages.aiEnhancement.progress);
+        }
+      });
+    }, PROGRESS_POLL_INTERVAL_MS);
+
     const result = await runAiEnhancement();
+    stopPolling();
     setRunning(false);
+    setProgress(undefined);
     if (!result.ok) {
       setError(result.message);
       return;
@@ -74,6 +152,7 @@ export function AiEnhancementStage({
           <RetryIcon className={`h-4 w-4 ${running ? "animate-spin" : ""}`} />
           {running ? "Retrying…" : "Retry AI enhancement"}
         </button>
+        {running && progress && <BatchProgressList progress={progress} />}
         {error && (
           <p
             role="alert"
@@ -104,6 +183,7 @@ export function AiEnhancementStage({
       >
         {running ? "Enhancing…" : "Enhance with AI"}
       </button>
+      {running && progress && <BatchProgressList progress={progress} />}
       {error && (
         <p
           role="alert"
