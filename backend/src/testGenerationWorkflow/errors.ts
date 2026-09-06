@@ -60,3 +60,16 @@ export class PostmanGenerationRefusedError extends Error {
     this.name = "PostmanGenerationRefusedError";
   }
 }
+
+/**
+ * A cancel request arrived when no AI enhancement run was in progress
+ * (specs/013-ai-enhancement-viability/contracts/ai-enhancement-cancel.md). Determined from the
+ * same "is a run active?" signal as `AiEnhancementAlreadyRunningError` — the presence of
+ * `stages.aiEnhancement.progress` — read in the opposite direction, so the two cannot disagree.
+ */
+export class NoAiEnhancementRunInProgressError extends Error {
+  constructor() {
+    super("No AI enhancement run is currently in progress.");
+    this.name = "NoAiEnhancementRunInProgressError";
+  }
+}

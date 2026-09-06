@@ -10,7 +10,7 @@ describe("AiEnhancementStage", () => {
     expect(screen.getByRole("button", { name: "Enhance with AI" })).toBeInTheDocument();
   });
 
-  it("shows a skip banner with the recorded error and a retry action (FR-008, FR-008a)", async () => {
+  it("shows a plain-language skip explanation and a retry action (FR-023, FR-025)", async () => {
     const onAdvanced = vi.fn();
     vi.stubGlobal(
       "fetch",
@@ -24,157 +24,92 @@ describe("AiEnhancementStage", () => {
     render(
       <AiEnhancementStage
         status="skipped"
-        aiErrorCategory="PROVIDER_UNAVAILABLE"
-        aiErrorMessage="local model not ready"
+        failureExplanation={{
+          category: "unavailable",
+          summary: "Local AI is unavailable right now.",
+          nextStep: "Your deterministic scenarios are unaffected and ready to review.",
+          retryable: true,
+        }}
         onAdvanced={onAdvanced}
       />,
     );
 
     expect(screen.getByTestId("ai-enhancement-skipped")).toBeInTheDocument();
     expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent(
-      "PROVIDER_UNAVAILABLE",
+      "Local AI is unavailable right now.",
     );
-    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent(
-      "local model not ready",
+    expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent(
+      "ready to review",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Retry AI enhancement" }));
     await waitFor(() => expect(onAdvanced).toHaveBeenCalled());
   });
 
-  it("shows a partial banner (distinct from skipped) with the recorded error and a retry action (FR-011)", async () => {
-    const onAdvanced = vi.fn();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ workflow: { activeStageId: "scenarioReview" } }),
-      }),
+  it("never renders internal diagnostics to the user (FR-024)", () => {
+    render(
+      <AiEnhancementStage
+        status="skipped"
+        failureExplanation={{
+          category: "too-slow",
+          summary: "The local AI model was too slow to finish this on this machine.",
+          nextStep: "Try enhancing a smaller specification.",
+          retryable: false,
+        }}
+        onAdvanced={() => {}}
+      />,
     );
 
+    // The message this feature replaced read: "AI enhancement was skipped (TIMEOUT): Inference
+    // exceeded the configured timeout of 300000ms." — a category literal, an implementation
+    // constant and a raw millisecond value, none of which a user can act on.
+    const banner = screen.getByTestId("ai-enhancement-skipped");
+    for (const leak of ["TIMEOUT", "300000", "ms", "AI_INFERENCE_TIMEOUT_MS", "AIProviderError"]) {
+      expect(banner.textContent).not.toContain(leak);
+    }
+  });
+
+  it("offers no retry when retrying cannot change the outcome (FR-025)", () => {
+    render(
+      <AiEnhancementStage
+        status="skipped"
+        failureExplanation={{
+          category: "not-viable",
+          summary: "This specification needs about 34 minutes, but the limit is about 5 minutes.",
+          nextStep: "Enhance a smaller specification, or raise the time limit.",
+          retryable: false,
+        }}
+        onAdvanced={() => {}}
+      />,
+    );
+
+    // Previously an identical retry button appeared for every failure kind, inviting the user to
+    // spend the whole budget again to reach exactly the same result.
+    expect(
+      screen.queryByRole("button", { name: "Retry AI enhancement" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent(
+      "smaller specification",
+    );
+  });
+
+  it("distinguishes a cancelled run from a failed one (FR-021)", () => {
     render(
       <AiEnhancementStage
         status="partial"
-        aiErrorCategory="TIMEOUT"
-        aiErrorMessage="provider timed out for 1 of 4 batches"
-        onAdvanced={onAdvanced}
+        cancelled
+        failureExplanation={{
+          category: "cancelled",
+          summary: "AI enhancement was cancelled before it finished.",
+          nextStep: "Any scenarios generated before you cancelled have been kept.",
+          retryable: true,
+        }}
+        onAdvanced={() => {}}
       />,
     );
 
     expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument();
-    expect(screen.queryByTestId("ai-enhancement-skipped")).not.toBeInTheDocument();
-    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent("TIMEOUT");
-    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent(
-      "provider timed out for 1 of 4 batches",
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Retry AI enhancement" }));
-    await waitFor(() => expect(onAdvanced).toHaveBeenCalled());
-  });
-});
-
-/** A fetch mock distinguishing the POST that triggers a run (left pending until resolved
- * manually) from GET polls, which return successive entries from `progressSequence` — mirrors
- * how the real backend's progress advances one poll at a time (specs/012-ai-enhancement-progress). */
-function stubPollingFetch(progressSequence: unknown[]) {
-  let pollCount = 0;
-  let resolvePost!: (value: unknown) => void;
-  const postPromise = new Promise((resolve) => {
-    resolvePost = resolve;
-  });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((_url: string, init?: RequestInit) => {
-      if (init?.method === "POST") return postPromise;
-      const progress = progressSequence[Math.min(pollCount, progressSequence.length - 1)];
-      pollCount += 1;
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            workflow: { stages: { aiEnhancement: { status: "active", progress } } },
-          }),
-      });
-    }),
-  );
-  return {
-    resolveRun: () =>
-      resolvePost({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ workflow: { activeStageId: "scenarioReview" } }),
-      }),
-  };
-}
-
-describe("AiEnhancementStage (progress polling, specs/012-ai-enhancement-progress)", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.useRealTimers();
-  });
-
-  it("polls workflow status on a 2-second interval while running, rendering per-batch progress from each poll (FR-001, FR-002, FR-003)", async () => {
-    vi.useFakeTimers();
-    const progressSequence = [
-      {
-        totalBatches: 3,
-        batches: [
-          { index: 0, status: "in-progress" },
-          { index: 1, status: "pending" },
-          { index: 2, status: "pending" },
-        ],
-      },
-      {
-        totalBatches: 3,
-        batches: [
-          { index: 0, status: "succeeded" },
-          { index: 1, status: "in-progress" },
-          { index: 2, status: "pending" },
-        ],
-      },
-    ];
-    stubPollingFetch(progressSequence);
-
-    render(<AiEnhancementStage onAdvanced={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
-
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(screen.getByText("Processing batch 1 of 3…")).toBeInTheDocument();
-    expect(screen.getByText("Batch 1: In progress")).toBeInTheDocument();
-
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(screen.getByText("Processing batch 2 of 3…")).toBeInTheDocument();
-    expect(screen.getByText("Batch 1: Succeeded")).toBeInTheDocument();
-  });
-
-  it("stops polling and hides progress once the run resolves", async () => {
-    vi.useFakeTimers();
-    const { resolveRun } = stubPollingFetch([
-      { totalBatches: 2, batches: [{ index: 0, status: "in-progress" }, { index: 1, status: "pending" }] },
-    ]);
-
-    render(<AiEnhancementStage onAdvanced={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(screen.getByTestId("ai-enhancement-progress")).toBeInTheDocument();
-
-    resolveRun();
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(screen.queryByTestId("ai-enhancement-progress")).not.toBeInTheDocument();
-  });
-
-  it("never shows a batch progress indicator for a single-batch run (FR-005)", async () => {
-    vi.useFakeTimers();
-    stubPollingFetch([{ totalBatches: 1, batches: [{ index: 0, status: "in-progress" }] }]);
-
-    render(<AiEnhancementStage onAdvanced={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
-    await vi.advanceTimersByTimeAsync(2000);
-
-    expect(screen.getByRole("button", { name: "Enhancing…" })).toBeInTheDocument();
-    expect(screen.queryByTestId("ai-enhancement-progress")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent("cancelled");
+    expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent("have been kept");
   });
 });

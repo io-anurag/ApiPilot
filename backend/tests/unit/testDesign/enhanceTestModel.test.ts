@@ -314,10 +314,12 @@ function perOperationCandidateProvider(budgetChars: number): AIProvider & {
     getInputBudget: async () => budgetChars,
     infer: async (request): Promise<InferenceResponse> => {
       calls.push(request.requestId);
+      // Reads the operation-contract projection introduced by specs/013-ai-enhancement-viability
+      // (responseVersion 2), which replaced the serialized ApiModel/TestModel pair.
       const parsed = JSON.parse(request.input) as {
-        apiModel: { operations: { path: string; method: string }[] };
+        operations: { path: string; method: string }[];
       };
-      const candidates = parsed.apiModel.operations.map((op) => ({
+      const candidates = parsed.operations.map((op) => ({
         candidateId: `cand-${op.path}`,
         operationPath: op.path,
         operationMethod: op.method,
@@ -556,15 +558,18 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
     expect(scripted.calls.length).toBeGreaterThan(1);
     expect(result.aiProviderOutcome).toBe("success");
     for (const input of scripted.inputs) {
+      // specs/013-ai-enhancement-viability replaced the serialized ApiModel/TestModel pair with an
+      // operation-contract projection: the baseline is now a compact `existingCoverage` list of
+      // "METHOD /path category[:field]" strings. The invariant under test is unchanged — a batch
+      // must only be shown baseline coverage for its own operations.
       const parsed = JSON.parse(input) as {
-        apiModel: { operations: { path: string }[] };
-        deterministicTestModel: { scenarios: { operationPath: string }[] };
+        operations: { path: string }[];
+        existingCoverage: string[];
       };
-      const batchOperationPaths = new Set(
-        parsed.apiModel.operations.map((op) => op.path),
-      );
-      for (const scenario of parsed.deterministicTestModel.scenarios) {
-        expect(batchOperationPaths.has(scenario.operationPath)).toBe(true);
+      const batchOperationPaths = new Set(parsed.operations.map((op) => op.path));
+      for (const entry of parsed.existingCoverage) {
+        const [, path] = entry.split(" ");
+        expect(batchOperationPaths.has(path)).toBe(true);
       }
     }
   });

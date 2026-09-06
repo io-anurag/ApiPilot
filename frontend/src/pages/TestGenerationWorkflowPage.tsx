@@ -246,8 +246,8 @@ export function TestGenerationWorkflowPage() {
                 workflow.stages.aiEnhancement.status === "partial") && (
                 <AiEnhancementStage
                   status={workflow.stages.aiEnhancement.status}
-                  aiErrorCategory={workflow.stages.aiEnhancement.aiErrorCategory}
-                  aiErrorMessage={workflow.stages.aiEnhancement.aiErrorMessage}
+                  failureExplanation={workflow.stages.aiEnhancement.failureExplanation}
+                  cancelled={workflow.stages.aiEnhancement.cancelled}
                   onAdvanced={handleAdvanced}
                 />
               )}

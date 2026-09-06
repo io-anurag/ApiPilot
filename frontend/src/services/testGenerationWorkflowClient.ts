@@ -96,6 +96,16 @@ export function runAiEnhancement(): Promise<WorkflowResult> {
   return postJson("/api/test-generation-workflow/ai-enhancement");
 }
 
+/**
+ * Requests cancellation of the AI enhancement run in progress
+ * (specs/013-ai-enhancement-viability). Resolves as soon as the request is accepted (202) rather
+ * than when the run settles, so the user regains control promptly; the terminal outcome arrives
+ * through the existing status poll.
+ */
+export function cancelAiEnhancement(): Promise<WorkflowResult> {
+  return postJson("/api/test-generation-workflow/ai-enhancement/cancel");
+}
+
 export type ScenarioDecisionOutcomeResult =
   | { ok: true; workflow: TestGenerationWorkflow; outcomes: ReviewUpdateOutcome[] }
   | { ok: false; error: string; message: string };

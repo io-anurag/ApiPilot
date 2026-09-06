@@ -13,16 +13,49 @@ import {
 import { enhanceTestModel } from "../testDesign/enhanceTestModel";
 import type { BatchOutcome } from "../ai/requestBatching";
 import { createLogger } from "../logger";
-import { AiEnhancementAlreadyRunningError, StageNotActiveError } from "./errors";
+import {
+  AiEnhancementAlreadyRunningError,
+  NoAiEnhancementRunInProgressError,
+  StageNotActiveError,
+} from "./errors";
+import { explainFailure, type FailureCause } from "./failureExplanation";
 import {
   advanceActiveStage,
   getCurrentWorkflow,
+  isAiEnhancementCancelRequested,
+  markAiEnhancementGenerating,
+  requestAiEnhancementCancel,
   patchWorkflow,
   setAiEnhancementProgress,
   updateStage,
 } from "./workflowStore";
 
 const logger = createLogger("testGenerationWorkflow.aiEnhancementStage");
+
+/**
+ * Requests cancellation of the run currently in flight
+ * (specs/013-ai-enhancement-viability/contracts/ai-enhancement-cancel.md, FR-020).
+ *
+ * Returns as soon as the request is recorded rather than waiting for the run to settle: that is
+ * what returns interactive control to the user promptly (SC-008). Cancellation takes effect at
+ * the next batch boundary — an in-flight generation cannot be interrupted, since the underlying
+ * runtime exposes no abort signal (research.md Decision 7) — so the run finishes shortly
+ * afterwards and the client observes the terminal state through its existing poll.
+ *
+ * Idempotent: cancelling an already-cancelled run succeeds without changing anything.
+ */
+export function cancelAiEnhancement(): TestGenerationWorkflow {
+  const workflow = getCurrentWorkflow();
+  if (!workflow?.stages.aiEnhancement.progress) {
+    throw new NoAiEnhancementRunInProgressError();
+  }
+  const updated = requestAiEnhancementCancel();
+  logger.info("cancel_requested", {
+    stage: "aiEnhancement",
+    workflowId: updated.id,
+  });
+  return updated;
+}
 
 /** ReviewScenario wrappers for scenarios in `testModel` not already present in `existingIds`. */
 function newlyAddedReviewScenarios(
@@ -62,6 +95,11 @@ function withBatchPatched(
     totalBatches: total,
     batches,
     startedAt: progress?.startedAt ?? new Date().toISOString(),
+    // Any batch activity means preparation is over, so carry the generating phase forward rather
+    // than reverting to the `preparing` default (the phase transition is one-way, FR-018).
+    phase: "generating",
+    generatingSince: progress?.generatingSince ?? new Date().toISOString(),
+    cancelRequested: progress?.cancelRequested ?? false,
   };
 }
 
@@ -122,7 +160,18 @@ export async function runAiEnhancement(
       throw new AiEnhancementAlreadyRunningError();
     }
     const isRetry = workflow.reviewWorkspace !== undefined;
-    setAiEnhancementProgress({ totalBatches: 0, batches: [], startedAt: new Date().toISOString() });
+    // Starts in the "preparing" phase with no batches: batch planning needs the loaded engine's
+    // capacity, so until the model is ready there is genuinely nothing to count. Reporting the
+    // phase is what makes a long first-run wait attributable — it can include a several-hundred-
+    // megabyte download, which previously appeared as an unexplained delay indistinguishable from
+    // slow generation (specs/013-ai-enhancement-viability FR-018).
+    setAiEnhancementProgress({
+      totalBatches: 0,
+      batches: [],
+      startedAt: new Date().toISOString(),
+      phase: "preparing",
+      cancelRequested: false,
+    });
     progressSetByThisCall = true;
     if (!isRetry) {
       // Seed the review workspace with the deterministic baseline immediately, before any AI
@@ -137,6 +186,13 @@ export async function runAiEnhancement(
       workflow.deterministicTestModel!,
       provider,
       {
+        isCancelled: () => isAiEnhancementCancelRequested(),
+        onPrepared: () => {
+          // The engine is loaded; everything from here is generation, and elapsed time shown to
+          // the user is measured from this moment rather than from the request, so a large
+          // one-time model download is not misreported as slow inference (FR-022).
+          markAiEnhancementGenerating();
+        },
         onBatchStart: (index, total) => {
           const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
           setAiEnhancementProgress(
@@ -173,8 +229,19 @@ export async function runAiEnhancement(
         },
       },
     );
+    // Read the cancellation flag before clearing progress, so a cancelled run can be reported as
+    // cancelled rather than as a failure (FR-021). Cancellation resolves to the existing
+    // skipped/partial statuses with a marker, introducing no new StageStatus member and so
+    // leaving specs/011's outcome semantics intact (FR-016, research.md Decision 10).
+    const wasCancelled = isAiEnhancementCancelRequested();
     patchWorkflow({ aiEnhancement: result });
     setAiEnhancementProgress(undefined);
+
+    /** The user-facing account of a non-success outcome for this run (FR-023). */
+    const explainOutcome = () =>
+      explainFailure(
+        (wasCancelled ? "cancelled" : result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause,
+      );
 
     if (result.aiProviderOutcome === "success" || result.aiProviderOutcome === "partial") {
       updateStage(
@@ -184,6 +251,8 @@ export async function runAiEnhancement(
           ? {
               aiErrorCategory: result.aiErrorCategory,
               aiErrorMessage: result.aiErrorMessage,
+              failureExplanation: explainOutcome(),
+              cancelled: wasCancelled || undefined,
             }
           : {},
       );
@@ -205,6 +274,8 @@ export async function runAiEnhancement(
     updateStage("aiEnhancement", "skipped", {
       aiErrorCategory: result.aiErrorCategory,
       aiErrorMessage: result.aiErrorMessage,
+      failureExplanation: explainOutcome(),
+      cancelled: wasCancelled || undefined,
     });
     if (!isRetry) {
       const advanced = advanceActiveStage("scenarioReview");

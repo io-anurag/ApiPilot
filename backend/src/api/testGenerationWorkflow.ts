@@ -10,11 +10,15 @@ import { getAIProvider } from "../ai";
 import { redactSensitiveRequestValues } from "../testDesign/reviewSensitiveValues";
 import { upload } from "../uploadMiddleware";
 import { continueApiReview } from "../testGenerationWorkflow/apiReviewStage";
-import { runAiEnhancement } from "../testGenerationWorkflow/aiEnhancementStage";
+import {
+  cancelAiEnhancement,
+  runAiEnhancement,
+} from "../testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../testGenerationWorkflow/deterministicGenerationStage";
 import {
   AiEnhancementAlreadyRunningError,
   EmptyApprovedScenariosError,
+  NoAiEnhancementRunInProgressError,
   PendingWorkflowDecisionsError,
   PostmanGenerationRefusedError,
   StageNotActiveError,
@@ -244,6 +248,29 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       // does not forward to the error middleware (pre-existing behavior of this route, not
       // changed here) — log it explicitly so it is not silently invisible.
       logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
+      throw err;
+    }
+  });
+
+  router.post("/test-generation-workflow/ai-enhancement/cancel", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      // 202 rather than 200: cancellation is accepted, not completed. The run settles at the next
+      // batch boundary, and the client observes the terminal state through its existing poll —
+      // responding immediately is what returns interactive control to the user promptly
+      // (specs/013-ai-enhancement-viability/contracts/ai-enhancement-cancel.md).
+      res.status(202).json({ workflow: toWorkflowResponse(cancelAiEnhancement()) });
+      logRequestSucceeded(req, startedAt, 202);
+    } catch (err) {
+      if (err instanceof NoAiEnhancementRunInProgressError) {
+        logRequestFailed(req, startedAt, 409, "no_run_in_progress");
+        res.status(409).json({ error: "no_run_in_progress", message: err.message });
+        return;
+      }
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
       throw err;
     }
   });
