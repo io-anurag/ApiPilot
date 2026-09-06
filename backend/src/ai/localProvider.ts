@@ -13,23 +13,73 @@ import type {
   ReadinessState,
 } from "@apipilot/shared-domain";
 import { AIProviderError, buildErrorResponse } from "./errors";
+import type { InferencePlanningConfig } from "./modelConfig";
 import { ReadinessTracker } from "./readiness";
 import { RequestQueue } from "./requestQueue";
 import { createLogger } from "../logger";
 
 const logger = createLogger("ai.localProvider");
 
+/**
+ * Observed generation throughput (specs/013-ai-enhancement-viability/data-model.md:
+ * InferenceRates). Seeded from configuration and refined at runtime, so the pre-flight estimate
+ * calibrates to the machine it is running on rather than encoding one reference laptop's
+ * characteristics permanently.
+ */
+export interface InferenceRates {
+  prefillMsPerToken: number;
+  decodeMsPerToken: number;
+  /** How many completed inferences have been folded in so far. */
+  sampleCount: number;
+}
+
+/**
+ * Planning defaults used when a LocalProvider is constructed without explicit configuration —
+ * chiefly in tests, which inject fixed values so the pre-flight estimate stays deterministic.
+ */
+const DEFAULT_PLANNING: InferencePlanningConfig = {
+  contextFloorTokens: 2048,
+  prefillMsPerToken: 2.0,
+  decodeMsPerToken: 130,
+  viabilitySafetyFactor: 1.5,
+};
+
+/** Weight given to each new observation when folding it into the running rate estimate. */
+const RATE_EWMA_ALPHA = 0.3;
+
+/**
+ * How a model's usable context window was determined
+ * (specs/013-ai-enhancement-viability/data-model.md: ModelCapacity). Provider-internal: it
+ * describes a runtime artifact, so it must not cross the AIProvider boundary into shared-domain
+ * (constitution VI).
+ */
+export interface ModelCapacity {
+  /** The model's true usable input size, in tokens. Always a positive finite integer. */
+  contextWindowTokens: number;
+  source: "model-config" | "tokenizer" | "conservative-floor";
+  /** True when neither source was usable and the conservative floor was applied. */
+  isFallback: boolean;
+}
+
 /** Minimal shape of a loaded model this provider needs, independent of the runtime. */
 export interface TextGenerationEngine {
-  generate(input: string, options: { maxNewTokens?: number }): Promise<string>;
-  /** Tokenizer's max context length in tokens, if known; used only for batch planning. */
-  contextWindowTokens?: number;
+  generate(
+    input: string,
+    options: { maxNewTokens?: number; expectedOutputFormat?: "text" | "json" },
+  ): Promise<string>;
+  /**
+   * The model's resolved usable context window. Used both for batch planning and for the
+   * exact-fit guard inside `generate()`, so planning and enforcement read one value and cannot
+   * disagree (FR-008).
+   */
+  capacity?: ModelCapacity;
 }
 
 /** Loads the configured model into a TextGenerationEngine for the given device. */
 export type EngineLoader = (
   config: ModelConfig,
   device: "cpu" | "gpu",
+  floorTokens?: number,
 ) => Promise<TextGenerationEngine>;
 
 /**
@@ -51,6 +101,65 @@ export const CONTEXT_SAFETY_MARGIN_TOKENS = 64;
  */
 export const CHARS_PER_TOKEN_ESTIMATE = 3;
 
+/** A positive finite integer, or undefined for anything else (missing, NaN, Infinity, <= 0). */
+function usableTokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : undefined;
+}
+
+/**
+ * Resolves a model's true usable context window as the minimum of the model's positional limit
+ * and the tokenizer's advertised maximum (specs/013-ai-enhancement-viability research.md
+ * Decision 2).
+ *
+ * These disagree in practice and the disagreement is not cosmetic: for the default model the
+ * tokenizer advertises 131,072 tokens while the model's `max_position_embeddings` is 32,768.
+ * Trusting the tokenizer inflated the planning budget roughly 4x, which meant batch splitting
+ * never triggered for any realistic specification, and left the exact-fit guard below calibrated
+ * against a limit the model cannot actually honour. Taking the minimum is correct whichever
+ * source is wrong, and needs no per-model table.
+ *
+ * Falls back to `floorTokens` rather than `undefined` when neither source is usable: "unknown"
+ * must mean "assume little", not "assume it fits" (FR-006, constitution XIV).
+ */
+export function resolveModelCapacity(
+  maxPositionEmbeddings: unknown,
+  tokenizerMaxLength: unknown,
+  floorTokens: number,
+): ModelCapacity {
+  const fromModel = usableTokenCount(maxPositionEmbeddings);
+  const fromTokenizer = usableTokenCount(tokenizerMaxLength);
+
+  if (fromModel !== undefined && fromTokenizer !== undefined) {
+    const contextWindowTokens = Math.min(fromModel, fromTokenizer);
+    return {
+      contextWindowTokens,
+      source: contextWindowTokens === fromModel ? "model-config" : "tokenizer",
+      isFallback: false,
+    };
+  }
+  if (fromModel !== undefined) {
+    return { contextWindowTokens: fromModel, source: "model-config", isFallback: false };
+  }
+  if (fromTokenizer !== undefined) {
+    return { contextWindowTokens: fromTokenizer, source: "tokenizer", isFallback: false };
+  }
+  return {
+    contextWindowTokens: floorTokens,
+    source: "conservative-floor",
+    isFallback: true,
+  };
+}
+
+/** System messages used to frame a request for a chat-capable model, keyed by expected output. */
+const SYSTEM_PROMPTS: Record<"text" | "json", string> = {
+  json:
+    "You are an API test design assistant. Reply with a single valid JSON document and nothing " +
+    "else: no explanation, no markdown code fences, no commentary before or after the JSON.",
+  text: "You are an API test design assistant. Answer concisely and directly.",
+};
+
 /**
  * Only this function (and this module) imports `@huggingface/transformers` (constitution
  * VI, XXVIII; FR-013) — everything else depends solely on the `AIProvider` abstraction.
@@ -58,6 +167,7 @@ export const CHARS_PER_TOKEN_ESTIMATE = 3;
 export async function loadTransformersEngine(
   config: ModelConfig,
   device: "cpu" | "gpu",
+  floorTokens = 2048,
 ): Promise<TextGenerationEngine> {
   const { pipeline, env } = await import("@huggingface/transformers");
   env.cacheDir = config.cacheDir;
@@ -67,16 +177,51 @@ export async function loadTransformersEngine(
     ...(config.dtype ? { dtype: config.dtype } : {}),
   });
 
-  const rawContextLimit = generator.tokenizer.model_max_length;
-  const contextWindowTokens =
-    typeof rawContextLimit === "number" && Number.isFinite(rawContextLimit)
-      ? rawContextLimit
-      : undefined;
+  const modelConfigLimit = (
+    generator.model as { config?: { max_position_embeddings?: unknown } } | undefined
+  )?.config?.max_position_embeddings;
+  const capacity = resolveModelCapacity(
+    modelConfigLimit,
+    generator.tokenizer.model_max_length,
+    floorTokens,
+  );
+  logger.info("capacity_resolved", {
+    modelId: config.modelId,
+    contextWindowTokens: capacity.contextWindowTokens,
+    capacitySource: capacity.source,
+  });
 
   return {
-    contextWindowTokens,
+    capacity,
     async generate(input, options) {
       const maxNewTokens = options.maxNewTokens ?? 256;
+
+      // Instruction-tuned models must be addressed through their own chat template, or they do
+      // not recognise the input as a task at all: `pipeline("text-generation")` applies a chat
+      // template only for a messages array, never for a plain string, so a raw prompt puts the
+      // model in pure continuation mode. Measured consequences were that it autocompleted the
+      // prompt's JSON instead of answering, and — because the stop token is a ChatML marker only
+      // reachable inside a chat-formatted conversation — never terminated early, always running
+      // to `max_new_tokens` (specs/013-ai-enhancement-viability research.md Decision 1).
+      //
+      // Models with no chat template keep receiving the raw string unchanged (FR-004).
+      const tokenizer = generator.tokenizer as {
+        chat_template?: unknown;
+        apply_chat_template?: (
+          messages: { role: string; content: string }[],
+          options: { tokenize: false; add_generation_prompt: boolean },
+        ) => string;
+      };
+      let prompt = input;
+      if (tokenizer.chat_template && typeof tokenizer.apply_chat_template === "function") {
+        prompt = tokenizer.apply_chat_template(
+          [
+            { role: "system", content: SYSTEM_PROMPTS[options.expectedOutputFormat ?? "text"] },
+            { role: "user", content: input },
+          ],
+          { tokenize: false, add_generation_prompt: true },
+        );
+      }
 
       // Transformers.js does not truncate or validate context length itself: an
       // oversized prompt reaches onnxruntime and crashes deep inside the RoPE/position
@@ -89,27 +234,27 @@ export async function loadTransformersEngine(
       // internally, so a prompt sitting right at the boundary can still overflow by a
       // few tokens even though this check passed — CONTEXT_SAFETY_MARGIN_TOKENS absorbs
       // that discrepancy instead of relying on an exact token-for-token match.
-      const contextLimit = generator.tokenizer.model_max_length;
-      if (typeof contextLimit === "number" && Number.isFinite(contextLimit)) {
-        const inputTokenCount = generator.tokenizer.encode(input).length;
-        if (
-          inputTokenCount + maxNewTokens + CONTEXT_SAFETY_MARGIN_TOKENS >
-          contextLimit
-        ) {
-          throw new AIProviderError(
-            "INVALID_REQUEST",
-            `InferenceRequest.input requires ${inputTokenCount} tokens plus ${maxNewTokens} reserved for ` +
-              `generation, exceeding the model's ${contextLimit}-token context window`,
-          );
-        }
+      //
+      // Calibrated against the resolved capacity, the same value `getInputBudget()` plans with,
+      // so planning and enforcement cannot disagree (FR-008). Measured against the *framed*
+      // prompt, since that is what actually reaches the model.
+      const contextLimit = capacity.contextWindowTokens;
+      const inputTokenCount = generator.tokenizer.encode(prompt).length;
+      if (inputTokenCount + maxNewTokens + CONTEXT_SAFETY_MARGIN_TOKENS > contextLimit) {
+        throw new AIProviderError(
+          "INVALID_REQUEST",
+          `InferenceRequest.input requires ${inputTokenCount} tokens plus ${maxNewTokens} reserved for ` +
+            `generation, exceeding the model's ${contextLimit}-token context window`,
+        );
       }
 
-      const output = await generator(input, {
+      const output = await generator(prompt, {
         max_new_tokens: maxNewTokens,
         do_sample: false,
-        // `input` is a plain string, not a chat array, so return_full_text defaults to
-        // true — without this, generated_text is the prompt itself plus the completion
-        // concatenated together, which then fails strict JSON parsing every time.
+        // `prompt` is a plain string (already chat-framed above where the model supports it), so
+        // return_full_text defaults to true — without this, generated_text is the prompt itself
+        // plus the completion concatenated together, which then fails strict JSON parsing every
+        // time.
         return_full_text: false,
       });
       const first = Array.isArray(output) ? output[0] : output;
@@ -156,14 +301,46 @@ export class LocalProvider implements AIProvider {
 
   private readonly config: ModelConfig;
   private readonly loadEngine: EngineLoader;
+  private readonly planning: InferencePlanningConfig;
   private readonly readiness = new ReadinessTracker();
   private readonly queue = new RequestQueue();
   private enginePromise: Promise<TextGenerationEngine> | undefined;
   private acceleratorActive = false;
+  /**
+   * Observed throughput, refined by EWMA from each completed inference and read only by the
+   * pre-flight viability check. Never influences prompt content, validation, deduplication order,
+   * or which scenarios are retained, so it cannot affect reproducibility (constitution XXIV).
+   */
+  private rates: InferenceRates;
 
-  constructor(config: ModelConfig, loadEngine: EngineLoader = loadTransformersEngine) {
+  constructor(
+    config: ModelConfig,
+    loadEngine: EngineLoader = loadTransformersEngine,
+    planning: InferencePlanningConfig = DEFAULT_PLANNING,
+  ) {
     this.config = config;
     this.loadEngine = loadEngine;
+    this.planning = planning;
+    this.rates = {
+      prefillMsPerToken: planning.prefillMsPerToken,
+      decodeMsPerToken: planning.decodeMsPerToken,
+      sampleCount: 0,
+    };
+  }
+
+  /** Current throughput estimates, for the pre-flight viability check (FR-014). */
+  getInferenceRates(): InferenceRates {
+    return { ...this.rates };
+  }
+
+  /** The configured margin by which a projection may exceed the timeout before refusing. */
+  getViabilitySafetyFactor(): number {
+    return this.planning.viabilitySafetyFactor;
+  }
+
+  /** The configured per-request time budget, which pre-flight compares projections against. */
+  getTimeoutMs(): number {
+    return this.config.inferenceTimeoutMs;
   }
 
   getReadiness(): ReadinessState {
@@ -171,12 +348,14 @@ export class LocalProvider implements AIProvider {
   }
 
   /**
-   * Conservative character budget for InferenceRequest.input, derived from the loaded
-   * tokenizer's context window (specs/011-ai-prompt-batching/research.md Decision 2).
-   * Loads the engine if not already loaded (same lazy path as `infer()`). Returns
-   * `undefined` if the engine fails to load here or the tokenizer reports no finite
-   * `model_max_length` — callers must treat that as "unknown, assume it fits" and rely on
-   * the exact guard inside `infer()` as the real safety net.
+   * Conservative character budget for InferenceRequest.input, derived from the model's *true*
+   * usable context window (specs/013-ai-enhancement-viability research.md Decision 2, correcting
+   * specs/011-ai-prompt-batching/research.md Decision 2, which read the tokenizer's advertised
+   * maximum and so over-estimated capacity roughly 4x for the default model).
+   *
+   * Loads the engine if not already loaded (same lazy path as `infer()`). Returns `undefined`
+   * only when the engine cannot be loaded at all — never merely because capacity is unknown,
+   * since `resolveModelCapacity()` supplies a conservative floor in that case (FR-006).
    */
   async getInputBudget(maxOutputTokens = 256): Promise<number | undefined> {
     let engine: TextGenerationEngine;
@@ -185,13 +364,8 @@ export class LocalProvider implements AIProvider {
     } catch {
       return undefined;
     }
-    const contextWindowTokens = engine.contextWindowTokens;
-    if (
-      typeof contextWindowTokens !== "number" ||
-      !Number.isFinite(contextWindowTokens)
-    ) {
-      return undefined;
-    }
+    const contextWindowTokens =
+      engine.capacity?.contextWindowTokens ?? this.planning.contextFloorTokens;
     const availableTokens =
       contextWindowTokens - maxOutputTokens - CONTEXT_SAFETY_MARGIN_TOKENS;
     return Math.max(0, Math.floor(availableTokens * CHARS_PER_TOKEN_ESTIMATE));
@@ -271,12 +445,21 @@ export class LocalProvider implements AIProvider {
     }
 
     const timeoutMs = request.timeoutMs ?? this.config.inferenceTimeoutMs;
+    const generationStartedAt = Date.now();
     try {
       const content = await withTimeout(
-        engine.generate(request.input, { maxNewTokens: request.maxOutputTokens }),
+        engine.generate(request.input, {
+          maxNewTokens: request.maxOutputTokens,
+          expectedOutputFormat: request.expectedOutputFormat,
+        }),
         timeoutMs,
       );
       const durationMs = Date.now() - startedAt;
+      this.recordObservedRates(
+        request.input.length,
+        content.length,
+        Date.now() - generationStartedAt,
+      );
       logger.info("inference_success", {
         requestId: request.requestId,
         modelId: this.config.modelId,
@@ -317,6 +500,50 @@ export class LocalProvider implements AIProvider {
     }
   }
 
+  /**
+   * Folds one completed inference's observed throughput into the running estimate (FR-014).
+   *
+   * Token counts are approximated from character counts via CHARS_PER_TOKEN_ESTIMATE rather than
+   * re-tokenizing: this feeds a projection whose only job is to catch order-of-magnitude
+   * infeasibility, so an exact count would buy nothing and cost a tokenizer pass per request.
+   * A non-positive or non-finite observation is discarded rather than propagated.
+   */
+  private recordObservedRates(
+    inputChars: number,
+    outputChars: number,
+    elapsedMs: number,
+  ): void {
+    const promptTokens = Math.max(1, Math.round(inputChars / CHARS_PER_TOKEN_ESTIMATE));
+    const outputTokens = Math.max(1, Math.round(outputChars / CHARS_PER_TOKEN_ESTIMATE));
+    if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return;
+
+    // Attribute time between prefill and decode using the current estimates' own ratio: a single
+    // wall-clock measurement cannot separate the two phases, but keeping their relative weighting
+    // stable while scaling both to reality is enough for an order-of-magnitude projection.
+    const predictedPrefill = promptTokens * this.rates.prefillMsPerToken;
+    const predictedDecode = outputTokens * this.rates.decodeMsPerToken;
+    const predictedTotal = predictedPrefill + predictedDecode;
+    if (predictedTotal <= 0) return;
+
+    const scale = elapsedMs / predictedTotal;
+    if (!Number.isFinite(scale) || scale <= 0) return;
+
+    const blend = (current: number, observed: number): number =>
+      current * (1 - RATE_EWMA_ALPHA) + observed * RATE_EWMA_ALPHA;
+
+    this.rates = {
+      prefillMsPerToken: blend(
+        this.rates.prefillMsPerToken,
+        this.rates.prefillMsPerToken * scale,
+      ),
+      decodeMsPerToken: blend(
+        this.rates.decodeMsPerToken,
+        this.rates.decodeMsPerToken * scale,
+      ),
+      sampleCount: this.rates.sampleCount + 1,
+    };
+  }
+
   private ensureEngine(): Promise<TextGenerationEngine> {
     if (!this.enginePromise) {
       this.readiness.markLoading(this.config.useAccelerator);
@@ -329,7 +556,7 @@ export class LocalProvider implements AIProvider {
     logger.info("load_start", { modelId: this.config.modelId });
 
     if (!this.config.useAccelerator) {
-      const engine = await this.loadEngine(this.config, "cpu");
+      const engine = await this.loadEngine(this.config, "cpu", this.planning.contextFloorTokens);
       this.acceleratorActive = false;
       this.readiness.markReady({
         modelId: this.config.modelId,
@@ -341,7 +568,7 @@ export class LocalProvider implements AIProvider {
     }
 
     try {
-      const engine = await this.loadEngine(this.config, "gpu");
+      const engine = await this.loadEngine(this.config, "gpu", this.planning.contextFloorTokens);
       this.acceleratorActive = true;
       this.readiness.markReady({
         modelId: this.config.modelId,
@@ -353,7 +580,7 @@ export class LocalProvider implements AIProvider {
     } catch {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
       // automatically, but surface a visible (never silent) notice (FR-008).
-      const engine = await this.loadEngine(this.config, "cpu");
+      const engine = await this.loadEngine(this.config, "cpu", this.planning.contextFloorTokens);
       this.acceleratorActive = false;
       this.readiness.markReady({
         modelId: this.config.modelId,

@@ -116,6 +116,10 @@ function isValidTransition(
 export interface UpdateStageOptions {
   aiErrorCategory?: WorkflowStageState["aiErrorCategory"];
   aiErrorMessage?: string;
+  /** What the user is shown for a non-success outcome (specs/013-ai-enhancement-viability). */
+  failureExplanation?: WorkflowStageState["failureExplanation"];
+  /** Marks a terminal skipped/partial as user-cancelled rather than failed (FR-021). */
+  cancelled?: boolean;
   /** Also moves `activeStageId` to this stage (typically `stageId` itself or the next one). */
   activeStageId?: WorkflowStageId;
 }
@@ -149,6 +153,9 @@ export function updateStage(
       status === "skipped" || status === "partial" ? options.aiErrorCategory : undefined,
     aiErrorMessage:
       status === "skipped" || status === "partial" ? options.aiErrorMessage : undefined,
+    failureExplanation:
+      status === "skipped" || status === "partial" ? options.failureExplanation : undefined,
+    cancelled: status === "skipped" || status === "partial" ? options.cancelled : undefined,
   };
   // updateStage is the sole validated per-stage status transition, so it is the one place that
   // can log every "advance" and every "marked stale/complete" event without duplicating callers.
@@ -189,6 +196,50 @@ export function setAiEnhancementProgress(
     },
   };
   return currentWorkflow;
+}
+
+/**
+ * Moves the in-flight run from the `preparing` phase to `generating`, stamping `generatingSince`
+ * (specs/013-ai-enhancement-viability FR-018).
+ *
+ * The transition is one-way and idempotent: once generating, further calls are ignored rather
+ * than re-stamping the timestamp, since clients derive displayed elapsed time from it and a
+ * moving origin would make the timer jump backwards.
+ */
+export function markAiEnhancementGenerating(): TestGenerationWorkflow {
+  if (!currentWorkflow) {
+    throw new Error("No workflow is currently in progress.");
+  }
+  const current = currentWorkflow.stages.aiEnhancement;
+  if (!current.progress || current.progress.phase === "generating") {
+    return currentWorkflow;
+  }
+  return setAiEnhancementProgress({
+    ...current.progress,
+    phase: "generating",
+    generatingSince: new Date().toISOString(),
+  });
+}
+
+/**
+ * Records that cancellation has been requested for the in-flight run
+ * (specs/013-ai-enhancement-viability FR-020). Transitions false -> true only; a cancellation
+ * cannot be withdrawn, so a repeat request is idempotent.
+ */
+export function requestAiEnhancementCancel(): TestGenerationWorkflow {
+  if (!currentWorkflow) {
+    throw new Error("No workflow is currently in progress.");
+  }
+  const current = currentWorkflow.stages.aiEnhancement;
+  if (!current.progress || current.progress.cancelRequested) {
+    return currentWorkflow;
+  }
+  return setAiEnhancementProgress({ ...current.progress, cancelRequested: true });
+}
+
+/** Whether cancellation has been requested for the run currently in flight. */
+export function isAiEnhancementCancelRequested(): boolean {
+  return currentWorkflow?.stages.aiEnhancement.progress?.cancelRequested === true;
 }
 
 /**

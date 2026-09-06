@@ -220,9 +220,9 @@ function perOperationCandidateProvider(): AIProvider & { infer: AIProvider["infe
     getInputBudget: async () => 10,
     infer: async (request) => {
       const parsed = JSON.parse(request.input) as {
-        apiModel: { operations: { path: string; method: string }[] };
+        operations: { path: string; method: string }[];
       };
-      const candidates = parsed.apiModel.operations.map((op, i) => ({
+      const candidates = parsed.operations.map((op, i) => ({
         candidateId: `cand-${op.method}-${op.path}-${i}`,
         operationPath: op.path,
         operationMethod: op.method,

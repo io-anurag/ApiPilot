@@ -142,6 +142,19 @@ async function runOneBatch(
 
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
 export interface EnhanceTestModelOptions {
+  /**
+   * Fires once the provider is loaded and ready, immediately before batch planning
+   * (specs/013-ai-enhancement-viability FR-018). Lets a caller distinguish time spent preparing
+   * the model — which on a first run includes a large download — from time spent generating.
+   */
+  onPrepared?: () => void;
+  /**
+   * Checked before each batch; once it returns true, that batch and every remaining one are
+   * recorded as `not-attempted` without calling the provider (FR-020). Cancellation is precise
+   * between batches only: an in-flight generation cannot be interrupted, so scenarios already
+   * retained from completed batches are kept (research.md Decision 7).
+   */
+  isCancelled?: () => boolean;
   /** Fires immediately before a batch's inference call starts. */
   onBatchStart?: (index: number, total: number) => void;
   /**
@@ -186,7 +199,12 @@ export async function enhanceTestModel(
   const outcomes = emptyOutcomes();
   const candidateIds = new Set<string>();
 
+  // `getInputBudget()` loads the engine if it is not already loaded, so this await is where a
+  // first run's model download and load actually happen. Signalling afterwards lets the caller
+  // report "preparing" separately from "generating" (specs/013-ai-enhancement-viability FR-018).
   const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
+  options.onPrepared?.();
+
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) =>
@@ -224,6 +242,7 @@ export async function enhanceTestModel(
       });
     },
     {
+      isCancelled: options.isCancelled,
       onBatchStart: options.onBatchStart,
       onBatchSettled: options.onBatchComplete
         ? (index, total, outcome) => {

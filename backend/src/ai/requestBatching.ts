@@ -182,6 +182,13 @@ export async function runBatchedInference<TOperation, TBatchData>(
   runBatch: (batch: Batch<TOperation>) => Promise<TBatchData>,
   options: {
     isTimedOut?: () => boolean;
+    /**
+     * Checked before each batch alongside `isTimedOut`; once true, that batch and all remaining
+     * ones are recorded as "not-attempted" without calling `runBatch`
+     * (specs/013-ai-enhancement-viability FR-020). Optional and defaulting to never-cancelled, so
+     * existing callers are unaffected.
+     */
+    isCancelled?: () => boolean;
     onBatchStart?: (index: number, total: number) => void;
     onBatchSettled?: (index: number, total: number, outcome: BatchOutcome) => void;
   } = {},
@@ -190,7 +197,7 @@ export async function runBatchedInference<TOperation, TBatchData>(
   const total = batches.length;
 
   for (const [index, batch] of batches.entries()) {
-    if (options.isTimedOut?.()) {
+    if (options.isTimedOut?.() || options.isCancelled?.()) {
       const outcome: BatchOutcome = { status: "not-attempted" };
       runs.push({ batch, outcome });
       options.onBatchSettled?.(index, total, outcome);

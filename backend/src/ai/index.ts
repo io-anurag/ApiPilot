@@ -10,7 +10,9 @@ export function getAIProvider(env: NodeJS.ProcessEnv = process.env): AIProvider 
   if (!activeProvider) {
     const config = loadAIConfig(env);
     activeProvider =
-      config.providerMode === "local" ? new LocalProvider(config.model) : new MockProvider();
+      config.providerMode === "local"
+        ? new LocalProvider(config.model, undefined, config.planning)
+        : new MockProvider();
   }
   return activeProvider;
 }
