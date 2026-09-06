@@ -133,4 +133,38 @@ describe("scenarioReviewStage", () => {
     expect(wf.dependencyAnalysis).toBeDefined();
     expect(["active", "complete"]).toContain(wf.stages.workflowReview.status);
   });
+
+  /**
+   * Regression: finalize completes `scenarioReview` and activates `dependencyAnalysis` *before*
+   * running the analysis, and `dependencyAnalysis` has no HTTP trigger of its own. A failure
+   * there therefore used to leave the review closed with no supported way to retry finalizing —
+   * every subsequent attempt refused as `stage_not_active`.
+   */
+  it("reopens scenarioReview when dependency analysis fails, so finalizing can be retried", async () => {
+    await reachScenarioReview();
+    const first = getCurrentWorkflow()!.reviewWorkspace!.scenarios[0];
+    applyScenarioDecisions([
+      { scenarioId: first.scenarioId, revision: first.revision, action: "accept" },
+    ]);
+
+    // Fails inside dependency analysis rather than before it: the budget is consulted at the
+    // very start of the AI-assisted pass, outside any per-batch degradation.
+    const brokenProvider: AIProvider = {
+      ...unavailableProvider,
+      getInputBudget: async () => {
+        throw new Error("engine unavailable");
+      },
+    };
+
+    await expect(finalizeScenarioReview(brokenProvider)).rejects.toThrow("engine unavailable");
+
+    const afterFailure = getCurrentWorkflow()!;
+    expect(afterFailure.stages.scenarioReview.status).toBe("active");
+    expect(afterFailure.activeStageId).toBe("scenarioReview");
+
+    // The retry is a plain repeat of the same call — no intervening decision needed to reopen.
+    const retried = await finalizeScenarioReview();
+    expect(retried.stages.scenarioReview.status).toBe("complete");
+    expect(retried.stages.dependencyAnalysis.status).toBe("complete");
+  });
 });

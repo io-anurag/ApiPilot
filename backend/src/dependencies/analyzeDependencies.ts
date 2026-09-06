@@ -123,8 +123,7 @@ async function runOneBatch(
  * partially-successful run retains every successful batch's relationships (FR-007).
  * `isTimedOut` enforces the existing `ANALYSIS_TIMEOUT_MS` budget between batches (FR-010,
  * research.md Decision 5): once it reports true, remaining batches are "not-attempted"
- * rather than run unbounded, and `hadNotAttemptedBatch` tells the caller a graceful
- * degradation already occurred (so the overall-budget guard should report, not throw).
+ * rather than run unbounded.
  */
 async function runAIAssistedPass(
   apiModel: ApiModel,
@@ -137,7 +136,6 @@ async function runAIAssistedPass(
   aiOutcome: DependencyAIOutcome;
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
-  hadNotAttemptedBatch: boolean;
 }> {
   const budgetChars = await provider.getInputBudget();
   const batches = splitOperationsIntoBatches(
@@ -163,10 +161,8 @@ async function runAIAssistedPass(
     deterministicRelationships,
     aiRelationships,
   );
-  const hadNotAttemptedBatch = summary.notAttemptedCount > 0;
-
   if (summary.outcome === "success") {
-    return { relationships, aiOutcome: "success", hadNotAttemptedBatch };
+    return { relationships, aiOutcome: "success" };
   }
 
   const category: AIErrorCategory = summary.errorCategory ?? "INVALID_RESPONSE";
@@ -180,7 +176,6 @@ async function runAIAssistedPass(
       summary.failureCount,
       summary.totalCount,
     ),
-    hadNotAttemptedBatch,
   };
 }
 
@@ -210,9 +205,11 @@ export async function analyzeDependencies(
   let aiOutcome: DependencyAIOutcome = "skipped";
   let aiErrorCategory: AIErrorCategory | undefined;
   let aiErrorMessage: string | undefined;
-  let hadNotAttemptedBatch = false;
+  /** Wall-clock spent inside the AI-assisted pass, excluded from the budget guard below. */
+  let aiElapsedMs = 0;
 
   if (provider) {
+    const aiStartedAt = Date.now();
     const aiResult = await runAIAssistedPass(
       apiModel,
       deterministicRelationships,
@@ -220,23 +217,31 @@ export async function analyzeDependencies(
       requestId,
       () => Date.now() - startedAt > timeoutMs,
     );
+    aiElapsedMs = Date.now() - aiStartedAt;
     relationships = aiResult.relationships;
     aiOutcome = aiResult.aiOutcome;
     aiErrorCategory = aiResult.aiErrorCategory;
     aiErrorMessage = aiResult.aiErrorMessage;
-    hadNotAttemptedBatch = aiResult.hadNotAttemptedBatch;
   }
 
   const { workflows, manualConfirmationCandidates, cycles } =
     assembleWorkflows(relationships);
-  // FR-010: once the AI-assisted pass has already gracefully degraded a batch to
-  // "not-attempted" against this same budget, the result must be reported (per FR-007/FR-008),
-  // not discarded by this guard, which otherwise protects the deterministic-matching +
-  // workflow-assembly portion of the pipeline against exceeding the SC-008 performance budget.
-  if (!hadNotAttemptedBatch && Date.now() - startedAt > timeoutMs) {
+  // Measures only the deterministic-matching + workflow-assembly work this guard exists to
+  // protect (SC-008); the AI pass's own wall-clock is excluded.
+  //
+  // It previously charged the AI pass's duration to this budget and threw unless a batch had
+  // been skipped, which was wrong in both directions: a *successful* AI pass slower than the
+  // budget had its result discarded, and — because `withTimeout` cannot preempt a synchronous
+  // local inference, so `AI_DEPENDENCY_TIMEOUT_MS` reports lateness rather than preventing it —
+  // a single-batch run routinely overran by 3x with nothing skipped, turning the AI pass's
+  // deliberate graceful degradation (FR-007/FR-008/FR-018, "never throws") back into a throw
+  // that no configuration could avoid.
+  const deterministicElapsedMs = Date.now() - startedAt - aiElapsedMs;
+  if (deterministicElapsedMs > timeoutMs) {
     logger.error("analysis_error", {
       errorCategory: "timeout",
-      durationMs: Date.now() - startedAt,
+      durationMs: deterministicElapsedMs,
+      totalDurationMs: Date.now() - startedAt,
     });
     throw new DependencyAnalysisTimeoutError();
   }

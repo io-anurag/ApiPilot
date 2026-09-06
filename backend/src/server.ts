@@ -1,6 +1,25 @@
 import "./loadEnv";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
+import { createLogger } from "./logger";
+
+const logger = createLogger("server");
+
+/**
+ * Last-resort guard (constitution XIX — Fail Safely). Node's default policy for an unhandled
+ * rejection is to terminate the process; because a workflow lives only in memory, that discards
+ * everything the user has built in their session — an uploaded specification, generated
+ * scenarios, and every review decision made on them — with no way to recover it.
+ *
+ * Every route forwards its own errors to `app.ts`'s centralized handler, so reaching here means
+ * a genuine escape rather than an expected failure: record it as such and keep serving. Only the
+ * error's category is logged, never its message or stack (constitution XX).
+ */
+process.on("unhandledRejection", (reason) => {
+  logger.error("unhandled_rejection", {
+    errorCategory: reason instanceof Error ? reason.name : typeof reason,
+  });
+});
 
 const MIN_SUPPORTED_NODE_MAJOR = 20;
 const currentMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
