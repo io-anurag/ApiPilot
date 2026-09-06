@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AiEnhancementStage } from "../../src/components/AiEnhancementStage";
 
 describe("AiEnhancementStage", () => {
@@ -111,5 +111,101 @@ describe("AiEnhancementStage", () => {
     expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument();
     expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent("cancelled");
     expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent("have been kept");
+  });
+});
+
+/**
+ * Live progress for a ceiling-bounded run (specs/014-ai-batching-policy FR-012).
+ *
+ * The planned unit count alone overstates what a run will do — a 39-unit plan under a five-minute
+ * ceiling completes roughly the first seven — so a run that has settled at its ceiling must not
+ * present the remainder as a queue of failures.
+ */
+describe("AiEnhancementStage run ceiling progress", () => {
+  /** Mirrors the component's own poll cadence; progress cannot appear before one tick elapses. */
+  const PROGRESS_POLL_INTERVAL_MS = 2000;
+
+  beforeEach(() => vi.useFakeTimers());
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Stubs fetch so the run POST never resolves — keeping the component in its running state, which
+   * is the only state that renders progress — while the status poll returns `progress`.
+   */
+  function stubPollingWith(progress: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: { method?: string } | null) => {
+        if (init?.method === "POST") return new Promise(() => {});
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ workflow: { stages: { aiEnhancement: { progress } } } }),
+        });
+      }),
+    );
+  }
+
+  function startRun() {
+    render(<AiEnhancementStage onAdvanced={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
+    return act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS + 100));
+  }
+
+  it("names not-attempted units as such rather than as failures, and shows the remaining allowance", async () => {
+    stubPollingWith({
+      totalBatches: 4,
+      batches: [
+        { index: 0, status: "succeeded" },
+        { index: 1, status: "failed", errorCategory: "TIMEOUT" },
+        { index: 2, status: "not-attempted" },
+        { index: 3, status: "not-attempted" },
+      ],
+      startedAt: new Date().toISOString(),
+      generatingSince: new Date().toISOString(),
+      phase: "generating",
+      cancelRequested: false,
+      runBudgetRemainingMs: 90_000,
+    });
+
+    await startRun();
+
+    const list = screen.getByLabelText("Batch progress");
+    expect(list).toHaveTextContent("Batch 3: Not attempted");
+    expect(list).toHaveTextContent("Batch 4: Not attempted");
+    // A unit the ceiling never started is not a failure, and must not be coloured as one.
+    expect(screen.getByText("Batch 3: Not attempted")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByText("Batch 2: Failed")).toHaveAttribute("data-tone", "danger");
+    expect(screen.getByTestId("ai-enhancement-run-budget-remaining")).toHaveTextContent(
+      "1m 30s of run time left",
+    );
+  });
+
+  it("says the limit is reached rather than showing no time left", async () => {
+    stubPollingWith({
+      totalBatches: 2,
+      batches: [
+        { index: 0, status: "succeeded" },
+        { index: 1, status: "in-progress" },
+      ],
+      startedAt: new Date().toISOString(),
+      generatingSince: new Date().toISOString(),
+      phase: "generating",
+      cancelRequested: false,
+      runBudgetRemainingMs: 0,
+    });
+
+    await startRun();
+
+    // A unit already in flight when the ceiling elapses runs to completion, so "0s left" would
+    // read as a stalled run rather than a finishing one.
+    expect(screen.getByTestId("ai-enhancement-run-budget-remaining")).toHaveTextContent(
+      "run time limit reached; finishing the current batch",
+    );
   });
 });

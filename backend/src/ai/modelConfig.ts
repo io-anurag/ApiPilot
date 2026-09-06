@@ -4,7 +4,27 @@ import type { AIProviderMode, ModelConfig, ModelDType } from "@apipilot/shared-d
 
 const DEFAULT_MODEL_ID = "onnx-community/Qwen2.5-0.5B-Instruct";
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".apipilot", "models");
-const DEFAULT_INFERENCE_TIMEOUT_MS = 60_000;
+/**
+ * Per-request inference timeout (specs/014-ai-batching-policy).
+ *
+ * 120 seconds, and the figure is arithmetic rather than caution. A single-operation enhancement
+ * request costs its output allowance plus its prompt: 256 output tokens at the seeded decode rate
+ * below is ~46s before a single prompt token is read, and a real 39-operation specification's units
+ * measured 430-834 prompt tokens, adding 18-35s of prefill. Every unit therefore projects at
+ * 64-81s.
+ *
+ * This was 60 seconds, which made the whole feature arithmetically impossible and did so silently
+ * in two different ways. Against a real specification the largest prompts hit the wall (`TIMEOUT`)
+ * and the near-boundary ones came back cut off mid-document (`INVALID_RESPONSE`). And once the
+ * viability safety factor was corrected to 1.0, the pre-flight check began refusing *every* run,
+ * including every fixture in the unit suite — a ~400-token prompt projects at 62.8s, which is over
+ * a 60-second ceiling.
+ *
+ * Raising it does not make impossible work possible: the pre-flight check still refuses anything
+ * projected beyond this limit, and `enhancementRunBudgetMs` still bounds the run as a whole. It
+ * makes *possible* work fit. Lower it only alongside a smaller output allowance or smaller prompts.
+ */
+const DEFAULT_INFERENCE_TIMEOUT_MS = 120_000;
 
 /**
  * Conservative context window assumed when neither the model config's `max_position_embeddings`
@@ -82,11 +102,18 @@ const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
 /**
  * Wall-clock ceiling for a whole enhancement run (research.md Decision 5).
  *
- * Five minutes. At a measured ~21 seconds per single-operation unit, total run time is now linear in
- * specification size — roughly 2 minutes for 6 operations, 17 for 50, 70 for 200 — so a ceiling is
- * what stops work-bounded batching from replacing "fails in one minute" with "runs for an hour".
- * Five minutes covers roughly 14 operations, which is about as long as a user will watch scenarios
- * stream in, and the run settles as `partial` with everything generated retained.
+ * Five minutes. Total run time is linear in specification size, so a ceiling is what stops
+ * work-bounded batching from replacing "fails in one minute" with "runs for an hour".
+ *
+ * The per-unit cost this covers was originally recorded as ~21 seconds. Measured against a real
+ * 39-operation specification it is **~30-60 seconds** — units settle early when the model closes
+ * its JSON document and run to the full timeout when it does not — so five minutes covers roughly
+ * 5-10 operations rather than the 14 first estimated. Raise it to cover a large specification in
+ * one pass; the run settles `partial` with everything generated retained either way.
+ *
+ * Enforced by `enhanceTestModel`, measured from the end of model preparation. It was previously
+ * loaded here and read by nothing at all, which is how a 39-unit run came to grind for roughly half
+ * an hour with no bound of any kind.
  */
 const DEFAULT_ENHANCEMENT_RUN_BUDGET_MS = 300_000;
 

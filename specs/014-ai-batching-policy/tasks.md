@@ -144,19 +144,30 @@ attempted.
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Add tests in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting that on ceiling exhaustion no further units start, remaining units record `not-attempted`, the run settles `partial`, and every scenario from completed units is retained (FR-010, SC-006)
-- [ ] T028 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a unit already in flight when the ceiling elapses runs to completion and its result is kept — the ceiling governs what is *started*, never what is discarded (spec.md edge case)
-- [ ] T029 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a run whose work fits inside the ceiling is observably identical to one with the ceiling effectively disabled (SC-006)
+- [X] T027 [P] [US3] Add tests in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting that on ceiling exhaustion no further units start, remaining units record `not-attempted`, the run settles `partial`, and every scenario from completed units is retained (FR-010, SC-006)
+- [X] T028 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a unit already in flight when the ceiling elapses runs to completion and its result is kept — the ceiling governs what is *started*, never what is discarded (spec.md edge case)
+- [X] T029 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a run whose work fits inside the ceiling is observably identical to one with the ceiling effectively disabled (SC-006)
 - [ ] T030 [P] [US3] Add a configuration test in `backend/tests/unit/ai/requestBatching.test.ts` or a config-focused test asserting an invalid `AI_ENHANCEMENT_RUN_BUDGET_MS` is rejected at startup (FR-011)
 
 ### Implementation for User Story 3
 
 - [ ] T031 [US3] Add `AI_ENHANCEMENT_RUN_BUDGET_MS` (default 300000) to `backend/src/ai/modelConfig.ts` and validate it at startup in `backend/src/config.ts`, per [contracts/run-budget.md](./contracts/run-budget.md)
-- [ ] T032 [US3] Enforce the ceiling at unit boundaries in `backend/src/testDesign/enhanceTestModel.ts` alongside the existing cancellation check, measuring elapsed time from `generatingSince` so a one-time model load is not charged to the budget
-- [ ] T033 [US3] Map ceiling exhaustion to the existing `partial` stage status with the `too-slow` explanation in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, introducing no new `StageStatus` member (preserving 011's outcome semantics)
-- [ ] T034 [P] [US3] Extend `AiEnhancementProgress` in `packages/shared-domain/src/testGenerationWorkflow.ts` with the run budget's remaining allowance, leaving every existing field unchanged
-- [ ] T035 [US3] Populate the remaining allowance from `backend/src/testGenerationWorkflow/aiEnhancementStage.ts` and render it in `frontend/src/components/AiEnhancementStage.tsx` so the user can see how much of the planned work the ceiling permits (FR-012)
-- [ ] T036 [P] [US3] Document `AI_ENHANCEMENT_RUN_BUDGET_MS` in `.env.example`, including that it is distinct from `AI_INFERENCE_TIMEOUT_MS` and that at ~21s per operation the 5-minute default covers roughly 14 operations
+- [X] T032 [US3] Enforce the ceiling at unit boundaries in `backend/src/testDesign/enhanceTestModel.ts` alongside the existing cancellation check, measuring elapsed time from `generatingSince` so a one-time model load is not charged to the budget
+- [X] T033 [US3] Map ceiling exhaustion to the existing `partial` stage status with the `too-slow` explanation in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, introducing no new `StageStatus` member (preserving 011's outcome semantics)
+- [X] T034 [P] [US3] Extend `AiEnhancementProgress` in `packages/shared-domain/src/testGenerationWorkflow.ts` with the run budget's remaining allowance, leaving every existing field unchanged
+- [X] T035 [US3] Populate the remaining allowance from `backend/src/testGenerationWorkflow/aiEnhancementStage.ts` and render it in `frontend/src/components/AiEnhancementStage.tsx` so the user can see how much of the planned work the ceiling permits (FR-012)
+- [X] T036 [P] [US3] Document `AI_ENHANCEMENT_RUN_BUDGET_MS` in `.env.example`, including that it is distinct from `AI_INFERENCE_TIMEOUT_MS` and that at ~21s per operation the 5-minute default covers roughly 14 operations
+
+> **US3 status note.** The ceiling is implemented and enforced (T032-T036). Two items remain open:
+> **T030** and the startup-validation half of **T031**. `loadAIConfig` already coerces an invalid
+> `AI_ENHANCEMENT_RUN_BUDGET_MS` to the default via `readPositiveNumber`, following the convention
+> every other AI variable uses; adding a hard startup rejection means teaching `backend/src/config.ts`
+> about AI configuration for the first time, which is an architectural decision this feature has not
+> taken. Two measured figures also correct earlier estimates and are recorded in
+> `backend/src/ai/modelConfig.ts`: a unit costs **~30-60s**, not ~21s, so the 5-minute default covers
+> roughly **5-10 operations**, not 14; and the per-request timeout default had to move from 60s to
+> **120s**, because a 256-token allowance plus a 430-834-token prompt projects at 64-81s and no unit
+> could ever have fitted 60s.
 
 **Checkpoint**: Large specifications degrade predictably instead of running unbounded.
 

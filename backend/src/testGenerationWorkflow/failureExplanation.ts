@@ -19,7 +19,11 @@ import type {
 import { formatDuration } from "../ai/viability";
 
 /** Everything that can end an AI enhancement run unsuccessfully. */
-export type FailureCause = AIErrorCategory | "cancelled" | "not-viable";
+export type FailureCause =
+  | AIErrorCategory
+  | "cancelled"
+  | "not-viable"
+  | "run-budget-exhausted";
 
 export interface FailureContext {
   /** For "not-viable": how long the work was projected to take. */
@@ -28,6 +32,10 @@ export interface FailureContext {
   budgetMs?: number;
   /** For INVALID_REQUEST: which operation could not be processed, e.g. "GET /pets". */
   operationLabel?: string;
+  /** For "run-budget-exhausted": how many planned units the ceiling never started. */
+  notStartedCount?: number;
+  /** For "run-budget-exhausted": how many units the run planned in total. */
+  plannedCount?: number;
   /**
    * The provider's own readiness reason. Passed through only when it is already plain language;
    * callers must not forward raw diagnostic strings, which FR-024 forbids surfacing.
@@ -74,6 +82,32 @@ export function explainFailure(
         nextStep:
           "Enhance a smaller specification, or raise the inference time limit in your " +
           "configuration. Nothing was run, so no time was spent waiting.",
+        retryable: false,
+      };
+    }
+
+    case "run-budget-exhausted": {
+      // Shares the `too-slow` category with TIMEOUT (contracts/run-budget.md outcome mapping) but
+      // not its wording: nothing timed out and nothing was lost. The run worked through as much of
+      // the specification as its ceiling allowed and handed the rest back unattempted, which is a
+      // different thing to tell a user than "the model was too slow".
+      const covered =
+        context.notStartedCount !== undefined && context.plannedCount !== undefined
+          ? `${context.plannedCount - context.notStartedCount} of ${context.plannedCount} ` +
+            `operations were covered`
+          : "part of the specification was covered";
+      const allowed =
+        context.budgetMs !== undefined
+          ? ` within the ${formatDuration(context.budgetMs)} allowed for one run`
+          : " within the time allowed for one run";
+      return {
+        category: "too-slow",
+        summary: `AI enhancement covered as much as it could: ${covered}${allowed}.`,
+        nextStep:
+          "Every scenario it produced has been kept and is ready to review. To cover more, raise " +
+          "the run time limit in your configuration or enhance a smaller specification.",
+        // A retry under unchanged configuration re-runs the same units in the same order and stops
+        // at the same place, so offering one would only spend the ceiling again (FR-025).
         retryable: false,
       };
     }

@@ -223,6 +223,12 @@ export async function enhanceTestModel(
   const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
   options.onPrepared?.();
 
+  // The run ceiling is measured from here — the moment preparation ends — and not from this
+  // function's entry, so a first run's model download and load are not charged to it
+  // (specs/014-ai-batching-policy contracts/run-budget.md, the `generatingSince` distinction
+  // specs/012-ai-enhancement-progress established).
+  const generationStartedAt = Date.now();
+
   // Work-bounded sizing (specs/014-ai-batching-policy FR-001): a unit covers a small fixed number
   // of operations rather than however many happen to fit the remaining context. `budgetChars`
   // remains the upper bound, so the work bound can never produce a request the model cannot accept.
@@ -287,6 +293,18 @@ export async function enhanceTestModel(
   const batchScenariosByIndex: BatchScenarioResult[][] = [];
   const allAiScenariosSoFar: BatchScenarioResult[] = [];
 
+  // Run ceiling (FR-009/FR-010). Checked at unit boundaries only, so a unit already in flight when
+  // the ceiling elapses runs to completion and its scenarios are kept: the ceiling governs what is
+  // *started*, never what is discarded. `runBudgetExhausted` records that the ceiling — rather than
+  // a user cancellation, the other producer of `not-attempted` — is what stopped the run.
+  const runBudgetMs = options.runBudgetMs ?? config.planning.enhancementRunBudgetMs;
+  let runBudgetExhausted = false;
+  const isRunBudgetExhausted = (): boolean => {
+    if (Date.now() - generationStartedAt < runBudgetMs) return false;
+    runBudgetExhausted = true;
+    return true;
+  };
+
   let nextBatchIndex = 0;
   const summary = await runBatchedInference(
     batches,
@@ -307,6 +325,7 @@ export async function enhanceTestModel(
       });
     },
     {
+      isTimedOut: isRunBudgetExhausted,
       isCancelled: options.isCancelled,
       onBatchStart: options.onBatchStart,
       onBatchSettled: (index, total, outcome) => {
@@ -345,6 +364,18 @@ export async function enhanceTestModel(
 
   const aiScenarios = summary.runs.flatMap((run) => run.data ?? []);
 
+  /**
+   * The ceiling report for this run, or `undefined` when the ceiling was never reached.
+   *
+   * Reported on every post-run return rather than only the `partial` one: a run where the ceiling
+   * elapsed *and* every started unit failed is still a truncated run, and saying so is what
+   * distinguishes "this specification produced nothing" from "this specification was only
+   * partly attempted".
+   */
+  const ceilingReport = runBudgetExhausted
+    ? { budgetMs: runBudgetMs, notStartedCount: summary.notAttemptedCount }
+    : undefined;
+
   if (summary.successCount === 0) {
     // No batch succeeded: nothing was ever added to `outcomes` (runOneBatch only mutates it
     // once fully parsed), so the baseline passes through unchanged, exactly like a
@@ -359,6 +390,7 @@ export async function enhanceTestModel(
       totalUnits: summary.totalCount,
       failureCount: summary.failureCount,
       notAttemptedCount: summary.notAttemptedCount,
+      runBudgetExhausted,
     });
     return {
       requestId,
@@ -371,7 +403,9 @@ export async function enhanceTestModel(
         summary.outcome,
         summary.failureCount,
         summary.totalCount,
+        ceilingReport,
       ),
+      runBudgetExhausted: ceilingReport,
     };
   }
 
@@ -404,6 +438,8 @@ export async function enhanceTestModel(
     rejectedCount: outcomes.rejected.length,
     deduplicatedCount: outcomes.deduplicated.length,
     totalBatches: summary.totalCount,
+    notAttemptedCount: summary.notAttemptedCount,
+    runBudgetExhausted,
   });
 
   if (summary.outcome === "success") {
@@ -427,7 +463,9 @@ export async function enhanceTestModel(
       "partial",
       summary.failureCount,
       summary.totalCount,
+      ceilingReport,
     ),
+    runBudgetExhausted: ceilingReport,
   };
 }
 
@@ -436,12 +474,23 @@ function providerErrorMessage(
   outcome: EnhancementResult["aiProviderOutcome"],
   failedCount: number,
   totalBatchCount: number,
+  ceiling?: { budgetMs: number; notStartedCount: number },
 ): string {
   const fraction = batchFraction(failedCount, totalBatchCount);
   const preserved =
     outcome === "partial"
       ? "deterministic scenarios and partial AI results were preserved"
       : "deterministic scenarios were preserved";
+  // A ceiling-truncated run must not be attributed to the provider. `failedCount` includes the
+  // units the ceiling never started, so the ordinary messages below would report a count of
+  // provider failures that never happened — reading, for a 39-unit plan stopped after seven, as
+  // "the AI provider returned invalid output for 32 of 39 batches".
+  if (ceiling) {
+    return (
+      `AI enhancement reached its run time limit with ${ceiling.notStartedCount} of ` +
+      `${totalBatchCount} batches not started; ${preserved}`
+    );
+  }
   if (category === "TIMEOUT") {
     return `AI provider timed out${fraction}; ${preserved}`;
   }

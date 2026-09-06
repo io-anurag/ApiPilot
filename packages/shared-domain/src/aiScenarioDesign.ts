@@ -93,4 +93,17 @@ export interface EnhancementResult {
     projectedMs: number;
     budgetMs: number;
   };
+  /**
+   * Present only when the run's wall-clock ceiling elapsed before every unit had been started
+   * (specs/014-ai-batching-policy FR-010, contracts/run-budget.md).
+   *
+   * Distinct from `aiErrorCategory`: the units that ran are unaffected and their scenarios are
+   * retained, and the ones recorded `not-attempted` were never sent. `notStartedCount` is what
+   * makes the shortfall reportable — the stage can say how much of the plan the ceiling permitted
+   * instead of presenting a truncated run as a complete one.
+   */
+  runBudgetExhausted?: {
+    budgetMs: number;
+    notStartedCount: number;
+  };
 }

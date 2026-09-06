@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
@@ -409,5 +409,94 @@ describe("aiEnhancementStage (concurrency guard, specs/012-ai-enhancement-progre
     await reachAiEnhancement();
     const wf = await runAiEnhancement(mockProvider);
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+  });
+});
+
+/**
+ * The run's wall-clock ceiling as the stage reports it (specs/014-ai-batching-policy FR-010/FR-023,
+ * contracts/run-budget.md outcome mapping).
+ *
+ * Configured through the environment rather than an option, because the stage deliberately has no
+ * seam for it: the ceiling `enhanceTestModel` enforces and the one the stage reports remaining
+ * allowance against must be the same number, and reading it once from configuration is what
+ * guarantees that.
+ */
+describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => {
+  const previousBudget = process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+
+  beforeEach(() => resetStore());
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (previousBudget === undefined) delete process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+    else process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = previousBudget;
+  });
+
+  /** A provider that charges `msPerCall` to a stubbed clock for every inference it serves. */
+  function timedProvider(msPerCall: number): AIProvider {
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    return {
+      ...mockProvider,
+      infer: async (request) => {
+        now += msPerCall;
+        return mockProvider.infer(request);
+      },
+    };
+  }
+
+  it("settles partial at the ceiling and explains the shortfall rather than blaming the provider", async () => {
+    // valid.yaml's operations become one unit each (three of them), so a 1.5s ceiling at 1s per
+    // unit stops the run after two, leaving the third never started.
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "1500";
+    await reachAiEnhancement();
+
+    const wf = await runAiEnhancement(timedProvider(1_000));
+
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.aiEnhancement?.aiProviderOutcome).toBe("partial");
+    expect(wf.aiEnhancement?.runBudgetExhausted).toEqual({ budgetMs: 1_500, notStartedCount: 1 });
+    const explanation = wf.stages.aiEnhancement.failureExplanation;
+    expect(explanation?.category).toBe("too-slow");
+    expect(explanation?.retryable).toBe(false);
+    // The aggregated provider category would have described this as unusable output, sending the
+    // user to fix a model that behaved perfectly.
+    expect(explanation?.summary).not.toContain("unusable");
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+    // A truncated run still advances on everything it did produce (FR-010).
+    expect(wf.activeStageId).toBe("scenarioReview");
+  });
+
+  it("leaves a run that fits inside the ceiling completely unaffected (SC-006)", async () => {
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "600000";
+    await reachAiEnhancement();
+
+    const wf = await runAiEnhancement(timedProvider(1_000));
+
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+    expect(wf.aiEnhancement?.runBudgetExhausted).toBeUndefined();
+    expect(wf.stages.aiEnhancement.failureExplanation).toBeUndefined();
+  });
+
+  it("reports the remaining allowance while a run is in flight (FR-012)", async () => {
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "600000";
+    await reachAiEnhancement();
+    let observed: number | undefined;
+    let seen = false;
+    const provider: AIProvider = {
+      ...mockProvider,
+      infer: async (request) => {
+        if (!seen) {
+          seen = true;
+          observed = getCurrentWorkflow()!.stages.aiEnhancement.progress?.runBudgetRemainingMs;
+        }
+        return mockProvider.infer(request);
+      },
+    };
+
+    await runAiEnhancement(provider);
+
+    expect(observed).toBeLessThanOrEqual(600_000);
+    expect(observed).toBeGreaterThan(0);
   });
 });

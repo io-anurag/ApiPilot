@@ -12,6 +12,7 @@ import {
 } from "../testDesign/reviewTestModel";
 import { enhanceTestModel } from "../testDesign/enhanceTestModel";
 import type { BatchOutcome } from "../ai/requestBatching";
+import { loadAIConfig } from "../ai/modelConfig";
 import { createLogger } from "../logger";
 import {
   AiEnhancementAlreadyRunningError,
@@ -85,12 +86,14 @@ function withBatchPatched(
   total: number,
   index: number,
   patch: BatchProgress,
+  runBudgetMs: number,
 ): AiEnhancementProgress {
   const batches: BatchProgress[] =
     progress && progress.totalBatches === total
       ? progress.batches.slice()
       : Array.from({ length: total }, (_, i) => ({ index: i, status: "pending" as const }));
   batches[index] = patch;
+  const generatingSince = progress?.generatingSince ?? new Date().toISOString();
   return {
     totalBatches: total,
     batches,
@@ -98,8 +101,14 @@ function withBatchPatched(
     // Any batch activity means preparation is over, so carry the generating phase forward rather
     // than reverting to the `preparing` default (the phase transition is one-way, FR-018).
     phase: "generating",
-    generatingSince: progress?.generatingSince ?? new Date().toISOString(),
+    generatingSince,
     cancelRequested: progress?.cancelRequested ?? false,
+    // Clamped at zero: the ceiling governs what is *started*, so a unit already in flight when it
+    // elapses keeps running with nothing left (specs/014-ai-batching-policy FR-012).
+    runBudgetRemainingMs: Math.max(
+      0,
+      runBudgetMs - (Date.now() - new Date(generatingSince).getTime()),
+    ),
   };
 }
 
@@ -160,6 +169,9 @@ export async function runAiEnhancement(
       throw new AiEnhancementAlreadyRunningError();
     }
     const isRetry = workflow.reviewWorkspace !== undefined;
+    // Read once for the whole run so every progress update reports the remaining allowance
+    // against the same ceiling `enhanceTestModel` is enforcing (FR-012).
+    const runBudgetMs = loadAIConfig().planning.enhancementRunBudgetMs;
     // Starts in the "preparing" phase with no batches: batch planning needs the loaded engine's
     // capacity, so until the model is ready there is genuinely nothing to count. Reporting the
     // phase is what makes a long first-run wait attributable — it can include a several-hundred-
@@ -196,18 +208,38 @@ export async function runAiEnhancement(
         onBatchStart: (index, total) => {
           const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
           setAiEnhancementProgress(
-            withBatchPatched(current, total, index, { index, status: "in-progress" }),
+            withBatchPatched(
+              current,
+              total,
+              index,
+              { index, status: "in-progress" },
+              runBudgetMs,
+            ),
           );
         },
         onBatchComplete: (index, total, outcome: BatchOutcome, newlyRetainedScenarios) => {
           const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
-          const batchStatus = outcome.status === "success" ? "succeeded" : "failed";
+          // `not-attempted` is reported as itself rather than folded into `failed`: the run
+          // ceiling or a cancellation stopped it from ever being sent, and nothing about it went
+          // wrong (specs/014-ai-batching-policy contracts/run-budget.md).
+          const batchStatus =
+            outcome.status === "success"
+              ? "succeeded"
+              : outcome.status === "not-attempted"
+                ? "not-attempted"
+                : "failed";
           setAiEnhancementProgress(
-            withBatchPatched(current, total, index, {
+            withBatchPatched(
+              current,
+              total,
               index,
-              status: batchStatus,
-              errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
-            }),
+              {
+                index,
+                status: batchStatus,
+                errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
+              },
+              runBudgetMs,
+            ),
           );
 
           if (newlyRetainedScenarios.length === 0) return;
@@ -234,6 +266,10 @@ export async function runAiEnhancement(
     // skipped/partial statuses with a marker, introducing no new StageStatus member and so
     // leaving specs/011's outcome semantics intact (FR-016, research.md Decision 10).
     const wasCancelled = isAiEnhancementCancelRequested();
+    // Captured before `progress` is cleared below: it is the only record of how many units the run
+    // planned, which a ceiling-truncated run needs in order to say what fraction it covered.
+    const plannedUnitCount =
+      getCurrentWorkflow()?.stages.aiEnhancement.progress?.totalBatches;
     patchWorkflow({ aiEnhancement: result });
     setAiEnhancementProgress(undefined);
 
@@ -253,6 +289,17 @@ export async function runAiEnhancement(
         });
       }
       if (wasCancelled) return explainFailure("cancelled");
+      // The ceiling outranks the aggregated provider category: with units the run never started,
+      // `aiErrorCategory` describes whichever unit happened to fail last, not why the run stopped.
+      // Telling the user "the model replied with unusable output" when the real answer is "it ran
+      // out of its time allowance after 7 of 39 operations" sends them to fix the wrong thing.
+      if (result.runBudgetExhausted) {
+        return explainFailure("run-budget-exhausted", {
+          budgetMs: result.runBudgetExhausted.budgetMs,
+          notStartedCount: result.runBudgetExhausted.notStartedCount,
+          plannedCount: plannedUnitCount,
+        });
+      }
       return explainFailure((result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause);
     };
 
