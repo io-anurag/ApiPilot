@@ -114,6 +114,10 @@ export async function regenerateScenario(
  */
 export async function finalizeScenarioReview(provider?: AIProvider): Promise<TestGenerationWorkflow> {
   const startedAt = Date.now();
+  // Tracks whether *this* call completed the stage, so the rollback below only ever reopens a
+  // review this call closed — never one a previous, successful finalize legitimately closed
+  // (which is the state a duplicate call fails against).
+  let completedByThisCall = false;
   try {
     const workflow = requireActive(getCurrentWorkflow());
     const approvedTestModel = projectApprovedTestModel(workflow.reviewWorkspace!);
@@ -122,6 +126,7 @@ export async function finalizeScenarioReview(provider?: AIProvider): Promise<Tes
     }
     patchWorkflow({ approvedTestModel });
     updateStage("scenarioReview", "complete");
+    completedByThisCall = true;
     advanceActiveStage("dependencyAnalysis");
     const result = await runDependencyAnalysis(provider);
     logger.info("stage_complete", {
@@ -132,6 +137,15 @@ export async function finalizeScenarioReview(provider?: AIProvider): Promise<Tes
     });
     return result;
   } catch (error) {
+    // The stage transitions above happen before dependency analysis runs, and dependency
+    // analysis has no HTTP trigger of its own. Without this rollback a failure there would
+    // leave scenarioReview `complete` — so finalizing again is refused as `stage_not_active`,
+    // and the only route back is the incidental reopen inside `applyScenarioDecisions`. Restore
+    // the pre-finalize state so the user can simply retry. The error still propagates: the
+    // failure stays visible rather than being silently absorbed (constitution XIX).
+    if (completedByThisCall) {
+      updateStage("scenarioReview", "active", { activeStageId: "scenarioReview" });
+    }
     logger.error("stage_error", {
       stage: "scenarioReview",
       workflowId: getCurrentWorkflow()?.id,

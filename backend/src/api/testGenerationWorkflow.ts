@@ -229,7 +229,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     }
   });
 
-  router.post("/test-generation-workflow/ai-enhancement", async (req, res) => {
+  router.post("/test-generation-workflow/ai-enhancement", async (req, res, next) => {
     const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(await runAiEnhancement(provider)) });
@@ -244,11 +244,12 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         res.status(409).json({ error: "ai_enhancement_already_running", message: err.message });
         return;
       }
-      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
-      // does not forward to the error middleware (pre-existing behavior of this route, not
-      // changed here) — log it explicitly so it is not silently invisible.
+      // Handler is async: Express 4 does not catch a rejected promise, so throwing here would
+      // surface as an unhandled rejection — which terminates the process under Node's default
+      // policy, discarding the entire in-memory workflow. Forward to app.ts's centralized
+      // handler, which maps it to a safe 500.
       logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
-      throw err;
+      next(err);
     }
   });
 
@@ -323,7 +324,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     }
   });
 
-  router.post("/test-generation-workflow/scenario-review/regenerate", async (req, res) => {
+  router.post("/test-generation-workflow/scenario-review/regenerate", async (req, res, next) => {
     const startedAt = logRequestReceived(req);
     const body = req.body as Record<string, unknown> | undefined;
     if (typeof body?.scenarioId !== "string" || typeof body?.revision !== "number") {
@@ -342,9 +343,8 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         logRequestFailed(req, startedAt, 409, "stage_not_active", { scenarioId: body.scenarioId });
         return stageNotActive(res, err.message);
       }
-      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
-      // does not forward to the error middleware (pre-existing behavior of this route, not
-      // changed here) — log it explicitly so it is not silently invisible.
+      // Handler is async: see the ai-enhancement route above — an uncaught throw would become
+      // an unhandled rejection and terminate the process, so forward instead.
       logRequestFailed(
         req,
         startedAt,
@@ -352,11 +352,11 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         err instanceof Error ? err.name : "unknown_error",
         { scenarioId: body.scenarioId },
       );
-      throw err;
+      next(err);
     }
   });
 
-  router.post("/test-generation-workflow/scenario-review/finalize", async (req, res) => {
+  router.post("/test-generation-workflow/scenario-review/finalize", async (req, res, next) => {
     const startedAt = logRequestReceived(req);
     try {
       res.status(200).json({ workflow: toWorkflowResponse(await finalizeScenarioReview(provider)) });
@@ -371,11 +371,10 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         res.status(409).json({ error: "empty_approved_scenarios", message: err.message });
         return;
       }
-      // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
-      // does not forward to the error middleware (pre-existing behavior of this route, not
-      // changed here) — log it explicitly so it is not silently invisible.
+      // Handler is async: see the ai-enhancement route above — an uncaught throw would become
+      // an unhandled rejection and terminate the process, so forward instead.
       logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
-      throw err;
+      next(err);
     }
   });
 
