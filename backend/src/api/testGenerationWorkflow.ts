@@ -13,6 +13,7 @@ import { continueApiReview } from "../testGenerationWorkflow/apiReviewStage";
 import { runAiEnhancement } from "../testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../testGenerationWorkflow/deterministicGenerationStage";
 import {
+  AiEnhancementAlreadyRunningError,
   EmptyApprovedScenariosError,
   PendingWorkflowDecisionsError,
   PostmanGenerationRefusedError,
@@ -233,6 +234,11 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       if (err instanceof StageNotActiveError) {
         logRequestFailed(req, startedAt, 409, "stage_not_active");
         return stageNotActive(res, err.message);
+      }
+      if (err instanceof AiEnhancementAlreadyRunningError) {
+        logRequestFailed(req, startedAt, 409, "ai_enhancement_already_running");
+        res.status(409).json({ error: "ai_enhancement_already_running", message: err.message });
+        return;
       }
       // Handler is async: an uncaught throw here becomes a rejected promise that Express 4
       // does not forward to the error middleware (pre-existing behavior of this route, not

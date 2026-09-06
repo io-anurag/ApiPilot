@@ -1,9 +1,40 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. No feature spec has been created yet — each `AP-###`
-below is meant to be run through `/speckit-specify` (then `clarify` → `plan` →
-`checklist` → `tasks` → `analyze` → `implement` → `converge`) individually, in
-dependency order.
+**Status**: Reference document. AP-001 through AP-010, plus the hardening specs
+`011-ai-prompt-batching` and `012-ai-enhancement-progress`, have each been run through
+`/speckit-specify` individually, in dependency order. See the Implementation Status table
+below for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
+`analyze` → `implement` → `converge` lifecycle. AP-011 (Test Execution & Results) and AP-012
+(AI Failure Analysis) — the two post-MVP features — have not been started.
+
+## Implementation Status
+
+| Feature | Status |
+|---|---|
+| AP-001 — Application Foundation | Implemented (1 minor follow-up task outstanding: a pre-flight `node_modules` dependency guard) |
+| AP-002 — OpenAPI Specification Engine | Implemented |
+| AP-003 — Deterministic Test Designer | Implemented |
+| AP-004 — AI Provider & Local Inference Foundation | Implemented (1 follow-up task outstanding: full manual quickstart validation pass) |
+| AP-005 — AI Test Scenario Designer | Implemented (3 follow-up tasks outstanding: broader semantic validation coverage, candidate-ID/low-confidence policy enforcement, all-or-nothing degradation coverage for partial/mixed-invalid provider responses — all marked partial in tasks.md) |
+| AP-006 — Test Scenario Review | Implemented |
+| AP-007 — Postman Collection Generator | Implemented (1 follow-up task outstanding: the manual Postman-import acceptance step, which needs a real, operator-authorized target this feature deliberately does not provide) |
+| AP-008 — API Dependency & Integration Workflow Engine | Implemented |
+| AP-009 — End-to-End Test Generation Workflow | Implemented |
+| AP-010 — Presentation System & Review Scalability | Implemented |
+| Hardening — Bounded AI Prompt Batching (`011-ai-prompt-batching`) | Implemented |
+| Hardening — AI Enhancement Progress Visibility (`012-ai-enhancement-progress`) | Implemented (1 follow-up task outstanding: manual real-model UI validation from quickstart.md, optional) |
+| AP-011 — Test Execution & Results *(post-MVP)* | Not started |
+| AP-012 — AI Failure Analysis *(post-MVP)* | Not started |
+
+Note the numbering collision between the MVP's `AP-011`/`AP-012` (post-MVP features, not
+started) and the hardening specs' directory names (`011-ai-prompt-batching`,
+`012-ai-enhancement-progress`, both otherwise unrelated to those two post-MVP features) — the
+hardening specs are intentionally unnumbered in the Feature Decomposition below precisely to
+avoid implying they are the same items as AP-011/AP-012.
+
+Each spec's own `spec.md` still carries a template-default `**Status**: Draft` header — that
+field is not maintained after `/speckit-specify` runs and should not be read as the feature's
+real implementation status; this table is the accurate source for that.
 
 ## Product Vision
 
@@ -653,6 +684,49 @@ passes rather than introducing a new one.
 
 ---
 
+## Hardening — AI Enhancement Progress Visibility (`012-ai-enhancement-progress`)
+
+### Objective
+
+Let a user watching AI-assisted scenario enhancement (AP-005) run against a specification large
+enough to need multiple batches (`011-ai-prompt-batching`) see live, batch-level progress while
+it runs, instead of a single unchanging wait followed by one final outcome that reads as
+ambiguous or alarming even when the workflow has actually advanced correctly. This is a
+hardening spec against an already-shipped feature, not a new pipeline stage, so it is
+intentionally not numbered `AP-###` in the Feature Decomposition above.
+
+### Scope
+
+- Show which batch is currently being processed, and each already-finished batch's
+  success/failure, while a multi-batch enhancement run is still in progress.
+- Reveal each batch's AI-derived scenarios into scenario review as soon as that batch
+  succeeds, rather than only once every batch finishes.
+- Present exactly one unambiguous final status (fully completed / partially completed / not
+  completed) once a run finishes, clearly distinct from the in-progress state.
+- Prevent a second AI enhancement run from starting for the same workflow while one is already
+  in progress.
+
+### Constraints
+
+- MUST NOT change the deterministic batch grouping, merge/deduplication rules, or the
+  success/partial/skipped outcome semantics already defined by `011-ai-prompt-batching` — only
+  how progress through that existing computation is surfaced changes.
+- Specifications whose enhancement completes in a single batch MUST see no behavior change
+  (same total time to result, same information shown).
+- A user's review decision on a scenario revealed from an already-succeeded batch MUST be
+  preserved regardless of how later batches in the same run conclude.
+- MUST NOT introduce a new transport mechanism, external dependency, or persistence layer
+  (constitution XXVII) — progress is carried through the existing workflow-state polling
+  endpoint the frontend already uses.
+
+### Dependencies
+
+Requires AP-005 (AI Test Scenario Designer) and `011-ai-prompt-batching` (Bounded AI Prompt
+Batching) to already exist, since it adds visibility into their existing batched execution
+rather than introducing a new AI-assisted pass.
+
+---
+
 # Post-MVP Features
 
 ## AP-011 — Test Execution & Results
@@ -1057,10 +1131,26 @@ Implementation
 
 # Next Actions
 
-1. Ratify the ApiPilot constitution as the authoritative project governance document.
+1. ~~Ratify the ApiPilot constitution as the authoritative project governance document.~~ Done
+   — see `.specify/memory/constitution.md` (currently v2.1.1).
 2. Keep `.specify/memory/constitution.md` as the single authoritative constitution source.
-3. Commit this roadmap as the reference Spec-of-Specs document.
-4. Start with **AP-001 — Application Foundation**.
-5. Run the complete Spec Kit lifecycle for AP-001 before moving to AP-002.
-6. Do not create implementation code for later AP-### features prematurely.
-7. During AP-004 `/speckit.plan`, evaluate and select the initial local AI model using representative ApiPilot workloads rather than assuming a model in advance.
+3. ~~Commit this roadmap as the reference Spec-of-Specs document.~~ Done.
+4. ~~Start with AP-001 — Application Foundation~~ Done, along with AP-002 through AP-010 and
+   the `011-ai-prompt-batching` hardening spec — see the Implementation Status table above.
+5. ~~Run the complete Spec Kit lifecycle for AP-001 before moving to AP-002.~~ Done for
+   AP-001–AP-010 and `011-ai-prompt-batching`.
+6. ~~Complete `012-ai-enhancement-progress`: run `/speckit-tasks` → `/speckit-analyze` →
+   `/speckit-implement` → `/speckit-converge` (spec and plan are already done).~~ Tasks,
+   analysis, and implementation are done (`npm test`, `npm run lint`, `npm run build` all
+   pass) — see the Implementation Status table above. Run `/speckit-converge` next; the one
+   outstanding item is the optional manual real-model UI validation step in
+   `specs/012-ai-enhancement-progress/quickstart.md`.
+7. ~~During AP-004 `/speckit.plan`, evaluate and select the initial local AI model using
+   representative ApiPilot workloads rather than assuming a model in advance.~~ Done — see
+   `specs/004-ai-provider-local-inference/` and `npm run ai:benchmark -w backend`.
+8. Address the outstanding follow-up tasks noted in the Implementation Status table above
+   (AP-001, AP-004, AP-005, AP-007, `012-ai-enhancement-progress`) where practical, or
+   explicitly defer them with a documented reason if they remain out of scope.
+9. Do not begin AP-011 (Test Execution & Results) or AP-012 (AI Failure Analysis) — both
+   post-MVP — until the full MVP boundary (AP-001 through AP-010) has been validated
+   end-to-end against a real specification, per the MVP Boundary section above.

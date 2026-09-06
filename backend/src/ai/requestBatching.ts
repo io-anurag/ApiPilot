@@ -170,22 +170,38 @@ export interface BatchedInferenceSummary<
  * `isTimedOut` (dependency detection only, FR-010, research.md Decision 5) is checked
  * before each batch; once it reports true, that batch and all remaining batches are
  * recorded as "not-attempted" without calling `runBatch`.
+ *
+ * `onBatchStart`/`onBatchSettled` (specs/012-ai-enhancement-progress) are optional,
+ * no-op-by-default progress hooks: `onBatchStart` fires immediately before a batch's
+ * `runBatch()` is invoked, `onBatchSettled` immediately after its `BatchOutcome` is known.
+ * Neither changes this function's return shape or any existing caller's behavior when
+ * omitted (e.g. `analyzeDependencies.ts`'s existing call site).
  */
 export async function runBatchedInference<TOperation, TBatchData>(
   batches: readonly Batch<TOperation>[],
   runBatch: (batch: Batch<TOperation>) => Promise<TBatchData>,
-  options: { isTimedOut?: () => boolean } = {},
+  options: {
+    isTimedOut?: () => boolean;
+    onBatchStart?: (index: number, total: number) => void;
+    onBatchSettled?: (index: number, total: number, outcome: BatchOutcome) => void;
+  } = {},
 ): Promise<BatchedInferenceSummary<TOperation, TBatchData>> {
   const runs: BatchRun<TOperation, TBatchData>[] = [];
+  const total = batches.length;
 
-  for (const batch of batches) {
+  for (const [index, batch] of batches.entries()) {
     if (options.isTimedOut?.()) {
-      runs.push({ batch, outcome: { status: "not-attempted" } });
+      const outcome: BatchOutcome = { status: "not-attempted" };
+      runs.push({ batch, outcome });
+      options.onBatchSettled?.(index, total, outcome);
       continue;
     }
+    options.onBatchStart?.(index, total);
     try {
       const data = await runBatch(batch);
-      runs.push({ batch, outcome: { status: "success" }, data });
+      const outcome: BatchOutcome = { status: "success" };
+      runs.push({ batch, outcome, data });
+      options.onBatchSettled?.(index, total, outcome);
     } catch (error) {
       // Duck-typed rather than `instanceof AIProviderError`: `runBatch` may itself throw a
       // provider-thrown error with a `category` property (e.g. a provider's `infer()`
@@ -196,7 +212,9 @@ export async function runBatchedInference<TOperation, TBatchData>(
           ? (error as { category: AIErrorCategory }).category
           : "INVALID_RESPONSE";
       const errorMessage = error instanceof Error ? error.message : String(error);
-      runs.push({ batch, outcome: { status: "failed", errorCategory, errorMessage } });
+      const outcome: BatchOutcome = { status: "failed", errorCategory, errorMessage };
+      runs.push({ batch, outcome });
+      options.onBatchSettled?.(index, total, outcome);
     }
   }
 

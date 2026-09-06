@@ -6,6 +6,7 @@ import type {
   ApiOperation,
   EnhancementResult,
   TestModel,
+  TestScenario,
 } from "@apipilot/shared-domain";
 import {
   AI_SCENARIO_MAX_OUTPUT_TOKENS,
@@ -23,6 +24,7 @@ import {
   runBatchedInference,
   splitOperationsIntoBatches,
   type Batch,
+  type BatchOutcome,
 } from "../ai/requestBatching";
 import { createLogger } from "../logger";
 
@@ -32,6 +34,31 @@ type ApiModelArg = Parameters<typeof validateAICandidateSemantics>[1];
 
 function withOperations(apiModel: ApiModelArg, operations: ApiOperation[]): ApiModelArg {
   return { ...apiModel, operations };
+}
+
+function operationKey(path: string, method: string): string {
+  return `${method.toUpperCase()} ${path}`;
+}
+
+/**
+ * Scopes the deterministic baseline to the scenarios belonging to `operations`, so a batch's
+ * prompt shrinks along with its operation subset instead of always embedding the full,
+ * spec-wide baseline regardless of how far `splitOperationsIntoBatches` has split the
+ * operations (specs/011-ai-prompt-batching/spec.md Key Entities: "Batch: ... and any other
+ * context sent to the AI provider today, e.g. the deterministic baseline for enhancement").
+ * Without this, a large specification's baseline dominates every batch's prompt size and
+ * batching never actually reduces it below the provider's budget.
+ */
+function scopeBaselineToOperations(
+  testModel: TestModel,
+  operations: readonly ApiOperation[],
+): TestModel {
+  const keys = new Set(operations.map((op) => operationKey(op.path, op.method)));
+  return {
+    scenarios: testModel.scenarios.filter((scenario) =>
+      keys.has(operationKey(scenario.operationPath, scenario.operationMethod)),
+    ),
+  };
 }
 
 /** Fraction-of-batches suffix (e.g. " for 1 of 3 batches"), omitted entirely for a single batch. */
@@ -113,6 +140,28 @@ async function runOneBatch(
   return aiScenarios;
 }
 
+/** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
+export interface EnhanceTestModelOptions {
+  /** Fires immediately before a batch's inference call starts. */
+  onBatchStart?: (index: number, total: number) => void;
+  /**
+   * Fires immediately after a batch settles, with exactly the scenarios newly retained by
+   * that batch (empty for a failed/not-attempted batch) — never the whole accumulated set.
+   * Computed by recomputing the same `deduplicate()` used for the final merge over the
+   * deterministic baseline plus every AI scenario from batches completed so far
+   * (research.md Decision 4): because `deduplicate()` is a stable first-seen-wins left-fold
+   * over scenarios in a fixed, deterministic batch order, a scenario already retained for an
+   * earlier batch's prefix is never later revoked, so this incremental computation always
+   * agrees with the final one-shot result.
+   */
+  onBatchComplete?: (
+    index: number,
+    total: number,
+    outcome: BatchOutcome,
+    newlyRetainedScenarios: TestScenario[],
+  ) => void;
+}
+
 /**
  * Enhances a deterministic baseline `TestModel` with AI-suggested scenarios (FR-*, AP-005):
  * batches the ApiModel's operations, runs inference through `AIProvider` for each batch, then
@@ -125,6 +174,7 @@ export async function enhanceTestModel(
   apiModel: ApiModelArg,
   testModel: TestModel,
   provider: AIProvider,
+  options: EnhanceTestModelOptions = {},
 ): Promise<EnhancementResult> {
   const requestId = `enhance-${createHash("sha256").update(buildAIScenarioPrompt(apiModel, testModel)).digest("hex").slice(0, 24)}`;
   const emptyOutcomes = (): AICandidateOutcomes => ({
@@ -140,24 +190,61 @@ export async function enhanceTestModel(
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) =>
-      buildAIScenarioPrompt(withOperations(apiModel, operations), testModel),
+      buildAIScenarioPrompt(
+        withOperations(apiModel, operations),
+        scopeBaselineToOperations(testModel, operations),
+      ),
     budgetChars,
   );
 
+  // Per-batch results, populated as each batch's own `runBatch` closure resolves, so
+  // `onBatchSettled` below (fired by runBatchedInference immediately afterward, before the
+  // next batch starts, FR-003) can read this same batch's data without runBatchedInference
+  // itself needing to carry TBatchData through its generic outcome-only hook.
+  const batchScenariosByIndex: BatchScenarioResult[][] = [];
+  const allAiScenariosSoFar: BatchScenarioResult[] = [];
+
   let nextBatchIndex = 0;
-  const summary = await runBatchedInference(batches, (batch) => {
-    const index = nextBatchIndex++;
-    const batchRequestId = batches.length > 1 ? `${requestId}-batch${index}` : requestId;
-    return runOneBatch(
-      batch,
-      apiModel,
-      testModel,
-      batchRequestId,
-      provider,
-      outcomes,
-      candidateIds,
-    );
-  });
+  const summary = await runBatchedInference(
+    batches,
+    (batch) => {
+      const index = nextBatchIndex++;
+      const batchRequestId = batches.length > 1 ? `${requestId}-batch${index}` : requestId;
+      return runOneBatch(
+        batch,
+        apiModel,
+        scopeBaselineToOperations(testModel, batch.operations),
+        batchRequestId,
+        provider,
+        outcomes,
+        candidateIds,
+      ).then((result) => {
+        batchScenariosByIndex[index] = result;
+        return result;
+      });
+    },
+    {
+      onBatchStart: options.onBatchStart,
+      onBatchSettled: options.onBatchComplete
+        ? (index, total, outcome) => {
+            const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
+            if (thisBatchScenarios.length === 0) {
+              options.onBatchComplete!(index, total, outcome, []);
+              return;
+            }
+            allAiScenariosSoFar.push(...thisBatchScenarios);
+            const mergedSoFar = deduplicate([
+              ...testModel.scenarios,
+              ...allAiScenariosSoFar.map((item) => item.scenario),
+            ]);
+            const newlyRetained = thisBatchScenarios
+              .map((item) => item.scenario)
+              .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
+            options.onBatchComplete!(index, total, outcome, newlyRetained);
+          }
+        : undefined,
+    },
+  );
 
   const aiScenarios = summary.runs.flatMap((run) => run.data ?? []);
 

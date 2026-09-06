@@ -1,4 +1,5 @@
 import type {
+  AiEnhancementProgress,
   ApiModel,
   StageStatus,
   TestGenerationWorkflow,
@@ -162,6 +163,30 @@ export function updateStage(
     updatedAt: now,
     activeStageId: options.activeStageId ?? currentWorkflow.activeStageId,
     stages: { ...currentWorkflow.stages, [stageId]: nextState },
+  };
+  return currentWorkflow;
+}
+
+/**
+ * Patches `stages.aiEnhancement.progress` directly, without going through `updateStage()`'s
+ * transition validation — setting or clearing progress never changes `status` itself
+ * (specs/012-ai-enhancement-progress data-model.md "State transitions"). Pass `undefined` to
+ * clear it (done once the stage reaches a terminal status).
+ */
+export function setAiEnhancementProgress(
+  progress: AiEnhancementProgress | undefined,
+): TestGenerationWorkflow {
+  if (!currentWorkflow) {
+    throw new Error("No workflow is currently in progress.");
+  }
+  const current = currentWorkflow.stages.aiEnhancement;
+  currentWorkflow = {
+    ...currentWorkflow,
+    updatedAt: new Date().toISOString(),
+    stages: {
+      ...currentWorkflow.stages,
+      aiEnhancement: { ...current, progress },
+    },
   };
   return currentWorkflow;
 }
