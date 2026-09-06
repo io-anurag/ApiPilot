@@ -80,4 +80,17 @@ export interface EnhancementResult {
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
   requestId: string;
+  /**
+   * Present only when the run was refused before any inference was attempted, because a single
+   * unit's projected cost could not fit the per-request budget
+   * (specs/014-ai-batching-policy FR-013).
+   *
+   * Distinct from every `aiErrorCategory`: nothing failed, and nothing was tried. The stage uses
+   * these figures to tell the user what was projected versus what was allowed, in human-readable
+   * durations, so a refusal is actionable rather than merely negative (FR-014).
+   */
+  notViable?: {
+    projectedMs: number;
+    budgetMs: number;
+  };
 }

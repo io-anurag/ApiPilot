@@ -237,11 +237,24 @@ export async function runAiEnhancement(
     patchWorkflow({ aiEnhancement: result });
     setAiEnhancementProgress(undefined);
 
-    /** The user-facing account of a non-success outcome for this run (FR-023). */
-    const explainOutcome = () =>
-      explainFailure(
-        (wasCancelled ? "cancelled" : result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause,
-      );
+    /**
+     * The user-facing account of a non-success outcome for this run (FR-023).
+     *
+     * A pre-flight refusal takes precedence over every other cause: nothing failed and nothing was
+     * attempted, so describing it as a provider error would be wrong. It carries the projected and
+     * allowed durations so the message can say what was needed versus what was permitted, in
+     * human-readable units (FR-014).
+     */
+    const explainOutcome = () => {
+      if (result.notViable) {
+        return explainFailure("not-viable", {
+          projectedMs: result.notViable.projectedMs,
+          budgetMs: result.notViable.budgetMs,
+        });
+      }
+      if (wasCancelled) return explainFailure("cancelled");
+      return explainFailure((result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause);
+    };
 
     if (result.aiProviderOutcome === "success" || result.aiProviderOutcome === "partial") {
       updateStage(

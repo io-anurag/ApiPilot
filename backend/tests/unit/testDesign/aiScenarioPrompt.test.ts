@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { InferenceResponse } from "@apipilot/shared-domain";
+import { SCENARIO_CATEGORIES, type InferenceResponse } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
 import { validateSpec } from "../../../src/openapi/validateSpec";
@@ -234,8 +234,34 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
     expect(promptFor([withBody]).example).toBeDefined();
   });
 
-  it("omits the worked example for an operation with no request body, where it costs time and buys nothing", () => {
-    expect(promptFor([withoutBody], baselineForBodyless).example).toBeUndefined();
+  /**
+   * The example is attached unconditionally. The conditional rule this replaces assumed it was
+   * redundant for body-less operations; the first real-model run disproved that — without it the
+   * model invented flat request shapes (`{"limit":5,"page":1}`) on exactly those operations and every
+   * such candidate was rejected. It also now replaces the prose output specification it used to sit
+   * beside, so attaching it always is cheaper than the alternative it removes
+   * (specs/014-ai-batching-policy research.md Decision 3).
+   */
+  it("includes the worked example for an operation with no request body, which needs the request shape demonstrated too", () => {
+    expect(promptFor([withoutBody], baselineForBodyless).example).toBeDefined();
+  });
+
+  it("demonstrates a supported category and the keyed request shape in the example", () => {
+    const example = promptFor([withBody]).example as {
+      candidates: { category: string; request: Record<string, unknown> }[];
+    };
+    const candidate = example.candidates[0];
+    // An invented category is rejected outright, so the example must not teach one.
+    expect(SCENARIO_CATEGORIES).toContain(candidate.category);
+    expect(candidate.request).toHaveProperty("pathParameters");
+    expect(candidate.request).toHaveProperty("queryParameters");
+    expect(candidate.request).toHaveProperty("headers");
+  });
+
+  it("states the closed category vocabulary, so the model cannot invent one", () => {
+    expect(promptFor([withoutBody], baselineForBodyless).categories).toEqual([
+      ...SCENARIO_CATEGORIES,
+    ]);
   });
 
   it("keeps the example a pure function of the operation, so unit derivation stays reproducible (SC-008)", () => {

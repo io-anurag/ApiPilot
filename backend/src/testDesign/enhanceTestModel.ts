@@ -13,6 +13,7 @@ import {
   buildAIScenarioRequest,
   buildAIScenarioPrompt,
 } from "./aiScenarioPrompt";
+import { estimateViability } from "../ai/viability";
 import { parseAIScenarioResponse, isCandidateShape } from "./parseAIScenarioResponse";
 import {
   validateAICandidateSemantics,
@@ -26,7 +27,7 @@ import {
   type Batch,
   type BatchOutcome,
 } from "../ai/requestBatching";
-import { loadAIConfig } from "../ai/modelConfig";
+import { CHARS_PER_TOKEN_ESTIMATE, loadAIConfig } from "../ai/modelConfig";
 import { createLogger } from "../logger";
 
 const logger = createLogger("testDesign.enhanceTestModel");
@@ -149,6 +150,11 @@ export interface EnhanceTestModelOptions {
    */
   operationsPerUnit?: number;
   /**
+   * Per-request time budget the pre-flight estimate is compared against, overriding the configured
+   * inference timeout. Test-facing seam (FR-013).
+   */
+  perRequestBudgetMs?: number;
+  /**
    * Wall-clock ceiling for the whole run, overriding the configured default (FR-009). Once
    * exceeded, no further unit is started; remaining units are recorded `not-attempted` and the run
    * settles `partial` with everything already produced retained.
@@ -230,6 +236,49 @@ export async function enhanceTestModel(
     budgetChars,
     options.operationsPerUnit ?? loadAIConfig().planning.enhancementOperationsPerUnit,
   );
+
+  // Pre-flight refusal (FR-013). Uniform, work-bounded units are what make a single estimate
+  // representative of the whole run: every unit costs roughly the same, so if the most expensive one
+  // cannot fit the per-request budget, none of them can and the run is hopeless before it starts.
+  //
+  // This exists because the alternative is what a user actually experienced: a 39-operation
+  // specification producing 39 units that each ran to the full timeout and failed, ~40 minutes to
+  // reach an outcome that was knowable in seconds. The estimator itself has been implemented and
+  // tested since specs/013-ai-enhancement-viability but was never called from anywhere.
+  const config = loadAIConfig();
+  const worstPromptChars = batches.reduce((worst, batch) => {
+    const chars = buildAIScenarioPrompt(
+      withOperations(apiModel, batch.operations),
+      scopeBaselineToOperations(testModel, batch.operations),
+    ).length;
+    return Math.max(worst, chars);
+  }, 0);
+  const estimate = estimateViability({
+    promptTokens: Math.ceil(worstPromptChars / CHARS_PER_TOKEN_ESTIMATE),
+    maxOutputTokens: AI_SCENARIO_MAX_OUTPUT_TOKENS,
+    rates: {
+      prefillMsPerToken: config.planning.prefillMsPerToken,
+      decodeMsPerToken: config.planning.decodeMsPerToken,
+    },
+    budgetMs: options.perRequestBudgetMs ?? config.model.inferenceTimeoutMs,
+    safetyFactor: config.planning.viabilitySafetyFactor,
+  });
+  if (!estimate.viable) {
+    logger.warn("run_refused_not_viable", {
+      promptTokens: estimate.promptTokens,
+      maxOutputTokens: estimate.maxOutputTokens,
+      projectedMs: Math.round(estimate.projectedMs),
+      budgetMs: estimate.budgetMs,
+      totalUnits: batches.length,
+    });
+    return {
+      requestId,
+      enhancedTestModel: testModel,
+      aiCandidates: emptyOutcomes(),
+      aiProviderOutcome: "unavailable",
+      notViable: { projectedMs: estimate.projectedMs, budgetMs: estimate.budgetMs },
+    };
+  }
 
   // Per-batch results, populated as each batch's own `runBatch` closure resolves, so
   // `onBatchSettled` below (fired by runBatchedInference immediately afterward, before the

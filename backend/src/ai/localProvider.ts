@@ -13,7 +13,7 @@ import type {
   ReadinessState,
 } from "@apipilot/shared-domain";
 import { AIProviderError, buildErrorResponse } from "./errors";
-import type { InferencePlanningConfig } from "./modelConfig";
+import { CHARS_PER_TOKEN_ESTIMATE, type InferencePlanningConfig } from "./modelConfig";
 import { ReadinessTracker } from "./readiness";
 import { RequestQueue } from "./requestQueue";
 import { createLogger } from "../logger";
@@ -39,9 +39,9 @@ export interface InferenceRates {
  */
 const DEFAULT_PLANNING: InferencePlanningConfig = {
   contextFloorTokens: 2048,
-  prefillMsPerToken: 2.0,
-  decodeMsPerToken: 130,
-  viabilitySafetyFactor: 1.5,
+  prefillMsPerToken: 42,
+  decodeMsPerToken: 180,
+  viabilitySafetyFactor: 1.0,
   enhancementOperationsPerUnit: 1,
   enhancementRunBudgetMs: 300_000,
 };
@@ -94,14 +94,10 @@ export type EngineLoader = (
 export const CONTEXT_SAFETY_MARGIN_TOKENS = 64;
 
 /**
- * Conservative characters-per-token estimate used only to plan batches before sending a
- * request (specs/011-ai-prompt-batching/research.md Decision 2) — deliberately on the
- * low side (JSON-heavy prompts full of punctuation/numbers tokenize less efficiently than
- * prose) because `loadTransformersEngine()`'s exact tokenizer guard remains the real,
- * authoritative fits/doesn't-fit check (Decision 1); this estimate only needs to usually
- * avoid tripping that guard, not match it exactly.
+ * Re-exported from `modelConfig`, which is where it now lives so that planning code can convert
+ * characters to tokens without importing this module and, through it, the inference library.
  */
-export const CHARS_PER_TOKEN_ESTIMATE = 3;
+export { CHARS_PER_TOKEN_ESTIMATE };
 
 /** A positive finite integer, or undefined for anything else (missing, NaN, Infinity, <= 0). */
 function usableTokenCount(value: unknown): number | undefined {

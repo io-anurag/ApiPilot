@@ -42,15 +42,26 @@ const DEFAULT_CONTEXT_FLOOR_TOKENS = 2048;
  * (specs/014-ai-batching-policy).
  */
 const DEFAULT_PREFILL_MS_PER_TOKEN = 42;
-const DEFAULT_DECODE_MS_PER_TOKEN = 130;
+const DEFAULT_DECODE_MS_PER_TOKEN = 180;
 
 /**
- * How far a projected duration may exceed the configured timeout before the run is refused
- * outright. Above 1.0 so a marginal misestimate never blocks a run that would have succeeded —
- * the estimate exists to catch the hopeless case (the reported defect over-ran its budget by
- * ~6.9x), not to police borderline ones.
+ * How far a projected duration may exceed the configured timeout before the run is refused.
+ *
+ * 1.0: refuse anything projected to exceed the budget. This was 1.5, on the reasoning that
+ * "wrongly refusing a viable run would be a worse failure than wrongly attempting one, since the
+ * timeout still backstops the latter" — sound when projections were tiny (the prefill seed was 21x
+ * too low, so the factor never actually decided anything) and attempts were assumed cheap.
+ *
+ * Both halves of that reasoning have since failed. `budgetMs` *is* the per-request hard timeout, so
+ * permitting `projected <= budget x 1.5` approved work projected at 68 seconds against a 60-second
+ * wall — guaranteed to fail, every time. And an attempt is not cheap: with one unit per operation, a
+ * 39-operation specification spent roughly 40 minutes discovering unit-by-unit what the projection
+ * already implied. Above 1.0 the check cannot do the one job it exists for.
+ *
+ * Lower it below 1.0 for genuine headroom; raise it only if you would rather attempt marginal runs
+ * than be told about them (specs/014-ai-batching-policy).
  */
-const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.5;
+const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.0;
 
 /**
  * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy research.md
@@ -78,6 +89,20 @@ const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
  * stream in, and the run settles as `partial` with everything generated retained.
  */
 const DEFAULT_ENHANCEMENT_RUN_BUDGET_MS = 300_000;
+
+/**
+ * Conservative characters-per-token estimate used only to plan work before sending a request
+ * (specs/011-ai-prompt-batching research.md Decision 2) — deliberately on the low side, because
+ * JSON-heavy prompts full of punctuation and numbers tokenize less efficiently than prose, and the
+ * loaded engine's exact tokenizer guard remains the authoritative fits/doesn't-fit check. This
+ * estimate only needs to usually avoid tripping that guard, not match it exactly.
+ *
+ * Lives here rather than in `localProvider` so planning code can convert characters to tokens
+ * without importing the provider — and with it the whole inference library. `enhanceTestModel`
+ * needs exactly that for its pre-flight estimate, and pulling the runtime into the test-design
+ * layer would both slow every import and breach the provider boundary (constitution VI, IX).
+ */
+export const CHARS_PER_TOKEN_ESTIMATE = 3;
 const VALID_DTYPES: readonly ModelDType[] = [
   "fp32",
   "fp16",

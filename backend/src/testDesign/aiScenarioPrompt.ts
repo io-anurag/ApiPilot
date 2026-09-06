@@ -272,7 +272,7 @@ export function buildAIScenarioPrompt(apiModel: ApiModel, testModel: TestModel):
   // output-shape specification: showing one correct candidate is materially cheaper than describing
   // the same structure in prose, and was measured to be at least as effective.
   return JSON.stringify({
-    v: AI_SCENARIO_RESPONSE_VERSION,
+    responseVersion: AI_SCENARIO_RESPONSE_VERSION,
     task:
       `Suggest at most ${candidateCeiling} more test scenarios for ${subject} below. ` +
       "Use only fields, parameters and status codes shown. Do not repeat existingCoverage. " +
