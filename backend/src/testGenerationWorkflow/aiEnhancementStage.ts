@@ -91,7 +91,10 @@ function withBatchPatched(
   const batches: BatchProgress[] =
     progress && progress.totalBatches === total
       ? progress.batches.slice()
-      : Array.from({ length: total }, (_, i) => ({ index: i, status: "pending" as const }));
+      : Array.from({ length: total }, (_, i) => ({
+          index: i,
+          status: "pending" as const,
+        }));
   batches[index] = patch;
   const generatingSince = progress?.generatingSince ?? new Date().toISOString();
   return {
@@ -190,7 +193,9 @@ export async function runAiEnhancement(
       // batch has even started, so it is reviewable from the very start of the run — AI-derived
       // scenarios are appended to it incrementally as each batch succeeds (below), rather than
       // only once the whole run finishes (FR-009).
-      patchWorkflow({ reviewWorkspace: createReviewWorkspace(workflow.deterministicTestModel!) });
+      patchWorkflow({
+        reviewWorkspace: createReviewWorkspace(workflow.deterministicTestModel!),
+      });
     }
 
     const result = await enhanceTestModel(
@@ -217,7 +222,24 @@ export async function runAiEnhancement(
             ),
           );
         },
-        onBatchComplete: (index, total, outcome: BatchOutcome, newlyRetainedScenarios) => {
+        onBatchRetry: (index, total) => {
+          const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
+          setAiEnhancementProgress(
+            withBatchPatched(
+              current,
+              total,
+              index,
+              { index, status: "retrying" },
+              runBudgetMs,
+            ),
+          );
+        },
+        onBatchComplete: (
+          index,
+          total,
+          outcome: BatchOutcome,
+          newlyRetainedScenarios,
+        ) => {
           const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
           // `not-attempted` is reported as itself rather than folded into `failed`: the run
           // ceiling or a cancellation stopped it from ever being sent, and nothing about it went
@@ -236,7 +258,8 @@ export async function runAiEnhancement(
               {
                 index,
                 status: batchStatus,
-                errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
+                errorCategory:
+                  outcome.status === "failed" ? outcome.errorCategory : undefined,
               },
               runBudgetMs,
             ),
@@ -298,12 +321,19 @@ export async function runAiEnhancement(
           budgetMs: result.runBudgetExhausted.budgetMs,
           notStartedCount: result.runBudgetExhausted.notStartedCount,
           plannedCount: plannedUnitCount,
+          attemptedOperations: result.runBudgetExhausted.attemptedOperations,
+          totalOperations: result.runBudgetExhausted.totalOperations,
         });
       }
-      return explainFailure((result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause);
+      return explainFailure(
+        (result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause,
+      );
     };
 
-    if (result.aiProviderOutcome === "success" || result.aiProviderOutcome === "partial") {
+    if (
+      result.aiProviderOutcome === "success" ||
+      result.aiProviderOutcome === "partial"
+    ) {
       updateStage(
         "aiEnhancement",
         result.aiProviderOutcome === "success" ? "complete" : "partial",

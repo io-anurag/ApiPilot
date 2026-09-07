@@ -169,7 +169,7 @@ describe("aiEnhancementStage (skip/retry, US4)", () => {
       getInputBudget: async () => 10,
       infer: async (request) => {
         callCount += 1;
-        if (callCount === 1) {
+        if (callCount <= 2) {
           throw Object.assign(new Error("timed out"), { category: "TIMEOUT" });
         }
         return {
@@ -315,7 +315,11 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
         );
         if (firstAi) {
           applyScenarioDecisions([
-            { scenarioId: firstAi.scenarioId, revision: firstAi.revision, action: "accept" },
+            {
+              scenarioId: firstAi.scenarioId,
+              revision: firstAi.revision,
+              action: "accept",
+            },
           ]);
           decided = true;
         }
@@ -333,12 +337,12 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
   /**
    * Supersedes specs/012's FR-005 premise that a realistic specification is one batch. It never was
    * a design goal — it was a consequence of sizing batches by remaining context window, which is
-   * what specs/014-ai-batching-policy replaces. A multi-operation specification now plans one unit
-   * per operation, which is what makes progress, cancellation, and partial results reachable at all.
+   * what specs/014-ai-batching-policy replaces. A multi-operation specification now plans small
+   * work-bounded units, which is what makes progress, cancellation, and partial results reachable.
    * The invariant the original test protected — progress cleared once the stage settles — still
    * holds and is asserted here.
    */
-  it("plans one unit per operation for a multi-operation specification (specs/014-ai-batching-policy FR-001)", async () => {
+  it("plans bounded multi-operation units for a multi-operation specification (specs/014-ai-batching-policy FR-001)", async () => {
     await reachAiEnhancement();
     const operationCount = getCurrentWorkflow()!.apiModel!.operations.length;
     expect(operationCount).toBeGreaterThan(1);
@@ -354,7 +358,7 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
 
     const wf = await runAiEnhancement(provider);
 
-    expect(capturedProgress?.totalBatches).toBe(operationCount);
+    expect(capturedProgress?.totalBatches).toBe(Math.ceil(operationCount / 2));
     // Progress is cleared the moment the stage reaches a terminal status.
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
     expect(wf.stages.aiEnhancement.status).toBe("complete");
@@ -423,6 +427,7 @@ describe("aiEnhancementStage (concurrency guard, specs/012-ai-enhancement-progre
  */
 describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => {
   const previousBudget = process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+  const previousOperationsPerUnit = process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT;
 
   beforeEach(() => resetStore());
 
@@ -430,6 +435,11 @@ describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => 
     vi.restoreAllMocks();
     if (previousBudget === undefined) delete process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
     else process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = previousBudget;
+    if (previousOperationsPerUnit === undefined) {
+      delete process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT;
+    } else {
+      process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT = previousOperationsPerUnit;
+    }
   });
 
   /** A provider that charges `msPerCall` to a stubbed clock for every inference it serves. */
@@ -446,16 +456,22 @@ describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => 
   }
 
   it("settles partial at the ceiling and explains the shortfall rather than blaming the provider", async () => {
-    // valid.yaml's operations become one unit each (three of them), so a 1.5s ceiling at 1s per
-    // unit stops the run after two, leaving the third never started.
+    // Keep this timing test at one operation per unit: a 1.5s ceiling at 1s per unit stops the
+    // run after two, leaving the third never started.
     process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "1500";
+    process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT = "1";
     await reachAiEnhancement();
 
     const wf = await runAiEnhancement(timedProvider(1_000));
 
     expect(wf.stages.aiEnhancement.status).toBe("partial");
     expect(wf.aiEnhancement?.aiProviderOutcome).toBe("partial");
-    expect(wf.aiEnhancement?.runBudgetExhausted).toEqual({ budgetMs: 1_500, notStartedCount: 1 });
+    expect(wf.aiEnhancement?.runBudgetExhausted).toEqual({
+      budgetMs: 1_500,
+      notStartedCount: 1,
+      attemptedOperations: 2,
+      totalOperations: 3,
+    });
     const explanation = wf.stages.aiEnhancement.failureExplanation;
     expect(explanation?.category).toBe("too-slow");
     expect(explanation?.retryable).toBe(false);
@@ -488,7 +504,8 @@ describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => 
       infer: async (request) => {
         if (!seen) {
           seen = true;
-          observed = getCurrentWorkflow()!.stages.aiEnhancement.progress?.runBudgetRemainingMs;
+          observed =
+            getCurrentWorkflow()!.stages.aiEnhancement.progress?.runBudgetRemainingMs;
         }
         return mockProvider.infer(request);
       },

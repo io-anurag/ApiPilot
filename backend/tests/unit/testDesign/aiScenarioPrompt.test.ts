@@ -192,7 +192,9 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
   it("carries exactly the operations it was given, so a single-operation unit asks about one operation", () => {
     const prompt = promptFor([withoutBody]);
     expect(prompt.operations).toHaveLength(1);
-    expect((prompt.operations as Record<string, unknown>[])[0].path).toBe(withoutBody.path);
+    expect((prompt.operations as Record<string, unknown>[])[0].path).toBe(
+      withoutBody.path,
+    );
   });
 
   it("scopes existingCoverage to the operations in the unit, so a unit is never told about coverage it cannot see", () => {
@@ -220,6 +222,7 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
 
     const ceilingOf = (task: string) => Number(/at most (\d+)/.exec(task)?.[1]);
     expect(ceilingOf(single)).toBeGreaterThan(0);
+    expect(ceilingOf(single)).toBe(1);
     // Three operations must request more than one does — the previous per-request ceiling meant a
     // 200-operation specification could yield at most six AI scenarios in total.
     expect(ceilingOf(many)).toBe(ceilingOf(single) * 3);
@@ -265,17 +268,23 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
   });
 
   it("keeps the example a pure function of the operation, so unit derivation stays reproducible (SC-008)", () => {
-    const first = buildAIScenarioPrompt({ ...aiScenarioApiModel, operations: [withBody] }, aiScenarioBaseline);
+    const first = buildAIScenarioPrompt(
+      { ...aiScenarioApiModel, operations: [withBody] },
+      aiScenarioBaseline,
+    );
     for (let attempt = 0; attempt < 3; attempt += 1) {
       expect(
-        buildAIScenarioPrompt({ ...aiScenarioApiModel, operations: [withBody] }, aiScenarioBaseline),
+        buildAIScenarioPrompt(
+          { ...aiScenarioApiModel, operations: [withBody] },
+          aiScenarioBaseline,
+        ),
       ).toBe(first);
     }
   });
 
   it("sizes the output allowance to a single unit's reply (research.md Decision 2)", () => {
-    // 192 truncated the largest-body operation; 256 gave 6 of 6. A larger allowance costs nothing on
-    // easy operations because generation stops when the document closes.
-    expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(256);
+    // One candidate per operation keeps 192 tokens sufficient while avoiding long local-model
+    // generations that can consume the entire per-request timeout.
+    expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(192);
   });
 });

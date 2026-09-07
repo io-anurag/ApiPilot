@@ -135,7 +135,11 @@ describe("splitOperationsIntoBatches work bound (specs/014-ai-batching-policy)",
 
     const batches = splitOperationsIntoBatches(operations, buildPrompt, 1, 3);
 
-    expect(batches).toEqual([{ operations: [1] }, { operations: [2] }, { operations: [3] }]);
+    expect(batches).toEqual([
+      { operations: [1] },
+      { operations: [2] },
+      { operations: [3] },
+    ]);
   });
 
   it.each([
@@ -143,15 +147,27 @@ describe("splitOperationsIntoBatches work bound (specs/014-ai-batching-policy)",
     ["zero", 0],
     ["negative", -5],
     ["not finite", Number.NaN],
-  ])("falls back to context-only sizing when the work bound is %s, leaving existing callers unaffected", (_label, bound) => {
-    const operations = [1, 2, 3, 4, 5];
-    const budgetChars = buildPrompt([1, 2]).length;
+  ])(
+    "falls back to context-only sizing when the work bound is %s, leaving existing callers unaffected",
+    (_label, bound) => {
+      const operations = [1, 2, 3, 4, 5];
+      const budgetChars = buildPrompt([1, 2]).length;
 
-    const withBound = splitOperationsIntoBatches(operations, buildPrompt, budgetChars, bound);
-    const contextOnly = splitOperationsIntoBatches(operations, buildPrompt, budgetChars);
+      const withBound = splitOperationsIntoBatches(
+        operations,
+        buildPrompt,
+        budgetChars,
+        bound,
+      );
+      const contextOnly = splitOperationsIntoBatches(
+        operations,
+        buildPrompt,
+        budgetChars,
+      );
 
-    expect(withBound).toEqual(contextOnly);
-  });
+      expect(withBound).toEqual(contextOnly);
+    },
+  );
 
   it("treats a work bound larger than the operation count as no constraint", () => {
     const operations = [1, 2, 3];
@@ -254,6 +270,39 @@ describe("runBatchedInference", () => {
     });
   });
 
+  it("retries a failed batch once and then continues in order", async () => {
+    const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
+    const attempts: number[] = [];
+    const settled: string[] = [];
+    const retries: string[] = [];
+
+    const summary = await runBatchedInference(
+      batches,
+      async (batch) => {
+        attempts.push(batch.operations[0]);
+        if (
+          batch.operations[0] === 1 &&
+          attempts.filter((value) => value === 1).length === 1
+        ) {
+          throw new AIProviderError("INVALID_RESPONSE", "temporary malformed response");
+        }
+        return `result-${batch.operations[0]}`;
+      },
+      {
+        retryFailedBatches: 1,
+        onBatchRetry: (index, _total, retryNumber) =>
+          retries.push(`${index}:retry-${retryNumber}`),
+        onBatchSettled: (index, _total, outcome) =>
+          settled.push(`${index}:${outcome.status}`),
+      },
+    );
+
+    expect(attempts).toEqual([1, 1, 2]);
+    expect(retries).toEqual(["0:retry-1"]);
+    expect(settled).toEqual(["0:success", "1:success"]);
+    expect(summary.outcome).toBe("success");
+  });
+
   it("marks remaining batches as not-attempted once isTimedOut() reports true", async () => {
     const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
     let calls = 0;
@@ -331,7 +380,10 @@ describe("runBatchedInference", () => {
 
   it("behaves identically to today when onBatchStart/onBatchSettled are omitted (analyzeDependencies.ts's existing call site is unaffected)", async () => {
     const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
-    const summary = await runBatchedInference(batches, async (batch) => batch.operations[0]);
+    const summary = await runBatchedInference(
+      batches,
+      async (batch) => batch.operations[0],
+    );
 
     expect(summary.outcome).toBe("success");
     expect(summary.runs.map((run) => run.data)).toEqual([1, 2]);

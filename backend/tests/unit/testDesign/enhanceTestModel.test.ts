@@ -326,7 +326,12 @@ function perOperationCandidateProvider(budgetChars: number): AIProvider & {
         category: "invalid-format",
         targetLocation: "body",
         targetField: "email",
-        request: { pathParameters: {}, queryParameters: {}, headers: {}, body: { email: "bad" } },
+        request: {
+          pathParameters: {},
+          queryParameters: {},
+          headers: {},
+          body: { email: "bad" },
+        },
         assertions: [{ type: "status-code", expectedStatusCode: "409" }],
         rationale: `Exercise a malformed email value for ${op.path}.`,
         confidence: 0.8,
@@ -359,7 +364,8 @@ describe("enhanceTestModel (progress + incremental reveal, specs/012-ai-enhancem
     );
     const provider = perOperationCandidateProvider(budgetChars);
 
-    const calls: { index: number; total: number; outcome: string; paths: string[] }[] = [];
+    const calls: { index: number; total: number; outcome: string; paths: string[] }[] =
+      [];
     const result = await enhanceTestModel(largeModel, emptyBaseline, provider, {
       onBatchComplete: (index, total, outcome, newlyRetainedScenarios) => {
         calls.push({
@@ -418,9 +424,14 @@ describe("enhanceTestModel (progress + incremental reveal, specs/012-ai-enhancem
     const provider = perOperationCandidateProvider(1_000_000);
     const calls: { index: number; total: number }[] = [];
 
-    const withCallback = await enhanceTestModel(aiScenarioApiModel, aiScenarioBaseline, provider, {
-      onBatchComplete: (index, total) => calls.push({ index, total }),
-    });
+    const withCallback = await enhanceTestModel(
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      provider,
+      {
+        onBatchComplete: (index, total) => calls.push({ index, total }),
+      },
+    );
     const without = await enhanceTestModel(
       aiScenarioApiModel,
       aiScenarioBaseline,
@@ -502,24 +513,22 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
     const budgetChars = Math.floor(
       buildAIScenarioPrompt(largeModel, aiScenarioBaseline).length / 3,
     );
-    let timedOutOnce = false;
+    let failedAttempts = 0;
     const scripted = scriptedBatchProvider({
       budgetChars,
       scriptResponse: (request) => {
-        if (!timedOutOnce) {
-          timedOutOnce = true;
-          return {
-            contractVersion: 1,
-            requestId: request.requestId,
-            status: "error",
-            errorCategory: "TIMEOUT",
-            errorMessage: "provider timed out",
-            modelId: "scripted-model",
-            provider: "mock",
-            durationMs: 0,
-          };
-        }
-        return undefined;
+        if (failedAttempts >= 2) return undefined;
+        failedAttempts += 1;
+        return {
+          contractVersion: 1,
+          requestId: request.requestId,
+          status: "error",
+          errorCategory: "TIMEOUT",
+          errorMessage: "provider timed out",
+          modelId: "scripted-model",
+          provider: "mock",
+          durationMs: 0,
+        };
       },
     });
 
@@ -620,7 +629,9 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
     const largeModel = buildLargeAiScenarioApiModel(operationCount);
     const provider = perOperationCandidateProvider(1_000_000);
 
-    await enhanceTestModel(largeModel, { scenarios: [] }, provider, { operationsPerUnit: 1 });
+    await enhanceTestModel(largeModel, { scenarios: [] }, provider, {
+      operationsPerUnit: 1,
+    });
 
     expect(provider.calls).toHaveLength(operationCount);
   });
@@ -647,7 +658,9 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
     const largeModel = buildLargeAiScenarioApiModel(6);
     const provider = perOperationCandidateProvider(1_000_000);
 
-    await enhanceTestModel(largeModel, { scenarios: [] }, provider, { operationsPerUnit: 3 });
+    await enhanceTestModel(largeModel, { scenarios: [] }, provider, {
+      operationsPerUnit: 3,
+    });
 
     expect(provider.calls).toHaveLength(2);
   });
@@ -660,7 +673,7 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
       ...base,
       infer: async (request) => {
         call += 1;
-        if (call === 2) {
+        if (call === 2 || call === 3) {
           return {
             contractVersion: 1,
             requestId: request.requestId,
@@ -684,7 +697,7 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
     const aiScenarios = result.enhancedTestModel.scenarios.filter(
       (scenario) => scenario.provenance.source === "AI",
     );
-    // Three of four units succeeded; a failing unit costs only its own contribution.
+    // Three of four units succeeded; the permanently failing unit costs only its own contribution.
     expect(aiScenarios).toHaveLength(3);
   });
 
@@ -698,14 +711,16 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
       infer: async (request) => {
         attempted.push(request.requestId);
         call += 1;
-        if (call === 1) throw new Error("first unit explodes");
+        if (call <= 2) throw new Error("first unit explodes");
         return base.infer(request);
       },
     };
 
-    await enhanceTestModel(largeModel, { scenarios: [] }, flaky, { operationsPerUnit: 1 });
+    await enhanceTestModel(largeModel, { scenarios: [] }, flaky, {
+      operationsPerUnit: 1,
+    });
 
-    expect(attempted).toHaveLength(5);
+    expect(attempted).toHaveLength(6);
   });
 
   it("preserves every deterministic scenario when no unit succeeds (FR-022, SC-005)", async () => {
@@ -735,7 +750,9 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
           return base.infer(request);
         },
       };
-      await enhanceTestModel(largeModel, { scenarios: [] }, spy, { operationsPerUnit: 2 });
+      await enhanceTestModel(largeModel, { scenarios: [] }, spy, {
+        operationsPerUnit: 2,
+      });
       return seen;
     };
 
@@ -888,7 +905,12 @@ describe("enhanceTestModel run ceiling (specs/014-ai-batching-policy)", () => {
       "not-attempted",
     ]);
     expect(result.aiProviderOutcome).toBe("partial");
-    expect(result.runBudgetExhausted).toEqual({ budgetMs: 2_500, notStartedCount: 5 });
+    expect(result.runBudgetExhausted).toEqual({
+      budgetMs: 2_500,
+      notStartedCount: 5,
+      attemptedOperations: 3,
+      totalOperations: 8,
+    });
   });
 
   it("retains every scenario from the units that did run (FR-010)", async () => {
@@ -936,7 +958,12 @@ describe("enhanceTestModel run ceiling (specs/014-ai-batching-policy)", () => {
     expect(
       result.enhancedTestModel.scenarios.filter((s) => s.provenance.source === "AI"),
     ).toHaveLength(1);
-    expect(result.runBudgetExhausted).toEqual({ budgetMs: 1_000, notStartedCount: 2 });
+    expect(result.runBudgetExhausted).toEqual({
+      budgetMs: 1_000,
+      notStartedCount: 2,
+      attemptedOperations: 1,
+      totalOperations: 3,
+    });
   });
 
   it("does not charge model preparation to the ceiling, only generation (contracts/run-budget.md)", async () => {

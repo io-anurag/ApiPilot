@@ -105,5 +105,9 @@ export interface EnhancementResult {
   runBudgetExhausted?: {
     budgetMs: number;
     notStartedCount: number;
+    /** Number of operations in units that were actually started. */
+    attemptedOperations: number;
+    /** Total operations planned for enhancement. */
+    totalOperations: number;
   };
 }

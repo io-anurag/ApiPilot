@@ -50,7 +50,8 @@ export type StageStatus =
  */
 export interface BatchProgress {
   index: number;
-  status: "pending" | "in-progress" | "succeeded" | "failed" | "not-attempted";
+  status:
+    "pending" | "in-progress" | "retrying" | "succeeded" | "failed" | "not-attempted";
   /** Present only when status is "failed". */
   errorCategory?: AIErrorCategory;
 }

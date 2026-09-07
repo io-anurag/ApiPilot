@@ -242,7 +242,11 @@ export async function runBatchedInference<TOperation, TBatchData>(
      * existing callers are unaffected.
      */
     isCancelled?: () => boolean;
+    /** Number of immediate retries for a failed batch. Defaults to zero. */
+    retryFailedBatches?: number;
     onBatchStart?: (index: number, total: number) => void;
+    /** Fires before a failed batch is attempted again. */
+    onBatchRetry?: (index: number, total: number, retryNumber: number) => void;
     onBatchSettled?: (index: number, total: number, outcome: BatchOutcome) => void;
   } = {},
 ): Promise<BatchedInferenceSummary<TOperation, TBatchData>> {
@@ -257,24 +261,40 @@ export async function runBatchedInference<TOperation, TBatchData>(
       continue;
     }
     options.onBatchStart?.(index, total);
-    try {
-      const data = await runBatch(batch);
-      const outcome: BatchOutcome = { status: "success" };
-      runs.push({ batch, outcome, data });
-      options.onBatchSettled?.(index, total, outcome);
-    } catch (error) {
-      // Duck-typed rather than `instanceof AIProviderError`: `runBatch` may itself throw a
-      // provider-thrown error with a `category` property (e.g. a provider's `infer()`
-      // rejecting directly) in addition to the `AIProviderError` instances thrown by the
-      // response parsers, so both shapes must be recognized here.
-      const errorCategory: AIErrorCategory =
-        error && typeof error === "object" && "category" in error
-          ? (error as { category: AIErrorCategory }).category
-          : "INVALID_RESPONSE";
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const outcome: BatchOutcome = { status: "failed", errorCategory, errorMessage };
-      runs.push({ batch, outcome });
-      options.onBatchSettled?.(index, total, outcome);
+    let attempt = 0;
+    while (true) {
+      try {
+        const data = await runBatch(batch);
+        const outcome: BatchOutcome = { status: "success" };
+        runs.push({ batch, outcome, data });
+        options.onBatchSettled?.(index, total, outcome);
+        break;
+      } catch (error) {
+        const retryLimit =
+          typeof options.retryFailedBatches === "number" &&
+          Number.isFinite(options.retryFailedBatches) &&
+          options.retryFailedBatches > 0
+            ? Math.floor(options.retryFailedBatches)
+            : 0;
+        if (attempt < retryLimit && !options.isCancelled?.()) {
+          attempt += 1;
+          options.onBatchRetry?.(index, total, attempt);
+          continue;
+        }
+        // Duck-typed rather than `instanceof AIProviderError`: `runBatch` may itself throw a
+        // provider-thrown error with a `category` property (e.g. a provider's `infer()`
+        // rejecting directly) in addition to the `AIProviderError` instances thrown by the
+        // response parsers, so both shapes must be recognized here.
+        const errorCategory: AIErrorCategory =
+          error && typeof error === "object" && "category" in error
+            ? (error as { category: AIErrorCategory }).category
+            : "INVALID_RESPONSE";
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const outcome: BatchOutcome = { status: "failed", errorCategory, errorMessage };
+        runs.push({ batch, outcome });
+        options.onBatchSettled?.(index, total, outcome);
+        break;
+      }
     }
   }
 

@@ -8,8 +8,8 @@ const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".apipilot", "models");
  * Per-request inference timeout (specs/014-ai-batching-policy).
  *
  * 120 seconds, and the figure is arithmetic rather than caution. A single-operation enhancement
- * request costs its output allowance plus its prompt: 256 output tokens at the seeded decode rate
- * below is ~46s before a single prompt token is read, and a real 39-operation specification's units
+ * request costs its output allowance plus its prompt: 192 output tokens at the seeded decode rate
+ * below is ~35s before a single prompt token is read, and a real 39-operation specification's units
  * measured 430-834 prompt tokens, adding 18-35s of prefill. Every unit therefore projects at
  * 64-81s.
  *
@@ -87,17 +87,15 @@ const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.0;
  * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy research.md
  * Decision 1).
  *
- * One, because that is what measurement supports rather than what seems generous: across the six
- * operations of a real springdoc-style specification, one operation per request produced a validly
- * shaped reply for all six, while two and three operations both truncated mid-document even at a
- * larger output allowance, and a whole-specification request made the model echo the request back
- * instead of answering it.
+ * Two, so normal specifications are processed in fewer expensive model calls and completed
+ * results become useful sooner. Context-based splitting remains an upper safety bound, and callers
+ * can lower this to one for slower or smaller models if a two-operation response becomes too long.
  *
  * Configurable rather than fixed because that result describes this CPU and this 0.5B model, not
  * the domain: a faster machine or a stronger model may well manage more, and should be able to try
  * without a code change.
  */
-const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
+const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 2;
 
 /**
  * Wall-clock ceiling for a whole enhancement run (research.md Decision 5).
@@ -173,10 +171,7 @@ export interface AIConfig {
 }
 
 /** Reads a positive finite number from `env`, falling back to `fallback` when unset or invalid. */
-function readPositiveNumber(
-  raw: string | undefined,
-  fallback: number,
-): number {
+function readPositiveNumber(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
   const parsed = Number.parseFloat(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -192,9 +187,10 @@ export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
   const cacheDir = env.AI_MODEL_CACHE_DIR?.trim() || DEFAULT_CACHE_DIR;
   const useAccelerator = env.AI_USE_ACCELERATOR === "true";
   const rawDtype = env.AI_MODEL_DTYPE?.trim();
-  const dtype = rawDtype && (VALID_DTYPES as readonly string[]).includes(rawDtype)
-    ? (rawDtype as ModelDType)
-    : undefined;
+  const dtype =
+    rawDtype && (VALID_DTYPES as readonly string[]).includes(rawDtype)
+      ? (rawDtype as ModelDType)
+      : undefined;
 
   const parsedTimeout = env.AI_INFERENCE_TIMEOUT_MS
     ? Number.parseInt(env.AI_INFERENCE_TIMEOUT_MS, 10)

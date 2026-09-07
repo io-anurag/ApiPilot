@@ -64,7 +64,13 @@ describe("AiEnhancementStage", () => {
     // exceeded the configured timeout of 300000ms." — a category literal, an implementation
     // constant and a raw millisecond value, none of which a user can act on.
     const banner = screen.getByTestId("ai-enhancement-skipped");
-    for (const leak of ["TIMEOUT", "300000", "ms", "AI_INFERENCE_TIMEOUT_MS", "AIProviderError"]) {
+    for (const leak of [
+      "TIMEOUT",
+      "300000",
+      "ms",
+      "AI_INFERENCE_TIMEOUT_MS",
+      "AIProviderError",
+    ]) {
       expect(banner.textContent).not.toContain(leak);
     }
   });
@@ -75,7 +81,8 @@ describe("AiEnhancementStage", () => {
         status="skipped"
         failureExplanation={{
           category: "not-viable",
-          summary: "This specification needs about 34 minutes, but the limit is about 5 minutes.",
+          summary:
+            "This specification needs about 34 minutes, but the limit is about 5 minutes.",
           nextStep: "Enhance a smaller specification, or raise the time limit.",
           retryable: false,
         }}
@@ -109,8 +116,12 @@ describe("AiEnhancementStage", () => {
     );
 
     expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument();
-    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent("cancelled");
-    expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent("have been kept");
+    expect(screen.getByTestId("ai-enhancement-skip-banner")).toHaveTextContent(
+      "cancelled",
+    );
+    expect(screen.getByTestId("ai-enhancement-next-step")).toHaveTextContent(
+      "have been kept",
+    );
   });
 });
 
@@ -136,7 +147,7 @@ describe("AiEnhancementStage run ceiling progress", () => {
    * Stubs fetch so the run POST never resolves — keeping the component in its running state, which
    * is the only state that renders progress — while the status poll returns `progress`.
    */
-  function stubPollingWith(progress: unknown) {
+  function stubPollingWith(progress: unknown, reviewWorkspace?: unknown) {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url: string, init?: { method?: string } | null) => {
@@ -145,7 +156,12 @@ describe("AiEnhancementStage run ceiling progress", () => {
           ok: true,
           status: 200,
           json: () =>
-            Promise.resolve({ workflow: { stages: { aiEnhancement: { progress } } } }),
+            Promise.resolve({
+              workflow: {
+                stages: { aiEnhancement: { progress } },
+                ...(reviewWorkspace ? { reviewWorkspace } : {}),
+              },
+            }),
         });
       }),
     );
@@ -177,9 +193,12 @@ describe("AiEnhancementStage run ceiling progress", () => {
 
     const list = screen.getByLabelText("Batch progress");
     expect(list).toHaveTextContent("Batch 3: Not attempted");
-    expect(list).toHaveTextContent("Batch 4: Not attempted");
-    // A unit the ceiling never started is not a failure, and must not be coloured as one.
-    expect(screen.getByText("Batch 3: Not attempted")).toHaveAttribute("data-tone", "warning");
+    expect(list).toHaveTextContent("Batch 3: Not attempted (run limit)");
+    expect(list).toHaveTextContent("Batch 4: Not attempted (run limit)");
+    expect(screen.getByText("Batch 3: Not attempted (run limit)")).toHaveAttribute(
+      "data-tone",
+      "warning",
+    );
     expect(screen.getByText("Batch 2: Failed")).toHaveAttribute("data-tone", "danger");
     expect(screen.getByTestId("ai-enhancement-run-budget-remaining")).toHaveTextContent(
       "1m 30s of run time left",
@@ -206,6 +225,55 @@ describe("AiEnhancementStage run ceiling progress", () => {
     // read as a stalled run rather than a finishing one.
     expect(screen.getByTestId("ai-enhancement-run-budget-remaining")).toHaveTextContent(
       "run time limit reached; finishing the current batch",
+    );
+  });
+
+  it("shows completed AI scenarios while the enhancement request is still running", async () => {
+    stubPollingWith(
+      {
+        totalBatches: 2,
+        batches: [
+          { index: 0, status: "succeeded" },
+          { index: 1, status: "in-progress" },
+        ],
+        startedAt: new Date().toISOString(),
+        generatingSince: new Date().toISOString(),
+        phase: "generating",
+        cancelRequested: false,
+      },
+      {
+        scenarios: [
+          {
+            scenarioId: "ai-scenario-1",
+            revision: 1,
+            state: "pending",
+            isUserModified: false,
+            history: [],
+            scenario: {
+              id: "ai-scenario-1",
+              operationPath: "/items",
+              operationMethod: "GET",
+              category: "positive",
+              request: { pathParameters: {}, queryParameters: {}, headers: {} },
+              assertions: [],
+              provenance: {
+                source: "AI",
+                description: "AI suggestion",
+                duplicateOfRules: [],
+              },
+            },
+          },
+        ],
+      },
+    );
+
+    await startRun();
+
+    expect(screen.getByTestId("ai-enhancement-live-results")).toHaveTextContent(
+      "1 AI scenario ready",
+    );
+    expect(screen.getByLabelText("Live AI scenarios")).toHaveTextContent(
+      "GET/itemspositive",
     );
   });
 });

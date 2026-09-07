@@ -5,23 +5,35 @@ import {
   runAiEnhancement,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
-import type { AiEnhancementProgress, FailureExplanation } from "@apipilot/shared-domain";
+import type {
+  AiEnhancementProgress,
+  FailureExplanation,
+  ReviewWorkspace,
+} from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 
 /** How often the frontend polls workflow status while a run is in progress (research.md Decision 6). */
 const PROGRESS_POLL_INTERVAL_MS = 2000;
 
-const BATCH_STATUS_LABEL: Record<AiEnhancementProgress["batches"][number]["status"], string> = {
+const BATCH_STATUS_LABEL: Record<
+  AiEnhancementProgress["batches"][number]["status"],
+  string
+> = {
   pending: "Pending",
   "in-progress": "In progress",
+  retrying: "Retrying",
   succeeded: "Succeeded",
   failed: "Failed",
-  "not-attempted": "Not attempted",
+  "not-attempted": "Not attempted (run limit)",
 };
 
-const BATCH_STATUS_TONE: Record<AiEnhancementProgress["batches"][number]["status"], StatusTone> = {
+const BATCH_STATUS_TONE: Record<
+  AiEnhancementProgress["batches"][number]["status"],
+  StatusTone
+> = {
   pending: "neutral",
   "in-progress": "info",
+  retrying: "warning",
   succeeded: "success",
   failed: "danger",
   // Warning rather than danger: the run's time ceiling stopped these from being sent, so nothing
@@ -60,7 +72,9 @@ function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
   }, []);
 
   const preparing = progress.phase === "preparing";
-  const since = preparing ? progress.startedAt : progress.generatingSince ?? progress.startedAt;
+  const since = preparing
+    ? progress.startedAt
+    : (progress.generatingSince ?? progress.startedAt);
   const elapsed = formatElapsed(now - new Date(since).getTime());
 
   return (
@@ -92,7 +106,9 @@ function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
  */
 function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
   if (progress.totalBatches <= 1) return null;
-  const currentIndex = progress.batches.findIndex((batch) => batch.status === "in-progress");
+  const currentIndex = progress.batches.findIndex(
+    (batch) => batch.status === "in-progress",
+  );
   const settledCount = progress.batches.filter(
     (batch) =>
       batch.status === "succeeded" ||
@@ -134,6 +150,40 @@ function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function LiveScenarioPreview({ workspace }: { workspace: ReviewWorkspace }) {
+  const aiScenarios = workspace.scenarios.filter(
+    (item) => item.scenario.provenance.source === "AI",
+  );
+  if (aiScenarios.length === 0) return null;
+
+  return (
+    <section
+      data-testid="ai-enhancement-live-results"
+      className="space-y-2 rounded-md border border-success-200 bg-success-50 p-3"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-success-900">
+          {aiScenarios.length} AI scenario{aiScenarios.length === 1 ? "" : "s"} ready
+        </h3>
+        <span className="text-xs text-success-700">
+          Review actions unlock when generation finishes.
+        </span>
+      </div>
+      <ul className="space-y-1 text-sm text-success-900" aria-label="Live AI scenarios">
+        {aiScenarios.map((item) => (
+          <li key={item.scenarioId} className="flex flex-wrap gap-x-2 gap-y-1">
+            <span className="font-mono font-medium">
+              {item.scenario.operationMethod.toUpperCase()}
+            </span>
+            <span className="font-mono">{item.scenario.operationPath}</span>
+            <span className="text-success-700">{item.scenario.category}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -201,6 +251,9 @@ export function AiEnhancementStage({
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [progress, setProgress] = useState<AiEnhancementProgress | undefined>(undefined);
+  const [liveWorkspace, setLiveWorkspace] = useState<ReviewWorkspace | undefined>(
+    undefined,
+  );
   const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function stopPolling() {
@@ -220,10 +273,12 @@ export function AiEnhancementStage({
     setError(null);
     setCancelling(false);
     setProgress(undefined);
+    setLiveWorkspace(undefined);
     pollHandleRef.current = setInterval(() => {
       void fetchCurrentWorkflow().then((result) => {
         if (result.ok && result.workflow) {
           setProgress(result.workflow.stages.aiEnhancement.progress);
+          setLiveWorkspace(result.workflow.reviewWorkspace);
         }
       });
     }, PROGRESS_POLL_INTERVAL_MS);
@@ -233,6 +288,7 @@ export function AiEnhancementStage({
     setRunning(false);
     setCancelling(false);
     setProgress(undefined);
+    setLiveWorkspace(undefined);
     if (!result.ok) {
       setError(result.message);
       return;
@@ -298,8 +354,12 @@ export function AiEnhancementStage({
           </button>
         )}
         {running && progress && <RunProgress progress={progress} />}
+        {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
         {running && (
-          <CancelButton onCancel={handleCancel} cancelling={cancelling || !!progress?.cancelRequested} />
+          <CancelButton
+            onCancel={handleCancel}
+            cancelling={cancelling || !!progress?.cancelRequested}
+          />
         )}
         {error && (
           <p
@@ -333,10 +393,14 @@ export function AiEnhancementStage({
           {running ? "Enhancing…" : "Enhance with AI"}
         </button>
         {running && (
-          <CancelButton onCancel={handleCancel} cancelling={cancelling || !!progress?.cancelRequested} />
+          <CancelButton
+            onCancel={handleCancel}
+            cancelling={cancelling || !!progress?.cancelRequested}
+          />
         )}
       </div>
       {running && progress && <RunProgress progress={progress} />}
+      {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
       {error && (
         <p
           role="alert"

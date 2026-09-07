@@ -25,16 +25,13 @@ export const AI_SCENARIO_RESPONSE_VERSION = 3;
  * Generation bound for a scenario-design response, sized against measured throughput
  * (specs/014-ai-batching-policy research.md Decision 2).
  *
- * 256 covers a single operation's reply. Measured across the six operations of a real
- * springdoc-style specification: a 192-token allowance produced a valid reply for five of them and
- * truncated on the one with the largest request body (four fields); 256 produced a valid reply for
- * all six, 14.6–30.4 seconds each, comfortably inside the 60-second per-request default.
+ * With one candidate requested per operation, 192 tokens leaves room for the complete response
+ * while reducing the amount of CPU generation the local 0.5B model can spend on a single batch.
+ * The earlier 256-token allowance still timed out on larger real specifications because the model
+ * sometimes continued generating until the cap instead of closing the JSON document.
  *
- * A larger allowance costs nothing on operations that do not need it — the same easy operation
- * measured 14.6s at 192 and 14.3s at 320 — because generation stops when the document closes. The
- * allowance is a cap, not a price, so 256 buys coverage of body-heavy operations without penalising
- * the common case. 320 was also valid but bought nothing on this corpus while moving the worst case
- * closer to the timeout.
+ * A larger allowance is not free on this model: when it does not stop at the closing brace, every
+ * reserved token increases CPU time and can push the request into the timeout window.
  *
  * This was 384 when a request covered every operation that fit the context window. That is no longer
  * what a request is: sizing work by operation (research.md Decision 1) is what makes the reply short
@@ -43,7 +40,7 @@ export const AI_SCENARIO_RESPONSE_VERSION = 3;
  * Passed to both `getInputBudget()` (so batch planning reserves this much context for the output)
  * and the request itself, so the two never disagree about how much output room exists.
  */
-export const AI_SCENARIO_MAX_OUTPUT_TOKENS = 256;
+export const AI_SCENARIO_MAX_OUTPUT_TOKENS = 192;
 
 /**
  * Candidates requested per operation, rather than per request (FR-003).
@@ -54,13 +51,17 @@ export const AI_SCENARIO_MAX_OUTPUT_TOKENS = 256;
  * at most six AI scenarios against 1,350 deterministic ones — proportionally *less* help the larger
  * the specification got.
  *
- * Two rather than more because a reply that arrives beats a longer one that truncates
- * (constitution XII — Quality Over Quantity).
+ * One rather than more because a reply that arrives beats a longer one that truncates. The local
+ * 0.5B model can spend the full output allowance describing two candidates for a body-heavy
+ * operation, leaving the enclosing JSON document incomplete and causing the whole batch to be
+ * rejected (constitution XII — Quality Over Quantity).
  */
-export const AI_SCENARIO_MAX_CANDIDATES_PER_OPERATION = 2;
+export const AI_SCENARIO_MAX_CANDIDATES_PER_OPERATION = 1;
 
 /** Only the constraint fields that shape a test value; absent ones are omitted, not nulled. */
-function summarizeSchema(schema: SchemaConstraint | undefined): Record<string, unknown> | undefined {
+function summarizeSchema(
+  schema: SchemaConstraint | undefined,
+): Record<string, unknown> | undefined {
   if (!schema) return undefined;
   const summary: Record<string, unknown> = {};
   if (schema.type) summary.type = schema.type;
@@ -80,7 +81,7 @@ function summarizeSchema(schema: SchemaConstraint | undefined): Record<string, u
  * Most fields a request body declares, before the list stops paying for itself.
  *
  * Prompt tokens cost ~42ms each before generation begins (research.md Decision 10), and a request
- * that asks for at most two scenarios cannot use forty fields. Truncation is deterministic —
+ * that asks for at most one scenario cannot use forty fields. Truncation is deterministic —
  * declaration order — so the same specification always sends the same fields (SC-008).
  */
 const MAX_BODY_FIELDS_SHOWN = 12;
@@ -89,7 +90,9 @@ const MAX_BODY_FIELDS_SHOWN = 12;
 const MAX_COVERED_FIELDS_SHOWN = 8;
 
 /** Request-body fields flattened one level: name, requiredness, and their own constraints. */
-function summarizeBodyFields(schema: SchemaConstraint | undefined): Record<string, unknown>[] {
+function summarizeBodyFields(
+  schema: SchemaConstraint | undefined,
+): Record<string, unknown>[] {
   if (!schema) return [];
   const required = new Set(schema.required);
   return Object.entries(schema.properties)
@@ -141,17 +144,24 @@ function summarizeOperation(operation: ApiOperation): Record<string, unknown> {
   if (operation.requestBody) {
     // The first declared content type only: alternatives are near-always the same schema in a
     // different encoding, and carrying every one multiplies prompt size for no added constraint.
-    const [contentType, schema] = Object.entries(operation.requestBody.contentTypes)[0] ?? [];
+    const [contentType, schema] =
+      Object.entries(operation.requestBody.contentTypes)[0] ?? [];
     const fields = summarizeBodyFields(schema);
     if (contentType && fields.length > 0) {
-      summary.requestBody = { contentType, required: operation.requestBody.required, fields };
+      summary.requestBody = {
+        contentType,
+        required: operation.requestBody.required,
+        fields,
+      };
     }
   }
 
   // Documented status codes only — never inferred, so the model cannot be led into asserting a
   // response the specification does not declare (constitution I).
   if (operation.responses.length > 0) {
-    summary.documentedResponses = operation.responses.map((response) => response.statusCode);
+    summary.documentedResponses = operation.responses.map(
+      (response) => response.statusCode,
+    );
   }
 
   return summary;
@@ -172,7 +182,9 @@ function summarizeOperation(operation: ApiOperation): Record<string, unknown> {
  * Deterministic: operations and categories are emitted in first-seen order over a stable scenario
  * list, and field lists preserve that order, so the same input always produces the same bytes (SC-008).
  */
-function summarizeBaseline(testModel: TestModel): Record<string, Record<string, string[]>> {
+function summarizeBaseline(
+  testModel: TestModel,
+): Record<string, Record<string, string[]>> {
   const byOperation: Record<string, Record<string, string[]>> = {};
   for (const scenario of testModel.scenarios) {
     const operationKey = `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath}`;
@@ -211,7 +223,11 @@ const WORKED_EXAMPLE = {
       targetField: "itemId",
       // The request is always these three keyed objects, plus `body` when the operation takes one.
       // Demonstrating that is what stopped the model inventing flat shapes like {"limit":5}.
-      request: { pathParameters: { itemId: "not-a-uuid" }, queryParameters: {}, headers: {} },
+      request: {
+        pathParameters: { itemId: "not-a-uuid" },
+        queryParameters: {},
+        headers: {},
+      },
       assertions: [{ type: "status-code", expectedStatusCode: "400" }],
       rationale: "An invalid identifier should be rejected before any lookup.",
       confidence: 0.8,
@@ -276,7 +292,7 @@ export function buildAIScenarioPrompt(apiModel: ApiModel, testModel: TestModel):
     task:
       `Suggest at most ${candidateCeiling} more test scenarios for ${subject} below. ` +
       "Use only fields, parameters and status codes shown. Do not repeat existingCoverage. " +
-      "Reply with only a JSON object: {\"candidates\":[...]} shaped exactly like the example.",
+      'Reply with only a JSON object: {"candidates":[...]} shaped exactly like the example.',
     operations: operations.map(summarizeOperation),
     existingCoverage: summarizeBaseline(baselineForOperations(testModel, operations)),
     // The closed category vocabulary. Measured against the default model: with the categories

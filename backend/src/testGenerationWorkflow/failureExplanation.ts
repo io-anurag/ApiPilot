@@ -12,18 +12,12 @@
  * (constitution IX, X), and is a pure total function so every branch is directly unit-testable
  * without a provider (constitution XXI).
  */
-import type {
-  AIErrorCategory,
-  FailureExplanation,
-} from "@apipilot/shared-domain";
+import type { AIErrorCategory, FailureExplanation } from "@apipilot/shared-domain";
 import { formatDuration } from "../ai/viability";
 
 /** Everything that can end an AI enhancement run unsuccessfully. */
 export type FailureCause =
-  | AIErrorCategory
-  | "cancelled"
-  | "not-viable"
-  | "run-budget-exhausted";
+  AIErrorCategory | "cancelled" | "not-viable" | "run-budget-exhausted";
 
 export interface FailureContext {
   /** For "not-viable": how long the work was projected to take. */
@@ -34,8 +28,12 @@ export interface FailureContext {
   operationLabel?: string;
   /** For "run-budget-exhausted": how many planned units the ceiling never started. */
   notStartedCount?: number;
-  /** For "run-budget-exhausted": how many units the run planned in total. */
+  /** Legacy batch count, retained for callers that only have unit-level data. */
   plannedCount?: number;
+  /** For "run-budget-exhausted": how many operations were actually started. */
+  attemptedOperations?: number;
+  /** For "run-budget-exhausted": how many operations were planned in total. */
+  totalOperations?: number;
   /**
    * The provider's own readiness reason. Passed through only when it is already plain language;
    * callers must not forward raw diagnostic strings, which FR-024 forbids surfacing.
@@ -92,10 +90,13 @@ export function explainFailure(
       // the specification as its ceiling allowed and handed the rest back unattempted, which is a
       // different thing to tell a user than "the model was too slow".
       const covered =
-        context.notStartedCount !== undefined && context.plannedCount !== undefined
-          ? `${context.plannedCount - context.notStartedCount} of ${context.plannedCount} ` +
+        context.attemptedOperations !== undefined && context.totalOperations !== undefined
+          ? `${context.attemptedOperations} of ${context.totalOperations} ` +
             `operations were covered`
-          : "part of the specification was covered";
+          : context.notStartedCount !== undefined && context.plannedCount !== undefined
+            ? `${context.plannedCount - context.notStartedCount} of ${context.plannedCount} ` +
+              `batches were covered`
+            : "part of the specification was covered";
       const allowed =
         context.budgetMs !== undefined
           ? ` within the ${formatDuration(context.budgetMs)} allowed for one run`

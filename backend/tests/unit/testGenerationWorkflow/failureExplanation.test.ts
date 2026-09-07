@@ -47,12 +47,14 @@ describe("explainFailure", () => {
         budgetMs: 300_000,
         notStartedCount: 32,
         plannedCount: 39,
+        attemptedOperations: 10,
+        totalOperations: 39,
       });
 
       // Shares TIMEOUT's user-facing category per contracts/run-budget.md's outcome mapping...
       expect(explanation.category).toBe("too-slow");
       // ...but not its wording: nothing timed out and nothing was lost.
-      expect(explanation.summary).toContain("7 of 39 operations");
+      expect(explanation.summary).toContain("10 of 39 operations");
       expect(explanation.summary).toContain("about 5 minutes");
       expect(explanation.nextStep).toContain("kept");
       // A retry re-runs the same units in the same order and stops in the same place (FR-025).

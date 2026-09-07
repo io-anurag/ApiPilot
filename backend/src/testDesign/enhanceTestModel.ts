@@ -68,6 +68,18 @@ function batchFraction(failedCount: number, totalBatchCount: number): string {
   return totalBatchCount > 1 ? ` for ${failedCount} of ${totalBatchCount} batches` : "";
 }
 
+const SAFE_RESPONSE_FAILURE_REASONS = new Set([
+  "AI response was empty",
+  "AI response was not valid JSON",
+  "AI response did not match the supported response shape",
+  "AI response declared an unsupported response version",
+  "AI response contained a malformed candidate",
+]);
+
+function safeResponseFailureReason(errorMessage: string): string | undefined {
+  return SAFE_RESPONSE_FAILURE_REASONS.has(errorMessage) ? errorMessage : undefined;
+}
+
 interface BatchScenarioResult {
   candidate: AIScenarioCandidate;
   scenario: ReturnType<typeof candidateToScenario>;
@@ -175,6 +187,8 @@ export interface EnhanceTestModelOptions {
   isCancelled?: () => boolean;
   /** Fires immediately before a batch's inference call starts. */
   onBatchStart?: (index: number, total: number) => void;
+  /** Fires before a failed batch is retried. */
+  onBatchRetry?: (index: number, total: number, retryNumber: number) => void;
   /**
    * Fires immediately after a batch settles, with exactly the scenarios newly retained by
    * that batch (empty for a failed/not-attempted batch) — never the whole accumulated set.
@@ -310,7 +324,8 @@ export async function enhanceTestModel(
     batches,
     (batch) => {
       const index = nextBatchIndex++;
-      const batchRequestId = batches.length > 1 ? `${requestId}-batch${index}` : requestId;
+      const batchRequestId =
+        batches.length > 1 ? `${requestId}-batch${index}` : requestId;
       return runOneBatch(
         batch,
         apiModel,
@@ -327,7 +342,9 @@ export async function enhanceTestModel(
     {
       isTimedOut: isRunBudgetExhausted,
       isCancelled: options.isCancelled,
+      retryFailedBatches: 1,
       onBatchStart: options.onBatchStart,
+      onBatchRetry: options.onBatchRetry,
       onBatchSettled: (index, total, outcome) => {
         // Per-unit diagnostics (specs/014-ai-batching-policy FR-018, constitution XX). Without
         // this, a run where every unit failed logged nothing at all about why: the
@@ -340,6 +357,10 @@ export async function enhanceTestModel(
           operationCount: batches[index]?.operations.length,
           status: outcome.status,
           errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
+          failureReason:
+            outcome.status === "failed"
+              ? safeResponseFailureReason(outcome.errorMessage)
+              : undefined,
           retainedCount: (batchScenariosByIndex[index] ?? []).length,
         });
 
@@ -373,8 +394,29 @@ export async function enhanceTestModel(
    * partly attempted".
    */
   const ceilingReport = runBudgetExhausted
-    ? { budgetMs: runBudgetMs, notStartedCount: summary.notAttemptedCount }
+    ? {
+        budgetMs: runBudgetMs,
+        notStartedCount: summary.notAttemptedCount,
+        attemptedOperations: summary.runs
+          .filter((run) => run.outcome.status !== "not-attempted")
+          .reduce((count, run) => count + run.batch.operations.length, 0),
+        totalOperations: apiModel.operations.length,
+      }
     : undefined;
+
+  if (ceilingReport) {
+    logger.warn("run_budget_exhausted", {
+      budgetMs: ceilingReport.budgetMs,
+      totalUnits: summary.totalCount,
+      attemptedCount:
+        summary.successCount + summary.failureCount - summary.notAttemptedCount,
+      succeededCount: summary.successCount,
+      failedCount: summary.failureCount - summary.notAttemptedCount,
+      notAttemptedCount: summary.notAttemptedCount,
+      attemptedOperations: ceilingReport.attemptedOperations,
+      totalOperations: ceilingReport.totalOperations,
+    });
+  }
 
   if (summary.successCount === 0) {
     // No batch succeeded: nothing was ever added to `outcomes` (runOneBatch only mutates it

@@ -42,7 +42,7 @@ const DEFAULT_PLANNING: InferencePlanningConfig = {
   prefillMsPerToken: 42,
   decodeMsPerToken: 180,
   viabilitySafetyFactor: 1.0,
-  enhancementOperationsPerUnit: 1,
+  enhancementOperationsPerUnit: 2,
   enhancementRunBudgetMs: 300_000,
 };
 
@@ -153,8 +153,10 @@ export function resolveModelCapacity(
 /** System messages used to frame a request for a chat-capable model, keyed by expected output. */
 const SYSTEM_PROMPTS: Record<"text" | "json", string> = {
   json:
-    "You are an API test design assistant. Reply with a single valid JSON document and nothing " +
-    "else: no explanation, no markdown code fences, no commentary before or after the JSON.",
+    "You are an API test design assistant. Your entire response must be one complete valid JSON " +
+    "object. Start with { and end with }. Output no markdown, no backticks, no explanation, and " +
+    "no commentary before or after the JSON. If you cannot suggest a scenario, output exactly " +
+    '{"candidates":[]}.',
   text: "You are an API test design assistant. Answer concisely and directly.",
 };
 
@@ -211,10 +213,16 @@ export async function loadTransformersEngine(
         ) => string;
       };
       let prompt = input;
-      if (tokenizer.chat_template && typeof tokenizer.apply_chat_template === "function") {
+      if (
+        tokenizer.chat_template &&
+        typeof tokenizer.apply_chat_template === "function"
+      ) {
         prompt = tokenizer.apply_chat_template(
           [
-            { role: "system", content: SYSTEM_PROMPTS[options.expectedOutputFormat ?? "text"] },
+            {
+              role: "system",
+              content: SYSTEM_PROMPTS[options.expectedOutputFormat ?? "text"],
+            },
             { role: "user", content: input },
           ],
           { tokenize: false, add_generation_prompt: true },
@@ -554,7 +562,11 @@ export class LocalProvider implements AIProvider {
     logger.info("load_start", { modelId: this.config.modelId });
 
     if (!this.config.useAccelerator) {
-      const engine = await this.loadEngine(this.config, "cpu", this.planning.contextFloorTokens);
+      const engine = await this.loadEngine(
+        this.config,
+        "cpu",
+        this.planning.contextFloorTokens,
+      );
       this.acceleratorActive = false;
       this.readiness.markReady({
         modelId: this.config.modelId,
@@ -566,7 +578,11 @@ export class LocalProvider implements AIProvider {
     }
 
     try {
-      const engine = await this.loadEngine(this.config, "gpu", this.planning.contextFloorTokens);
+      const engine = await this.loadEngine(
+        this.config,
+        "gpu",
+        this.planning.contextFloorTokens,
+      );
       this.acceleratorActive = true;
       this.readiness.markReady({
         modelId: this.config.modelId,
@@ -578,7 +594,11 @@ export class LocalProvider implements AIProvider {
     } catch {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
       // automatically, but surface a visible (never silent) notice (FR-008).
-      const engine = await this.loadEngine(this.config, "cpu", this.planning.contextFloorTokens);
+      const engine = await this.loadEngine(
+        this.config,
+        "cpu",
+        this.planning.contextFloorTokens,
+      );
       this.acceleratorActive = false;
       this.readiness.markReady({
         modelId: this.config.modelId,
