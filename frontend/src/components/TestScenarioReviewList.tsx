@@ -5,6 +5,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
+import { BUTTON_STYLES } from "./controlStyles";
 
 function operationKey(item: ReviewScenarioWire): string {
   return `${item.scenario.operationMethod} ${item.scenario.operationPath}`;
@@ -15,9 +16,6 @@ const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
   accepted: "success",
   rejected: "danger",
 };
-
-const BUTTON_CLASSES =
-  "rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2";
 
 type PendingBulkAction = {
   scope: "filtered" | "selected";
@@ -148,7 +146,7 @@ export function TestScenarioReviewList({
             id="review-operation-filter"
             value={operationFilter}
             onChange={(e) => updateOperationFilter(e.target.value)}
-            className="rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             <option value="all">All operations</option>
             {operations.map((op) => (
@@ -170,7 +168,7 @@ export function TestScenarioReviewList({
             id="review-category-filter"
             value={categoryFilter}
             onChange={(e) => updateCategoryFilter(e.target.value)}
-            className="rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             <option value="all">All categories</option>
             {categories.map((category) => (
@@ -192,7 +190,7 @@ export function TestScenarioReviewList({
             id="review-source-filter"
             value={sourceFilter}
             onChange={(e) => updateSourceFilter(e.target.value)}
-            className="rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             <option value="all">All sources</option>
             {sources.map((source) => (
@@ -210,7 +208,7 @@ export function TestScenarioReviewList({
             No scenarios match the current filters.
           </p>
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="min-w-0 divide-y divide-border rounded-md border border-border">
             <li className="flex items-center gap-3 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
               <span className="w-4" aria-hidden="true" />
               <span>Scenario</span>
@@ -220,7 +218,7 @@ export function TestScenarioReviewList({
             </li>
             {filtered.slice(0, visibleCount).map((item) => (
               <Fragment key={item.scenarioId}>
-                <li className="flex items-center gap-3 px-3 py-2">
+                <li className="flex min-w-0 items-center gap-3 px-3 py-2">
                   <input
                     type="checkbox"
                     checked={manualSelectionIds.has(item.scenarioId)}
@@ -232,12 +230,12 @@ export function TestScenarioReviewList({
                     type="button"
                     aria-pressed={item.scenarioId === selectedScenarioId}
                     onClick={() => onSelect(item)}
-                    className={`flex flex-1 flex-wrap items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
+                    className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
                       item.scenarioId === selectedScenarioId ? "bg-brand-50" : ""
                     }`}
                   >
                     <HttpMethodBadge method={item.scenario.operationMethod} />
-                    <span className="font-mono text-slate-800">
+                    <span className="min-w-0 break-all font-mono text-slate-800">
                       {item.scenario.operationPath}
                     </span>
                     <span className="text-muted">—</span>
@@ -295,7 +293,7 @@ export function TestScenarioReviewList({
               onClick={() =>
                 setPendingBulk({ scope: "filtered", action: "accept", items: filtered })
               }
-              className={BUTTON_CLASSES}
+              className={BUTTON_STYLES.secondary}
             >
               Accept all filtered ({filtered.length})
             </button>
@@ -304,7 +302,7 @@ export function TestScenarioReviewList({
               onClick={() =>
                 setPendingBulk({ scope: "filtered", action: "reject", items: filtered })
               }
-              className={BUTTON_CLASSES}
+              className={BUTTON_STYLES.secondary}
             >
               Reject all filtered ({filtered.length})
             </button>
@@ -321,7 +319,7 @@ export function TestScenarioReviewList({
                   items: manuallySelected,
                 })
               }
-              className={BUTTON_CLASSES}
+              className={BUTTON_STYLES.secondary}
             >
               Accept selected ({manuallySelected.length})
             </button>
@@ -334,7 +332,7 @@ export function TestScenarioReviewList({
                   items: manuallySelected,
                 })
               }
-              className={BUTTON_CLASSES}
+              className={BUTTON_STYLES.secondary}
             >
               Reject selected ({manuallySelected.length})
             </button>
@@ -350,8 +348,9 @@ export function TestScenarioReviewList({
           {filtered.length > visibleCount && (
             <button
               type="button"
+              aria-label={`Load more scenarios; showing ${Math.min(visibleCount, filtered.length)} of ${filtered.length}`}
               onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-              className={BUTTON_CLASSES}
+              className={BUTTON_STYLES.secondary}
             >
               Load more
             </button>

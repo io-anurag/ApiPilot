@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReviewEditContent } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
+import { BUTTON_STYLES } from "./controlStyles";
 
 /** Edit and AI-regeneration controls for AI-derived and user-modified scenarios (US3, FR-011-FR-016). */
 export function TestScenarioReviewRefinement({
@@ -9,18 +10,23 @@ export function TestScenarioReviewRefinement({
   error,
   onEdit,
   onRegenerate,
-}: {
+}: Readonly<{
   item: ReviewScenarioWire;
   submitting: boolean;
   error?: string;
   onEdit: (edit: ReviewEditContent) => void;
   onRegenerate: () => void;
-}) {
+}>) {
   const [body, setBody] = useState(
     JSON.stringify(item.scenario.request.body ?? {}, null, 2),
   );
   const [bodyError, setBodyError] = useState<string | null>(null);
   const canRegenerate = item.scenario.provenance.source === "AI";
+
+  useEffect(() => {
+    setBody(JSON.stringify(item.scenario.request.body ?? {}, null, 2));
+    setBodyError(null);
+  }, [item.scenarioId, item.revision]);
 
   function handleSubmitEdit() {
     let parsedBody: unknown;
@@ -40,7 +46,10 @@ export function TestScenarioReviewRefinement({
   }
 
   return (
-    <div data-testid="review-scenario-refinement" className="space-y-2 border-t border-border pt-4">
+    <div
+      data-testid="review-scenario-refinement"
+      className="space-y-2 border-t border-border pt-4"
+    >
       <div className="flex flex-col gap-1">
         <label htmlFor="review-edit-body" className="text-xs font-medium text-muted">
           Request body
@@ -51,11 +60,15 @@ export function TestScenarioReviewRefinement({
           onChange={(e) => setBody(e.target.value)}
           disabled={submitting}
           rows={6}
-          className="w-full rounded-md border border-border bg-surface p-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+          className="w-full rounded-md border border-border bg-surface p-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
         />
       </div>
       {bodyError && (
-        <p role="alert" data-testid="review-edit-body-error" className="text-sm font-medium text-danger-700">
+        <p
+          role="alert"
+          data-testid="review-edit-body-error"
+          className="text-sm font-medium text-danger-700"
+        >
           {bodyError}
         </p>
       )}
@@ -64,7 +77,7 @@ export function TestScenarioReviewRefinement({
           type="button"
           onClick={handleSubmitEdit}
           disabled={submitting}
-          className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.secondary}
         >
           Save edit
         </button>
@@ -73,7 +86,7 @@ export function TestScenarioReviewRefinement({
           type="button"
           onClick={onRegenerate}
           disabled={submitting || !canRegenerate}
-          className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.secondary}
         >
           Regenerate with AI
         </button>
@@ -85,7 +98,11 @@ export function TestScenarioReviewRefinement({
       </div>
 
       {error && (
-        <p role="alert" data-testid="review-refinement-error" className="text-sm font-medium text-danger-700">
+        <p
+          role="alert"
+          data-testid="review-refinement-error"
+          className="text-sm font-medium text-danger-700"
+        >
           {error}
         </p>
       )}

@@ -12,16 +12,33 @@ import { AiEnhancementStage } from "../components/AiEnhancementStage";
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
+import { BUTTON_STYLES } from "../components/controlStyles";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
  * in-progress, per-stage breakdown is WorkflowStageTracker's job once a workflow exists. */
-const PIPELINE_PREVIEW_STEPS = ["OpenAPI", "Analysis", "Test Design", "Generated Tests", "Results"];
+const PIPELINE_PREVIEW_STEPS = [
+  "OpenAPI",
+  "Analysis",
+  "Test Design",
+  "Generated Tests",
+  "Results",
+];
 
-function UploadIcon({ className }: { className?: string }) {
+function UploadIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={className}
+    >
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.5V5m0 0L8 9m4-4l4 4" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 16v2a2 2 0 002 2h10a2 2 0 002-2v-2" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5 16v2a2 2 0 002 2h10a2 2 0 002-2v-2"
+      />
     </svg>
   );
 }
@@ -97,19 +114,28 @@ export function TestGenerationWorkflowPage() {
 
   if (loading) {
     return (
-      <p data-testid="workflow-loading" className="text-sm text-muted">
-        Loading…
-      </p>
+      <div
+        data-testid="workflow-loading"
+        className="flex min-h-64 items-center justify-center"
+      >
+        <p className="flex items-center gap-3 border border-border bg-surface px-4 py-3 text-sm text-muted shadow-sm">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 animate-pulse rounded-full bg-brand-500"
+          />
+          <span>Restoring workflow…</span>
+        </p>
+      </div>
     );
   }
 
   return (
-    <section data-testid="test-generation-workflow-page" className="space-y-4">
+    <section data-testid="test-generation-workflow-page" className="space-y-5">
       {pendingFile && (
         <div
           role="alertdialog"
           data-testid="discard-existing-confirmation"
-          className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4"
+          className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
         >
           <p className="text-sm text-warning-700">
             A workflow is already in progress. Starting a new one from &ldquo;
@@ -120,7 +146,7 @@ export function TestGenerationWorkflowPage() {
               type="button"
               onClick={() => doUpload(pendingFile, true)}
               disabled={uploading}
-              className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={BUTTON_STYLES.danger}
             >
               Discard and start new
             </button>
@@ -128,7 +154,7 @@ export function TestGenerationWorkflowPage() {
               type="button"
               onClick={() => setPendingFile(null)}
               disabled={uploading}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={BUTTON_STYLES.secondary}
             >
               Cancel
             </button>
@@ -136,71 +162,107 @@ export function TestGenerationWorkflowPage() {
         </div>
       )}
       {showHome && (
-        <div className="space-y-6">
-          <div className="space-y-2 text-center">
-            <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-              Turn an OpenAPI specification into a test suite
-            </h2>
-            <p className="mx-auto max-w-xl text-sm text-muted">
-              Upload a spec to run it through deterministic scenario generation, optional AI
-              enhancement, and guided review — every generated test stays traceable to its
-              source.
-            </p>
+        <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-8 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)] lg:gap-x-16">
+          <div className="space-y-7">
+            <div className="space-y-4">
+              <p className="font-mono text-xs font-semibold uppercase text-brand-700">
+                Specification to executable tests
+              </p>
+              <h2 className="max-w-3xl text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
+                Turn an OpenAPI specification into a test suite
+              </h2>
+              <p className="max-w-2xl text-base leading-7 text-muted">
+                Analyze endpoints, generate deterministic scenarios, enhance selectively
+                with local AI, and review every result with its provenance intact.
+              </p>
+            </div>
+            <div className="grid max-w-2xl grid-cols-3 gap-px border border-border bg-border sm:grid-cols-5">
+              <div className="bg-surface px-3 py-3">
+                <p className="font-mono text-xs text-brand-700">LOCAL</p>
+                <p className="mt-1 text-xs text-muted">Private by default</p>
+              </div>
+              <div className="bg-surface px-3 py-3">
+                <p className="font-mono text-xs text-brand-700">REPEATABLE</p>
+                <p className="mt-1 text-xs text-muted">Deterministic core</p>
+              </div>
+              <div className="bg-surface px-3 py-3">
+                <p className="font-mono text-xs text-brand-700">TRACEABLE</p>
+                <p className="mt-1 text-xs text-muted">Visible provenance</p>
+              </div>
+            </div>
           </div>
-          <ol className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-2">
+          <div className="border border-slate-300 bg-surface shadow-[8px_8px_0_0_#dce3e0]">
+            <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  New test generation run
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  OpenAPI 3.x · YAML · up to 10 MB
+                </p>
+              </div>
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+            </div>
+            <div className="space-y-5 p-5 sm:p-6">
+              <div className="flex h-12 w-12 items-center justify-center border border-brand-200 bg-brand-50 text-brand-700">
+                <UploadIcon className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold text-slate-950">
+                  Upload specification
+                </h3>
+                <p className="text-sm leading-6 text-muted">
+                  The document stays in your local workflow and is never sent to a cloud
+                  AI provider.
+                </p>
+              </div>
+              <input
+                type="file"
+                accept=".yaml,.yml"
+                aria-label="Upload OpenAPI specification"
+                onChange={handleFileChange}
+                disabled={uploading}
+                className="block w-full border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-700 file:mr-3 file:cursor-pointer file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:border-brand-400 hover:file:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {workflow && (
+                <button
+                  type="button"
+                  onClick={() => setShowStartPage(false)}
+                  className="text-sm font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus-visible:underline"
+                >
+                  Cancel — return to my in-progress workflow
+                </button>
+              )}
+            </div>
+          </div>
+          <ol className="col-span-full grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-5">
             {PIPELINE_PREVIEW_STEPS.map((label, index) => (
-              <li key={label} className="flex items-center gap-1.5">
-                <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-slate-600">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
-                    {index + 1}
-                  </span>
-                  {label}
-                </span>
-                {index < PIPELINE_PREVIEW_STEPS.length - 1 && (
-                  <span aria-hidden="true" className="text-border">
-                    →
-                  </span>
-                )}
+              <li
+                key={label}
+                className="flex items-center gap-2 bg-surface px-3 py-2.5 text-xs font-medium text-slate-600"
+              >
+                <span className="font-mono text-brand-700">0{index + 1}</span>
+                <span>{label}</span>
               </li>
             ))}
           </ol>
-          <div className="mx-auto max-w-md space-y-4 rounded-lg border border-dashed border-border bg-surface p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-              <UploadIcon className="h-6 w-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-slate-900">
-                Upload OpenAPI Specification
-              </h3>
-              <p className="text-sm text-muted">YAML (.yaml, .yml), up to 10 MB</p>
-            </div>
-            <input
-              type="file"
-              accept=".yaml,.yml"
-              aria-label="Upload OpenAPI specification"
-              onChange={handleFileChange}
-              disabled={uploading}
-              className="mx-auto block text-sm text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            {workflow && (
-              <button
-                type="button"
-                onClick={() => setShowStartPage(false)}
-                className="text-sm font-medium text-brand-600 hover:text-brand-700 focus:outline-none focus-visible:underline"
-              >
-                Cancel — return to my in-progress workflow
-              </button>
-            )}
-          </div>
         </div>
       )}
       {workflow && !showStartPage && (
-        <div>
+        <div className="flex items-center justify-between border-b border-border pb-4">
+          <div>
+            <p className="font-mono text-xs font-semibold uppercase text-brand-700">
+              Active run
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Review and advance the generated test workflow.
+            </p>
+          </div>
           <button
             type="button"
             aria-label="Start a new workflow from a different specification"
             onClick={() => setShowStartPage(true)}
-            className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className="border border-border bg-surface px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             Start a new workflow
           </button>
@@ -218,18 +280,17 @@ export function TestGenerationWorkflowPage() {
       )}
       {workflow && !showStartPage && (
         <>
-          <div className="rounded-lg border border-border bg-surface p-4 shadow-sm">
+          <div className="border border-border bg-surface p-3 shadow-sm">
             <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
           </div>
           {displayStageId !== workflow.activeStageId && (
-            <p
-              role="status"
+            <output
               data-testid="revisiting-notice"
-              className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+              className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
             >
               Revisiting a completed stage. Making a change here will mark later stages as
               needing to be redone.
-            </p>
+            </output>
           )}
           {displayStageId === "apiReview" && workflow.apiModel && (
             <ApiReviewStage apiModel={workflow.apiModel} onAdvanced={handleAdvanced} />
@@ -275,9 +336,9 @@ export function TestGenerationWorkflowPage() {
 
 function DeterministicGenerationTrigger({
   onAdvanced,
-}: {
+}: Readonly<{
   onAdvanced: (result: WorkflowResult) => void;
-}) {
+}>) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -305,7 +366,7 @@ function DeterministicGenerationTrigger({
         type="button"
         onClick={handleGenerate}
         disabled={generating}
-        className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className={BUTTON_STYLES.primary}
       >
         {generating ? "Generating…" : "Generate Baseline Test Suite"}
       </button>

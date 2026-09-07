@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
+import { BUTTON_STYLES } from "./controlStyles";
 
 /** Accept/reject controls with required rejection feedback and failure recovery (US2, FR-006-FR-010). */
 export function TestScenarioReviewDecision({
@@ -37,7 +38,7 @@ export function TestScenarioReviewDecision({
           type="button"
           onClick={onAccept}
           disabled={submitting || !isPending}
-          className="rounded-md bg-success-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-success-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-success-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.success}
         >
           Accept
         </button>
@@ -54,14 +55,14 @@ export function TestScenarioReviewDecision({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={submitting || !isPending}
-            className="rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
           />
         </div>
         <button
           type="button"
           onClick={handleReject}
           disabled={submitting || !isPending || reason.trim().length === 0}
-          className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.danger}
         >
           Reject
         </button>

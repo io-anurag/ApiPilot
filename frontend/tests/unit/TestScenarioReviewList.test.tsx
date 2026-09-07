@@ -202,4 +202,26 @@ describe("TestScenarioReviewList bulk actions", () => {
       screen.queryByRole("button", { name: /Accept selected/ }),
     ).not.toBeInTheDocument();
   });
+
+  it("describes pagination progress in the load-more action", () => {
+    const scenarios = Array.from({ length: 51 }, (_, index) =>
+      makeItem({
+        scenarioId: `s${index + 1}`,
+        scenario: { id: `s${index + 1}` } as never,
+      }),
+    );
+
+    render(
+      <TestScenarioReviewList
+        scenarios={scenarios}
+        selectedScenarioId={null}
+        onSelect={vi.fn()}
+        onBulkDecision={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Load more scenarios; showing 50 of 51" }),
+    ).toBeInTheDocument();
+  });
 });

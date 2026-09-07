@@ -30,12 +30,17 @@ function historyEntryLabel(entry: ReviewScenarioWire["history"][number]): string
 }
 
 /** Shows one review scenario's request, assertions, provenance, and review status (US1, FR-001-FR-005). */
-export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire }) {
+export function TestScenarioReviewDetail({
+  item,
+}: Readonly<{ item: ReviewScenarioWire }>) {
   const { scenario, state, history } = item;
   const provenance = scenario.provenance;
 
   return (
-    <article data-testid="review-scenario-detail" className="space-y-4 rounded-lg border border-border bg-surface p-4">
+    <article
+      data-testid="review-scenario-detail"
+      className="space-y-4 rounded-md border border-border bg-surface p-4"
+    >
       <div>
         <h4 className="text-sm font-semibold text-slate-900">
           {scenario.category}
@@ -50,7 +55,10 @@ export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire })
             <StatusBadge label={reviewStateLabel(state)} tone={STATE_TONES[state]} />
           </span>
           <span data-testid="review-scenario-origin">
-            <ProvenanceBadge source={provenance.source} modifiedByUser={item.isUserModified} />
+            <ProvenanceBadge
+              source={provenance.source}
+              modifiedByUser={item.isUserModified}
+            />
           </span>
         </div>
       </div>
@@ -79,8 +87,8 @@ export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire })
                 <dt className="text-muted">Assumptions</dt>
                 <dd>
                   <ul className="ml-4 list-disc">
-                    {provenance.aiAssumptions.map((assumption, i) => (
-                      <li key={i}>{assumption}</li>
+                    {provenance.aiAssumptions.map((assumption) => (
+                      <li key={assumption}>{assumption}</li>
                     ))}
                   </ul>
                 </dd>
@@ -91,7 +99,9 @@ export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire })
       </section>
 
       <section>
-        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">Request</h5>
+        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+          Request
+        </h5>
         <pre
           data-testid="review-scenario-request"
           className="mt-1 overflow-x-auto rounded-md border border-border bg-slate-900 p-3 font-mono text-xs text-slate-100"
@@ -101,13 +111,17 @@ export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire })
       </section>
 
       <section>
-        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">Expected Assertions</h5>
+        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+          Expected Assertions
+        </h5>
         {scenario.assertions.length === 0 ? (
-          <p className="text-sm text-muted">No documented response was available to assert against.</p>
+          <p className="text-sm text-muted">
+            No documented response was available to assert against.
+          </p>
         ) : (
           <ul className="mt-1 space-y-1 text-sm text-slate-700">
-            {scenario.assertions.map((assertion, i) => (
-              <li key={i}>
+            {scenario.assertions.map((assertion) => (
+              <li key={JSON.stringify(assertion)}>
                 {assertion.type === "status-code"
                   ? `Status code: ${assertion.expectedStatusCode}`
                   : "Response schema conformance"}
@@ -119,10 +133,19 @@ export function TestScenarioReviewDetail({ item }: { item: ReviewScenarioWire })
 
       {history.length > 0 && (
         <section>
-          <h5 className="text-xs font-medium uppercase tracking-wide text-muted">Review History</h5>
-          <ul data-testid="review-scenario-history" className="mt-1 space-y-1 text-sm text-slate-700">
-            {history.map((entry, i) => (
-              <li key={i}>{historyEntryLabel(entry)}</li>
+          <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+            Review History
+          </h5>
+          <ul
+            data-testid="review-scenario-history"
+            className="mt-1 space-y-1 text-sm text-slate-700"
+          >
+            {history.map((entry) => (
+              <li
+                key={`${entry.type}-${entry.type === "decision" ? entry.decision.revision : entry.revision}-${entry.type === "decision" ? entry.decision.recordedAt : entry.recordedAt}`}
+              >
+                {historyEntryLabel(entry)}
+              </li>
             ))}
           </ul>
         </section>

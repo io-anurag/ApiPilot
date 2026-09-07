@@ -11,6 +11,7 @@ import type {
   ReviewWorkspace,
 } from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { BUTTON_STYLES } from "./controlStyles";
 
 /** How often the frontend polls workflow status while a run is in progress (research.md Decision 6). */
 const PROGRESS_POLL_INTERVAL_MS = 2000;
@@ -63,7 +64,7 @@ function formatElapsed(ms: number): string {
  * Elapsed time is derived client-side from the server's timestamps rather than pushed, so poll
  * responses stay stable between real state changes.
  */
-function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
+function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -79,7 +80,7 @@ function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
 
   return (
     <div data-testid="ai-enhancement-run-progress" className="space-y-2">
-      <p role="status" aria-live="polite" className="text-sm text-slate-600">
+      <output aria-live="polite" className="block text-sm text-slate-600">
         {preparing ? (
           <>
             <span data-testid="ai-enhancement-phase">Preparing the local model</span>
@@ -92,7 +93,7 @@ function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
         )}
         <span data-testid="ai-enhancement-elapsed">{elapsed} elapsed</span>
         {progress.cancelRequested && " — finishing the current batch, then stopping."}
-      </p>
+      </output>
       <BatchProgressList progress={progress} />
     </div>
   );
@@ -104,7 +105,7 @@ function RunProgress({ progress }: { progress: AiEnhancementProgress }) {
  * a sequence, and showing "batch 1 of 1" would imply a multi-step process that does not exist.
  * Phase and elapsed time are shown for such runs by `RunProgress` above.
  */
-function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
+function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgress }>) {
   if (progress.totalBatches <= 1) return null;
   const currentIndex = progress.batches.findIndex(
     (batch) => batch.status === "in-progress",
@@ -153,7 +154,7 @@ function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
   );
 }
 
-function LiveScenarioPreview({ workspace }: { workspace: ReviewWorkspace }) {
+function LiveScenarioPreview({ workspace }: Readonly<{ workspace: ReviewWorkspace }>) {
   const aiScenarios = workspace.scenarios.filter(
     (item) => item.scenario.provenance.source === "AI",
   );
@@ -195,24 +196,24 @@ function LiveScenarioPreview({ workspace }: { workspace: ReviewWorkspace }) {
 function CancelButton({
   onCancel,
   cancelling,
-}: {
+}: Readonly<{
   onCancel: () => void;
   cancelling: boolean;
-}) {
+}>) {
   return (
     <button
       type="button"
       onClick={onCancel}
       disabled={cancelling}
       data-testid="ai-enhancement-cancel"
-      className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      className={BUTTON_STYLES.secondary}
     >
       {cancelling ? "Stopping…" : "Cancel"}
     </button>
   );
 }
 
-function RetryIcon({ className }: { className?: string }) {
+function RetryIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
       <path
@@ -235,7 +236,7 @@ export function AiEnhancementStage({
   failureExplanation,
   cancelled,
   onAdvanced,
-}: {
+}: Readonly<{
   status?: "skipped" | "partial";
   /**
    * What the user is shown for a non-success outcome. Replaces the previous `aiErrorCategory` /
@@ -246,7 +247,7 @@ export function AiEnhancementStage({
   /** True when the outcome came from the user cancelling rather than a failure (FR-021). */
   cancelled?: boolean;
   onAdvanced: (result: WorkflowResult) => void;
-}) {
+}>) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -321,12 +322,11 @@ export function AiEnhancementStage({
     return (
       <section
         data-testid={isPartial ? "ai-enhancement-partial" : "ai-enhancement-skipped"}
-        className="space-y-3 rounded-lg border border-warning-200 bg-warning-50 p-4"
+        className="space-y-3 rounded-md border border-warning-200 bg-warning-50 p-4"
       >
-        <div
-          role="status"
+        <output
           data-testid="ai-enhancement-skip-banner"
-          className="space-y-1 text-sm text-warning-700"
+          className="block space-y-1 text-sm text-warning-700"
         >
           <p className="font-medium">
             {failureExplanation?.summary ??
@@ -341,7 +341,7 @@ export function AiEnhancementStage({
           {isPartial && !cancelled && (
             <p>The scenarios that were generated successfully are included below.</p>
           )}
-        </div>
+        </output>
         {canRetry && (
           <button
             type="button"
@@ -377,7 +377,7 @@ export function AiEnhancementStage({
   return (
     <section
       data-testid="ai-enhancement-stage"
-      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">Enhance With Local AI</h2>
       <p className="text-sm text-slate-600">
@@ -388,7 +388,7 @@ export function AiEnhancementStage({
           type="button"
           onClick={handleRun}
           disabled={running}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.primary}
         >
           {running ? "Enhancing…" : "Enhance with AI"}
         </button>

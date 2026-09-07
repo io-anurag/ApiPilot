@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { TestScenario } from "@apipilot/shared-domain";
 import { TestScenarioDetail } from "../../src/components/TestScenarioDetail";
+import { TestScenarioList } from "../../src/components/TestScenarioList";
 
 const scenario: TestScenario = {
   id: "1",
@@ -10,14 +11,17 @@ const scenario: TestScenario = {
   category: "invalid-type",
   targetLocation: "body",
   targetField: "name",
-  request: { pathParameters: { widgetId: "abc" }, queryParameters: {}, headers: {}, body: { name: 12345 } },
-  assertions: [
-    { type: "status-code", expectedStatusCode: "400" },
-  ],
+  request: {
+    pathParameters: { widgetId: "abc" },
+    queryParameters: {},
+    headers: {},
+    body: { name: 12345 },
+  },
+  assertions: [{ type: "status-code", expectedStatusCode: "400" }],
   provenance: {
     source: "RULE",
     rule: "invalid-type",
-    description: "body field \"name\" set to a value of an incompatible type.",
+    description: 'body field "name" set to a value of an incompatible type.',
     duplicateOfRules: [],
   },
 };
@@ -39,5 +43,15 @@ describe("TestScenarioDetail", () => {
     render(<TestScenarioDetail scenario={gapScenario} />);
 
     expect(screen.getByText(/No documented response was available/)).toBeInTheDocument();
+  });
+});
+
+describe("TestScenarioList", () => {
+  it("shows an explicit empty state when generation produces no scenarios", () => {
+    render(<TestScenarioList scenarios={[]} onSelect={() => undefined} />);
+
+    expect(screen.getByTestId("test-scenario-list-empty")).toHaveTextContent(
+      "No test scenarios were generated",
+    );
   });
 });

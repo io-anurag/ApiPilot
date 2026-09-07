@@ -6,7 +6,7 @@ import {
 } from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 
-function CheckIcon({ className }: { className?: string }) {
+function CheckIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
       <path
@@ -21,12 +21,12 @@ function CheckIcon({ className }: { className?: string }) {
 /** Chip container styling per stage status — border/background echo the StatusBadge tone so the
  * whole chip reads as a unit; the badge's text remains the sole load-bearing signal (FR-016). */
 const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
-  "not-yet-reached": "border-border bg-surface",
-  active: "border-brand-300 bg-brand-50 shadow-sm",
-  complete: "border-success-500/30 bg-success-50",
-  stale: "border-warning-500/40 bg-warning-50",
-  skipped: "border-border bg-slate-50",
-  partial: "border-warning-500/40 bg-warning-50",
+  "not-yet-reached": "border-transparent bg-surface",
+  active: "border-brand-300 bg-brand-50",
+  complete: "border-transparent bg-success-50",
+  stale: "border-warning-300 bg-warning-50",
+  skipped: "border-transparent bg-slate-50",
+  partial: "border-warning-300 bg-warning-50",
 };
 
 const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
@@ -81,10 +81,10 @@ const REVISABLE_STAGES = new Set<WorkflowStageId>(["scenarioReview", "workflowRe
 export function WorkflowStageTracker({
   workflow,
   onViewStage,
-}: {
+}: Readonly<{
   workflow: TestGenerationWorkflow;
   onViewStage?: (stageId: WorkflowStageId) => void;
-}) {
+}>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
   const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
 
@@ -92,9 +92,9 @@ export function WorkflowStageTracker({
     <nav
       aria-label="Workflow progress"
       data-testid="workflow-stage-tracker"
-      className="space-y-3"
+      className="space-y-3 overflow-hidden"
     >
-      <ol className="flex flex-wrap gap-2">
+      <ol className="flex gap-1 overflow-x-auto pb-1">
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
           const stage = workflow.stages[stageId];
           const isActive = workflow.activeStageId === stageId;
@@ -106,11 +106,11 @@ export function WorkflowStageTracker({
             <li
               key={stageId}
               aria-current={isActive ? "step" : undefined}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isActive ? "font-semibold text-slate-900" : "text-slate-600"}`}
+              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isActive ? "font-semibold text-slate-950" : "text-slate-600"}`}
             >
               <span
                 aria-hidden="true"
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${INDEX_TONE_CLASSES[stage.status]}`}
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold ${INDEX_TONE_CLASSES[stage.status]}`}
               >
                 {stage.status === "complete" ? (
                   <CheckIcon className="h-3 w-3" />
@@ -144,10 +144,9 @@ export function WorkflowStageTracker({
         })}
       </ol>
       {issues.length > 0 && (
-        <div
-          role="status"
+        <output
           data-testid="workflow-analysis-issues"
-          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
           <p>{issues.length} specification analysis issue(s) were found:</p>
           <ul className="ml-4 list-disc">
@@ -157,17 +156,16 @@ export function WorkflowStageTracker({
               </li>
             ))}
           </ul>
-        </div>
+        </output>
       )}
       {dependencyAiIssue && (
-        <p
-          role="status"
+        <output
           data-testid="workflow-dependency-ai-issue"
-          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
           AI-assisted dependency detection did not complete ({dependencyAiIssue});
           deterministic relationships are still shown.
-        </p>
+        </output>
       )}
     </nav>
   );

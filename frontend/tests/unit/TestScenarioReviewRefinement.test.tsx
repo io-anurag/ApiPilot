@@ -145,4 +145,36 @@ describe("TestScenarioReviewRefinement", () => {
       "unavailable",
     );
   });
+
+  it("refreshes the editor when a new server revision arrives", () => {
+    const { rerender } = render(
+      <TestScenarioReviewRefinement
+        item={aiItem}
+        submitting={false}
+        onEdit={vi.fn()}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Request body"), {
+      target: { value: '{"quantity": 999}' },
+    });
+    rerender(
+      <TestScenarioReviewRefinement
+        item={{
+          ...aiItem,
+          revision: 1,
+          scenario: {
+            ...aiItem.scenario,
+            request: { ...aiItem.scenario.request, body: { quantity: 10 } },
+          },
+        }}
+        submitting={false}
+        onEdit={vi.fn()}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Request body")).toHaveValue('{\n  "quantity": 10\n}');
+  });
 });

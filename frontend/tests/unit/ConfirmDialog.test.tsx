@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ConfirmDialog } from "../../src/components/ConfirmDialog";
 
@@ -76,5 +77,56 @@ describe("ConfirmDialog", () => {
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+  });
+
+  it("keeps keyboard focus inside the dialog", () => {
+    render(
+      <ConfirmDialog
+        message="Reject selected workflows"
+        affectedCount={3}
+        requireReason
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const reason = screen.getByLabelText("Reason");
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    reason.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(cancel);
+
+    cancel.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(reason);
+  });
+
+  it("restores focus to the control that opened it", () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open confirmation
+          </button>
+          {open && (
+            <ConfirmDialog
+              message="Approve selected workflows"
+              affectedCount={3}
+              onConfirm={vi.fn()}
+              onCancel={() => setOpen(false)}
+            />
+          )}
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Open confirmation" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(document.activeElement).toBe(trigger);
   });
 });
