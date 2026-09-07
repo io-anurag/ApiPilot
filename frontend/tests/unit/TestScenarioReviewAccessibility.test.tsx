@@ -83,7 +83,10 @@ describe("Test scenario review accessibility", () => {
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes[0]).toHaveAccessibleName(/positive/);
     expect(checkboxes[1]).toHaveAccessibleName(/missing-required-field/);
-    expect(checkboxes[0].getAttribute("aria-label")).not.toBe(checkboxes[1].getAttribute("aria-label"));
+    expect(checkboxes.at(-1)).toHaveAccessibleName("Select all filtered scenarios");
+    expect(checkboxes[0].getAttribute("aria-label")).not.toBe(
+      checkboxes[1].getAttribute("aria-label"),
+    );
 
     checkboxes[0].focus();
     expect(document.activeElement).toBe(checkboxes[0]);
@@ -99,8 +102,12 @@ describe("Test scenario review accessibility", () => {
       />,
     );
 
-    const acceptAllFiltered = screen.getByRole("button", { name: "Accept all filtered (2)" });
-    const rejectAllFiltered = screen.getByRole("button", { name: "Reject all filtered (2)" });
+    const acceptAllFiltered = screen.getByRole("button", {
+      name: "Accept all filtered (2)",
+    });
+    const rejectAllFiltered = screen.getByRole("button", {
+      name: "Reject all filtered (2)",
+    });
     expect(acceptAllFiltered.tagName).toBe("BUTTON");
     expect(rejectAllFiltered.tagName).toBe("BUTTON");
 

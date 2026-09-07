@@ -33,15 +33,27 @@ function makeScenarios(): ReviewScenarioWire[] {
   return [
     makeItem({
       scenarioId: "s1",
-      scenario: { operationPath: "/widgets", operationMethod: "POST", category: "positive" } as never,
+      scenario: {
+        operationPath: "/widgets",
+        operationMethod: "POST",
+        category: "positive",
+      } as never,
     }),
     makeItem({
       scenarioId: "s2",
-      scenario: { operationPath: "/widgets", operationMethod: "POST", category: "missing-required-field" } as never,
+      scenario: {
+        operationPath: "/widgets",
+        operationMethod: "POST",
+        category: "missing-required-field",
+      } as never,
     }),
     makeItem({
       scenarioId: "s3",
-      scenario: { operationPath: "/widgets/{id}", operationMethod: "GET", category: "positive" } as never,
+      scenario: {
+        operationPath: "/widgets/{id}",
+        operationMethod: "GET",
+        category: "positive",
+      } as never,
     }),
   ];
 }
@@ -58,9 +70,10 @@ describe("TestScenarioReviewList bulk actions", () => {
     );
 
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes).toHaveLength(4);
     expect(checkboxes[0]).toHaveAccessibleName(/POST \/widgets — positive/);
     expect(checkboxes[1]).toHaveAccessibleName(/POST \/widgets — missing-required-field/);
+    expect(checkboxes[3]).toHaveAccessibleName("Select all filtered scenarios");
   });
 
   it("shows an all-filtered bulk action whose count matches the current filter", () => {
@@ -73,10 +86,16 @@ describe("TestScenarioReviewList bulk actions", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "POST /widgets" } });
+    fireEvent.change(screen.getByLabelText("Operation"), {
+      target: { value: "POST /widgets" },
+    });
 
-    expect(screen.getByRole("button", { name: "Accept all filtered (2)" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject all filtered (2)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Accept all filtered (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject all filtered (2)" }),
+    ).toBeInTheDocument();
   });
 
   it("confirms a filtered bulk accept and reports the exact filtered set", () => {
@@ -90,7 +109,9 @@ describe("TestScenarioReviewList bulk actions", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "POST /widgets" } });
+    fireEvent.change(screen.getByLabelText("Operation"), {
+      target: { value: "POST /widgets" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Accept all filtered (2)" }));
 
     expect(screen.getByTestId("confirm-dialog-count")).toHaveTextContent("2");
@@ -121,10 +142,16 @@ describe("TestScenarioReviewList bulk actions", () => {
     const confirmButton = screen.getByRole("button", { name: "Reject (3)" });
     expect(confirmButton).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Duplicates" } });
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Duplicates" },
+    });
     fireEvent.click(confirmButton);
 
-    expect(onBulkDecision).toHaveBeenCalledWith(expect.any(Array), "reject", "Duplicates");
+    expect(onBulkDecision).toHaveBeenCalledWith(
+      expect.any(Array),
+      "reject",
+      "Duplicates",
+    );
   });
 
   it("bulk-decides only on the manually selected scenarios", () => {
@@ -146,7 +173,10 @@ describe("TestScenarioReviewList bulk actions", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Accept \(2\)/ }));
 
     const [items] = onBulkDecision.mock.calls[0];
-    expect(items.map((i: ReviewScenarioWire) => i.scenarioId).sort()).toEqual(["s1", "s3"]);
+    expect(items.map((i: ReviewScenarioWire) => i.scenarioId).sort()).toEqual([
+      "s1",
+      "s3",
+    ]);
   });
 
   it("clears the manual selection when the active filter changes (FR-019)", () => {
@@ -160,10 +190,16 @@ describe("TestScenarioReviewList bulk actions", () => {
     );
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    expect(screen.getByRole("button", { name: "Accept selected (1)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Accept selected (1)" }),
+    ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "positive" } });
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: "positive" },
+    });
 
-    expect(screen.queryByRole("button", { name: /Accept selected/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Accept selected/ }),
+    ).not.toBeInTheDocument();
   });
 });
