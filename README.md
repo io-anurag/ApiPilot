@@ -4,219 +4,196 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
 [![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
-[![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml)
-[![stars - ApiPilot](https://img.shields.io/github/stars/io-anurag/ApiPilot?style=social)](https://github.com/io-anurag/ApiPilot)
-[![forks - ApiPilot](https://img.shields.io/github/forks/io-anurag/ApiPilot?style=social)](https://github.com/io-anurag/ApiPilot)
-[![GitHub tag](https://img.shields.io/github/tag/io-anurag/ApiPilot?include_prereleases=&sort=semver&color=blue)](https://github.com/io-anurag/ApiPilot/releases/)
-[![issues - ApiPilot](https://img.shields.io/github/issues/io-anurag/ApiPilot)](https://github.com/io-anurag/ApiPilot/issues)
 
-ApiPilot is an AI-powered API test engineering platform that transforms OpenAPI/YAML
-specifications into intelligent, executable, and explainable API test suites — deterministically
-by default, with local/offline AI as an optional enhancement.
-
-## Versioning
-
-ApiPilot uses semantic versioning across the root, backend, and frontend packages. Increment the
-version once for each check-in that changes the product:
-
-- `spec`: major version for a new product specification or contract-level product capability
-- `feature`: minor version for a feature or enhancement within the current product contract
-- `bugfix`: patch version for a bug fix, test-only fix, or documentation-only change
-
-Run the version bump before committing:
-
-```powershell
-npm run version:bump -- feature
-```
-
-The command updates `package.json`, workspace package versions, and `package-lock.json` together.
-The shared-domain package keeps its own version because it is an independently published contract
-package; bump it separately when its public types change.
+ApiPilot is a local-first API test engineering platform for QA engineers testing REST APIs, microservices, and service-to-service integrations. It transforms OpenAPI 3.x YAML into reviewable, explainable, reproducible API test intent and exports approved single-operation scenarios as Postman artifacts.
 
 ```text
-OpenAPI spec → Analysis → Deterministic tests → AI enhancement (optional) → Scenario review →
-Dependency analysis → Workflow review → Postman collection
+OpenAPI YAML -> ApiModel -> deterministic TestModel -> optional AI enhancement
+             -> human review -> dependency workflows -> Postman artifacts
 ```
 
-## Why ApiPilot
-
-- **Deterministic by default** — the baseline test suite (positive, boundary, and negative
-  scenarios) is produced by fixed rules evaluated against the specification's own declared
-  constraints. No LLM and no randomness are involved in the baseline.
-- **AI as an enhancement, never a replacement** — an optional local, offline model
-  (Transformers.js) can propose additional scenarios and operation relationships. It runs
-  entirely on the local machine, is never silently substituted for the deterministic baseline,
-  and never sends specifications or prompts to a cloud service.
-- **Explainable** — every scenario and relationship carries provenance: which deterministic
-  rule, or which AI call (with rationale and confidence), produced it.
-- **Specification-grounded** — expected status codes and assertions come only from what the
-  OpenAPI document itself documents; nothing is fabricated.
-- **Reviewable** — a human explicitly accepts or rejects every scenario and every multi-step
-  integration workflow before an artifact is generated.
+The deterministic path is the product foundation. AI contributes bounded, validated suggestions; it never replaces specification facts, deterministic scenarios, or explicit human approval.
 
 ## Quick start
 
-Prerequisites: Node.js 20 LTS (see [.nvmrc](./.nvmrc)) and npm.
+Prerequisites: Node.js 20 LTS or newer and npm.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-- Backend: `http://localhost:4000` (health check at `GET /api/health`)
-- Frontend: `http://localhost:5173` — opens the guided test-generation workflow and proxies
-  `/api/*` to the backend (no CORS configuration needed in development)
+- Frontend: `http://localhost:5173`
+- Backend health check: `http://localhost:4000/api/health`
 
-`Ctrl+C` then `npm run dev` (or `npm run stop`) returns the application to a clean state.
-Because the in-progress workflow is tracked server-side, reloading the page — or restarting
-only the frontend — resumes it rather than losing it.
+`npm run dev` stops stale local processes before starting both workspaces. Use `Ctrl+C` or `npm run stop` to stop development servers. Copy [.env.example](.env.example) to `.env` only to override defaults. No cloud account, AI credential, or external paid service is needed to run ApiPilot.
 
-Optionally copy [.env.example](./.env.example) to `.env` to override the default ports or the
-AI provider settings — see [Configuration](#configuration).
+## Guided workflow
 
-## The guided workflow
+ApiPilot's UI is one ordered workflow; individual stages cannot be opened independently outside an active workflow.
 
-The frontend's only entry point is a nine-stage guided workflow:
+1. **Upload**: submit one OpenAPI 3.x YAML document, up to the configured upload limit (10 MB by default).
+2. **Analysis**: parse, validate, resolve same-document `$ref`s, and construct `ApiModel`; gaps become visible analysis issues.
+3. **API review**: inspect operations, parameters, schemas, responses, security requirements, examples, and constraints.
+4. **Deterministic generation**: build the rule-based baseline `TestModel` from documented facts only.
+5. **AI enhancement**: optionally request local semantic scenarios and coverage gaps; deterministic work remains usable on every AI outcome.
+6. **Scenario review**: inspect, accept, reject with rationale, edit supported content, regenerate suggestions, or apply confirmed bulk decisions.
+7. **Dependency analysis**: identify producer-to-consumer relationships and generate ordered integration-workflow candidates.
+8. **Workflow review**: approve or reject dependency workflows.
+9. **Postman generation**: download a collection, environment, and artifact README from approved scenarios.
 
-1. **Upload** — an OpenAPI 3.x YAML specification (up to 10 MB).
-2. **Analysis** — operations, schemas, security requirements, and any specification
-   ambiguities, surfaced as `AnalysisIssue`s rather than causing a rejection.
-3. **API review** — confirm the analyzed surface before generating tests.
-4. **Deterministic generation** — a baseline `TestModel`: positive, missing-required-field,
-   invalid-type/format/enum, and numeric/string/array-boundary scenarios.
-5. **AI enhancement** _(optional)_ — the local model proposes additional, validated scenarios;
-   provider failure or unavailability falls back to the deterministic baseline, visibly rather
-   than silently.
-6. **Scenario review** — accept, reject, edit, or regenerate scenarios, individually or in bulk.
-7. **Dependency analysis** — operations are analyzed for producer/consumer relationships and
-   assembled into ordered integration workflows.
-8. **Workflow review** — confirm or discard the proposed multi-step workflows.
-9. **Postman generation** — export the accepted scenarios as a runnable Postman collection,
-   environment, and README.
+The backend keeps one workflow instance in process memory. Browser reloads or reconnects resume it while the backend stays alive; backend restarts discard it. An upstream decision marks dependent completed stages stale and blocks artifact download until those stages are redone.
 
-Every stage's underlying capability is also independently reachable as its own stateless HTTP
-endpoint — see the feature table below for each one's contract.
+## Product capabilities and specification status
 
-## Features
+The [roadmap](specs/ROADMAP.md) is authoritative for implementation status. Individual `spec.md` files retain a template `Draft` header that does not represent implementation state.
 
-| Feature                                           | What it does                                                                                                                                                | Details                                                                                                                                              |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AP-001 — Application Foundation                   | npm-workspaces monorepo: Express backend, React/Vite frontend, shared-domain package, one dev/test workflow                                                 | [spec](./specs/001-application-foundation/spec.md)                                                                                                   |
-| AP-002 — OpenAPI Specification Engine             | Parses, validates, and normalizes an OpenAPI 3.x document into an `ApiModel`; flags unsupported constructs instead of rejecting the upload                  | [spec](./specs/002-openapi-specification-engine/spec.md) · [API](./specs/002-openapi-specification-engine/contracts/specifications-api.md)           |
-| AP-003 — Deterministic Test Designer              | Generates a rule-based baseline `TestModel` from the `ApiModel` — no AI, no randomness                                                                      | [spec](./specs/003-deterministic-test-designer/spec.md) · [API](./specs/003-deterministic-test-designer/contracts/test-models-api.md)                |
-| AP-004 — AI Provider & Local Inference            | Local-first `AIProvider` abstraction (Transformers.js) with a deterministic mock provider, a readiness endpoint, and a model-selection benchmarking harness | [spec](./specs/004-ai-provider-local-inference/spec.md) · [API](./specs/004-ai-provider-local-inference/contracts/ai-status-api.md)                  |
-| AP-005 — AI Test Scenario Designer                | Validates AI-proposed scenarios against the `ApiModel` and merges only executable, non-duplicate ones into the `TestModel`                                  | [spec](./specs/005-ai-test-scenario-designer/spec.md) · [API](./specs/005-ai-test-scenario-designer/contracts/enhanced-test-models-api.md)           |
-| AP-006 — Test Scenario Review                     | Accept/reject/edit/regenerate scenarios; produces the approved `TestModel` downstream features consume                                                      | [spec](./specs/006-test-scenario-review/spec.md) · [API](./specs/006-test-scenario-review/contracts/test-scenario-review-api.md)                     |
-| AP-007 — Postman Collection Generator             | Deterministic Postman collection + environment + README from the approved `TestModel`; credentials are never written into the artifact                      | [spec](./specs/007-postman-collection-generator/spec.md) · [API](./specs/007-postman-collection-generator/contracts/postman-collection-api.md)       |
-| AP-008 — Dependency & Integration Workflow Engine | Detects producer/consumer relationships between operations and assembles confident ones into ordered multi-step workflows                                   | [spec](./specs/008-dependency-workflow-engine/spec.md) · [API](./specs/008-dependency-workflow-engine/contracts/api-dependency-workflow-api.md)      |
-| AP-009 — End-to-End Test Generation Workflow      | Chains AP-002 through AP-008 into one resumable, server-tracked journey; the app's sole UI entry point                                                      | [spec](./specs/009-e2e-test-generation-workflow/spec.md) · [API](./specs/009-e2e-test-generation-workflow/contracts/test-generation-workflow-api.md) |
-| AP-010 — Presentation & Review Scalability        | Filtered and multi-select bulk accept/reject so reviewing hundreds of scenarios stays practical                                                             | [spec](./specs/010-presentation-review-scalability/spec.md)                                                                                          |
-| Bounded AI Prompt Batching                        | Splits a large specification's AI-assisted work into multiple sequential requests instead of skipping it                                                    | [spec](./specs/011-ai-prompt-batching/spec.md)                                                                                                       |
-| AI Enhancement Progress Visibility                | Live per-batch progress and an unambiguous success/partial/failed outcome for the enhancement stage                                                         | [spec](./specs/012-ai-enhancement-progress/spec.md)                                                                                                  |
+| Capability                                       | Status                                      | Scope                                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AP-001 Application Foundation                    | Implemented; dependency-preflight follow-up | npm workspaces, Express backend, React/Vite frontend, shared contracts, health check, local configuration, and test infrastructure.                                                    |
+| AP-002 OpenAPI Specification Engine              | Implemented                                 | YAML OpenAPI 3.x upload, deterministic parsing/validation/normalization, internal `$ref`, operation/schema/security extraction, and visible analysis issues.                           |
+| AP-003 Deterministic Test Designer               | Implemented                                 | Framework-independent baseline scenarios, specification-grounded assertions, stable per-operation deduplication, and rule provenance.                                                  |
+| AP-004 AI Provider and Local Inference           | Implemented; manual quickstart follow-up    | `AIProvider`, local Transformers.js and deterministic mock providers, readiness, FIFO serial queue, timeout, offline cache, CPU baseline, accelerator fallback, and benchmark harness. |
+| AP-005 AI Test Scenario Designer                 | Implemented; validation-policy follow-ups   | Structured candidates, semantic validation, confidence/rationale/provenance, stable merging, and deterministic-baseline degradation.                                                   |
+| AP-006 Test Scenario Review                      | Implemented                                 | Inspection, pending/accepted/rejected decisions, feedback, validated edits, regeneration, policy-aware approval, and stale/failure visibility.                                         |
+| AP-007 Postman Collection Generator              | Implemented; manual import follow-up        | Deterministic collection, environment, and artifact README from approved scenarios, with validation, credential variables, limitations, and provenance.                                |
+| AP-008 Dependency and Workflow Engine            | Implemented                                 | Conservative deterministic and optional AI-assisted relationship inference, confidence/evidence, stable workflow ordering, and explicit hand-offs.                                     |
+| AP-009 End-to-End Test Generation Workflow       | Implemented                                 | Exclusive guided orchestration, stage gating, stale-state propagation, AI-unavailable continuation, and artifact download gating.                                                      |
+| AP-010 Presentation and Review Scalability       | Implemented                                 | Consistent accessible presentation, filtering, multi-select bulk decisions, confirmation, partial-failure counts, and progress.                                                        |
+| Hardening: AI prompt batching (`011`)            | Implemented                                 | Deterministic serial batches, small-input compatibility, partial retention, and honest full/partial/not-completed outcomes.                                                            |
+| Hardening: AI enhancement progress (`012`)       | Implemented; optional manual UI validation  | Live batch progress, per-batch outcomes, incremental scenario visibility, final outcomes, and concurrency protection.                                                                  |
+| Hardening: AI enhancement viability (`013`)      | In progress                                 | Instruction framing, true capacity planning, smaller prompts, viable output/time budgets, pre-flight refusal, cancellation, phases, elapsed time, and user-safe failures.              |
+| Hardening: AI batching policy and pacing (`014`) | In progress                                 | Small deterministic work units, caller-specific sizing, run ceilings, retained partial results, responsive cancellation, reply-shape reliability, and paced dependency analysis.       |
+| AP-011 Test Execution and Results                | Post-MVP, not started                       | Execute generated artifacts and report results.                                                                                                                                        |
+| AP-012 AI Failure Analysis                       | Post-MVP, not started                       | Analyze execution failures using AI as an explicitly bounded assistant.                                                                                                                |
 
-Two further hardening efforts are in progress:
-[013-ai-enhancement-viability](./specs/013-ai-enhancement-viability/spec.md) (making local CPU
-inference actually complete within its time budget) and
-[014-ai-batching-policy](./specs/014-ai-batching-policy/spec.md) (pacing and sizing AI batches
-realistically). See [specs/ROADMAP.md](./specs/ROADMAP.md) for the authoritative, up-to-date
-implementation status of every feature.
+## Specification behavior
+
+### OpenAPI processing
+
+ApiPilot accepts a single YAML OpenAPI 3.x document. It discovers every path/method and extracts parameters, request bodies, documented responses/statuses/schemas, security requirements, constraints, and examples. It never uses AI, executes uploaded content, silently repairs malformed input, or fetches external `$ref` URLs. Invalid YAML/version, oversized uploads, unresolved/circular references, duplicate operations, and unsupported constructs are explicit errors or `AnalysisIssue`s. A valid specification with zero operations or no security schemes remains valid and accurately represented.
+
+### Deterministic test coverage
+
+Every operation receives a positive scenario with specification-conformant values. Applicable constraints produce missing/null/empty scenarios for required nested body fields and required query/header parameters; path parameters intentionally omit those routing-level cases. Other rules cover invalid type, enum, format/pattern, numeric minimum/maximum, string length, and array-size boundaries. Assertions reference only documented response codes and schemas; no expected outcome is invented. Equivalent request/assertion pairs are deduplicated per operation with their rule origins retained. Unresolved source portions are reported and skipped rather than guessed.
+
+### Local AI
+
+All AI use passes through `AIProvider`. Supported modes are `local` and deterministic `mock`; there is no cloud fallback. Cached local models can operate offline. Readiness is explicit: `not-loaded`, `loading`, `ready`, or `unavailable`. Requests run serially; failures, timeouts, and model load errors remain distinguishable, and a failed load requires explicit retry. An unavailable explicitly enabled accelerator falls back to CPU with notice.
+
+AI may suggest semantic scenarios and relationships but cannot add executable endpoints, methods, fields, status codes, or authentication absent from `ApiModel`. Candidates require structured output, full-model semantic validation, bounded confidence, rationale, assumptions, and AI provenance. Invalid, trivial, duplicate, or non-executable candidates are rejected or surfaced separately; deterministic scenarios never change. Large specifications use deterministic serial batching: every operation belongs to one unit, successful units merge with established validation/deduplication, mixed outcomes are partial, and total failure returns the deterministic baseline explicitly. The active hardening work adds CPU-viable units, run ceilings, viability refusal, cancellation, incremental results, and clear explanations.
+
+### Review, dependency analysis, and export
+
+Review states are pending, accepted, and rejected. Pending/rejected scenarios are ineligible downstream. Edits preserve and revalidate provenance; failed edits or regeneration retain the last valid state. Filtered and manually selected bulk actions require explicit confirmation and create the same per-item decision record as individual actions. Bulk rejection uses a shared justification.
+
+Dependency relationships are `CONFIRMED`, `LIKELY`, or `POSSIBLE`. Field names alone never justify confirmed/likely classifications; corroborating type, format, path, tag, description, or example evidence is needed. Only confirmed/likely edges automatically assemble into workflows; possible edges remain review candidates. Workflows use stable tie-breaks and named producer/consumer hand-off variables. Cycles, unresolved order, batching limitations, and AI unavailability are visible rather than fabricated away.
+
+Postman export is deterministic, invokes no AI, and does not execute requests. It emits exactly one request per approved single-operation scenario, preserves deliberate negative values, applies only approved assertions, validates output, and generates an environment plus README. Base URLs, credentials, and absent values are declared variables rather than literals or guesses. Empty sets, unsupported auth/content, missing assertions, and analysis issues are reported as limitations. Rendering ordered multi-step workflows is a documented future extension.
+
+## Core guarantees
+
+- **Specification authority**: API facts come from OpenAPI or explicit user input, never guesswork.
+- **Determinism first**: parsing, validation, test generation, assertions, deduplication, review gating, and artifacts are reproducible without an LLM.
+- **Explainability**: scenarios, relationships, workflows, and artifacts retain specification, rule, AI, or user provenance.
+- **Human ownership**: AI validation is not approval, and exporting does not authorize API execution.
+- **Privacy**: specifications, prompts, and credentials are not sent to cloud AI; sensitive content stays out of normal diagnostics and artifacts.
+- **Explicit failure**: unsupported, ambiguous, unavailable, invalid, partial, stale, empty, and cancelled outcomes are never presented as success.
+- **Framework independence**: `ApiModel`, `TestModel`, and workflow contracts do not depend on Postman.
 
 ## Architecture
 
-An npm-workspaces monorepo with three packages:
+ApiPilot is an npm-workspaces monorepo with thin UI/HTTP adapters around shared contracts and independently testable pipeline modules.
 
 ```text
-backend/                     Express + TypeScript API
-  src/app.ts                   Express app assembly, middleware, routes, centralized error handling
-  src/server.ts                 process entry point, configuration, HTTP listener startup
-  src/api/                       one thin route module per endpoint
-  src/openapi/                   parse -> validate -> analyze pipeline (AP-002), independent of Express
-  src/testDesign/                deterministic scenario generation, review, and regeneration (AP-003, AP-006)
-  src/postman/                   Postman artifact generation (AP-007)
-  src/dependencies/              relationship detection and workflow assembly (AP-008)
-  src/testGenerationWorkflow/    the guided-workflow state machine (AP-009)
-  src/ai/                        AIProvider abstraction, local/mock providers, request batching, benchmarking (AP-004)
+frontend (React + Vite)              backend (Express + TypeScript)
+Workflow UI -> service clients  ->  thin routes -> domain pipeline modules
+         ^                                      |
+         |                                      v
+         +---------------- shared-domain contracts ----------------+
 
-frontend/                    React + Vite + TypeScript UI
-  src/App.tsx                   root component; renders the guided workflow
-  src/pages/                     TestGenerationWorkflowPage.tsx - the sole composition root
-  src/components/                per-stage workflow UI and reusable components
-  src/services/                  HTTP clients; no API calls live in components
-
-packages/shared-domain/      Framework-agnostic TypeScript contracts shared by backend and frontend
-                              (ApiModel, TestModel, TestScenario, AIProvider, ReviewState, ...)
+OpenAPI YAML -> ApiModel -> TestModel -> approved TestModel -> Postman artifacts
+                         \-> AI suggestions / dependency workflows -> review
 ```
 
-Routes stay thin; business logic lives in `openapi/`, `testDesign/`, `postman/`, `dependencies/`,
-`testGenerationWorkflow/`, and `ai/`, each independent of Express and independently unit-testable.
-Cross-layer types are defined once in `packages/shared-domain/` and consumed unchanged by both
-`backend/` and `frontend/`. Each feature's own spec (linked in the table above) documents its
-internal module boundaries in full detail.
-
-## Testing
-
-```powershell
-npm test
-```
-
-Runs [Vitest](https://vitest.dev) once across all three workspaces (via
-[vitest.workspace.ts](./vitest.workspace.ts)):
-
-- `backend` — integration tests (Supertest against the Express app) and unit tests
-- `frontend` — component tests (React Testing Library, jsdom environment)
-- `shared-domain` — unit tests
-
-Output is grouped and labeled per workspace, so pass/fail results are easy to attribute.
-AI-dependent tests default to the deterministic mock provider — they never download a model,
-require a GPU, or need network access. Re-running `npm test` with no code changes produces
-identical results.
-
-## Other scripts
-
-- `npm run build` — builds all workspaces (TypeScript compilation; Vite production build for
-  the frontend)
-- `npm run lint` — runs ESLint across the repository
-- `npm run stop` — stops any dev servers left running from a previous `npm run dev`
-- `npm run ai:benchmark -w backend` — runs the AI model-selection benchmarking harness
-  (downloads candidate models on first run)
-- `npm run test:ai-real -w backend` — the opt-in real-model integration test (downloads and
-  loads the configured model; excluded from `npm test`)
+| Area                                             | Responsibility                                                                                                  |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| [backend](backend)                               | Express assembly, configuration, upload handling, centralized errors, and domain pipeline modules.              |
+| [frontend](frontend)                             | React/Vite guided workflow UI, reusable components, hooks, and service clients.                                 |
+| [packages/shared-domain](packages/shared-domain) | Canonical framework-agnostic API, test, AI, review, dependency, workflow, and artifact contracts.               |
+| [docs/architecture.md](docs/architecture.md)     | Detailed boundaries, data flow, state lifecycle, AI model, security constraints, and deployment topology.       |
+| [specs](specs)                                   | Constitution, roadmap, feature specifications, plans, data models, contracts, research, quickstarts, and tasks. |
 
 ## Configuration
 
-Configuration is environment-driven; see [.env.example](./.env.example) for the full, current
-list with rationale. Common variables:
+See [.env.example](.env.example) for the maintained variable list and guidance.
 
-| Variable                  | Purpose                                                                                                                | Default                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `BACKEND_PORT`            | Backend HTTP port                                                                                                      | `4000`                                 |
-| `FRONTEND_DEV_PORT`       | Frontend Vite dev server port                                                                                          | `5173`                                 |
-| `AI_PROVIDER_MODE`        | `local` (Transformers.js) or `mock` (deterministic, no real model)                                                     | `mock` in tests, `local` otherwise     |
-| `AI_MODEL_ID`             | Hugging Face repo id of the local model                                                                                | `onnx-community/Qwen2.5-0.5B-Instruct` |
-| `AI_MODEL_CACHE_DIR`      | Local cache directory for downloaded model files                                                                       | `~/.apipilot/models`                   |
-| `AI_MODEL_DTYPE`          | ONNX weight quantization; leave unset on CPU (fp32 measured faster and more accurate than q8 on the reference profile) | unset                                  |
-| `AI_INFERENCE_TIMEOUT_MS` | Per-request inference timeout                                                                                          | `60000`                                |
-| `AI_USE_ACCELERATOR`      | Attempt hardware-accelerated inference; falls back to CPU with a visible notice if unavailable                         | `false`                                |
+| Variable                             | Purpose                                  | Default                                |
+| ------------------------------------ | ---------------------------------------- | -------------------------------------- |
+| `BACKEND_PORT`                       | Backend HTTP listener                    | `4000`                                 |
+| `FRONTEND_DEV_PORT`                  | Vite development server                  | `5173`                                 |
+| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider | `mock` in tests; `local` otherwise     |
+| `AI_MODEL_ID`                        | Local Hugging Face model identifier      | `onnx-community/Qwen2.5-0.5B-Instruct` |
+| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | `~/.apipilot/models`                   |
+| `AI_MODEL_DTYPE`                     | Optional ONNX weight precision           | unset by default                       |
+| `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit              | see `.env.example`                     |
+| `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt      | `false`                                |
+| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Work-bounded enhancement batch size      | `1`                                    |
 
-AI features never send a specification or prompt to a cloud service, and never fall back from
-the local provider to a cloud provider on failure — a failed or unavailable provider is reported
-explicitly, and the deterministic baseline is always preserved.
+## Development and validation
+
+```powershell
+npm test
+npm run lint
+npm run build
+
+# May download local candidate models on first run.
+npm run ai:benchmark -w backend
+
+# Opt-in local-model test; excluded from npm test.
+npm run test:ai-real -w backend
+```
+
+The root test command uses [vitest.workspace.ts](vitest.workspace.ts), including the `jsdom` environment required by frontend component tests. AI-dependent automated tests use mock or scripted fake providers, so routine validation does not require GPU hardware, a real model, or network access.
+
+ApiPilot versions root, backend, and frontend packages with semantic versioning. Before committing a product change, run `npm run version:bump -- feature`. Use `spec` for a product specification/contract capability, `feature` for a compatible enhancement, and `bugfix` for fixes, tests, or documentation. Bump the independently published shared-domain package when public types change.
+
+## Scope and limitations
+
+- Input is one OpenAPI 3.x YAML file. Swagger 2.0, JSON input, external `$ref` retrieval, and executing uploaded content are unsupported.
+- ApiPilot creates and reviews test intent but does not contact APIs from the specification. Execution/results and AI failure analysis are post-MVP.
+- Workflow state is single-instance, process-memory only, and not multi-user or durable across a backend restart.
+- Postman export is currently limited to approved single-operation scenarios; multi-step workflow rendering is a planned extension.
+- Local model provisioning may require an initial download. Normal tests do not download models.
+- Specifications `013` and `014` are actively being completed; their task lists describe remaining work.
+
+## Documentation map
+
+- [Architecture reference](docs/architecture.md)
+- [Product roadmap and implementation status](specs/ROADMAP.md)
+- [Project constitution](specs/constitution.md)
+- [AP-001 foundation](specs/001-application-foundation/spec.md)
+- [AP-002 OpenAPI engine](specs/002-openapi-specification-engine/spec.md)
+- [AP-003 deterministic designer](specs/003-deterministic-test-designer/spec.md)
+- [AP-004 local AI provider](specs/004-ai-provider-local-inference/spec.md)
+- [AP-005 AI scenario designer](specs/005-ai-test-scenario-designer/spec.md)
+- [AP-006 scenario review](specs/006-test-scenario-review/spec.md)
+- [AP-007 Postman generator](specs/007-postman-collection-generator/spec.md)
+- [AP-008 dependency workflows](specs/008-dependency-workflow-engine/spec.md)
+- [AP-009 end-to-end workflow](specs/009-e2e-test-generation-workflow/spec.md)
+- [AP-010 review scalability](specs/010-presentation-review-scalability/spec.md)
+- [AI prompt batching](specs/011-ai-prompt-batching/spec.md)
+- [AI enhancement progress](specs/012-ai-enhancement-progress/spec.md)
+- [AI enhancement viability](specs/013-ai-enhancement-viability/spec.md)
+- [AI batching policy](specs/014-ai-batching-policy/spec.md)
+
+Each feature directory contains the normative specification, implementation plan, task list, data model, research, quickstart, and API contracts where relevant.
 
 ## Deployment
 
-[vercel.json](./vercel.json) deploys the frontend and backend as separate Vercel services from
-this monorepo, rewriting `/api/*` to the backend service and everything else to the frontend.
-
-## Documentation
-
-- [specs/constitution.md](./specs/constitution.md) — the project's governing engineering
-  principles
-- [specs/ROADMAP.md](./specs/ROADMAP.md) — feature-by-feature implementation status
-- `specs/<NNN-feature-name>/` — each feature's spec, plan, data model, API contracts, and
-  quickstart
+[vercel.json](vercel.json) deploys frontend and backend as separate Vercel services. Requests under `/api/*` route to the backend and all other paths route to the frontend.
 
 ## License
 
-Released under [MIT](/LICENSE) by [@io-anurag](https://github.com/io-anurag).
+Released under the [MIT License](LICENSE) by [@io-anurag](https://github.com/io-anurag).
