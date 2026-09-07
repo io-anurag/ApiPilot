@@ -12,6 +12,7 @@ import { AiEnhancementStage } from "../components/AiEnhancementStage";
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
+import { BUTTON_STYLES } from "../components/controlStyles";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
  * in-progress, per-stage breakdown is WorkflowStageTracker's job once a workflow exists. */
@@ -23,7 +24,7 @@ const PIPELINE_PREVIEW_STEPS = [
   "Results",
 ];
 
-function UploadIcon({ className }: { className?: string }) {
+function UploadIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -145,7 +146,7 @@ export function TestGenerationWorkflowPage() {
               type="button"
               onClick={() => doUpload(pendingFile, true)}
               disabled={uploading}
-              className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={BUTTON_STYLES.danger}
             >
               Discard and start new
             </button>
@@ -153,7 +154,7 @@ export function TestGenerationWorkflowPage() {
               type="button"
               onClick={() => setPendingFile(null)}
               disabled={uploading}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={BUTTON_STYLES.secondary}
             >
               Cancel
             </button>
@@ -283,14 +284,13 @@ export function TestGenerationWorkflowPage() {
             <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
           </div>
           {displayStageId !== workflow.activeStageId && (
-            <p
-              role="status"
+            <output
               data-testid="revisiting-notice"
-              className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+              className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
             >
               Revisiting a completed stage. Making a change here will mark later stages as
               needing to be redone.
-            </p>
+            </output>
           )}
           {displayStageId === "apiReview" && workflow.apiModel && (
             <ApiReviewStage apiModel={workflow.apiModel} onAdvanced={handleAdvanced} />
@@ -336,9 +336,9 @@ export function TestGenerationWorkflowPage() {
 
 function DeterministicGenerationTrigger({
   onAdvanced,
-}: {
+}: Readonly<{
   onAdvanced: (result: WorkflowResult) => void;
-}) {
+}>) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -366,7 +366,7 @@ function DeterministicGenerationTrigger({
         type="button"
         onClick={handleGenerate}
         disabled={generating}
-        className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className={BUTTON_STYLES.primary}
       >
         {generating ? "Generating…" : "Generate Baseline Test Suite"}
       </button>

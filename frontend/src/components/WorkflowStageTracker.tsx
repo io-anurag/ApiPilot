@@ -6,7 +6,7 @@ import {
 } from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 
-function CheckIcon({ className }: { className?: string }) {
+function CheckIcon({ className }: Readonly<{ className?: string }>) {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className={className}>
       <path
@@ -81,10 +81,10 @@ const REVISABLE_STAGES = new Set<WorkflowStageId>(["scenarioReview", "workflowRe
 export function WorkflowStageTracker({
   workflow,
   onViewStage,
-}: {
+}: Readonly<{
   workflow: TestGenerationWorkflow;
   onViewStage?: (stageId: WorkflowStageId) => void;
-}) {
+}>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
   const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
 
@@ -144,10 +144,9 @@ export function WorkflowStageTracker({
         })}
       </ol>
       {issues.length > 0 && (
-        <div
-          role="status"
+        <output
           data-testid="workflow-analysis-issues"
-          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
           <p>{issues.length} specification analysis issue(s) were found:</p>
           <ul className="ml-4 list-disc">
@@ -157,17 +156,16 @@ export function WorkflowStageTracker({
               </li>
             ))}
           </ul>
-        </div>
+        </output>
       )}
       {dependencyAiIssue && (
-        <p
-          role="status"
+        <output
           data-testid="workflow-dependency-ai-issue"
-          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
           AI-assisted dependency detection did not complete ({dependencyAiIssue});
           deterministic relationships are still shown.
-        </p>
+        </output>
       )}
     </nav>
   );

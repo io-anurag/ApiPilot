@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BUTTON_STYLES } from "./controlStyles";
 
 /**
  * Shared confirmation step for a bulk decision (FR-011): shows the number of items the action
@@ -14,7 +15,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   onConfirm,
   onCancel,
-}: {
+}: Readonly<{
   message: string;
   affectedCount: number;
   requireReason?: boolean;
@@ -22,17 +23,42 @@ export function ConfirmDialog({
   confirmLabel?: string;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
-}) {
+}>) {
   const [reason, setReason] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement;
     cancelButtonRef.current?.focus();
+    return () => {
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
   }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onCancel();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -47,11 +73,12 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-message"
         data-testid="confirm-dialog"
-        className="w-full max-w-md space-y-3 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl"
+        className="w-full max-w-md space-y-3 rounded-md border border-brand-300 bg-surface p-4 shadow-xl"
       >
         <p id="confirm-dialog-message" className="text-sm font-medium text-slate-900">
           {message}
@@ -61,7 +88,10 @@ export function ConfirmDialog({
         </p>
         {requireReason && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="confirm-dialog-reason" className="text-xs font-medium text-muted">
+            <label
+              htmlFor="confirm-dialog-reason"
+              className="text-xs font-medium text-muted"
+            >
               {reasonLabel}
             </label>
             <textarea
@@ -69,7 +99,7 @@ export function ConfirmDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-border bg-surface p-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="w-full rounded-md border border-border bg-surface p-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             />
           </div>
         )}
@@ -78,7 +108,7 @@ export function ConfirmDialog({
             type="button"
             ref={cancelButtonRef}
             onClick={onCancel}
-            className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className={BUTTON_STYLES.secondary}
           >
             Cancel
           </button>
@@ -86,7 +116,7 @@ export function ConfirmDialog({
             type="button"
             onClick={handleConfirm}
             disabled={reasonMissing}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className={BUTTON_STYLES.primary}
           >
             {confirmLabel} ({affectedCount})
           </button>

@@ -19,6 +19,7 @@ import { TestScenarioReviewSummary } from "./TestScenarioReviewSummary";
 import { TestScenarioReviewDetail } from "./TestScenarioReviewDetail";
 import { TestScenarioReviewDecision } from "./TestScenarioReviewDecision";
 import { TestScenarioReviewRefinement } from "./TestScenarioReviewRefinement";
+import { BUTTON_STYLES } from "./controlStyles";
 
 function AiReviewOutcome({ workflow }: Readonly<{ workflow: TestGenerationWorkflow }>) {
   const enhancement = workflow.aiEnhancement;
@@ -196,7 +197,7 @@ export function ScenarioReviewStage({
   return (
     <section
       data-testid="scenario-review-stage"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">
         Review Generated Scenarios
@@ -305,7 +306,7 @@ export function ScenarioReviewStage({
           type="button"
           onClick={handleFinalize}
           disabled={finalizing}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.primary}
         >
           {finalizing ? "Finalizing…" : "Finalize Review"}
         </button>

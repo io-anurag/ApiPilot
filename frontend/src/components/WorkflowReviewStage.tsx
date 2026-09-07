@@ -16,13 +16,18 @@ import { useBulkDecision, type BulkChunkResult } from "../hooks/useBulkDecision"
 import { ConfirmDialog } from "./ConfirmDialog";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { BUTTON_STYLES } from "./controlStyles";
 
-function workflowSummary(workflow: IntegrationWorkflow, graph: DependencyAnalysisResult["graph"]) {
+function workflowSummary(
+  workflow: IntegrationWorkflow,
+  graph: DependencyAnalysisResult["graph"],
+) {
   return workflow.steps.map((step) => {
-    const relationship = graph.relationships.find((r) =>
-      workflow.relationshipIds.includes(r.id) &&
-      r.consumer.operationPath === step.operationPath &&
-      r.consumer.operationMethod === step.operationMethod,
+    const relationship = graph.relationships.find(
+      (r) =>
+        workflow.relationshipIds.includes(r.id) &&
+        r.consumer.operationPath === step.operationPath &&
+        r.consumer.operationMethod === step.operationMethod,
     );
     return { step, relationship };
   });
@@ -52,9 +57,6 @@ const CONFIDENCE_TONES: Record<DependencyConfidence, StatusTone> = {
   POSSIBLE: "warning",
 };
 
-const BUTTON_CLASSES =
-  "rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-
 type PendingBulkDecision = { state: "approved" | "rejected"; workflowIds: string[] };
 
 /**
@@ -66,11 +68,11 @@ export function WorkflowReviewStage({
   dependencyAnalysis,
   decisions,
   onAdvanced,
-}: {
+}: Readonly<{
   dependencyAnalysis: DependencyAnalysisResult;
   decisions: Record<string, WorkflowReviewDecision> | undefined;
   onAdvanced: (result: WorkflowResult) => void;
-}) {
+}>) {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [continuing, setContinuing] = useState(false);
@@ -116,7 +118,9 @@ export function WorkflowReviewStage({
     setManualSelectionIds(new Set());
     let latestWorkflow: TestGenerationWorkflow | null = null;
     await bulkDecision.run(workflowIds, async (chunkIds): Promise<BulkChunkResult> => {
-      const result = await recordWorkflowDecisions(chunkIds.map((workflowId) => ({ workflowId, state })));
+      const result = await recordWorkflowDecisions(
+        chunkIds.map((workflowId) => ({ workflowId, state })),
+      );
       if (!result.ok) return { ok: false, message: result.message };
       latestWorkflow = result.workflow;
       return { ok: true };
@@ -141,12 +145,22 @@ export function WorkflowReviewStage({
 
   if (dependencyAnalysis.workflows.length === 0) {
     return (
-      <section data-testid="workflow-review-stage" className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Review Integration Workflows</h2>
+      <section
+        data-testid="workflow-review-stage"
+        className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-sm"
+      >
+        <h2 className="text-base font-semibold text-slate-900">
+          Review Integration Workflows
+        </h2>
         <p data-testid="workflow-review-empty" className="text-sm text-muted">
           No integration workflows were discovered.
         </p>
-        <button type="button" onClick={handleContinue} disabled={continuing} className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+        <button
+          type="button"
+          onClick={handleContinue}
+          disabled={continuing}
+          className={BUTTON_STYLES.primary}
+        >
           Continue
         </button>
         {error && (
@@ -163,21 +177,30 @@ export function WorkflowReviewStage({
     .filter((id) => manualSelectionIds.has(id));
 
   return (
-    <section data-testid="workflow-review-stage" className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-base font-semibold text-slate-900">Review Integration Workflows</h2>
+    <section
+      data-testid="workflow-review-stage"
+      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">
+        Review Integration Workflows
+      </h2>
       {manuallySelectedIds.length > 0 && (
         <div data-testid="workflow-review-bulk-actions" className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setPendingBulk({ state: "approved", workflowIds: manuallySelectedIds })}
-            className={BUTTON_CLASSES}
+            onClick={() =>
+              setPendingBulk({ state: "approved", workflowIds: manuallySelectedIds })
+            }
+            className={BUTTON_STYLES.secondary}
           >
             Approve selected ({manuallySelectedIds.length})
           </button>
           <button
             type="button"
-            onClick={() => setPendingBulk({ state: "rejected", workflowIds: manuallySelectedIds })}
-            className={BUTTON_CLASSES}
+            onClick={() =>
+              setPendingBulk({ state: "rejected", workflowIds: manuallySelectedIds })
+            }
+            className={BUTTON_STYLES.secondary}
           >
             Reject selected ({manuallySelectedIds.length})
           </button>
@@ -201,21 +224,30 @@ export function WorkflowReviewStage({
                   className="mt-1 h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 />
                 <ol className="flex-1 space-y-1.5">
-                  {workflowSummary(workflow, dependencyAnalysis.graph).map(({ step, relationship }) => (
-                    <li key={`${workflow.id}-${step.position}`} className="flex flex-wrap items-center gap-2 text-sm">
-                      <HttpMethodBadge method={step.operationMethod} />
-                      <span className="font-mono text-slate-800">{step.operationPath}</span>
-                      {relationship && (
-                        <>
-                          <StatusBadge
-                            label={CONFIDENCE_LABELS[relationship.confidence]}
-                            tone={CONFIDENCE_TONES[relationship.confidence]}
-                          />
-                          <span className="text-muted">— {relationship.explanation}</span>
-                        </>
-                      )}
-                    </li>
-                  ))}
+                  {workflowSummary(workflow, dependencyAnalysis.graph).map(
+                    ({ step, relationship }) => (
+                      <li
+                        key={`${workflow.id}-${step.position}`}
+                        className="flex flex-wrap items-center gap-2 text-sm"
+                      >
+                        <HttpMethodBadge method={step.operationMethod} />
+                        <span className="font-mono text-slate-800">
+                          {step.operationPath}
+                        </span>
+                        {relationship && (
+                          <>
+                            <StatusBadge
+                              label={CONFIDENCE_LABELS[relationship.confidence]}
+                              tone={CONFIDENCE_TONES[relationship.confidence]}
+                            />
+                            <span className="text-muted">
+                              — {relationship.explanation}
+                            </span>
+                          </>
+                        )}
+                      </li>
+                    ),
+                  )}
                 </ol>
               </div>
               <div className="flex items-center gap-3">
@@ -226,7 +258,7 @@ export function WorkflowReviewStage({
                   type="button"
                   onClick={() => decide(workflow.id, "approved")}
                   disabled={submittingId === workflow.id}
-                  className="rounded-md bg-success-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-success-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-success-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={BUTTON_STYLES.success}
                 >
                   Approve
                 </button>
@@ -234,7 +266,7 @@ export function WorkflowReviewStage({
                   type="button"
                   onClick={() => decide(workflow.id, "rejected")}
                   disabled={submittingId === workflow.id}
-                  className="rounded-md bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={BUTTON_STYLES.danger}
                 >
                   Reject
                 </button>
@@ -244,18 +276,29 @@ export function WorkflowReviewStage({
         })}
       </ul>
       {bulkDecision.status === "running" && (
-        <p role="status" data-testid="workflow-bulk-progress" className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700">
+        <output
+          data-testid="workflow-bulk-progress"
+          className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+        >
           Applying to {bulkDecision.processed} of {bulkDecision.total}…
-        </p>
+        </output>
       )}
       {bulkDecision.status === "done" && (
-        <div role="status" data-testid="workflow-bulk-summary" className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <output
+          data-testid="workflow-bulk-summary"
+          className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-slate-700"
+        >
           <p>
-            <span className="font-medium text-success-700">{bulkDecision.succeeded} succeeded</span>,{" "}
-            <span className={bulkDecision.failed.length > 0 ? "font-medium text-danger-700" : ""}>
-              {bulkDecision.failed.length} failed
+            <span className="font-medium text-success-700">{bulkDecision.succeeded}</span>
+            {" succeeded, "}
+            <span
+              className={
+                bulkDecision.failed.length > 0 ? "font-medium text-danger-700" : ""
+              }
+            >
+              {bulkDecision.failed.length}
             </span>
-            .
+            {" failed."}
           </p>
           {bulkDecision.failed.length > 0 && (
             <ul className="mt-1 ml-4 list-disc">
@@ -266,19 +309,23 @@ export function WorkflowReviewStage({
               ))}
             </ul>
           )}
-        </div>
+        </output>
       )}
       <div className="flex items-center gap-3 border-t border-border pt-4">
         <button
           type="button"
           onClick={handleContinue}
           disabled={continuing}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={BUTTON_STYLES.primary}
         >
           {continuing ? "Continuing…" : "Continue"}
         </button>
         {error && (
-          <p role="alert" data-testid="workflow-review-error" className="text-sm font-medium text-danger-700">
+          <p
+            role="alert"
+            data-testid="workflow-review-error"
+            className="text-sm font-medium text-danger-700"
+          >
             {error}
           </p>
         )}
