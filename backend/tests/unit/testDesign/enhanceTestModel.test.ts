@@ -170,6 +170,7 @@ describe("enhanceTestModel", () => {
   );
 
   it("preserves the baseline for malformed provider output", async () => {
+    const logSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const result = await enhanceTestModel(
       aiScenarioApiModel,
       aiScenarioBaseline,
@@ -178,6 +179,12 @@ describe("enhanceTestModel", () => {
 
     expect(result.aiProviderOutcome).toBe("invalid-response");
     expect(result.enhancedTestModel).toEqual(aiScenarioBaseline);
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"ai_response_parse_failed"'),
+    );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"responseLength":2'));
+    expect(logSpy).toHaveBeenCalledWith(expect.not.stringContaining("{}"));
+    logSpy.mockRestore();
   });
 
   it("partitions duplicate AI candidates and preserves their identities", async () => {
@@ -492,6 +499,42 @@ describe("enhanceTestModel (AI-assisted batching, US1/US2/US3)", () => {
     await enhanceTestModel(aiScenarioApiModel, aiScenarioBaseline, scripted);
 
     expect(scripted.getInputBudgetCalls).toEqual([AI_SCENARIO_MAX_OUTPUT_TOKENS]);
+  });
+
+  it("uses a corrective prompt when retrying malformed model output", async () => {
+    const requests: InferenceRequest[] = [];
+    let attempts = 0;
+    const scripted: AIProvider = {
+      ...provider(""),
+      infer: async (request) => {
+        requests.push(request);
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            contractVersion: 1,
+            requestId: request.requestId,
+            status: "success",
+            content: '{"candidates":[',
+            modelId: "scripted-model",
+            provider: "mock",
+            durationMs: 0,
+          };
+        }
+        return successResponse(request);
+      },
+    };
+
+    const result = await enhanceTestModel(
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      scripted,
+      { operationsPerUnit: 1 },
+    );
+
+    expect(result.aiProviderOutcome).toBe("success");
+    expect(requests[1].requestId).toContain("-retry1");
+    expect(requests[1].input).toContain("Your previous response was invalid");
+    expect(requests[1].input).not.toBe(requests[0].input);
   });
 
   it("splits a large ApiModel into multiple batches, all succeeding (T013)", async () => {

@@ -16,6 +16,25 @@ ApiPilot is an AI-powered API test engineering platform that transforms OpenAPI/
 specifications into intelligent, executable, and explainable API test suites — deterministically
 by default, with local/offline AI as an optional enhancement.
 
+## Versioning
+
+ApiPilot uses semantic versioning across the root, backend, and frontend packages. Increment the
+version once for each check-in that changes the product:
+
+- `spec`: major version for a new product specification or contract-level product capability
+- `feature`: minor version for a feature or enhancement within the current product contract
+- `bugfix`: patch version for a bug fix, test-only fix, or documentation-only change
+
+Run the version bump before committing:
+
+```powershell
+npm run version:bump -- feature
+```
+
+The command updates `package.json`, workspace package versions, and `package-lock.json` together.
+The shared-domain package keeps its own version because it is an independently published contract
+package; bump it separately when its public types change.
+
 ```text
 OpenAPI spec → Analysis → Deterministic tests → AI enhancement (optional) → Scenario review →
 Dependency analysis → Workflow review → Postman collection

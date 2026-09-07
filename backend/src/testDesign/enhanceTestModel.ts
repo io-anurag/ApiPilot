@@ -80,9 +80,53 @@ function safeResponseFailureReason(errorMessage: string): string | undefined {
   return SAFE_RESPONSE_FAILURE_REASONS.has(errorMessage) ? errorMessage : undefined;
 }
 
+function classifyAIResponse(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return "empty";
+  if (trimmed.startsWith("```")) return "code-fence";
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json-like";
+  return "non-json-like";
+}
+
+function logResponseParseFailure(
+  requestId: string,
+  response: Awaited<ReturnType<AIProvider["infer"]>>,
+  errorMessage: string,
+): void {
+  const content = response.content ?? "";
+  logger.warn("ai_response_parse_failed", {
+    requestId,
+    modelId: response.modelId,
+    provider: response.provider,
+    responseLength: content.length,
+    responseSha256: createHash("sha256").update(content).digest("hex"),
+    responseShape: classifyAIResponse(content),
+    parserReason: safeResponseFailureReason(errorMessage),
+  });
+}
+
 interface BatchScenarioResult {
   candidate: AIScenarioCandidate;
   scenario: ReturnType<typeof candidateToScenario>;
+}
+
+interface BatchRunContext {
+  outcomes: AICandidateOutcomes;
+  candidateIds: Set<string>;
+  retryAttempt: number;
+}
+
+function createBatchRequestId(
+  requestId: string,
+  batchCount: number,
+  batchIndex: number,
+  retryAttempt: number,
+): string {
+  if (batchCount === 1) {
+    return retryAttempt > 0 ? `${requestId}-retry${retryAttempt}` : requestId;
+  }
+  const retrySuffix = retryAttempt > 0 ? `-retry${retryAttempt}` : "";
+  return `${requestId}-batch${batchIndex}${retrySuffix}`;
 }
 
 /** Runs one batch's inference call and returns its validated, executable AI scenario candidates. */
@@ -92,17 +136,33 @@ async function runOneBatch(
   testModel: TestModel,
   requestId: string,
   provider: AIProvider,
-  outcomes: AICandidateOutcomes,
-  candidateIds: Set<string>,
+  context: BatchRunContext,
 ): Promise<BatchScenarioResult[]> {
-  const response = await provider.infer(
-    buildAIScenarioRequest(
-      requestId,
-      withOperations(apiModel, batch.operations),
-      testModel,
-    ),
+  const { outcomes, candidateIds, retryAttempt } = context;
+  const request = buildAIScenarioRequest(
+    requestId,
+    withOperations(apiModel, batch.operations),
+    testModel,
   );
-  const parsed = parseAIScenarioResponse(response);
+  if (retryAttempt > 0) {
+    request.input +=
+      "\nIMPORTANT: Your previous response was invalid. Return only one compact, valid JSON object " +
+      "with a candidates array. Do not include markdown, explanations, or trailing text.";
+  }
+  const response = await provider.infer(request);
+  let parsed: ReturnType<typeof parseAIScenarioResponse>;
+  try {
+    parsed = parseAIScenarioResponse(response);
+  } catch (error) {
+    if (response.status === "success") {
+      logResponseParseFailure(
+        requestId,
+        response,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    throw error;
+  }
   const aiScenarios: BatchScenarioResult[] = [];
   for (const rawCandidate of parsed.candidates) {
     const shapeFindings = validateAICandidateShape(rawCandidate);
@@ -319,21 +379,23 @@ export async function enhanceTestModel(
     return true;
   };
 
-  let nextBatchIndex = 0;
   const summary = await runBatchedInference(
     batches,
-    (batch) => {
-      const index = nextBatchIndex++;
-      const batchRequestId =
-        batches.length > 1 ? `${requestId}-batch${index}` : requestId;
+    (batch, retryAttempt) => {
+      const index = batches.indexOf(batch);
+      const batchRequestId = createBatchRequestId(
+        requestId,
+        batches.length,
+        index,
+        retryAttempt,
+      );
       return runOneBatch(
         batch,
         apiModel,
         scopeBaselineToOperations(testModel, batch.operations),
         batchRequestId,
         provider,
-        outcomes,
-        candidateIds,
+        { outcomes, candidateIds, retryAttempt },
       ).then((result) => {
         batchScenariosByIndex[index] = result;
         return result;

@@ -232,7 +232,7 @@ export interface BatchedInferenceSummary<
  */
 export async function runBatchedInference<TOperation, TBatchData>(
   batches: readonly Batch<TOperation>[],
-  runBatch: (batch: Batch<TOperation>) => Promise<TBatchData>,
+  runBatch: (batch: Batch<TOperation>, attempt: number) => Promise<TBatchData>,
   options: {
     isTimedOut?: () => boolean;
     /**
@@ -264,7 +264,7 @@ export async function runBatchedInference<TOperation, TBatchData>(
     let attempt = 0;
     while (true) {
       try {
-        const data = await runBatch(batch);
+        const data = await runBatch(batch, attempt);
         const outcome: BatchOutcome = { status: "success" };
         runs.push({ batch, outcome, data });
         options.onBatchSettled?.(index, total, outcome);

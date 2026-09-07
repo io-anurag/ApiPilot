@@ -8,13 +8,13 @@ export function TestScenarioReviewDecision({
   error,
   onAccept,
   onReject,
-}: {
+}: Readonly<{
   item: ReviewScenarioWire;
   submitting: boolean;
   error?: string;
   onAccept: () => void;
   onReject: (reason: string) => void;
-}) {
+}>) {
   const [reason, setReason] = useState("");
   const isPending = item.state === "pending";
 
@@ -23,7 +23,10 @@ export function TestScenarioReviewDecision({
   }
 
   return (
-    <div data-testid="review-scenario-decision" className="space-y-2 border-t border-border pt-4">
+    <div
+      data-testid="review-scenario-decision"
+      className="space-y-3 rounded-md border border-border bg-surface p-3"
+    >
       {!isPending && (
         <p data-testid="review-decision-state" className="text-sm text-muted">
           This scenario is already {item.state}.
@@ -39,7 +42,10 @@ export function TestScenarioReviewDecision({
           Accept
         </button>
         <div className="flex flex-col gap-1">
-          <label htmlFor="review-rejection-reason" className="text-xs font-medium text-muted">
+          <label
+            htmlFor="review-rejection-reason"
+            className="text-xs font-medium text-slate-700"
+          >
             Rejection reason
           </label>
           <input
@@ -61,7 +67,11 @@ export function TestScenarioReviewDecision({
         </button>
       </div>
       {error && (
-        <p role="alert" data-testid="review-decision-error" className="text-sm font-medium text-danger-700">
+        <p
+          role="alert"
+          data-testid="review-decision-error"
+          className="text-sm font-medium text-danger-700"
+        >
           {error}
         </p>
       )}
