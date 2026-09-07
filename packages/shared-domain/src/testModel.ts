@@ -14,6 +14,28 @@ export type ScenarioCategory =
   | "string-boundary"
   | "array-boundary";
 
+/**
+ * The same vocabulary as a runtime value, for the two places that need to enumerate rather than
+ * merely type-check it: the AI prompt, which must tell the model which categories exist, and the
+ * candidate validator, which rejects anything outside them.
+ *
+ * It lives here rather than in either consumer because both need it and neither owns it
+ * (constitution X — Domain Model First); defining it in the validator and importing it into the
+ * prompt builder would also close an import cycle through the response parser.
+ */
+export const SCENARIO_CATEGORIES: readonly ScenarioCategory[] = [
+  "positive",
+  "missing-field",
+  "null-value",
+  "empty-value",
+  "invalid-type",
+  "invalid-format",
+  "invalid-enum",
+  "numeric-boundary",
+  "string-boundary",
+  "array-boundary",
+];
+
 /** The concrete request one TestScenario exercises. */
 export interface GeneratedRequest {
   pathParameters: Record<string, unknown>;

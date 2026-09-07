@@ -224,9 +224,14 @@ describe("analyzeDependencies (AI-assisted batching, US1/US2/US3)", () => {
   it("gracefully degrades (never throws) once the overall analysis budget is exhausted mid-run, marking remaining batches not-attempted (FR-010, T027)", async () => {
     const largeModel = buildLargeApiModel(20);
     const budgetChars = Math.floor(buildAIDependencyPrompt(largeModel).length / 6);
-    const provider = scriptedBatchProvider({ budgetChars, delayMs: 20 });
+    // The budget must be large enough that deterministic matching and workflow assembly fit inside
+    // it even when the suite runs in parallel, and small enough that the scripted provider's own
+    // delay exhausts it after the first batch or two. A 15ms budget could not separate those: under
+    // load the deterministic portion alone exceeded it, so the run failed the budget guard for a
+    // reason this test is not about (specs/014-ai-batching-policy).
+    const provider = scriptedBatchProvider({ budgetChars, delayMs: 80 });
 
-    const result = await analyzeDependencies(largeModel, provider, { timeoutMs: 15 });
+    const result = await analyzeDependencies(largeModel, provider, { timeoutMs: 150 });
 
     expect(provider.calls.length).toBeGreaterThanOrEqual(1);
     expect(provider.calls.length).toBeLessThan(6);

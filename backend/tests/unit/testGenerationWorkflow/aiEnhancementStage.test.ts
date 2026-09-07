@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
@@ -330,8 +330,19 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
     expect(accepted?.length).toBe(1);
   });
 
-  it("a single-batch run's progress, if observed at all, never implies a multi-step process (FR-005)", async () => {
+  /**
+   * Supersedes specs/012's FR-005 premise that a realistic specification is one batch. It never was
+   * a design goal — it was a consequence of sizing batches by remaining context window, which is
+   * what specs/014-ai-batching-policy replaces. A multi-operation specification now plans one unit
+   * per operation, which is what makes progress, cancellation, and partial results reachable at all.
+   * The invariant the original test protected — progress cleared once the stage settles — still
+   * holds and is asserted here.
+   */
+  it("plans one unit per operation for a multi-operation specification (specs/014-ai-batching-policy FR-001)", async () => {
     await reachAiEnhancement();
+    const operationCount = getCurrentWorkflow()!.apiModel!.operations.length;
+    expect(operationCount).toBeGreaterThan(1);
+
     let capturedProgress: { totalBatches: number } | undefined;
     const provider: AIProvider = {
       ...mockProvider,
@@ -343,9 +354,8 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
 
     const wf = await runAiEnhancement(provider);
 
-    if (capturedProgress) {
-      expect(capturedProgress.totalBatches).toBe(1);
-    }
+    expect(capturedProgress?.totalBatches).toBe(operationCount);
+    // Progress is cleared the moment the stage reaches a terminal status.
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
     expect(wf.stages.aiEnhancement.status).toBe("complete");
   });
@@ -399,5 +409,94 @@ describe("aiEnhancementStage (concurrency guard, specs/012-ai-enhancement-progre
     await reachAiEnhancement();
     const wf = await runAiEnhancement(mockProvider);
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+  });
+});
+
+/**
+ * The run's wall-clock ceiling as the stage reports it (specs/014-ai-batching-policy FR-010/FR-023,
+ * contracts/run-budget.md outcome mapping).
+ *
+ * Configured through the environment rather than an option, because the stage deliberately has no
+ * seam for it: the ceiling `enhanceTestModel` enforces and the one the stage reports remaining
+ * allowance against must be the same number, and reading it once from configuration is what
+ * guarantees that.
+ */
+describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => {
+  const previousBudget = process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+
+  beforeEach(() => resetStore());
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (previousBudget === undefined) delete process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+    else process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = previousBudget;
+  });
+
+  /** A provider that charges `msPerCall` to a stubbed clock for every inference it serves. */
+  function timedProvider(msPerCall: number): AIProvider {
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    return {
+      ...mockProvider,
+      infer: async (request) => {
+        now += msPerCall;
+        return mockProvider.infer(request);
+      },
+    };
+  }
+
+  it("settles partial at the ceiling and explains the shortfall rather than blaming the provider", async () => {
+    // valid.yaml's operations become one unit each (three of them), so a 1.5s ceiling at 1s per
+    // unit stops the run after two, leaving the third never started.
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "1500";
+    await reachAiEnhancement();
+
+    const wf = await runAiEnhancement(timedProvider(1_000));
+
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.aiEnhancement?.aiProviderOutcome).toBe("partial");
+    expect(wf.aiEnhancement?.runBudgetExhausted).toEqual({ budgetMs: 1_500, notStartedCount: 1 });
+    const explanation = wf.stages.aiEnhancement.failureExplanation;
+    expect(explanation?.category).toBe("too-slow");
+    expect(explanation?.retryable).toBe(false);
+    // The aggregated provider category would have described this as unusable output, sending the
+    // user to fix a model that behaved perfectly.
+    expect(explanation?.summary).not.toContain("unusable");
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+    // A truncated run still advances on everything it did produce (FR-010).
+    expect(wf.activeStageId).toBe("scenarioReview");
+  });
+
+  it("leaves a run that fits inside the ceiling completely unaffected (SC-006)", async () => {
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "600000";
+    await reachAiEnhancement();
+
+    const wf = await runAiEnhancement(timedProvider(1_000));
+
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+    expect(wf.aiEnhancement?.runBudgetExhausted).toBeUndefined();
+    expect(wf.stages.aiEnhancement.failureExplanation).toBeUndefined();
+  });
+
+  it("reports the remaining allowance while a run is in flight (FR-012)", async () => {
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "600000";
+    await reachAiEnhancement();
+    let observed: number | undefined;
+    let seen = false;
+    const provider: AIProvider = {
+      ...mockProvider,
+      infer: async (request) => {
+        if (!seen) {
+          seen = true;
+          observed = getCurrentWorkflow()!.stages.aiEnhancement.progress?.runBudgetRemainingMs;
+        }
+        return mockProvider.infer(request);
+      },
+    };
+
+    await runAiEnhancement(provider);
+
+    expect(observed).toBeLessThanOrEqual(600_000);
+    expect(observed).toBeGreaterThan(0);
   });
 });

@@ -79,6 +79,93 @@ describe("splitOperationsIntoBatches", () => {
   });
 });
 
+describe("splitOperationsIntoBatches work bound (specs/014-ai-batching-policy)", () => {
+  it("yields one batch per operation for a large specification when the work bound is 1", () => {
+    const operations = Array.from({ length: 200 }, (_, i) => i);
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, 1_000_000, 1);
+
+    expect(batches).toHaveLength(200);
+    expect(batches.every((batch) => batch.operations.length === 1)).toBe(true);
+  });
+
+  it("preserves specification order across batches", () => {
+    const operations = [10, 20, 30, 40, 50];
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, 1_000_000, 2);
+
+    expect(batches.map((batch) => batch.operations)).toEqual([[10, 20], [30, 40], [50]]);
+  });
+
+  it("places every operation in exactly one batch, losing and duplicating none", () => {
+    const operations = Array.from({ length: 37 }, (_, i) => i);
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, 1_000_000, 3);
+
+    const flattened = batches.flatMap((batch) => batch.operations);
+    expect(flattened).toEqual(operations);
+    expect(new Set(flattened).size).toBe(operations.length);
+  });
+
+  it("produces identical batches across repeated calls, so a run is reproducible (SC-008)", () => {
+    const operations = Array.from({ length: 50 }, (_, i) => i);
+
+    const first = splitOperationsIntoBatches(operations, buildPrompt, 400, 4);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(splitOperationsIntoBatches(operations, buildPrompt, 400, 4)).toEqual(first);
+    }
+  });
+
+  it("still applies the context budget within a work-bounded batch, so the work bound cannot produce an oversized request", () => {
+    const operations = [1, 2, 3, 4];
+    // A budget too small for the 4-operation work bound to fit in one prompt.
+    const tightBudget = buildPrompt([1, 2]).length;
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, tightBudget, 4);
+
+    expect(batches.length).toBeGreaterThan(1);
+    expect(batches.flatMap((batch) => batch.operations)).toEqual(operations);
+    for (const batch of batches) {
+      expect(buildPrompt(batch.operations).length).toBeLessThanOrEqual(tightBudget);
+    }
+  });
+
+  it("isolates a single operation that alone exceeds the budget rather than dropping or merging it (FR-011)", () => {
+    const operations = [1, 2, 3];
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, 1, 3);
+
+    expect(batches).toEqual([{ operations: [1] }, { operations: [2] }, { operations: [3] }]);
+  });
+
+  it.each([
+    ["omitted", undefined],
+    ["zero", 0],
+    ["negative", -5],
+    ["not finite", Number.NaN],
+  ])("falls back to context-only sizing when the work bound is %s, leaving existing callers unaffected", (_label, bound) => {
+    const operations = [1, 2, 3, 4, 5];
+    const budgetChars = buildPrompt([1, 2]).length;
+
+    const withBound = splitOperationsIntoBatches(operations, buildPrompt, budgetChars, bound);
+    const contextOnly = splitOperationsIntoBatches(operations, buildPrompt, budgetChars);
+
+    expect(withBound).toEqual(contextOnly);
+  });
+
+  it("treats a work bound larger than the operation count as no constraint", () => {
+    const operations = [1, 2, 3];
+
+    const batches = splitOperationsIntoBatches(operations, buildPrompt, 1_000_000, 99);
+
+    expect(batches).toEqual([{ operations: [1, 2, 3] }]);
+  });
+
+  it("returns no batches for an empty operation list regardless of the work bound", () => {
+    expect(splitOperationsIntoBatches([], buildPrompt, 1000, 1)).toEqual([]);
+  });
+});
+
 describe("deriveAggregateOutcome", () => {
   it("returns 'success' when every batch succeeded", () => {
     const result = deriveAggregateOutcome([{ status: "success" }, { status: "success" }]);

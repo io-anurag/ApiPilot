@@ -16,6 +16,7 @@ const BATCH_STATUS_LABEL: Record<AiEnhancementProgress["batches"][number]["statu
   "in-progress": "In progress",
   succeeded: "Succeeded",
   failed: "Failed",
+  "not-attempted": "Not attempted",
 };
 
 const BATCH_STATUS_TONE: Record<AiEnhancementProgress["batches"][number]["status"], StatusTone> = {
@@ -23,6 +24,9 @@ const BATCH_STATUS_TONE: Record<AiEnhancementProgress["batches"][number]["status
   "in-progress": "info",
   succeeded: "success",
   failed: "danger",
+  // Warning rather than danger: the run's time ceiling stopped these from being sent, so nothing
+  // about them went wrong and presenting them as failures would overstate the outcome.
+  "not-attempted": "warning",
 };
 
 /** Renders elapsed seconds/minutes the way a person reads a stopwatch. */
@@ -90,7 +94,10 @@ function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
   if (progress.totalBatches <= 1) return null;
   const currentIndex = progress.batches.findIndex((batch) => batch.status === "in-progress");
   const settledCount = progress.batches.filter(
-    (batch) => batch.status === "succeeded" || batch.status === "failed",
+    (batch) =>
+      batch.status === "succeeded" ||
+      batch.status === "failed" ||
+      batch.status === "not-attempted",
   ).length;
 
   return (
@@ -99,6 +106,22 @@ function BatchProgressList({ progress }: { progress: AiEnhancementProgress }) {
         {currentIndex >= 0
           ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
           : `${settledCount} of ${progress.totalBatches} batches complete`}
+        {/*
+          The planned batch count on its own overstates what a run will do: a 39-batch plan under a
+          five-minute ceiling completes roughly the first seven, and a denominator the run never
+          intends to reach reads as a queue of failures waiting to happen
+          (specs/014-ai-batching-policy FR-012).
+        */}
+        {progress.runBudgetRemainingMs !== undefined && (
+          <>
+            {" — "}
+            <span data-testid="ai-enhancement-run-budget-remaining">
+              {progress.runBudgetRemainingMs > 0
+                ? `${formatElapsed(progress.runBudgetRemainingMs)} of run time left`
+                : "run time limit reached; finishing the current batch"}
+            </span>
+          </>
+        )}
       </p>
       <ul className="flex flex-wrap gap-1.5" aria-label="Batch progress">
         {progress.batches.map((batch) => (

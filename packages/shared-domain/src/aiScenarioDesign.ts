@@ -80,4 +80,30 @@ export interface EnhancementResult {
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
   requestId: string;
+  /**
+   * Present only when the run was refused before any inference was attempted, because a single
+   * unit's projected cost could not fit the per-request budget
+   * (specs/014-ai-batching-policy FR-013).
+   *
+   * Distinct from every `aiErrorCategory`: nothing failed, and nothing was tried. The stage uses
+   * these figures to tell the user what was projected versus what was allowed, in human-readable
+   * durations, so a refusal is actionable rather than merely negative (FR-014).
+   */
+  notViable?: {
+    projectedMs: number;
+    budgetMs: number;
+  };
+  /**
+   * Present only when the run's wall-clock ceiling elapsed before every unit had been started
+   * (specs/014-ai-batching-policy FR-010, contracts/run-budget.md).
+   *
+   * Distinct from `aiErrorCategory`: the units that ran are unaffected and their scenarios are
+   * retained, and the ones recorded `not-attempted` were never sent. `notStartedCount` is what
+   * makes the shortfall reportable — the stage can say how much of the plan the ceiling permitted
+   * instead of presenting a truncated run as a complete one.
+   */
+  runBudgetExhausted?: {
+    budgetMs: number;
+    notStartedCount: number;
+  };
 }

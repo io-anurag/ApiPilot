@@ -4,7 +4,27 @@ import type { AIProviderMode, ModelConfig, ModelDType } from "@apipilot/shared-d
 
 const DEFAULT_MODEL_ID = "onnx-community/Qwen2.5-0.5B-Instruct";
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".apipilot", "models");
-const DEFAULT_INFERENCE_TIMEOUT_MS = 60_000;
+/**
+ * Per-request inference timeout (specs/014-ai-batching-policy).
+ *
+ * 120 seconds, and the figure is arithmetic rather than caution. A single-operation enhancement
+ * request costs its output allowance plus its prompt: 256 output tokens at the seeded decode rate
+ * below is ~46s before a single prompt token is read, and a real 39-operation specification's units
+ * measured 430-834 prompt tokens, adding 18-35s of prefill. Every unit therefore projects at
+ * 64-81s.
+ *
+ * This was 60 seconds, which made the whole feature arithmetically impossible and did so silently
+ * in two different ways. Against a real specification the largest prompts hit the wall (`TIMEOUT`)
+ * and the near-boundary ones came back cut off mid-document (`INVALID_RESPONSE`). And once the
+ * viability safety factor was corrected to 1.0, the pre-flight check began refusing *every* run,
+ * including every fixture in the unit suite — a ~400-token prompt projects at 62.8s, which is over
+ * a 60-second ceiling.
+ *
+ * Raising it does not make impossible work possible: the pre-flight check still refuses anything
+ * projected beyond this limit, and `enhancementRunBudgetMs` still bounds the run as a whole. It
+ * makes *possible* work fit. Lower it only alongside a smaller output allowance or smaller prompts.
+ */
+const DEFAULT_INFERENCE_TIMEOUT_MS = 120_000;
 
 /**
  * Conservative context window assumed when neither the model config's `max_position_embeddings`
@@ -28,17 +48,88 @@ const DEFAULT_CONTEXT_FLOOR_TOKENS = 2048;
  * These are seeds only: the provider refines them by exponentially-weighted moving average from
  * observed inferences. They gate *whether* a run is attempted and never influence prompt content,
  * validation, deduplication order, or which scenarios are retained (constitution XXIV).
+ *
+ * The prefill seed was 2.0 ms/token, inherited from an estimate rather than a measurement. Direct
+ * measurement against the reference profile puts it at **~42 ms/token** — 21x higher — and
+ * remarkably linear: holding the output allowance fixed at 32 tokens and varying only prompt size
+ * gave 43.4, 41.3 and 42.1 ms/prompt-token at 441, 828 and 1,132 prompt tokens respectively.
+ *
+ * That single number reframes the whole cost model. Prefill, not generation, is what a request
+ * spends its time on: a ~1,130-token prompt costs roughly 47 seconds before the first output token
+ * exists, which is why a single-operation request over a large request body exceeded the 60-second
+ * default even with the output allowance cut to 96 tokens. Prompt size is the dominant lever, and
+ * an estimator seeded at 2.0 would have declared every such run viable
+ * (specs/014-ai-batching-policy).
  */
-const DEFAULT_PREFILL_MS_PER_TOKEN = 2.0;
-const DEFAULT_DECODE_MS_PER_TOKEN = 130;
+const DEFAULT_PREFILL_MS_PER_TOKEN = 42;
+const DEFAULT_DECODE_MS_PER_TOKEN = 180;
 
 /**
- * How far a projected duration may exceed the configured timeout before the run is refused
- * outright. Above 1.0 so a marginal misestimate never blocks a run that would have succeeded —
- * the estimate exists to catch the hopeless case (the reported defect over-ran its budget by
- * ~6.9x), not to police borderline ones.
+ * How far a projected duration may exceed the configured timeout before the run is refused.
+ *
+ * 1.0: refuse anything projected to exceed the budget. This was 1.5, on the reasoning that
+ * "wrongly refusing a viable run would be a worse failure than wrongly attempting one, since the
+ * timeout still backstops the latter" — sound when projections were tiny (the prefill seed was 21x
+ * too low, so the factor never actually decided anything) and attempts were assumed cheap.
+ *
+ * Both halves of that reasoning have since failed. `budgetMs` *is* the per-request hard timeout, so
+ * permitting `projected <= budget x 1.5` approved work projected at 68 seconds against a 60-second
+ * wall — guaranteed to fail, every time. And an attempt is not cheap: with one unit per operation, a
+ * 39-operation specification spent roughly 40 minutes discovering unit-by-unit what the projection
+ * already implied. Above 1.0 the check cannot do the one job it exists for.
+ *
+ * Lower it below 1.0 for genuine headroom; raise it only if you would rather attempt marginal runs
+ * than be told about them (specs/014-ai-batching-policy).
  */
-const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.5;
+const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.0;
+
+/**
+ * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy research.md
+ * Decision 1).
+ *
+ * One, because that is what measurement supports rather than what seems generous: across the six
+ * operations of a real springdoc-style specification, one operation per request produced a validly
+ * shaped reply for all six, while two and three operations both truncated mid-document even at a
+ * larger output allowance, and a whole-specification request made the model echo the request back
+ * instead of answering it.
+ *
+ * Configurable rather than fixed because that result describes this CPU and this 0.5B model, not
+ * the domain: a faster machine or a stronger model may well manage more, and should be able to try
+ * without a code change.
+ */
+const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
+
+/**
+ * Wall-clock ceiling for a whole enhancement run (research.md Decision 5).
+ *
+ * Five minutes. Total run time is linear in specification size, so a ceiling is what stops
+ * work-bounded batching from replacing "fails in one minute" with "runs for an hour".
+ *
+ * The per-unit cost this covers was originally recorded as ~21 seconds. Measured against a real
+ * 39-operation specification it is **~30-60 seconds** — units settle early when the model closes
+ * its JSON document and run to the full timeout when it does not — so five minutes covers roughly
+ * 5-10 operations rather than the 14 first estimated. Raise it to cover a large specification in
+ * one pass; the run settles `partial` with everything generated retained either way.
+ *
+ * Enforced by `enhanceTestModel`, measured from the end of model preparation. It was previously
+ * loaded here and read by nothing at all, which is how a 39-unit run came to grind for roughly half
+ * an hour with no bound of any kind.
+ */
+const DEFAULT_ENHANCEMENT_RUN_BUDGET_MS = 300_000;
+
+/**
+ * Conservative characters-per-token estimate used only to plan work before sending a request
+ * (specs/011-ai-prompt-batching research.md Decision 2) — deliberately on the low side, because
+ * JSON-heavy prompts full of punctuation and numbers tokenize less efficiently than prose, and the
+ * loaded engine's exact tokenizer guard remains the authoritative fits/doesn't-fit check. This
+ * estimate only needs to usually avoid tripping that guard, not match it exactly.
+ *
+ * Lives here rather than in `localProvider` so planning code can convert characters to tokens
+ * without importing the provider — and with it the whole inference library. `enhanceTestModel`
+ * needs exactly that for its pre-flight estimate, and pulling the runtime into the test-design
+ * layer would both slow every import and breach the provider boundary (constitution VI, IX).
+ */
+export const CHARS_PER_TOKEN_ESTIMATE = 3;
 const VALID_DTYPES: readonly ModelDType[] = [
   "fp32",
   "fp16",
@@ -60,6 +151,18 @@ export interface InferencePlanningConfig {
   prefillMsPerToken: number;
   decodeMsPerToken: number;
   viabilitySafetyFactor: number;
+  /**
+   * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy FR-001).
+   * Sizing a request by work rather than by remaining context is what keeps its reply short enough
+   * to be usable.
+   */
+  enhancementOperationsPerUnit: number;
+  /**
+   * Wall-clock ceiling for a whole enhancement run (FR-009), distinct from `inferenceTimeoutMs`,
+   * which bounds a single request. Work-bounded units make total run time grow with specification
+   * size, so a run needs a bound of its own.
+   */
+  enhancementRunBudgetMs: number;
 }
 
 /** Resolved AI configuration for the current process: which provider to construct, and its model settings. */
@@ -116,6 +219,18 @@ export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
     viabilitySafetyFactor: readPositiveNumber(
       env.AI_VIABILITY_SAFETY_FACTOR,
       DEFAULT_VIABILITY_SAFETY_FACTOR,
+    ),
+    enhancementOperationsPerUnit: Math.floor(
+      readPositiveNumber(
+        env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT,
+        DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT,
+      ),
+    ),
+    enhancementRunBudgetMs: Math.floor(
+      readPositiveNumber(
+        env.AI_ENHANCEMENT_RUN_BUDGET_MS,
+        DEFAULT_ENHANCEMENT_RUN_BUDGET_MS,
+      ),
     ),
   };
 

@@ -1,0 +1,369 @@
+openapi: 3.0.3
+info:
+  title: Body-Heavy Fixture
+  version: "1.0"
+  description: >
+    Corpus for validating the conditional worked-example rule
+    (specs/014-ai-batching-policy research.md Decision 3). The Phase 0 measurement that produced
+    that rule rested on a single body-carrying operation, so it needs a spec with request bodies of
+    varying size — including nested objects and arrays — to confirm the rule holds. Operations
+    without a request body are included deliberately as the control group: the rule must omit the
+    example for those.
+servers:
+  - url: https://example.invalid/api
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders. Control case — no request body, example must be omitted.
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [pending, shipped, cancelled]
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    post:
+      operationId: createOrder
+      summary: Create an order. Large body — nested object plus array of objects.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Order"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Fetch one order. Control case — no request body.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    patch:
+      operationId: patchOrder
+      summary: Partially update an order. Small body — three flat fields.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, shipped, cancelled]
+                note:
+                  type: string
+                  maxLength: 280
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    delete:
+      operationId: deleteOrder
+      summary: Delete an order. Control case — no request body.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /customers:
+    post:
+      operationId: createCustomer
+      summary: Create a customer. Medium body — nested address object.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Customer"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /shipments:
+    post:
+      operationId: createShipment
+      summary: Create a shipment. Largest body — ten fields including nested and array members.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, carrier, destination]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+                carrier:
+                  type: string
+                  enum: [dhl, fedex, ups, royalmail]
+                trackingNumber:
+                  type: string
+                  minLength: 6
+                  maxLength: 40
+                weightKg:
+                  type: number
+                  minimum: 0.01
+                  maximum: 1000
+                insured:
+                  type: boolean
+                signatureRequired:
+                  type: boolean
+                dispatchedAt:
+                  type: string
+                  format: date-time
+                destination:
+                  $ref: "#/components/schemas/Address"
+                parcels:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [reference]
+                    properties:
+                      reference:
+                        type: string
+                      lengthCm:
+                        type: number
+                      widthCm:
+                        type: number
+                      heightCm:
+                        type: number
+                notes:
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 200
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shipmentId:
+                    type: string
+                    format: uuid
+                  trackingNumber:
+                    type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /shipments/{shipmentId}/events:
+    post:
+      operationId: appendShipmentEvent
+      summary: Append a tracking event. Small body — two fields plus an enum.
+      parameters:
+        - name: shipmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, occurredAt]
+              properties:
+                kind:
+                  type: string
+                  enum: [picked-up, in-transit, delivered, exception]
+                occurredAt:
+                  type: string
+                  format: date-time
+                location:
+                  type: string
+      responses:
+        "201":
+          description: Recorded
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+components:
+  schemas:
+    Address:
+      type: object
+      required: [line1, city, postcode, country]
+      properties:
+        line1:
+          type: string
+          maxLength: 120
+        line2:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        postcode:
+          type: string
+          minLength: 3
+          maxLength: 12
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+    Customer:
+      type: object
+      required: [email, name]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        phone:
+          type: string
+        marketingOptIn:
+          type: boolean
+        billingAddress:
+          $ref: "#/components/schemas/Address"
+    Order:
+      type: object
+      required: [customerId, lines]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, shipped, cancelled]
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        placedAt:
+          type: string
+          format: date-time
+        shippingAddress:
+          $ref: "#/components/schemas/Address"
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [sku, quantity]
+            properties:
+              sku:
+                type: string
+                minLength: 1
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 999
+              unitPriceMinor:
+                type: integer
+                minimum: 0
+    Problem:
+      type: object
+      properties:
+        title:
+          type: string
+        detail:
+          type: string
+        status:
+          type: integer

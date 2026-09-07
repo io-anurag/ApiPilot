@@ -13,6 +13,7 @@ import {
   buildAIScenarioRequest,
   buildAIScenarioPrompt,
 } from "./aiScenarioPrompt";
+import { estimateViability } from "../ai/viability";
 import { parseAIScenarioResponse, isCandidateShape } from "./parseAIScenarioResponse";
 import {
   validateAICandidateSemantics,
@@ -26,6 +27,7 @@ import {
   type Batch,
   type BatchOutcome,
 } from "../ai/requestBatching";
+import { CHARS_PER_TOKEN_ESTIMATE, loadAIConfig } from "../ai/modelConfig";
 import { createLogger } from "../logger";
 
 const logger = createLogger("testDesign.enhanceTestModel");
@@ -143,6 +145,22 @@ async function runOneBatch(
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
 export interface EnhanceTestModelOptions {
   /**
+   * Operations per AI request, overriding the configured default. Test-facing seam
+   * (specs/014-ai-batching-policy FR-001) so unit sizing can be exercised without touching env.
+   */
+  operationsPerUnit?: number;
+  /**
+   * Per-request time budget the pre-flight estimate is compared against, overriding the configured
+   * inference timeout. Test-facing seam (FR-013).
+   */
+  perRequestBudgetMs?: number;
+  /**
+   * Wall-clock ceiling for the whole run, overriding the configured default (FR-009). Once
+   * exceeded, no further unit is started; remaining units are recorded `not-attempted` and the run
+   * settles `partial` with everything already produced retained.
+   */
+  runBudgetMs?: number;
+  /**
    * Fires once the provider is loaded and ready, immediately before batch planning
    * (specs/013-ai-enhancement-viability FR-018). Lets a caller distinguish time spent preparing
    * the model — which on a first run includes a large download — from time spent generating.
@@ -205,6 +223,15 @@ export async function enhanceTestModel(
   const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
   options.onPrepared?.();
 
+  // The run ceiling is measured from here — the moment preparation ends — and not from this
+  // function's entry, so a first run's model download and load are not charged to it
+  // (specs/014-ai-batching-policy contracts/run-budget.md, the `generatingSince` distinction
+  // specs/012-ai-enhancement-progress established).
+  const generationStartedAt = Date.now();
+
+  // Work-bounded sizing (specs/014-ai-batching-policy FR-001): a unit covers a small fixed number
+  // of operations rather than however many happen to fit the remaining context. `budgetChars`
+  // remains the upper bound, so the work bound can never produce a request the model cannot accept.
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) =>
@@ -213,7 +240,51 @@ export async function enhanceTestModel(
         scopeBaselineToOperations(testModel, operations),
       ),
     budgetChars,
+    options.operationsPerUnit ?? loadAIConfig().planning.enhancementOperationsPerUnit,
   );
+
+  // Pre-flight refusal (FR-013). Uniform, work-bounded units are what make a single estimate
+  // representative of the whole run: every unit costs roughly the same, so if the most expensive one
+  // cannot fit the per-request budget, none of them can and the run is hopeless before it starts.
+  //
+  // This exists because the alternative is what a user actually experienced: a 39-operation
+  // specification producing 39 units that each ran to the full timeout and failed, ~40 minutes to
+  // reach an outcome that was knowable in seconds. The estimator itself has been implemented and
+  // tested since specs/013-ai-enhancement-viability but was never called from anywhere.
+  const config = loadAIConfig();
+  const worstPromptChars = batches.reduce((worst, batch) => {
+    const chars = buildAIScenarioPrompt(
+      withOperations(apiModel, batch.operations),
+      scopeBaselineToOperations(testModel, batch.operations),
+    ).length;
+    return Math.max(worst, chars);
+  }, 0);
+  const estimate = estimateViability({
+    promptTokens: Math.ceil(worstPromptChars / CHARS_PER_TOKEN_ESTIMATE),
+    maxOutputTokens: AI_SCENARIO_MAX_OUTPUT_TOKENS,
+    rates: {
+      prefillMsPerToken: config.planning.prefillMsPerToken,
+      decodeMsPerToken: config.planning.decodeMsPerToken,
+    },
+    budgetMs: options.perRequestBudgetMs ?? config.model.inferenceTimeoutMs,
+    safetyFactor: config.planning.viabilitySafetyFactor,
+  });
+  if (!estimate.viable) {
+    logger.warn("run_refused_not_viable", {
+      promptTokens: estimate.promptTokens,
+      maxOutputTokens: estimate.maxOutputTokens,
+      projectedMs: Math.round(estimate.projectedMs),
+      budgetMs: estimate.budgetMs,
+      totalUnits: batches.length,
+    });
+    return {
+      requestId,
+      enhancedTestModel: testModel,
+      aiCandidates: emptyOutcomes(),
+      aiProviderOutcome: "unavailable",
+      notViable: { projectedMs: estimate.projectedMs, budgetMs: estimate.budgetMs },
+    };
+  }
 
   // Per-batch results, populated as each batch's own `runBatch` closure resolves, so
   // `onBatchSettled` below (fired by runBatchedInference immediately afterward, before the
@@ -221,6 +292,18 @@ export async function enhanceTestModel(
   // itself needing to carry TBatchData through its generic outcome-only hook.
   const batchScenariosByIndex: BatchScenarioResult[][] = [];
   const allAiScenariosSoFar: BatchScenarioResult[] = [];
+
+  // Run ceiling (FR-009/FR-010). Checked at unit boundaries only, so a unit already in flight when
+  // the ceiling elapses runs to completion and its scenarios are kept: the ceiling governs what is
+  // *started*, never what is discarded. `runBudgetExhausted` records that the ceiling — rather than
+  // a user cancellation, the other producer of `not-attempted` — is what stopped the run.
+  const runBudgetMs = options.runBudgetMs ?? config.planning.enhancementRunBudgetMs;
+  let runBudgetExhausted = false;
+  const isRunBudgetExhausted = (): boolean => {
+    if (Date.now() - generationStartedAt < runBudgetMs) return false;
+    runBudgetExhausted = true;
+    return true;
+  };
 
   let nextBatchIndex = 0;
   const summary = await runBatchedInference(
@@ -242,36 +325,73 @@ export async function enhanceTestModel(
       });
     },
     {
+      isTimedOut: isRunBudgetExhausted,
       isCancelled: options.isCancelled,
       onBatchStart: options.onBatchStart,
-      onBatchSettled: options.onBatchComplete
-        ? (index, total, outcome) => {
-            const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
-            if (thisBatchScenarios.length === 0) {
-              options.onBatchComplete!(index, total, outcome, []);
-              return;
-            }
-            allAiScenariosSoFar.push(...thisBatchScenarios);
-            const mergedSoFar = deduplicate([
-              ...testModel.scenarios,
-              ...allAiScenariosSoFar.map((item) => item.scenario),
-            ]);
-            const newlyRetained = thisBatchScenarios
-              .map((item) => item.scenario)
-              .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
-            options.onBatchComplete!(index, total, outcome, newlyRetained);
-          }
-        : undefined,
+      onBatchSettled: (index, total, outcome) => {
+        // Per-unit diagnostics (specs/014-ai-batching-policy FR-018, constitution XX). Without
+        // this, a run where every unit failed logged nothing at all about why: the
+        // `successCount === 0` path below returns before `enhancement_complete` is reached, so the
+        // only trace was a provider-level `inference_success` followed by an unexplained
+        // `INVALID_RESPONSE`. Categories and counts only — never prompt or reply content.
+        logger.info("unit_settled", {
+          unitIndex: index,
+          totalUnits: total,
+          operationCount: batches[index]?.operations.length,
+          status: outcome.status,
+          errorCategory: outcome.status === "failed" ? outcome.errorCategory : undefined,
+          retainedCount: (batchScenariosByIndex[index] ?? []).length,
+        });
+
+        if (!options.onBatchComplete) return;
+        const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
+        if (thisBatchScenarios.length === 0) {
+          options.onBatchComplete(index, total, outcome, []);
+          return;
+        }
+        allAiScenariosSoFar.push(...thisBatchScenarios);
+        const mergedSoFar = deduplicate([
+          ...testModel.scenarios,
+          ...allAiScenariosSoFar.map((item) => item.scenario),
+        ]);
+        const newlyRetained = thisBatchScenarios
+          .map((item) => item.scenario)
+          .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
+        options.onBatchComplete(index, total, outcome, newlyRetained);
+      },
     },
   );
 
   const aiScenarios = summary.runs.flatMap((run) => run.data ?? []);
+
+  /**
+   * The ceiling report for this run, or `undefined` when the ceiling was never reached.
+   *
+   * Reported on every post-run return rather than only the `partial` one: a run where the ceiling
+   * elapsed *and* every started unit failed is still a truncated run, and saying so is what
+   * distinguishes "this specification produced nothing" from "this specification was only
+   * partly attempted".
+   */
+  const ceilingReport = runBudgetExhausted
+    ? { budgetMs: runBudgetMs, notStartedCount: summary.notAttemptedCount }
+    : undefined;
 
   if (summary.successCount === 0) {
     // No batch succeeded: nothing was ever added to `outcomes` (runOneBatch only mutates it
     // once fully parsed), so the baseline passes through unchanged, exactly like a
     // single-batch failure did before batching existed.
     const category = summary.errorCategory ?? "INVALID_RESPONSE";
+    // Logged here as well as per-unit above, because this early return skips the
+    // `enhancement_complete` line at the end — which is precisely why a total failure previously
+    // left no diagnostic trace at all.
+    logger.error("enhancement_failed", {
+      outcome: summary.outcome,
+      errorCategory: category,
+      totalUnits: summary.totalCount,
+      failureCount: summary.failureCount,
+      notAttemptedCount: summary.notAttemptedCount,
+      runBudgetExhausted,
+    });
     return {
       requestId,
       enhancedTestModel: testModel,
@@ -283,7 +403,9 @@ export async function enhanceTestModel(
         summary.outcome,
         summary.failureCount,
         summary.totalCount,
+        ceilingReport,
       ),
+      runBudgetExhausted: ceilingReport,
     };
   }
 
@@ -316,6 +438,8 @@ export async function enhanceTestModel(
     rejectedCount: outcomes.rejected.length,
     deduplicatedCount: outcomes.deduplicated.length,
     totalBatches: summary.totalCount,
+    notAttemptedCount: summary.notAttemptedCount,
+    runBudgetExhausted,
   });
 
   if (summary.outcome === "success") {
@@ -339,7 +463,9 @@ export async function enhanceTestModel(
       "partial",
       summary.failureCount,
       summary.totalCount,
+      ceilingReport,
     ),
+    runBudgetExhausted: ceilingReport,
   };
 }
 
@@ -348,12 +474,23 @@ function providerErrorMessage(
   outcome: EnhancementResult["aiProviderOutcome"],
   failedCount: number,
   totalBatchCount: number,
+  ceiling?: { budgetMs: number; notStartedCount: number },
 ): string {
   const fraction = batchFraction(failedCount, totalBatchCount);
   const preserved =
     outcome === "partial"
       ? "deterministic scenarios and partial AI results were preserved"
       : "deterministic scenarios were preserved";
+  // A ceiling-truncated run must not be attributed to the provider. `failedCount` includes the
+  // units the ceiling never started, so the ordinary messages below would report a count of
+  // provider failures that never happened — reading, for a 39-unit plan stopped after seven, as
+  // "the AI provider returned invalid output for 32 of 39 batches".
+  if (ceiling) {
+    return (
+      `AI enhancement reached its run time limit with ${ceiling.notStartedCount} of ` +
+      `${totalBatchCount} batches not started; ${preserved}`
+    );
+  }
   if (category === "TIMEOUT") {
     return `AI provider timed out${fraction}; ${preserved}`;
   }

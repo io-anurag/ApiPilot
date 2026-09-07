@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { InferenceResponse } from "@apipilot/shared-domain";
+import { SCENARIO_CATEGORIES, type InferenceResponse } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
 import { validateSpec } from "../../../src/openapi/validateSpec";
@@ -32,7 +32,7 @@ describe("AI scenario prompt and response contract", () => {
     // minutes against a 5-minute timeout, so the stage could never complete
     // (specs/013-ai-enhancement-viability FR-011).
     expect(request.maxOutputTokens).toBe(AI_SCENARIO_MAX_OUTPUT_TOKENS);
-    expect(prompt.responseVersion).toBe(2);
+    expect(prompt.responseVersion).toBe(3);
   });
 
   it("sends an operation-contract projection, not the serialized models (FR-009)", () => {
@@ -64,11 +64,14 @@ describe("AI scenario prompt and response contract", () => {
       expect(operation.security).toBeUndefined();
     }
 
-    // The baseline is compressed to what stops the model repeating it, not reproduced in full.
-    const coverage = prompt.existingCoverage as string[];
-    expect(Array.isArray(coverage)).toBe(true);
-    for (const entry of coverage) {
-      expect(typeof entry).toBe("string");
+    // The baseline is compressed to what stops the model repeating it, not reproduced in full:
+    // nested operation -> category -> covered fields (specs/014-ai-batching-policy).
+    const coverage = prompt.existingCoverage as Record<string, Record<string, string[]>>;
+    expect(typeof coverage).toBe("object");
+    for (const byCategory of Object.values(coverage)) {
+      for (const fields of Object.values(byCategory)) {
+        expect(Array.isArray(fields)).toBe(true);
+      }
     }
   });
 
@@ -129,5 +132,150 @@ describe("AI scenario prompt and response contract", () => {
 
     expect(() => parseAIScenarioResponse(response)).toThrow("valid JSON");
     expect(() => parseAIScenarioResponse(response)).not.toThrow("sensitive-content");
+  });
+});
+
+/**
+ * specs/014-ai-batching-policy: the prompt's *scope* is what makes its reply usable. Asking a small
+ * local model about a whole specification made it echo the request back instead of answering; asking
+ * about one operation produced a valid reply for 6 of 6 operations of a real specification
+ * (research.md Decisions 1 and 3).
+ */
+describe("AI scenario prompt scope and worked example (specs/014-ai-batching-policy)", () => {
+  // The shared fixture carries only body-bearing operations, so the control case for the
+  // conditional-example rule is built here rather than by widening a fixture other tests depend on.
+  const withBody = aiScenarioApiModel.operations[0];
+  const withoutBody: (typeof aiScenarioApiModel.operations)[number] = {
+    path: "/accounts/{accountId}",
+    method: "GET",
+    operationId: "getAccount",
+    parameters: [
+      {
+        name: "accountId",
+        location: "path",
+        required: true,
+        schema: { required: [], properties: {}, type: "string" },
+      },
+    ],
+    requestBody: undefined,
+    responses: [
+      { statusCode: "200", description: "Account", contentTypes: {}, examples: {} },
+      { statusCode: "404", description: "Not Found", contentTypes: {}, examples: {} },
+    ],
+    security: [],
+    tags: ["accounts"],
+  };
+
+  const baselineForBodyless = {
+    scenarios: [
+      {
+        ...aiScenarioBaseline.scenarios[0],
+        operationPath: withoutBody.path,
+        operationMethod: withoutBody.method,
+      },
+    ],
+  };
+
+  function promptFor(
+    operations: typeof aiScenarioApiModel.operations,
+    baseline: typeof aiScenarioBaseline = aiScenarioBaseline,
+  ) {
+    return JSON.parse(
+      buildAIScenarioPrompt({ ...aiScenarioApiModel, operations }, baseline),
+    ) as Record<string, unknown>;
+  }
+
+  it("declares response version 3, since request scope changed even though structure did not (XXIII)", () => {
+    expect(promptFor(aiScenarioApiModel.operations).responseVersion).toBe(3);
+  });
+
+  it("carries exactly the operations it was given, so a single-operation unit asks about one operation", () => {
+    const prompt = promptFor([withoutBody]);
+    expect(prompt.operations).toHaveLength(1);
+    expect((prompt.operations as Record<string, unknown>[])[0].path).toBe(withoutBody.path);
+  });
+
+  it("scopes existingCoverage to the operations in the unit, so a unit is never told about coverage it cannot see", () => {
+    const mixedBaseline = {
+      scenarios: [...aiScenarioBaseline.scenarios, ...baselineForBodyless.scenarios],
+    };
+
+    const prompt = promptFor([withoutBody], mixedBaseline);
+
+    const coverage = prompt.existingCoverage as Record<string, Record<string, string[]>>;
+    const operationKeys = Object.keys(coverage);
+    expect(operationKeys.length).toBeGreaterThan(0);
+    expect(operationKeys.every((key) => key.includes(withoutBody.path))).toBe(true);
+  });
+
+  it("requests candidates per operation, so the total requested grows with specification size (FR-003)", () => {
+    const threeOperations = [
+      withoutBody,
+      { ...withoutBody, path: "/accounts/{accountId}/limits", operationId: "getLimits" },
+      { ...withoutBody, path: "/accounts/{accountId}/owner", operationId: "getOwner" },
+    ];
+
+    const single = promptFor([withoutBody], baselineForBodyless).task as string;
+    const many = promptFor(threeOperations, baselineForBodyless).task as string;
+
+    const ceilingOf = (task: string) => Number(/at most (\d+)/.exec(task)?.[1]);
+    expect(ceilingOf(single)).toBeGreaterThan(0);
+    // Three operations must request more than one does — the previous per-request ceiling meant a
+    // 200-operation specification could yield at most six AI scenarios in total.
+    expect(ceilingOf(many)).toBe(ceilingOf(single) * 3);
+  });
+
+  it("addresses a single-operation unit in the singular, so the ask reads as one operation", () => {
+    const single = promptFor([withoutBody], baselineForBodyless).task as string;
+    expect(single).toContain("the operation below");
+  });
+
+  it("includes the worked example for an operation carrying a request body", () => {
+    expect(promptFor([withBody]).example).toBeDefined();
+  });
+
+  /**
+   * The example is attached unconditionally. The conditional rule this replaces assumed it was
+   * redundant for body-less operations; the first real-model run disproved that — without it the
+   * model invented flat request shapes (`{"limit":5,"page":1}`) on exactly those operations and every
+   * such candidate was rejected. It also now replaces the prose output specification it used to sit
+   * beside, so attaching it always is cheaper than the alternative it removes
+   * (specs/014-ai-batching-policy research.md Decision 3).
+   */
+  it("includes the worked example for an operation with no request body, which needs the request shape demonstrated too", () => {
+    expect(promptFor([withoutBody], baselineForBodyless).example).toBeDefined();
+  });
+
+  it("demonstrates a supported category and the keyed request shape in the example", () => {
+    const example = promptFor([withBody]).example as {
+      candidates: { category: string; request: Record<string, unknown> }[];
+    };
+    const candidate = example.candidates[0];
+    // An invented category is rejected outright, so the example must not teach one.
+    expect(SCENARIO_CATEGORIES).toContain(candidate.category);
+    expect(candidate.request).toHaveProperty("pathParameters");
+    expect(candidate.request).toHaveProperty("queryParameters");
+    expect(candidate.request).toHaveProperty("headers");
+  });
+
+  it("states the closed category vocabulary, so the model cannot invent one", () => {
+    expect(promptFor([withoutBody], baselineForBodyless).categories).toEqual([
+      ...SCENARIO_CATEGORIES,
+    ]);
+  });
+
+  it("keeps the example a pure function of the operation, so unit derivation stays reproducible (SC-008)", () => {
+    const first = buildAIScenarioPrompt({ ...aiScenarioApiModel, operations: [withBody] }, aiScenarioBaseline);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(
+        buildAIScenarioPrompt({ ...aiScenarioApiModel, operations: [withBody] }, aiScenarioBaseline),
+      ).toBe(first);
+    }
+  });
+
+  it("sizes the output allowance to a single unit's reply (research.md Decision 2)", () => {
+    // 192 truncated the largest-body operation; 256 gave 6 of 6. A larger allowance costs nothing on
+    // easy operations because generation stops when the document closes.
+    expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(256);
   });
 });

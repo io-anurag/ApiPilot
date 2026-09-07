@@ -40,14 +40,17 @@ export type StageStatus =
 
 /**
  * The per-batch status of one AI enhancement run, as known at the moment a client polls
- * (specs/012-ai-enhancement-progress/data-model.md: BatchProgress). "not-attempted"
- * (specs/011-ai-prompt-batching's BatchOutcome) is not applicable here — scenario enhancement
- * has no overall wall-clock budget (specs/011 research.md Decision 5), so every batch is
- * always attempted.
+ * (specs/012-ai-enhancement-progress/data-model.md: BatchProgress).
+ *
+ * `not-attempted` was previously documented as inapplicable here, on the grounds that scenario
+ * enhancement had no overall wall-clock budget (specs/011 research.md Decision 5) and so always
+ * attempted every batch. specs/014-ai-batching-policy gives it one: work-bounded units make total
+ * run time grow with specification size, so a run can now settle at its ceiling with units it never
+ * started. Reporting those as `failed` would be wrong — nothing was tried, and nothing went wrong.
  */
 export interface BatchProgress {
   index: number;
-  status: "pending" | "in-progress" | "succeeded" | "failed";
+  status: "pending" | "in-progress" | "succeeded" | "failed" | "not-attempted";
   /** Present only when status is "failed". */
   errorCategory?: AIErrorCategory;
 }
@@ -91,6 +94,20 @@ export interface AiEnhancementProgress {
   generatingSince?: string;
   /** True once a cancellation has been accepted. Transitions false -> true only. */
   cancelRequested: boolean;
+  /**
+   * How much of the run's wall-clock ceiling remains, in milliseconds, as of this poll
+   * (specs/014-ai-batching-policy FR-012, contracts/run-budget.md "Progress reporting").
+   *
+   * Present only while `phase` is `generating`, since the ceiling is measured from
+   * `generatingSince` and a one-time model load is not charged to it. Clamped at zero rather than
+   * going negative: a unit already in flight when the ceiling elapses runs to completion, so a run
+   * can legitimately still be working with nothing left.
+   *
+   * Exists because `totalBatches` alone overstates what a run will do — a 39-unit plan under a
+   * five-minute ceiling completes roughly the first seven — and a denominator the run never intends
+   * to reach reads as 32 failures waiting to happen.
+   */
+  runBudgetRemainingMs?: number;
 }
 
 /**
