@@ -14,51 +14,13 @@ import {
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
 import { useBulkDecision, type BulkChunkResult } from "../hooks/useBulkDecision";
+import { AiEnhancementOutcomeSummary } from "./AiEnhancementOutcomeSummary";
 import { TestScenarioReviewList } from "./TestScenarioReviewList";
 import { TestScenarioReviewSummary } from "./TestScenarioReviewSummary";
 import { TestScenarioReviewDetail } from "./TestScenarioReviewDetail";
 import { TestScenarioReviewDecision } from "./TestScenarioReviewDecision";
 import { TestScenarioReviewRefinement } from "./TestScenarioReviewRefinement";
 import { BUTTON_STYLES } from "./controlStyles";
-
-function AiReviewOutcome({ workflow }: Readonly<{ workflow: TestGenerationWorkflow }>) {
-  const enhancement = workflow.aiEnhancement;
-  if (!enhancement) return null;
-
-  const { added, deduplicated, rejected, nonExecutable } = enhancement.aiCandidates ?? {
-    added: [],
-    deduplicated: [],
-    rejected: [],
-    nonExecutable: [],
-  };
-  const totalCandidates =
-    added.length + deduplicated.length + rejected.length + nonExecutable.length;
-  const hasUniqueScenarios = added.length > 0;
-  const addedLabel = `${added.length} AI-suggested scenario${added.length === 1 ? "" : "s"} added to review`;
-  const rejectedLabel = `${deduplicated.length} duplicate, ${rejected.length} rejected, and ${nonExecutable.length} non-executable candidate${totalCandidates === 1 ? "" : "s"}.`;
-
-  return (
-    <section
-      data-testid="ai-review-outcome"
-      className={`rounded-md border p-3 text-sm ${
-        hasUniqueScenarios
-          ? "border-brand-200 bg-brand-50 text-brand-900"
-          : "border-warning-200 bg-warning-50 text-warning-800"
-      }`}
-    >
-      <p className="font-semibold">
-        {hasUniqueScenarios
-          ? addedLabel
-          : "AI enhancement completed without adding a unique scenario"}
-      </p>
-      <p className="mt-1">
-        {totalCandidates === 0
-          ? "The model returned no usable candidates. The list currently contains only deterministic scenarios."
-          : rejectedLabel}
-      </p>
-    </section>
-  );
-}
 
 /**
  * Wraps AP-006's existing review components, driven by the workflow-scoped client instead of
@@ -203,7 +165,7 @@ export function ScenarioReviewStage({
         Review Generated Scenarios
       </h2>
       <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
-      <AiReviewOutcome workflow={workflow} />
+      <AiEnhancementOutcomeSummary workflow={workflow} />
       <TestScenarioReviewList
         scenarios={reviewWorkspace.scenarios}
         selectedScenarioId={selectedScenarioId}
@@ -310,6 +272,12 @@ export function ScenarioReviewStage({
         >
           {finalizing ? "Finalizing…" : "Finalize Review"}
         </button>
+        {finalizing && (
+          <p data-testid="finalize-in-progress" className="text-sm text-muted">
+            Running dependency analysis with the local AI model — this can take a couple
+            of minutes.
+          </p>
+        )}
         {finalizeError && (
           <p
             role="alert"

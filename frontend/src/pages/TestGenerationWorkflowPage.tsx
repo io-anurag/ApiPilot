@@ -1,17 +1,28 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import type { TestGenerationWorkflow, WorkflowStageId } from "@apipilot/shared-domain";
+import type {
+  DependencyAnalysisResult,
+  TestGenerationWorkflow,
+  TestModel,
+  WorkflowStageId,
+} from "@apipilot/shared-domain";
 import {
   fetchCurrentWorkflow,
   runDeterministicGeneration,
   startWorkflow,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
-import { WorkflowStageTracker } from "../components/WorkflowStageTracker";
+import {
+  WorkflowStageTracker,
+  REVISABLE_STAGES,
+} from "../components/WorkflowStageTracker";
 import { ApiReviewStage } from "../components/ApiReviewStage";
 import { AiEnhancementStage } from "../components/AiEnhancementStage";
+import { AiEnhancementOutcomeSummary } from "../components/AiEnhancementOutcomeSummary";
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
+import { AnalysisSummary } from "../components/AnalysisSummary";
+import { PostmanExportLimitations } from "../components/PostmanExportLimitations";
 import { BUTTON_STYLES } from "../components/controlStyles";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
@@ -53,10 +64,12 @@ export function TestGenerationWorkflowPage() {
   const [loading, setLoading] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  // Lets the user preview the starting page from anywhere in an in-progress workflow without
-  // discarding it (FR-010 still gates the actual discard, via the pendingFile confirmation below,
-  // once a replacement file is chosen).
+  // Gates opening the starting page at all: clicking "Start a new workflow" while one is running
+  // must confirm the discard up front (FR-010), rather than only warning once a replacement file
+  // is chosen. Confirming sets showStartPage; the page is only reachable via that confirmation
+  // (or directly, when there is no workflow to discard), so any file chosen there is uploaded with
+  // discardExisting already implied.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [showStartPage, setShowStartPage] = useState(false);
 
   useEffect(() => {
@@ -87,11 +100,9 @@ export function TestGenerationWorkflowPage() {
     event.target.value = "";
     if (!file) return;
     setUploadError(null);
-    if (workflow) {
-      setPendingFile(file);
-      return;
-    }
-    await doUpload(file, false);
+    // Reaching the starting page while a workflow exists only happens after the user already
+    // confirmed the discard (see confirmDiscard below), so no second confirmation is needed here.
+    await doUpload(file, workflow !== null);
   }
 
   async function doUpload(file: File, discardExisting: boolean) {
@@ -99,7 +110,6 @@ export function TestGenerationWorkflowPage() {
     setUploadError(null);
     const result = await startWorkflow(file, discardExisting);
     setUploading(false);
-    setPendingFile(null);
     if (!result.ok) {
       setUploadError(result.message);
       return;
@@ -131,29 +141,29 @@ export function TestGenerationWorkflowPage() {
 
   return (
     <section data-testid="test-generation-workflow-page" className="space-y-5">
-      {pendingFile && (
+      {confirmDiscard && (
         <div
           role="alertdialog"
           data-testid="discard-existing-confirmation"
           className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
         >
           <p className="text-sm text-warning-700">
-            A workflow is already in progress. Starting a new one from &ldquo;
-            {pendingFile.name}&rdquo; discards it. Continue?
+            A workflow is already in progress. Starting a new one discards it. Continue?
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => doUpload(pendingFile, true)}
-              disabled={uploading}
+              onClick={() => {
+                setConfirmDiscard(false);
+                setShowStartPage(true);
+              }}
               className={BUTTON_STYLES.danger}
             >
               Discard and start new
             </button>
             <button
               type="button"
-              onClick={() => setPendingFile(null)}
-              disabled={uploading}
+              onClick={() => setConfirmDiscard(false)}
               className={BUTTON_STYLES.secondary}
             >
               Cancel
@@ -261,7 +271,7 @@ export function TestGenerationWorkflowPage() {
           <button
             type="button"
             aria-label="Start a new workflow from a different specification"
-            onClick={() => setShowStartPage(true)}
+            onClick={() => setConfirmDiscard(true)}
             className="border border-border bg-surface px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             Start a new workflow
@@ -281,25 +291,60 @@ export function TestGenerationWorkflowPage() {
       {workflow && !showStartPage && (
         <>
           <div className="border border-border bg-surface p-3 shadow-sm">
-            <WorkflowStageTracker workflow={workflow} onViewStage={setViewedStageId} />
+            <WorkflowStageTracker
+              workflow={workflow}
+              onViewStage={setViewedStageId}
+              viewedStageId={displayStageId}
+            />
           </div>
-          {displayStageId !== workflow.activeStageId && (
-            <output
-              data-testid="revisiting-notice"
-              className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
-            >
-              Revisiting a completed stage. Making a change here will mark later stages as
-              needing to be redone.
-            </output>
-          )}
+          {displayStageId !== workflow.activeStageId &&
+            (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
+              <output
+                data-testid="revisiting-notice"
+                className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+              >
+                Revisiting a completed stage. Making a change here will mark later stages
+                as needing to be redone.
+              </output>
+            ) : (
+              <output
+                data-testid="read-only-stage-notice"
+                className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-muted"
+              >
+                Read-only view of a completed stage — nothing here can be changed.
+              </output>
+            ))}
           {displayStageId === "apiReview" && workflow.apiModel && (
-            <ApiReviewStage apiModel={workflow.apiModel} onAdvanced={handleAdvanced} />
+            <ApiReviewStage
+              apiModel={workflow.apiModel}
+              onAdvanced={handleAdvanced}
+              readOnly={workflow.activeStageId !== "apiReview"}
+            />
           )}
-          {displayStageId === "deterministicGeneration" && (
-            <DeterministicGenerationTrigger onAdvanced={handleAdvanced} />
-          )}
-          {displayStageId === "aiEnhancement" && (
-            <AiEnhancementStage onAdvanced={handleAdvanced} />
+          {(displayStageId === "upload" || displayStageId === "analysis") &&
+            workflow.apiModel && (
+              <UploadAnalysisSummary
+                stageId={displayStageId}
+                specificationFilename={workflow.specificationFilename}
+                apiModel={workflow.apiModel}
+              />
+            )}
+          {displayStageId === "deterministicGeneration" &&
+            (workflow.activeStageId === "deterministicGeneration" ? (
+              <DeterministicGenerationTrigger onAdvanced={handleAdvanced} />
+            ) : (
+              <DeterministicGenerationSummary
+                testModel={workflow.deterministicTestModel}
+              />
+            ))}
+          {displayStageId === "aiEnhancement" &&
+            (workflow.activeStageId === "aiEnhancement" ? (
+              <AiEnhancementStage onAdvanced={handleAdvanced} />
+            ) : (
+              <AiEnhancementOutcomeSummary workflow={workflow} />
+            ))}
+          {displayStageId === "dependencyAnalysis" && workflow.dependencyAnalysis && (
+            <DependencyAnalysisSummary dependencyAnalysis={workflow.dependencyAnalysis} />
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
             <>
@@ -322,14 +367,121 @@ export function TestGenerationWorkflowPage() {
               onAdvanced={handleAdvanced}
             />
           )}
-          {displayStageId === "postmanGeneration" && (
-            <PostmanGenerationStage
-              postmanArtifact={workflow.postmanArtifact}
-              onGenerated={handleAdvanced}
-            />
-          )}
+          {displayStageId === "postmanGeneration" &&
+            (workflow.activeStageId === "postmanGeneration" ? (
+              <PostmanGenerationStage
+                postmanArtifact={workflow.postmanArtifact}
+                onGenerated={handleAdvanced}
+              />
+            ) : (
+              <PostmanGenerationSummary postmanArtifact={workflow.postmanArtifact} />
+            ))}
         </>
       )}
+    </section>
+  );
+}
+
+function UploadAnalysisSummary({
+  stageId,
+  specificationFilename,
+  apiModel,
+}: Readonly<{
+  stageId: "upload" | "analysis";
+  specificationFilename: string;
+  apiModel: NonNullable<TestGenerationWorkflow["apiModel"]>;
+}>) {
+  const isUpload = stageId === "upload";
+  return (
+    <section
+      data-testid={`${stageId}-stage-summary`}
+      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">
+        {isUpload ? "Specification Uploaded" : "Specification Analysis"}
+      </h2>
+      {isUpload && <p className="text-sm text-slate-600">{specificationFilename}</p>}
+      <AnalysisSummary summary={apiModel.summary} />
+    </section>
+  );
+}
+
+/** Read-only view of an already-completed deterministicGeneration stage. */
+function DeterministicGenerationSummary({
+  testModel,
+}: Readonly<{ testModel?: TestModel }>) {
+  const scenarioCount = testModel?.scenarios.length ?? 0;
+  return (
+    <section
+      data-testid="deterministic-generation-summary"
+      className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">
+        Deterministic Test Suite Generated
+      </h2>
+      <p className="text-sm text-slate-600">
+        {scenarioCount} baseline scenario{scenarioCount === 1 ? "" : "s"} generated from
+        the reviewed specification.
+      </p>
+    </section>
+  );
+}
+
+/** Read-only view of an already-completed dependencyAnalysis stage — this stage has no screen
+ * of its own while active (it runs automatically as part of finalizing scenario review), so
+ * this is the only place its relationship/workflow counts are shown outside workflowReview. */
+function DependencyAnalysisSummary({
+  dependencyAnalysis,
+}: Readonly<{ dependencyAnalysis: DependencyAnalysisResult }>) {
+  const { graph, workflows, cycles } = dependencyAnalysis;
+  return (
+    <section
+      data-testid="dependency-analysis-summary"
+      className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">Dependency Analysis</h2>
+      <p className="text-sm text-slate-600">
+        {graph.relationships.length} relationship
+        {graph.relationships.length === 1 ? "" : "s"} found; {workflows.length}{" "}
+        integration workflow{workflows.length === 1 ? "" : "s"} assembled.
+        {cycles.length > 0 &&
+          ` ${cycles.length} dependency cycle${cycles.length === 1 ? "" : "s"} detected.`}
+      </p>
+    </section>
+  );
+}
+
+function PostmanGenerationSummary({
+  postmanArtifact,
+}: Readonly<{ postmanArtifact?: TestGenerationWorkflow["postmanArtifact"] }>) {
+  if (!postmanArtifact) {
+    return (
+      <section
+        data-testid="postman-generation-summary"
+        className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      >
+        <h2 className="text-base font-semibold text-slate-900">Postman Generation</h2>
+        <p className="text-sm text-slate-600">
+          No Postman artifact was generated for this stage.
+        </p>
+      </section>
+    );
+  }
+
+  const { summary, limitations } = postmanArtifact;
+  return (
+    <section
+      data-testid="postman-generation-summary"
+      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <h2 className="text-base font-semibold text-slate-900">
+        Postman Collection Generated
+      </h2>
+      <p className="text-sm text-slate-600">
+        {summary.requestCount} request{summary.requestCount === 1 ? "" : "s"} in{" "}
+        {summary.folderCount} folder{summary.folderCount === 1 ? "" : "s"}.
+      </p>
+      <PostmanExportLimitations limitations={limitations} />
     </section>
   );
 }

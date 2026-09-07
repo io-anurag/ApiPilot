@@ -12,13 +12,19 @@ import {
 /**
  * The apiReview confirmation gate (research.md D3): there is no selectable data here, only an
  * explicit "Continue" action over the existing analysis display (AP-002 components, unmodified).
+ *
+ * `readOnly` renders the same analysis display without the "Continue" action, for a QA engineer
+ * looking back at an already-completed apiReview stage (research.md D3 addendum) — nothing here
+ * can be redone since the stage carries no revisable decision.
  */
 export function ApiReviewStage({
   apiModel,
   onAdvanced,
+  readOnly = false,
 }: Readonly<{
   apiModel: ApiModel;
   onAdvanced: (result: WorkflowResult) => void;
+  readOnly?: boolean;
 }>) {
   const [selected, setSelected] = useState<ApiOperation | null>(null);
   const [continuing, setContinuing] = useState(false);
@@ -45,25 +51,27 @@ export function ApiReviewStage({
       <AnalysisSummary summary={apiModel.summary} />
       <OperationList operations={apiModel.operations} onSelect={setSelected} />
       {selected && <OperationDetail operation={selected} />}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={continuing}
-          className={BUTTON_STYLES.primary}
-        >
-          {continuing ? "Continuing…" : "Continue"}
-        </button>
-        {error && (
-          <p
-            role="alert"
-            data-testid="api-review-error"
-            className="text-sm font-medium text-danger-700"
+      {!readOnly && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={continuing}
+            className={BUTTON_STYLES.primary}
           >
-            {error}
-          </p>
-        )}
-      </div>
+            {continuing ? "Continuing…" : "Continue"}
+          </button>
+          {error && (
+            <p
+              role="alert"
+              data-testid="api-review-error"
+              className="text-sm font-medium text-danger-700"
+            >
+              {error}
+            </p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

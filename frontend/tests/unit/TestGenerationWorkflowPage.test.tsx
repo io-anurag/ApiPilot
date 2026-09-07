@@ -158,7 +158,7 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
-  it("lets the user preview the starting page from an in-progress workflow, and return without discarding it (FR-010)", async () => {
+  it("requires confirmation before discarding an in-progress workflow to start a new one (FR-010)", async () => {
     stubFetch([{ workflow: workflowAt("apiReview") }]);
 
     render(<TestGenerationWorkflowPage />);
@@ -177,20 +177,91 @@ describe("TestGenerationWorkflowPage", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Start a new workflow from a different specification" }),
+      screen.getByRole("button", {
+        name: "Start a new workflow from a different specification",
+      }),
     );
 
-    // Back on the starting page — no workflow content, no discard, no confirmation yet.
-    expect(screen.getByText("Turn an OpenAPI specification into a test suite")).toBeInTheDocument();
+    // Clicking the button asks for confirmation immediately, before showing the starting page.
+    expect(screen.getByTestId("discard-existing-confirmation")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Turn an OpenAPI specification into a test suite"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // Cancelling the confirmation leaves the in-progress workflow untouched.
+    expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
+    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Start a new workflow from a different specification",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
+
+    // Confirmed — now on the starting page, with the prior workflow's content gone.
+    expect(
+      screen.getByText("Turn an OpenAPI specification into a test suite"),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("api-review-stage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel — return to my in-progress workflow" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel — return to my in-progress workflow" }),
+    );
 
     expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
     expect(
       screen.queryByText("Turn an OpenAPI specification into a test suite"),
     ).not.toBeInTheDocument();
+  });
+
+  it("uploads with discardExisting when a file is chosen after confirming the discard (FR-010)", async () => {
+    stubFetch([
+      { workflow: workflowAt("apiReview") },
+      { workflow: workflowAt("apiReview", { specificationFilename: "other.yaml" }) },
+    ]);
+
+    render(<TestGenerationWorkflowPage />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
+    );
+
+    fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
+      target: {
+        files: [
+          new File(["openapi: 3.0.3"], "valid.yaml", { type: "application/x-yaml" }),
+        ],
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("api-review-stage")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Start a new workflow from a different specification",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
+
+    const fetchMock = vi.mocked(fetch);
+    const callsBefore = fetchMock.mock.calls.length;
+
+    fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
+      target: {
+        files: [
+          new File(["openapi: 3.0.3"], "other.yaml", { type: "application/x-yaml" }),
+        ],
+      },
+    });
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore));
+
+    const [url] = fetchMock.mock.calls[callsBefore];
+    expect(String(url)).toContain("discardExisting=true");
   });
 
   it("renders the AI-enhancement partial banner (not skipped) alongside scenario review when the stage status is 'partial' (FR-011)", async () => {
@@ -244,5 +315,91 @@ describe("TestGenerationWorkflowPage", () => {
     );
     expect(screen.queryByTestId("ai-enhancement-skipped")).not.toBeInTheDocument();
     expect(screen.getByTestId("scenario-review-stage")).toBeInTheDocument();
+  });
+
+  it("lets a QA engineer look back read-only at completed apiReview, deterministicGeneration, aiEnhancement, and dependencyAnalysis stages (research.md D3 addendum)", async () => {
+    const stages = baseStages() as Record<string, { stageId: string; status: string }>;
+    stages.upload = { stageId: "upload", status: "complete" };
+    stages.analysis = { stageId: "analysis", status: "complete" };
+    stages.apiReview = { stageId: "apiReview", status: "complete" };
+    stages.deterministicGeneration = {
+      stageId: "deterministicGeneration",
+      status: "complete",
+    };
+    stages.aiEnhancement = { stageId: "aiEnhancement", status: "complete" };
+    stages.scenarioReview = { stageId: "scenarioReview", status: "complete" };
+    stages.dependencyAnalysis = { stageId: "dependencyAnalysis", status: "complete" };
+    stages.workflowReview = { stageId: "workflowReview", status: "active" };
+    const workflow = {
+      id: "wf-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      activeStageId: "workflowReview",
+      stages,
+      specificationFilename: "valid.yaml",
+      apiModel: emptyApiModel,
+      deterministicTestModel: { scenarios: [{ id: "s1" }, { id: "s2" }] },
+      aiEnhancement: {
+        aiProviderOutcome: "success",
+        aiCandidates: {
+          added: [{ id: "a1" }],
+          deduplicated: [],
+          rejected: [],
+          nonExecutable: [],
+        },
+      },
+      dependencyAnalysis: {
+        requestId: "req-1",
+        graph: { relationships: [{ id: "r1" }] },
+        workflows: [],
+        manualConfirmationCandidates: [],
+        cycles: [],
+        aiOutcome: "success",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/test-generation-workflow")) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ workflow }) };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    render(<TestGenerationWorkflowPage />);
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("stage-status-apiReview"));
+    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("read-only-stage-notice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("stage-status-deterministicGeneration"));
+    expect(screen.getByTestId("deterministic-generation-summary")).toHaveTextContent(
+      "2 baseline scenarios generated",
+    );
+
+    fireEvent.click(screen.getByTestId("stage-status-aiEnhancement"));
+    expect(screen.getByTestId("ai-review-outcome")).toHaveTextContent(
+      "1 AI-suggested scenario added to review",
+    );
+
+    fireEvent.click(screen.getByTestId("stage-status-dependencyAnalysis"));
+    expect(screen.getByTestId("dependency-analysis-summary")).toHaveTextContent(
+      "1 relationship found",
+    );
+
+    fireEvent.click(screen.getByTestId("stage-status-upload"));
+    expect(screen.getByTestId("upload-stage-summary")).toHaveTextContent("valid.yaml");
+
+    fireEvent.click(screen.getByTestId("stage-status-analysis"));
+    expect(screen.getByTestId("analysis-stage-summary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("stage-status-workflowReview"));
+    expect(screen.getByTestId("workflow-review-stage")).toBeInTheDocument();
   });
 });

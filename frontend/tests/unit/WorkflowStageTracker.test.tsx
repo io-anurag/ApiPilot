@@ -92,17 +92,80 @@ describe("WorkflowStageTracker", () => {
     );
   });
 
-  it("lets a completed scenarioReview be revisited, but not a completed apiReview (research.md D3)", () => {
+  it("lets a completed scenarioReview be revisited, and a completed apiReview be viewed read-only (research.md D3 addendum)", () => {
     const onViewStage = vi.fn();
     const workflow = workflowWithStatuses({
       apiReview: "complete",
       scenarioReview: "complete",
     });
-    render(<WorkflowStageTracker workflow={workflow} onViewStage={onViewStage} />);
+    workflow.activeStageId = "workflowReview";
+    render(
+      <WorkflowStageTracker
+        workflow={workflow}
+        onViewStage={onViewStage}
+        viewedStageId="upload"
+      />,
+    );
 
     fireEvent.click(screen.getByTestId("stage-status-scenarioReview"));
     expect(onViewStage).toHaveBeenCalledWith("scenarioReview");
-    expect(screen.getByTestId("stage-status-apiReview").tagName).toBe("SPAN");
+    expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
+      "revisit",
+    );
+
+    expect(screen.getByTestId("stage-status-apiReview").tagName).toBe("BUTTON");
+    fireEvent.click(screen.getByTestId("stage-status-apiReview"));
+    expect(onViewStage).toHaveBeenCalledWith("apiReview");
+    expect(screen.getByTestId("stage-status-apiReview")).toHaveTextContent("view");
+    expect(screen.getByTestId("stage-status-apiReview")).not.toHaveTextContent("revisit");
+  });
+
+  it("offers a read-only view of completed deterministicGeneration, aiEnhancement, and dependencyAnalysis stages", () => {
+    const onViewStage = vi.fn();
+    const workflow = workflowWithStatuses({
+      apiReview: "complete",
+      deterministicGeneration: "complete",
+      aiEnhancement: "partial",
+      dependencyAnalysis: "stale",
+    });
+    render(<WorkflowStageTracker workflow={workflow} onViewStage={onViewStage} />);
+
+    for (const stageId of [
+      "deterministicGeneration",
+      "aiEnhancement",
+      "dependencyAnalysis",
+    ]) {
+      const badge = screen.getByTestId(`stage-status-${stageId}`);
+      expect(badge.tagName).toBe("BUTTON");
+      fireEvent.click(badge);
+      expect(onViewStage).toHaveBeenCalledWith(stageId);
+      expect(badge).toHaveTextContent("view");
+    }
+  });
+
+  it("offers every completed stage as read-only and returns from it to the active stage", () => {
+    const onViewStage = vi.fn();
+    const workflow = workflowWithStatuses({
+      upload: "complete",
+      analysis: "complete",
+      apiReview: "active",
+      postmanGeneration: "complete",
+    });
+    render(<WorkflowStageTracker workflow={workflow} onViewStage={onViewStage} />);
+
+    for (const stageId of ["upload", "analysis", "postmanGeneration"]) {
+      const badge = screen.getByTestId(`stage-status-${stageId}`);
+      expect(badge.tagName).toBe("BUTTON");
+      fireEvent.click(badge);
+      expect(onViewStage).toHaveBeenCalledWith(stageId);
+      expect(badge).toHaveTextContent("view");
+    }
+
+    const activeBadge = screen.getByTestId("stage-status-apiReview");
+    expect(activeBadge.tagName).toBe("BUTTON");
+    fireEvent.click(activeBadge);
+    expect(onViewStage).toHaveBeenCalledWith("apiReview");
+    expect(activeBadge).toHaveTextContent("return");
   });
 
   it("surfaces a dependency-analysis AI issue at the tracker level", () => {

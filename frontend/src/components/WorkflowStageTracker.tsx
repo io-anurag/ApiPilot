@@ -68,6 +68,19 @@ const STATUS_TONES: Record<StageStatus, StatusTone> = {
   partial: "warning",
 };
 
+/** The only stages a QA engineer can revisit to revise a decision (research.md D3). */
+export const REVISABLE_STAGES = new Set<WorkflowStageId>([
+  "scenarioReview",
+  "workflowReview",
+]);
+
+const READ_ONLY_VIEWABLE_STATUSES = new Set<StageStatus>([
+  "complete",
+  "stale",
+  "skipped",
+  "partial",
+]);
+
 /**
  * Shows every stage's status (User Story 2, FR-004) and any workflow-level condition worth
  * surfacing outside the active stage's own screen — analysis issues and dependency-analysis
@@ -75,15 +88,14 @@ const STATUS_TONES: Record<StageStatus, StatusTone> = {
  * solely in AiEnhancementStage's skip banner, which also carries the retry action (FR-013,
  * research.md D6) — showing it here too would duplicate it.
  */
-/** The only stages a QA engineer can revisit to revise a decision (research.md D3). */
-const REVISABLE_STAGES = new Set<WorkflowStageId>(["scenarioReview", "workflowReview"]);
-
 export function WorkflowStageTracker({
   workflow,
   onViewStage,
+  viewedStageId,
 }: Readonly<{
   workflow: TestGenerationWorkflow;
   onViewStage?: (stageId: WorkflowStageId) => void;
+  viewedStageId?: WorkflowStageId | null;
 }>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
   const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
@@ -98,10 +110,26 @@ export function WorkflowStageTracker({
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
           const stage = workflow.stages[stageId];
           const isActive = workflow.activeStageId === stageId;
+          const isViewingAnotherStage =
+            !!onViewStage &&
+            viewedStageId !== null &&
+            viewedStageId !== workflow.activeStageId;
           const isRevisitable =
-            onViewStage &&
+            !!onViewStage &&
             REVISABLE_STAGES.has(stageId) &&
             (stage.status === "complete" || stage.status === "stale");
+          const isReadOnlyViewable =
+            !!onViewStage &&
+            !isActive &&
+            !REVISABLE_STAGES.has(stageId) &&
+            READ_ONLY_VIEWABLE_STATUSES.has(stage.status);
+          const isReturnToActiveView = isActive && isViewingAnotherStage;
+          let actionLabel = "view";
+          if (isReturnToActiveView) {
+            actionLabel = "return";
+          } else if (isRevisitable) {
+            actionLabel = "revisit";
+          }
           return (
             <li
               key={stageId}
@@ -119,7 +147,7 @@ export function WorkflowStageTracker({
                 )}
               </span>
               <span>{STAGE_LABELS[stageId]}</span>
-              {isRevisitable ? (
+              {isRevisitable || isReadOnlyViewable || isReturnToActiveView ? (
                 <button
                   type="button"
                   data-testid={`stage-status-${stageId}`}
@@ -127,7 +155,7 @@ export function WorkflowStageTracker({
                   className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <StatusBadge
-                    label={`${STATUS_LABELS[stage.status]} — revisit`}
+                    label={`${STATUS_LABELS[stage.status]} — ${actionLabel}`}
                     tone={STATUS_TONES[stage.status]}
                   />
                 </button>

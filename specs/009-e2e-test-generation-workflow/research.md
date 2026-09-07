@@ -78,6 +78,20 @@ scenario accept/reject/edit (already exists, AP-006) and workflow approve/reject
 the API-review stage carries no selectable data, revisiting it never produces a meaningful staleness
 cascade — reopening it is a no-op beyond re-displaying the same analysis.
 
+**Addendum (read-only history views)**: The original implementation went further than this
+decision required and made apiReview (and, by the same reasoning, deterministicGeneration,
+aiEnhancement, and dependencyAnalysis) entirely unreachable once complete — `WorkflowStageTracker`
+rendered their status as a plain, non-interactive badge, with no way to look back at what happened
+there. That over-restricted FR-004's "always know where I am" intent: a QA engineer could see that
+a stage *was* complete but not what it produced. Since none of these four stages has a revisable
+decision, opening one read-only carries none of the staleness risk this decision exists to guard
+against, so `WorkflowStageTracker` now also renders their completed/skipped/partial badge as a
+clickable "— view" affordance (distinct from the "— revisit" affordance on `scenarioReview`/
+`workflowReview`), and `TestGenerationWorkflowPage` renders a non-interactive summary for whichever
+one is opened this way instead of its normal interactive screen. `upload`/`analysis` remain
+non-viewable (their only output, the ApiModel, is what apiReview's own display already shows) and
+so does `postmanGeneration` (the last stage, never complete without also being active).
+
 ## D4. Are "upload" and "analysis" one stage or two?
 
 **Decision**: Modeled as two distinct `WorkflowStageId` values (matching spec.md's FR-001 and Key
