@@ -6,16 +6,19 @@
  * palette (CLAUDE.md §28) shared by every screen in the guided workflow.
  */
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
+  --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+
+  --color-brand-50: #ecfdf8;
+  --color-brand-100: #d1faee;
+  --color-brand-200: #a7f3df;
+  --color-brand-300: #6ee7ca;
+  --color-brand-400: #34d3b2;
+  --color-brand-500: #14b892;
+  --color-brand-600: #0d9275;
+  --color-brand-700: #0f755f;
+  --color-brand-800: #115e4f;
+  --color-brand-900: #124e43;
 
   --color-success-50: #f0fdf4;
   --color-success-100: #dcfce7;
@@ -42,7 +45,59 @@
   --color-info-700: #0e7490;
 
   --color-surface: #ffffff;
-  --color-background: #f8fafc;
-  --color-muted: #64748b;
-  --color-border: #e2e8f0;
+  --color-background: #f4f6f5;
+  --color-muted: #65716d;
+  --color-border: #dce3e0;
+}
+
+@layer base {
+  html {
+    background: var(--color-background);
+  }
+
+  body {
+    min-width: 320px;
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  input[type="file"],
+  select {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer utilities {
+  .technical-grid {
+    background-image:
+      linear-gradient(to right, rgb(15 118 95 / 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(15 118 95 / 0.035) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
