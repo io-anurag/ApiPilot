@@ -19,23 +19,23 @@ never adds unapproved test intent.
 
 ```mermaid
 flowchart LR
-  QA[QA engineer] --> UI[React + Vite frontend]
-  UI -->|/api| API[Express backend]
-  API --> OAI[OpenAPI engine]
-  OAI --> AM[ApiModel]
-  AM --> TD[Deterministic test designer]
-  TD --> TM[TestModel]
-  TM --> AI[AI scenario enhancement]
-  AM --> DEP[Dependency analysis]
-  AI --> REVIEW[Scenario review]
-  DEP --> WREVIEW[Workflow review]
-  REVIEW --> APPROVED[Approved test intent]
+  QA["QA engineer"] --> UI["React + Vite frontend"]
+  UI -->|"/api"| API["Express backend"]
+  API --> OAI["OpenAPI engine"]
+  OAI --> AM["ApiModel"]
+  AM --> TD["Deterministic test designer"]
+  TD --> TM["TestModel"]
+  TM --> AI["AI scenario enhancement"]
+  AM --> DEP["Dependency analysis"]
+  AI --> REVIEW["Scenario review"]
+  DEP --> WREVIEW["Workflow review"]
+  REVIEW --> APPROVED["Approved test intent"]
   WREVIEW --> APPROVED
-  APPROVED --> PM[Postman generator]
-  PM --> ART[Collection + environment + README]
-  AI --> PROVIDER[AIProvider]
+  APPROVED --> PM["Postman generator"]
+  PM --> ART["Collection + environment + README"]
+  AI --> PROVIDER["AIProvider"]
   DEP --> PROVIDER
-  PROVIDER --> LOCAL[Local model or deterministic mock]
+  PROVIDER --> LOCAL["Local model or deterministic mock"]
 ```
 
 The frontend and backend consume the same contracts from `packages/shared-domain`. The browser
@@ -64,21 +64,21 @@ model lifecycle, batching, request queueing, and diagnostics.
 
 ```mermaid
 flowchart TD
-  S[OpenAPI YAML upload] --> P[Parse YAML]
-  P --> V[Validate OpenAPI 3.x]
-  V --> N[Normalize and analyze]
-  N --> A[ApiModel plus AnalysisIssues]
-  A --> G[Deterministic generation]
-  G --> T[TestModel]
-  T --> E[Optional AI enhancement]
-  E --> ET[Enhanced TestModel]
-  ET --> R[Scenario decisions]
-  A --> D[Dependency analysis]
-  D --> DG[Dependency graph]
-  DG --> W[Workflow candidates and decisions]
-  R --> AT[Approved test intent]
+  S["OpenAPI YAML upload"] --> P["Parse YAML"]
+  P --> V["Validate OpenAPI 3.x"]
+  V --> N["Normalize and analyze"]
+  N --> A["ApiModel plus AnalysisIssues"]
+  A --> G["Deterministic generation"]
+  G --> T["TestModel"]
+  T --> E["Optional AI enhancement"]
+  E --> ET["Enhanced TestModel"]
+  ET --> R["Scenario decisions"]
+  A --> D["Dependency analysis"]
+  D --> DG["Dependency graph"]
+  DG --> W["Workflow candidates and decisions"]
+  R --> AT["Approved test intent"]
   W --> AT
-  AT --> X[Deterministic Postman export]
+  AT --> X["Deterministic Postman export"]
 ```
 
 ### OpenAPI to `ApiModel`
