@@ -262,7 +262,7 @@ export async function runBatchedInference<TOperation, TBatchData>(
     }
     options.onBatchStart?.(index, total);
     let attempt = 0;
-    while (true) {
+    for (;;) {
       try {
         const data = await runBatch(batch, attempt);
         const outcome: BatchOutcome = { status: "success" };

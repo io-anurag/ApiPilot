@@ -237,24 +237,6 @@ const WORKED_EXAMPLE = {
 } as const;
 
 /**
- * Whether this request's operations warrant the worked example.
- *
- * Attached for operations carrying a request body — the ones whose replies are longest and where
- * truncation is the observed failure — and omitted otherwise. Measured on paired runs of the same
- * operation: on the body-less operation the example cost ~6.6s and changed nothing (17.1s/17.3s
- * without, 23.9s with); on the four-field-body operation that truncates first it *saved* ~9.1s
- * (30.4s without, 21.2s with), by steering the model toward a more compact reply.
- *
- * Applying it unconditionally would spend that ~6.6s on every body-less operation for no measured
- * benefit, and under the run budget (FR-009) time spent is coverage lost.
- *
- * A pure function of the operations, so unit derivation stays reproducible (SC-008).
- */
-function needsWorkedExample(operations: readonly ApiOperation[]): boolean {
-  return operations.some((operation) => operation.requestBody !== undefined);
-}
-
-/**
  * The deterministic baseline entries belonging to `operations`.
  *
  * Scoped here rather than trusted to the caller so a request can never be told about coverage for an
