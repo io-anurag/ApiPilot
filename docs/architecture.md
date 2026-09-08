@@ -200,6 +200,27 @@ Progress exposes batch/unit counts and outcomes but never raw specifications, pr
 responses. Successful enhancement units can reveal scenarios incrementally; their review decisions
 remain intact when later units settle differently.
 
+### Hardware and resource footprint
+
+No GPU is required for any ApiPilot capability. Local inference runs on CPU by design;
+`AI_USE_ACCELERATOR` defaults to `false`, and an explicitly enabled but unavailable accelerator
+falls back to CPU with a visible notice rather than failing silently.
+
+The project's own benchmark harness (`npm run ai:benchmark -w backend`, recorded in
+[specs/004-ai-provider-local-inference/benchmark-results.json](../specs/004-ai-provider-local-inference/benchmark-results.json))
+measured the selected default model (`onnx-community/Qwen2.5-0.5B-Instruct`, fp32) at roughly
+2.75 GB peak process RSS and ~12.7s average latency per representative workload on the reference
+CPU profile also used to calibrate `AI_INFERENCE_TIMEOUT_MS` and `AI_ENHANCEMENT_RUN_BUDGET_MS` in
+`backend/src/ai/modelConfig.ts`. 4 GB of free RAM is a reasonable minimum for running local AI.
+`AI_PROVIDER_MODE=mock` (the automated-test default) needs no model process and adds no
+meaningful memory beyond the Node/Express and Vite dev servers themselves.
+
+First use of local AI downloads and caches the model — about 1.7 GB for the default model at
+fp32, under `AI_MODEL_CACHE_DIR` (`~/.apipilot/models` by default). `.env.example` documents why
+`AI_MODEL_DTYPE` should stay unset on CPU: measured q8 quantization was roughly 4x slower than
+fp32 on the reference profile and produced malformed structured output. Local AI operates fully
+offline once the model is cached.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither

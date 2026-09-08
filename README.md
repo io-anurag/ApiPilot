@@ -35,6 +35,15 @@ npm run dev
 
 `npm run dev` stops stale local processes before starting both workspaces. Use `Ctrl+C` or `npm run stop` to stop development servers. Copy [.env.example](.env.example) to `.env` only to override defaults. No cloud account, AI credential, or external paid service is needed to run ApiPilot.
 
+## System requirements
+
+- **Node.js 20 LTS or newer** and **npm** (npm workspaces monorepo).
+- **CPU only** — no GPU is required for any capability. Local AI inference runs unaccelerated on CPU by default (`AI_USE_ACCELERATOR=false`); an explicitly enabled but unavailable accelerator falls back to CPU with a visible notice.
+- **Disk**: local AI mode (`AI_PROVIDER_MODE=local`, the default outside automated tests) downloads and caches a model on first run — about 1.7 GB for the default `onnx-community/Qwen2.5-0.5B-Instruct` model at its unquantized (fp32) precision, cached under `~/.apipilot/models` unless `AI_MODEL_CACHE_DIR` is set. Deterministic-only use (`AI_PROVIDER_MODE=mock`) needs no model download.
+- **Memory**: the project's own benchmark harness measured the default local model at roughly 2.75 GB peak process RSS during inference (see [specs/004-ai-provider-local-inference/benchmark-results.json](specs/004-ai-provider-local-inference/benchmark-results.json)); 4 GB or more of free RAM is recommended when running local AI. Without local AI, ApiPilot's footprint is a standard Node/Express + Vite dev setup.
+- **Network**: needed once, to download the local model on first use; local AI runs fully offline afterward. Deterministic-only workflows (`AI_PROVIDER_MODE=mock`) need no network access at all.
+- No cloud account, AI credential, or paid external service is required at any point.
+
 ## Guided workflow
 
 ApiPilot's UI is one ordered workflow; individual stages cannot be opened independently outside an active workflow.
@@ -141,11 +150,44 @@ See [.env.example](.env.example) for the maintained variable list and guidance.
 | `FRONTEND_DEV_PORT`                  | Vite development server                  | `5173`                                 |
 | `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider | `mock` in tests; `local` otherwise     |
 | `AI_MODEL_ID`                        | Local Hugging Face model identifier      | `onnx-community/Qwen2.5-0.5B-Instruct` |
-| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | `backend/models`                       |
+| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | If set, that path; otherwise `~/.apipilot/models` |
 | `AI_MODEL_DTYPE`                     | Optional ONNX weight precision           | unset by default                       |
 | `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit              | see `.env.example`                     |
 | `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt      | `false`                                |
 | `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Work-bounded enhancement batch size      | `1`                                    |
+
+### Choosing a local AI model for your hardware
+
+`AI_MODEL_ID` accepts any Hugging Face repo compatible with Transformers.js's `text-generation`
+pipeline — not every model on Hugging Face qualifies. In practice this means an ONNX-exported
+causal/instruction-tuned language model, typically published under the `onnx-community/` or
+`Xenova/` organizations (or converted yourself with `optimum-cli export onnx`). Model choice is an
+evidence-based decision here, not a matter of picking the newest or largest available model:
+
+1. **Estimate fit before downloading.** Open the model's "Files" tab on Hugging Face and check the
+   `onnx/` weight file size (e.g. `model.onnx`, or a quantized variant like `model_q4.onnx`) — that
+   is roughly the disk download. Peak RAM during CPU inference runs higher than the file size, not
+   equal to it: this project's own benchmark run
+   ([specs/004-ai-provider-local-inference/benchmark-results.json](specs/004-ai-provider-local-inference/benchmark-results.json))
+   measured peak process RSS at 1.4-1.7x a model's on-disk size across four candidates (the default
+   ~1.7 GB fp32 model peaked at ~2.75 GB RSS; a ~2.5 GB q4 candidate peaked at ~3.55-4.28 GB). Budget
+   free RAM well above the raw download size, not equal to it.
+2. **Benchmark on your own machine before trusting a model.** Add the candidate to `CANDIDATES` in
+   [backend/src/ai/benchmark/runBenchmark.ts](backend/src/ai/benchmark/runBenchmark.ts) (optionally
+   with an `AI_MODEL_DTYPE` override for a large model that cannot run unquantized) and run
+   `npm run ai:benchmark -w backend`. The report writes `structuredOutputSuccessRate`,
+   `averageLatencyMs`, and `peakMemoryMb` per candidate to
+   `specs/004-ai-provider-local-inference/benchmark-results.json` — those three numbers, not
+   popularity or parameter count, are what should decide `AI_MODEL_ID`.
+3. **Prefer a smaller unquantized model over a larger quantized one when both are candidates.**
+   Quantization is not a free trade on CPU: this repo's own measurement found the default 0.5B
+   model ran *faster and more correctly* at fp32 than at q8 (`.env.example` documents ~4x higher
+   throughput and better structured-output success at fp32). Reach for `AI_MODEL_DTYPE` only when
+   a model's unquantized weights genuinely do not fit your disk/RAM budget, and re-run the benchmark
+   afterward rather than assuming the quantized variant behaves the same way.
+4. **Leave `AI_MODEL_DTYPE` unset unless you changed `AI_MODEL_ID` to something that needs it.** The
+   default model is already sized for a CPU-only machine with roughly 4 GB of free RAM (see
+   [System requirements](#system-requirements)); most users never need to touch this variable.
 
 ## Development and validation
 
