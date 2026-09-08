@@ -141,7 +141,7 @@ See [.env.example](.env.example) for the maintained variable list and guidance.
 | `FRONTEND_DEV_PORT`                  | Vite development server                  | `5173`                                 |
 | `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider | `mock` in tests; `local` otherwise     |
 | `AI_MODEL_ID`                        | Local Hugging Face model identifier      | `onnx-community/Qwen2.5-0.5B-Instruct` |
-| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | `~/.apipilot/models`                   |
+| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | `backend/models`                       |
 | `AI_MODEL_DTYPE`                     | Optional ONNX weight precision           | unset by default                       |
 | `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit              | see `.env.example`                     |
 | `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt      | `false`                                |
