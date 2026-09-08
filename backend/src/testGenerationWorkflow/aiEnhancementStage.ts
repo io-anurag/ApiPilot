@@ -1,6 +1,7 @@
 import type {
   AIProvider,
   AiEnhancementProgress,
+  BatchOutcomeRecord,
   BatchProgress,
   ReviewScenario,
   TestGenerationWorkflow,
@@ -10,12 +11,14 @@ import {
   computeReviewSummary,
   createReviewWorkspace,
 } from "../testDesign/reviewTestModel";
-import { enhanceTestModel } from "../testDesign/enhanceTestModel";
+import { enhanceTestModel, retryOneBatch } from "../testDesign/enhanceTestModel";
 import type { BatchOutcome } from "../ai/requestBatching";
 import { loadAIConfig } from "../ai/modelConfig";
 import { createLogger } from "../logger";
 import {
   AiEnhancementAlreadyRunningError,
+  BatchNotFoundError,
+  BatchNotRetryableError,
   NoAiEnhancementRunInProgressError,
   StageNotActiveError,
 } from "./errors";
@@ -27,6 +30,7 @@ import {
   markAiEnhancementGenerating,
   requestAiEnhancementCancel,
   patchWorkflow,
+  setAiEnhancementBatchOutcome,
   setAiEnhancementProgress,
   updateStage,
 } from "./workflowStore";
@@ -73,6 +77,40 @@ function newlyAddedReviewScenarios(
       isUserModified: false,
       history: [],
     }));
+}
+
+/**
+ * Builds the persisted `BatchOutcomeRecord` for one settled batch (specs/015-ai-batch-retry
+ * FR-001, FR-010). `failureExplanation` reuses the same `explainFailure()` the run-level field
+ * of the same name already relies on (research.md Decision 4) — a `"not-attempted"` batch's
+ * cause is read from the live cancellation flag at the moment it settles, since a batch never
+ * knows on its own whether the run's ceiling or a user cancellation is why it was never sent.
+ */
+function buildBatchOutcomeRecord(
+  index: number,
+  operationKeys: string[],
+  outcome: BatchOutcome,
+): BatchOutcomeRecord {
+  if (outcome.status === "success") {
+    return { index, operationKeys, status: "succeeded" };
+  }
+  if (outcome.status === "not-attempted") {
+    return {
+      index,
+      operationKeys,
+      status: "not-attempted",
+      failureExplanation: explainFailure(
+        isAiEnhancementCancelRequested() ? "cancelled" : "run-budget-exhausted",
+      ),
+    };
+  }
+  return {
+    index,
+    operationKeys,
+    status: "failed",
+    errorCategory: outcome.errorCategory,
+    failureExplanation: explainFailure(outcome.errorCategory as FailureCause),
+  };
 }
 
 /**
@@ -239,6 +277,7 @@ export async function runAiEnhancement(
           total,
           outcome: BatchOutcome,
           newlyRetainedScenarios,
+          operationKeys,
         ) => {
           const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
           // `not-attempted` is reported as itself rather than folded into `failed`: the run
@@ -263,6 +302,11 @@ export async function runAiEnhancement(
               },
               runBudgetMs,
             ),
+          );
+          // Persisted past settling, unlike `progress` above — what a later single-batch retry
+          // reads (specs/015-ai-batch-retry FR-001).
+          setAiEnhancementBatchOutcome(
+            buildBatchOutcomeRecord(index, operationKeys, outcome),
           );
 
           if (newlyRetainedScenarios.length === 0) return;
@@ -394,6 +438,225 @@ export async function runAiEnhancement(
     logger.error("stage_error", {
       stage: "aiEnhancement",
       workflowId: getCurrentWorkflow()?.id,
+      errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
+  }
+}
+
+/** `"METHOD /path"` -> the matching `ApiOperation`, or throws if the workflow's apiModel has none. */
+function resolveOperationByKey(
+  workflow: TestGenerationWorkflow,
+  key: string,
+): NonNullable<TestGenerationWorkflow["apiModel"]>["operations"][number] {
+  const [method, ...pathParts] = key.split(" ");
+  const opPath = pathParts.join(" ");
+  const operation = workflow.apiModel!.operations.find(
+    (op) => op.method.toUpperCase() === method && op.path === opPath,
+  );
+  if (!operation) {
+    // Cannot happen for a workflow whose apiModel hasn't changed since the batch was recorded
+    // (research.md Decision 2) — surfaced as a hard error rather than silently skipped, since a
+    // silent skip would resend an incomplete batch without saying so (constitution XIV, XIX).
+    throw new Error(`Operation for key "${key}" was not found in the current apiModel.`);
+  }
+  return operation;
+}
+
+/**
+ * Recomputes the AI Enhancement stage's aggregate status from every current `batchOutcomes`
+ * entry (specs/015-ai-batch-retry FR-012, `/speckit-clarify` 2026-09-08): `"complete"` once every
+ * batch's terminal status is `"succeeded"`, otherwise `"partial"` — reusing the exact
+ * `active -> complete`/`active -> partial` transitions whole-stage retry already exercises
+ * (research.md Decision 3), so no new `StageStatus` or transition is introduced. When still
+ * `"partial"`, the stage-level `aiErrorCategory`/`failureExplanation` are taken from the
+ * highest-index batch that hasn't succeeded, mirroring `deriveAggregateOutcome`'s own
+ * last-failure convention (requestBatching.ts).
+ */
+function recomputeAggregateStatus(): TestGenerationWorkflow {
+  const outcomes = getCurrentWorkflow()!.stages.aiEnhancement.batchOutcomes ?? [];
+  const allSucceeded = outcomes.every((o) => o.status === "succeeded");
+  if (allSucceeded) {
+    return updateStage("aiEnhancement", "complete");
+  }
+  const stillOutstanding = outcomes.filter((o) => o.status !== "succeeded");
+  const representative = stillOutstanding[stillOutstanding.length - 1];
+  return updateStage("aiEnhancement", "partial", {
+    aiErrorCategory: representative?.errorCategory,
+    failureExplanation: representative?.failureExplanation,
+  });
+}
+
+/** Merges a successful batch retry's newly produced scenarios into `reviewWorkspace` (FR-004), via the same exact-scenario-ID path used for incremental reveal during a normal run. */
+function mergeRetriedScenariosIntoWorkspace(newScenarios: ReviewScenario["scenario"][]): void {
+  if (newScenarios.length === 0) return;
+  const workspace = getCurrentWorkflow()!.reviewWorkspace!;
+  const existingIds = new Set(workspace.scenarios.map((s) => s.scenarioId));
+  const added = newlyAddedReviewScenarios({ scenarios: newScenarios }, existingIds);
+  if (added.length === 0) return;
+  const scenarios = [...workspace.scenarios, ...added];
+  patchWorkflow({
+    reviewWorkspace: {
+      ...workspace,
+      scenarios,
+      summary: computeReviewSummary(scenarios, workspace.policy),
+    },
+  });
+}
+
+/**
+ * Appends a successful batch retry's scenarios/candidate tallies onto the run's existing
+ * `EnhancementResult` (research.md Decision 7) rather than replacing it: a whole-stage run
+ * overwrites `aiEnhancement` wholesale because it reprocesses every operation, but a batch retry
+ * only ever covers one batch, so replacing the whole result would under-report every other
+ * batch's already-retained scenarios in `AiEnhancementOutcomeSummary`.
+ */
+function appendRetryIntoEnhancementResult(
+  result: Extract<Awaited<ReturnType<typeof retryOneBatch>>, { outcome: "succeeded" }>,
+): void {
+  const enhancement = getCurrentWorkflow()!.aiEnhancement;
+  if (!enhancement) return;
+  patchWorkflow({
+    aiEnhancement: {
+      ...enhancement,
+      enhancedTestModel: {
+        scenarios: [...enhancement.enhancedTestModel.scenarios, ...result.scenarios],
+      },
+      aiCandidates: {
+        added: [...enhancement.aiCandidates.added, ...result.candidateOutcomes.added],
+        deduplicated: [
+          ...enhancement.aiCandidates.deduplicated,
+          ...result.candidateOutcomes.deduplicated,
+        ],
+        rejected: [...enhancement.aiCandidates.rejected, ...result.candidateOutcomes.rejected],
+        nonExecutable: [
+          ...enhancement.aiCandidates.nonExecutable,
+          ...result.candidateOutcomes.nonExecutable,
+        ],
+      },
+    },
+  });
+}
+
+/**
+ * Retries exactly one batch from the most recent AI Enhancement run
+ * (specs/015-ai-batch-retry/contracts/ai-enhancement-retry-batch.md). Available only once the
+ * stage has settled `"skipped"` or `"partial"` (never mid-run) and only for a batch whose own
+ * `BatchOutcomeRecord.status` is not `"succeeded"` and whose `failureExplanation.retryable` is
+ * not `false` (FR-002, FR-003) — the same retryable/non-retryable rule whole-stage retry already
+ * uses (research.md Decision 4), evaluated per batch instead of per run.
+ *
+ * A successful retry adds only that batch's newly produced scenarios to `reviewWorkspace`
+ * (FR-004); a repeat failure updates only that batch's own record (FR-005). Every other batch's
+ * scenarios, review decisions, and record are left exactly as they were. Reuses the same
+ * `progress`-presence concurrency guard as a whole-stage run (FR-007, research.md Decision 8).
+ */
+export async function retryAiEnhancementBatch(
+  batchIndex: number,
+  provider: AIProvider,
+): Promise<TestGenerationWorkflow> {
+  const startedAt = Date.now();
+  let progressSetByThisCall = false;
+  try {
+    const workflow = getCurrentWorkflow();
+    if (!workflow) {
+      throw new StageNotActiveError("aiEnhancement is not the active stage.");
+    }
+    // FR-007: checked first and before any status transition below, with no `await` in between
+    // — a concurrent call (whole-stage run, cancel, or another batch retry) must be detected by
+    // this signal regardless of what status this call's own transition has already applied,
+    // never mistaken for "wrong stage" (research.md Decision 8).
+    if (workflow.stages.aiEnhancement.progress) {
+      throw new AiEnhancementAlreadyRunningError();
+    }
+    const status = workflow.stages.aiEnhancement.status;
+    if (status !== "skipped" && status !== "partial") {
+      throw new StageNotActiveError(
+        "A batch can only be retried once the AI enhancement run has settled as skipped or partial.",
+      );
+    }
+    if (workflow.stages.scenarioReview.status === "complete") {
+      throw new StageNotActiveError(
+        "AI enhancement can no longer be retried: scenario review is already finalized.",
+      );
+    }
+    const target = workflow.stages.aiEnhancement.batchOutcomes?.find(
+      (o) => o.index === batchIndex,
+    );
+    if (!target) {
+      throw new BatchNotFoundError(batchIndex);
+    }
+    if (target.status === "succeeded") {
+      throw new BatchNotRetryableError(batchIndex, "already succeeded and cannot be retried.");
+    }
+    if (target.failureExplanation?.retryable === false) {
+      throw new BatchNotRetryableError(
+        batchIndex,
+        "cannot be retried: its failure reason is not retryable.",
+      );
+    }
+
+    setAiEnhancementProgress({
+      totalBatches: workflow.stages.aiEnhancement.batchOutcomes!.length,
+      batches: [],
+      startedAt: new Date().toISOString(),
+      phase: "generating",
+      generatingSince: new Date().toISOString(),
+      cancelRequested: false,
+    });
+    progressSetByThisCall = true;
+    updateStage("aiEnhancement", "active");
+
+    const operations = target.operationKeys.map((key) => resolveOperationByKey(workflow, key));
+    const requestId = `retry-batch${batchIndex}-${Date.now()}`;
+    const result = await retryOneBatch(
+      operations,
+      workflow.apiModel!,
+      workflow.deterministicTestModel!,
+      provider,
+      requestId,
+      batchIndex,
+    );
+
+    setAiEnhancementProgress(undefined);
+
+    if (result.outcome === "succeeded") {
+      setAiEnhancementBatchOutcome({
+        index: batchIndex,
+        operationKeys: target.operationKeys,
+        status: "succeeded",
+      });
+      mergeRetriedScenariosIntoWorkspace(result.scenarios);
+      appendRetryIntoEnhancementResult(result);
+    } else {
+      setAiEnhancementBatchOutcome({
+        index: batchIndex,
+        operationKeys: target.operationKeys,
+        status: "failed",
+        errorCategory: result.errorCategory,
+        failureExplanation: explainFailure(result.errorCategory as FailureCause),
+      });
+    }
+
+    const settled = recomputeAggregateStatus();
+    logger.info("batch_retry_settled", {
+      stage: "aiEnhancement",
+      workflowId: settled.id,
+      batchIndex,
+      outcome: result.outcome,
+      errorCategory: result.outcome === "failed" ? result.errorCategory : undefined,
+      durationMs: Date.now() - startedAt,
+    });
+    return settled;
+  } catch (error) {
+    if (progressSetByThisCall && getCurrentWorkflow()) {
+      setAiEnhancementProgress(undefined);
+    }
+    logger.error("batch_retry_error", {
+      stage: "aiEnhancement",
+      workflowId: getCurrentWorkflow()?.id,
+      batchIndex,
       errorCategory: error instanceof Error ? error.name : "UNKNOWN",
       durationMs: Date.now() - startedAt,
     });

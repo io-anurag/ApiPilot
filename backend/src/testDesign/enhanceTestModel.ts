@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   AICandidateOutcomes,
+  AIErrorCategory,
   AIProvider,
   AIScenarioCandidate,
   ApiOperation,
@@ -129,7 +130,53 @@ function createBatchRequestId(
   return `${requestId}-batch${batchIndex}${retrySuffix}`;
 }
 
-/** Runs one batch's inference call and returns its validated, executable AI scenario candidates. */
+/**
+ * Classifies a set of candidate results against a baseline `TestModel`'s scenarios: which are
+ * genuinely new (`outcomes.added`, mutated in place) versus duplicates of something already
+ * retained (`outcomes.deduplicated`), using the same stable, first-seen-wins `deduplicate()` fold
+ * as every other merge in this module. Shared by `enhanceTestModel`'s own final merge (baseline +
+ * every batch's combined candidates, for a whole run) and `retryOneBatch` (baseline + one batch's
+ * candidates only, specs/015-ai-batch-retry research.md Decision 5) — the two differ only in which
+ * candidates they pass in, not in how classification works.
+ */
+function classifyAgainstBaseline(
+  candidateResults: readonly BatchScenarioResult[],
+  baselineScenarios: readonly TestScenario[],
+  outcomes: AICandidateOutcomes,
+): { merged: TestScenario[]; retainedScenarios: TestScenario[] } {
+  const merged = deduplicate([
+    ...baselineScenarios,
+    ...candidateResults.map((item) => item.scenario),
+  ]);
+  for (const item of candidateResults) {
+    const retained = merged.find((scenario) =>
+      scenariosAreEquivalent(scenario, item.scenario),
+    );
+    if (!retained) continue;
+    if (retained.id === item.scenario.id) {
+      outcomes.added.push({ candidate: item.candidate, scenarioId: item.scenario.id });
+    } else {
+      outcomes.deduplicated.push({
+        candidate: item.candidate,
+        retainedScenarioId: retained.id,
+        duplicateOfCandidateIds:
+          retained.provenance.source === "AI" && retained.provenance.aiCandidateId
+            ? [retained.provenance.aiCandidateId]
+            : [],
+      });
+    }
+  }
+  const retainedScenarios = candidateResults
+    .map((item) => item.scenario)
+    .filter((scenario) => merged.some((m) => m.id === scenario.id));
+  return { merged, retainedScenarios };
+}
+
+/**
+ * Runs one batch's inference call and returns its validated, executable AI scenario candidates.
+ * `batchIndex`, when supplied, is stamped onto each candidate's provenance
+ * (specs/015-ai-batch-retry FR-010) — omitted only by call sites that predate that feature.
+ */
 async function runOneBatch(
   batch: Batch<ApiOperation>,
   apiModel: ApiModelArg,
@@ -137,6 +184,7 @@ async function runOneBatch(
   requestId: string,
   provider: AIProvider,
   context: BatchRunContext,
+  batchIndex?: number,
 ): Promise<BatchScenarioResult[]> {
   const { outcomes, candidateIds, retryAttempt } = context;
   const request = buildAIScenarioRequest(
@@ -208,10 +256,83 @@ async function runOneBatch(
         operation,
         response.modelId,
         response.provider,
+        batchIndex,
       ),
     });
   }
   return aiScenarios;
+}
+
+/**
+ * `retryOneBatch`'s result: either the batch's newly retained scenarios (plus the full
+ * `AICandidateOutcomes` classification, so a caller can fold this retry's counts into the run's
+ * cumulative tallies — specs/015-ai-batch-retry research.md Decision 7), or a structured failure.
+ */
+export type RetryOneBatchResult =
+  | { outcome: "succeeded"; scenarios: TestScenario[]; candidateOutcomes: AICandidateOutcomes }
+  | { outcome: "failed"; errorCategory: AIErrorCategory; errorMessage: string };
+
+/**
+ * Re-runs a single, already-known batch of operations through the same request-build, parse,
+ * and validation pipeline `runOneBatch` uses for a normal run (specs/015-ai-batch-retry
+ * research.md Decision 5) — the sole implementation of "run one batch," reused rather than
+ * duplicated.
+ *
+ * Deduplicates the resulting candidates against `testModel` (the deterministic baseline) only —
+ * never against another batch's prior output, which is what today's whole-stage retry does too
+ * (research.md Decision 6; spec.md Assumptions record this as a known, deliberate limitation).
+ * Cross-batch duplicate suppression happens later, at the exact-scenario-ID merge into the
+ * review workspace.
+ *
+ * Never throws: any error from `provider.infer()` or response parsing/validation is caught and
+ * returned as a structured `{ outcome: "failed", ... }`, mirroring the same duck-typed
+ * `category` extraction `runBatchedInference` already performs for a normal run's batches.
+ */
+export async function retryOneBatch(
+  operations: ApiOperation[],
+  apiModel: ApiModelArg,
+  testModel: TestModel,
+  provider: AIProvider,
+  requestId: string,
+  batchIndex: number,
+): Promise<RetryOneBatchResult> {
+  const batch: Batch<ApiOperation> = { operations };
+  const outcomes: AICandidateOutcomes = {
+    added: [],
+    deduplicated: [],
+    rejected: [],
+    nonExecutable: [],
+  };
+  let candidateResults: BatchScenarioResult[];
+  try {
+    candidateResults = await runOneBatch(
+      batch,
+      apiModel,
+      scopeBaselineToOperations(testModel, operations),
+      requestId,
+      provider,
+      { outcomes, candidateIds: new Set(), retryAttempt: 0 },
+      batchIndex,
+    );
+  } catch (error) {
+    // Duck-typed rather than `instanceof AIProviderError`, matching `runBatchedInference`'s own
+    // catch (requestBatching.ts): `runOneBatch` may throw a provider-thrown error with a
+    // `category` property directly, in addition to `AIProviderError` instances from the response
+    // parsers.
+    const errorCategory: AIErrorCategory =
+      error && typeof error === "object" && "category" in error
+        ? (error as { category: AIErrorCategory }).category
+        : "INVALID_RESPONSE";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { outcome: "failed", errorCategory, errorMessage };
+  }
+
+  const { retainedScenarios } = classifyAgainstBaseline(
+    candidateResults,
+    testModel.scenarios,
+    outcomes,
+  );
+  return { outcome: "succeeded", scenarios: retainedScenarios, candidateOutcomes: outcomes };
 }
 
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
@@ -264,6 +385,7 @@ export interface EnhanceTestModelOptions {
     total: number,
     outcome: BatchOutcome,
     newlyRetainedScenarios: TestScenario[],
+    operationKeys: string[],
   ) => void;
 }
 
@@ -396,6 +518,7 @@ export async function enhanceTestModel(
         batchRequestId,
         provider,
         { outcomes, candidateIds, retryAttempt },
+        index,
       ).then((result) => {
         batchScenariosByIndex[index] = result;
         return result;
@@ -427,9 +550,12 @@ export async function enhanceTestModel(
         });
 
         if (!options.onBatchComplete) return;
+        const operationKeys = batches[index].operations.map((op) =>
+          operationKey(op.path, op.method),
+        );
         const thisBatchScenarios = batchScenariosByIndex[index] ?? [];
         if (thisBatchScenarios.length === 0) {
-          options.onBatchComplete(index, total, outcome, []);
+          options.onBatchComplete(index, total, outcome, [], operationKeys);
           return;
         }
         allAiScenariosSoFar.push(...thisBatchScenarios);
@@ -440,7 +566,7 @@ export async function enhanceTestModel(
         const newlyRetained = thisBatchScenarios
           .map((item) => item.scenario)
           .filter((scenario) => mergedSoFar.some((m) => m.id === scenario.id));
-        options.onBatchComplete(index, total, outcome, newlyRetained);
+        options.onBatchComplete(index, total, outcome, newlyRetained, operationKeys);
       },
     },
   );
@@ -513,28 +639,7 @@ export async function enhanceTestModel(
     };
   }
 
-  const merged = deduplicate([
-    ...testModel.scenarios,
-    ...aiScenarios.map((item) => item.scenario),
-  ]);
-  for (const item of aiScenarios) {
-    const retained = merged.find((scenario) =>
-      scenariosAreEquivalent(scenario, item.scenario),
-    );
-    if (!retained) continue;
-    if (retained.id === item.scenario.id) {
-      outcomes.added.push({ candidate: item.candidate, scenarioId: item.scenario.id });
-    } else {
-      outcomes.deduplicated.push({
-        candidate: item.candidate,
-        retainedScenarioId: retained.id,
-        duplicateOfCandidateIds:
-          retained.provenance.source === "AI" && retained.provenance.aiCandidateId
-            ? [retained.provenance.aiCandidateId]
-            : [],
-      });
-    }
-  }
+  const { merged } = classifyAgainstBaseline(aiScenarios, testModel.scenarios, outcomes);
 
   logger.info("enhancement_complete", {
     outcome: summary.outcome,

@@ -12,11 +12,14 @@ import { upload } from "../uploadMiddleware";
 import { continueApiReview } from "../testGenerationWorkflow/apiReviewStage";
 import {
   cancelAiEnhancement,
+  retryAiEnhancementBatch,
   runAiEnhancement,
 } from "../testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../testGenerationWorkflow/deterministicGenerationStage";
 import {
   AiEnhancementAlreadyRunningError,
+  BatchNotFoundError,
+  BatchNotRetryableError,
   EmptyApprovedScenariosError,
   NoAiEnhancementRunInProgressError,
   PendingWorkflowDecisionsError,
@@ -275,6 +278,56 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       throw err;
     }
   });
+
+  router.post(
+    "/test-generation-workflow/ai-enhancement/retry-batch",
+    async (req, res, next) => {
+      const startedAt = logRequestReceived(req);
+      const batchIndex = (req.body as Record<string, unknown> | undefined)?.batchIndex;
+      if (typeof batchIndex !== "number" || !Number.isInteger(batchIndex)) {
+        logRequestFailed(req, startedAt, 400, "invalid_request");
+        res.status(400).json({
+          error: "invalid_request",
+          message: "Request must include an integer 'batchIndex'",
+        });
+        return;
+      }
+      try {
+        res.status(200).json({
+          workflow: toWorkflowResponse(await retryAiEnhancementBatch(batchIndex, provider)),
+        });
+        logRequestSucceeded(req, startedAt, 200);
+      } catch (err) {
+        if (err instanceof BatchNotFoundError) {
+          logRequestFailed(req, startedAt, 404, "batch_not_found");
+          res.status(404).json({ error: "batch_not_found", message: err.message });
+          return;
+        }
+        if (err instanceof BatchNotRetryableError) {
+          logRequestFailed(req, startedAt, 409, "batch_not_retryable");
+          res.status(409).json({ error: "batch_not_retryable", message: err.message });
+          return;
+        }
+        if (err instanceof StageNotActiveError) {
+          logRequestFailed(req, startedAt, 409, "stage_not_active");
+          return stageNotActive(res, err.message);
+        }
+        if (err instanceof AiEnhancementAlreadyRunningError) {
+          logRequestFailed(req, startedAt, 409, "ai_enhancement_already_running");
+          res
+            .status(409)
+            .json({ error: "ai_enhancement_already_running", message: err.message });
+          return;
+        }
+        // Handler is async: Express 4 does not catch a rejected promise, so throwing here would
+        // surface as an unhandled rejection — which terminates the process under Node's default
+        // policy, discarding the entire in-memory workflow. Forward to app.ts's centralized
+        // handler, which maps it to a safe 500.
+        logRequestFailed(req, startedAt, 500, err instanceof Error ? err.name : "unknown_error");
+        next(err);
+      }
+    },
+  );
 
   router.post("/test-generation-workflow/scenario-review/decisions", (req, res) => {
     const startedAt = logRequestReceived(req);

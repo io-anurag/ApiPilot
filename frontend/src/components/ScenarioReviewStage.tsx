@@ -263,7 +263,11 @@ export function ScenarioReviewStage({
           )}
         </output>
       )}
-      <div className="flex items-center gap-3 border-t border-border pt-4">
+      {/* Sticky rather than in normal flow: with hundreds of scenarios to review, the finalize
+          action must stay reachable without scrolling past the entire list (matches the
+          sticky app header pattern in App.tsx). Negative margins extend it to the section's
+          full padded width so the opaque background fully covers scrolled-past content. */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
         <button
           type="button"
           onClick={handleFinalize}

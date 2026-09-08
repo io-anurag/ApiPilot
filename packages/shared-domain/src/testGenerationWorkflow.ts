@@ -57,6 +57,38 @@ export interface BatchProgress {
 }
 
 /**
+ * The persisted, per-batch result of one AI enhancement run (specs/015-ai-batch-retry
+ * data-model.md). Unlike `BatchProgress`/`AiEnhancementProgress`, which are cleared the moment a
+ * run settles, this survives on `WorkflowStageState.batchOutcomes` for as long as the run's
+ * outcome remains visible — it is what a later single-batch retry reads to know what exists and
+ * what is eligible.
+ *
+ * Holds only the latest attempt for its batch: a retry overwrites this record in place rather
+ * than appending a new entry, so no per-attempt history is kept (`/speckit-clarify` 2026-09-08).
+ */
+export interface BatchOutcomeRecord {
+  /** Position within the run's batch plan, 0-based. Stable identifier for a retry request. */
+  index: number;
+  /**
+   * `"METHOD /path"` for every operation this batch covered, pinned at the run that first
+   * produced this batch. Never recomputed on retry (FR-008) — retrying batch N always resends
+   * exactly these operations, regardless of any batching configuration change since.
+   */
+  operationKeys: string[];
+  /** This batch's own terminal state, independent of the run's aggregate outcome. */
+  status: "succeeded" | "failed" | "not-attempted";
+  /** Present only when status is "failed". Internal diagnostic detail (constitution XX). */
+  errorCategory?: AIErrorCategory;
+  /**
+   * Present when status is "failed" or "not-attempted". Produced by the same `explainFailure()`
+   * used for the run-level field of the same name, so per-batch and whole-run failures share
+   * identical wording, rationale, and `retryable` gating (specs/015-ai-batch-retry research.md
+   * Decision 4).
+   */
+  failureExplanation?: FailureExplanation;
+}
+
+/**
  * Which activity an in-flight run is currently spending time on
  * (specs/013-ai-enhancement-viability/data-model.md). Distinguishing these is what makes a long
  * first-run wait attributable rather than mysterious: preparing the model can include a
@@ -164,6 +196,14 @@ export interface WorkflowStageState {
    * reaches a terminal status (specs/012-ai-enhancement-progress FR-006/FR-007).
    */
   progress?: AiEnhancementProgress;
+  /**
+   * Present only for aiEnhancement once a run has produced at least one batch result. Populated
+   * incrementally as each batch settles and, unlike `progress`, retained after the stage reaches
+   * `complete`/`partial`/`skipped` — this is what a single-batch retry reads and updates
+   * (specs/015-ai-batch-retry FR-001). Absent for a run refused pre-flight before any batch was
+   * planned.
+   */
+  batchOutcomes?: BatchOutcomeRecord[];
   /**
    * Present only for aiEnhancement when status is "skipped" or "partial" — what the user reads
    * (specs/013-ai-enhancement-viability FR-023).

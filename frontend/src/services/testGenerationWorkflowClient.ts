@@ -106,6 +106,15 @@ export function cancelAiEnhancement(): Promise<WorkflowResult> {
   return postJson("/api/test-generation-workflow/ai-enhancement/cancel");
 }
 
+/**
+ * Retries exactly one batch from the most recent AI Enhancement run
+ * (specs/015-ai-batch-retry, contracts/ai-enhancement-retry-batch.md). Resolves once the retry
+ * has settled (succeeded or failed again) — this endpoint does not poll or stream.
+ */
+export function retryAiEnhancementBatch(batchIndex: number): Promise<WorkflowResult> {
+  return postJson("/api/test-generation-workflow/ai-enhancement/retry-batch", { batchIndex });
+}
+
 export type ScenarioDecisionOutcomeResult =
   | { ok: true; workflow: TestGenerationWorkflow; outcomes: ReviewUpdateOutcome[] }
   | { ok: false; error: string; message: string };

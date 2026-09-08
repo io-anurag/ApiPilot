@@ -354,6 +354,7 @@ export function TestGenerationWorkflowPage() {
                   status={workflow.stages.aiEnhancement.status}
                   failureExplanation={workflow.stages.aiEnhancement.failureExplanation}
                   cancelled={workflow.stages.aiEnhancement.cancelled}
+                  batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes}
                   onAdvanced={handleAdvanced}
                 />
               )}

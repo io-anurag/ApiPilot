@@ -72,6 +72,12 @@ export interface AIProvenance {
   aiRationale: string;
   aiConfidence: number;
   aiAssumptions: string[];
+  /**
+   * The index (within its run's `BatchOutcomeRecord[]`) of the batch that produced this scenario
+   * (specs/015-ai-batch-retry FR-010). Present on every AI-derived scenario produced from that
+   * feature onward; absent on scenarios produced before it shipped.
+   */
+  aiBatchIndex?: number;
 }
 
 export type Provenance = RuleProvenance | AIProvenance;

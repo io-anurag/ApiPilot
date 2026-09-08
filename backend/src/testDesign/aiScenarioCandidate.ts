@@ -10,12 +10,18 @@ export function candidateScenarioId(candidate: AIScenarioCandidate): string {
   return `ai-${createHash("sha256").update(JSON.stringify(candidate)).digest("hex").slice(0, 24)}`;
 }
 
-/** Converts a validated AI scenario candidate into an executable TestScenario, attaching AI provenance (model, provider, rationale, confidence, assumptions). */
+/**
+ * Converts a validated AI scenario candidate into an executable TestScenario, attaching AI
+ * provenance (model, provider, rationale, confidence, assumptions). `batchIndex`, when supplied,
+ * tags the scenario with the batch that produced it (specs/015-ai-batch-retry FR-010), so a
+ * later retry of that same batch can be scoped correctly.
+ */
 export function candidateToScenario(
   candidate: AIScenarioCandidate,
   operation: ApiOperation,
   modelId: string,
   provider: "local" | "mock",
+  batchIndex?: number,
 ): TestScenario {
   return {
     id: candidateScenarioId(candidate),
@@ -37,6 +43,7 @@ export function candidateToScenario(
       aiRationale: candidate.rationale,
       aiConfidence: candidate.confidence,
       aiAssumptions: candidate.assumptions,
+      aiBatchIndex: batchIndex,
     },
   };
 }

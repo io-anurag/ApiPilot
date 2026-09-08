@@ -73,3 +73,26 @@ export class NoAiEnhancementRunInProgressError extends Error {
     this.name = "NoAiEnhancementRunInProgressError";
   }
 }
+
+/**
+ * A batch retry named a `batchIndex` with no corresponding record in
+ * `stages.aiEnhancement.batchOutcomes` (specs/015-ai-batch-retry
+ * contracts/ai-enhancement-retry-batch.md).
+ */
+export class BatchNotFoundError extends Error {
+  constructor(batchIndex: number) {
+    super(`No batch with index ${batchIndex} exists for this AI enhancement run.`);
+    this.name = "BatchNotFoundError";
+  }
+}
+
+/**
+ * A batch retry targeted a batch that already succeeded, or whose failure reason is not
+ * retryable (specs/015-ai-batch-retry FR-003, contracts/ai-enhancement-retry-batch.md).
+ */
+export class BatchNotRetryableError extends Error {
+  constructor(batchIndex: number, reason: string) {
+    super(`Batch ${batchIndex} ${reason}`);
+    this.name = "BatchNotRetryableError";
+  }
+}

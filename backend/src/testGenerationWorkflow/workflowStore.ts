@@ -1,6 +1,7 @@
 import type {
   AiEnhancementProgress,
   ApiModel,
+  BatchOutcomeRecord,
   StageStatus,
   TestGenerationWorkflow,
   WorkflowStageId,
@@ -193,6 +194,33 @@ export function setAiEnhancementProgress(
     stages: {
       ...currentWorkflow.stages,
       aiEnhancement: { ...current, progress },
+    },
+  };
+  return currentWorkflow;
+}
+
+/**
+ * Upserts one `BatchOutcomeRecord` into `stages.aiEnhancement.batchOutcomes` by `index`,
+ * creating the array on first use (specs/015-ai-batch-retry FR-001). Unlike `progress`, this is
+ * never cleared when the stage settles — it is what a later single-batch retry reads and
+ * updates. A retry of the same batch overwrites its record in place (`/speckit-clarify`
+ * 2026-09-08: latest attempt only, no per-attempt history).
+ */
+export function setAiEnhancementBatchOutcome(record: BatchOutcomeRecord): TestGenerationWorkflow {
+  if (!currentWorkflow) {
+    throw new Error("No workflow is currently in progress.");
+  }
+  const current = currentWorkflow.stages.aiEnhancement;
+  const existing = current.batchOutcomes ?? [];
+  const next = existing.some((o) => o.index === record.index)
+    ? existing.map((o) => (o.index === record.index ? record : o))
+    : [...existing, record];
+  currentWorkflow = {
+    ...currentWorkflow,
+    updatedAt: new Date().toISOString(),
+    stages: {
+      ...currentWorkflow.stages,
+      aiEnhancement: { ...current, batchOutcomes: next },
     },
   };
   return currentWorkflow;

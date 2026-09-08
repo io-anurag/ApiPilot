@@ -517,3 +517,74 @@ describe("aiEnhancementStage run ceiling (specs/014-ai-batching-policy)", () => 
     expect(observed).toBeGreaterThan(0);
   });
 });
+
+/**
+ * `stages.aiEnhancement.batchOutcomes` persists past settling, unlike `progress`
+ * (specs/015-ai-batch-retry FR-001) — this is what a later single-batch retry reads.
+ */
+describe("aiEnhancementStage batchOutcomes persistence (specs/015-ai-batch-retry US2)", () => {
+  const previousTimeout = process.env.AI_INFERENCE_TIMEOUT_MS;
+
+  beforeEach(() => resetStore());
+
+  afterEach(() => {
+    if (previousTimeout === undefined) delete process.env.AI_INFERENCE_TIMEOUT_MS;
+    else process.env.AI_INFERENCE_TIMEOUT_MS = previousTimeout;
+  });
+
+  it("records one BatchOutcomeRecord per batch after a partial settle, with a retryable=false explanation for the timed-out batch", async () => {
+    await reachAiEnhancement();
+    let callCount = 0;
+    const partialProvider: AIProvider = {
+      ...mockProvider,
+      getInputBudget: async () => 10,
+      infer: async (request) => {
+        callCount += 1;
+        if (callCount <= 2) {
+          throw Object.assign(new Error("timed out"), { category: "TIMEOUT" });
+        }
+        return {
+          contractVersion: 1,
+          requestId: request.requestId,
+          status: "success",
+          content: JSON.stringify({ responseVersion: 1, candidates: [] }),
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+
+    const wf = await runAiEnhancement(partialProvider);
+
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    const outcomes = wf.stages.aiEnhancement.batchOutcomes;
+    expect(outcomes).toHaveLength(3);
+    expect(outcomes?.[0]).toMatchObject({
+      index: 0,
+      status: "failed",
+      errorCategory: "TIMEOUT",
+    });
+    expect(outcomes?.[0]?.operationKeys).toHaveLength(1);
+    expect(outcomes?.[0]?.failureExplanation).toMatchObject({
+      category: "too-slow",
+      retryable: false,
+    });
+    expect(outcomes?.[1]).toMatchObject({ index: 1, status: "succeeded" });
+    expect(outcomes?.[1]?.failureExplanation).toBeUndefined();
+    expect(outcomes?.[2]).toMatchObject({ index: 2, status: "succeeded" });
+    // Unlike `progress`, this must survive the settle that just happened.
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+  });
+
+  it("leaves batchOutcomes absent when the run is refused pre-flight (not-viable) before any batch is planned", async () => {
+    process.env.AI_INFERENCE_TIMEOUT_MS = "1";
+    await reachAiEnhancement();
+
+    const wf = await runAiEnhancement(mockProvider);
+
+    expect(wf.aiEnhancement?.notViable).toBeDefined();
+    expect(wf.stages.aiEnhancement.status).toBe("skipped");
+    expect(wf.stages.aiEnhancement.batchOutcomes).toBeUndefined();
+  });
+});

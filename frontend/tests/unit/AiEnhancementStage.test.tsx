@@ -100,6 +100,102 @@ describe("AiEnhancementStage", () => {
     );
   });
 
+  it("offers a retry action only for eligible batches (specs/015-ai-batch-retry FR-002, FR-003, FR-011)", () => {
+    render(
+      <AiEnhancementStage
+        status="partial"
+        failureExplanation={{
+          category: "unavailable",
+          summary: "Local AI is unavailable right now.",
+          nextStep: "Retry once it recovers.",
+          retryable: true,
+        }}
+        batchOutcomes={[
+          { index: 0, operationKeys: ["GET /pets"], status: "succeeded" },
+          {
+            index: 1,
+            operationKeys: ["POST /pets"],
+            status: "failed",
+            errorCategory: "PROVIDER_UNAVAILABLE",
+            failureExplanation: {
+              category: "unavailable",
+              summary: "Local AI is unavailable right now.",
+              nextStep: "Retry once it recovers.",
+              retryable: true,
+            },
+          },
+          {
+            index: 2,
+            operationKeys: ["GET /pets/{petId}"],
+            status: "failed",
+            errorCategory: "TIMEOUT",
+            failureExplanation: {
+              category: "too-slow",
+              summary: "The local AI model was too slow to finish this on this machine.",
+              nextStep: "Try a smaller specification.",
+              retryable: false,
+            },
+          },
+        ]}
+        onAdvanced={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /retry batch 1/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry batch 2/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /retry batch 3/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("retries the requested batch and reflects the updated workflow (specs/015-ai-batch-retry)", async () => {
+    const onAdvanced = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ workflow: { stages: { aiEnhancement: { status: "complete" } } } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AiEnhancementStage
+        status="partial"
+        failureExplanation={{
+          category: "unavailable",
+          summary: "Local AI is unavailable right now.",
+          nextStep: "Retry once it recovers.",
+          retryable: true,
+        }}
+        batchOutcomes={[
+          {
+            index: 3,
+            operationKeys: ["DELETE /pets/{petId}"],
+            status: "failed",
+            errorCategory: "PROVIDER_UNAVAILABLE",
+            failureExplanation: {
+              category: "unavailable",
+              summary: "Local AI is unavailable right now.",
+              nextStep: "Retry once it recovers.",
+              retryable: true,
+            },
+          },
+        ]}
+        onAdvanced={onAdvanced}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /retry batch 4/i }));
+
+    await waitFor(() => expect(onAdvanced).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/test-generation-workflow/ai-enhancement/retry-batch",
+      expect.objectContaining({ body: JSON.stringify({ batchIndex: 3 }) }),
+    );
+  });
+
   it("distinguishes a cancelled run from a failed one (FR-021)", () => {
     render(
       <AiEnhancementStage

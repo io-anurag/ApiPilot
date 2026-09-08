@@ -135,14 +135,13 @@ describe("Test generation workflow accessibility", () => {
       />,
     );
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes[0]).toHaveAccessibleName(/wf-1/);
-    expect(checkboxes[1]).toHaveAccessibleName(/wf-2/);
-    checkboxes[0].focus();
-    expect(document.activeElement).toBe(checkboxes[0]);
+    const wf1Checkbox = screen.getByRole("checkbox", { name: /wf-1/ });
+    const wf2Checkbox = screen.getByRole("checkbox", { name: /wf-2/ });
+    wf1Checkbox.focus();
+    expect(document.activeElement).toBe(wf1Checkbox);
 
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
+    fireEvent.click(wf1Checkbox);
+    fireEvent.click(wf2Checkbox);
     const approveSelected = screen.getByRole("button", { name: "Approve selected (2)" });
     approveSelected.focus();
     expect(document.activeElement).toBe(approveSelected);

@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import {
   cancelAiEnhancement,
   fetchCurrentWorkflow,
+  retryAiEnhancementBatch,
   runAiEnhancement,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
 import type {
   AiEnhancementProgress,
+  BatchOutcomeRecord,
   FailureExplanation,
   ReviewWorkspace,
 } from "@apipilot/shared-domain";
+import { BatchOutcomeList } from "./BatchOutcomeList";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
 
@@ -235,6 +238,7 @@ export function AiEnhancementStage({
   status,
   failureExplanation,
   cancelled,
+  batchOutcomes,
   onAdvanced,
 }: Readonly<{
   status?: "skipped" | "partial";
@@ -246,6 +250,8 @@ export function AiEnhancementStage({
   failureExplanation?: FailureExplanation;
   /** True when the outcome came from the user cancelling rather than a failure (FR-021). */
   cancelled?: boolean;
+  /** Per-batch detail and, for eligible batches, a retry control (specs/015-ai-batch-retry). */
+  batchOutcomes?: BatchOutcomeRecord[];
   onAdvanced: (result: WorkflowResult) => void;
 }>) {
   const [running, setRunning] = useState(false);
@@ -255,7 +261,20 @@ export function AiEnhancementStage({
   const [liveWorkspace, setLiveWorkspace] = useState<ReviewWorkspace | undefined>(
     undefined,
   );
+  const [retryingBatchIndex, setRetryingBatchIndex] = useState<number | null>(null);
   const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function handleRetryBatch(batchIndex: number) {
+    setRetryingBatchIndex(batchIndex);
+    setError(null);
+    const result = await retryAiEnhancementBatch(batchIndex);
+    setRetryingBatchIndex(null);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    onAdvanced(result);
+  }
 
   function stopPolling() {
     if (pollHandleRef.current !== null) {
@@ -353,6 +372,25 @@ export function AiEnhancementStage({
             {running ? "Retrying…" : "Retry AI enhancement"}
           </button>
         )}
+        <BatchOutcomeList
+          batchOutcomes={batchOutcomes}
+          renderAction={(batch) => {
+            if (batch.status === "succeeded") return null;
+            if (batch.failureExplanation?.retryable === false) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => handleRetryBatch(batch.index)}
+                disabled={retryingBatchIndex !== null}
+                className={BUTTON_STYLES.secondary}
+              >
+                {retryingBatchIndex === batch.index
+                  ? "Retrying…"
+                  : `Retry batch ${batch.index + 1}`}
+              </button>
+            );
+          }}
+        />
         {running && progress && <RunProgress progress={progress} />}
         {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
         {running && (
