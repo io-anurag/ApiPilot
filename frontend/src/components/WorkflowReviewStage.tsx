@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   DependencyAnalysisResult,
   DependencyConfidence,
@@ -79,6 +79,22 @@ export function WorkflowReviewStage({
   const [manualSelectionIds, setManualSelectionIds] = useState<Set<string>>(new Set());
   const [pendingBulk, setPendingBulk] = useState<PendingBulkDecision | null>(null);
   const bulkDecision = useBulkDecision();
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const allWorkflowIds = dependencyAnalysis.workflows.map((w) => w.id);
+  const allSelected =
+    allWorkflowIds.length > 0 && manualSelectionIds.size === allWorkflowIds.length;
+
+  // Reflects "some but not all selected" on the native checkbox — a state React's `checked`
+  // prop cannot express and that must be set imperatively on the DOM node.
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = !allSelected && manualSelectionIds.size > 0;
+    }
+  }, [allSelected, manualSelectionIds]);
+
+  function toggleSelectAll() {
+    setManualSelectionIds(allSelected ? new Set() : new Set(allWorkflowIds));
+  }
 
   async function decide(workflowId: string, state: "approved" | "rejected") {
     setSubmittingId(workflowId);
@@ -184,6 +200,18 @@ export function WorkflowReviewStage({
       <h2 className="text-base font-semibold text-slate-900">
         Review Integration Workflows
       </h2>
+      <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
+        <input
+          ref={selectAllRef}
+          type="checkbox"
+          checked={allSelected}
+          onChange={toggleSelectAll}
+          aria-label="Select all workflows"
+          data-testid="workflow-review-select-all"
+          className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        />
+        Select all
+      </label>
       {manuallySelectedIds.length > 0 && (
         <div data-testid="workflow-review-bulk-actions" className="flex flex-wrap gap-2">
           <button

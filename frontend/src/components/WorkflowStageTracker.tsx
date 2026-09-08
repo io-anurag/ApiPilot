@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   WORKFLOW_STAGE_ORDER,
   type StageStatus,
@@ -99,6 +100,18 @@ export function WorkflowStageTracker({
 }>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
   const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
+  const activeStageRef = useRef<HTMLLIElement | null>(null);
+
+  // The stage list scrolls horizontally, so the active stage can start off-screen (e.g. on
+  // initial load once several stages are already complete). Keep it in view automatically
+  // instead of requiring the user to scroll the strip manually.
+  useEffect(() => {
+    activeStageRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [workflow.activeStageId]);
 
   return (
     <nav
@@ -133,6 +146,7 @@ export function WorkflowStageTracker({
           return (
             <li
               key={stageId}
+              ref={isActive ? activeStageRef : undefined}
               aria-current={isActive ? "step" : undefined}
               className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isActive ? "font-semibold text-slate-950" : "text-slate-600"}`}
             >

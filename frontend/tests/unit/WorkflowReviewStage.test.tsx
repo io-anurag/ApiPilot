@@ -17,7 +17,7 @@ function makeDependencyAnalysis(workflowIds: string[]): DependencyAnalysisResult
 }
 
 describe("WorkflowReviewStage bulk actions", () => {
-  it("renders one distinguishable selection checkbox per workflow row", () => {
+  it("renders one distinguishable selection checkbox per workflow row, plus a select-all checkbox", () => {
     render(
       <WorkflowReviewStage
         dependencyAnalysis={makeDependencyAnalysis(["w1", "w2"])}
@@ -26,10 +26,51 @@ describe("WorkflowReviewStage bulk actions", () => {
       />,
     );
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(2);
-    expect(checkboxes[0]).toHaveAccessibleName(/w1/);
-    expect(checkboxes[1]).toHaveAccessibleName(/w2/);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.getByRole("checkbox", { name: "Select all workflows" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /w1/ })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /w2/ })).toBeInTheDocument();
+  });
+
+  it("selects and deselects every workflow via the select-all checkbox", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis(["w1", "w2", "w3"])}
+        decisions={undefined}
+        onAdvanced={vi.fn()}
+      />,
+    );
+
+    const selectAll = screen.getByRole("checkbox", { name: "Select all workflows" });
+    fireEvent.click(selectAll);
+
+    expect(selectAll).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /w1/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /w2/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /w3/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Approve selected (3)" })).toBeInTheDocument();
+
+    fireEvent.click(selectAll);
+
+    expect(selectAll).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /w1/ })).not.toBeChecked();
+    expect(screen.queryByTestId("workflow-review-bulk-actions")).not.toBeInTheDocument();
+  });
+
+  it("reflects a partial selection as unchecked on the select-all checkbox", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis(["w1", "w2"])}
+        decisions={undefined}
+        onAdvanced={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /w1/ }));
+
+    const selectAll = screen.getByRole("checkbox", { name: "Select all workflows" }) as HTMLInputElement;
+    expect(selectAll.checked).toBe(false);
+    expect(selectAll.indeterminate).toBe(true);
   });
 
   it("is keyboard-reachable and each bulk button has a distinguishing accessible name (FR-014, FR-015)", () => {
@@ -41,8 +82,8 @@ describe("WorkflowReviewStage bulk actions", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    fireEvent.click(screen.getByRole("checkbox", { name: /w1/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /w2/ }));
 
     const approveSelected = screen.getByRole("button", { name: "Approve selected (2)" });
     const rejectSelected = screen.getByRole("button", { name: "Reject selected (2)" });
@@ -104,9 +145,8 @@ describe("WorkflowReviewStage bulk actions", () => {
       />,
     );
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
-    fireEvent.click(checkboxes[1]);
+    fireEvent.click(screen.getByRole("checkbox", { name: /w1/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /w2/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "Approve selected (2)" }));
     fireEvent.click(screen.getByRole("button", { name: /^Approve \(2\)/ }));
