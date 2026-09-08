@@ -339,7 +339,10 @@ export function TestGenerationWorkflowPage() {
             ))}
           {displayStageId === "aiEnhancement" &&
             (workflow.activeStageId === "aiEnhancement" ? (
-              <AiEnhancementStage onAdvanced={handleAdvanced} />
+              <AiEnhancementStage
+                activeProgress={workflow.stages.aiEnhancement.progress}
+                onAdvanced={handleAdvanced}
+              />
             ) : (
               <AiEnhancementOutcomeSummary workflow={workflow} />
             ))}
@@ -354,6 +357,7 @@ export function TestGenerationWorkflowPage() {
                   status={workflow.stages.aiEnhancement.status}
                   failureExplanation={workflow.stages.aiEnhancement.failureExplanation}
                   cancelled={workflow.stages.aiEnhancement.cancelled}
+                  batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes}
                   onAdvanced={handleAdvanced}
                 />
               )}
@@ -433,7 +437,13 @@ function DeterministicGenerationSummary({
 function DependencyAnalysisSummary({
   dependencyAnalysis,
 }: Readonly<{ dependencyAnalysis: DependencyAnalysisResult }>) {
-  const { graph, workflows, cycles } = dependencyAnalysis;
+  const { graph, workflows, cycles, aiBatchingLimitation, aiErrorMessage, aiOutcome } =
+    dependencyAnalysis;
+  // "skipped"/"success" need no explanation — nothing degraded. Every other outcome (including
+  // the pre-flight "not viable" refusal) has a plain-language reason in `aiErrorMessage`, which
+  // must reach the user rather than stay a log-only detail (Explicit Failure, constitution VIII.4).
+  const showAiErrorMessage =
+    aiErrorMessage && aiOutcome !== "skipped" && aiOutcome !== "success";
   return (
     <section
       data-testid="dependency-analysis-summary"
@@ -447,6 +457,18 @@ function DependencyAnalysisSummary({
         {cycles.length > 0 &&
           ` ${cycles.length} dependency cycle${cycles.length === 1 ? "" : "s"} detected.`}
       </p>
+      {showAiErrorMessage && (
+        <p data-testid="dependency-analysis-ai-error" className="text-sm text-muted">
+          {aiErrorMessage}
+        </p>
+      )}
+      {/* FR-034: a relationship spanning a batch boundary is unchecked, not confirmed absent —
+          that distinction must reach the user, not stay a backend-only detail. */}
+      {aiBatchingLimitation && (
+        <p data-testid="dependency-analysis-batching-limitation" className="text-sm text-muted">
+          {aiBatchingLimitation}
+        </p>
+      )}
     </section>
   );
 }

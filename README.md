@@ -155,6 +155,15 @@ See [.env.example](.env.example) for the maintained variable list and guidance.
 | `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit              | see `.env.example`                     |
 | `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt      | `false`                                |
 | `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Work-bounded enhancement batch size      | `1`                                    |
+| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Wall-clock ceiling for one enhancement run | see `.env.example`                   |
+| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Work-bounded dependency-analysis batch size | `3`                                |
+| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Wall-clock ceiling for one dependency-analysis AI pass | `120000`                |
+
+Whole-specification AI enhancement is practical to roughly **5–10 operations** at the default run
+budget on the reference CPU profile — larger specifications settle `partial` at the ceiling, with
+everything generated retained and the remainder reported as not attempted. (Earlier estimates of
+14–30 operations assumed ~21s/operation; a real 39-operation run measured 30–60s/operation instead —
+see specs/014-ai-batching-policy research.md and `backend/src/ai/modelConfig.ts`.)
 
 ### Choosing a local AI model for your hardware
 

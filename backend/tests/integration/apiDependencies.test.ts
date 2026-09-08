@@ -7,9 +7,10 @@ import {
   cyclicApiModel,
   dissimilarNameAiApiModel,
 } from "../fixtures/dependencies/dependencyFixtures";
+import { AI_DEPENDENCY_RESPONSE_VERSION } from "../../src/dependencies/aiDependencyPrompt";
 
 const dependencyCandidateResponse = JSON.stringify({
-  responseVersion: 1,
+  responseVersion: AI_DEPENDENCY_RESPONSE_VERSION,
   candidates: [
     {
       candidateId: "ai-candidate-1",
@@ -182,7 +183,7 @@ describe("POST /api/api-models/dependencies", () => {
 
   it("never surfaces an AI candidate that references a nonexistent field (FR-008)", async () => {
     const invalidCandidateResponse = JSON.stringify({
-      responseVersion: 1,
+      responseVersion: AI_DEPENDENCY_RESPONSE_VERSION,
       candidates: [
         {
           candidateId: "bad-candidate",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AIProvider, InferenceResponse } from "@apipilot/shared-domain";
 import { analyzeDependencies } from "../../../src/dependencies/analyzeDependencies";
 import { buildLargeApiModel } from "../../fixtures/dependencies/dependencyFixtures";
+import { AI_DEPENDENCY_RESPONSE_VERSION } from "../../../src/dependencies/aiDependencyPrompt";
 
 function mockProvider(): AIProvider {
   return {
@@ -17,7 +18,7 @@ function mockProvider(): AIProvider {
       contractVersion: 1,
       requestId: input.requestId,
       status: "success",
-      content: JSON.stringify({ responseVersion: 1, candidates: [] }),
+      content: JSON.stringify({ responseVersion: AI_DEPENDENCY_RESPONSE_VERSION, candidates: [] }),
       modelId: "performance-model",
       provider: "mock",
       durationMs: 0,

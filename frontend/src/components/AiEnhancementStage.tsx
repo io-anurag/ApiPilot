@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import {
   cancelAiEnhancement,
   fetchCurrentWorkflow,
+  retryAiEnhancementBatch,
   runAiEnhancement,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
 import type {
   AiEnhancementProgress,
+  BatchOutcomeRecord,
   FailureExplanation,
   ReviewWorkspace,
 } from "@apipilot/shared-domain";
+import { BatchOutcomeList } from "./BatchOutcomeList";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
 
@@ -140,7 +143,10 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
           </>
         )}
       </p>
-      <ul className="flex flex-wrap gap-1.5" aria-label="Batch progress">
+      <ul
+        className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+        aria-label="Batch progress"
+      >
         {progress.batches.map((batch) => (
           <li key={batch.index}>
             <StatusBadge
@@ -235,6 +241,8 @@ export function AiEnhancementStage({
   status,
   failureExplanation,
   cancelled,
+  batchOutcomes,
+  activeProgress,
   onAdvanced,
 }: Readonly<{
   status?: "skipped" | "partial";
@@ -246,16 +254,42 @@ export function AiEnhancementStage({
   failureExplanation?: FailureExplanation;
   /** True when the outcome came from the user cancelling rather than a failure (FR-021). */
   cancelled?: boolean;
+  /** Per-batch detail and, for eligible batches, a retry control (specs/015-ai-batch-retry). */
+  batchOutcomes?: BatchOutcomeRecord[];
+  /**
+   * The workflow's own `stages.aiEnhancement.progress` at mount time. A run started before a
+   * page reload keeps running server-side (FR-007), but this component's local `running`/
+   * `progress` state would otherwise reset to idle on remount, showing the trigger button as if
+   * nothing were happening — clicking it then only produces "already in progress" from the
+   * server's concurrency guard. Seeding state from this prop and resuming polling below instead
+   * restores the live view the reload interrupted.
+   */
+  activeProgress?: AiEnhancementProgress;
   onAdvanced: (result: WorkflowResult) => void;
 }>) {
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(() => activeProgress !== undefined);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const [progress, setProgress] = useState<AiEnhancementProgress | undefined>(undefined);
+  const [progress, setProgress] = useState<AiEnhancementProgress | undefined>(
+    activeProgress,
+  );
   const [liveWorkspace, setLiveWorkspace] = useState<ReviewWorkspace | undefined>(
     undefined,
   );
+  const [retryingBatchIndex, setRetryingBatchIndex] = useState<number | null>(null);
   const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function handleRetryBatch(batchIndex: number) {
+    setRetryingBatchIndex(batchIndex);
+    setError(null);
+    const result = await retryAiEnhancementBatch(batchIndex);
+    setRetryingBatchIndex(null);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    onAdvanced(result);
+  }
 
   function stopPolling() {
     if (pollHandleRef.current !== null) {
@@ -268,6 +302,33 @@ export function AiEnhancementStage({
   // itself keeps going server-side regardless (FR-007); this only stops this component's own
   // polling requests.
   useEffect(() => stopPolling, []);
+
+  // Resumes observing a run that was already in progress when this component mounted (see
+  // `activeProgress` above). Unlike `handleRun`, this never calls `runAiEnhancement()` itself —
+  // it only polls the existing run to completion, since the run was started by an earlier page
+  // load (or another tab) and calling it again would just hit the server's concurrency guard.
+  useEffect(() => {
+    if (!activeProgress) return;
+    pollHandleRef.current = setInterval(() => {
+      void fetchCurrentWorkflow().then((result) => {
+        if (!result.ok || !result.workflow) return;
+        const currentProgress = result.workflow.stages.aiEnhancement.progress;
+        setLiveWorkspace(result.workflow.reviewWorkspace);
+        if (currentProgress) {
+          setProgress(currentProgress);
+          return;
+        }
+        stopPolling();
+        setRunning(false);
+        setProgress(undefined);
+        setLiveWorkspace(undefined);
+        onAdvanced({ ok: true, workflow: result.workflow });
+      });
+    }, PROGRESS_POLL_INTERVAL_MS);
+    return stopPolling;
+    // Intentionally mount-only: `activeProgress` is a snapshot taken when this component was
+    // created, not a live value to resync against on every parent re-render.
+  }, []);
 
   async function handleRun() {
     setRunning(true);
@@ -353,6 +414,25 @@ export function AiEnhancementStage({
             {running ? "Retrying…" : "Retry AI enhancement"}
           </button>
         )}
+        <BatchOutcomeList
+          batchOutcomes={batchOutcomes}
+          renderAction={(batch) => {
+            if (batch.status === "succeeded") return null;
+            if (batch.failureExplanation?.retryable === false) return null;
+            return (
+              <button
+                type="button"
+                onClick={() => handleRetryBatch(batch.index)}
+                disabled={retryingBatchIndex !== null}
+                className={BUTTON_STYLES.secondary}
+              >
+                {retryingBatchIndex === batch.index
+                  ? "Retrying…"
+                  : `Retry batch ${batch.index + 1}`}
+              </button>
+            );
+          }}
+        />
         {running && progress && <RunProgress progress={progress} />}
         {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
         {running && (

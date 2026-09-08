@@ -1,4 +1,5 @@
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
+import { BatchOutcomeList } from "./BatchOutcomeList";
 
 /**
  * Read-only account of one AI enhancement run's outcome (how many AI-suggested scenarios were
@@ -46,6 +47,9 @@ export function AiEnhancementOutcomeSummary({
           : rejectedLabel}
       </p>
       {failureExplanation && <p className="mt-1">{failureExplanation.summary}</p>}
+      {/* Read-only here — no retry action; retrying lives on the scenario-review screen's
+          AiEnhancementStage banner, matching where the existing whole-stage retry control is. */}
+      <BatchOutcomeList batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes} />
     </section>
   );
 }

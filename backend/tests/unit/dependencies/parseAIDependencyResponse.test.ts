@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InferenceResponse } from "@apipilot/shared-domain";
 import { parseAIDependencyResponse } from "../../../src/dependencies/parseAIDependencyResponse";
+import { AI_DEPENDENCY_RESPONSE_VERSION } from "../../../src/dependencies/aiDependencyPrompt";
 
 function response(content: string): InferenceResponse {
   return {
@@ -19,7 +20,7 @@ describe("parseAIDependencyResponse", () => {
     const parsed = parseAIDependencyResponse(
       response(
         JSON.stringify({
-          responseVersion: 1,
+          responseVersion: AI_DEPENDENCY_RESPONSE_VERSION,
           candidates: [
             {
               candidateId: "c1",
@@ -45,7 +46,9 @@ describe("parseAIDependencyResponse", () => {
   });
 
   it("throws when the payload is not the expected shape (missing candidates array)", () => {
-    expect(() => parseAIDependencyResponse(response(JSON.stringify({ responseVersion: 1 })))).toThrow();
+    expect(() =>
+      parseAIDependencyResponse(response(JSON.stringify({ responseVersion: AI_DEPENDENCY_RESPONSE_VERSION }))),
+    ).toThrow();
   });
 
   it("throws when a provider error response is passed through", () => {

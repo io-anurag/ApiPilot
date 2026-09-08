@@ -6,7 +6,12 @@ import type {
   DependencyAIOutcome,
   DependencyAnalysisResult,
 } from "@apipilot/shared-domain";
-import { buildAIDependencyPrompt, buildAIDependencyRequest } from "./aiDependencyPrompt";
+import {
+  AI_DEPENDENCY_MAX_OUTPUT_TOKENS,
+  AI_DEPENDENCY_TIMEOUT_MS,
+  buildAIDependencyPrompt,
+  buildAIDependencyRequest,
+} from "./aiDependencyPrompt";
 import {
   runBatchedInference,
   splitOperationsIntoBatches,
@@ -24,6 +29,8 @@ import {
   validateAIDependencyCandidateSemantics,
   validateAIDependencyCandidateShape,
 } from "./validateAIDependencyCandidate";
+import { loadAIConfig, CHARS_PER_TOKEN_ESTIMATE } from "../ai/modelConfig";
+import { estimateViability } from "../ai/viability";
 import { createLogger } from "../logger";
 
 const logger = createLogger("dependencies.analyze");
@@ -41,8 +48,29 @@ export const ANALYSIS_TIMEOUT_MS = 15_000;
 
 /** Options for one `analyzeDependencies` call. */
 export interface AnalyzeDependenciesOptions {
-  /** Overrides `ANALYSIS_TIMEOUT_MS` for this call only; test-only hook (T026). */
+  /**
+   * Overrides `ANALYSIS_TIMEOUT_MS` for this call only; test-only hook (T026). Governs only
+   * deterministic matching and workflow assembly (FR-033) — see `aiRunBudgetMs` for the
+   * AI-assisted pass's own ceiling, which this no longer shares.
+   */
   timeoutMs?: number;
+  /**
+   * Overrides the configured dependency-analysis AI run ceiling
+   * (`InferencePlanningConfig.dependencyRunBudgetMs`) for this call only; test-only hook
+   * (specs/014-ai-batching-policy FR-033, T056).
+   */
+  aiRunBudgetMs?: number;
+  /**
+   * Overrides the configured dependency-analysis unit size
+   * (`InferencePlanningConfig.dependencyOperationsPerUnit`) for this call only; test-only hook
+   * (specs/014-ai-batching-policy FR-029, T054/T055).
+   */
+  maxOperationsPerBatch?: number;
+  /**
+   * Overrides `AI_DEPENDENCY_TIMEOUT_MS` — the per-request budget the pre-flight viability check
+   * compares a unit's projected cost against — for this call only; test-only hook (T059).
+   */
+  perRequestBudgetMs?: number;
 }
 
 /** Fraction-of-batches suffix (e.g. " for 1 of 3 batches"), omitted entirely for a single batch. */
@@ -98,6 +126,10 @@ async function runOneBatch(
     if (!isDependencyCandidateShape(rawCandidate)) continue;
     if (seenCandidateIds.has(rawCandidate.candidateId)) continue;
     seenCandidateIds.add(rawCandidate.candidateId);
+    // Validated against the full, untouched `apiModel` — never `withOperations(apiModel,
+    // batch.operations)` — so narrowing the prompt (T051) narrows only the model's *view*; a
+    // candidate is still rejected on exactly the same evidence as before if it references
+    // anything outside the real contract (T053, constitution XV).
     const semanticFindings = validateAIDependencyCandidateSemantics(
       rawCandidate,
       apiModel,
@@ -114,16 +146,44 @@ async function runOneBatch(
 }
 
 /**
+ * Explains why a relationship spanning a unit boundary cannot be inferred by this pass (FR-034,
+ * T057): batching this specification into more than one unit means a producer and consumer whose
+ * operations landed in different units were never shown to the model together, so their absence
+ * from the result must not be read as a confirmed absence — only deterministic matching and
+ * within-unit AI pairing were actually checked.
+ */
+function batchingLimitationMessage(batchCount: number): string | undefined {
+  if (batchCount <= 1) return undefined;
+  return (
+    `The AI-assisted pass ran across ${batchCount} separate units. A relationship whose producer ` +
+    "and consumer operations landed in different units could not be checked by AI and is not " +
+    "confirmed absent — only deterministic matching and within-unit AI pairing were checked."
+  );
+}
+
+/** The median of `values`, robust to a single outlier in either direction; 0 for an empty input. */
+function medianOf(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid];
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
  * Runs the AI-assisted pass (FR-005): the specification's operations are split into one or
- * more character-bounded batches (FR-004, FR-009, FR-012 via `provider.getInputBudget()`),
- * each sent sequentially through `provider.infer()` (FR-003), validated candidate by
- * candidate (shape then semantics, mirroring `enhanceTestModel.ts`'s pipeline), and merged
- * with the deterministic relationships. Never throws — an unavailable, slow, or invalid
- * provider degrades to the deterministic-only result with an explicit outcome (FR-018); a
- * partially-successful run retains every successful batch's relationships (FR-007).
- * `isTimedOut` enforces the existing `ANALYSIS_TIMEOUT_MS` budget between batches (FR-010,
- * research.md Decision 5): once it reports true, remaining batches are "not-attempted"
- * rather than run unbounded.
+ * more work-and-character-bounded batches (FR-004, FR-009, FR-012 via `provider.getInputBudget()`,
+ * FR-028/FR-029 via `maxOperationsPerBatch`), each sent sequentially through `provider.infer()`
+ * (FR-003), validated candidate by candidate (shape then semantics, mirroring
+ * `enhanceTestModel.ts`'s pipeline), and merged with the deterministic relationships. Never
+ * throws — an unavailable, slow, or invalid provider degrades to the deterministic-only result
+ * with an explicit outcome (FR-018); a partially-successful run retains every successful batch's
+ * relationships (FR-007, FR-030).
+ *
+ * `isTimedOut` enforces this pass's own run ceiling (FR-033) rather than the overall analysis
+ * budget: once it reports true, remaining batches are "not-attempted" rather than run unbounded,
+ * and `ANALYSIS_TIMEOUT_MS` remains free to govern only deterministic matching and workflow
+ * assembly, undisturbed by however long this pass takes.
  */
 async function runAIAssistedPass(
   apiModel: ApiModel,
@@ -131,18 +191,81 @@ async function runAIAssistedPass(
   provider: AIProvider,
   requestId: string,
   isTimedOut: () => boolean,
+  maxOperationsPerBatch: number | undefined,
+  viability: {
+    perRequestBudgetMs: number;
+    prefillMsPerToken: number;
+    decodeMsPerToken: number;
+    safetyFactor: number;
+  },
 ): Promise<{
   relationships: DependencyAnalysisResult["graph"]["relationships"];
   aiOutcome: DependencyAIOutcome;
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
+  aiBatchingLimitation?: string;
+  notViable?: { projectedMs: number; budgetMs: number };
 }> {
-  const budgetChars = await provider.getInputBudget();
+  const budgetChars = await provider.getInputBudget(AI_DEPENDENCY_MAX_OUTPUT_TOKENS);
   const batches = splitOperationsIntoBatches(
     apiModel.operations,
     (operations) => buildAIDependencyPrompt(withOperations(apiModel, operations)),
     budgetChars,
+    maxOperationsPerBatch,
   );
+
+  // Pre-flight refusal (specs/014-ai-batching-policy, mirroring enhanceTestModel.ts's own
+  // viability check): a *typical* unit's cost represents the whole run, so if it cannot fit a
+  // single request's budget, none of the others can either, and running each one anyway just
+  // spends real minutes rediscovering what the projection already knows (AI_DEPENDENCY_TIMEOUT_MS's
+  // own doc comment: even a single-operation unit's prefill alone measures ~9.9s on the reference
+  // hardware).
+  //
+  // Uses the *median* batch's prompt size rather than the worst, unlike enhancement: enhancement's
+  // units are uniform by construction, so its max and its typical unit are the same thing.
+  // Dependency analysis's units are not — FR-011 deliberately isolates one oversized operation into
+  // its own batch rather than dropping it, specifically so that operation can fail on its own via
+  // the provider's fast, synchronous exact-fit guard without blocking every other batch. Sizing the
+  // whole-run estimate by that one outlier's batch would refuse the entire pass over a single
+  // anomalous operation — exactly what FR-011 exists to prevent — and an outlier can still land in
+  // an undersized batch for other reasons (a tight `budgetChars`, an odd remainder at the end), so
+  // filtering by batch size alone cannot reliably tell "the outlier's batch" apart from "every
+  // batch, including the outlier's." The median is robust to a single such outlier in either
+  // direction without needing to identify it explicitly.
+  const promptCharsPerBatch = batches.map(
+    (batch) => buildAIDependencyPrompt(withOperations(apiModel, batch.operations)).length,
+  );
+  const medianPromptChars = medianOf(promptCharsPerBatch);
+  const estimate = estimateViability({
+    promptTokens: Math.ceil(medianPromptChars / CHARS_PER_TOKEN_ESTIMATE),
+    maxOutputTokens: AI_DEPENDENCY_MAX_OUTPUT_TOKENS,
+    rates: {
+      prefillMsPerToken: viability.prefillMsPerToken,
+      decodeMsPerToken: viability.decodeMsPerToken,
+    },
+    budgetMs: viability.perRequestBudgetMs,
+    safetyFactor: viability.safetyFactor,
+  });
+  if (!estimate.viable) {
+    logger.warn("ai_pass_refused_not_viable", {
+      promptTokens: estimate.promptTokens,
+      maxOutputTokens: estimate.maxOutputTokens,
+      projectedMs: Math.round(estimate.projectedMs),
+      budgetMs: estimate.budgetMs,
+      totalUnits: batches.length,
+    });
+    return {
+      relationships: deterministicRelationships,
+      aiOutcome: "unavailable",
+      aiErrorMessage:
+        `The local AI model would need about ${Math.ceil(estimate.projectedMs / 1000)}s per ` +
+        `unit, more than the configured ${Math.ceil(estimate.budgetMs / 1000)}s budget. ` +
+        "Deterministic relationships were used instead; nothing was run, so no time was spent waiting.",
+      notViable: { projectedMs: estimate.projectedMs, budgetMs: estimate.budgetMs },
+    };
+  }
+
+  const aiBatchingLimitation = batchingLimitationMessage(batches.length);
 
   let nextBatchIndex = 0;
   const summary = await runBatchedInference(
@@ -162,7 +285,7 @@ async function runAIAssistedPass(
     aiRelationships,
   );
   if (summary.outcome === "success") {
-    return { relationships, aiOutcome: "success" };
+    return { relationships, aiOutcome: "success", aiBatchingLimitation };
   }
 
   const category: AIErrorCategory = summary.errorCategory ?? "INVALID_RESPONSE";
@@ -176,6 +299,7 @@ async function runAIAssistedPass(
       summary.failureCount,
       summary.totalCount,
     ),
+    aiBatchingLimitation,
   };
 }
 
@@ -205,23 +329,41 @@ export async function analyzeDependencies(
   let aiOutcome: DependencyAIOutcome = "skipped";
   let aiErrorCategory: AIErrorCategory | undefined;
   let aiErrorMessage: string | undefined;
+  let aiBatchingLimitation: string | undefined;
+  let notViable: { projectedMs: number; budgetMs: number } | undefined;
   /** Wall-clock spent inside the AI-assisted pass, excluded from the budget guard below. */
   let aiElapsedMs = 0;
 
   if (provider) {
+    const planning = loadAIConfig().planning;
+    const aiRunBudgetMs = options.aiRunBudgetMs ?? planning.dependencyRunBudgetMs;
+    const maxOperationsPerBatch =
+      options.maxOperationsPerBatch ?? planning.dependencyOperationsPerUnit;
+    const perRequestBudgetMs = options.perRequestBudgetMs ?? AI_DEPENDENCY_TIMEOUT_MS;
     const aiStartedAt = Date.now();
     const aiResult = await runAIAssistedPass(
       apiModel,
       deterministicRelationships,
       provider,
       requestId,
-      () => Date.now() - startedAt > timeoutMs,
+      // This pass's own run ceiling (FR-033) — independent of `timeoutMs` above, which governs
+      // only deterministic matching and workflow assembly.
+      () => Date.now() - aiStartedAt > aiRunBudgetMs,
+      maxOperationsPerBatch,
+      {
+        perRequestBudgetMs,
+        prefillMsPerToken: planning.prefillMsPerToken,
+        decodeMsPerToken: planning.decodeMsPerToken,
+        safetyFactor: planning.viabilitySafetyFactor,
+      },
     );
     aiElapsedMs = Date.now() - aiStartedAt;
     relationships = aiResult.relationships;
     aiOutcome = aiResult.aiOutcome;
     aiErrorCategory = aiResult.aiErrorCategory;
     aiErrorMessage = aiResult.aiErrorMessage;
+    aiBatchingLimitation = aiResult.aiBatchingLimitation;
+    notViable = aiResult.notViable;
   }
 
   const { workflows, manualConfirmationCandidates, cycles } =
@@ -261,5 +403,7 @@ export async function analyzeDependencies(
     aiOutcome,
     aiErrorCategory,
     aiErrorMessage,
+    aiBatchingLimitation,
+    notViable,
   };
 }

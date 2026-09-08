@@ -17,6 +17,17 @@ const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
   rejected: "danger",
 };
 
+/**
+ * Shared column template for the header row and every scenario row, so Method/Path/Category/
+ * Source/Status line up as real columns instead of a flowing row whose later fields land at a
+ * different position depending on how long the operation path happens to be. Method/Source/Status
+ * are fixed widths sized to their known label sets (badge text never varies beyond those values),
+ * while Path and Category share the remaining space proportionally rather than each reserving a
+ * generously wide fixed column most rows never fill.
+ */
+const ROW_GRID_COLUMNS =
+  "grid-cols-[3.75rem_minmax(0,1.6fr)_minmax(0,1fr)_8.5rem_7rem]";
+
 type PendingBulkAction = {
   scope: "filtered" | "selected";
   action: "accept" | "reject";
@@ -209,14 +220,26 @@ export function TestScenarioReviewList({
           </p>
         ) : (
           <ul className="min-w-0 divide-y divide-border rounded-md border border-border">
-            <li className="flex items-center gap-3 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
-              <span className="w-4" aria-hidden="true" />
-              <span>Scenario</span>
-              <span className="ml-auto">
+            <li className="flex flex-col gap-1 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
+              <div className="flex items-center gap-3">
+                <span className="w-4" aria-hidden="true" />
+                <div className={`grid min-w-0 flex-1 items-center gap-x-3 ${ROW_GRID_COLUMNS}`}>
+                  <span>Method</span>
+                  <span>Path</span>
+                  <span>Category</span>
+                  <span>Source</span>
+                  <span>Status</span>
+                </div>
+              </div>
+              <p className="pl-7 text-[11px] font-normal normal-case text-muted">
                 Select individual rows or use Select all filtered above
-              </span>
+              </p>
             </li>
-            {filtered.slice(0, visibleCount).map((item) => (
+            {filtered.slice(0, visibleCount).map((item) => {
+              const categoryLabel = item.scenario.targetField
+                ? `${item.scenario.category} — ${item.scenario.targetField}`
+                : item.scenario.category;
+              return (
               <Fragment key={item.scenarioId}>
                 <li className="flex min-w-0 items-center gap-3 px-3 py-2">
                   <input
@@ -230,18 +253,22 @@ export function TestScenarioReviewList({
                     type="button"
                     aria-pressed={item.scenarioId === selectedScenarioId}
                     onClick={() => onSelect(item)}
-                    className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
+                    className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
                       item.scenarioId === selectedScenarioId ? "bg-brand-50" : ""
                     }`}
                   >
                     <HttpMethodBadge method={item.scenario.operationMethod} />
-                    <span className="min-w-0 break-all font-mono text-slate-800">
+                    <span
+                      className="min-w-0 truncate font-mono text-slate-800"
+                      title={item.scenario.operationPath}
+                    >
                       {item.scenario.operationPath}
                     </span>
-                    <span className="text-muted">—</span>
-                    <span className="text-slate-700">
-                      {item.scenario.category}
-                      {item.scenario.targetField ? ` — ${item.scenario.targetField}` : ""}
+                    <span
+                      className="min-w-0 truncate text-slate-700"
+                      title={categoryLabel}
+                    >
+                      {categoryLabel}
                     </span>
                     <ProvenanceBadge
                       source={item.scenario.provenance.source}
@@ -259,7 +286,8 @@ export function TestScenarioReviewList({
                   </li>
                 )}
               </Fragment>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

@@ -100,6 +100,102 @@ describe("AiEnhancementStage", () => {
     );
   });
 
+  it("offers a retry action only for eligible batches (specs/015-ai-batch-retry FR-002, FR-003, FR-011)", () => {
+    render(
+      <AiEnhancementStage
+        status="partial"
+        failureExplanation={{
+          category: "unavailable",
+          summary: "Local AI is unavailable right now.",
+          nextStep: "Retry once it recovers.",
+          retryable: true,
+        }}
+        batchOutcomes={[
+          { index: 0, operationKeys: ["GET /pets"], status: "succeeded" },
+          {
+            index: 1,
+            operationKeys: ["POST /pets"],
+            status: "failed",
+            errorCategory: "PROVIDER_UNAVAILABLE",
+            failureExplanation: {
+              category: "unavailable",
+              summary: "Local AI is unavailable right now.",
+              nextStep: "Retry once it recovers.",
+              retryable: true,
+            },
+          },
+          {
+            index: 2,
+            operationKeys: ["GET /pets/{petId}"],
+            status: "failed",
+            errorCategory: "TIMEOUT",
+            failureExplanation: {
+              category: "too-slow",
+              summary: "The local AI model was too slow to finish this on this machine.",
+              nextStep: "Try a smaller specification.",
+              retryable: false,
+            },
+          },
+        ]}
+        onAdvanced={() => {}}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /retry batch 1/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry batch 2/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /retry batch 3/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("retries the requested batch and reflects the updated workflow (specs/015-ai-batch-retry)", async () => {
+    const onAdvanced = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({ workflow: { stages: { aiEnhancement: { status: "complete" } } } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AiEnhancementStage
+        status="partial"
+        failureExplanation={{
+          category: "unavailable",
+          summary: "Local AI is unavailable right now.",
+          nextStep: "Retry once it recovers.",
+          retryable: true,
+        }}
+        batchOutcomes={[
+          {
+            index: 3,
+            operationKeys: ["DELETE /pets/{petId}"],
+            status: "failed",
+            errorCategory: "PROVIDER_UNAVAILABLE",
+            failureExplanation: {
+              category: "unavailable",
+              summary: "Local AI is unavailable right now.",
+              nextStep: "Retry once it recovers.",
+              retryable: true,
+            },
+          },
+        ]}
+        onAdvanced={onAdvanced}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /retry batch 4/i }));
+
+    await waitFor(() => expect(onAdvanced).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/test-generation-workflow/ai-enhancement/retry-batch",
+      expect.objectContaining({ body: JSON.stringify({ batchIndex: 3 }) }),
+    );
+  });
+
   it("distinguishes a cancelled run from a failed one (FR-021)", () => {
     render(
       <AiEnhancementStage
@@ -274,6 +370,99 @@ describe("AiEnhancementStage run ceiling progress", () => {
     );
     expect(screen.getByLabelText("Live AI scenarios")).toHaveTextContent(
       "GET/itemspositive",
+    );
+  });
+});
+
+/**
+ * A run started before a page reload keeps running server-side (FR-007), but this component's
+ * local `running`/`progress` state previously reset to idle on remount — showing the trigger
+ * button as if nothing were happening, so clicking it only produced "already in progress" from
+ * the server's concurrency guard. `activeProgress` seeds state from the workflow snapshot the
+ * page already fetched on mount, restoring the live view the reload interrupted.
+ */
+describe("AiEnhancementStage resuming an in-progress run after reload", () => {
+  const PROGRESS_POLL_INTERVAL_MS = 2000;
+
+  beforeEach(() => vi.useFakeTimers());
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the live run view immediately at mount, without requiring a click on Enhance with AI", () => {
+    render(
+      <AiEnhancementStage
+        activeProgress={{
+          totalBatches: 3,
+          batches: [
+            { index: 0, status: "succeeded" },
+            { index: 1, status: "in-progress" },
+            { index: 2, status: "pending" },
+          ],
+          startedAt: new Date().toISOString(),
+          generatingSince: new Date().toISOString(),
+          phase: "generating",
+          cancelRequested: false,
+        }}
+        onAdvanced={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Enhancing…" })).toBeDisabled();
+    expect(screen.getByTestId("ai-enhancement-run-progress")).toBeInTheDocument();
+    expect(screen.getByLabelText("Batch progress")).toHaveTextContent(
+      "Batch 2: In progress",
+    );
+    // Clicking is disabled, so there is no path left to the server's "already in progress"
+    // rejection this behavior replaces.
+    expect(
+      screen.queryByRole("button", { name: "Enhance with AI" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps polling the resumed run and reports the outcome once it settles", async () => {
+    const onAdvanced = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            workflow: {
+              activeStageId: "scenarioReview",
+              stages: { aiEnhancement: { status: "complete" } },
+            },
+          }),
+      }),
+    );
+
+    render(
+      <AiEnhancementStage
+        activeProgress={{
+          totalBatches: 2,
+          batches: [
+            { index: 0, status: "succeeded" },
+            { index: 1, status: "in-progress" },
+          ],
+          startedAt: new Date().toISOString(),
+          generatingSince: new Date().toISOString(),
+          phase: "generating",
+          cancelRequested: false,
+        }}
+        onAdvanced={onAdvanced}
+      />,
+    );
+
+    await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS + 100));
+
+    expect(onAdvanced).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: true,
+        workflow: expect.objectContaining({ activeStageId: "scenarioReview" }),
+      }),
     );
   });
 });

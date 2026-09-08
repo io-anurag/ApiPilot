@@ -107,13 +107,23 @@ for aggregation purposes (FR-010: "reported per FR-007/FR-008").
 
 Given the list of `BatchOutcome`s for a run:
 
-| Successes   | Failures/not-attempted                                                                     | Aggregate outcome    |
-| ----------- | ------------------------------------------------------------------------------------------ | -------------------- |
-| all batches | none                                                                                       | `"success"`          |
-| ≥1 batch    | ≥1 batch                                                                                   | `"partial"`          |
-| none        | all batches, all `"failed"` with category `TIMEOUT`                                        | `"timeout"`          |
-| none        | all batches, all `"failed"` with category `PROVIDER_UNAVAILABLE`/`NOT_READY`/`LOAD_FAILED` | `"unavailable"`      |
-| none        | all batches, any other/mixed category (including any `"not-attempted"`)                    | `"invalid-response"` |
+| Successes | Actual failures (excludes `"not-attempted"`)                                          | Aggregate outcome    |
+| --------- | --------------------------------------------------------------------------------------- | --------------------- |
+| all batches | none                                                                                    | `"success"`           |
+| ≥1 batch  | ≥1 batch or `"not-attempted"`                                                            | `"partial"`            |
+| none      | ≥1, all `"failed"` with category `TIMEOUT`                                              | `"timeout"`            |
+| none      | ≥1, all `"failed"` with category `PROVIDER_UNAVAILABLE`/`NOT_READY`/`LOAD_FAILED`        | `"unavailable"`        |
+| none      | none (every batch `"not-attempted"`), or a genuine mix of failure categories             | `"invalid-response"`  |
+
+Classification with zero successes looks only at batches that actually *failed* — a
+`"not-attempted"` batch (specs/014-ai-batching-policy: the AI pass's own run ceiling ran out
+before it could be tried) carries no error category of its own and must not block classifying the
+run by what its real failures were. This was originally an all-or-nothing rule (any
+`"not-attempted"` batch forced `"invalid-response"` regardless of what the rest failed with,
+specs/014-ai-batching-policy); the corrected rule still falls through to `"invalid-response"` when
+there are zero real failures to classify by (every batch not-attempted) or when the real failures
+are themselves a genuine mix of categories, but no longer when every real failure agrees and the
+remainder simply never got a chance to run.
 
 This table is a direct generalization of each caller's existing single-batch
 `providerErrorMessage()`/category-mapping logic (`analyzeDependencies.ts`,

@@ -118,6 +118,23 @@ export interface DependencyAnalysisResult {
   aiOutcome: DependencyAIOutcome;
   aiErrorCategory?: AIErrorCategory;
   aiErrorMessage?: string;
+  /**
+   * Present whenever the AI-assisted pass ran in more than one unit (specs/014-ai-batching-policy
+   * FR-034): a relationship whose producer and consumer operations land in different units cannot
+   * be inferred by this pass, so its absence from `graph.relationships` must not be read as a
+   * confirmed absence — only deterministic matching and within-unit AI pairing were checked.
+   */
+  aiBatchingLimitation?: string;
+  /**
+   * Present only when the AI-assisted pass was refused before any inference was attempted,
+   * because its most expensive unit's projected cost could not fit the per-request budget
+   * (specs/014-ai-batching-policy). Distinct from every `aiErrorCategory`: nothing failed, and
+   * nothing was tried. Mirrors `AiEnhancementResult.notViable` (aiScenarioDesign.ts).
+   */
+  notViable?: {
+    projectedMs: number;
+    budgetMs: number;
+  };
 }
 
 /** Distinguishable reasons the analysis endpoint refuses to return a result. */

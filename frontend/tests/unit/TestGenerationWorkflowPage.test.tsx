@@ -355,6 +355,10 @@ describe("TestGenerationWorkflowPage", () => {
         manualConfirmationCandidates: [],
         cycles: [],
         aiOutcome: "success",
+        aiBatchingLimitation:
+          "The AI-assisted pass ran across 3 separate units. A relationship whose producer and " +
+          "consumer operations landed in different units could not be checked by AI and is not " +
+          "confirmed absent — only deterministic matching and within-unit AI pairing were checked.",
       },
     };
     vi.stubGlobal(
@@ -392,6 +396,10 @@ describe("TestGenerationWorkflowPage", () => {
     expect(screen.getByTestId("dependency-analysis-summary")).toHaveTextContent(
       "1 relationship found",
     );
+    // FR-034: batching's coverage limitation must reach the user, not stay a backend-only detail.
+    expect(screen.getByTestId("dependency-analysis-batching-limitation")).toHaveTextContent(
+      "could not be checked by AI",
+    );
 
     fireEvent.click(screen.getByTestId("stage-status-upload"));
     expect(screen.getByTestId("upload-stage-summary")).toHaveTextContent("valid.yaml");
@@ -401,5 +409,53 @@ describe("TestGenerationWorkflowPage", () => {
 
     fireEvent.click(screen.getByTestId("stage-status-workflowReview"));
     expect(screen.getByTestId("workflow-review-stage")).toBeInTheDocument();
+  });
+
+  it("explains a pre-flight 'not viable' dependency-analysis refusal to the user, not just the logs", async () => {
+    const stages = baseStages() as Record<string, { stageId: string; status: string }>;
+    stages.dependencyAnalysis = { stageId: "dependencyAnalysis", status: "complete" };
+    stages.workflowReview = { stageId: "workflowReview", status: "active" };
+    const workflow = {
+      id: "wf-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      activeStageId: "workflowReview",
+      stages,
+      specificationFilename: "valid.yaml",
+      apiModel: emptyApiModel,
+      dependencyAnalysis: {
+        requestId: "req-1",
+        graph: { relationships: [] },
+        workflows: [],
+        manualConfirmationCandidates: [],
+        cycles: [],
+        aiOutcome: "unavailable",
+        aiErrorMessage:
+          "The local AI model would need about 39s per unit, more than the configured 45s " +
+          "budget. Deterministic relationships were used instead; nothing was run, so no time " +
+          "was spent waiting.",
+        notViable: { projectedMs: 39000, budgetMs: 45000 },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/test-generation-workflow")) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ workflow }) };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    render(<TestGenerationWorkflowPage />);
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByTestId("stage-status-dependencyAnalysis"));
+    expect(screen.getByTestId("dependency-analysis-ai-error")).toHaveTextContent(
+      "more than the configured 45s budget",
+    );
   });
 });

@@ -1,8 +1,9 @@
 import type { AIDependencyCandidate, InferenceResponse } from "@apipilot/shared-domain";
 import { AIProviderError } from "../ai/errors";
+import { AI_DEPENDENCY_RESPONSE_VERSION } from "./aiDependencyPrompt";
 
 interface ParsedResponse {
-  responseVersion: 1;
+  responseVersion: typeof AI_DEPENDENCY_RESPONSE_VERSION;
   candidates: unknown[];
 }
 
@@ -22,13 +23,17 @@ export function parseAIDependencyResponse(response: InferenceResponse): ParsedRe
   } catch {
     throw new AIProviderError("INVALID_RESPONSE", "AI response was not valid JSON");
   }
-  if (!isRecord(value) || value.responseVersion !== 1 || !Array.isArray(value.candidates)) {
+  if (
+    !isRecord(value) ||
+    value.responseVersion !== AI_DEPENDENCY_RESPONSE_VERSION ||
+    !Array.isArray(value.candidates)
+  ) {
     throw new AIProviderError("INVALID_RESPONSE", "AI response did not match the supported response shape");
   }
   if (!value.candidates.every((candidate) => isRecord(candidate))) {
     throw new AIProviderError("INVALID_RESPONSE", "AI response contained a malformed candidate");
   }
-  return { responseVersion: 1, candidates: value.candidates };
+  return { responseVersion: AI_DEPENDENCY_RESPONSE_VERSION, candidates: value.candidates };
 }
 
 /** Type guard for one raw candidate's structural shape; does not validate against the ApiModel (see `validateAIDependencyCandidate.ts`). */

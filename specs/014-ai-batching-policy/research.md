@@ -160,6 +160,18 @@ feature in `plan.md`'s Complexity Tracking.
 - *A ceiling derived from operation count*: rejected as surprising — the user cannot predict it, and
   it would make the same specification behave differently on different hardware.
 
+**Addendum (Phase 8/T063, after real-specification measurement): the per-unit figure above was an
+estimate, not yet a measurement, and the real figure is worse.** Running enhancement against a real
+39-operation specification measured **30-60s per unit**, not the ~21s used above — units settle early
+when the model closes its JSON document and run to the full timeout when it does not. At that real
+rate the 5-minute default covers roughly **5-10 operations**, not 14, and the "15-30 operations"
+practical ceiling stated below and in `plan.md`'s Complexity Tracking is correspondingly optimistic.
+The ceiling's *purpose* is unaffected — it still converts an impossible unbounded run into a useful
+partial one — but a reader sizing a specification against this feature should use 5-10 as the
+current, measured figure. Recorded in `backend/src/ai/modelConfig.ts`'s
+`DEFAULT_ENHANCEMENT_RUN_BUDGET_MS` comment and `tasks.md`'s US3 status note when the real
+measurement first surfaced; added here so research.md carries it too.
+
 ---
 
 ## Decision 6: Dependency analysis needs a prompt projection before batching helps
@@ -214,11 +226,60 @@ The dependency-analysis figure is deliberately **not** fixed here: with the curr
 be measured meaningfully, since every size times out. Decision 6's projection must land first, and the
 figure is then settled by measuring detected relationships, not duration.
 
+**Addendum (T054, after Decision 6's projection landed): the figure is 3, chosen for memory safety
+rather than for completing inside `AI_DEPENDENCY_TIMEOUT_MS`.**
+
+Measured directly from the shipped projection (`buildAIDependencyPrompt`, not an estimate):
+
+| Fixture | Unit size | Prompt |
+| --- | --- | --- |
+| `crudChainApiModel` | 1 op | 706 chars |
+| `crudChainApiModel` | 3 ops | 1,106 chars |
+| `buildLargeApiModel` | 1 op | 675 chars |
+| `buildLargeApiModel` | 3 ops | 1,008 chars |
+| `buildLargeApiModel` | 5 ops | 1,341 chars |
+| `buildLargeApiModel` | 51 ops (today's unbounded behavior) | 8,907 chars (≈2,969 tokens) |
+
+The 51-operation figure is the one that actually crashed: sent as a single unbounded unit, it produced
+a ~20,500-token *tokenized* prompt (tokenization is not linear with the character estimate at this
+size) that the local ONNX runtime failed to allocate memory for — a native "bad allocation", not a
+graceful over-budget refusal. 3 operations keeps a unit in the same low-hundreds-of-tokens range as
+one enhancement unit, nowhere near that failure mode, while still letting operations up to two
+positions apart share a unit (`knownRelationships`' actual spread, T050's coverage test).
+
+Applying this codebase's own already-measured throughput seeds (`DEFAULT_PREFILL_MS_PER_TOKEN=42`,
+`CHARS_PER_TOKEN_ESTIMATE=3`, both from real measurement on the reference profile, Decision 6/10) to
+these real character counts projects **prefill alone** at ~9.9s for a *single*-operation unit
+(706 chars ÷ 3 × 42ms) — already past the 8s `AI_DEPENDENCY_TIMEOUT_MS`, before any decode time and
+before any unit size larger than one. This is consistent with the earlier finding that this pass fails
+even more decisively at the shipped timeout (Decision 6): on this reference hardware, no unit size
+completes inside 8 seconds, because `withTimeout` cannot preempt the local provider's synchronous
+generation (`localProvider.ts`) — the real call in the crash log ran 28.3s against an 8s configured
+timeout, confirming the setting reports lateness rather than preventing it.
+
+The consequence is that `AI_DEPENDENCY_RUN_BUDGET_MS` (T056), not unit size, is what actually bounds
+this pass's wall-clock cost on hardware like the reference profile: it is checked *between* units
+(where JavaScript can act on it) rather than relied on to interrupt one already in flight. A `partial`
+outcome — some units settle before the run budget elapses, the rest become "not-attempted" — is
+therefore the expected steady state here, not a bug; deterministic relationships are unaffected either
+way (FR-031). Raising `AI_DEPENDENCY_OPERATIONS_PER_UNIT` or `AI_INFERENCE_TIMEOUT_MS`-equivalent
+settings for dependency analysis is a decision for faster hardware or an accelerator, made through
+configuration, not a code change.
+
 **Alternatives considered**:
 
 - *One shared constant*: rejected — guarantees the wrong size for at least one caller.
-- *Fix the dependency figure now*: rejected — it would be a guess presented as a measurement, which is
-  what this research phase exists to prevent.
+- *Fix the dependency figure now (before Decision 6 landed)*: rejected — it would have been a guess
+  presented as a measurement, which is what this research phase exists to prevent.
+- *Size for sub-8-second completion*: rejected — the measurement above shows no unit size achieves
+  this on the reference hardware; sizing for it would mean an ever-shrinking unit chasing a target it
+  cannot reach while actively losing cross-unit coverage (Decision 7's core tradeoff) for no benefit.
+- *A live multi-run timing sweep against the real local model in this environment*: not performed —
+  each real call on this hardware measures 14-30+ seconds even for a single small unit (observed in
+  production logs), and the character-count-plus-established-rate projection above already answers the
+  question a timing sweep would (whether any practical unit size fits the 8s budget: no) without
+  spending many minutes of real inference to confirm a conclusion the arithmetic already gives
+  directly from real, already-shipped measurements.
 
 ---
 
@@ -239,6 +300,14 @@ The configured seed rates are approximately correct on this hardware and need no
 
 - *Estimate the whole run and refuse if it exceeds the run ceiling*: rejected — that is what `partial`
   is for. A long run that delivers useful partial results must not be refused outright.
+
+**Addendum (Phase 8/T063): `DEFAULT_DECODE_MS_PER_TOKEN` is `180` in the shipped code, not the `130`
+recorded above.** A later, unrelated commit (`7e0621a`) raised it with no accompanying comment or
+new measurement. `180` against the ~140 ms/token measured here biases the pre-flight estimate toward
+refusing more marginal runs than strictly necessary — the fail-safe direction (constitution XIX) —
+so it was left as shipped rather than reverted on a guess; reverting without a fresh measurement
+would itself be an unverified change, just in the other direction. T061 re-measures this against
+real hardware; this addendum exists so the discrepancy is visible in the meantime rather than silent.
 
 ---
 
@@ -304,7 +373,7 @@ designed — refusing to fabricate contract facts — not a regression.
 **Consequence for Decision 3**: the evidence for the *conditional* example rule is now weaker than it
 looked. The example demonstrates request shape as well as reply shape, and body-less operations were
 measured getting request shape wrong without it. Stating `requestShape` for every prompt addresses
-that without paying the example's cost everywhere, but T058 should re-examine whether always-on is
+that without paying the example's cost everywhere, but T060 should re-examine whether always-on is
 now the better rule.
 
 **Alternatives considered**:

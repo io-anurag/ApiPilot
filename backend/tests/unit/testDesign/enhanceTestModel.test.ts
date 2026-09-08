@@ -10,7 +10,7 @@ import {
   buildLargeAiScenarioApiModel,
   buildLargeAiScenarioBaseline,
 } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
-import { enhanceTestModel } from "../../../src/testDesign/enhanceTestModel";
+import { enhanceTestModel, retryOneBatch } from "../../../src/testDesign/enhanceTestModel";
 import {
   AI_SCENARIO_MAX_OUTPUT_TOKENS,
   buildAIScenarioPrompt,
@@ -169,6 +169,149 @@ describe("enhanceTestModel", () => {
     },
   );
 
+});
+
+describe("retryOneBatch (specs/015-ai-batch-retry)", () => {
+  it("validates against the full ApiModel and returns the batch's newly retained scenarios", async () => {
+    const result = await retryOneBatch(
+      aiScenarioApiModel.operations,
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      provider(
+        JSON.stringify({
+          responseVersion: 1,
+          candidates: [
+            {
+              candidateId: "retry-valid-1",
+              operationPath: "/accounts",
+              operationMethod: "POST",
+              category: "invalid-format",
+              targetLocation: "body",
+              targetField: "email",
+              request: {
+                pathParameters: {},
+                queryParameters: {},
+                headers: {},
+                body: { email: "bad" },
+              },
+              assertions: [{ type: "status-code", expectedStatusCode: "409" }],
+              rationale: "Exercise a malformed email value.",
+              confidence: 0.8,
+              assumptions: [],
+            },
+            {
+              // Same rejection path as the normal-run test above: an operation absent from the
+              // full ApiModel must still be rejected, proving retryOneBatch validates against the
+              // full model rather than a projection scoped to just the retried operations.
+              candidateId: "retry-unsafe-1",
+              operationPath: "/missing",
+              operationMethod: "POST",
+              category: "positive",
+              request: { pathParameters: {}, queryParameters: {}, headers: {} },
+              assertions: [],
+              rationale: "Unknown operation should not execute.",
+              confidence: 0.8,
+              assumptions: [],
+            },
+          ],
+        }),
+      ),
+      "retry-req-1",
+      4,
+    );
+
+    expect(result.outcome).toBe("succeeded");
+    if (result.outcome !== "succeeded") throw new Error("unreachable");
+    expect(result.scenarios).toHaveLength(1);
+    expect(result.scenarios[0].provenance.source).toBe("AI");
+    expect(result.scenarios[0].provenance).toMatchObject({ aiBatchIndex: 4 });
+  });
+
+  it("returns a structured failure, never throwing, when the provider errors", async () => {
+    const result = await retryOneBatch(
+      aiScenarioApiModel.operations,
+      aiScenarioApiModel,
+      aiScenarioBaseline,
+      {
+        ...provider(""),
+        infer: async () => {
+          throw Object.assign(new Error("unavailable"), {
+            category: "PROVIDER_UNAVAILABLE",
+          });
+        },
+      },
+      "retry-req-2",
+      0,
+    );
+
+    expect(result).toEqual({
+      outcome: "failed",
+      errorCategory: "PROVIDER_UNAVAILABLE",
+      errorMessage: "unavailable",
+    });
+  });
+
+  it("dedupes only against the deterministic baseline, not against other batches' prior output", async () => {
+    const candidate = {
+      candidateId: "retry-dup-1",
+      operationPath: "/accounts",
+      operationMethod: "POST",
+      category: "invalid-format",
+      targetLocation: "body",
+      targetField: "email",
+      request: {
+        pathParameters: {},
+        queryParameters: {},
+        headers: {},
+        body: { email: "bad" },
+      },
+      assertions: [{ type: "status-code", expectedStatusCode: "409" }],
+      rationale: "Exercise a malformed email value.",
+      confidence: 0.8,
+      assumptions: [],
+    };
+    // Baseline already contains an equivalent scenario for this exact candidate content, via a
+    // prior run's own baseline-scoped dedupe — retryOneBatch must still catch this against the
+    // *deterministic* baseline it's given, per research.md Decision 6.
+    const baselineWithEquivalentEntry = {
+      scenarios: [
+        ...aiScenarioBaseline.scenarios,
+        {
+          id: "already-there",
+          operationPath: "/accounts",
+          operationMethod: "POST",
+          category: "invalid-format" as const,
+          targetLocation: "body" as const,
+          targetField: "email",
+          request: candidate.request,
+          assertions: candidate.assertions as never,
+          provenance: {
+            source: "RULE" as const,
+            rule: "existing",
+            description: "pre-existing",
+            duplicateOfRules: [],
+          },
+        },
+      ],
+    };
+
+    const result = await retryOneBatch(
+      aiScenarioApiModel.operations,
+      aiScenarioApiModel,
+      baselineWithEquivalentEntry,
+      provider(JSON.stringify({ responseVersion: 1, candidates: [candidate] })),
+      "retry-req-3",
+      1,
+    );
+
+    expect(result.outcome).toBe("succeeded");
+    if (result.outcome !== "succeeded") throw new Error("unreachable");
+    // Deduplicated against the baseline's pre-existing equivalent entry, so nothing new surfaces.
+    expect(result.scenarios).toHaveLength(0);
+  });
+});
+
+describe("enhanceTestModel", () => {
   it("preserves the baseline for malformed provider output", async () => {
     const logSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const result = await enhanceTestModel(
