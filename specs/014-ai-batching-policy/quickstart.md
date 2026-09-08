@@ -77,8 +77,9 @@ Start a run on a specification with more than a handful of operations.
 
 ## Scenario 3 — A large specification settles at the ceiling (US3, SC-006)
 
-Use a specification whose operation count clearly exceeds the run budget — at ~21s per operation, a
-5-minute default covers roughly 14.
+Use a specification whose operation count clearly exceeds the run budget — a 5-minute default covers
+roughly 5-10 operations at the measured 30-60s/operation rate (research.md Decision 5 addendum;
+superseded the original ~21s/14-operation estimate).
 
 ```bash
 AI_ENHANCEMENT_RUN_BUDGET_MS=60000 npm run dev   # shorten to make this quick to observe

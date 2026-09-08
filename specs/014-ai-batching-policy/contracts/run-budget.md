@@ -16,7 +16,9 @@ Validated at startup with existing AI configuration (FR-011) and documented in `
 Distinct from `AI_INFERENCE_TIMEOUT_MS`, which bounds a *single* request.
 
 Default rationale: at ~21s per single-operation unit, 5 minutes covers roughly 14 operations
-(research.md Decision 5).
+(research.md Decision 5). **Superseded by measurement against a real 39-operation specification**:
+30-60s per unit, so 5 minutes actually covers roughly **5-10 operations** (research.md Decision 5
+addendum, Phase 8/T063). The mechanism this contract describes is unaffected.
 
 ## Run budget behaviour
 

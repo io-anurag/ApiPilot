@@ -23,10 +23,15 @@ export function OperationList({
           <button
             type="button"
             onClick={() => onSelect(operation)}
-            className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
+            // Method badge width varies with its text ("GET" vs "DELETE"), so a plain flex row
+            // starts the path at a different x-position per row. A fixed-width first column
+            // keeps every path aligned regardless of which verb precedes it.
+            className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
           >
             <HttpMethodBadge method={operation.method} />
-            <span className="font-mono text-slate-800">{operation.path}</span>
+            <span className="min-w-0 truncate font-mono text-slate-800" title={operation.path}>
+              {operation.path}
+            </span>
           </button>
         </li>
       ))}

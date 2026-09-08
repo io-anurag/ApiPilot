@@ -358,7 +358,10 @@ describe("aiEnhancementStage (progress + incremental reveal, specs/012-ai-enhanc
 
     const wf = await runAiEnhancement(provider);
 
-    expect(capturedProgress?.totalBatches).toBe(Math.ceil(operationCount / 2));
+    // Default unit size is 1 operation (specs/014-ai-batching-policy research.md Decision 1: larger
+    // units measured truncating mid-document), so a multi-operation specification plans one unit per
+    // operation rather than the "/2" this test asserted before Phase 8 restored that default.
+    expect(capturedProgress?.totalBatches).toBe(Math.ceil(operationCount / 1));
     // Progress is cleared the moment the stage reaches a terminal status.
     expect(wf.stages.aiEnhancement.progress).toBeUndefined();
     expect(wf.stages.aiEnhancement.status).toBe("complete");

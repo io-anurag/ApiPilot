@@ -44,6 +44,17 @@ export interface AggregateOutcomeResult {
  * Derives the aggregate outcome for a run from its per-batch outcomes, per the table in
  * data-model.md. A pure function so it can be unit-tested directly, independent of any real
  * provider call (constitution XXI).
+ *
+ * With zero successes, classification looks only at batches that actually *failed* — a
+ * "not-attempted" batch (the run budget ran out before it could be tried) carries no category of
+ * its own and must not block classifying the run by what its failures actually were. This was
+ * previously an all-or-nothing check (`notAttemptedCount === 0`), so a run where every attempted
+ * batch genuinely timed out, but the run budget also ran out before the remaining batches could be
+ * tried, fell through to the generic `"invalid-response"` bucket — reporting "AI provider returned
+ * invalid output" for a run the provider never actually returned anything invalid from. A
+ * `"not-attempted"` batch is still counted in `failureCount`/`notAttemptedCount`, and a run where
+ * *every* batch was not-attempted (no real failures to classify by) still correctly falls through
+ * to `"invalid-response"`, since `failures.length > 0` still gates each category branch below.
  */
 export function deriveAggregateOutcome(
   outcomes: readonly BatchOutcome[],
@@ -76,11 +87,7 @@ export function deriveAggregateOutcome(
       totalCount,
     };
   }
-  if (
-    notAttemptedCount === 0 &&
-    failures.length > 0 &&
-    failures.every((f) => f.errorCategory === "TIMEOUT")
-  ) {
+  if (failures.length > 0 && failures.every((f) => f.errorCategory === "TIMEOUT")) {
     return {
       outcome: "timeout",
       errorCategory: lastFailure?.errorCategory,
@@ -91,7 +98,6 @@ export function deriveAggregateOutcome(
     };
   }
   if (
-    notAttemptedCount === 0 &&
     failures.length > 0 &&
     failures.every((f) => UNAVAILABLE_CATEGORIES.includes(f.errorCategory))
   ) {

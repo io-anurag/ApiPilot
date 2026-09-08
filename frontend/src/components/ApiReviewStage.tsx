@@ -52,7 +52,10 @@ export function ApiReviewStage({
       <OperationList operations={apiModel.operations} onSelect={setSelected} />
       {selected && <OperationDetail operation={selected} />}
       {!readOnly && (
-        <div className="flex items-center gap-3">
+        // Sticky rather than in normal flow: with dozens of discovered operations to review, the
+        // continue action must stay reachable without scrolling past the entire list (matches
+        // the same fix applied to ScenarioReviewStage's "Finalize Review" bar).
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
           <button
             type="button"
             onClick={handleContinue}

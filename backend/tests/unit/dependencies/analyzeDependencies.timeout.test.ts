@@ -5,6 +5,7 @@ import {
   DependencyAnalysisTimeoutError,
 } from "../../../src/dependencies/analyzeDependencies";
 import { buildLargeApiModel, crudChainApiModel } from "../../fixtures/dependencies/dependencyFixtures";
+import { AI_DEPENDENCY_RESPONSE_VERSION } from "../../../src/dependencies/aiDependencyPrompt";
 
 /**
  * A provider whose single inference takes `delayMs` and then resolves however `respond` says.
@@ -47,7 +48,7 @@ function successResponse(request: InferenceRequest): InferenceResponse {
     contractVersion: 1,
     requestId: request.requestId,
     status: "success",
-    content: JSON.stringify({ responseVersion: 1, candidates: [] }),
+    content: JSON.stringify({ responseVersion: AI_DEPENDENCY_RESPONSE_VERSION, candidates: [] }),
     modelId: "slow-test-model",
     provider: "mock",
     durationMs: 0,
@@ -79,7 +80,12 @@ describe("analyzeDependencies timeout guard", () => {
   it("degrades rather than throwing when a single-batch AI pass overruns the analysis budget", async () => {
     const provider = slowProvider(40, timedOutResponse);
 
-    const result = await analyzeDependencies(crudChainApiModel, provider, { timeoutMs: 10 });
+    // Work-bounded sizing disabled (`maxOperationsPerBatch: 0`) so this stays genuinely
+    // single-batch as titled, isolated from specs/014's default unit size.
+    const result = await analyzeDependencies(crudChainApiModel, provider, {
+      timeoutMs: 10,
+      maxOperationsPerBatch: 0,
+    });
 
     expect(result.aiOutcome).toBe("timeout");
     expect(result.aiErrorCategory).toBe("TIMEOUT");
@@ -91,7 +97,10 @@ describe("analyzeDependencies timeout guard", () => {
   it("keeps the result of a successful AI pass that took longer than the analysis budget", async () => {
     const provider = slowProvider(40, successResponse);
 
-    const result = await analyzeDependencies(crudChainApiModel, provider, { timeoutMs: 10 });
+    const result = await analyzeDependencies(crudChainApiModel, provider, {
+      timeoutMs: 10,
+      maxOperationsPerBatch: 0,
+    });
 
     expect(result.aiOutcome).toBe("success");
     expect(result.graph.relationships.length).toBeGreaterThan(0);

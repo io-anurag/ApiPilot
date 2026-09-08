@@ -213,18 +213,49 @@ describe("deriveAggregateOutcome", () => {
     expect(result.outcome).toBe("unavailable");
   });
 
-  it("returns 'invalid-response' for mixed/other all-failure categories, including any not-attempted batch", () => {
+  it("returns 'invalid-response' for mixed/other all-failure categories", () => {
     const mixedCategories = deriveAggregateOutcome([
       { status: "failed", errorCategory: "TIMEOUT", errorMessage: "a" },
       { status: "failed", errorCategory: "INVALID_RESPONSE", errorMessage: "b" },
     ]);
     expect(mixedCategories.outcome).toBe("invalid-response");
+  });
 
-    const withNotAttempted = deriveAggregateOutcome([
-      { status: "failed", errorCategory: "TIMEOUT", errorMessage: "a" },
+  it("returns 'invalid-response' when every batch is not-attempted and none was ever tried", () => {
+    const result = deriveAggregateOutcome([
+      { status: "not-attempted" },
       { status: "not-attempted" },
     ]);
-    expect(withNotAttempted.outcome).toBe("invalid-response");
+    expect(result.outcome).toBe("invalid-response");
+  });
+
+  /**
+   * A "not-attempted" batch carries no error category of its own (the run budget ran out before
+   * it could even be tried), so it must not block classifying the run by what its actual failures
+   * were. Previously this fell through to the generic "invalid-response" bucket, reporting "AI
+   * provider returned invalid output" for a run where the provider only ever timed out.
+   */
+  it("classifies by the actual failures' category even when the rest were not-attempted, rather than the generic bucket", () => {
+    const allTimedOut = deriveAggregateOutcome([
+      { status: "failed", errorCategory: "TIMEOUT", errorMessage: "a" },
+      { status: "failed", errorCategory: "TIMEOUT", errorMessage: "b" },
+      { status: "not-attempted" },
+    ]);
+    expect(allTimedOut.outcome).toBe("timeout");
+
+    const allUnavailable = deriveAggregateOutcome([
+      { status: "failed", errorCategory: "PROVIDER_UNAVAILABLE", errorMessage: "a" },
+      { status: "not-attempted" },
+    ]);
+    expect(allUnavailable.outcome).toBe("unavailable");
+
+    // A genuine mix of failure categories alongside a not-attempted batch is still ambiguous.
+    const mixedWithNotAttempted = deriveAggregateOutcome([
+      { status: "failed", errorCategory: "TIMEOUT", errorMessage: "a" },
+      { status: "failed", errorCategory: "INVALID_RESPONSE", errorMessage: "b" },
+      { status: "not-attempted" },
+    ]);
+    expect(mixedWithNotAttempted.outcome).toBe("invalid-response");
   });
 });
 

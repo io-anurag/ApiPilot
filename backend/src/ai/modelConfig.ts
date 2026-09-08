@@ -87,15 +87,58 @@ const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.0;
  * Operations per AI request for scenario enhancement (specs/014-ai-batching-policy research.md
  * Decision 1).
  *
- * Two, so normal specifications are processed in fewer expensive model calls and completed
- * results become useful sooner. Context-based splitting remains an upper safety bound, and callers
- * can lower this to one for slower or smaller models if a two-operation response becomes too long.
+ * One, because that is what measurement supports rather than what seems generous: across the six
+ * operations of a real springdoc-style specification, one operation per request produced a validly
+ * shaped reply for all six, while two and three operations both truncated mid-document even at a
+ * larger output allowance, and a whole-specification request made the model echo the request back
+ * instead of answering it.
  *
  * Configurable rather than fixed because that result describes this CPU and this 0.5B model, not
  * the domain: a faster machine or a stronger model may well manage more, and should be able to try
  * without a code change.
+ *
+ * (Phase 8 reconciliation, T063: this constant was found set to `2` with a throughput-only
+ * rationale and no accompanying measurement, directly contradicting Decision 1's truncation finding
+ * above — see research.md's addendum to Decision 1. The repository's own `.env` already overrode it
+ * back to `1`, so no running instance here was actually affected; only this fallback, used when the
+ * variable is unset, was wrong.)
  */
-const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 2;
+const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
+
+/**
+ * Operations per AI request for dependency analysis (specs/014-ai-batching-policy research.md
+ * Decision 7, T054).
+ *
+ * Three. Unlike enhancement, dependency analysis needs several operations in the same unit to
+ * find a relationship between them, so the smallest unit is not the best unit here (FR-028,
+ * FR-029) — but an unbounded unit is what let a 51-operation specification build a single
+ * ~20,500-token prompt that crashed the local runtime's memory allocator outright, rather than
+ * failing an input-size check. Three operations at the projected per-operation cost (T051) keeps
+ * a unit's prompt in the same rough order as one enhancement unit while still letting a producer
+ * and consumer up to two positions apart share a unit, which covers most of the
+ * `knownRelationships` fixture's spread (SC-013). `budgetChars` remains the upper safety bound for
+ * specifications with unusually large per-operation schemas.
+ *
+ * Configurable rather than fixed for the same reason as enhancement's: this describes what this
+ * CPU and this 0.5B model can prefill/decode inside `AI_DEPENDENCY_TIMEOUT_MS`, not the domain,
+ * and a faster machine or stronger model should be able to raise it without a code change.
+ */
+const DEFAULT_DEPENDENCY_OPERATIONS_PER_UNIT = 3;
+
+/**
+ * Wall-clock ceiling for a whole dependency-analysis AI-assisted pass (specs/014-ai-batching-policy
+ * FR-033, T056), distinct from `ANALYSIS_TIMEOUT_MS` (which governs only deterministic matching and
+ * workflow assembly) and from `AI_DEPENDENCY_TIMEOUT_MS` (which bounds one request).
+ *
+ * Two minutes, matching the "this can take a couple of minutes" copy already shown while
+ * finalizing scenario review. With `AI_DEPENDENCY_TIMEOUT_MS` raised to a realistic 45s per
+ * request (see its own doc comment — the original 8s was never achievable on the reference
+ * hardware even for a single operation), this budget needs to cover more than one real attempt:
+ * two minutes allows roughly two full-cost units, or several cheaper/faster ones. Remaining units
+ * become "not-attempted" once the ceiling is reached, and whatever succeeded before then is
+ * retained (`partial`), matching enhancement's run-budget behavior.
+ */
+const DEFAULT_DEPENDENCY_RUN_BUDGET_MS = 120_000;
 
 /**
  * Wall-clock ceiling for a whole enhancement run (research.md Decision 5).
@@ -161,6 +204,19 @@ export interface InferencePlanningConfig {
    * size, so a run needs a bound of its own.
    */
   enhancementRunBudgetMs: number;
+  /**
+   * Operations per AI request for dependency analysis (specs/014-ai-batching-policy FR-028,
+   * FR-029). Larger than enhancement's by design: this pass needs several operations in view at
+   * once to find a relationship between them, but still bounded so a large specification cannot
+   * build one unbounded prompt (the crash this feature exists to prevent).
+   */
+  dependencyOperationsPerUnit: number;
+  /**
+   * Wall-clock ceiling for a whole dependency-analysis AI-assisted pass (FR-033), distinct from
+   * `ANALYSIS_TIMEOUT_MS` (deterministic matching and workflow assembly only) and from
+   * `AI_DEPENDENCY_TIMEOUT_MS` (one request).
+   */
+  dependencyRunBudgetMs: number;
 }
 
 /** Resolved AI configuration for the current process: which provider to construct, and its model settings. */
@@ -227,6 +283,15 @@ export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
         env.AI_ENHANCEMENT_RUN_BUDGET_MS,
         DEFAULT_ENHANCEMENT_RUN_BUDGET_MS,
       ),
+    ),
+    dependencyOperationsPerUnit: Math.floor(
+      readPositiveNumber(
+        env.AI_DEPENDENCY_OPERATIONS_PER_UNIT,
+        DEFAULT_DEPENDENCY_OPERATIONS_PER_UNIT,
+      ),
+    ),
+    dependencyRunBudgetMs: Math.floor(
+      readPositiveNumber(env.AI_DEPENDENCY_RUN_BUDGET_MS, DEFAULT_DEPENDENCY_RUN_BUDGET_MS),
     ),
   };
 
