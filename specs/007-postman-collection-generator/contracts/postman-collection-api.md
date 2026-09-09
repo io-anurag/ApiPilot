@@ -7,6 +7,8 @@ a network request to any API described by the specification and never invokes AI
 ## `POST /api/test-models/postman-collection`
 
 Generates the collection, environment, and accompanying document from an approved TestModel.
+AP-016 callers may additionally provide `workflowContext` containing dependency-analysis
+workflows and the workflow IDs explicitly approved during workflow review.
 
 ### Request
 
@@ -14,6 +16,10 @@ Generates the collection, environment, and accompanying document from an approve
 {
   "apiModel": { "operations": [], "securitySchemes": {}, "summary": {} },
   "testModel": { "scenarios": [] },
+  "workflowContext": {
+    "workflows": [],
+    "approvedWorkflowIds": []
+  },
   "options": {
     "collectionName": "Orders API tests",
     "baseUrl": "https://qa.internal.example",
@@ -28,6 +34,12 @@ Generates the collection, environment, and accompanying document from an approve
 `options` is optional in full and in every field. `variableValues` accepts only names the generated
 collection actually references; an unknown name is a validation error rather than a silently ignored
 field. Values supplied for credential variables are written to the environment artifact only.
+
+`workflowContext` is optional and preserves the AP-007 no-workflow behavior when omitted. When
+present, only IDs in `approvedWorkflowIds` are rendered. Supported approved workflows become
+ordered folders with safe response-to-request handoffs; unsupported approved workflows are omitted
+as complete sequences and reported in `limitations` and `readme`. Unapproved workflows are never
+rendered.
 
 ### Success Response: `200 OK`
 
@@ -91,7 +103,13 @@ field. Values supplied for credential variables are written to the environment a
   "summary": {
     "requestCount": 42,
     "folderCount": 5,
-    "byProvenance": { "RULE": 36, "AI": 4 }
+    "byProvenance": { "RULE": 36, "AI": 4 },
+    "workflowCount": 1,
+    "workflowRequestCount": 2,
+    "standaloneRequestCount": 40,
+    "workflowVariableCount": 1,
+    "unsupportedWorkflowCount": 0,
+    "omittedWorkflowCount": 0
   }
 }
 ```
@@ -146,6 +164,8 @@ specification content, or variable values (FR-025).
 ## Guarantees asserted by contract tests
 
 - No response field contains a literal host; every request URL begins with `{{baseUrl}}` (FR-008).
+- Workflow requests carry safe workflow, step, scenario, and relationship provenance, and workflow
+  variables retain their source workflow relationship.
 - No credential value appears in `collection`, `readme`, or any error body; supplied credential
   values appear only in `environment.values` with `type: "secret"` (FR-011, SC-003, SC-004).
 - Every `{{…}}` reference in the collection is declared in both `collection.variable` and

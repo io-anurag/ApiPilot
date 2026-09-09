@@ -109,7 +109,11 @@ function buildBatchOutcomeRecord(
     operationKeys,
     status: "failed",
     errorCategory: outcome.errorCategory,
-    failureExplanation: explainFailure(outcome.errorCategory as FailureCause),
+    // A total run with unusable output is not retryable as a whole, but an individual failed
+    // batch is exactly what the batch-retry workflow is designed to recover.
+    failureExplanation: explainFailure(outcome.errorCategory as FailureCause, {
+      partialRun: true,
+    }),
   };
 }
 
@@ -241,6 +245,25 @@ export async function runAiEnhancement(
       workflow.deterministicTestModel!,
       provider,
       {
+        onPlan: (total) => {
+          const current = getCurrentWorkflow()!.stages.aiEnhancement.progress;
+          const generatingSince = current?.generatingSince ?? new Date().toISOString();
+          setAiEnhancementProgress({
+            totalBatches: total,
+            batches: Array.from({ length: total }, (_, index) => ({
+              index,
+              status: "pending" as const,
+            })),
+            startedAt: current?.startedAt ?? new Date().toISOString(),
+            phase: current?.phase ?? "generating",
+            generatingSince,
+            cancelRequested: current?.cancelRequested ?? false,
+            runBudgetRemainingMs: Math.max(
+              0,
+              runBudgetMs - (Date.now() - new Date(generatingSince).getTime()),
+            ),
+          });
+        },
         isCancelled: () => isAiEnhancementCancelRequested(),
         onPrepared: () => {
           // The engine is loaded; everything from here is generation, and elapsed time shown to
@@ -371,6 +394,7 @@ export async function runAiEnhancement(
       }
       return explainFailure(
         (result.aiErrorCategory ?? "INVALID_RESPONSE") as FailureCause,
+        { partialRun: result.aiProviderOutcome === "partial" },
       );
     };
 
@@ -383,7 +407,7 @@ export async function runAiEnhancement(
         result.aiProviderOutcome === "success" ? "complete" : "partial",
         result.aiProviderOutcome === "partial"
           ? {
-              aiErrorCategory: result.aiErrorCategory,
+              aiErrorCategory: wasCancelled ? undefined : result.aiErrorCategory,
               aiErrorMessage: result.aiErrorMessage,
               failureExplanation: explainOutcome(),
               cancelled: wasCancelled || undefined,
@@ -406,7 +430,7 @@ export async function runAiEnhancement(
     }
 
     updateStage("aiEnhancement", "skipped", {
-      aiErrorCategory: result.aiErrorCategory,
+      aiErrorCategory: wasCancelled ? undefined : result.aiErrorCategory,
       aiErrorMessage: result.aiErrorMessage,
       failureExplanation: explainOutcome(),
       cancelled: wasCancelled || undefined,
@@ -489,7 +513,9 @@ function recomputeAggregateStatus(): TestGenerationWorkflow {
 }
 
 /** Merges a successful batch retry's newly produced scenarios into `reviewWorkspace` (FR-004), via the same exact-scenario-ID path used for incremental reveal during a normal run. */
-function mergeRetriedScenariosIntoWorkspace(newScenarios: ReviewScenario["scenario"][]): void {
+function mergeRetriedScenariosIntoWorkspace(
+  newScenarios: ReviewScenario["scenario"][],
+): void {
   if (newScenarios.length === 0) return;
   const workspace = getCurrentWorkflow()!.reviewWorkspace!;
   const existingIds = new Set(workspace.scenarios.map((s) => s.scenarioId));
@@ -529,7 +555,10 @@ function appendRetryIntoEnhancementResult(
           ...enhancement.aiCandidates.deduplicated,
           ...result.candidateOutcomes.deduplicated,
         ],
-        rejected: [...enhancement.aiCandidates.rejected, ...result.candidateOutcomes.rejected],
+        rejected: [
+          ...enhancement.aiCandidates.rejected,
+          ...result.candidateOutcomes.rejected,
+        ],
         nonExecutable: [
           ...enhancement.aiCandidates.nonExecutable,
           ...result.candidateOutcomes.nonExecutable,
@@ -588,7 +617,10 @@ export async function retryAiEnhancementBatch(
       throw new BatchNotFoundError(batchIndex);
     }
     if (target.status === "succeeded") {
-      throw new BatchNotRetryableError(batchIndex, "already succeeded and cannot be retried.");
+      throw new BatchNotRetryableError(
+        batchIndex,
+        "already succeeded and cannot be retried.",
+      );
     }
     if (target.failureExplanation?.retryable === false) {
       throw new BatchNotRetryableError(
@@ -608,7 +640,9 @@ export async function retryAiEnhancementBatch(
     progressSetByThisCall = true;
     updateStage("aiEnhancement", "active");
 
-    const operations = target.operationKeys.map((key) => resolveOperationByKey(workflow, key));
+    const operations = target.operationKeys.map((key) =>
+      resolveOperationByKey(workflow, key),
+    );
     const requestId = `retry-batch${batchIndex}-${Date.now()}`;
     const result = await retryOneBatch(
       operations,
@@ -635,7 +669,9 @@ export async function retryAiEnhancementBatch(
         operationKeys: target.operationKeys,
         status: "failed",
         errorCategory: result.errorCategory,
-        failureExplanation: explainFailure(result.errorCategory as FailureCause),
+        failureExplanation: explainFailure(result.errorCategory as FailureCause, {
+          partialRun: true,
+        }),
       });
     }
 

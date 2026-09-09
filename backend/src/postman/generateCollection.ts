@@ -11,6 +11,7 @@ import type {
   ProvenanceCounts,
   TestModel,
   TestScenario,
+  WorkflowExportContext,
 } from "@apipilot/shared-domain";
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
 import { baseUrlVariable } from "./artifactVariables";
@@ -22,6 +23,8 @@ import { compareCodeUnits } from "./ordering";
 import { renderReadme } from "./readme";
 import { buildRequestItem } from "./requestItem";
 import { validateCollection } from "./validateCollection";
+import { planApprovedWorkflows, workflowVariableName } from "./workflowRendering";
+import { applyWorkflowSubstitutions } from "./workflowVariables";
 import { createLogger } from "../logger";
 
 const logger = createLogger("postman.generateCollection");
@@ -147,7 +150,11 @@ function dedupeVariables(variables: ArtifactVariable[]): ArtifactVariable[] {
 function authByOperation(
   apiModel: ApiModel,
   pairs: { scenario: TestScenario; operation: ApiOperation }[],
-): { byKey: Map<string, PostmanAuth | undefined>; variables: ArtifactVariable[]; limitations: GenerationLimitation[] } {
+): {
+  byKey: Map<string, PostmanAuth | undefined>;
+  variables: ArtifactVariable[];
+  limitations: GenerationLimitation[];
+} {
   const byKey = new Map<string, PostmanAuth | undefined>();
   const variables: ArtifactVariable[] = [];
   const limitations: GenerationLimitation[] = [];
@@ -178,6 +185,7 @@ export function generateCollection(
   apiModel: ApiModel,
   testModel: TestModel,
   options: ExportOptions = {},
+  workflowContext?: WorkflowExportContext,
 ): ExportOutcome {
   const startedAt = Date.now();
   const workflowKey = workflowIntentKey(testModel);
@@ -213,30 +221,100 @@ export function generateCollection(
     };
   }
 
-  const auth = authByOperation(apiModel, resolved);
+  const workflowPlans = planApprovedWorkflows(apiModel, testModel, workflowContext);
+  const renderedScenarioIds = workflowPlans.renderedScenarioIds;
+  const standaloneResolved = resolved.filter(
+    ({ scenario }) => !renderedScenarioIds.has(scenario.id),
+  );
+  const workflowResolved = workflowPlans.plans.flatMap((plan) =>
+    plan.limitation
+      ? []
+      : plan.steps.map((step) => ({
+          scenario: step.scenario,
+          operation: step.operation,
+        })),
+  );
+  const auth = authByOperation(apiModel, [...standaloneResolved, ...workflowResolved]);
   const limitations: GenerationLimitation[] = [
     ...auth.limitations,
     ...analysisIssueLimitations(apiModel, resolved),
+    ...workflowPlans.limitations,
   ];
   const variables: ArtifactVariable[] = [
     baseUrlVariable(options.baseUrl ?? ""),
     ...auth.variables,
   ];
 
-  const folders: PostmanFolder[] = groupAndName(resolved).map((folder) => ({
-    name: folder.name,
-    item: folder.entries.map((entry) => {
-      const built = buildRequestItem({
-        scenario: entry.scenario,
-        operation: entry.operation,
-        requestName: entry.requestName,
-        auth: auth.byKey.get(operationKey(entry.operation.path, entry.operation.method)),
-      });
-      limitations.push(...built.limitations);
-      variables.push(...built.variables);
-      return built.item;
+  const standaloneFolders: PostmanFolder[] = groupAndName(standaloneResolved).map(
+    (folder) => ({
+      name: folder.name,
+      item: folder.entries.map((entry) => {
+        const built = buildRequestItem({
+          scenario: entry.scenario,
+          operation: entry.operation,
+          requestName: entry.requestName,
+          auth: auth.byKey.get(
+            operationKey(entry.operation.path, entry.operation.method),
+          ),
+        });
+        limitations.push(...built.limitations);
+        variables.push(...built.variables);
+        return built.item;
+      }),
     }),
-  }));
+  );
+
+  const workflowFolders: PostmanFolder[] = workflowPlans.plans
+    .filter((plan) => !plan.limitation)
+    .map((plan) => {
+      for (const variable of plan.variables) {
+        variables.push({
+          name: workflowVariableName(plan.workflowId, variable.name),
+          purpose: `Value handed from workflow ${plan.workflowId} to a later step`,
+          secret: false,
+          value: "",
+          provenance: {
+            workflowId: plan.workflowId,
+            relationshipId: variable.relationshipId,
+          },
+        });
+      }
+      return {
+        name: `Workflow: ${plan.workflowId}`,
+        item: plan.steps.map((step) => {
+          const scenario = applyWorkflowSubstitutions(
+            step.scenario,
+            plan.workflowId,
+            step.consumes,
+          );
+          const built = buildRequestItem({
+            scenario,
+            operation: step.operation,
+            requestName: `${step.operation.method.toUpperCase()} ${step.operation.path} — workflow step ${step.position + 1}`,
+            auth: auth.byKey.get(
+              operationKey(step.operation.path, step.operation.method),
+            ),
+            workflowId: plan.workflowId,
+            workflowStepPosition: step.position,
+            workflowRelationshipIds: plan.variables.map(
+              (variable) => variable.relationshipId,
+            ),
+            workflowExtractions: step.produces.map((variable) => ({
+              workflowId: plan.workflowId,
+              variableName: variable.name,
+              responseField: variable.producerField,
+            })),
+          });
+          limitations.push(...built.limitations);
+          variables.push(...built.variables);
+          return built.item;
+        }),
+      };
+    });
+
+  const folders = [...workflowFolders, ...standaloneFolders].sort((left, right) =>
+    compareCodeUnits(left.name, right.name),
+  );
 
   // One auth configuration shared by every request moves to the collection level; a mixture
   // stays on the individual requests (data-model.md).
@@ -282,7 +360,10 @@ export function generateCollection(
     info: {
       name: collectionName,
       _postman_id: collectionIdForScenarios(
-        resolved.map((pair) => pair.scenario.id).sort(compareCodeUnits),
+        [
+          ...workflowFolders.flatMap((folder) => folder.item.map((item) => item.id)),
+          ...standaloneResolved.map((pair) => pair.scenario.id),
+        ].sort(compareCodeUnits),
       ),
       schema: POSTMAN_COLLECTION_SCHEMA,
     },
@@ -309,6 +390,9 @@ export function generateCollection(
     (a, b) =>
       compareCodeUnits(a.kind, b.kind) ||
       compareCodeUnits(a.location, b.location) ||
+      compareCodeUnits(a.workflowId ?? "", b.workflowId ?? "") ||
+      (a.stepPosition ?? -1) - (b.stepPosition ?? -1) ||
+      compareCodeUnits(a.relationshipId ?? "", b.relationshipId ?? "") ||
       compareCodeUnits(a.scenarioId ?? "", b.scenarioId ?? ""),
   );
 
@@ -318,9 +402,20 @@ export function generateCollection(
     validation,
     limitations: orderedLimitations,
     summary: {
-      requestCount: testModel.scenarios.length,
+      requestCount: folders.reduce((count, folder) => count + folder.item.length, 0),
       folderCount: folders.length,
-      byProvenance: countByProvenance(testModel.scenarios),
+      byProvenance: countByProvenance([
+        ...standaloneResolved.map((pair) => pair.scenario),
+        ...workflowResolved.map((pair) => pair.scenario),
+      ]),
+      workflowCount: workflowPlans.approvedWorkflowCount,
+      workflowRequestCount: workflowResolved.length,
+      standaloneRequestCount: standaloneResolved.length,
+      workflowVariableCount: workflowPlans.plans
+        .filter((plan) => !plan.limitation)
+        .reduce((count, plan) => count + plan.variables.length, 0),
+      unsupportedWorkflowCount: workflowPlans.unsupportedWorkflowCount,
+      omittedWorkflowCount: workflowPlans.omittedWorkflowCount,
     },
   };
 

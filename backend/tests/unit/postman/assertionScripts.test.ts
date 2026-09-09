@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TestScenario } from "@apipilot/shared-domain";
-import { toJsonSchema, translateAssertions } from "../../../src/postman/assertionScripts";
+import {
+  appendWorkflowExtractions,
+  toJsonSchema,
+  translateAssertions,
+} from "../../../src/postman/assertionScripts";
 
 function scenario(assertions: TestScenario["assertions"]): TestScenario {
   return {
@@ -10,7 +14,12 @@ function scenario(assertions: TestScenario["assertions"]): TestScenario {
     category: "positive",
     request: { pathParameters: {}, queryParameters: {}, headers: {} },
     assertions,
-    provenance: { source: "RULE", rule: "positive", description: "d", duplicateOfRules: [] },
+    provenance: {
+      source: "RULE",
+      rule: "positive",
+      description: "d",
+      duplicateOfRules: [],
+    },
   };
 }
 
@@ -20,13 +29,17 @@ function script(result: ReturnType<typeof translateAssertions>): string {
 
 describe("translateAssertions", () => {
   it("asserts an exact documented status code", () => {
-    const result = translateAssertions(scenario([{ type: "status-code", expectedStatusCode: "201" }]));
+    const result = translateAssertions(
+      scenario([{ type: "status-code", expectedStatusCode: "201" }]),
+    );
     expect(script(result)).toContain("201");
     expect(result.limitations).toEqual([]);
   });
 
   it("asserts a status class for a wildcard code without inventing a concrete code", () => {
-    const result = translateAssertions(scenario([{ type: "status-code", expectedStatusCode: "4XX" }]));
+    const result = translateAssertions(
+      scenario([{ type: "status-code", expectedStatusCode: "4XX" }]),
+    );
     const text = script(result);
     expect(text).toContain("400");
     expect(text).toContain("500");
@@ -39,7 +52,10 @@ describe("translateAssertions", () => {
     );
     expect(result.event).toBeUndefined();
     expect(result.limitations).toEqual([
-      expect.objectContaining({ kind: "undocumented-status-code", scenarioId: "scenario-1" }),
+      expect.objectContaining({
+        kind: "undocumented-status-code",
+        scenarioId: "scenario-1",
+      }),
     ]);
   });
 
@@ -56,7 +72,11 @@ describe("translateAssertions", () => {
       scenario([
         {
           type: "schema-conformance",
-          expectedSchema: { type: "object", required: ["id"], properties: { id: { type: "string", required: [], properties: {} } } },
+          expectedSchema: {
+            type: "object",
+            required: ["id"],
+            properties: { id: { type: "string", required: [], properties: {} } },
+          },
         },
       ]),
     );
@@ -68,7 +88,10 @@ describe("translateAssertions", () => {
     const result = translateAssertions(
       scenario([
         { type: "status-code", expectedStatusCode: "201" },
-        { type: "schema-conformance", expectedSchema: { type: "object", required: [], properties: {} } },
+        {
+          type: "schema-conformance",
+          expectedSchema: { type: "object", required: [], properties: {} },
+        },
       ]),
     );
     expect(result.event?.listen).toBe("test");
@@ -91,7 +114,11 @@ describe("toJsonSchema", () => {
 
   it("keeps a non-empty required list", () => {
     expect(
-      toJsonSchema({ type: "object", required: ["a"], properties: { a: { type: "string", required: [], properties: {} } } }),
+      toJsonSchema({
+        type: "object",
+        required: ["a"],
+        properties: { a: { type: "string", required: [], properties: {} } },
+      }),
     ).toEqual({ type: "object", properties: { a: { type: "string" } }, required: ["a"] });
   });
 
@@ -118,5 +145,31 @@ describe("toJsonSchema", () => {
         pattern: "^a",
       }),
     ).toEqual({ type: "string", enum: ["a", "b"], format: "uuid", pattern: "^a" });
+  });
+});
+
+describe("appendWorkflowExtractions", () => {
+  it("parses the response once while preserving assertion and extraction order", () => {
+    const result = appendWorkflowExtractions(
+      {
+        listen: "test",
+        script: {
+          type: "text/javascript",
+          exec: ['pm.test("approved", function () {});'],
+        },
+      },
+      [
+        { workflowId: "checkout", variableName: "orderId", responseField: "id" },
+        { workflowId: "checkout", variableName: "status", responseField: "status" },
+      ],
+    );
+
+    const lines = result?.script.exec ?? [];
+    expect(
+      lines.filter((line) => line === "const workflowResponse = pm.response.json();"),
+    ).toHaveLength(1);
+    expect(lines[0]).toContain("approved");
+    expect(lines[2]).toContain("checkout_orderId");
+    expect(lines[3]).toContain("checkout_status");
   });
 });

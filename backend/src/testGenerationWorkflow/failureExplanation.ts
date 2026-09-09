@@ -39,6 +39,8 @@ export interface FailureContext {
    * callers must not forward raw diagnostic strings, which FR-024 forbids surfacing.
    */
   readinessReason?: string;
+  /** True when invalid output was observed after at least one other unit succeeded. */
+  partialRun?: boolean;
 }
 
 /** Appends a reason as its own sentence when one is available. */
@@ -150,9 +152,12 @@ export function explainFailure(
       return {
         category: "unusable-output",
         summary: "The AI model replied with output that couldn't be used.",
-        nextStep:
-          "This can happen intermittently — running enhancement again will often succeed.",
-        retryable: true,
+        nextStep: context.partialRun
+          ? "Some units succeeded and were kept. You can retry the failed units after checking " +
+            "the local AI setup."
+          : "The deterministic scenarios are ready to review. Check the local AI setup before " +
+            "trying enhancement again.",
+        retryable: context.partialRun === true,
       };
 
     case "INVALID_REQUEST":

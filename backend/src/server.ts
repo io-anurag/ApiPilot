@@ -1,6 +1,6 @@
 import "./loadEnv";
 import { createApp } from "./app";
-import { loadConfig } from "./config";
+import { loadConfig, validateAIConfiguration } from "./config";
 import { createLogger } from "./logger";
 
 const logger = createLogger("server");
@@ -32,6 +32,7 @@ if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
 }
 
 const config = loadConfig();
+validateAIConfiguration();
 const app = createApp();
 
 const server = app.listen(config.backendPort, () => {

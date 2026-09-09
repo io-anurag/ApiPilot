@@ -1,6 +1,6 @@
 {
   "name": "@apipilot/backend",
-  "version": "3.0.0",
+  "version": "4.5.7",
   "private": true,
   "type": "module",
   "main": "src/server.ts",

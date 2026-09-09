@@ -409,6 +409,28 @@ describe("runBatchedInference", () => {
     expect(onBatchSettled).toHaveBeenNthCalledWith(2, 1, 2, { status: "not-attempted" });
   });
 
+  it("stops before the next batch when isCancelled becomes true", async () => {
+    const calls: number[] = [];
+    let cancelled = false;
+
+    const result = await runBatchedInference(
+      [{ operations: [1] }, { operations: [2] }, { operations: [3] }],
+      async (batch) => {
+        calls.push(batch.operations[0]);
+        cancelled = true;
+        return batch.operations[0];
+      },
+      { isCancelled: () => cancelled },
+    );
+
+    expect(calls).toEqual([1]);
+    expect(result.runs.map((run) => run.outcome.status)).toEqual([
+      "success",
+      "not-attempted",
+      "not-attempted",
+    ]);
+  });
+
   it("behaves identically to today when onBatchStart/onBatchSettled are omitted (analyzeDependencies.ts's existing call site is unaffected)", async () => {
     const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
     const summary = await runBatchedInference(

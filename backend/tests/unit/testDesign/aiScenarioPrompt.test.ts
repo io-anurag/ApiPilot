@@ -57,11 +57,25 @@ describe("AI scenario prompt and response contract", () => {
       expect(operation.method).toBe(
         aiScenarioApiModel.operations[index].method.toUpperCase(),
       );
+      expect(operation.operationId).toBe(
+        aiScenarioApiModel.operations[index].operationId,
+      );
+      expect(operation.requestBody).toEqual({
+        contentType: "application/json",
+        required: true,
+        fields: [
+          { name: "email", required: true, type: "string", format: "email" },
+          { name: "displayName", type: "string" },
+        ],
+      });
+      expect(operation.documentedResponses).toEqual(["201", "409"]);
       // ...while prose and presentation material, which cost tokens without constraining a
       // scenario, are not.
       expect(operation.description).toBeUndefined();
       expect(operation.tags).toBeUndefined();
       expect(operation.security).toBeUndefined();
+      expect(operation.examples).toBeUndefined();
+      expect(operation.servers).toBeUndefined();
     }
 
     // The baseline is compressed to what stops the model repeating it, not reproduced in full:
@@ -99,7 +113,10 @@ describe("AI scenario prompt and response contract", () => {
     // Measured at 11x (21,802 -> 1,985 characters) when this was written. Asserting 5x leaves
     // room for fixture growth while still failing loudly if the projection regresses toward
     // embedding the models again.
-    expect(projected * 5).toBeLessThan(serialized);
+    expect(
+      projected * 5,
+      `realized reduction factor: ${(serialized / projected).toFixed(2)}x`,
+    ).toBeLessThan(serialized);
   });
 
   it("parses only the supported structured response shape", () => {

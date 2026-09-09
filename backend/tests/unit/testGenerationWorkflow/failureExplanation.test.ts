@@ -69,4 +69,23 @@ describe("explainFailure", () => {
       expect(explanation.retryable).toBe(false);
     });
   });
+
+  it("maps the three primary failure categories to distinct actionable text", () => {
+    const tooSlow = explainFailure("TIMEOUT");
+    const unavailable = explainFailure("PROVIDER_UNAVAILABLE");
+    const unusable = explainFailure("INVALID_RESPONSE");
+
+    expect(
+      new Set([tooSlow.category, unavailable.category, unusable.category]).size,
+    ).toBe(3);
+    expect(new Set([tooSlow.summary, unavailable.summary, unusable.summary]).size).toBe(
+      3,
+    );
+    expect(tooSlow.retryable).toBe(false);
+    expect(unavailable.retryable).toBe(true);
+    expect(unusable.retryable).toBe(false);
+    expect(explainFailure("INVALID_RESPONSE", { partialRun: true }).retryable).toBe(true);
+    expect(explainFailure("not-viable").retryable).toBe(false);
+    expect(explainFailure("INVALID_REQUEST").retryable).toBe(false);
+  });
 });

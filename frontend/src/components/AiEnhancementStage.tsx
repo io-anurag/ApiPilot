@@ -103,13 +103,11 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
 }
 
 /**
- * Live batch-by-batch progress for a multi-batch run (specs/012-ai-enhancement-progress
- * FR-002/FR-003). Renders nothing for a single-batch run (`totalBatches <= 1`): one batch is not
- * a sequence, and showing "batch 1 of 1" would imply a multi-step process that does not exist.
- * Phase and elapsed time are shown for such runs by `RunProgress` above.
+ * Live batch-by-batch progress for an enhancement run (specs/012-ai-enhancement-progress
+ * FR-002/FR-003). A single-unit run still reports its planned and settled counts so a long
+ * operation never appears stalled or unbounded.
  */
 function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgress }>) {
-  if (progress.totalBatches <= 1) return null;
   const currentIndex = progress.batches.findIndex(
     (batch) => batch.status === "in-progress",
   );
@@ -125,7 +123,7 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
       <p className="text-sm text-slate-600">
         {currentIndex >= 0
           ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
-          : `${settledCount} of ${progress.totalBatches} batches complete`}
+          : `${settledCount} of ${progress.totalBatches} ${progress.totalBatches === 1 ? "unit" : "batches"} complete`}
         {/*
           The planned batch count on its own overstates what a run will do: a 39-batch plan under a
           five-minute ceiling completes roughly the first seven, and a denominator the run never

@@ -8,7 +8,15 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
   "unsupported-content-type": "Request content types this export cannot represent",
   "unresolved-path-parameter": "Path parameters with no approved value",
   "specification-analysis-issue": "Operations carrying specification analysis issues",
-  "alternative-auth-requirement-selected": "Operations declaring alternative authentication",
+  "alternative-auth-requirement-selected":
+    "Operations declaring alternative authentication",
+  "workflow-missing-scenario": "Workflow steps without an approved scenario",
+  "workflow-unsupported-sequence": "Workflow sequences this export cannot render",
+  "workflow-unresolved-handoff": "Workflow handoffs this export cannot resolve",
+  "workflow-unsupported-extraction-path":
+    "Workflow response paths this export cannot extract",
+  "workflow-unsupported-request-representation":
+    "Workflow request representations this export cannot render",
 };
 
 /**
@@ -31,13 +39,20 @@ export function PostmanExportLimitations({
   const kinds = [...new Set(limitations.map((limitation) => limitation.kind))];
 
   return (
-    <section aria-labelledby="export-limitations-heading" data-testid="export-limitations" className="space-y-2 rounded-md border border-warning-200 bg-warning-50 p-3">
-      <h4 id="export-limitations-heading" className="text-sm font-semibold text-warning-700">
+    <section
+      aria-labelledby="export-limitations-heading"
+      data-testid="export-limitations"
+      className="space-y-2 rounded-md border border-warning-200 bg-warning-50 p-3"
+    >
+      <h4
+        id="export-limitations-heading"
+        className="text-sm font-semibold text-warning-700"
+      >
         Known limitations ({limitations.length})
       </h4>
       <p className="text-sm text-warning-700">
-        These cases could not be expressed in the collection. They are reported rather than
-        filled in with an assumed value.
+        These cases could not be expressed in the collection. They are reported rather
+        than filled in with an assumed value.
       </p>
       {kinds.map((kind) => {
         const forKind = limitations.filter((limitation) => limitation.kind === kind);
@@ -50,7 +65,8 @@ export function PostmanExportLimitations({
               {forKind.map((limitation, index) => (
                 <li key={`${limitation.location}-${limitation.scenarioId ?? index}`}>
                   <code className="font-mono text-xs">{limitation.location}</code>
-                  {limitation.scenarioId ? ` (${limitation.scenarioId})` : ""}: {limitation.message}
+                  {limitation.scenarioId ? ` (${limitation.scenarioId})` : ""}:{" "}
+                  {limitation.message}
                 </li>
               ))}
             </ul>

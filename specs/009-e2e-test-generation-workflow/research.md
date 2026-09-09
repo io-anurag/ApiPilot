@@ -39,6 +39,10 @@ visibility, staleness handling" and "review/approve workflows" is one of its own
 
 ## D2. Does AP-009 render approved integration workflows into the Postman collection?
 
+**Superseded by AP-016.** The original AP-009 decision below remains historical context for why
+the capability was initially deferred; `specs/016-workflow-aware-postman/` now owns the rendering
+contract and the guided stage passes approved workflow IDs into the deterministic Postman generator.
+
 **Decision**: No. The Postman-generation stage calls the existing `generateCollection` exactly as
 AP-007 built it, using only the approved `TestModel` from scenario review. Approved
 `IntegrationWorkflow`s are retained on the `TestGenerationWorkflow` record for traceability and

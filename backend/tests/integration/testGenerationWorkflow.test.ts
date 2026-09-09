@@ -166,6 +166,13 @@ describe("test generation workflow orchestration", () => {
         (folder: { item: { name: string }[] }) => folder.item.map((item) => item.name),
       );
     expect(requestItemNames.length).toBe(approvedScenarioIds.size);
+    expect(afterPostman.body.workflow.postmanArtifact.summary).toMatchObject({
+      workflowCount: 0,
+      omittedWorkflowCount: 0,
+    });
+    expect(afterPostman.body.workflow.postmanArtifact.readme).toContain(
+      "Rendered workflows: 0",
+    );
   });
 
   it("GET reflects the same state a fresh browser connection would see after a reload (US2, FR-014)", async () => {
@@ -400,7 +407,8 @@ describe("test generation workflow orchestration", () => {
       expect(pair.a).toEqual(pair.b);
       expect((pair.a as { totalBatches: number }).totalBatches).toBe(3);
       expect(
-        (pair.a as { batches: { index: number; status: string }[] }).batches[index].status,
+        (pair.a as { batches: { index: number; status: string }[] }).batches[index]
+          .status,
       ).toBe("in-progress");
     });
 
@@ -500,7 +508,12 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
                 operationPath: op.path,
                 operationMethod: op.method,
                 category: "positive",
-                request: { pathParameters: {}, queryParameters: {}, headers: {}, body: {} },
+                request: {
+                  pathParameters: {},
+                  queryParameters: {},
+                  headers: {},
+                  body: {},
+                },
                 assertions: [],
                 rationale: `Exercise ${key}.`,
                 confidence: 0.7,
@@ -587,7 +600,11 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
-          { scenarioId: scenario.scenarioId, revision: scenario.revision, action: "accept" },
+          {
+            scenarioId: scenario.scenarioId,
+            revision: scenario.revision,
+            action: "accept",
+          },
         ],
       });
     await request(app).post("/api/test-generation-workflow/scenario-review/finalize");

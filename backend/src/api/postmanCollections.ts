@@ -1,5 +1,12 @@
 import { Router } from "express";
-import type { ApiModel, ExportFailureCode, ExportOptions, TestModel } from "@apipilot/shared-domain";
+import type {
+  ApiModel,
+  ExportFailureCode,
+  ExportOptions,
+  IntegrationWorkflow,
+  TestModel,
+  WorkflowExportContext,
+} from "@apipilot/shared-domain";
 import { generateCollection } from "../postman/generateCollection";
 import { createLogger } from "../logger";
 
@@ -46,11 +53,15 @@ function isExportOptions(value: unknown): value is ExportOptions | undefined {
   if (typeof value !== "object" || value === null) return false;
   const options = value as Record<string, unknown>;
   if (options.baseUrl !== undefined && typeof options.baseUrl !== "string") return false;
-  if (options.collectionName !== undefined && typeof options.collectionName !== "string") {
+  if (
+    options.collectionName !== undefined &&
+    typeof options.collectionName !== "string"
+  ) {
     return false;
   }
   if (options.variableValues === undefined) return true;
-  if (typeof options.variableValues !== "object" || options.variableValues === null) return false;
+  if (typeof options.variableValues !== "object" || options.variableValues === null)
+    return false;
   return Object.values(options.variableValues as Record<string, unknown>).every(
     (entry) => typeof entry === "string",
   );
@@ -59,13 +70,51 @@ function isExportOptions(value: unknown): value is ExportOptions | undefined {
 interface ExportRequestBody {
   apiModel: ApiModel;
   testModel: TestModel;
+  workflowContext?: WorkflowExportContext;
   options?: ExportOptions;
+}
+
+function isWorkflowContext(value: unknown): value is WorkflowExportContext | undefined {
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const context = value as Record<string, unknown>;
+  if (!Array.isArray(context.workflows) || !Array.isArray(context.approvedWorkflowIds))
+    return false;
+  if (!context.approvedWorkflowIds.every((id) => typeof id === "string")) return false;
+  const ids = new Set<string>();
+  for (const workflow of context.workflows) {
+    if (!isIntegrationWorkflow(workflow)) return false;
+    if (ids.has(workflow.id)) return false;
+    ids.add(workflow.id);
+  }
+  return context.approvedWorkflowIds.every((id) => ids.has(id));
+}
+
+function isIntegrationWorkflow(value: unknown): value is IntegrationWorkflow {
+  if (typeof value !== "object" || value === null) return false;
+  const workflow = value as Record<string, unknown>;
+  if (
+    typeof workflow.id !== "string" ||
+    !Array.isArray(workflow.steps) ||
+    !Array.isArray(workflow.variables)
+  ) {
+    return false;
+  }
+  return (
+    Array.isArray(workflow.relationshipIds) &&
+    workflow.relationshipIds.every((id) => typeof id === "string")
+  );
 }
 
 function isExportRequestBody(value: unknown): value is ExportRequestBody {
   if (typeof value !== "object" || value === null) return false;
   const body = value as Record<string, unknown>;
-  return isApiModel(body.apiModel) && isTestModel(body.testModel) && isExportOptions(body.options);
+  return (
+    isApiModel(body.apiModel) &&
+    isTestModel(body.testModel) &&
+    isWorkflowContext(body.workflowContext) &&
+    isExportOptions(body.options)
+  );
 }
 
 /** Builds the router for POST /test-models/postman-collection, the stateless Postman export endpoint. */
@@ -93,7 +142,12 @@ export function createPostmanCollectionsRouter() {
         return;
       }
 
-      const outcome = generateCollection(req.body.apiModel, req.body.testModel, req.body.options);
+      const outcome = generateCollection(
+        req.body.apiModel,
+        req.body.testModel,
+        req.body.options,
+        req.body.workflowContext,
+      );
       if (!outcome.ok) {
         const { code, message, problems } = outcome.failure;
         logger.error("request_failed", {
