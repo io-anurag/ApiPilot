@@ -646,6 +646,7 @@ export async function enhanceTestModel(
     addedCount: outcomes.added.length,
     rejectedCount: outcomes.rejected.length,
     deduplicatedCount: outcomes.deduplicated.length,
+    nonExecutableCount: outcomes.nonExecutable.length,
     totalBatches: summary.totalCount,
     notAttemptedCount: summary.notAttemptedCount,
     runBudgetExhausted,

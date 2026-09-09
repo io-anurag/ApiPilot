@@ -168,6 +168,12 @@ export function WorkflowReviewStage({
         <h2 className="text-base font-semibold text-slate-900">
           Review Integration Workflows
         </h2>
+        <p className="text-sm text-muted">
+          This analyzes every operation in the specification for multi-step call chains
+          (e.g. create then reference by ID) — independent of which scenarios you accepted
+          in the previous stage, since a workflow describes how operations relate, not
+          which test scenarios exist.
+        </p>
         <p data-testid="workflow-review-empty" className="text-sm text-muted">
           No integration workflows were discovered.
         </p>
@@ -200,6 +206,13 @@ export function WorkflowReviewStage({
       <h2 className="text-base font-semibold text-slate-900">
         Review Integration Workflows
       </h2>
+      <p className="text-sm text-muted">
+        Each item below is a call chain (e.g. create then reference by ID) discovered
+        across every operation in the specification — independent of which scenarios you
+        accepted in the previous stage. Approving or rejecting only records a decision for
+        traceability; it does not add or remove any generated test scenario, and no
+        workflow is ever included in the Postman output.
+      </p>
       <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
         <input
           ref={selectAllRef}

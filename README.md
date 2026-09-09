@@ -144,20 +144,20 @@ OpenAPI YAML -> ApiModel -> TestModel -> approved TestModel -> Postman artifacts
 
 See [.env.example](.env.example) for the maintained variable list and guidance.
 
-| Variable                             | Purpose                                  | Default                                |
-| ------------------------------------ | ---------------------------------------- | -------------------------------------- |
-| `BACKEND_PORT`                       | Backend HTTP listener                    | `4000`                                 |
-| `FRONTEND_DEV_PORT`                  | Vite development server                  | `5173`                                 |
-| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider | `mock` in tests; `local` otherwise     |
-| `AI_MODEL_ID`                        | Local Hugging Face model identifier      | `onnx-community/Qwen2.5-0.5B-Instruct` |
-| `AI_MODEL_CACHE_DIR`                 | Local model cache                        | If set, that path; otherwise `~/.apipilot/models` |
-| `AI_MODEL_DTYPE`                     | Optional ONNX weight precision           | unset by default                       |
-| `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit              | see `.env.example`                     |
-| `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt      | `false`                                |
-| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Work-bounded enhancement batch size      | `1`                                    |
-| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Wall-clock ceiling for one enhancement run | see `.env.example`                   |
-| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Work-bounded dependency-analysis batch size | `3`                                |
-| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Wall-clock ceiling for one dependency-analysis AI pass | `120000`                |
+| Variable                             | Purpose                                                | Default                                           |
+| ------------------------------------ | ------------------------------------------------------ | ------------------------------------------------- |
+| `BACKEND_PORT`                       | Backend HTTP listener                                  | `4000`                                            |
+| `FRONTEND_DEV_PORT`                  | Vite development server                                | `5173`                                            |
+| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider               | `mock` in tests; `local` otherwise                |
+| `AI_MODEL_ID`                        | Local Hugging Face model identifier                    | `onnx-community/Qwen2.5-0.5B-Instruct`            |
+| `AI_MODEL_CACHE_DIR`                 | Local model cache                                      | If set, that path; otherwise `~/.apipilot/models` |
+| `AI_MODEL_DTYPE`                     | Optional ONNX weight precision                         | unset by default                                  |
+| `AI_INFERENCE_TIMEOUT_MS`            | Per-request inference limit                            | see `.env.example`                                |
+| `AI_USE_ACCELERATOR`                 | Enable optional accelerator attempt                    | `false`                                           |
+| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Work-bounded enhancement batch size                    | `1`                                               |
+| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Wall-clock ceiling for one enhancement run             | see `.env.example`                                |
+| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Work-bounded dependency-analysis batch size            | `3`                                               |
+| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Wall-clock ceiling for one dependency-analysis AI pass | `120000`                                          |
 
 Whole-specification AI enhancement is practical to roughly **5–10 operations** at the default run
 budget on the reference CPU profile — larger specifications settle `partial` at the ceiling, with
@@ -190,7 +190,7 @@ evidence-based decision here, not a matter of picking the newest or largest avai
    popularity or parameter count, are what should decide `AI_MODEL_ID`.
 3. **Prefer a smaller unquantized model over a larger quantized one when both are candidates.**
    Quantization is not a free trade on CPU: this repo's own measurement found the default 0.5B
-   model ran *faster and more correctly* at fp32 than at q8 (`.env.example` documents ~4x higher
+   model ran _faster and more correctly_ at fp32 than at q8 (`.env.example` documents ~4x higher
    throughput and better structured-output success at fp32). Reach for `AI_MODEL_DTYPE` only when
    a model's unquantized weights genuinely do not fit your disk/RAM budget, and re-run the benchmark
    afterward rather than assuming the quantized variant behaves the same way.
@@ -246,10 +246,6 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 - [AI batching policy](specs/014-ai-batching-policy/spec.md)
 
 Each feature directory contains the normative specification, implementation plan, task list, data model, research, quickstart, and API contracts where relevant.
-
-## Deployment
-
-[vercel.json](vercel.json) deploys frontend and backend as separate Vercel services. Requests under `/api/*` route to the backend and all other paths route to the frontend.
 
 ## License
 

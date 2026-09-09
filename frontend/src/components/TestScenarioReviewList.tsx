@@ -23,10 +23,13 @@ const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
  * different position depending on how long the operation path happens to be. Method/Source/Status
  * are fixed widths sized to their known label sets (badge text never varies beyond those values),
  * while Path and Category share the remaining space proportionally rather than each reserving a
- * generously wide fixed column most rows never fill.
+ * generously wide fixed column most rows never fill. `justify-items-start` is required alongside
+ * these tracks: CSS Grid's default `justify-items: stretch` otherwise forces every badge to fill
+ * its entire column width, which is what actually produced the oversized boxes/wasted whitespace
+ * around Method/Source/Status — the fixed track widths were already sized correctly.
  */
 const ROW_GRID_COLUMNS =
-  "grid-cols-[3.75rem_minmax(0,1.6fr)_minmax(0,1fr)_8.5rem_7rem]";
+  "grid-cols-[3.75rem_minmax(0,1.6fr)_minmax(0,1fr)_8rem_7rem] justify-items-start";
 
 type PendingBulkAction = {
   scope: "filtered" | "selected";
@@ -223,7 +226,9 @@ export function TestScenarioReviewList({
             <li className="flex flex-col gap-1 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
               <div className="flex items-center gap-3">
                 <span className="w-4" aria-hidden="true" />
-                <div className={`grid min-w-0 flex-1 items-center gap-x-3 ${ROW_GRID_COLUMNS}`}>
+                <div
+                  className={`grid min-w-0 flex-1 items-center gap-x-3 ${ROW_GRID_COLUMNS}`}
+                >
                   <span>Method</span>
                   <span>Path</span>
                   <span>Category</span>
@@ -240,52 +245,52 @@ export function TestScenarioReviewList({
                 ? `${item.scenario.category} — ${item.scenario.targetField}`
                 : item.scenario.category;
               return (
-              <Fragment key={item.scenarioId}>
-                <li className="flex min-w-0 items-center gap-3 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={manualSelectionIds.has(item.scenarioId)}
-                    onChange={() => toggleManualSelection(item.scenarioId)}
-                    aria-label={`Select ${operationKey(item)} — ${item.scenario.category} scenario`}
-                    className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                  />
-                  <button
-                    type="button"
-                    aria-pressed={item.scenarioId === selectedScenarioId}
-                    onClick={() => onSelect(item)}
-                    className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
-                      item.scenarioId === selectedScenarioId ? "bg-brand-50" : ""
-                    }`}
-                  >
-                    <HttpMethodBadge method={item.scenario.operationMethod} />
-                    <span
-                      className="min-w-0 truncate font-mono text-slate-800"
-                      title={item.scenario.operationPath}
-                    >
-                      {item.scenario.operationPath}
-                    </span>
-                    <span
-                      className="min-w-0 truncate text-slate-700"
-                      title={categoryLabel}
-                    >
-                      {categoryLabel}
-                    </span>
-                    <ProvenanceBadge
-                      source={item.scenario.provenance.source}
-                      modifiedByUser={item.isUserModified}
+                <Fragment key={item.scenarioId}>
+                  <li className="flex min-w-0 items-center gap-3 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={manualSelectionIds.has(item.scenarioId)}
+                      onChange={() => toggleManualSelection(item.scenarioId)}
+                      aria-label={`Select ${operationKey(item)} — ${item.scenario.category} scenario`}
+                      className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     />
-                    <StatusBadge
-                      label={reviewStateLabel(item.state)}
-                      tone={STATE_TONES[item.state]}
-                    />
-                  </button>
-                </li>
-                {item.scenarioId === selectedScenarioId && (
-                  <li className="border-t border-brand-200 bg-brand-50/20">
-                    {renderSelected?.(item)}
+                    <button
+                      type="button"
+                      aria-pressed={item.scenarioId === selectedScenarioId}
+                      onClick={() => onSelect(item)}
+                      className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
+                        item.scenarioId === selectedScenarioId ? "bg-brand-50" : ""
+                      }`}
+                    >
+                      <HttpMethodBadge method={item.scenario.operationMethod} />
+                      <span
+                        className="min-w-0 truncate font-mono text-slate-800"
+                        title={item.scenario.operationPath}
+                      >
+                        {item.scenario.operationPath}
+                      </span>
+                      <span
+                        className="min-w-0 truncate text-slate-700"
+                        title={categoryLabel}
+                      >
+                        {categoryLabel}
+                      </span>
+                      <ProvenanceBadge
+                        source={item.scenario.provenance.source}
+                        modifiedByUser={item.isUserModified}
+                      />
+                      <StatusBadge
+                        label={reviewStateLabel(item.state)}
+                        tone={STATE_TONES[item.state]}
+                      />
+                    </button>
                   </li>
-                )}
-              </Fragment>
+                  {item.scenarioId === selectedScenarioId && (
+                    <li className="border-t border-brand-200 bg-brand-50/20">
+                      {renderSelected?.(item)}
+                    </li>
+                  )}
+                </Fragment>
               );
             })}
           </ul>

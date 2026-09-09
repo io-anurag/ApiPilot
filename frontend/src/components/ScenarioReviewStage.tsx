@@ -20,6 +20,7 @@ import { TestScenarioReviewSummary } from "./TestScenarioReviewSummary";
 import { TestScenarioReviewDetail } from "./TestScenarioReviewDetail";
 import { TestScenarioReviewDecision } from "./TestScenarioReviewDecision";
 import { TestScenarioReviewRefinement } from "./TestScenarioReviewRefinement";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { BUTTON_STYLES } from "./controlStyles";
 
 /**
@@ -40,6 +41,7 @@ export function ScenarioReviewStage({
   const [actionError, setActionError] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const bulkDecision = useBulkDecision();
 
   function applyResult(
@@ -156,6 +158,17 @@ export function ScenarioReviewStage({
     onAdvanced(result);
   }
 
+  // Finalize only ever projects `accepted` scenarios forward (data-model.md); every pending
+  // scenario is silently excluded. Confirming first, when any remain pending, keeps that
+  // exclusion from being a surprise once the pending count is large (FR-011 companion UX).
+  function handleFinalizeClick() {
+    if (reviewWorkspace.summary.pending > 0) {
+      setConfirmingFinalize(true);
+      return;
+    }
+    void handleFinalize();
+  }
+
   return (
     <section
       data-testid="scenario-review-stage"
@@ -270,7 +283,7 @@ export function ScenarioReviewStage({
       <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
         <button
           type="button"
-          onClick={handleFinalize}
+          onClick={handleFinalizeClick}
           disabled={finalizing}
           className={BUTTON_STYLES.primary}
         >
@@ -292,6 +305,18 @@ export function ScenarioReviewStage({
           </p>
         )}
       </div>
+      {confirmingFinalize && (
+        <ConfirmDialog
+          message={`${reviewWorkspace.summary.pending} scenario${reviewWorkspace.summary.pending === 1 ? " has" : "s have"} no decision and will be excluded — finalize anyway?`}
+          affectedCount={reviewWorkspace.summary.pending}
+          confirmLabel="Finalize anyway"
+          onConfirm={() => {
+            setConfirmingFinalize(false);
+            void handleFinalize();
+          }}
+          onCancel={() => setConfirmingFinalize(false)}
+        />
+      )}
     </section>
   );
 }
