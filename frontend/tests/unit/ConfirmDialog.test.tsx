@@ -46,6 +46,29 @@ describe("ConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledWith("Out of date scenarios");
   });
 
+  it("shows only an error and an OK button for a blocking validation", () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDialog
+        message="This message is not shown"
+        affectedCount={3}
+        errorOnlyMessage="Accept at least one scenario before finalizing the review. Rejected scenarios will not be included."
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Accept at least one scenario before finalizing the review. Rejected scenarios will not be included.",
+    );
+    expect(screen.queryByTestId("confirm-dialog-count")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Finalize anyway/ }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it("cancels without confirming", () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();

@@ -13,6 +13,9 @@ export function ConfirmDialog({
   requireReason,
   reasonLabel = "Reason",
   confirmLabel = "Confirm",
+  confirmDisabled = false,
+  confirmDisabledMessage,
+  errorOnlyMessage,
   onConfirm,
   onCancel,
 }: Readonly<{
@@ -21,6 +24,9 @@ export function ConfirmDialog({
   requireReason?: boolean;
   reasonLabel?: string;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
+  confirmDisabledMessage?: string;
+  errorOnlyMessage?: string;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
 }>) {
@@ -80,13 +86,30 @@ export function ConfirmDialog({
         data-testid="confirm-dialog"
         className="w-full max-w-md space-y-3 rounded-md border border-brand-300 bg-surface p-4 shadow-xl"
       >
-        <p id="confirm-dialog-message" className="text-sm font-medium text-slate-900">
-          {message}
-        </p>
-        <p data-testid="confirm-dialog-count" className="text-sm text-muted">
-          {affectedCount} item{affectedCount === 1 ? "" : "s"} will be affected.
-        </p>
-        {requireReason && (
+        {errorOnlyMessage ? (
+          <p
+            id="confirm-dialog-message"
+            role="alert"
+            className="text-sm font-medium text-danger-700"
+          >
+            {errorOnlyMessage}
+          </p>
+        ) : (
+          <>
+            <p id="confirm-dialog-message" className="text-sm font-medium text-slate-900">
+              {message}
+            </p>
+            <p data-testid="confirm-dialog-count" className="text-sm text-muted">
+              {affectedCount} item{affectedCount === 1 ? "" : "s"} will be affected.
+            </p>
+            {confirmDisabledMessage && (
+              <p role="alert" className="text-sm font-medium text-danger-700">
+                {confirmDisabledMessage}
+              </p>
+            )}
+          </>
+        )}
+        {!errorOnlyMessage && requireReason && (
           <div className="flex flex-col gap-1">
             <label
               htmlFor="confirm-dialog-reason"
@@ -104,22 +127,35 @@ export function ConfirmDialog({
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            ref={cancelButtonRef}
-            onClick={onCancel}
-            className={BUTTON_STYLES.secondary}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={reasonMissing}
-            className={BUTTON_STYLES.primary}
-          >
-            {confirmLabel} ({affectedCount})
-          </button>
+          {errorOnlyMessage ? (
+            <button
+              type="button"
+              ref={cancelButtonRef}
+              onClick={onCancel}
+              className={BUTTON_STYLES.primary}
+            >
+              OK
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                ref={cancelButtonRef}
+                onClick={onCancel}
+                className={BUTTON_STYLES.secondary}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={reasonMissing || confirmDisabled}
+                className={BUTTON_STYLES.primary}
+              >
+                {confirmLabel} ({affectedCount})
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

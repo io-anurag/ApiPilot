@@ -1,4 +1,5 @@
 import type { ApiModel } from "./apiModel";
+import type { IntegrationWorkflow } from "./apiDependency";
 import type { Provenance, TestModel } from "./testModel";
 
 /**
@@ -23,6 +24,10 @@ export interface ArtifactVariable {
   purpose: string;
   secret: boolean;
   value: string;
+  provenance?: {
+    workflowId: string;
+    relationshipId?: string;
+  };
 }
 
 /** Postman Collection Format v2.1.0 schema identifier emitted in `info.schema`. */
@@ -95,6 +100,12 @@ export interface PostmanRequestItem {
   name: string;
   request: PostmanRequest;
   event?: PostmanEvent[];
+  provenance?: {
+    workflowId: string;
+    stepPosition: number;
+    scenarioId: string;
+    relationshipIds: string[];
+  };
 }
 
 export interface PostmanFolder {
@@ -137,7 +148,12 @@ export type GenerationLimitationKind =
   | "unsupported-content-type"
   | "unresolved-path-parameter"
   | "specification-analysis-issue"
-  | "alternative-auth-requirement-selected";
+  | "alternative-auth-requirement-selected"
+  | "workflow-missing-scenario"
+  | "workflow-unsupported-sequence"
+  | "workflow-unresolved-handoff"
+  | "workflow-unsupported-extraction-path"
+  | "workflow-unsupported-request-representation";
 
 /**
  * A recorded gap. A limitation never blocks the export; a validation problem always does.
@@ -146,8 +162,17 @@ export type GenerationLimitationKind =
 export interface GenerationLimitation {
   kind: GenerationLimitationKind;
   scenarioId?: string;
+  workflowId?: string;
+  stepPosition?: number;
+  relationshipId?: string;
   location: string;
   message: string;
+}
+
+/** Explicit workflow-review input at the artifact boundary. */
+export interface WorkflowExportContext {
+  workflows: IntegrationWorkflow[];
+  approvedWorkflowIds: string[];
 }
 
 /** Pre-delivery check of the emitted collection; `valid: false` withholds the artifacts (FR-015). */
@@ -167,6 +192,12 @@ export interface ExportSummary {
   requestCount: number;
   folderCount: number;
   byProvenance: ProvenanceCounts;
+  workflowCount: number;
+  workflowRequestCount: number;
+  standaloneRequestCount: number;
+  workflowVariableCount: number;
+  unsupportedWorkflowCount: number;
+  omittedWorkflowCount: number;
 }
 
 /** The human-readable accompanying document (`README.md`) content. */
@@ -197,12 +228,12 @@ export interface ExportFailure {
 }
 
 export type ExportOutcome =
-  | { ok: true; result: ExportResult }
-  | { ok: false; failure: ExportFailure };
+  { ok: true; result: ExportResult } | { ok: false; failure: ExportFailure };
 
 /** Full request body accepted by `POST /api/test-models/postman-collection`. */
 export interface PostmanCollectionExportRequest {
   apiModel: ApiModel;
   testModel: TestModel;
+  workflowContext?: WorkflowExportContext;
   options?: ExportOptions;
 }

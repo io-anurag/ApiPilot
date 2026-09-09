@@ -5,6 +5,7 @@ import type {
   SchemaConstraint,
   TestScenario,
 } from "@apipilot/shared-domain";
+import { workflowVariableName } from "./workflowRendering";
 
 /**
  * Translates the assertions an approved scenario already carries into executable checks
@@ -123,5 +124,37 @@ export function translateAssertions(scenario: TestScenario): AssertionTranslatio
   return {
     event: { listen: "test", script: { type: "text/javascript", exec: lines } },
     limitations,
+  };
+}
+
+export interface WorkflowExtraction {
+  workflowId: string;
+  variableName: string;
+  responseField: string;
+}
+
+function extractionLines(extraction: WorkflowExtraction): string[] {
+  const access = extraction.responseField
+    .split(".")
+    .map((part) => `[${JSON.stringify(part)}]`)
+    .join("");
+  const variable = workflowVariableName(extraction.workflowId, extraction.variableName);
+  return [
+    `pm.collectionVariables.set(${JSON.stringify(variable)}, workflowResponse${access});`,
+  ];
+}
+
+export function appendWorkflowExtractions(
+  event: PostmanEvent | undefined,
+  extractions: WorkflowExtraction[],
+): PostmanEvent | undefined {
+  if (extractions.length === 0) return event;
+  const lines = [
+    `const workflowResponse = pm.response.json();`,
+    ...extractions.flatMap(extractionLines),
+  ];
+  return {
+    listen: "test",
+    script: { type: "text/javascript", exec: [...(event?.script.exec ?? []), ...lines] },
   };
 }

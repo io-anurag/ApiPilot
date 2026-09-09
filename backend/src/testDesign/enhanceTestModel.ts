@@ -337,6 +337,8 @@ export async function retryOneBatch(
 
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
 export interface EnhanceTestModelOptions {
+  /** Fires once the deterministic batch plan is fixed, before any unit starts. */
+  onPlan?: (total: number) => void;
   /**
    * Operations per AI request, overriding the configured default. Test-facing seam
    * (specs/014-ai-batching-policy FR-001) so unit sizing can be exercised without touching env.
@@ -438,6 +440,7 @@ export async function enhanceTestModel(
     budgetChars,
     options.operationsPerUnit ?? loadAIConfig().planning.enhancementOperationsPerUnit,
   );
+  options.onPlan?.(batches.length);
 
   // Pre-flight refusal (FR-013). Uniform, work-bounded units are what make a single estimate
   // representative of the whole run: every unit costs roughly the same, so if the most expensive one

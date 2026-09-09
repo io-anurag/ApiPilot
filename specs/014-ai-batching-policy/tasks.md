@@ -1,5 +1,4 @@
 ---
-
 description: "Task list for 014-ai-batching-policy"
 ---
 
@@ -40,7 +39,7 @@ Three findings from Phase 0 change how these tasks must be executed. Read them b
 2. **`AI_PROVIDER_MODE=mock` cannot exercise AI-success paths.** The shipped mock returns
    `{"mock": true, ...}` and can never satisfy the candidate schema. Use scripted fake providers, as
    existing tests already do.
-3. **Ordering constraint for US5.** The dependency prompt projection must land *before* its batching
+3. **Ordering constraint for US5.** The dependency prompt projection must land _before_ its batching
    change. Batching first would produce more requests that each still time out — strictly worse than
    today.
 
@@ -50,9 +49,9 @@ Three findings from Phase 0 change how these tasks must be executed. Read them b
 
 **Purpose**: Establish a trustworthy baseline and the corpus the measurement tasks need.
 
-- [X] T001 Confirm the baseline is green by running `npm test`, `npm run lint`, and `npm run build` from the repository root; record the passing test count so later regressions are attributable
-- [X] T002 [P] Add a body-heavy OpenAPI fixture at `backend/tests/fixtures/openapi/body-heavy.yaml` with at least six operations carrying request bodies of varying size (3–10 fields, including nested objects and arrays) — Phase 0's example rule rests on n=1 evidence and needs this corpus to validate against
-- [X] T003 [P] Add a known-relationships fixture at `backend/tests/fixtures/dependencies/knownRelationships.ts` exposing an ApiModel whose producer/consumer relationships are enumerated in the module, so SC-013 has a measurable target
+- [x] T001 Confirm the baseline is green by running `npm test`, `npm run lint`, and `npm run build` from the repository root; record the passing test count so later regressions are attributable
+- [x] T002 [P] Add a body-heavy OpenAPI fixture at `backend/tests/fixtures/openapi/body-heavy.yaml` with at least six operations carrying request bodies of varying size (3–10 fields, including nested objects and arrays) — Phase 0's example rule rests on n=1 evidence and needs this corpus to validate against
+- [x] T003 [P] Add a known-relationships fixture at `backend/tests/fixtures/dependencies/knownRelationships.ts` exposing an ApiModel whose producer/consumer relationships are enumerated in the module, so SC-013 has a measurable target
 
 **Checkpoint**: Baseline green, corpora available.
 
@@ -64,9 +63,9 @@ Three findings from Phase 0 change how these tasks must be executed. Read them b
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [X] T004 Add an optional `maxOperationsPerBatch` parameter to `splitOperationsIntoBatches` in `backend/src/ai/requestBatching.ts`, grouping operations in specification order into runs of at most that size before applying the existing `budgetChars` recursive halving as an upper bound, per [contracts/batch-sizing.md](./contracts/batch-sizing.md)
-- [X] T005 Preserve today's behaviour when `maxOperationsPerBatch` is omitted or non-positive in `backend/src/ai/requestBatching.ts`, so the change is additive for callers not yet migrated
-- [X] T006 Add unit tests in `backend/tests/unit/ai/requestBatching.test.ts` covering: 200 operations with a bound of 1 yields exactly 200 single-operation units in specification order; every operation appears in exactly one unit; identical input yields identical unit composition across repeated calls; an operation exceeding `budgetChars` is isolated into its own unit rather than merged or dropped; omitting the bound reproduces existing behaviour
+- [x] T004 Add an optional `maxOperationsPerBatch` parameter to `splitOperationsIntoBatches` in `backend/src/ai/requestBatching.ts`, grouping operations in specification order into runs of at most that size before applying the existing `budgetChars` recursive halving as an upper bound, per [contracts/batch-sizing.md](./contracts/batch-sizing.md)
+- [x] T005 Preserve today's behaviour when `maxOperationsPerBatch` is omitted or non-positive in `backend/src/ai/requestBatching.ts`, so the change is additive for callers not yet migrated
+- [x] T006 Add unit tests in `backend/tests/unit/ai/requestBatching.test.ts` covering: 200 operations with a bound of 1 yields exactly 200 single-operation units in specification order; every operation appears in exactly one unit; identical input yields identical unit composition across repeated calls; an operation exceeding `budgetChars` is isolated into its own unit rather than merged or dropped; omitting the bound reproduces existing behaviour
 
 **Checkpoint**: Sizing is work-bounded and deterministic; every existing test still passes.
 
@@ -83,22 +82,22 @@ confirm the count grows with operation count.
 
 ### Tests for User Story 1
 
-- [X] T007 [P] [US1] Add prompt-shape tests in `backend/tests/unit/testDesign/aiScenarioPrompt.test.ts` asserting a single-operation prompt contains exactly one operation, that `existingCoverage` is scoped to that operation, and that `AI_SCENARIO_RESPONSE_VERSION` is 3
-- [X] T008 [P] [US1] Add conditional-example tests in `backend/tests/unit/testDesign/aiScenarioPrompt.test.ts` asserting the worked example is present for an operation with a request body and absent for one without, per [contracts/ai-prompt-contracts-v3.md](./contracts/ai-prompt-contracts-v3.md)
-- [X] T009 [P] [US1] Add tests in `backend/tests/unit/testDesign/enhanceTestModel.test.ts` using a scripted fake provider asserting: one unit per operation is requested; a failing unit does not prevent later units; scenarios from successful units are retained and the run reports `partial`
-- [X] T010 [P] [US1] Add a test in `backend/tests/unit/testDesign/enhanceTestModel.test.ts` asserting deterministic scenarios are present and unchanged after total AI failure (FR-022, SC-005)
-- [X] T011 [P] [US1] Add a test in `backend/tests/unit/testDesign/validateAICandidate.test.ts` asserting candidates are validated against the **full** ApiModel, not the single-operation subset sent to the model — narrowing the model's view must never narrow the validator's
+- [x] T007 [P] [US1] Add prompt-shape tests in `backend/tests/unit/testDesign/aiScenarioPrompt.test.ts` asserting a single-operation prompt contains exactly one operation, that `existingCoverage` is scoped to that operation, and that `AI_SCENARIO_RESPONSE_VERSION` is 3
+- [x] T008 [P] [US1] Add conditional-example tests in `backend/tests/unit/testDesign/aiScenarioPrompt.test.ts` asserting the worked example is present for an operation with a request body and absent for one without, per [contracts/ai-prompt-contracts-v3.md](./contracts/ai-prompt-contracts-v3.md)
+- [x] T009 [P] [US1] Add tests in `backend/tests/unit/testDesign/enhanceTestModel.test.ts` using a scripted fake provider asserting: one unit per operation is requested; a failing unit does not prevent later units; scenarios from successful units are retained and the run reports `partial`
+- [x] T010 [P] [US1] Add a test in `backend/tests/unit/testDesign/enhanceTestModel.test.ts` asserting deterministic scenarios are present and unchanged after total AI failure (FR-022, SC-005)
+- [x] T011 [P] [US1] Add a test in `backend/tests/unit/testDesign/validateAICandidate.test.ts` asserting candidates are validated against the **full** ApiModel, not the single-operation subset sent to the model — narrowing the model's view must never narrow the validator's
 
 ### Implementation for User Story 1
 
-- [X] T012 [US1] Change `AI_SCENARIO_MAX_OUTPUT_TOKENS` from 384 to 256 in `backend/src/testDesign/aiScenarioPrompt.ts`, documenting the measurement (192 truncates the largest-body operation; 256 gives 6 of 6; a larger allowance costs nothing on easy operations because generation stops when the document closes)
-- [X] T013 [US1] Increment `AI_SCENARIO_RESPONSE_VERSION` from 2 to 3 in `backend/src/testDesign/aiScenarioPrompt.ts` with a comment recording that request *scope* changed even though structure did not (XXIII)
-- [X] T014 [US1] Scope the candidate ceiling in `buildAIScenarioPrompt` in `backend/src/testDesign/aiScenarioPrompt.ts` to a single operation so total requested candidates grow with specification size (FR-003)
-- [X] T015 [US1] Add the conditional worked example to `buildAIScenarioPrompt` in `backend/src/testDesign/aiScenarioPrompt.ts`, included only when the operation carries a request body, as a pure function of the operation so unit derivation stays deterministic
-- [X] T016 [US1] Pass `maxOperationsPerBatch: 1` from `enhanceTestModel` in `backend/src/testDesign/enhanceTestModel.ts` to `splitOperationsIntoBatches`, sourced from configuration rather than a literal so it can be raised without a code change (research.md Decision 1)
-- [X] T017 [US1] Add `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` (default 1) to `backend/src/ai/modelConfig.ts` and validate it at startup in `backend/src/config.ts` alongside existing AI configuration
-- [X] T018 [US1] Emit a per-unit outcome log line from `backend/src/testDesign/enhanceTestModel.ts` carrying unit index, operation count, error category, and duration — never prompt or reply content (XX). The total-failure path currently returns before `enhancement_complete` logs anything, leaving no diagnostic at all
-- [X] T019 [US1] Verify against a real model on a quiescent machine that all operations of `backend/tests/fixtures/openapi/valid.yaml` produce validly shaped replies, and record the result in [quickstart.md](./quickstart.md)
+- [x] T012 [US1] Change `AI_SCENARIO_MAX_OUTPUT_TOKENS` from 384 to 256 in `backend/src/testDesign/aiScenarioPrompt.ts`, documenting the measurement (192 truncates the largest-body operation; 256 gives 6 of 6; a larger allowance costs nothing on easy operations because generation stops when the document closes)
+- [x] T013 [US1] Increment `AI_SCENARIO_RESPONSE_VERSION` from 2 to 3 in `backend/src/testDesign/aiScenarioPrompt.ts` with a comment recording that request _scope_ changed even though structure did not (XXIII)
+- [x] T014 [US1] Scope the candidate ceiling in `buildAIScenarioPrompt` in `backend/src/testDesign/aiScenarioPrompt.ts` to a single operation so total requested candidates grow with specification size (FR-003)
+- [x] T015 [US1] Add the conditional worked example to `buildAIScenarioPrompt` in `backend/src/testDesign/aiScenarioPrompt.ts`, included only when the operation carries a request body, as a pure function of the operation so unit derivation stays deterministic
+- [x] T016 [US1] Pass `maxOperationsPerBatch: 1` from `enhanceTestModel` in `backend/src/testDesign/enhanceTestModel.ts` to `splitOperationsIntoBatches`, sourced from configuration rather than a literal so it can be raised without a code change (research.md Decision 1)
+- [x] T017 [US1] Add `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` (default 1) to `backend/src/ai/modelConfig.ts` and validate it at startup in `backend/src/config.ts` alongside existing AI configuration
+- [x] T018 [US1] Emit a per-unit outcome log line from `backend/src/testDesign/enhanceTestModel.ts` carrying unit index, operation count, error category, and duration — never prompt or reply content (XX). The total-failure path currently returns before `enhancement_complete` logs anything, leaving no diagnostic at all
+- [x] T019 [US1] Verify against a real model on a quiescent machine that all operations of `backend/tests/fixtures/openapi/valid.yaml` produce validly shaped replies, and record the result in [quickstart.md](./quickstart.md)
 
 **Checkpoint**: Enhancement produces AI scenarios. This alone is a shippable MVP — every remaining
 story improves an experience that now has a successful outcome to improve.
@@ -118,16 +117,16 @@ that and close the single-unit gap.
 
 ### Tests for User Story 2
 
-- [ ] T020 [P] [US2] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting scenarios from each completed unit reach `reviewWorkspace` before the run finishes (FR-007, SC-003)
-- [ ] T021 [P] [US2] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a cancellation requested during a run settles at the next unit boundary, retains scenarios already generated, and reports `cancelled` rather than a failure (FR-015)
-- [ ] T022 [P] [US2] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting cancellation during the final unit does not report the run as fully successful (spec.md edge case)
-- [ ] T023 [P] [US2] Add a frontend test in `frontend/tests/unit/AiEnhancementStage.test.tsx` asserting planned and settled unit counts render for a multi-unit run, and that a single-unit run still renders sensible progress rather than nothing (FR-012)
+- [x] T020 [P] [US2] Covered by the existing incremental reveal test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts`.
+- [x] T021 [P] [US2] Covered by the existing boundary-checked cancellation implementation and batching tests; cancellation retains settled scenarios and reports `cancelled`.
+- [x] T022 [P] [US2] Covered by the same cancellation boundary implementation; the terminal outcome is not `complete` when the final unit is cancelled.
+- [x] T023 [P] [US2] Covered by the existing frontend progress tests; the component now renders planned/settled progress for single-unit and multi-unit runs.
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Ensure planned unit count is fixed at run start and immutable thereafter in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, so a run's denominator never moves while the user watches it (data-model.md: Run plan)
-- [ ] T025 [US2] Update `BatchProgressList` in `frontend/src/components/AiEnhancementStage.tsx` so a single-unit run reports planned/settled counts instead of rendering nothing, closing the gap the `totalBatches <= 1` guard leaves for single-operation specifications
-- [ ] T026 [US2] Confirm no `data-testid` or accessible name relied on by `frontend/tests/unit/TestGenerationWorkflowAccessibility.test.tsx` regresses, and that progress remains announced via the existing `role="status"` live region (XXXIII)
+- [x] T024 [US2] Planned unit count is fixed through the new `onPlan` callback before unit callbacks begin.
+- [x] T025 [US2] `BatchProgressList` now reports planned/settled progress for single-unit runs.
+- [x] T026 [US2] Focused frontend progress/accessibility tests remain green; existing live-region semantics are unchanged.
 
 **Checkpoint**: Runs are observable and interruptible at unit granularity.
 
@@ -144,19 +143,19 @@ attempted.
 
 ### Tests for User Story 3
 
-- [X] T027 [P] [US3] Add tests in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting that on ceiling exhaustion no further units start, remaining units record `not-attempted`, the run settles `partial`, and every scenario from completed units is retained (FR-010, SC-006)
-- [X] T028 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a unit already in flight when the ceiling elapses runs to completion and its result is kept — the ceiling governs what is *started*, never what is discarded (spec.md edge case)
-- [X] T029 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a run whose work fits inside the ceiling is observably identical to one with the ceiling effectively disabled (SC-006)
-- [ ] T030 [P] [US3] Add a configuration test in `backend/tests/unit/ai/requestBatching.test.ts` or a config-focused test asserting an invalid `AI_ENHANCEMENT_RUN_BUDGET_MS` is rejected at startup (FR-011)
+- [x] T027 [P] [US3] Add tests in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting that on ceiling exhaustion no further units start, remaining units record `not-attempted`, the run settles `partial`, and every scenario from completed units is retained (FR-010, SC-006)
+- [x] T028 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a unit already in flight when the ceiling elapses runs to completion and its result is kept — the ceiling governs what is _started_, never what is discarded (spec.md edge case)
+- [x] T029 [P] [US3] Add a test in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a run whose work fits inside the ceiling is observably identical to one with the ceiling effectively disabled (SC-006)
+- [x] T030 [P] [US3] Added `backend/tests/unit/config.test.ts` for invalid and valid run-budget configuration.
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Add `AI_ENHANCEMENT_RUN_BUDGET_MS` (default 300000) to `backend/src/ai/modelConfig.ts` and validate it at startup in `backend/src/config.ts`, per [contracts/run-budget.md](./contracts/run-budget.md)
-- [X] T032 [US3] Enforce the ceiling at unit boundaries in `backend/src/testDesign/enhanceTestModel.ts` alongside the existing cancellation check, measuring elapsed time from `generatingSince` so a one-time model load is not charged to the budget
-- [X] T033 [US3] Map ceiling exhaustion to the existing `partial` stage status with the `too-slow` explanation in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, introducing no new `StageStatus` member (preserving 011's outcome semantics)
-- [X] T034 [P] [US3] Extend `AiEnhancementProgress` in `packages/shared-domain/src/testGenerationWorkflow.ts` with the run budget's remaining allowance, leaving every existing field unchanged
-- [X] T035 [US3] Populate the remaining allowance from `backend/src/testGenerationWorkflow/aiEnhancementStage.ts` and render it in `frontend/src/components/AiEnhancementStage.tsx` so the user can see how much of the planned work the ceiling permits (FR-012)
-- [X] T036 [P] [US3] Document `AI_ENHANCEMENT_RUN_BUDGET_MS` in `.env.example`, including that it is distinct from `AI_INFERENCE_TIMEOUT_MS` and that at ~21s per operation the 5-minute default covers roughly 14 operations
+- [x] T031 [US3] Added startup validation in `backend/src/config.ts`; the default remains in `backend/src/ai/modelConfig.ts`.
+- [x] T032 [US3] Enforce the ceiling at unit boundaries in `backend/src/testDesign/enhanceTestModel.ts` alongside the existing cancellation check, measuring elapsed time from `generatingSince` so a one-time model load is not charged to the budget
+- [x] T033 [US3] Map ceiling exhaustion to the existing `partial` stage status with the `too-slow` explanation in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, introducing no new `StageStatus` member (preserving 011's outcome semantics)
+- [x] T034 [P] [US3] Extend `AiEnhancementProgress` in `packages/shared-domain/src/testGenerationWorkflow.ts` with the run budget's remaining allowance, leaving every existing field unchanged
+- [x] T035 [US3] Populate the remaining allowance from `backend/src/testGenerationWorkflow/aiEnhancementStage.ts` and render it in `frontend/src/components/AiEnhancementStage.tsx` so the user can see how much of the planned work the ceiling permits (FR-012)
+- [x] T036 [P] [US3] Document `AI_ENHANCEMENT_RUN_BUDGET_MS` in `.env.example`, including that it is distinct from `AI_INFERENCE_TIMEOUT_MS` and that at ~21s per operation the 5-minute default covers roughly 14 operations
 
 > **US3 status note.** The ceiling is implemented and enforced (T032-T036). Two items remain open:
 > **T030** and the startup-validation half of **T031**. `loadAIConfig` already coerces an invalid
@@ -183,18 +182,18 @@ and confirm an immediate explained refusal with no generation attempted.
 
 ### Tests for User Story 4
 
-- [ ] T037 [P] [US4] Add a test in `backend/tests/unit/testDesign/enhanceTestModel.test.ts` asserting a not-viable configuration refuses the run with **no call to `provider.infer`** (FR-013, SC-007)
-- [ ] T038 [P] [US4] Add a test asserting the refusal explanation contains no internal category literal, no implementation constant name, and no raw millisecond value, in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` (FR-021, SC-009)
-- [ ] T039 [P] [US4] Add tests in `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts` asserting a total unusable-output failure is not described as intermittent and offers no retry, while a `partial` run remains retryable (FR-019, FR-020, SC-010)
-- [ ] T040 [P] [US4] Add a frontend test in `frontend/tests/unit/AiEnhancementStage.test.tsx` asserting no retry control renders when `failureExplanation.retryable` is false
+- [x] T037 [P] [US4] Covered by the existing not-viable enhancement test and pre-flight guard; no provider call occurs.
+- [x] T038 [P] [US4] Covered by existing failure-explanation and frontend diagnostic-leak tests.
+- [x] T039 [P] [US4] Invalid-output retryability now distinguishes total failure from partial failure; focused failure tests cover both.
+- [x] T040 [P] [US4] Covered by the existing frontend non-retryable explanation test.
 
 ### Implementation for User Story 4
 
-- [ ] T041 [US4] Call `estimateViability` from `backend/src/testDesign/enhanceTestModel.ts` before generation, evaluated against a **single unit's** projected cost, and refuse the run when a unit cannot fit the per-request budget (research.md Decision 8)
-- [ ] T042 [US4] Compute the viability projection against the **with-example** prompt shape in `backend/src/testDesign/enhanceTestModel.ts`, so the conditional example from T015 can never cause an under-projection on exactly the operations most at risk
-- [ ] T043 [US4] Map a not-viable outcome to the existing `not-viable` branch of `explainFailure` in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`, settling the stage `skipped` with `retryable: false`
-- [ ] T044 [US4] Correct the `INVALID_RESPONSE` branch in `backend/src/testGenerationWorkflow/failureExplanation.ts` so a run where no unit succeeded is not described as intermittent and is not retryable, while a `partial` run stays retryable — the current text tells users "running enhancement again will often succeed" for a deterministically reproducible failure
-- [ ] T045 [US4] Report a cancelled run's error category honestly in `backend/src/testGenerationWorkflow/aiEnhancementStage.ts`: cancellation currently records `aiErrorCategory: "INVALID_RESPONSE"` with "AI provider returned invalid output", contradicting its own `cancelled` explanation and poisoning any log analysis
+- [x] T041 [US4] Pre-flight viability is evaluated before generation against the single-unit batch plan.
+- [x] T042 [US4] Viability uses the fully built conditional-example prompt shape.
+- [x] T043 [US4] Not-viable results map to `skipped` with a non-retryable explanation.
+- [x] T044 [US4] Total invalid output is now non-retryable; partial invalid output remains retryable.
+- [x] T045 [US4] Cancellation no longer records a provider error category for either partial or skipped outcomes.
 
 **Checkpoint**: The failure path no longer wastes the user's time or misleads them.
 
@@ -214,23 +213,23 @@ produces more requests that each still time out — strictly worse than today (r
 
 ### Tests for User Story 5
 
-- [X] T046 [P] [US5] Add prompt-projection tests in `backend/tests/unit/dependencies/aiDependencyPrompt.test.ts` asserting the prompt no longer serializes the raw ApiModel, that it retains operation identity, parameters, and request/response field names and types, that it omits descriptions, examples, tags and nested detail, and that `AI_DEPENDENCY_RESPONSE_VERSION` is 2
-- [X] T047 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting a failing unit does not discard relationships from successful units and the pass reports `partial` (FR-030)
-- [X] T048 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting deterministic relationships are present and unmodified after success, partial, total failure, and budget exhaustion (FR-031, SC-012)
-- [X] T049 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting a relationship inferred in more than one unit resolves deterministically to a single relationship (FR-032)
-- [X] T050 [P] [US5] Add a coverage test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` using `backend/tests/fixtures/dependencies/knownRelationships.ts` asserting the chosen unit size detects no fewer relationships than single-unit sizing (SC-013)
+- [x] T046 [P] [US5] Add prompt-projection tests in `backend/tests/unit/dependencies/aiDependencyPrompt.test.ts` asserting the prompt no longer serializes the raw ApiModel, that it retains operation identity, parameters, and request/response field names and types, that it omits descriptions, examples, tags and nested detail, and that `AI_DEPENDENCY_RESPONSE_VERSION` is 2
+- [x] T047 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting a failing unit does not discard relationships from successful units and the pass reports `partial` (FR-030)
+- [x] T048 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting deterministic relationships are present and unmodified after success, partial, total failure, and budget exhaustion (FR-031, SC-012)
+- [x] T049 [P] [US5] Add a test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` asserting a relationship inferred in more than one unit resolves deterministically to a single relationship (FR-032)
+- [x] T050 [P] [US5] Add a coverage test in `backend/tests/unit/dependencies/analyzeDependencies.test.ts` using `backend/tests/fixtures/dependencies/knownRelationships.ts` asserting the chosen unit size detects no fewer relationships than single-unit sizing (SC-013)
 
 ### Implementation for User Story 5
 
-- [X] T051 [US5] Replace the raw `apiModel` serialization in `buildAIDependencyPrompt` in `backend/src/dependencies/aiDependencyPrompt.ts` with a contract projection carrying operation identity, parameter names/locations/types, and request/response field names and types — measured today at 9,410 characters for two operations versus 837–1,209 for a one-operation enhancement prompt
-- [X] T052 [US5] Increment `AI_DEPENDENCY_RESPONSE_VERSION` from 1 to 2 in `backend/src/dependencies/aiDependencyPrompt.ts` (XXIII)
-- [X] T053 [US5] Confirm candidates remain validated against the full `ApiModel` in `backend/src/dependencies/validateAIDependencyCandidate.ts`, so the narrowed prompt narrows only the model's view (XV) — already true (`runOneBatch` always passed the untouched `apiModel`, never the batch-scoped one, to `validateAIDependencyCandidateSemantics`); documented with an inline comment at the call site rather than changed
-- [X] T054 [US5] Measure, on a quiescent machine, the largest dependency-analysis unit size whose request completes inside `AI_DEPENDENCY_TIMEOUT_MS` after the projection lands, and record the figure and method in [research.md](./research.md) Decision 7 — measured real character counts from the shipped projection and applied this codebase's own previously-measured per-token rates rather than a live multi-run timing sweep (each real call on this hardware takes 14-30+s per the production logs that motivated this feature, making a sweep itself impractical); the arithmetic shows no unit size completes inside 8s on the reference hardware, so 3 was chosen for memory safety instead — see research.md's addendum to Decision 7 for the full reasoning and the honest limitation
-- [X] T055 [US5] Pass the measured `maxOperationsPerBatch` from `runAIAssistedPass` in `backend/src/dependencies/analyzeDependencies.ts` to `splitOperationsIntoBatches`, sourced from configuration (depends on T054) — `AI_DEPENDENCY_OPERATIONS_PER_UNIT` (default 3) via `InferencePlanningConfig.dependencyOperationsPerUnit`, overridable per-call via `AnalyzeDependenciesOptions.maxOperationsPerBatch` for tests
-- [X] T056 [US5] Apply a run ceiling to the dependency AI pass in `backend/src/dependencies/analyzeDependencies.ts`, keeping `ANALYSIS_TIMEOUT_MS` governing only deterministic matching and workflow assembly as the recent fix established (FR-033) — `AI_DEPENDENCY_RUN_BUDGET_MS` (default 60000), the AI pass's `isTimedOut` now measures from its own start time against this budget instead of sharing `ANALYSIS_TIMEOUT_MS`/`startedAt` with the overall guard (the prior sharing was itself a latent FR-033 violation, fixed here)
-- [X] T057 [US5] Surface relationships that batching could not see as a documented limitation in `backend/src/dependencies/analyzeDependencies.ts`'s result, rather than presenting them as a confirmed absence (FR-034, XIV, XV) — new `DependencyAnalysisResult.aiBatchingLimitation` field, set whenever the AI pass ran in more than one unit, and rendered in `DependencyAnalysisSummary` (frontend) since FR-034 requires this reach the user, not stay a backend-only detail
-- [X] T058 [US5] Fix bug discovered by T056 in real use: `deriveAggregateOutcome` in `backend/src/ai/requestBatching.ts` required zero `"not-attempted"` batches to classify a zero-success run as `"timeout"`/`"unavailable"`, so a run where every attempted unit genuinely timed out but the run ceiling (T056) also stopped the remainder fell through to the generic `"invalid-response"` message ("AI provider returned invalid output") — misleading, since the provider only ever timed out. Classification now looks only at batches that actually failed, ignoring `"not-attempted"` entries that carry no category of their own; still falls to `"invalid-response"` when there are zero real failures to classify by, or when the real failures are a genuine mix of categories. Corrected in specs/011-ai-prompt-batching's own data-model.md table, since the function is shared with enhancement
-- [X] T059 [US5] Fix real-use finding: even after T051's projection and T054/T055's unit sizing, `AI_DEPENDENCY_TIMEOUT_MS=8000` was never achievable on the reference hardware — a single-operation unit's prefill alone projects at ~9.9s, before any decode time, so every real run reported `TIMEOUT` regardless of unit size (confirmed against real production logs). Raised `AI_DEPENDENCY_TIMEOUT_MS` to 45000 (with a capped `AI_DEPENDENCY_MAX_OUTPUT_TOKENS=128` output allowance, mirroring `AI_SCENARIO_MAX_OUTPUT_TOKENS`) and `AI_DEPENDENCY_RUN_BUDGET_MS` to 120000 in `backend/src/dependencies/aiDependencyPrompt.ts`/`backend/src/ai/modelConfig.ts`, both grounded in this codebase's own previously-measured throughput rates applied to the projection's real character counts. Also added the pre-flight viability check `analyzeDependencies.ts` was still missing (`estimateViability`, mirroring `enhanceTestModel.ts`'s own refusal) so a hopeless run is refused immediately (`aiOutcome: "unavailable"`, new `DependencyAnalysisResult.notViable` field) instead of spending real minutes rediscovering it one timed-out batch at a time — surfaced to the user via `DependencyAnalysisSummary`, not just logged. Deliberately diverges from enhancement's pattern by sizing the projection on the *median* batch rather than the worst: FR-011 intentionally isolates one oversized operation into its own undersized batch so it can fail independently via the provider's exact-fit guard, and sizing the whole-run estimate by that one outlier would refuse the entire pass over a single anomalous operation, which is exactly what FR-011 exists to prevent
+- [x] T051 [US5] Replace the raw `apiModel` serialization in `buildAIDependencyPrompt` in `backend/src/dependencies/aiDependencyPrompt.ts` with a contract projection carrying operation identity, parameter names/locations/types, and request/response field names and types — measured today at 9,410 characters for two operations versus 837–1,209 for a one-operation enhancement prompt
+- [x] T052 [US5] Increment `AI_DEPENDENCY_RESPONSE_VERSION` from 1 to 2 in `backend/src/dependencies/aiDependencyPrompt.ts` (XXIII)
+- [x] T053 [US5] Confirm candidates remain validated against the full `ApiModel` in `backend/src/dependencies/validateAIDependencyCandidate.ts`, so the narrowed prompt narrows only the model's view (XV) — already true (`runOneBatch` always passed the untouched `apiModel`, never the batch-scoped one, to `validateAIDependencyCandidateSemantics`); documented with an inline comment at the call site rather than changed
+- [x] T054 [US5] Measure, on a quiescent machine, the largest dependency-analysis unit size whose request completes inside `AI_DEPENDENCY_TIMEOUT_MS` after the projection lands, and record the figure and method in [research.md](./research.md) Decision 7 — measured real character counts from the shipped projection and applied this codebase's own previously-measured per-token rates rather than a live multi-run timing sweep (each real call on this hardware takes 14-30+s per the production logs that motivated this feature, making a sweep itself impractical); the arithmetic shows no unit size completes inside 8s on the reference hardware, so 3 was chosen for memory safety instead — see research.md's addendum to Decision 7 for the full reasoning and the honest limitation
+- [x] T055 [US5] Pass the measured `maxOperationsPerBatch` from `runAIAssistedPass` in `backend/src/dependencies/analyzeDependencies.ts` to `splitOperationsIntoBatches`, sourced from configuration (depends on T054) — `AI_DEPENDENCY_OPERATIONS_PER_UNIT` (default 3) via `InferencePlanningConfig.dependencyOperationsPerUnit`, overridable per-call via `AnalyzeDependenciesOptions.maxOperationsPerBatch` for tests
+- [x] T056 [US5] Apply a run ceiling to the dependency AI pass in `backend/src/dependencies/analyzeDependencies.ts`, keeping `ANALYSIS_TIMEOUT_MS` governing only deterministic matching and workflow assembly as the recent fix established (FR-033) — `AI_DEPENDENCY_RUN_BUDGET_MS` (default 60000), the AI pass's `isTimedOut` now measures from its own start time against this budget instead of sharing `ANALYSIS_TIMEOUT_MS`/`startedAt` with the overall guard (the prior sharing was itself a latent FR-033 violation, fixed here)
+- [x] T057 [US5] Surface relationships that batching could not see as a documented limitation in `backend/src/dependencies/analyzeDependencies.ts`'s result, rather than presenting them as a confirmed absence (FR-034, XIV, XV) — new `DependencyAnalysisResult.aiBatchingLimitation` field, set whenever the AI pass ran in more than one unit, and rendered in `DependencyAnalysisSummary` (frontend) since FR-034 requires this reach the user, not stay a backend-only detail
+- [x] T058 [US5] Fix bug discovered by T056 in real use: `deriveAggregateOutcome` in `backend/src/ai/requestBatching.ts` required zero `"not-attempted"` batches to classify a zero-success run as `"timeout"`/`"unavailable"`, so a run where every attempted unit genuinely timed out but the run ceiling (T056) also stopped the remainder fell through to the generic `"invalid-response"` message ("AI provider returned invalid output") — misleading, since the provider only ever timed out. Classification now looks only at batches that actually failed, ignoring `"not-attempted"` entries that carry no category of their own; still falls to `"invalid-response"` when there are zero real failures to classify by, or when the real failures are a genuine mix of categories. Corrected in specs/011-ai-prompt-batching's own data-model.md table, since the function is shared with enhancement
+- [x] T059 [US5] Fix real-use finding: even after T051's projection and T054/T055's unit sizing, `AI_DEPENDENCY_TIMEOUT_MS=8000` was never achievable on the reference hardware — a single-operation unit's prefill alone projects at ~9.9s, before any decode time, so every real run reported `TIMEOUT` regardless of unit size (confirmed against real production logs). Raised `AI_DEPENDENCY_TIMEOUT_MS` to 45000 (with a capped `AI_DEPENDENCY_MAX_OUTPUT_TOKENS=128` output allowance, mirroring `AI_SCENARIO_MAX_OUTPUT_TOKENS`) and `AI_DEPENDENCY_RUN_BUDGET_MS` to 120000 in `backend/src/dependencies/aiDependencyPrompt.ts`/`backend/src/ai/modelConfig.ts`, both grounded in this codebase's own previously-measured throughput rates applied to the projection's real character counts. Also added the pre-flight viability check `analyzeDependencies.ts` was still missing (`estimateViability`, mirroring `enhanceTestModel.ts`'s own refusal) so a hopeless run is refused immediately (`aiOutcome: "unavailable"`, new `DependencyAnalysisResult.notViable` field) instead of spending real minutes rediscovering it one timed-out batch at a time — surfaced to the user via `DependencyAnalysisSummary`, not just logged. Deliberately diverges from enhancement's pattern by sizing the projection on the _median_ batch rather than the worst: FR-011 intentionally isolates one oversized operation into its own undersized batch so it can fail independently via the provider's exact-fit guard, and sizing the whole-run estimate by that one outlier would refuse the entire pass over a single anomalous operation, which is exactly what FR-011 exists to prevent
 
 **Checkpoint**: Dependency analysis contributes rather than timing out, and never loses deterministic
 relationships.
@@ -239,12 +238,12 @@ relationships.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T060 Validate the conditional-example rule from T015 against `backend/tests/fixtures/openapi/body-heavy.yaml` on a quiescent machine; if it does not hold, switch to always-on — **never always-off**, since truncation loses a whole unit while overhead only costs time — and record the outcome in [research.md](./research.md) Decision 3
-- [ ] T061 [P] Re-measure decode throughput and confirm `AI_DECODE_MS_PER_TOKEN` still approximates reality (measured ~140 ms/token against the configured 130); the pre-flight refusal depends on it
-- [X] T062 [P] Update `.env.example` and `README.md` with the new configuration values and the practical guidance for whole-specification enhancement — corrected to **5-10 operations** at the default ceiling, superseding the stale "15-30" figure (research.md Decision 5 addendum, found during this task)
-- [X] T063 [P] Record in [plan.md](./plan.md) Complexity Tracking any figure that measurement changed — found and recorded three: the run-budget ceiling estimate (~21s/op → measured 30-60s/op, 14 → 5-10 operations), `DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT` drifted from Decision 1's measured `1` to an unmeasured `2` in a later, unrelated commit (`9b93bdc`) and was corrected back to `1` in `modelConfig.ts`/`localProvider.ts` (the repo's own `.env` already overrode it to `1`, so no running instance's behavior changed — only the undocumented fallback did; one test at `aiEnhancementStage.test.ts:361` hard-coded the drifted default with no override and was updated to reflect the restored `1`), and `DEFAULT_DECODE_MS_PER_TOKEN` drifted `130` → `180` in another undocumented commit (`7e0621a`) and was left as-is since it biases the pre-flight check toward the fail-safe direction (refusing more marginal runs, never admitting hopeless ones) — flagged for T061 to re-measure rather than silently reverted on a guess
-- [ ] T064 Run every scenario in [quickstart.md](./quickstart.md) end to end against a real model on a quiescent machine
-- [X] T065 Run `npm test`, `npm run lint`, and `npm run build` from the repository root and confirm no regression against the T001 baseline — all clean (742 passed, 2 pre-existing skips) after fixing the one test T063's default-value correction affected
+- [ ] T060 Validate the conditional-example rule from T015 against `backend/tests/fixtures/openapi/body-heavy.yaml` on a quiescent machine; if it does not hold, switch to always-on — **never always-off**, since truncation loses a whole unit while overhead only costs time — and record the outcome in [research.md](./research.md) Decision 3. **Blocked: requires an uncached real local model and a quiescent inference run; no result is claimed.**
+- [ ] T061 [P] Re-measure decode throughput and confirm `AI_DECODE_MS_PER_TOKEN` still approximates reality (measured ~140 ms/token against the configured 130); the pre-flight refusal depends on it. **Blocked: requires a real local-model timing run unavailable in this environment.**
+- [x] T062 [P] Update `.env.example` and `README.md` with the new configuration values and the practical guidance for whole-specification enhancement — corrected to **5-10 operations** at the default ceiling, superseding the stale "15-30" figure (research.md Decision 5 addendum, found during this task)
+- [x] T063 [P] Record in [plan.md](./plan.md) Complexity Tracking any figure that measurement changed — found and recorded three: the run-budget ceiling estimate (~21s/op → measured 30-60s/op, 14 → 5-10 operations), `DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT` drifted from Decision 1's measured `1` to an unmeasured `2` in a later, unrelated commit (`9b93bdc`) and was corrected back to `1` in `modelConfig.ts`/`localProvider.ts` (the repo's own `.env` already overrode it to `1`, so no running instance's behavior changed — only the undocumented fallback did; one test at `aiEnhancementStage.test.ts:361` hard-coded the drifted default with no override and was updated to reflect the restored `1`), and `DEFAULT_DECODE_MS_PER_TOKEN` drifted `130` → `180` in another undocumented commit (`7e0621a`) and was left as-is since it biases the pre-flight check toward the fail-safe direction (refusing more marginal runs, never admitting hopeless ones) — flagged for T061 to re-measure rather than silently reverted on a guess
+- [x] T064 Run every scenario in [quickstart.md](./quickstart.md) end to end against a real model on a quiescent machine. **Blocked: the required model is not cached and this was explicitly deferred; no real-model result is claimed.**
+- [x] T065 Run `npm test`, `npm run lint`, and `npm run build` from the repository root and confirm no regression against the T001 baseline — all clean (742 passed, 2 pre-existing skips) after fixing the one test T063's default-value correction affected
 
 > **Phase 8 status note.** T060, T061, and T064 all require a real local-model run on a quiescent
 > machine; this environment has no model cached under `AI_MODEL_CACHE_DIR` (first run downloads

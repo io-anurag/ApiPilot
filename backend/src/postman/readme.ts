@@ -19,10 +19,20 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
   "unsupported-content-type": "Request content types this export cannot represent",
   "unresolved-path-parameter": "Path parameters with no approved value",
   "specification-analysis-issue": "Operations carrying specification analysis issues",
-  "alternative-auth-requirement-selected": "Operations declaring alternative authentication",
+  "alternative-auth-requirement-selected":
+    "Operations declaring alternative authentication",
+  "workflow-missing-scenario": "Workflow steps with no approved scenario",
+  "workflow-unsupported-sequence": "Workflow sequences this export cannot represent",
+  "workflow-unresolved-handoff": "Workflow data handoffs this export could not resolve",
+  "workflow-unsupported-extraction-path": "Workflow response paths this export cannot extract",
+  "workflow-unsupported-request-representation":
+    "Workflow request representations this export cannot express",
 };
 
-function coverageSection(collection: PostmanCollection, summary: ExportResult["summary"]): string[] {
+function coverageSection(
+  collection: PostmanCollection,
+  summary: ExportResult["summary"],
+): string[] {
   const lines = [
     "## Coverage",
     "",
@@ -30,8 +40,16 @@ function coverageSection(collection: PostmanCollection, summary: ExportResult["s
     `- Folders: ${summary.folderCount}`,
     `- Rule-derived scenarios: ${summary.byProvenance.RULE}`,
     `- AI-derived scenarios: ${summary.byProvenance.AI}`,
+    `- Rendered workflows: ${summary.workflowCount}`,
+    `- Workflow requests: ${summary.workflowRequestCount}`,
+    `- Standalone requests: ${summary.standaloneRequestCount}`,
+    `- Workflow data handoffs: ${summary.workflowVariableCount}`,
+    `- Unsupported approved workflows: ${summary.unsupportedWorkflowCount}`,
+    `- Omitted unapproved workflows: ${summary.omittedWorkflowCount}`,
     "",
-    "Requests are organized into one folder per API grouping:",
+    "Workflow folders contain only explicitly approved, fully supported sequences. Standalone",
+    "folders contain approved scenarios not covered by a rendered workflow. Requests are",
+    "organized into one folder per workflow or API grouping:",
     "",
   ];
   for (const folder of collection.item) {
@@ -50,8 +68,12 @@ function variableSection(variables: ArtifactVariable[]): string[] {
     "| Variable | Credential | Purpose |",
     "| --- | --- | --- |",
   ];
-  for (const variable of [...variables].sort((a, b) => compareCodeUnits(a.name, b.name))) {
-    lines.push(`| \`${variable.name}\` | ${variable.secret ? "yes" : "no"} | ${variable.purpose} |`);
+  for (const variable of [...variables].sort((a, b) =>
+    compareCodeUnits(a.name, b.name),
+  )) {
+    lines.push(
+      `| \`${variable.name}\` | ${variable.secret ? "yes" : "no"} | ${variable.purpose} |`,
+    );
   }
   return lines;
 }

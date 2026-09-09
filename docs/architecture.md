@@ -139,9 +139,13 @@ appear only in the marked-sensitive environment artifact.
 
 The generator preserves an approved negative payload as-is and translates only approved assertions.
 No assertion or expected status is added merely to make an export look complete. It reports empty
-approval sets, unsupported auth/content types, missing expected outcomes, and analysis issues as
-limitations. Current export is single-operation only; ordered multi-step workflow rendering is a
-defined future extension.
+approval sets, unsupported auth/content types, missing expected outcomes, analysis issues, and
+unsupported workflow representations remain visible as limitations. When AP-016 workflow context
+is present, explicitly approved and supportable integration workflows are rendered as deterministic
+ordered folders. Producer response fields are extracted into workflow-scoped variables and
+referenced by later approved requests; unsupported workflows are omitted atomically. Workflow
+requests and variables retain source workflow, step, scenario, and relationship provenance.
+Standalone scenarios not covered by a rendered workflow continue to use the existing folder layout.
 
 ## Workflow orchestration
 

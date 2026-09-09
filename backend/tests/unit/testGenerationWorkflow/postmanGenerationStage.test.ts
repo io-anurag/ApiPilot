@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ApiModel } from "@apipilot/shared-domain";
+import type { ApiModel, DependencyAnalysisResult } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { generateTestModel } from "../../../src/testDesign/generateTestModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
@@ -11,7 +11,17 @@ import {
   StageNotActiveError,
 } from "../../../src/testGenerationWorkflow/errors";
 import { runPostmanGeneration } from "../../../src/testGenerationWorkflow/postmanGenerationStage";
-import { patchWorkflow, resetStore, startWorkflow, updateStage } from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  patchWorkflow,
+  resetStore,
+  startWorkflow,
+  updateStage,
+} from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  integrationWorkflow,
+  workflowStep,
+  workflowVariable,
+} from "../../fixtures/postman/workflowFixtures";
 
 async function validApiModel() {
   const content = readFileSync(
@@ -63,6 +73,39 @@ describe("postmanGenerationStage", () => {
     expect(wf.stages.postmanGeneration.status).toBe("complete");
     expect(wf.postmanArtifact?.collection).toBeDefined();
     expect(wf.postmanArtifact?.environment).toBeDefined();
+  });
+
+  it("passes explicitly approved workflows into Postman generation", async () => {
+    const apiModel = await validApiModel();
+    reachPostmanGeneration(apiModel);
+    const approvedTestModel = generateTestModel(apiModel);
+    const variable = workflowVariable("petId", 0, "id", 1, "path", "petId");
+    const workflow = integrationWorkflow(
+      "pets-flow",
+      [
+        workflowStep(0, "POST", "/pets", { producesVariableNames: ["petId"] }),
+        workflowStep(1, "GET", "/pets/{petId}", { consumesVariableNames: ["petId"] }),
+      ],
+      [variable],
+    );
+    const dependencyAnalysis: DependencyAnalysisResult = {
+      requestId: "dependency-test",
+      graph: { relationships: [] },
+      workflows: [workflow],
+      manualConfirmationCandidates: [],
+      cycles: [],
+      aiOutcome: "skipped",
+    };
+    patchWorkflow({
+      dependencyAnalysis,
+      approvedTestModel,
+      approvedWorkflowIds: ["pets-flow"],
+    });
+
+    const result = runPostmanGeneration().postmanArtifact;
+    expect(
+      result?.collection.item.some((folder) => folder.name === "Workflow: pets-flow"),
+    ).toBe(true);
   });
 
   it("refuses when workflowReview has been marked stale, not just not-yet-reached/active (FR-007)", async () => {

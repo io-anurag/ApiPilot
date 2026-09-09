@@ -162,12 +162,15 @@ export function ScenarioReviewStage({
   // scenario is silently excluded. Confirming first, when any remain pending, keeps that
   // exclusion from being a surprise once the pending count is large (FR-011 companion UX).
   function handleFinalizeClick() {
+    setFinalizeError(null);
     if (reviewWorkspace.summary.pending > 0) {
       setConfirmingFinalize(true);
       return;
     }
     void handleFinalize();
   }
+
+  const noAcceptedScenarios = reviewWorkspace.summary.accepted === 0;
 
   return (
     <section
@@ -310,6 +313,11 @@ export function ScenarioReviewStage({
           message={`${reviewWorkspace.summary.pending} scenario${reviewWorkspace.summary.pending === 1 ? " has" : "s have"} no decision and will be excluded — finalize anyway?`}
           affectedCount={reviewWorkspace.summary.pending}
           confirmLabel="Finalize anyway"
+          errorOnlyMessage={
+            noAcceptedScenarios
+              ? "Accept at least one scenario before finalizing the review. Rejected scenarios will not be included."
+              : undefined
+          }
           onConfirm={() => {
             setConfirmingFinalize(false);
             void handleFinalize();

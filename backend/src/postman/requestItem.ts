@@ -20,8 +20,12 @@ import {
   credentialVariable,
   pathParameterVariable,
 } from "./artifactVariables";
-import { translateAssertions } from "./assertionScripts";
-import { itemIdForScenario } from "./identifiers";
+import {
+  appendWorkflowExtractions,
+  translateAssertions,
+  type WorkflowExtraction,
+} from "./assertionScripts";
+import { itemIdForScenario, itemIdForWorkflowStep } from "./identifiers";
 import { sortedEntries } from "./ordering";
 
 /**
@@ -82,6 +86,10 @@ export interface BuildRequestItemInput {
   operation: ApiOperation;
   requestName: string;
   auth?: PostmanAuth;
+  workflowId?: string;
+  workflowStepPosition?: number;
+  workflowRelationshipIds?: string[];
+  workflowExtractions?: WorkflowExtraction[];
 }
 
 /** Output of `buildRequestItem`: the built request item plus any limitations and variables its parts introduced. */
@@ -163,7 +171,11 @@ function buildUrl(
   scenario: TestScenario,
   operation: ApiOperation,
   location: string,
-): { url: PostmanUrl; limitations: GenerationLimitation[]; variables: ArtifactVariable[] } {
+): {
+  url: PostmanUrl;
+  limitations: GenerationLimitation[];
+  variables: ArtifactVariable[];
+} {
   const limitations: GenerationLimitation[] = [];
   const variables: ArtifactVariable[] = [];
   const pathVariables: { key: string; value: string }[] = [];
@@ -228,7 +240,16 @@ function buildUrl(
 
 /** Assembles the full request item (URL, headers, body, auth, assertions) for one scenario, collecting the limitations and variables its parts introduced along the way. */
 export function buildRequestItem(input: BuildRequestItemInput): RequestItemResult {
-  const { scenario, operation, requestName, auth } = input;
+  const {
+    scenario,
+    operation,
+    requestName,
+    auth,
+    workflowId,
+    workflowStepPosition,
+    workflowRelationshipIds = [],
+    workflowExtractions = [],
+  } = input;
   const location = `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath}`;
 
   const credentialVariables: ArtifactVariable[] = [];
@@ -248,8 +269,12 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
     header.push({ key: "Content-Type", value: bodyResult.contentType });
   }
 
+  const event = appendWorkflowExtractions(assertions.event, workflowExtractions);
   const item: PostmanRequestItem = {
-    id: itemIdForScenario(scenario.id),
+    id:
+      workflowId !== undefined && workflowStepPosition !== undefined
+        ? itemIdForWorkflowStep(workflowId, workflowStepPosition, scenario.id)
+        : itemIdForScenario(scenario.id),
     name: requestName,
     request: {
       method: scenario.operationMethod.toUpperCase(),
@@ -258,12 +283,26 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
       ...(bodyResult.body ? { body: bodyResult.body } : {}),
       ...(auth ? { auth } : {}),
     },
-    ...(assertions.event ? { event: [assertions.event] } : {}),
+    ...(event ? { event: [event] } : {}),
+    ...(workflowId !== undefined && workflowStepPosition !== undefined
+      ? {
+          provenance: {
+            workflowId,
+            stepPosition: workflowStepPosition,
+            scenarioId: scenario.id,
+            relationshipIds: workflowRelationshipIds,
+          },
+        }
+      : {}),
   };
 
   return {
     item,
-    limitations: [...url.limitations, ...bodyResult.limitations, ...assertions.limitations],
+    limitations: [
+      ...url.limitations,
+      ...bodyResult.limitations,
+      ...assertions.limitations,
+    ],
     variables: [...url.variables, ...credentialVariables],
   };
 }

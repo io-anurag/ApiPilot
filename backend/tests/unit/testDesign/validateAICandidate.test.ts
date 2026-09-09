@@ -4,6 +4,7 @@ import {
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "../../../src/testDesign/validateAICandidate";
+import { buildAIScenarioPrompt } from "../../../src/testDesign/aiScenarioPrompt";
 
 const candidate = {
   candidateId: "candidate-1",
@@ -68,5 +69,56 @@ describe("AI candidate validation", () => {
     expect(validateAICandidateShape({ ...candidate, candidateId: "" })).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "invalid-shape" })]),
     );
+  });
+
+  it("validates against the full model when prompt projection omits a later field", () => {
+    const operation = aiScenarioApiModel.operations[0];
+    const schema = operation.requestBody?.contentTypes["application/json"];
+    if (!schema) throw new Error("fixture request body schema is required");
+
+    const fullModel = {
+      ...aiScenarioApiModel,
+      operations: [
+        {
+          ...operation,
+          requestBody: {
+            ...operation.requestBody!,
+            contentTypes: {
+              "application/json": {
+                ...schema,
+                properties: {
+                  ...schema.properties,
+                  ...Object.fromEntries(
+                    Array.from({ length: 12 }, (_, index) => [
+                      `field${index + 1}`,
+                      { type: "string", required: [], properties: {} },
+                    ]),
+                  ),
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+    const prompt = JSON.parse(buildAIScenarioPrompt(fullModel, { scenarios: [] })) as {
+      operations: { requestBody?: { fields: { name: string }[] } }[];
+    };
+    expect(
+      prompt.operations[0].requestBody?.fields.map((field) => field.name),
+    ).not.toContain("field12");
+
+    const findings = validateAICandidateSemantics(
+      {
+        ...candidate,
+        targetField: "field12",
+        request: {
+          ...candidate.request,
+          body: { field12: "bad" },
+        },
+      },
+      fullModel,
+    );
+    expect(findings).toEqual([]);
   });
 });

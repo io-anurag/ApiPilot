@@ -23,6 +23,7 @@ below for where each one currently stands in the `clarify` → `plan` → `check
 | AP-010 — Presentation System & Review Scalability | Implemented |
 | Hardening — Bounded AI Prompt Batching (`011-ai-prompt-batching`) | Implemented |
 | Hardening — AI Enhancement Progress Visibility (`012-ai-enhancement-progress`) | Implemented (1 follow-up task outstanding: manual real-model UI validation from quickstart.md, optional) |
+| Hardening — AI Enhancement Viability (`013-ai-enhancement-viability`) | Implemented with follow-up validation outstanding: benchmark workload/dtype evidence, endpoint integration coverage, fake-timer UI coverage, and regression checklist |
 | AP-011 — Test Execution & Results *(post-MVP)* | Not started |
 | AP-012 — AI Failure Analysis *(post-MVP)* | Not started |
 
@@ -31,6 +32,9 @@ started) and the hardening specs' directory names (`011-ai-prompt-batching`,
 `012-ai-enhancement-progress`, both otherwise unrelated to those two post-MVP features) — the
 hardening specs are intentionally unnumbered in the Feature Decomposition below precisely to
 avoid implying they are the same items as AP-011/AP-012.
+
+The `012-ai-enhancement-progress` follow-up real-model validation surfaced the local inference
+capacity and output-reliability defects addressed by `013-ai-enhancement-viability`.
 
 Each spec's own `spec.md` still carries a template-default `**Status**: Draft` header — that
 field is not maintained after `/speckit-specify` runs and should not be read as the feature's

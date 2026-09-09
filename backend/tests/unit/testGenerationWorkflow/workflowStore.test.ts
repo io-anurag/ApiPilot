@@ -4,6 +4,9 @@ import {
   InvalidStageTransitionError,
   getCurrentWorkflow,
   patchWorkflow,
+  markAiEnhancementGenerating,
+  requestAiEnhancementCancel,
+  setAiEnhancementProgress,
   resetStore,
   startWorkflow,
   updateStage,
@@ -50,7 +53,9 @@ describe("workflowStore", () => {
 
   it("updateStage rejects an invalid transition", () => {
     startWorkflow({ specificationFilename: "valid.yaml", apiModel });
-    expect(() => updateStage("postmanGeneration", "complete")).toThrow(InvalidStageTransitionError);
+    expect(() => updateStage("postmanGeneration", "complete")).toThrow(
+      InvalidStageTransitionError,
+    );
   });
 
   it("updateStage allows active -> skipped only for aiEnhancement", () => {
@@ -64,7 +69,9 @@ describe("workflowStore", () => {
     expect(wf.stages.aiEnhancement.aiErrorCategory).toBe("PROVIDER_UNAVAILABLE");
 
     updateStage("deterministicGeneration", "active");
-    expect(() => updateStage("deterministicGeneration", "skipped")).toThrow(InvalidStageTransitionError);
+    expect(() => updateStage("deterministicGeneration", "skipped")).toThrow(
+      InvalidStageTransitionError,
+    );
   });
 
   it("updateStage allows skipped -> active for aiEnhancement retry (FR-008a)", () => {
@@ -108,5 +115,28 @@ describe("workflowStore", () => {
   it("updateStage/patchWorkflow throw when no workflow is in progress", () => {
     expect(() => updateStage("apiReview", "active")).toThrow();
     expect(() => patchWorkflow({})).toThrow();
+  });
+
+  it("enforces one-way progress phase and cancellation transitions", () => {
+    const started = startWorkflow({ specificationFilename: "valid.yaml", apiModel });
+    const preparing = setAiEnhancementProgress({
+      totalBatches: 0,
+      batches: [],
+      startedAt: started.createdAt,
+      phase: "preparing",
+      cancelRequested: false,
+    });
+    expect(preparing.stages.aiEnhancement.progress?.generatingSince).toBeUndefined();
+
+    const generating = markAiEnhancementGenerating();
+    expect(generating.stages.aiEnhancement.progress?.phase).toBe("generating");
+    expect(generating.stages.aiEnhancement.progress?.generatingSince).toBeDefined();
+    expect(
+      generating.stages.aiEnhancement.progress?.generatingSince! >= started.createdAt,
+    ).toBe(true);
+
+    const cancelled = requestAiEnhancementCancel();
+    expect(cancelled.stages.aiEnhancement.progress?.cancelRequested).toBe(true);
+    expect(requestAiEnhancementCancel()).toEqual(cancelled);
   });
 });
