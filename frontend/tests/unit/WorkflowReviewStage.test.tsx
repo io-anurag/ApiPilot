@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { DependencyAnalysisResult } from "@apipilot/shared-domain";
 import { WorkflowReviewStage } from "../../src/components/WorkflowReviewStage";
@@ -17,6 +17,10 @@ function makeDependencyAnalysis(workflowIds: string[]): DependencyAnalysisResult
 }
 
 describe("WorkflowReviewStage bulk actions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders one distinguishable selection checkbox per workflow row, plus a select-all checkbox", () => {
     render(
       <WorkflowReviewStage

@@ -21,13 +21,25 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "concurrently": "^9.0.1",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.3",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.1"
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2",
+    "qs": "6.16.0",
+    "sharp": "0.35.4",
+    "adm-zip": "0.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "esbuild@0.28.2": true,
+    "onnxruntime-node@1.24.3": true,
+    "protobufjs@7.6.6": true
   }
 }

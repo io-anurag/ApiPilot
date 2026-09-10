@@ -31,7 +31,7 @@ export function createAiStatusRouter(provider: AIProvider): Router {
           statusCode: 200,
           durationMs: Date.now() - startedAt,
         });
-      } catch (error) {
+      } catch {
         // Never leak a raw exception (constitution XIX, XX).
         logger.error("request_failed", {
           method: req.method,
