@@ -120,6 +120,43 @@ describe("WorkflowStageTracker", () => {
     expect(screen.getByTestId("stage-status-apiReview")).not.toHaveTextContent("revisit");
   });
 
+  it("moves the highlighted/current stage to whichever stage is being viewed, not just the true active stage", () => {
+    const workflow = workflowWithStatuses({
+      apiReview: "complete",
+      scenarioReview: "complete",
+    });
+    workflow.activeStageId = "workflowReview";
+
+    const { rerender } = render(
+      <WorkflowStageTracker
+        workflow={workflow}
+        onViewStage={() => {}}
+        viewedStageId={workflow.activeStageId}
+      />,
+    );
+    expect(screen.getByTestId("stage-status-workflowReview").closest("li")).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
+    expect(
+      screen.getByTestId("stage-status-apiReview").closest("li"),
+    ).not.toHaveAttribute("aria-current");
+
+    // Clicking "back" to view a completed stage (apiReview) must move the highlight there too —
+    // it must not stay pinned to the true active stage (workflowReview) while its content is no
+    // longer what's on screen.
+    rerender(
+      <WorkflowStageTracker workflow={workflow} onViewStage={() => {}} viewedStageId="apiReview" />,
+    );
+    expect(screen.getByTestId("stage-status-apiReview").closest("li")).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
+    expect(
+      screen.getByTestId("stage-status-workflowReview").closest("li"),
+    ).not.toHaveAttribute("aria-current");
+  });
+
   it("offers a read-only view of completed deterministicGeneration, aiEnhancement, and dependencyAnalysis stages", () => {
     const onViewStage = vi.fn();
     const workflow = workflowWithStatuses({

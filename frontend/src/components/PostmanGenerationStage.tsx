@@ -56,7 +56,19 @@ export function PostmanGenerationStage({
     problems?: string[];
   } | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
-  const [links, setLinks] = useState<DownloadLink[]>([]);
+  // Seeded from `postmanArtifact` too, mirroring `result`/`status` above: without this, revisiting
+  // this stage (the component remounts, losing `handleGenerate`'s in-memory links) showed the
+  // success summary correctly but rendered zero download links, since only a fresh generation
+  // call ever populated this state.
+  const [links, setLinks] = useState<DownloadLink[]>(() =>
+    postmanArtifact
+      ? artifactFiles(postmanArtifact).map((file) => ({
+          filename: file.filename,
+          label: file.label,
+          href: artifactHref(file.text, file.mimeType),
+        }))
+      : [],
+  );
 
   useEffect(() => {
     return () => {

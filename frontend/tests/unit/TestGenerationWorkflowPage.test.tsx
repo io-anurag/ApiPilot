@@ -134,6 +134,28 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
+  it("rejects a non-YAML file chosen via the native file picker's 'All Files' filter", async () => {
+    stubFetch([]);
+
+    render(<TestGenerationWorkflowPage />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
+    );
+
+    const fetchMock = vi.mocked(fetch);
+    const callsBefore = fetchMock.mock.calls.length;
+
+    const file = new File(["not a spec"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByTestId("upload-error")).toHaveTextContent(
+      "Only .yaml or .yml OpenAPI specification files are supported.",
+    );
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+
   it("shows the workflow-level stage tracker once a workflow starts (User Story 2)", async () => {
     stubFetch([{ workflow: workflowAt("apiReview") }]);
 
@@ -264,7 +286,7 @@ describe("TestGenerationWorkflowPage", () => {
     expect(String(url)).toContain("discardExisting=true");
   });
 
-  it("renders the AI-enhancement partial banner (not skipped) alongside scenario review when the stage status is 'partial' (FR-011)", async () => {
+  it("renders the AI-enhancement partial banner (not skipped) on the AI Enhancement stage's own view, not cluttering scenario review, when the stage status is 'partial' (FR-011)", async () => {
     const stages = baseStages() as Record<
       string,
       {
@@ -310,11 +332,21 @@ describe("TestGenerationWorkflowPage", () => {
 
     render(<TestGenerationWorkflowPage />);
 
+    // Landing on scenario review (the real active stage) shows the review UI without the retry
+    // banner — that would otherwise clutter a screen it doesn't belong to.
     await waitFor(() =>
-      expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument(),
+      expect(screen.getByTestId("scenario-review-stage")).toBeInTheDocument(),
     );
+    expect(screen.queryByTestId("ai-enhancement-partial")).not.toBeInTheDocument();
+
+    // The retry banner lives on the AI Enhancement stage's own view instead, reachable via
+    // "view" since the workflow already advanced past it.
+    fireEvent.click(screen.getByTestId("stage-status-aiEnhancement"));
+    expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument();
     expect(screen.queryByTestId("ai-enhancement-skipped")).not.toBeInTheDocument();
-    expect(screen.getByTestId("scenario-review-stage")).toBeInTheDocument();
+    // The generic "nothing here can be changed" notice would contradict the retry banner right
+    // above it, so it must not also render for this specific case.
+    expect(screen.queryByTestId("read-only-stage-notice")).not.toBeInTheDocument();
   });
 
   it("lets a QA engineer look back read-only at completed apiReview, deterministicGeneration, aiEnhancement, and dependencyAnalysis stages (research.md D3 addendum)", async () => {

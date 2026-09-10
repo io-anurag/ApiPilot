@@ -4,9 +4,10 @@ import { BatchOutcomeList } from "./BatchOutcomeList";
 /**
  * Read-only account of one AI enhancement run's outcome (how many AI-suggested scenarios were
  * added versus deduplicated/rejected/non-executable, plus the failure explanation for a
- * skipped/partial run). Shared between the live scenario-review screen — where the run just
- * finished — and the workflow tracker's read-only view of an already-completed aiEnhancement
- * stage, since both show the same underlying `workflow.aiEnhancement`/`stages.aiEnhancement` data.
+ * skipped/partial run). Shared between the scenario-review screen — as review context, never as
+ * the retry surface — and the AI Enhancement stage's own view once its outcome is `complete`
+ * (a skipped/partial outcome there instead gets the actionable `AiEnhancementStage` banner), since
+ * both show the same underlying `workflow.aiEnhancement`/`stages.aiEnhancement` data.
  */
 export function AiEnhancementOutcomeSummary({
   workflow,
@@ -47,8 +48,9 @@ export function AiEnhancementOutcomeSummary({
           : rejectedLabel}
       </p>
       {failureExplanation && <p className="mt-1">{failureExplanation.summary}</p>}
-      {/* Read-only here — no retry action; retrying lives on the scenario-review screen's
-          AiEnhancementStage banner, matching where the existing whole-stage retry control is. */}
+      {/* Read-only here — no retry action; retrying lives on the AI Enhancement stage's own
+          screen (TestGenerationWorkflowPage.tsx), reachable via "view" once it's skipped/partial,
+          since the workflow always advances past it immediately and it is never active again. */}
       <BatchOutcomeList batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes} />
     </section>
   );

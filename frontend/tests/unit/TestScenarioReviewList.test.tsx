@@ -203,6 +203,27 @@ describe("TestScenarioReviewList bulk actions", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("tints an accepted/rejected row differently from a pending one, distinguishable beyond the status badge alone", () => {
+    render(
+      <TestScenarioReviewList
+        scenarios={[
+          makeItem({ scenarioId: "s1", state: "pending" }),
+          makeItem({ scenarioId: "s2", state: "accepted" }),
+          makeItem({ scenarioId: "s3", state: "rejected" }),
+        ]}
+        selectedScenarioId={null}
+        onSelect={vi.fn()}
+        onBulkDecision={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("review-scenario-row-s1").className).not.toMatch(
+      /bg-(success|danger)-50/,
+    );
+    expect(screen.getByTestId("review-scenario-row-s2").className).toContain("bg-success-50");
+    expect(screen.getByTestId("review-scenario-row-s3").className).toContain("bg-danger-50");
+  });
+
   it("describes pagination progress in the load-more action", () => {
     const scenarios = Array.from({ length: 51 }, (_, index) =>
       makeItem({

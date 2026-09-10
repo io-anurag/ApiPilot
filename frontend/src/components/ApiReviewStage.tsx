@@ -49,8 +49,28 @@ export function ApiReviewStage({
     >
       <h2 className="text-base font-semibold text-slate-900">Review Discovered APIs</h2>
       <AnalysisSummary summary={apiModel.summary} />
-      <OperationList operations={apiModel.operations} onSelect={setSelected} />
-      {selected && <OperationDetail operation={selected} />}
+      <OperationList
+        operations={apiModel.operations}
+        selected={selected}
+        onSelect={setSelected}
+        renderSelected={(operation) => (
+          <div className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                Operation details
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="rounded-md border border-border bg-surface px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                Close details
+              </button>
+            </div>
+            <OperationDetail operation={operation} />
+          </div>
+        )}
+      />
       {!readOnly && (
         // Sticky rather than in normal flow: with dozens of discovered operations to review, the
         // continue action must stay reachable without scrolling past the entire list (matches

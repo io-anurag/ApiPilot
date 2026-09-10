@@ -8,6 +8,7 @@ import { StageNotActiveError } from "../../../src/testGenerationWorkflow/errors"
 import { runDependencyAnalysis } from "../../../src/testGenerationWorkflow/dependencyAnalysisStage";
 import {
   getCurrentWorkflow,
+  patchWorkflow,
   resetStore,
   startWorkflow,
   updateStage,
@@ -38,6 +39,29 @@ describe("dependencyAnalysisStage", () => {
     updateStage("aiEnhancement", "active");
     updateStage("aiEnhancement", "complete");
     updateStage("scenarioReview", "active");
+    // finalizeScenarioReview always sets approvedTestModel before this stage runs (research.md,
+    // updated: dependencyAnalysis now scopes its input to the operations these scenarios touch),
+    // so this stand-in must too rather than leaving it unset.
+    patchWorkflow({
+      approvedTestModel: {
+        scenarios: [
+          {
+            id: "s1",
+            operationPath: "/pets",
+            operationMethod: "GET",
+            category: "positive",
+            request: { pathParameters: {}, queryParameters: {}, headers: {} },
+            assertions: [],
+            provenance: {
+              source: "RULE",
+              rule: "positive",
+              description: "baseline positive case",
+              duplicateOfRules: [],
+            },
+          },
+        ],
+      },
+    });
     updateStage("scenarioReview", "complete");
     updateStage("dependencyAnalysis", "active");
 
@@ -54,5 +78,63 @@ describe("dependencyAnalysisStage", () => {
       expect(wf.activeStageId).toBe("workflowReview");
     }
     expect(getCurrentWorkflow()).toEqual(wf);
+  });
+
+  function scenario(operationPath: string, operationMethod: string, id: string) {
+    return {
+      id,
+      operationPath,
+      operationMethod,
+      category: "positive" as const,
+      request: { pathParameters: {}, queryParameters: {}, headers: {} },
+      assertions: [],
+      provenance: {
+        source: "RULE" as const,
+        rule: "positive",
+        description: "baseline positive case",
+        duplicateOfRules: [],
+      },
+    };
+  }
+
+  async function activateDependencyAnalysis(approvedScenarios: ReturnType<typeof scenario>[]) {
+    const apiModel = await validApiModel();
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel });
+    updateStage("apiReview", "complete");
+    updateStage("deterministicGeneration", "active");
+    updateStage("deterministicGeneration", "complete");
+    updateStage("aiEnhancement", "active");
+    updateStage("aiEnhancement", "complete");
+    updateStage("scenarioReview", "active");
+    patchWorkflow({ approvedTestModel: { scenarios: approvedScenarios } });
+    updateStage("scenarioReview", "complete");
+    updateStage("dependencyAnalysis", "active");
+  }
+
+  it("excludes a relationship whose consumer operation has no approved scenario, even though a deterministic match would otherwise be found (the whole reason to scope)", async () => {
+    // POST /pets (producer 'id') -> GET /pets/{petId} (consumer 'petId') is a genuine
+    // deterministic LIKELY match (resource-path prefix + the bare-'id' naming idiom) — but only
+    // POST /pets is approved here, so the consumer side is out of scope and the relationship must
+    // not appear, even though full-ApiModel analysis would have found it.
+    await activateDependencyAnalysis([scenario("/pets", "POST", "s1")]);
+
+    const wf = await runDependencyAnalysis();
+
+    expect(wf.dependencyAnalysis!.graph.relationships).toEqual([]);
+    expect(wf.dependencyAnalysis!.workflows).toEqual([]);
+  });
+
+  it("still finds that same relationship once both its producer and consumer operations have an approved scenario", async () => {
+    await activateDependencyAnalysis([
+      scenario("/pets", "POST", "s1"),
+      scenario("/pets/{petId}", "GET", "s2"),
+    ]);
+
+    const wf = await runDependencyAnalysis();
+
+    const found = wf.dependencyAnalysis!.graph.relationships.some(
+      (r) => r.producer.operationPath === "/pets" && r.consumer.operationPath === "/pets/{petId}",
+    );
+    expect(found).toBe(true);
   });
 });

@@ -171,6 +171,12 @@ export function ScenarioReviewStage({
   }
 
   const noAcceptedScenarios = reviewWorkspace.summary.accepted === 0;
+  // Merely revisiting an already-completed scenarioReview (the real active stage is further
+  // ahead) still allows accept/reject/edit/regenerate — each legitimately reopens the stage
+  // server-side (reopenIfComplete, scenarioReviewStage.ts) — but "Finalize Review" must stay
+  // hidden until that happens, since finalizing requires the stage to already be active and
+  // would otherwise fail with `stage_not_active` the instant it's clicked.
+  const isActiveStage = workflow.activeStageId === "scenarioReview";
 
   return (
     <section
@@ -284,14 +290,16 @@ export function ScenarioReviewStage({
           sticky app header pattern in App.tsx). Negative margins extend it to the section's
           full padded width so the opaque background fully covers scrolled-past content. */}
       <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
-        <button
-          type="button"
-          onClick={handleFinalizeClick}
-          disabled={finalizing}
-          className={BUTTON_STYLES.primary}
-        >
-          {finalizing ? "Finalizing…" : "Finalize Review"}
-        </button>
+        {isActiveStage && (
+          <button
+            type="button"
+            onClick={handleFinalizeClick}
+            disabled={finalizing}
+            className={BUTTON_STYLES.primary}
+          >
+            {finalizing ? "Finalizing…" : "Finalize Review"}
+          </button>
+        )}
         {finalizing && (
           <p data-testid="finalize-in-progress" className="text-sm text-muted">
             Running dependency analysis with the local AI model — this can take a couple
