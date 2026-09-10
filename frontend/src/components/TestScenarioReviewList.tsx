@@ -17,6 +17,15 @@ const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
   rejected: "danger",
 };
 
+/** Row background tint per decision (in addition to the StatusBadge text, never in place of it —
+ * FR accessibility: state is never communicated through color alone), so an accepted/rejected row
+ * is scannable across the whole list rather than only legible one row at a time. */
+const STATE_ROW_TONE_CLASSES: Record<ReviewScenarioWire["state"], string> = {
+  pending: "",
+  accepted: "bg-success-50",
+  rejected: "bg-danger-50",
+};
+
 /**
  * Shared column template for the header row and every scenario row, so Method/Path/Category/
  * Source/Status line up as real columns instead of a flowing row whose later fields land at a
@@ -256,10 +265,11 @@ export function TestScenarioReviewList({
                     />
                     <button
                       type="button"
+                      data-testid={`review-scenario-row-${item.scenarioId}`}
                       aria-pressed={item.scenarioId === selectedScenarioId}
                       onClick={() => onSelect(item)}
-                      className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
-                        item.scenarioId === selectedScenarioId ? "bg-brand-50" : ""
+                      className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${STATE_ROW_TONE_CLASSES[item.state]} ${
+                        item.scenarioId === selectedScenarioId ? "ring-2 ring-inset ring-brand-400" : ""
                       }`}
                     >
                       <HttpMethodBadge method={item.scenario.operationMethod} />

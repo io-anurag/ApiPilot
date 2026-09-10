@@ -55,6 +55,12 @@ export interface AggregateOutcomeResult {
  * `"not-attempted"` batch is still counted in `failureCount`/`notAttemptedCount`, and a run where
  * *every* batch was not-attempted (no real failures to classify by) still correctly falls through
  * to `"invalid-response"`, since `failures.length > 0` still gates each category branch below.
+ *
+ * `outcomes` empty (zero batches — e.g. a caller scoped its input down to nothing, dependencies/
+ * dependencyAnalysisStage.ts) is reported as `"success"` rather than falling through to
+ * `"invalid-response"`: with nothing attempted, nothing failed either, so reporting a failure
+ * category would misreport a provider error for a run where `provider.infer()` was never even
+ * called once.
  */
 export function deriveAggregateOutcome(
   outcomes: readonly BatchOutcome[],
@@ -68,7 +74,7 @@ export function deriveAggregateOutcome(
   const failureCount = failures.length + notAttemptedCount;
   const lastFailure = failures[failures.length - 1];
 
-  if (totalCount > 0 && successCount === totalCount) {
+  if (successCount === totalCount) {
     return {
       outcome: "success",
       successCount,

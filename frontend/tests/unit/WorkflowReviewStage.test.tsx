@@ -136,6 +136,53 @@ describe("WorkflowReviewStage bulk actions", () => {
     );
   });
 
+  it("tints an approved/rejected workflow card differently from a pending one, distinguishable beyond the status badge alone", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis(["w1", "w2", "w3"])}
+        decisions={{
+          w2: { workflowId: "w2", state: "approved", recordedAt: "2026-01-01T00:00:00.000Z" },
+          w3: { workflowId: "w3", state: "rejected", recordedAt: "2026-01-01T00:00:00.000Z" },
+        }}
+        onAdvanced={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("workflow-review-item-w1").className).not.toMatch(
+      /bg-(success|danger)-50/,
+    );
+    expect(screen.getByTestId("workflow-review-item-w2").className).toContain("bg-success-50");
+    expect(screen.getByTestId("workflow-review-item-w3").className).toContain("bg-danger-50");
+  });
+
+  it("hides the Continue action while merely revisiting an already-completed stage, so it can't be clicked before a decision reopens it", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis(["w1"])}
+        decisions={undefined}
+        onAdvanced={vi.fn()}
+        isActiveStage={false}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^Continue/ })).not.toBeInTheDocument();
+    // Approve/Reject remain live — changing a decision legitimately reopens the stage server-side.
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
+  it("hides Continue when revisiting an empty (no discovered workflows) workflowReview too", () => {
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis([])}
+        decisions={undefined}
+        onAdvanced={vi.fn()}
+        isActiveStage={false}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+  });
+
   it("bulk-approves only the selected workflows after confirmation", async () => {
     const spy = vi.spyOn(client, "recordWorkflowDecisions").mockResolvedValue({
       ok: true,

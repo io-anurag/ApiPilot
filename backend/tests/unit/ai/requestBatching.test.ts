@@ -188,6 +188,13 @@ describe("deriveAggregateOutcome", () => {
     expect(result.outcome).toBe("success");
   });
 
+  it("returns 'success', not 'invalid-response', for zero batches (nothing was ever attempted, so nothing failed)", () => {
+    const result = deriveAggregateOutcome([]);
+    expect(result.outcome).toBe("success");
+    expect(result.errorCategory).toBeUndefined();
+    expect(result.totalCount).toBe(0);
+  });
+
   it("returns 'partial' when some batches succeeded and some failed", () => {
     const result = deriveAggregateOutcome([
       { status: "success" },

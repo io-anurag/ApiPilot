@@ -107,16 +107,41 @@ function withOperations(apiModel: ApiModel, operations: ApiOperation[]): ApiMode
   return { ...apiModel, operations };
 }
 
-/** Runs one batch's inference call and returns its validated, executable AI relationships. */
+/** Mirrors enhanceTestModel.ts's own batch-request-id scheme, extended with a retry suffix. */
+function createBatchRequestId(
+  requestId: string,
+  batchCount: number,
+  batchIndex: number,
+  retryAttempt: number,
+): string {
+  if (batchCount === 1) {
+    return retryAttempt > 0 ? `${requestId}-retry${retryAttempt}` : requestId;
+  }
+  const retrySuffix = retryAttempt > 0 ? `-retry${retryAttempt}` : "";
+  return `${requestId}-batch${batchIndex}${retrySuffix}`;
+}
+
+/**
+ * Runs one batch's inference call and returns its validated, executable AI relationships.
+ * `retryAttempt > 0` (the retry `runBatchedInference`'s `retryFailedBatches` triggers after a
+ * malformed reply) appends the same corrective instruction `enhanceTestModel.ts` uses on its own
+ * retry — the first attempt's failure is otherwise invisible to the model, so it has no reason to
+ * behave differently the second time.
+ */
 async function runOneBatch(
   batch: Batch<ApiOperation>,
   apiModel: ApiModel,
   requestId: string,
   provider: AIProvider,
+  retryAttempt: number,
 ): Promise<DependencyAnalysisResult["graph"]["relationships"]> {
-  const response = await provider.infer(
-    buildAIDependencyRequest(requestId, withOperations(apiModel, batch.operations)),
-  );
+  const request = buildAIDependencyRequest(requestId, withOperations(apiModel, batch.operations));
+  if (retryAttempt > 0) {
+    request.input +=
+      "\nIMPORTANT: Your previous response was invalid. Return only one compact, valid JSON " +
+      "object with a candidates array. Do not include markdown, explanations, or trailing text.";
+  }
+  const response = await provider.infer(request);
   const parsed = parseAIDependencyResponse(response);
   const seenCandidateIds = new Set<string>();
   const aiRelationships: DependencyAnalysisResult["graph"]["relationships"] = [];
@@ -267,16 +292,20 @@ async function runAIAssistedPass(
 
   const aiBatchingLimitation = batchingLimitationMessage(batches.length);
 
-  let nextBatchIndex = 0;
   const summary = await runBatchedInference(
     batches,
-    (batch) => {
-      const index = nextBatchIndex++;
-      const batchRequestId =
-        batches.length > 1 ? `${requestId}-batch${index}` : requestId;
-      return runOneBatch(batch, apiModel, batchRequestId, provider);
+    (batch, attempt) => {
+      const index = batches.indexOf(batch);
+      const batchRequestId = createBatchRequestId(requestId, batches.length, index, attempt);
+      return runOneBatch(batch, apiModel, batchRequestId, provider, attempt);
     },
-    { isTimedOut },
+    // One immediate retry per failed batch, matching enhanceTestModel.ts's own batch loop: a
+    // unit that comes back as malformed JSON (INVALID_RESPONSE) is far more common here than for
+    // enhancement, since a unit's reply must describe relationships across several operations at
+    // once rather than one operation in isolation — a single retry absorbs a one-off bad
+    // generation without masking a genuinely broken/unavailable provider (still only 1 retry per
+    // batch, not a blanket doubling of every call).
+    { isTimedOut, retryFailedBatches: 1 },
   );
 
   const aiRelationships = summary.runs.flatMap((run) => run.data ?? []);

@@ -100,6 +100,12 @@ export function TestGenerationWorkflowPage() {
     event.target.value = "";
     if (!file) return;
     setUploadError(null);
+    // The native file picker's "All Files" filter lets users select any file regardless of the
+    // input's `accept` attribute, so the extension must also be checked here before upload.
+    if (!/\.ya?ml$/i.test(file.name)) {
+      setUploadError("Only .yaml or .yml OpenAPI specification files are supported.");
+      return;
+    }
     // Reaching the starting page while a workflow exists only happens after the user already
     // confirmed the discard (see confirmDiscard below), so no second confirmation is needed here.
     await doUpload(file, workflow !== null);
@@ -121,6 +127,13 @@ export function TestGenerationWorkflowPage() {
 
   const displayStageId = viewedStageId ?? workflow?.activeStageId ?? null;
   const showHome = !workflow || showStartPage;
+  // The AI Enhancement stage's own view carries an actual retry action once skipped/partial
+  // (rendered below), so the generic "nothing here can be changed" read-only notice would
+  // directly contradict it — suppressed only for that specific case.
+  const aiEnhancementHasRetryableOutcome =
+    displayStageId === "aiEnhancement" &&
+    (workflow?.stages.aiEnhancement.status === "skipped" ||
+      workflow?.stages.aiEnhancement.status === "partial");
 
   if (loading) {
     return (
@@ -298,6 +311,7 @@ export function TestGenerationWorkflowPage() {
             />
           </div>
           {displayStageId !== workflow.activeStageId &&
+            !aiEnhancementHasRetryableOutcome &&
             (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
               <output
                 data-testid="revisiting-notice"
@@ -343,6 +357,21 @@ export function TestGenerationWorkflowPage() {
                 activeProgress={workflow.stages.aiEnhancement.progress}
                 onAdvanced={handleAdvanced}
               />
+            ) : workflow.stages.aiEnhancement.status === "skipped" ||
+              workflow.stages.aiEnhancement.status === "partial" ? (
+              // The workflow always advances past aiEnhancement immediately once it settles
+              // (aiEnhancementStage.ts), even for a skipped/partial outcome — so this is the only
+              // "AI Enhancement" screen a retry action can live on; it is never the active stage
+              // again once retryable. Rendering it here, rather than on scenarioReview, keeps the
+              // retry action where the process actually ran (matches AiEnhancementOutcomeSummary's
+              // scenarioReview counterpart, which stays purely informational).
+              <AiEnhancementStage
+                status={workflow.stages.aiEnhancement.status}
+                failureExplanation={workflow.stages.aiEnhancement.failureExplanation}
+                cancelled={workflow.stages.aiEnhancement.cancelled}
+                batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes}
+                onAdvanced={handleAdvanced}
+              />
             ) : (
               <AiEnhancementOutcomeSummary workflow={workflow} />
             ))}
@@ -350,25 +379,14 @@ export function TestGenerationWorkflowPage() {
             <DependencyAnalysisSummary dependencyAnalysis={workflow.dependencyAnalysis} />
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
-            <>
-              {(workflow.stages.aiEnhancement.status === "skipped" ||
-                workflow.stages.aiEnhancement.status === "partial") && (
-                <AiEnhancementStage
-                  status={workflow.stages.aiEnhancement.status}
-                  failureExplanation={workflow.stages.aiEnhancement.failureExplanation}
-                  cancelled={workflow.stages.aiEnhancement.cancelled}
-                  batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes}
-                  onAdvanced={handleAdvanced}
-                />
-              )}
-              <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} />
-            </>
+            <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} />
           )}
           {displayStageId === "workflowReview" && workflow.dependencyAnalysis && (
             <WorkflowReviewStage
               dependencyAnalysis={workflow.dependencyAnalysis}
               decisions={workflow.workflowDecisions}
               onAdvanced={handleAdvanced}
+              isActiveStage={workflow.activeStageId === "workflowReview"}
             />
           )}
           {displayStageId === "postmanGeneration" &&

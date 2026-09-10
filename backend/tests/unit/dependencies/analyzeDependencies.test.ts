@@ -92,6 +92,20 @@ describe("analyzeDependencies (deterministic-only)", () => {
     expect(result.aiOutcome).toBe("skipped");
   });
 
+  it("reports aiOutcome 'success', not a phantom failure, when a provider is supplied but there are zero operations to analyze", async () => {
+    // Reachable in practice once the caller scopes its input (dependencyAnalysisStage.ts scoping
+    // to approved-scenario operations): with nothing to batch, `provider.infer()` is never called,
+    // so reporting anything but 'success' would misrepresent a run the provider never even saw.
+    const provider = scriptedBatchProvider({ budgetChars: undefined });
+    const emptyModel = { ...crudChainApiModel, operations: [] };
+
+    const result = await analyzeDependencies(emptyModel, provider);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(result.aiOutcome).toBe("success");
+    expect(result.aiErrorCategory).toBeUndefined();
+  });
+
   it("returns an explicit empty workflow/candidate/cycle set when there are no candidate relationships", async () => {
     const result = await analyzeDependencies(minimalApiModelForNoRelationships);
     expect(result.workflows).toEqual([]);
@@ -175,7 +189,11 @@ describe("analyzeDependencies (AI-assisted batching, US1/US2/US3)", () => {
     const provider = scriptedBatchProvider({
       budgetChars,
       scriptResponse: (request) => {
-        const parsed = JSON.parse(request.input) as { operations: unknown[] };
+        // The retry attempt (specs/T060) appends a corrective instruction after the JSON body, so
+        // parsing must ignore that suffix rather than assume `request.input` is pure JSON.
+        const parsed = JSON.parse(request.input.split("\nIMPORTANT:")[0]) as {
+          operations: unknown[];
+        };
         const containsHugeOp = request.input.includes("hugeOperation");
         if (containsHugeOp) {
           hugeOperationBatchSize = parsed.operations.length;
@@ -205,24 +223,23 @@ describe("analyzeDependencies (AI-assisted batching, US1/US2/US3)", () => {
   it("reports 'partial' when one of several batches times out while others succeed (T023)", async () => {
     const largeModel = buildLargeApiModel(20);
     const budgetChars = Math.floor(buildAIDependencyPrompt(largeModel).length / 3);
-    let timedOutOnce = false;
     const provider = scriptedBatchProvider({
       budgetChars,
+      // Keyed off the batch index (stable across its own retry, specs/T060) rather than "the
+      // first call ever": with the automatic single retry a failure now gets, a one-shot flag
+      // would let batch 0's retry attempt succeed and the run would misreport 'success'.
       scriptResponse: (request) => {
-        if (!timedOutOnce) {
-          timedOutOnce = true;
-          return {
-            contractVersion: 1,
-            requestId: request.requestId,
-            status: "error",
-            errorCategory: "TIMEOUT",
-            errorMessage: "provider timed out",
-            modelId: "scripted-model",
-            provider: "mock",
-            durationMs: 0,
-          };
-        }
-        return undefined;
+        if (!request.requestId.includes("batch0")) return undefined;
+        return {
+          contractVersion: 1,
+          requestId: request.requestId,
+          status: "error",
+          errorCategory: "TIMEOUT",
+          errorMessage: "provider timed out",
+          modelId: "scripted-model",
+          provider: "mock",
+          durationMs: 0,
+        };
       },
     });
 
@@ -420,6 +437,78 @@ describe("analyzeDependencies (AI-assisted batching, US1/US2/US3)", () => {
     expect(provider.calls.length).toBe(2);
     const matches = result.graph.relationships.filter((r) => r.producer.field === "accountId");
     expect(matches).toHaveLength(1);
+  });
+});
+
+describe("analyzeDependencies automatic batch retry (parity with enhanceTestModel.ts)", () => {
+  it("retries a batch once after a malformed response, using a corrective prompt, and recovers to 'success'", async () => {
+    const requests: InferenceRequest[] = [];
+    let attempts = 0;
+    const provider: AIProvider = {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      getInputBudget: async () => undefined,
+      infer: async (request): Promise<InferenceResponse> => {
+        requests.push(request);
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            contractVersion: 1,
+            requestId: request.requestId,
+            status: "success",
+            content: '{"candidates":[',
+            modelId: "scripted-model",
+            provider: "mock",
+            durationMs: 0,
+          };
+        }
+        return successResponse(request);
+      },
+    };
+
+    const result = await analyzeDependencies(crudChainApiModel, provider, {
+      maxOperationsPerBatch: 0,
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(result.aiOutcome).toBe("success");
+    expect(requests[1].requestId).toContain("-retry1");
+    expect(requests[1].input).toContain("Your previous response was invalid");
+    expect(requests[1].input).not.toBe(requests[0].input);
+  });
+
+  it("still reports the failure when a batch's retry also comes back malformed", async () => {
+    const provider: AIProvider = {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      getInputBudget: async () => undefined,
+      infer: async (request): Promise<InferenceResponse> => ({
+        contractVersion: 1,
+        requestId: request.requestId,
+        status: "success",
+        content: "not json",
+        modelId: "scripted-model",
+        provider: "mock",
+        durationMs: 0,
+      }),
+    };
+
+    const result = await analyzeDependencies(crudChainApiModel, provider, {
+      maxOperationsPerBatch: 0,
+    });
+
+    expect(result.aiOutcome).toBe("invalid-response");
+    expect(result.aiErrorCategory).toBe("INVALID_RESPONSE");
   });
 });
 

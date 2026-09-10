@@ -45,6 +45,15 @@ const STATE_TONES: Record<WorkflowReviewState, StatusTone> = {
   rejected: "danger",
 };
 
+/** Card background tint per decision, mirroring TestScenarioReviewList's row tint — in addition
+ * to the StatusBadge text, never in place of it, so an approved/rejected workflow is scannable
+ * across the whole list rather than only legible one card at a time. */
+const STATE_CARD_TONE_CLASSES: Record<WorkflowReviewState, string> = {
+  pending: "",
+  approved: "bg-success-50",
+  rejected: "bg-danger-50",
+};
+
 const CONFIDENCE_LABELS: Record<DependencyConfidence, string> = {
   CONFIRMED: "Confirmed",
   LIKELY: "Likely",
@@ -68,10 +77,19 @@ export function WorkflowReviewStage({
   dependencyAnalysis,
   decisions,
   onAdvanced,
+  isActiveStage = true,
 }: Readonly<{
   dependencyAnalysis: DependencyAnalysisResult;
   decisions: Record<string, WorkflowReviewDecision> | undefined;
   onAdvanced: (result: WorkflowResult) => void;
+  /**
+   * False while merely revisiting an already-completed workflowReview (the real active stage is
+   * further ahead) — Approve/Reject remain live even then, since changing a decision legitimately
+   * reopens the stage server-side (`reopenIfComplete`, workflowReviewStage.ts), but "Continue"
+   * would otherwise fail with `stage_not_active` the instant it's clicked without a prior decision
+   * change, since the server has nothing to advance from here yet.
+   */
+  isActiveStage?: boolean;
 }>) {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,22 +187,23 @@ export function WorkflowReviewStage({
           Review Integration Workflows
         </h2>
         <p className="text-sm text-muted">
-          This analyzes every operation in the specification for multi-step call chains
-          (e.g. create then reference by ID) — independent of which scenarios you accepted
-          in the previous stage, since a workflow describes how operations relate, not
-          which test scenarios exist.
+          This analyzes multi-step call chains (e.g. create then reference by ID) across the
+          operations you accepted a scenario for in the previous stage — a workflow describes how
+          those operations relate, not which test scenarios exist.
         </p>
         <p data-testid="workflow-review-empty" className="text-sm text-muted">
           No integration workflows were discovered.
         </p>
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={continuing}
-          className={BUTTON_STYLES.primary}
-        >
-          Continue
-        </button>
+        {isActiveStage && (
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={continuing}
+            className={BUTTON_STYLES.primary}
+          >
+            Continue
+          </button>
+        )}
         {error && (
           <p role="alert" className="text-sm font-medium text-danger-700">
             {error}
@@ -207,11 +226,10 @@ export function WorkflowReviewStage({
         Review Integration Workflows
       </h2>
       <p className="text-sm text-muted">
-        Each item below is a call chain (e.g. create then reference by ID) discovered
-        across every operation in the specification — independent of which scenarios you
-        accepted in the previous stage. Approving or rejecting only records a decision for
-        traceability; it does not add or remove any generated test scenario, and no
-        workflow is ever included in the Postman output.
+        Each item below is a call chain (e.g. create then reference by ID) discovered across the
+        operations you accepted a scenario for in the previous stage. Approving or rejecting only
+        records a decision for traceability; it does not add or remove any generated test
+        scenario, and no workflow is ever included in the Postman output.
       </p>
       <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
         <input
@@ -254,7 +272,7 @@ export function WorkflowReviewStage({
             <li
               key={workflow.id}
               data-testid={`workflow-review-item-${workflow.id}`}
-              className="space-y-3 rounded-md border border-border p-3"
+              className={`space-y-3 rounded-md border border-border p-3 ${STATE_CARD_TONE_CLASSES[state]}`}
             >
               <div className="flex items-start gap-3">
                 <input
@@ -353,14 +371,16 @@ export function WorkflowReviewStage({
         </output>
       )}
       <div className="flex items-center gap-3 border-t border-border pt-4">
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={continuing}
-          className={BUTTON_STYLES.primary}
-        >
-          {continuing ? "Continuing…" : "Continue"}
-        </button>
+        {isActiveStage && (
+          <button
+            type="button"
+            onClick={handleContinue}
+            disabled={continuing}
+            className={BUTTON_STYLES.primary}
+          >
+            {continuing ? "Continuing…" : "Continue"}
+          </button>
+        )}
         {error && (
           <p
             role="alert"

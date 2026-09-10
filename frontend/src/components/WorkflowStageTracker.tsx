@@ -123,6 +123,14 @@ export function WorkflowStageTracker({
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
           const stage = workflow.stages[stageId];
           const isActive = workflow.activeStageId === stageId;
+          // The stage currently shown on screen — the active stage by default, or whichever
+          // stage the user clicked "back"/"view" to revisit (viewedStageId, when the caller
+          // tracks it). Distinct from `isActive`: revisiting a completed stage must move this
+          // chip's highlight there too, not leave it stuck on the true active stage.
+          const isCurrentlyViewed =
+            viewedStageId !== undefined && viewedStageId !== null
+              ? viewedStageId === stageId
+              : isActive;
           const isViewingAnotherStage =
             !!onViewStage &&
             viewedStageId !== null &&
@@ -147,8 +155,8 @@ export function WorkflowStageTracker({
             <li
               key={stageId}
               ref={isActive ? activeStageRef : undefined}
-              aria-current={isActive ? "step" : undefined}
-              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isActive ? "font-semibold text-slate-950" : "text-slate-600"}`}
+              aria-current={isCurrentlyViewed ? "step" : undefined}
+              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-slate-950" : "text-slate-600"}`}
             >
               <span
                 aria-hidden="true"
