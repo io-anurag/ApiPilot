@@ -129,11 +129,10 @@ describe("workflowStore", () => {
     expect(preparing.stages.aiEnhancement.progress?.generatingSince).toBeUndefined();
 
     const generating = markAiEnhancementGenerating();
-    expect(generating.stages.aiEnhancement.progress?.phase).toBe("generating");
-    expect(generating.stages.aiEnhancement.progress?.generatingSince).toBeDefined();
-    expect(
-      generating.stages.aiEnhancement.progress?.generatingSince! >= started.createdAt,
-    ).toBe(true);
+    const generatingProgress = generating.stages.aiEnhancement.progress;
+    expect(generatingProgress?.phase).toBe("generating");
+    expect(generatingProgress?.generatingSince).toBeDefined();
+    expect(generatingProgress!.generatingSince! >= started.createdAt).toBe(true);
 
     const cancelled = requestAiEnhancementCancel();
     expect(cancelled.stages.aiEnhancement.progress?.cancelRequested).toBe(true);

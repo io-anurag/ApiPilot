@@ -402,7 +402,7 @@ implementation constant.
 - Any cloud, hosted, or external inference path.
 - Changing what makes a proposed scenario valid, executable, or grounded.
 - Persisting workflows across server restarts.
-- Test execution and results (`AP-011`) and AI failure analysis (`AP-012`), both post-MVP.
+- Test execution and results (`AP-017`) and AI failure analysis (`AP-018`), both post-MVP.
 
 ## Dependencies
 

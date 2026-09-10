@@ -76,12 +76,14 @@ The [roadmap](specs/ROADMAP.md) is authoritative for implementation status. Indi
 | AP-008 Dependency and Workflow Engine            | Implemented                                 | Conservative deterministic and optional AI-assisted relationship inference, confidence/evidence, stable workflow ordering, and explicit hand-offs.                                     |
 | AP-009 End-to-End Test Generation Workflow       | Implemented                                 | Exclusive guided orchestration, stage gating, stale-state propagation, AI-unavailable continuation, and artifact download gating.                                                      |
 | AP-010 Presentation and Review Scalability       | Implemented                                 | Consistent accessible presentation, filtering, multi-select bulk decisions, confirmation, partial-failure counts, and progress.                                                        |
-| Hardening: AI prompt batching (`011`)            | Implemented                                 | Deterministic serial batches, small-input compatibility, partial retention, and honest full/partial/not-completed outcomes.                                                            |
-| Hardening: AI enhancement progress (`012`)       | Implemented; optional manual UI validation  | Live batch progress, per-batch outcomes, incremental scenario visibility, final outcomes, and concurrency protection.                                                                  |
-| Hardening: AI enhancement viability (`013`)      | In progress                                 | Instruction framing, true capacity planning, smaller prompts, viable output/time budgets, pre-flight refusal, cancellation, phases, elapsed time, and user-safe failures.              |
-| Hardening: AI batching policy and pacing (`014`) | In progress                                 | Small deterministic work units, caller-specific sizing, run ceilings, retained partial results, responsive cancellation, reply-shape reliability, and paced dependency analysis.       |
-| AP-011 Test Execution and Results                | Post-MVP, not started                       | Execute generated artifacts and report results.                                                                                                                                        |
-| AP-012 AI Failure Analysis                       | Post-MVP, not started                       | Analyze execution failures using AI as an explicitly bounded assistant.                                                                                                                |
+| AP-011 Bounded AI Prompt Batching                | Implemented                                 | Deterministic serial batches, small-input compatibility, partial retention, and honest full/partial/not-completed outcomes.                                                            |
+| AP-012 AI Enhancement Progress Visibility        | Implemented; optional manual UI validation  | Live batch progress, per-batch outcomes, incremental scenario visibility, final outcomes, and concurrency protection.                                                                  |
+| AP-013 AI Enhancement Viability                  | Implemented; follow-up validation outstanding | Instruction framing, true capacity planning, smaller prompts, viable output/time budgets, pre-flight refusal, cancellation, phases, elapsed time, and user-safe failures.              |
+| AP-014 AI Batching Policy and Run Pacing         | Implemented; 2 tasks blocked on real-model validation | Small deterministic work units, caller-specific sizing, run ceilings, retained partial results, responsive cancellation, reply-shape reliability, and paced dependency analysis.       |
+| AP-015 AI Batch Retry                            | Implemented                                 | Retry a single failed AI-enhancement batch after a run settles, without discarding already-succeeded batches.                                                                          |
+| AP-016 Workflow-Aware Postman Generation          | Implemented                                 | Render approved integration workflows as ordered, dependency-aware Postman request sequences.                                                                                          |
+| AP-017 Test Execution and Results                | Post-MVP, not started                       | Execute generated artifacts and report results.                                                                                                                                        |
+| AP-018 AI Failure Analysis                       | Post-MVP, not started                       | Analyze execution failures using AI as an explicitly bounded assistant.                                                                                                                |
 
 ## Specification behavior
 
@@ -223,7 +225,7 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 - Workflow state is single-instance, process-memory only, and not multi-user or durable across a backend restart.
 - Postman export is currently limited to approved single-operation scenarios; multi-step workflow rendering is a planned extension.
 - Local model provisioning may require an initial download. Normal tests do not download models.
-- Specifications `013` and `014` are actively being completed; their task lists describe remaining work.
+- AP-013 and AP-014 have a small number of real-model validation tasks deliberately left open (blocked on an uncached local model); see their task lists and the roadmap for detail.
 
 ## Documentation map
 
@@ -240,10 +242,12 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 - [AP-008 dependency workflows](specs/008-dependency-workflow-engine/spec.md)
 - [AP-009 end-to-end workflow](specs/009-e2e-test-generation-workflow/spec.md)
 - [AP-010 review scalability](specs/010-presentation-review-scalability/spec.md)
-- [AI prompt batching](specs/011-ai-prompt-batching/spec.md)
-- [AI enhancement progress](specs/012-ai-enhancement-progress/spec.md)
-- [AI enhancement viability](specs/013-ai-enhancement-viability/spec.md)
-- [AI batching policy](specs/014-ai-batching-policy/spec.md)
+- [AP-011 prompt batching](specs/011-ai-prompt-batching/spec.md)
+- [AP-012 enhancement progress](specs/012-ai-enhancement-progress/spec.md)
+- [AP-013 enhancement viability](specs/013-ai-enhancement-viability/spec.md)
+- [AP-014 batching policy](specs/014-ai-batching-policy/spec.md)
+- [AP-015 batch retry](specs/015-ai-batch-retry/spec.md)
+- [AP-016 workflow-aware Postman generation](specs/016-workflow-aware-postman/spec.md)
 
 Each feature directory contains the normative specification, implementation plan, task list, data model, research, quickstart, and API contracts where relevant.
 
