@@ -25,10 +25,30 @@ import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 import { createLogger } from "./logger";
 
 const logger = createLogger("api.errorHandler");
+const requestLogger = createLogger("api.request");
 
 /** Assembles the Express app: JSON body parsing sized to the upload contract, every `/api` router, and the centralized error handler. `provider` (when supplied) is threaded into the routers that support AI-assisted behavior instead of each using the process-wide default. */
 export function createApp(provider?: AIProvider) {
   const app = express();
+
+  // Diagnostics only (constitution XX): method/path/status/duration/clientIp, never request
+  // bodies or headers. `req.ip` is the direct TCP peer, which is the Vite dev proxy's own
+  // loopback address for requests proxied via `frontend/vite.config.ts`, not the original
+  // browser's address — this only reflects the real client IP for requests made straight
+  // to the backend port.
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on("finish", () => {
+      requestLogger.info("request_completed", {
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - startedAt,
+        clientIp: req.ip ?? req.socket.remoteAddress ?? "unknown",
+      });
+    });
+    next();
+  });
 
   // Downstream endpoints (test-model generation/enhancement/review, Postman export) receive
   // the ApiModel/TestModel derived from an uploaded spec as a JSON body. Match express.json's

@@ -10,6 +10,7 @@ export default defineConfig({
   customLogger: createFileLogger(),
   plugins: [react(), tailwindcss()],
   server: {
+    host: true,
     port: frontendDevPort,
     proxy: {
       "/api": {
