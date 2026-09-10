@@ -238,6 +238,10 @@ deterministic TestModel, with the AI-unavailable condition visibly recorded.
   workflow that has reached that stage.
 - **FR-018**: The system MUST maintain the in-progress end-to-end workflow as a single instance
   shared by the running backend, rather than isolating it per browser connection or session.
+  **Superseded by `specs/017-session-workflow-isolation`**: that feature deliberately reverses
+  this decision, isolating the in-progress workflow per browser session instead so concurrent
+  users no longer share one instance — see that spec's "Relationship to Existing Specifications"
+  section for the rationale.
 
 ### Key Entities
 

@@ -37,6 +37,9 @@ import {
 } from "../testGenerationWorkflow/scenarioReviewStage";
 import { startWorkflowFromUpload } from "../testGenerationWorkflow/startWorkflow";
 import { getCurrentWorkflow } from "../testGenerationWorkflow/workflowStore";
+import { reaffirmSession } from "../session/sessionMiddleware";
+import { getSessionId } from "../session/sessionContext";
+import { getStatus } from "../session/sessionRegistry";
 import {
   continueWorkflowReview,
   recordWorkflowDecisions,
@@ -156,8 +159,9 @@ function isWorkflowDecisionArray(value: unknown): value is WorkflowDecisionInput
 
 /**
  * Orchestration boundary over the existing stateless engine endpoints (contracts/
- * test-generation-workflow-api.md). Operates on the single global TestGenerationWorkflow
- * instance (FR-018) — there is at most one at a time, and no route takes an id.
+ * test-generation-workflow-api.md). Operates on the calling session's own TestGenerationWorkflow
+ * instance — there is at most one per session at a time (specs/017-session-workflow-isolation,
+ * superseding spec 009's original single-process-wide-instance FR-018) — and no route takes an id.
  */
 export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIProvider()) {
   const router = Router();
@@ -168,6 +172,13 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       const startedAt = logRequestReceived(req);
       const workflow = getCurrentWorkflow();
       if (!workflow) {
+        // Distinguishes "your session's workflow was idle-evicted" from "you never started one"
+        // (contracts/session-isolation.md, FR-007a) without a new endpoint.
+        if (getStatus(getSessionId()) === "expired") {
+          res.status(200).json({ workflow: null, sessionExpired: true });
+          logRequestSucceeded(req, startedAt, 200);
+          return;
+        }
         res.status(204).end();
         logRequestSucceeded(req, startedAt, 204);
         return;
@@ -175,7 +186,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       res.status(200).json({ workflow: toWorkflowResponse(workflow) });
       logRequestSucceeded(req, startedAt, 200);
     })
-    .post(upload.single("file"), async (req, res, next) => {
+    .post(upload.single("file"), reaffirmSession, async (req, res, next) => {
       const startedAt = logRequestReceived(req);
       try {
         if (!req.file) {

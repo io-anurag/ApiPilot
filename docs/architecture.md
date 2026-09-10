@@ -54,7 +54,8 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/ai/`                     | `AIProvider` implementations, configuration, readiness, serial queue, model loading, batching utilities, local inference, and benchmarks.      |
 | `backend/src/dependencies/`           | Conservative relationship classification, evidence capture, dependency graph, and workflow assembly.                                           |
 | `backend/src/postman/`                | Collection/environment/document rendering and collection validation.                                                                           |
-| `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle.                                                     |
+| `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle — keyed per session by `backend/src/session/`.       |
+| `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation). |
 | `frontend/src/pages/`                 | The guided workflow composition root.                                                                                                          |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
@@ -150,7 +151,17 @@ Standalone scenarios not covered by a rendered workflow continue to use the exis
 ## Workflow orchestration
 
 `testGenerationWorkflow/` coordinates the pipeline without reimplementing its domain rules. It
-holds exactly one globally shared workflow in backend process memory.
+holds exactly one in-progress workflow per browser session in backend process memory
+(specs/017-session-workflow-isolation, superseding the original single-process-wide-instance
+design from specs/009). A new Express middleware (`backend/src/session/sessionMiddleware.ts`)
+assigns each browser an unguessable, cryptographically random session identifier via an
+`httpOnly` cookie and runs the rest of the request inside a `node:async_hooks`
+`AsyncLocalStorage` context; `workflowStore.ts` reads that context internally, so no route or
+pipeline module needed to change to become session-aware. Concurrent sessions never see or
+affect each other's workflow, and a session idle for over 60 minutes is evicted — its next visit
+is told explicitly that its session expired, rather than shown an indistinguishable empty state.
+The underlying `AIProvider` (readiness, model, and serial inference queue) remains one shared,
+process-wide resource, unaffected by this per-session isolation.
 
 ```mermaid
 stateDiagram-v2
@@ -172,8 +183,9 @@ stateDiagram-v2
 Every stage is guarded by its required output. Stage state is visible as not-yet-reached, active,
 complete, stale, or skipped; skipped AI enhancement may become active again before scenario review
 is finalized. Changing an upstream decision invalidates dependent completed stages, marks them
-stale, and blocks artifact download until regenerated. State survives browser reloads while the
-backend remains alive, but not backend restarts.
+stale, and blocks artifact download until regenerated. A session's state survives that browser's
+reloads and additional tabs while the backend remains alive, but not backend restarts or a
+60-minute idle period.
 
 ## AI subsystem
 
@@ -237,8 +249,10 @@ offline once the model is cached.
   it.
 - Local-only operation never silently transfers inference inputs externally. The current provider
   modes are local and mock.
-- The initial product is single-user, in-memory, and non-persistent. No external queue, database,
-  authentication system, or cloud AI provider is part of the core architecture.
+- The product isolates concurrent browser sessions (an unguessable cookie identity, evicted after
+  60 minutes idle) but has no login/account system, and workflow state remains in-memory and
+  non-persistent. No external queue, database, authentication system, or cloud AI provider is
+  part of the core architecture.
 
 ## Frontend architecture
 
@@ -275,6 +289,6 @@ tests and benchmarks are opt-in because they may provision or load a local model
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
 feature-level behavior, contracts, success criteria, and implementation status live in the
-[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/014-*`.
+[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/017-*`.
 Where this document and a feature specification differ, the applicable specification and
 constitution take precedence.

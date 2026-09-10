@@ -58,7 +58,7 @@ ApiPilot's UI is one ordered workflow; individual stages cannot be opened indepe
 8. **Workflow review**: approve or reject dependency workflows.
 9. **Postman generation**: download a collection, environment, and artifact README from approved scenarios.
 
-The backend keeps one workflow instance in process memory. Browser reloads or reconnects resume it while the backend stays alive; backend restarts discard it. An upstream decision marks dependent completed stages stale and blocks artifact download until those stages are redone.
+The backend keeps one workflow instance per browser session in process memory, isolated by an unguessable session cookie — concurrent users never see or affect each other's workflow. Browser reloads or additional tabs in the same browser resume that session's own workflow while the backend stays alive; backend restarts discard every session's state, and a session idle for over 60 minutes is evicted (its next visit shows an explicit "session expired" notice rather than a silent blank state). An upstream decision marks dependent completed stages stale and blocks artifact download until those stages are redone.
 
 ## Product capabilities and specification status
 
@@ -82,6 +82,7 @@ The [roadmap](specs/ROADMAP.md) is authoritative for implementation status. Indi
 | AP-014 AI Batching Policy and Run Pacing         | Implemented; 2 tasks blocked on real-model validation | Small deterministic work units, caller-specific sizing, run ceilings, retained partial results, responsive cancellation, reply-shape reliability, and paced dependency analysis.       |
 | AP-015 AI Batch Retry                            | Implemented                                 | Retry a single failed AI-enhancement batch after a run settles, without discarding already-succeeded batches.                                                                          |
 | AP-016 Workflow-Aware Postman Generation          | Implemented                                 | Render approved integration workflows as ordered, dependency-aware Postman request sequences.                                                                                          |
+| Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented | Isolates the in-progress guided workflow per browser session behind an unguessable cookie identity, so concurrent users no longer collide on one shared workflow; idle sessions are evicted after 60 minutes with an explicit expiry notice. Not the same feature as AP-017 below despite the directory-number coincidence. |
 | AP-017 Test Execution and Results                | Post-MVP, not started                       | Execute generated artifacts and report results.                                                                                                                                        |
 | AP-018 AI Failure Analysis                       | Post-MVP, not started                       | Analyze execution failures using AI as an explicitly bounded assistant.                                                                                                                |
 
@@ -222,7 +223,7 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 
 - Input is one OpenAPI 3.x YAML file. Swagger 2.0, JSON input, external `$ref` retrieval, and executing uploaded content are unsupported.
 - ApiPilot creates and reviews test intent but does not contact APIs from the specification. Execution/results and AI failure analysis are post-MVP.
-- Workflow state is single-instance, process-memory only, and not multi-user or durable across a backend restart.
+- Workflow state is isolated per browser session (an unguessable cookie identity, not a login/account) and kept in process memory only — it is not durable across a backend restart, and an idle session's workflow is evicted after 60 minutes.
 - Postman export is currently limited to approved single-operation scenarios; multi-step workflow rendering is a planned extension.
 - Local model provisioning may require an initial download. Normal tests do not download models.
 - AP-013 and AP-014 have a small number of real-model validation tasks deliberately left open (blocked on an uncached local model); see their task lists and the roadmap for detail.
@@ -248,6 +249,7 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 - [AP-014 batching policy](specs/014-ai-batching-policy/spec.md)
 - [AP-015 batch retry](specs/015-ai-batch-retry/spec.md)
 - [AP-016 workflow-aware Postman generation](specs/016-workflow-aware-postman/spec.md)
+- [Session-scoped concurrent workflow isolation](specs/017-session-workflow-isolation/spec.md)
 
 Each feature directory contains the normative specification, implementation plan, task list, data model, research, quickstart, and API contracts where relevant.
 

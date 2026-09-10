@@ -74,6 +74,35 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
+  it("shows the session-expired notice, not the plain upload prompt, when the session's prior workflow was idle-evicted (specs/017-session-workflow-isolation FR-007a)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ workflow: null, sessionExpired: true }),
+      })),
+    );
+
+    render(<TestGenerationWorkflowPage />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("session-expired-notice")).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument();
+  });
+
+  it("shows the plain upload prompt, not the session-expired notice, for an ordinary empty session", async () => {
+    stubFetch([]);
+
+    render(<TestGenerationWorkflowPage />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("session-expired-notice")).not.toBeInTheDocument();
+  });
+
   it("walks upload -> apiReview -> deterministicGeneration -> aiEnhancement -> scenarioReview", async () => {
     stubFetch([
       { workflow: workflowAt("apiReview") },

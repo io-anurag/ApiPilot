@@ -71,6 +71,10 @@ export function TestGenerationWorkflowPage() {
   // discardExisting already implied.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [showStartPage, setShowStartPage] = useState(false);
+  // Set only when this session's own prior workflow was discarded for inactivity
+  // (specs/017-session-workflow-isolation FR-007a) — distinct from a session that never
+  // started one, which never sets this.
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +83,8 @@ export function TestGenerationWorkflowPage() {
       if (result.ok && result.workflow) {
         setWorkflow(result.workflow);
         setViewedStageId(result.workflow.activeStageId);
+      } else if (result.ok && result.sessionExpired) {
+        setSessionExpired(true);
       }
       setLoading(false);
     });
@@ -183,6 +189,14 @@ export function TestGenerationWorkflowPage() {
             </button>
           </div>
         </div>
+      )}
+      {sessionExpired && !workflow && (
+        <output
+          data-testid="session-expired-notice"
+          className="block border-l-4 border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700"
+        >
+          Your previous session expired due to inactivity. Start a new run below.
+        </output>
       )}
       {showHome && (
         <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-8 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)] lg:gap-x-16">

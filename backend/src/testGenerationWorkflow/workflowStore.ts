@@ -9,12 +9,34 @@ import type {
 } from "@apipilot/shared-domain";
 import { WORKFLOW_STAGE_ORDER } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
+import { getSessionId } from "../session/sessionContext";
+import { markActive, onExpire } from "../session/sessionRegistry";
 
 const logger = createLogger("testGenerationWorkflow.workflowStore");
 
-/** The single global instance (FR-018, research.md D7). No database, no session identity. */
-let currentWorkflow: TestGenerationWorkflow | undefined;
-let nextWorkflowSequence = 0;
+/** One entry per session (specs/017-session-workflow-isolation) — previously two bare module-level variables shared by every caller (FR-018, research.md D7 of specs/009-e2e-test-generation-workflow). */
+interface SessionWorkflowState {
+  currentWorkflow: TestGenerationWorkflow | undefined;
+  nextWorkflowSequence: number;
+}
+
+const sessionStates = new Map<string, SessionWorkflowState>();
+
+/** Discards a session's workflow state the moment it is idle-evicted (specs/017-session-workflow-isolation research.md D3/D4), bounding memory growth without this module needing a periodic sweep of its own. */
+onExpire((sessionId) => {
+  sessionStates.delete(sessionId);
+});
+
+/** Resolves the calling session's own state, creating a fresh one on first use. */
+function getState(): SessionWorkflowState {
+  const sessionId = getSessionId();
+  let state = sessionStates.get(sessionId);
+  if (!state) {
+    state = { currentWorkflow: undefined, nextWorkflowSequence: 0 };
+    sessionStates.set(sessionId, state);
+  }
+  return state;
+}
 
 /** Thrown by `updateStage` when the requested `from -> to` StageStatus change is not permitted (data-model.md). */
 export class InvalidStageTransitionError extends Error {
@@ -24,20 +46,14 @@ export class InvalidStageTransitionError extends Error {
   }
 }
 
-/** Returns the single in-progress workflow, or `undefined` if none has been started yet. */
+/** Returns the calling session's in-progress workflow, or `undefined` if none has been started yet. */
 export function getCurrentWorkflow(): TestGenerationWorkflow | undefined {
-  return currentWorkflow;
+  return getState().currentWorkflow;
 }
 
-/** Test-only hook to clear the store between test runs (mirrors resetAIProvider). */
+/** Test-only hook to clear every session's state between test runs (mirrors resetAIProvider). */
 export function resetStore(): void {
-  currentWorkflow = undefined;
-  nextWorkflowSequence = 0;
-}
-
-function freshWorkflowId(now: Date): string {
-  nextWorkflowSequence += 1;
-  return `wf-${now.getTime()}-${nextWorkflowSequence}`;
+  sessionStates.clear();
 }
 
 function initialStages(): Record<WorkflowStageId, WorkflowStageState> {
@@ -51,12 +67,16 @@ function initialStages(): Record<WorkflowStageId, WorkflowStageState> {
 
 /**
  * Creates a fresh workflow from an already-built ApiModel (upload + analysis complete
- * atomically, research.md D4) and makes it the current one, replacing any prior workflow.
+ * atomically, research.md D4) and makes it the calling session's current one, replacing any
+ * prior workflow that same session had (FR-003) and clearing an idle-expired tombstone for this
+ * session, if any (FR-007a's notice only applies until the session starts fresh — data-model.md).
  */
 export function startWorkflow(input: {
   specificationFilename: string;
   apiModel: ApiModel;
 }): TestGenerationWorkflow {
+  const sessionId = getSessionId();
+  const state = getState();
   const now = new Date();
   const nowIso = now.toISOString();
   const stages = initialStages();
@@ -74,8 +94,9 @@ export function startWorkflow(input: {
   };
   stages.apiReview = { stageId: "apiReview", status: "active", enteredAt: nowIso };
 
-  currentWorkflow = {
-    id: freshWorkflowId(now),
+  state.nextWorkflowSequence += 1;
+  state.currentWorkflow = {
+    id: `wf-${now.getTime()}-${state.nextWorkflowSequence}`,
     createdAt: nowIso,
     updatedAt: nowIso,
     activeStageId: "apiReview",
@@ -83,7 +104,8 @@ export function startWorkflow(input: {
     specificationFilename: input.specificationFilename,
     apiModel: input.apiModel,
   };
-  return currentWorkflow;
+  markActive(sessionId);
+  return state.currentWorkflow;
 }
 
 /** Valid `from -> to` StageStatus transitions (data-model.md). Skip/retry/partial is aiEnhancement-only. */
@@ -127,17 +149,19 @@ export interface UpdateStageOptions {
 
 /**
  * Applies one validated stage-status transition (throws InvalidStageTransitionError otherwise)
- * and returns the updated workflow. Requires a current workflow to exist.
+ * and returns the updated workflow. Requires a current workflow to exist for the calling
+ * session.
  */
 export function updateStage(
   stageId: WorkflowStageId,
   status: StageStatus,
   options: UpdateStageOptions = {},
 ): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const current = currentWorkflow.stages[stageId];
+  const current = state.currentWorkflow.stages[stageId];
   if (!isValidTransition(stageId, current.status, status)) {
     throw new InvalidStageTransitionError(stageId, current.status, status);
   }
@@ -161,18 +185,18 @@ export function updateStage(
   // updateStage is the sole validated per-stage status transition, so it is the one place that
   // can log every "advance" and every "marked stale/complete" event without duplicating callers.
   logger.info("stage_transition", {
-    workflowId: currentWorkflow.id,
+    workflowId: state.currentWorkflow.id,
     stageId,
     fromStatus: current.status,
     toStatus: status,
   });
-  currentWorkflow = {
-    ...currentWorkflow,
+  state.currentWorkflow = {
+    ...state.currentWorkflow,
     updatedAt: now,
-    activeStageId: options.activeStageId ?? currentWorkflow.activeStageId,
-    stages: { ...currentWorkflow.stages, [stageId]: nextState },
+    activeStageId: options.activeStageId ?? state.currentWorkflow.activeStageId,
+    stages: { ...state.currentWorkflow.stages, [stageId]: nextState },
   };
-  return currentWorkflow;
+  return state.currentWorkflow;
 }
 
 /**
@@ -184,19 +208,20 @@ export function updateStage(
 export function setAiEnhancementProgress(
   progress: AiEnhancementProgress | undefined,
 ): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const current = currentWorkflow.stages.aiEnhancement;
-  currentWorkflow = {
-    ...currentWorkflow,
+  const current = state.currentWorkflow.stages.aiEnhancement;
+  state.currentWorkflow = {
+    ...state.currentWorkflow,
     updatedAt: new Date().toISOString(),
     stages: {
-      ...currentWorkflow.stages,
+      ...state.currentWorkflow.stages,
       aiEnhancement: { ...current, progress },
     },
   };
-  return currentWorkflow;
+  return state.currentWorkflow;
 }
 
 /**
@@ -207,23 +232,24 @@ export function setAiEnhancementProgress(
  * 2026-09-08: latest attempt only, no per-attempt history).
  */
 export function setAiEnhancementBatchOutcome(record: BatchOutcomeRecord): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const current = currentWorkflow.stages.aiEnhancement;
+  const current = state.currentWorkflow.stages.aiEnhancement;
   const existing = current.batchOutcomes ?? [];
   const next = existing.some((o) => o.index === record.index)
     ? existing.map((o) => (o.index === record.index ? record : o))
     : [...existing, record];
-  currentWorkflow = {
-    ...currentWorkflow,
+  state.currentWorkflow = {
+    ...state.currentWorkflow,
     updatedAt: new Date().toISOString(),
     stages: {
-      ...currentWorkflow.stages,
+      ...state.currentWorkflow.stages,
       aiEnhancement: { ...current, batchOutcomes: next },
     },
   };
-  return currentWorkflow;
+  return state.currentWorkflow;
 }
 
 /**
@@ -235,12 +261,13 @@ export function setAiEnhancementBatchOutcome(record: BatchOutcomeRecord): TestGe
  * moving origin would make the timer jump backwards.
  */
 export function markAiEnhancementGenerating(): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const current = currentWorkflow.stages.aiEnhancement;
+  const current = state.currentWorkflow.stages.aiEnhancement;
   if (!current.progress || current.progress.phase === "generating") {
-    return currentWorkflow;
+    return state.currentWorkflow;
   }
   return setAiEnhancementProgress({
     ...current.progress,
@@ -255,19 +282,20 @@ export function markAiEnhancementGenerating(): TestGenerationWorkflow {
  * cannot be withdrawn, so a repeat request is idempotent.
  */
 export function requestAiEnhancementCancel(): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const current = currentWorkflow.stages.aiEnhancement;
+  const current = state.currentWorkflow.stages.aiEnhancement;
   if (!current.progress || current.progress.cancelRequested) {
-    return currentWorkflow;
+    return state.currentWorkflow;
   }
   return setAiEnhancementProgress({ ...current.progress, cancelRequested: true });
 }
 
-/** Whether cancellation has been requested for the run currently in flight. */
+/** Whether cancellation has been requested for the calling session's run currently in flight. */
 export function isAiEnhancementCancelRequested(): boolean {
-  return currentWorkflow?.stages.aiEnhancement.progress?.cancelRequested === true;
+  return getState().currentWorkflow?.stages.aiEnhancement.progress?.cancelRequested === true;
 }
 
 /**
@@ -275,23 +303,25 @@ export function isAiEnhancementCancelRequested(): boolean {
  * not already been entered. Used by every forward stage transition in US1.
  */
 export function advanceActiveStage(stageId: WorkflowStageId): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  const status = currentWorkflow.stages[stageId].status;
+  const status = state.currentWorkflow.stages[stageId].status;
   if (status === "not-yet-reached" || status === "stale") {
     updateStage(stageId, "active");
   }
   return patchWorkflow({ activeStageId: stageId });
 }
 
-/** Merges arbitrary top-level fields (produced artifacts, activeStageId) onto the current workflow. */
+/** Merges arbitrary top-level fields (produced artifacts, activeStageId) onto the calling session's current workflow. */
 export function patchWorkflow(
   patch: Partial<TestGenerationWorkflow>,
 ): TestGenerationWorkflow {
-  if (!currentWorkflow) {
+  const state = getState();
+  if (!state.currentWorkflow) {
     throw new Error("No workflow is currently in progress.");
   }
-  currentWorkflow = { ...currentWorkflow, ...patch, updatedAt: new Date().toISOString() };
-  return currentWorkflow;
+  state.currentWorkflow = { ...state.currentWorkflow, ...patch, updatedAt: new Date().toISOString() };
+  return state.currentWorkflow;
 }

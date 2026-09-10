@@ -34,6 +34,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-014 — AI Batching Policy & Run Pacing | Implemented (2 tasks blocked on an uncached real local model — validating a conditional-example batching rule and re-measuring decode throughput — plus two startup-validation items for the run-budget env var deliberately deferred, per tasks.md) |
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
+| Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
 | AP-017 — Test Execution & Results *(post-MVP)* | Not started |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 
@@ -46,6 +47,12 @@ lets a single failed batch from that same batched run be retried without discard
 already-succeeded batches; AP-016 is unrelated to the batching/enhancement chain and instead
 makes the AP-008/AP-009 workflow review decision consequential by having AP-007's Postman
 generator emit approved workflows as ordered, dependency-aware request sequences.
+
+`specs/017-session-workflow-isolation` is a further hardening feature on AP-009/AP-012, isolating
+the previously single, backend-wide in-progress workflow (AP-009 FR-018) per browser session so
+concurrent users no longer collide. Despite the directory-number coincidence, this is **not** the
+`AP-017` post-MVP feature below (Test Execution & Results) — see that spec's own "Relationship to
+Existing Specifications" section for why the two are unrelated and how to tell them apart.
 
 Each spec's own `spec.md` still carries a template-default `**Status**: Draft` header — that
 field is not maintained after `/speckit-specify` runs and should not be read as the feature's

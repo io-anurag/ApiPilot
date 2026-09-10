@@ -53,13 +53,14 @@ afterEach(() => {
 describe("test generation workflow diagnostics", () => {
   it("keeps the AI provider's raw error message out of the log and response when AI enhancement degrades (FR-016)", async () => {
     const app = createApp(providerThatLeaksIfLogged());
-    await request(app)
+    const agent = request.agent(app);
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
 
-    const response = await request(app).post(
+    const response = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
 
@@ -71,11 +72,12 @@ describe("test generation workflow diagnostics", () => {
 
   it("keeps specification content out of the log during a normal sequence", async () => {
     const app = createApp();
-    await request(app)
+    const agent = request.agent(app);
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
 
     expect(logged.join("\n")).not.toContain(SPEC_MARKER);
   });

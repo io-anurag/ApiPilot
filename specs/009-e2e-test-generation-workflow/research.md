@@ -161,6 +161,11 @@ exactly the one piece of state the clarified spec requires and nothing more. It 
 persisted to disk (Assumptions: lost on backend restart, matching ApiPilot's non-persistent
 processing model).
 
+**Superseded**: `specs/017-session-workflow-isolation` deliberately reverses the "single
+backend-wide instance" decision — the module-level variable became a `Map` keyed by session id
+instead — while keeping this decision's other properties (no database, in-memory only, lost on
+restart) unchanged. See that spec's research.md D1–D5 for the replacement mechanism.
+
 ## D8. Frontend: no client-side router is introduced
 
 **Decision**: A single new `TestGenerationWorkflowPage` replaces the current ad hoc nesting in

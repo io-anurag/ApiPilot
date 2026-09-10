@@ -40,12 +40,12 @@ function throwingProvider(): AIProvider {
   };
 }
 
-async function driveToAiEnhancement(app: ReturnType<typeof createApp>): Promise<void> {
-  await request(app)
+async function driveToAiEnhancement(agent: ReturnType<typeof request.agent>): Promise<void> {
+  await agent
     .post("/api/test-generation-workflow?discardExisting=true")
     .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-  await request(app).post("/api/test-generation-workflow/api-review/continue");
-  await request(app).post("/api/test-generation-workflow/deterministic-generation");
+  await agent.post("/api/test-generation-workflow/api-review/continue");
+  await agent.post("/api/test-generation-workflow/deterministic-generation");
 }
 
 describe("async workflow routes surface unexpected failures as a safe 500", () => {
@@ -53,9 +53,10 @@ describe("async workflow routes surface unexpected failures as a safe 500", () =
 
   it("returns 500 from POST /ai-enhancement instead of escaping the handler as an unhandled rejection", async () => {
     const app = createApp(throwingProvider());
-    await driveToAiEnhancement(app);
+    const agent = request.agent(app);
+    await driveToAiEnhancement(agent);
 
-    const response = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const response = await agent.post("/api/test-generation-workflow/ai-enhancement");
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: "internal_server_error" });
@@ -63,9 +64,10 @@ describe("async workflow routes surface unexpected failures as a safe 500", () =
 
   it("leaks no diagnostic detail in the 500 body (constitution XX)", async () => {
     const app = createApp(throwingProvider());
-    await driveToAiEnhancement(app);
+    const agent = request.agent(app);
+    await driveToAiEnhancement(agent);
 
-    const response = await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    const response = await agent.post("/api/test-generation-workflow/ai-enhancement");
 
     const serialized = JSON.stringify(response.body);
     expect(serialized).not.toContain("engine exploded");
@@ -75,13 +77,14 @@ describe("async workflow routes surface unexpected failures as a safe 500", () =
 
   it("keeps serving after the failure, so the workflow is not lost with the process", async () => {
     const app = createApp(throwingProvider());
-    await driveToAiEnhancement(app);
+    const agent = request.agent(app);
+    await driveToAiEnhancement(agent);
 
-    await request(app).post("/api/test-generation-workflow/ai-enhancement");
+    await agent.post("/api/test-generation-workflow/ai-enhancement");
 
     // The same workflow is still readable, with its deterministic scenarios intact — the
     // behaviour a terminated process could not provide.
-    const after = await request(app).get("/api/test-generation-workflow");
+    const after = await agent.get("/api/test-generation-workflow");
     expect(after.status).toBe(200);
     expect(after.body.workflow.deterministicTestModel.scenarios.length).toBeGreaterThan(0);
   });

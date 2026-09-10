@@ -13,7 +13,7 @@ export type WorkflowResult =
   | { ok: false; error: string; message: string; problems?: string[] };
 
 export type WorkflowOrNoneResult =
-  | { ok: true; workflow: TestGenerationWorkflow | null }
+  | { ok: true; workflow: TestGenerationWorkflow | null; sessionExpired?: boolean }
   | { ok: false; error: string; message: string };
 
 async function toWorkflowResult(response: Response): Promise<WorkflowResult> {
@@ -50,7 +50,12 @@ async function postJson(path: string, body?: unknown): Promise<WorkflowResult> {
   }
 }
 
-/** Fetches the current workflow, or `workflow: null` when none is in progress (FR-014). */
+/**
+ * Fetches the current workflow, or `workflow: null` when none is in progress (FR-014). When the
+ * calling session's own prior workflow was discarded for inactivity, `sessionExpired: true` is
+ * also set, distinguishing that case from a session that never started one
+ * (specs/017-session-workflow-isolation FR-007a, contracts/session-isolation.md).
+ */
 export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
   try {
     const response = await get("/api/test-generation-workflow");
@@ -63,7 +68,11 @@ export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
         message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
       };
     }
-    return { ok: true, workflow: parsed.workflow as TestGenerationWorkflow };
+    return {
+      ok: true,
+      workflow: parsed.workflow as TestGenerationWorkflow | null,
+      ...(parsed?.sessionExpired ? { sessionExpired: true as const } : {}),
+    };
   } catch (err) {
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }

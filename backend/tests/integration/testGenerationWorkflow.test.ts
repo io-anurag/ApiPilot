@@ -37,20 +37,21 @@ describe("test generation workflow orchestration", () => {
 
   it("starts a workflow and refuses a second start unless discardExisting=true (FR-001, FR-010)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
+    const agent = request.agent(app);
 
-    const first = await request(app)
+    const first = await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     expect(first.status).toBe(200);
     expect(first.body.workflow.activeStageId).toBe("apiReview");
 
-    const conflict = await request(app)
+    const conflict = await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     expect(conflict.status).toBe(409);
     expect(conflict.body.error).toBe("workflow_in_progress");
 
-    const discarded = await request(app)
+    const discarded = await agent
       .post("/api/test-generation-workflow?discardExisting=true")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     expect(discarded.status).toBe(200);
@@ -74,19 +75,20 @@ describe("test generation workflow orchestration", () => {
 
   it("walks the full sequence from upload to a downloadable Postman collection (US1)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
+    const agent = request.agent(app);
 
-    const started = await request(app)
+    const started = await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
     expect(started.status).toBe(200);
 
-    const afterReview = await request(app).post(
+    const afterReview = await agent.post(
       "/api/test-generation-workflow/api-review/continue",
     );
     expect(afterReview.status).toBe(200);
     expect(afterReview.body.workflow.activeStageId).toBe("deterministicGeneration");
 
-    const afterGeneration = await request(app).post(
+    const afterGeneration = await agent.post(
       "/api/test-generation-workflow/deterministic-generation",
     );
     expect(afterGeneration.status).toBe(200);
@@ -95,7 +97,7 @@ describe("test generation workflow orchestration", () => {
       afterGeneration.body.workflow.deterministicTestModel.scenarios.length,
     ).toBeGreaterThan(0);
 
-    const afterEnhancement = await request(app).post(
+    const afterEnhancement = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(afterEnhancement.status).toBe(200);
@@ -103,7 +105,7 @@ describe("test generation workflow orchestration", () => {
     expect(afterEnhancement.body.workflow.activeStageId).toBe("scenarioReview");
 
     const scenario = afterEnhancement.body.workflow.reviewWorkspace.scenarios[0];
-    const afterDecision = await request(app)
+    const afterDecision = await agent
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
@@ -117,7 +119,7 @@ describe("test generation workflow orchestration", () => {
     expect(afterDecision.status).toBe(200);
     expect(afterDecision.body.outcomes[0].applied).toBe(true);
 
-    const afterFinalize = await request(app).post(
+    const afterFinalize = await agent.post(
       "/api/test-generation-workflow/scenario-review/finalize",
     );
     expect(afterFinalize.status).toBe(200);
@@ -130,7 +132,7 @@ describe("test generation workflow orchestration", () => {
     if (workflowReviewStatus === "active") {
       const discovered = currentWorkflow.dependencyAnalysis.workflows;
       if (discovered.length > 0) {
-        await request(app)
+        await agent
           .post("/api/test-generation-workflow/workflow-review/decisions")
           .send({
             decisions: discovered.map((w: { id: string }) => ({
@@ -139,7 +141,7 @@ describe("test generation workflow orchestration", () => {
             })),
           });
       }
-      const afterWorkflowReview = await request(app).post(
+      const afterWorkflowReview = await agent.post(
         "/api/test-generation-workflow/workflow-review/continue",
       );
       expect(afterWorkflowReview.status).toBe(200);
@@ -148,7 +150,7 @@ describe("test generation workflow orchestration", () => {
     expect(currentWorkflow.stages.workflowReview.status).toBe("complete");
     expect(currentWorkflow.activeStageId).toBe("postmanGeneration");
 
-    const afterPostman = await request(app)
+    const afterPostman = await agent
       .post("/api/test-generation-workflow/postman-generation")
       .send({});
     expect(afterPostman.status).toBe(200);
@@ -177,15 +179,16 @@ describe("test generation workflow orchestration", () => {
 
   it("GET reflects the same state a fresh browser connection would see after a reload (US2, FR-014)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
-    await request(app)
+    const agent = request.agent(app);
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    const afterGeneration = await request(app).post(
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    const afterGeneration = await agent.post(
       "/api/test-generation-workflow/deterministic-generation",
     );
 
-    const resumed = await request(app).get("/api/test-generation-workflow");
+    const resumed = await agent.get("/api/test-generation-workflow");
     expect(resumed.status).toBe(200);
     expect(resumed.body.workflow.activeStageId).toBe(
       afterGeneration.body.workflow.activeStageId,
@@ -197,16 +200,17 @@ describe("test generation workflow orchestration", () => {
 
   it("revising an approved scenario after completing the workflow marks downstream stages stale (US3, SC-003)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
-    await request(app)
+    const agent = request.agent(app);
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
-    const afterEnhancement = await request(app).post(
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     const scenario = afterEnhancement.body.workflow.reviewWorkspace.scenarios[0];
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
@@ -217,7 +221,7 @@ describe("test generation workflow orchestration", () => {
           },
         ],
       });
-    const afterFinalize = await request(app).post(
+    const afterFinalize = await agent.post(
       "/api/test-generation-workflow/scenario-review/finalize",
     );
 
@@ -225,7 +229,7 @@ describe("test generation workflow orchestration", () => {
     if (workflow.stages.workflowReview.status === "active") {
       const discovered = workflow.dependencyAnalysis.workflows;
       if (discovered.length > 0) {
-        await request(app)
+        await agent
           .post("/api/test-generation-workflow/workflow-review/decisions")
           .send({
             decisions: discovered.map((w: { id: string }) => ({
@@ -234,15 +238,15 @@ describe("test generation workflow orchestration", () => {
             })),
           });
       }
-      const afterWorkflowReview = await request(app).post(
+      const afterWorkflowReview = await agent.post(
         "/api/test-generation-workflow/workflow-review/continue",
       );
       workflow = afterWorkflowReview.body.workflow;
     }
-    await request(app).post("/api/test-generation-workflow/postman-generation").send({});
+    await agent.post("/api/test-generation-workflow/postman-generation").send({});
 
     // Revise the previously-accepted decision.
-    const revision = await request(app)
+    const revision = await agent
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
@@ -260,10 +264,10 @@ describe("test generation workflow orchestration", () => {
     expect(revision.body.workflow.stages.workflowReview.status).toBe("stale");
     expect(revision.body.workflow.stages.postmanGeneration.status).toBe("stale");
 
-    const resumed = await request(app).get("/api/test-generation-workflow");
+    const resumed = await agent.get("/api/test-generation-workflow");
     expect(resumed.body.workflow.stages.postmanGeneration.status).toBe("stale");
 
-    const blockedRetry = await request(app)
+    const blockedRetry = await agent
       .post("/api/test-generation-workflow/postman-generation")
       .send({});
     expect(blockedRetry.status).toBe(409);
@@ -299,14 +303,15 @@ describe("test generation workflow orchestration", () => {
       },
     };
     const app = createApp(provider);
+    const agent = request.agent(app);
 
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
 
-    const skipped = await request(app).post(
+    const skipped = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(skipped.status).toBe(200);
@@ -314,14 +319,14 @@ describe("test generation workflow orchestration", () => {
     expect(skipped.body.workflow.activeStageId).toBe("scenarioReview");
 
     providerAvailable = true;
-    const retried = await request(app).post(
+    const retried = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(retried.status).toBe(200);
     expect(retried.body.workflow.stages.aiEnhancement.status).toBe("complete");
 
     const scenario = retried.body.workflow.reviewWorkspace.scenarios[0];
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
@@ -332,9 +337,9 @@ describe("test generation workflow orchestration", () => {
           },
         ],
       });
-    await request(app).post("/api/test-generation-workflow/scenario-review/finalize");
+    await agent.post("/api/test-generation-workflow/scenario-review/finalize");
 
-    const afterFinalizeRetry = await request(app).post(
+    const afterFinalizeRetry = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(afterFinalizeRetry.status).toBe(409);
@@ -343,10 +348,11 @@ describe("test generation workflow orchestration", () => {
 
   it("blocks a stage before its predecessor is complete (FR-002)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
-    await request(app)
+    const agent = request.agent(app);
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    const response = await request(app).post(
+    const response = await agent.post(
       "/api/test-generation-workflow/deterministic-generation",
     );
     expect(response.status).toBe(409);
@@ -355,6 +361,11 @@ describe("test generation workflow orchestration", () => {
 
   it("GET returns stages.aiEnhancement.progress while a multi-batch run is active, identically across independent polls, and absent again once it finishes (specs/012-ai-enhancement-progress)", async () => {
     const progressPairs: { a: unknown; b: unknown }[] = [];
+    // The provider's `infer` polls mid-batch via `agent`, declared below with `const` — the
+    // closure only reads it once `infer` is actually invoked (after that declaration has run),
+    // the same way this file's other tests already reference `app` from an enclosing closure. A
+    // separate, cookie-less `request(app)` call would look like a brand-new session with no
+    // workflow under specs/017-session-workflow-isolation.
     // Small budget splits the fixture's 3 operations into one batch each (mirrors the existing
     // "partial outcome" convention in aiEnhancementStage.test.ts).
     const provider: AIProvider = {
@@ -369,8 +380,8 @@ describe("test generation workflow orchestration", () => {
       infer: async (req) => {
         // Two independent GET calls "mid-batch" simulate two different browser
         // tabs/reconnects polling at the same moment — both must see identical state.
-        const pollA = await request(app).get("/api/test-generation-workflow");
-        const pollB = await request(app).get("/api/test-generation-workflow");
+        const pollA = await agent.get("/api/test-generation-workflow");
+        const pollB = await agent.get("/api/test-generation-workflow");
         progressPairs.push({
           a: pollA.body.workflow.stages.aiEnhancement.progress,
           b: pollB.body.workflow.stages.aiEnhancement.progress,
@@ -387,13 +398,14 @@ describe("test generation workflow orchestration", () => {
       },
     };
     const app = createApp(provider);
+    const agent = request.agent(app);
 
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
-    const afterEnhancement = await request(app).post(
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(afterEnhancement.status).toBe(200);
@@ -418,6 +430,9 @@ describe("test generation workflow orchestration", () => {
 
   it("POST ai-enhancement returns 409 ai_enhancement_already_running when a run is already in progress (specs/012-ai-enhancement-progress FR-008)", async () => {
     let concurrentResponse: { status: number; body: { error?: string } } | undefined;
+    // Same reasoning as the progress-poll test above: the nested request during `infer` must
+    // reuse this test's own session agent (declared below with `const`), not a fresh
+    // cookie-less connection.
     const provider: AIProvider = {
       mode: "mock",
       getReadiness: () => ({
@@ -429,7 +444,7 @@ describe("test generation workflow orchestration", () => {
       getInputBudget: async () => 10,
       infer: async (req) => {
         if (req.requestId.endsWith("-batch1") && !concurrentResponse) {
-          concurrentResponse = await request(app).post(
+          concurrentResponse = await agent.post(
             "/api/test-generation-workflow/ai-enhancement",
           );
         }
@@ -445,13 +460,14 @@ describe("test generation workflow orchestration", () => {
       },
     };
     const app = createApp(provider);
+    const agent = request.agent(app);
 
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
-    const afterEnhancement = await request(app).post(
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
 
@@ -530,13 +546,13 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     return { provider, behavior };
   }
 
-  async function walkToPartialRun(app: ReturnType<typeof createApp>) {
-    await request(app)
+  async function walkToPartialRun(agent: ReturnType<typeof request.agent>) {
+    await agent
       .post("/api/test-generation-workflow")
       .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
-    await request(app).post("/api/test-generation-workflow/api-review/continue");
-    await request(app).post("/api/test-generation-workflow/deterministic-generation");
-    const afterEnhancement = await request(app).post(
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await agent.post(
       "/api/test-generation-workflow/ai-enhancement",
     );
     expect(afterEnhancement.body.workflow.stages.aiEnhancement.status).toBe("partial");
@@ -547,10 +563,11 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    await walkToPartialRun(app);
+    const agent = request.agent(app);
+    await walkToPartialRun(agent);
 
     behavior.set(FAILING_KEY, "succeed");
-    const response = await request(app)
+    const response = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: FAILING_INDEX });
 
@@ -565,9 +582,10 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    await walkToPartialRun(app);
+    const agent = request.agent(app);
+    await walkToPartialRun(agent);
 
-    const response = await request(app)
+    const response = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: 99 });
 
@@ -579,9 +597,10 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    await walkToPartialRun(app);
+    const agent = request.agent(app);
+    await walkToPartialRun(agent);
 
-    const response = await request(app)
+    const response = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: 0 });
 
@@ -593,10 +612,11 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    const afterEnhancement = await walkToPartialRun(app);
+    const agent = request.agent(app);
+    const afterEnhancement = await walkToPartialRun(agent);
 
     const scenario = afterEnhancement.body.workflow.reviewWorkspace.scenarios[0];
-    await request(app)
+    await agent
       .post("/api/test-generation-workflow/scenario-review/decisions")
       .send({
         updates: [
@@ -607,9 +627,9 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
           },
         ],
       });
-    await request(app).post("/api/test-generation-workflow/scenario-review/finalize");
+    await agent.post("/api/test-generation-workflow/scenario-review/finalize");
 
-    const response = await request(app)
+    const response = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: FAILING_INDEX });
 
@@ -621,7 +641,8 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    await walkToPartialRun(app);
+    const agent = request.agent(app);
+    await walkToPartialRun(agent);
 
     let concurrentResponse: { status: number; body: { error?: string } } | undefined;
     behavior.set(FAILING_KEY, "succeed");
@@ -630,14 +651,14 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     // reassigning its `infer` in place is observed by the in-flight request below.
     provider.infer = async (req) => {
       if (!concurrentResponse) {
-        concurrentResponse = await request(app)
+        concurrentResponse = await agent
           .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
           .send({ batchIndex: FAILING_INDEX });
       }
       return originalInfer(req);
     };
 
-    const response = await request(app)
+    const response = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: FAILING_INDEX });
 
@@ -650,15 +671,16 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     const { provider, behavior } = controllableProvider();
     behavior.set(FAILING_KEY, "fail");
     const app = createApp(provider);
-    await walkToPartialRun(app);
+    const agent = request.agent(app);
+    await walkToPartialRun(agent);
 
-    const missing = await request(app).post(
+    const missing = await agent.post(
       "/api/test-generation-workflow/ai-enhancement/retry-batch",
     );
     expect(missing.status).toBe(400);
     expect(missing.body.error).toBe("invalid_request");
 
-    const notInteger = await request(app)
+    const notInteger = await agent
       .post("/api/test-generation-workflow/ai-enhancement/retry-batch")
       .send({ batchIndex: 1.5 });
     expect(notInteger.status).toBe(400);

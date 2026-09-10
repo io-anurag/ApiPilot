@@ -14,3 +14,11 @@ export const VALID_SPECIFICATION_FILENAME = "valid.yaml";
  * both for the "at least one approved scenario" and (once every scenario is rejected) the
  * "zero approved scenarios" finalize edge case. */
 export const VALID_SPECIFICATION_OPERATION_COUNT = 3;
+
+/** A second, distinct valid specification (specs/017-session-workflow-isolation) — used where a
+ * test needs two different uploads to prove they stay distinguishable (e.g. across sessions). */
+export function secondSpecificationBuffer(): Buffer {
+  return readFileSync(path.join(openApiFixturesDir, "body-heavy.yaml"));
+}
+
+export const SECOND_SPECIFICATION_FILENAME = "body-heavy.yaml";

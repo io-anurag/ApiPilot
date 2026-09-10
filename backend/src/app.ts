@@ -23,6 +23,7 @@ import { versionRouter } from "./api/version";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 import { createLogger } from "./logger";
+import { sessionMiddleware } from "./session/sessionMiddleware";
 
 const logger = createLogger("api.errorHandler");
 const requestLogger = createLogger("api.request");
@@ -30,6 +31,13 @@ const requestLogger = createLogger("api.request");
 /** Assembles the Express app: JSON body parsing sized to the upload contract, every `/api` router, and the centralized error handler. `provider` (when supplied) is threaded into the routers that support AI-assisted behavior instead of each using the process-wide default. */
 export function createApp(provider?: AIProvider) {
   const app = express();
+
+  // Assigns every request an unguessable per-browser session identity and runs the rest of the
+  // request inside its AsyncLocalStorage context (specs/017-session-workflow-isolation), so
+  // every downstream router/middleware — including the error handler below — sees "the current
+  // workflow" as scoped to this session. Registered first so nothing downstream can run outside
+  // a resolved session context.
+  app.use(sessionMiddleware);
 
   // Diagnostics only (constitution XX): method/path/status/duration/clientIp, never request
   // bodies or headers. `req.ip` is the direct TCP peer, which is the Vite dev proxy's own
