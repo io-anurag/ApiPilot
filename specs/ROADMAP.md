@@ -35,7 +35,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
-| AP-017 — Test Execution & Results *(post-MVP)* | Not started |
+| AP-017 — Test Execution & Results *(post-MVP)* | Not started — MVP end-to-end validation gate CLOSED 2026-09-11 (see Next Actions #10-11); speccing may now proceed |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
@@ -1478,3 +1478,93 @@ Implementation
 9. Do not begin AP-017 (Test Execution & Results) or AP-018 (AI Failure Analysis) — both
    post-MVP — until the full MVP boundary (AP-001 through AP-010) has been validated
    end-to-end against a real specification, per the MVP Boundary section above.
+   **2026-09-11: CLOSED for the PayPal Invoicing API v2 spec** — see Next Actions #10 (the
+   blocking defect found) and #11 (the fix and the confirming passing rerun). AP-017 speccing
+   may proceed. A second real-world spec pass (`swagger.yaml`, FST.BE, 69 operations) is recorded
+   separately as an additional data point (Next Actions #12).
+10. **End-to-end MVP validation pass attempted against a real specification (2026-09-11) —
+    blocked by a genuine defect, gate remains open.** Ran the complete guided AP-009 journey
+    (upload → analyze → API review → deterministic generation → AI enhancement → scenario
+    review → dependency analysis → workflow review → Postman generation → download) through
+    the actual running backend against PayPal's official public Invoicing API v2 specification
+    (22 operations, OpenAPI 3.0.3, no external `$ref`s — chosen because no real-world-scale spec
+    was already available in-repo; the "51 operations / 371 scenarios / 8 workflows" pass cited
+    in AP-010's spec has no recorded artifact and could not be reused). Every stage completed
+    without a runtime error and produced a structurally valid Postman collection, environment,
+    and README — but the run surfaced a genuine, previously-undiscovered defect rather than
+    validating the MVP:
+    - **Deterministic generation produced 0 scenarios for all 22 operations** (AP-003).
+      Root cause: `hasBlockingIssue` in `backend/src/testDesign/generateTestModel.ts` (~line
+      31-38) skips scenario generation for an entire operation whenever *any*
+      `unsupported-construct`/`unresolved-ref` analysis issue's location string starts with
+      that operation's path prefix — including issues found deep in a *response* schema
+      unrelated to the operation's own parameters. Real-world specs commonly compose schemas
+      with `allOf` (flagged as unsupported per constitution/FR-013), so on this spec every
+      operation picked up at least one such issue and none of AP-003's rule modules ever ran —
+      including for operations with plain, non-`allOf` path parameters. This is a
+      **construct-vs-operation-level scoping bug**, not the accepted behavior: AP-003's FR-018
+      (`specs/003-deterministic-test-designer/spec.md`) specifies skipping generation "for that
+      construct", not for the whole operation. A secondary, lower-severity gap was also found:
+      `extractSchemaConstraint` (`backend/src/openapi/buildApiModel.ts` ~line 34-68) drops
+      rather than merges `allOf` branches, which would still legitimately limit (not fabricate)
+      scenarios for the specific composed fields once the primary bug is fixed.
+    - **Knock-on effect**: with a 0-scenario deterministic baseline, AI enhancement
+      (AP-005/011/012/013/014) ran all 22 batches without error over ~7 minutes on the local
+      Qwen2.5-0.5B model (including one real per-request TIMEOUT that correctly retried and
+      succeeded — good evidence AP-013/014's retry/partial-outcome mechanics work under real
+      load) but retained only **1 net scenario out of 22 operations** (`addedCount:1,
+      rejectedCount:2, totalBatches:22`). Dependency analysis then correctly found 0
+      relationships/workflows from a single scenario. The mechanical pipeline is sound, but the
+      resulting test suite (1 scenario for a 22-operation API) does not meet the MVP's
+      qualitative bar of a meaningful generated baseline.
+    - **Recommendation before re-attempting this gate**: fix the `hasBlockingIssue`
+      construct-vs-operation scoping defect first (highest priority — it silently voids AP-003's
+      core deterministic guarantee on any real spec using `allOf`, independent of AI quality),
+      then re-run this same validation pass and assess AI-enhancement yield separately
+      once a non-empty deterministic baseline exists.
+    - Validation driver scripts and captured output are session-scratch artifacts, not
+      committed to the repository; this entry is the durable record.
+11. **Fix applied and gate re-validated as passing (2026-09-11).** Two genuine defects
+    surfaced by Next Actions #10 were fixed, each with new regression tests, the full backend
+    suite (654 tests), lint, and build all passing:
+    - `hasBlockingIssue` removed entirely from `backend/src/testDesign/generateTestModel.ts`.
+      `buildApiModel.ts`'s schema extraction already degrades an unresolved/unsupported schema
+      node to an empty constraint (`{required: [], properties: {}}`) rather than fabricating
+      one, so removing the operation-wide check lets every rule naturally skip only the
+      affected construct (FR-018) while still generating scenarios for the rest of the
+      operation — no replacement blocking logic was needed.
+    - A second, previously-masked defect surfaced once real scenario generation actually ran
+      against this spec's parameters: `backend/src/testDesign/valueGenerators.ts`'s
+      `stringBoundaryValues`/`arrayBoundaryValues` built exact-length boundary values directly
+      from declared `maxLength`/`maxItems` — and this spec (like other real-world APIs)
+      declares several of these as literally `2147483647` (INT32_MAX) as an "effectively
+      unbounded" placeholder, which crashed `String.repeat`/`Array.from` with a `RangeError`.
+      Fixed by capping generation at a safe practical length/count and omitting (not
+      fabricating a smaller, misleadingly-labeled) that specific boundary variant when the
+      declared bound is unrealistic.
+    - **Confirming rerun, same PayPal Invoicing API v2 spec (22 operations)**: deterministic
+      generation now produces **806 scenarios** (was 0); AI enhancement settles `partial`
+      (`addedCount:1, rejectedCount:5`, one batch failed with a genuine `INVALID_RESPONSE` from
+      the local model — expected real-model behavior, not a bug) for **807 total scenarios**;
+      dependency analysis finds **2 relationships/workflows**; all 807 scenarios reviewed,
+      approved, and exported to a valid Postman collection (807 requests across 5 folders),
+      environment, and README. Full pipeline traversal confirmed end-to-end at real-world scale.
+    - The MVP end-to-end validation gate (Next Actions #9) is now CLOSED for this specification.
+      AP-017 speccing may proceed.
+12. **Second real-world validation pass — `swagger.yaml` (FST.BE, OpenAPI 3.0.1, 57 paths / 69
+    operations, user-supplied, untracked in the repo) — passed cleanly, no new defects.** Run as
+    an additional real-world data point after #11's fix, at roughly 3x the operation count of
+    the PayPal spec. Deterministic generation produced **691 scenarios** with no crash (the
+    `valueGenerators.ts` safety caps were not even triggered here — this spec did not use the
+    INT32_MAX-placeholder pattern PayPal's did, but the earlier crash risk remains real for any
+    spec that does). AI enhancement settled `success` (`addedCount:1, rejectedCount:15,
+    totalBatches:69, notAttemptedCount:0`) for **692 total scenarios**; dependency analysis
+    found **37 relationships/workflows** (this spec's much larger, more interconnected resource
+    model, vs. PayPal's 2); all 692 scenarios reviewed and approved; Postman generation produced
+    **739 requests across 55 folders**, with **37 workflows fully rendered as ordered sequences**
+    (0 unsupported, vs. PayPal's 2/2 unsupported) — a stronger confirmation of AP-016's
+    workflow-aware export than the PayPal run gave. One scaling observation, not a defect:
+    bulk-accepting ~700-800 individual review decisions and dependency analysis over 69
+    operations both took on the order of 1-2 minutes each — worth keeping an eye on if a much
+    larger specification is validated in the future, but well within this run's practical
+    bounds.

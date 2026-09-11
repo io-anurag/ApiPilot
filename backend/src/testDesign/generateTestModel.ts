@@ -1,4 +1,4 @@
-import type { AnalysisIssue, ApiModel, ApiOperation, TestModel, TestScenario } from "@apipilot/shared-domain";
+import type { ApiModel, ApiOperation, TestModel, TestScenario } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 import { deduplicate } from "./deduplicate";
 import { arrayBoundaryScenarios } from "./rules/arrayBoundaryScenarios";
@@ -24,25 +24,14 @@ const RULES: ((operation: ApiOperation) => TestScenario[])[] = [
 ];
 
 /**
- * An operation is skipped entirely (FR-018) when the OpenAPI Specification Engine flagged an
- * unresolved reference or unsupported construct at that operation's location, rather than
- * deterministically fabricating a scenario against an unknown/ambiguous construct.
+ * No per-operation issue check here (FR-018 skips generation per-construct, not per-operation):
+ * buildApiModel.ts already degrades an unresolved/unsupported schema node to an empty constraint
+ * rather than fabricating one, so the rules below naturally skip only the affected construct.
  */
-function hasBlockingIssue(operation: ApiOperation, issues: AnalysisIssue[]): boolean {
-  const operationLocationPrefix = `#/paths/${operation.path}/${operation.method.toLowerCase()}`;
-  return issues.some(
-    (issue) =>
-      (issue.kind === "unresolved-ref" || issue.kind === "unsupported-construct") &&
-      issue.location.startsWith(operationLocationPrefix),
-  );
-}
-
-/** Generates the deterministic baseline TestModel for an analyzed specification (ApiModel -> TestModel). */
 export function generateTestModel(apiModel: ApiModel): TestModel {
   const startedAt = Date.now();
   const scenarios: TestScenario[] = [];
   for (const operation of apiModel.operations) {
-    if (hasBlockingIssue(operation, apiModel.summary.issues)) continue;
     for (const rule of RULES) {
       scenarios.push(...rule(operation));
     }

@@ -96,6 +96,12 @@ describe("stringBoundaryValues", () => {
     expect(values.atMaxLength).toHaveLength(5);
     expect(values.aboveMaxLength).toHaveLength(6);
   });
+
+  it("omits atMaxLength/aboveMaxLength rather than crashing when maxLength is an unrealistic placeholder (e.g. INT32_MAX, seen in real-world specs)", () => {
+    const values = stringBoundaryValues(emptyConstraint({ minLength: 0, maxLength: 2147483647 }));
+    expect(values.atMaxLength).toBeUndefined();
+    expect(values.aboveMaxLength).toBeUndefined();
+  });
 });
 
 describe("arrayBoundaryValues", () => {
@@ -105,5 +111,11 @@ describe("arrayBoundaryValues", () => {
     expect(values.atMinItems).toHaveLength(1);
     expect(values.atMaxItems).toHaveLength(3);
     expect(values.aboveMaxItems).toHaveLength(4);
+  });
+
+  it("omits atMaxItems/aboveMaxItems rather than exhausting memory when maxItems is an unrealistic placeholder (e.g. INT32_MAX, seen in real-world specs)", () => {
+    const values = arrayBoundaryValues(emptyConstraint({ minItems: 0, maxItems: 2147483647 }));
+    expect(values.atMaxItems).toBeUndefined();
+    expect(values.aboveMaxItems).toBeUndefined();
   });
 });
