@@ -21,6 +21,7 @@ import { AiEnhancementOutcomeSummary } from "../components/AiEnhancementOutcomeS
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
+import { ExecutionResultsPanel } from "../components/ExecutionResultsPanel";
 import { AnalysisSummary } from "../components/AnalysisSummary";
 import { PostmanExportLimitations } from "../components/PostmanExportLimitations";
 import { BUTTON_STYLES } from "../components/controlStyles";
@@ -209,11 +210,12 @@ export function TestGenerationWorkflowPage() {
                 Turn an OpenAPI specification into a test suite
               </h2>
               <p className="max-w-2xl text-base leading-7 text-muted">
-                Analyze endpoints, generate deterministic scenarios, enhance selectively
-                with local AI, and review every result with its provenance intact.
+                Analyze endpoints, generate deterministic scenarios, and enhance selectively
+                with local AI. Review every result with its provenance intact, then run the
+                approved suite against your own environment to see real pass/fail results.
               </p>
             </div>
-            <div className="grid max-w-2xl grid-cols-3 gap-px border border-border bg-border sm:grid-cols-5">
+            <div className="grid max-w-2xl grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
               <div className="bg-surface px-3 py-3">
                 <p className="font-mono text-xs text-brand-700">LOCAL</p>
                 <p className="mt-1 text-xs text-muted">Private by default</p>
@@ -225,6 +227,10 @@ export function TestGenerationWorkflowPage() {
               <div className="bg-surface px-3 py-3">
                 <p className="font-mono text-xs text-brand-700">TRACEABLE</p>
                 <p className="mt-1 text-xs text-muted">Visible provenance</p>
+              </div>
+              <div className="bg-surface px-3 py-3">
+                <p className="font-mono text-xs text-brand-700">VERIFIABLE</p>
+                <p className="mt-1 text-xs text-muted">Runs against your API</p>
               </div>
             </div>
           </div>
@@ -412,6 +418,7 @@ export function TestGenerationWorkflowPage() {
             ) : (
               <PostmanGenerationSummary postmanArtifact={workflow.postmanArtifact} />
             ))}
+          {workflow.stages.postmanGeneration.status === "complete" && <ExecutionResultsPanel />}
         </>
       )}
     </section>

@@ -78,6 +78,49 @@ function isExactStatusCode(code: string): boolean {
   return /^[1-5][0-9]{2}$/.test(code);
 }
 
+function statusTestName(code: string): string {
+  const wildcard = WILDCARD_STATUS.exec(code);
+  return wildcard
+    ? `Status code is in the ${code.toUpperCase()} class`
+    : `Status code is ${code}`;
+}
+
+export const SCHEMA_CONFORMANCE_TEST_NAME = "Response body conforms to the documented schema";
+
+/** One assertion this scenario's script actually expresses, and which original assertion it came from. */
+export interface AssertionTestPlanEntry {
+  originalIndex: number;
+  assertion: Assertion;
+  /** The exact `pm.test(...)` name Newman reports this assertion under. */
+  testName: string;
+}
+
+/**
+ * The ordered list of assertions `translateAssertions()` actually emits a `pm.test(...)` for,
+ * each paired with its `scenario.assertions` array index. Newman preserves `pm.test` invocation
+ * order, so zipping this list positionally against one Newman execution's `assertions` array
+ * recovers which original assertion each result belongs to
+ * (`backend/src/execution/mapNewmanResult.ts`, research.md D5). Kept in this module, and used by
+ * `translateAssertions()` itself below, so generation and execution can never disagree about
+ * which assertions are expressible.
+ */
+export function assertionTestPlan(scenario: TestScenario): AssertionTestPlanEntry[] {
+  const plan: AssertionTestPlanEntry[] = [];
+  scenario.assertions.forEach((assertion, index) => {
+    if (assertion.type === "status-code") {
+      const code = assertion.expectedStatusCode;
+      if (code !== undefined && (isExactStatusCode(code) || WILDCARD_STATUS.test(code))) {
+        plan.push({ originalIndex: index, assertion, testName: statusTestName(code) });
+      }
+      return;
+    }
+    if (assertion.expectedSchema !== undefined) {
+      plan.push({ originalIndex: index, assertion, testName: SCHEMA_CONFORMANCE_TEST_NAME });
+    }
+  });
+  return plan;
+}
+
 /**
  * One `test` event carrying every translatable assertion, plus the limitations recorded for
  * assertions that carry no expressible expectation. An assertion set that translates to
@@ -86,7 +129,6 @@ function isExactStatusCode(code: string): boolean {
 export function translateAssertions(scenario: TestScenario): AssertionTranslation {
   const location = `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath}`;
   const limitations: GenerationLimitation[] = [];
-  const lines: string[] = [];
 
   if (scenario.assertions.length === 0) {
     limitations.push({
@@ -99,25 +141,24 @@ export function translateAssertions(scenario: TestScenario): AssertionTranslatio
     return { limitations };
   }
 
+  const plan = assertionTestPlan(scenario);
+  const plannedIndexes = new Set(plan.map((entry) => entry.originalIndex));
+
   scenario.assertions.forEach((assertion: Assertion, index) => {
-    if (assertion.type === "status-code") {
-      const code = assertion.expectedStatusCode;
-      if (code !== undefined && (isExactStatusCode(code) || WILDCARD_STATUS.test(code))) {
-        lines.push(...statusCodeLines(code));
-        return;
-      }
-      limitations.push({
-        kind: "undocumented-status-code",
-        scenarioId: scenario.id,
-        location,
-        message: `The specification documents the response as "${code ?? "unspecified"}", which carries no status information, so no status check is asserted.`,
-      });
-      return;
-    }
-    if (assertion.expectedSchema !== undefined) {
-      lines.push(...schemaLines(assertion.expectedSchema, index));
-    }
+    if (plannedIndexes.has(index) || assertion.type !== "status-code") return;
+    limitations.push({
+      kind: "undocumented-status-code",
+      scenarioId: scenario.id,
+      location,
+      message: `The specification documents the response as "${assertion.expectedStatusCode ?? "unspecified"}", which carries no status information, so no status check is asserted.`,
+    });
   });
+
+  const lines = plan.flatMap((entry) =>
+    entry.assertion.type === "status-code"
+      ? statusCodeLines(entry.assertion.expectedStatusCode!)
+      : schemaLines(entry.assertion.expectedSchema!, entry.originalIndex),
+  );
 
   if (lines.length === 0) return { limitations };
 
@@ -139,8 +180,15 @@ function extractionLines(extraction: WorkflowExtraction): string[] {
     .map((part) => `[${JSON.stringify(part)}]`)
     .join("");
   const variable = workflowVariableName(extraction.workflowId, extraction.variableName);
+  // Environment scope, not collection scope: Newman's Node API only exposes a run's mutated
+  // environment back to the caller (`summary.environment`), which is exactly what AP-017's
+  // execution orchestrator needs to carry a workflow handoff forward from one item's Newman
+  // invocation to the next (specs/018-test-execution-results research.md D2 addendum) — a
+  // `pm.collectionVariables.set(...)` mutation is invisible outside the run that made it. This is
+  // also what a human re-running the downloaded collection one request at a time in Postman's own
+  // UI would expect, since Postman persists environment values across a session the same way.
   return [
-    `pm.collectionVariables.set(${JSON.stringify(variable)}, workflowResponse${access});`,
+    `pm.environment.set(${JSON.stringify(variable)}, workflowResponse${access});`,
   ];
 }
 

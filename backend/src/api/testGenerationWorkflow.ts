@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import type {
   AIProvider,
+  EnvironmentTier,
   ExportOptions,
   ReviewEditContent,
   ReviewUpdateRequest,
@@ -10,6 +11,30 @@ import { getAIProvider } from "../ai";
 import { redactSensitiveRequestValues } from "../testDesign/reviewSensitiveValues";
 import { upload } from "../uploadMiddleware";
 import { continueApiReview } from "../testGenerationWorkflow/apiReviewStage";
+import {
+  createEnvironment,
+  type EnvironmentInput,
+  getEnvironment,
+  listEnvironments,
+  updateEnvironment,
+} from "../execution/environmentStore";
+import {
+  DuplicateEnvironmentNameError,
+  EnvironmentNotFoundError,
+  NoRunInProgressError,
+  RunNotFoundError,
+} from "../execution/errors";
+import {
+  createRun,
+  getInProgressRun,
+  getRun,
+  listRuns,
+  requestCancel,
+} from "../execution/executionRunStore";
+import { missingVariableValues } from "../execution/variableCompleteness";
+import { confirmationRequirement } from "../execution/destructiveOperations";
+import { generateCollection } from "../postman/generateCollection";
+import { runExecution } from "../execution/runExecution";
 import {
   cancelAiEnhancement,
   retryAiEnhancementBatch,
@@ -98,6 +123,62 @@ function logRequestFailed(
 /** Shared `409 stage_not_active` refusal, reused by every stage-transition route (FR-002). */
 export function stageNotActive(res: Response, message: string): void {
   res.status(409).json({ error: "stage_not_active", message });
+}
+
+/**
+ * Every Execution & Results endpoint (contracts/execution-api.md) requires the calling session's
+ * `postmanGeneration` stage to be complete, since there is otherwise no approved collection to
+ * execute or configure environments for. Throws `StageNotActiveError`, mapped by each route's
+ * existing catch block exactly like every other stage-transition route.
+ */
+function requireCompletedWorkflow(): TestGenerationWorkflow {
+  const workflow = getCurrentWorkflow();
+  if (!workflow || workflow.stages.postmanGeneration.status !== "complete") {
+    throw new StageNotActiveError(
+      "Execution & Results requires postmanGeneration to be complete.",
+    );
+  }
+  return workflow;
+}
+
+const ENVIRONMENT_TIERS: ReadonlySet<string> = new Set([
+  "local",
+  "dev",
+  "qa",
+  "staging",
+  "production",
+]);
+
+/** Validates and narrows a raw request body into `EnvironmentInput`, or `undefined` if invalid. */
+function parseEnvironmentInput(body: unknown): EnvironmentInput | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const record = body as Record<string, unknown>;
+  if (typeof record.name !== "string" || record.name.trim().length === 0) return undefined;
+  if (typeof record.tier !== "string" || !ENVIRONMENT_TIERS.has(record.tier)) return undefined;
+  if (typeof record.baseUrl !== "string" || record.baseUrl.trim().length === 0) return undefined;
+  const variableValues = record.variableValues;
+  if (variableValues !== undefined) {
+    if (typeof variableValues !== "object" || variableValues === null || Array.isArray(variableValues)) {
+      return undefined;
+    }
+    if (Object.values(variableValues as Record<string, unknown>).some((v) => typeof v !== "string")) {
+      return undefined;
+    }
+  }
+  const requestDelayMs = record.requestDelayMs;
+  if (
+    requestDelayMs !== undefined &&
+    (typeof requestDelayMs !== "number" || !Number.isFinite(requestDelayMs) || requestDelayMs < 0)
+  ) {
+    return undefined;
+  }
+  return {
+    name: record.name,
+    tier: record.tier as EnvironmentTier,
+    baseUrl: record.baseUrl,
+    variableValues: (variableValues as Record<string, string> | undefined) ?? {},
+    requestDelayMs: (requestDelayMs as number | undefined) ?? 0,
+  };
 }
 
 /**
@@ -508,6 +589,263 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         res
           .status(statusCode)
           .json({ error: err.code, message: err.message, ...(err.problems ? { problems: err.problems } : {}) });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.get("/test-generation-workflow/environments", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      requireCompletedWorkflow();
+      res.status(200).json({ environments: listEnvironments() });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      throw err;
+    }
+  });
+
+  router.post("/test-generation-workflow/environments", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    const input = parseEnvironmentInput(req.body);
+    if (!input) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
+      res.status(400).json({
+        error: "invalid_request",
+        message: "Request must include a valid 'name', 'tier', and 'baseUrl'",
+      });
+      return;
+    }
+    try {
+      requireCompletedWorkflow();
+      const environment = createEnvironment(input);
+      res.status(200).json({ environment });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      if (err instanceof DuplicateEnvironmentNameError) {
+        logRequestFailed(req, startedAt, 409, "duplicate_environment_name");
+        res.status(409).json({ error: "duplicate_environment_name", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.put("/test-generation-workflow/environments/:environmentId", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    const input = parseEnvironmentInput(req.body);
+    if (!input) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
+      res.status(400).json({
+        error: "invalid_request",
+        message: "Request must include a valid 'name', 'tier', and 'baseUrl'",
+      });
+      return;
+    }
+    try {
+      requireCompletedWorkflow();
+      const environment = updateEnvironment(req.params.environmentId, input);
+      res.status(200).json({ environment });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      if (err instanceof EnvironmentNotFoundError) {
+        logRequestFailed(req, startedAt, 404, "environment_not_found");
+        res.status(404).json({ error: "environment_not_found", message: err.message });
+        return;
+      }
+      if (err instanceof DuplicateEnvironmentNameError) {
+        logRequestFailed(req, startedAt, 409, "duplicate_environment_name");
+        res.status(409).json({ error: "duplicate_environment_name", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/test-generation-workflow/execution/start", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    const body = req.body as Record<string, unknown> | undefined;
+    if (typeof body?.environmentId !== "string") {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
+      res
+        .status(400)
+        .json({ error: "invalid_request", message: "Request must include 'environmentId'" });
+      return;
+    }
+    const confirmed = body?.confirmed === true;
+    try {
+      const workflow = requireCompletedWorkflow();
+
+      // Checked first (FR-008): no point evaluating anything else while a run is already active.
+      const inProgress = getInProgressRun();
+      if (inProgress) {
+        logRequestFailed(req, startedAt, 409, "execution_in_progress");
+        res
+          .status(409)
+          .json({ error: "execution_in_progress", message: "An execution run is already in progress.", runId: inProgress.id });
+        return;
+      }
+
+      const environment = getEnvironment(body.environmentId);
+      const workflowContext = workflow.dependencyAnalysis
+        ? {
+            workflows: workflow.dependencyAnalysis.workflows,
+            approvedWorkflowIds: workflow.approvedWorkflowIds ?? [],
+          }
+        : undefined;
+      const outcome = generateCollection(
+        workflow.apiModel!,
+        workflow.approvedTestModel!,
+        { baseUrl: environment.baseUrl, variableValues: environment.variableValues },
+        workflowContext,
+      );
+      if (!outcome.ok) {
+        const statusCode = outcome.failure.code === "empty_approved_test_model" ? 409 : 400;
+        logRequestFailed(req, startedAt, statusCode, outcome.failure.code);
+        res.status(statusCode).json({ error: outcome.failure.code, message: outcome.failure.message });
+        return;
+      }
+
+      const missing = missingVariableValues(outcome.result.collection.variable, environment.variableValues);
+      if (missing.length > 0) {
+        logRequestFailed(req, startedAt, 400, "missing_variable_values");
+        res.status(400).json({
+          error: "missing_variable_values",
+          message: `The selected environment does not supply a value for: ${missing.join(", ")}.`,
+          missing,
+        });
+        return;
+      }
+
+      const requirement = confirmationRequirement(workflow.apiModel!, environment);
+      if (requirement && !confirmed) {
+        logRequestFailed(req, startedAt, 409, "confirmation_required");
+        res.status(409).json({
+          error: "confirmation_required",
+          message: "This execution requires explicit confirmation before it can start.",
+          environmentTier: requirement.environmentTier,
+          destructiveOperations: requirement.destructiveOperations,
+        });
+        return;
+      }
+
+      const run = createRun({
+        workflowId: workflow.id,
+        environmentId: environment.id,
+        environmentSnapshot: {
+          name: environment.name,
+          tier: environment.tier,
+          baseUrl: environment.baseUrl,
+        },
+      });
+
+      // Fire-and-poll (research.md D4): the run continues after this response is sent; the
+      // client observes its progress and eventual terminal state via GET .../execution/runs/:runId.
+      // runExecution() never rejects (it settles the run defensively on any internal failure), so
+      // this .catch() is a defensive backstop only — see aiEnhancement's identical rationale above
+      // for why an unhandled rejection here would be unsafe.
+      runExecution({
+        runId: run.id,
+        apiModel: workflow.apiModel!,
+        approvedTestModel: workflow.approvedTestModel!,
+        workflowContext,
+        environment,
+      }).catch((error) => {
+        logger.error("execution_run_unhandled_error", {
+          runId: run.id,
+          errorCategory: error instanceof Error ? error.name : "unknown_error",
+        });
+      });
+
+      res.status(200).json({ run });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      if (err instanceof EnvironmentNotFoundError) {
+        logRequestFailed(req, startedAt, 400, "environment_not_found");
+        res.status(400).json({ error: "environment_not_found", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.post("/test-generation-workflow/execution/cancel", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      requireCompletedWorkflow();
+      const inProgress = getInProgressRun();
+      if (!inProgress) {
+        throw new NoRunInProgressError();
+      }
+      const run = requestCancel(inProgress.id);
+      // 202: cancellation is accepted, not completed instantly — the in-flight request finishes,
+      // then the run settles as cancelled, observable via the existing poll (research.md D6,
+      // mirroring the existing ai-enhancement/cancel convention).
+      res.status(202).json({ run });
+      logRequestSucceeded(req, startedAt, 202);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      if (err instanceof NoRunInProgressError) {
+        logRequestFailed(req, startedAt, 409, "no_run_in_progress");
+        res.status(409).json({ error: "no_run_in_progress", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.get("/test-generation-workflow/execution/runs", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      requireCompletedWorkflow();
+      // Summaries only (no `results`), newest first — listRuns() already orders newest first.
+      const runs = listRuns().map(({ results: _results, ...summary }) => summary);
+      res.status(200).json({ runs });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      throw err;
+    }
+  });
+
+  router.get("/test-generation-workflow/execution/runs/:runId", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      requireCompletedWorkflow();
+      const run = getRun(req.params.runId);
+      res.status(200).json({ run });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      if (err instanceof RunNotFoundError) {
+        logRequestFailed(req, startedAt, 404, "run_not_found");
+        res.status(404).json({ error: "run_not_found", message: err.message });
         return;
       }
       throw err;
