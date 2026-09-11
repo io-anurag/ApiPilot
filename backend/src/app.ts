@@ -28,9 +28,26 @@ import { sessionMiddleware } from "./session/sessionMiddleware";
 const logger = createLogger("api.errorHandler");
 const requestLogger = createLogger("api.request");
 
+export interface CreateAppOptions {
+  /** See `DEBUG_LOG_REAL_CLIENT_IP` in `.env.example`. Default false. */
+  debugLogRealClientIp?: boolean;
+}
+
 /** Assembles the Express app: JSON body parsing sized to the upload contract, every `/api` router, and the centralized error handler. `provider` (when supplied) is threaded into the routers that support AI-assisted behavior instead of each using the process-wide default. */
-export function createApp(provider?: AIProvider) {
+export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   const app = express();
+
+  // Off by default (constitution XX: diagnostics only, never silently reinterpret the network
+  // layer). When explicitly enabled for local debugging, trust only the loopback address — the
+  // Vite dev proxy (frontend/vite.config.ts) is the only process expected to sit between the
+  // browser and this server, and it always connects via loopback — so Express reads the real
+  // client address from `X-Forwarded-For` (which that proxy sets) instead of using the proxy's
+  // own address. Never enable this behind a real reverse proxy/load balancer without also
+  // restricting `trust proxy` to that proxy's actual address, or any client could spoof its own
+  // logged IP by sending its own `X-Forwarded-For` header.
+  if (options?.debugLogRealClientIp) {
+    app.set("trust proxy", "loopback");
+  }
 
   // Assigns every request an unguessable per-browser session identity and runs the rest of the
   // request inside its AsyncLocalStorage context (specs/017-session-workflow-isolation), so
@@ -40,10 +57,10 @@ export function createApp(provider?: AIProvider) {
   app.use(sessionMiddleware);
 
   // Diagnostics only (constitution XX): method/path/status/duration/clientIp, never request
-  // bodies or headers. `req.ip` is the direct TCP peer, which is the Vite dev proxy's own
-  // loopback address for requests proxied via `frontend/vite.config.ts`, not the original
-  // browser's address — this only reflects the real client IP for requests made straight
-  // to the backend port.
+  // bodies or headers. By default `req.ip` is the direct TCP peer, which is the Vite dev
+  // proxy's own loopback address for requests proxied via `frontend/vite.config.ts`, not the
+  // original browser's address. Set DEBUG_LOG_REAL_CLIENT_IP=true (see .env.example) to trust
+  // that proxy's `X-Forwarded-For` header instead and log the real client address.
   app.use((req, res, next) => {
     const startedAt = Date.now();
     res.on("finish", () => {

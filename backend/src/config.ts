@@ -5,6 +5,7 @@
  */
 export interface AppConfig {
   backendPort: number;
+  debugLogRealClientIp: boolean;
 }
 
 export class InvalidAIConfigurationError extends Error {
@@ -16,14 +17,19 @@ export class InvalidAIConfigurationError extends Error {
 
 const DEFAULT_BACKEND_PORT = 4000;
 
-/** Reads `BACKEND_PORT` from `env` (defaulting to `process.env`), falling back to 4000 when unset, non-numeric, or non-positive. */
+/**
+ * Reads `BACKEND_PORT` from `env` (defaulting to `process.env`), falling back to 4000 when
+ * unset, non-numeric, or non-positive. Also reads `DEBUG_LOG_REAL_CLIENT_IP` (default false) —
+ * see `AppConfig.debugLogRealClientIp`.
+ */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const rawPort = env.BACKEND_PORT;
   const parsedPort = rawPort ? Number.parseInt(rawPort, 10) : DEFAULT_BACKEND_PORT;
   const backendPort =
     Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_BACKEND_PORT;
+  const debugLogRealClientIp = env.DEBUG_LOG_REAL_CLIENT_IP === "true";
 
-  return { backendPort };
+  return { backendPort, debugLogRealClientIp };
 }
 
 /** Validates AI settings that must fail fast when the backend is started. */

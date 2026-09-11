@@ -33,7 +33,7 @@ if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
 
 const config = loadConfig();
 validateAIConfiguration();
-const app = createApp();
+const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 
 const server = app.listen(config.backendPort, () => {
   // eslint-disable-next-line no-console

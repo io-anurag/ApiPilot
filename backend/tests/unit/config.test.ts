@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { InvalidAIConfigurationError, validateAIConfiguration } from "../../src/config";
+import { InvalidAIConfigurationError, loadConfig, validateAIConfiguration } from "../../src/config";
+
+describe("loadConfig", () => {
+  it("defaults debugLogRealClientIp to false when unset", () => {
+    expect(loadConfig({}).debugLogRealClientIp).toBe(false);
+  });
+
+  it("enables debugLogRealClientIp only for the exact value \"true\"", () => {
+    expect(loadConfig({ DEBUG_LOG_REAL_CLIENT_IP: "true" }).debugLogRealClientIp).toBe(true);
+    expect(loadConfig({ DEBUG_LOG_REAL_CLIENT_IP: "TRUE" }).debugLogRealClientIp).toBe(false);
+    expect(loadConfig({ DEBUG_LOG_REAL_CLIENT_IP: "1" }).debugLogRealClientIp).toBe(false);
+  });
+});
 
 describe("validateAIConfiguration", () => {
   it("accepts an omitted enhancement run budget", () => {
