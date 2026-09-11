@@ -33,8 +33,28 @@ const FORMAT_CONFORMANT: Record<string, string> = {
 /** A single fixed sentinel outside virtually any declared enum's value space. */
 const ENUM_VIOLATION_SENTINELS = ["__INVALID_ENUM_VALUE__", -9999999, "__INVALID_ENUM_VALUE__@@2"];
 
-function repeatChar(char: string, length: number): string {
-  return length > 0 ? char.repeat(length) : "";
+/**
+ * Some real-world specs declare `maxLength` as high as `2147483647` (INT32_MAX) as an
+ * "effectively unbounded" placeholder rather than a real limit. Materializing a string that
+ * long would throw (`RangeError: Invalid string length`) well before reaching it, and would be
+ * an unsafe, impractical request payload regardless. This caps what this module will ever build.
+ */
+const MAX_SAFE_GENERATED_STRING_LENGTH = 10_000;
+
+/** A representative conformant-length string: any length within a declared range is equally valid, so this clamps down rather than fabricating an unsafe one. */
+function repeatCharClamped(char: string, length: number): string {
+  return length > 0 ? char.repeat(Math.min(length, MAX_SAFE_GENERATED_STRING_LENGTH)) : "";
+}
+
+/**
+ * An exact-length string for boundary testing, or `undefined` when `length` exceeds what is
+ * safe to materialize — clamping here instead would silently mislabel a shorter, still-conformant
+ * string as an "at/above the limit" violation, which is not what it would actually be.
+ */
+function repeatCharExact(char: string, length: number): string | undefined {
+  if (length <= 0) return "";
+  if (length > MAX_SAFE_GENERATED_STRING_LENGTH) return undefined;
+  return char.repeat(length);
 }
 
 function numericStep(schema: SchemaConstraint): number {
@@ -47,7 +67,7 @@ function conformantString(schema: SchemaConstraint): string {
   const minLength = schema.minLength ?? 0;
   const maxLength = schema.maxLength;
   const length = maxLength !== undefined ? Math.min(Math.max(minLength, 1), maxLength) : Math.max(minLength, 1);
-  return repeatChar("a", length);
+  return repeatCharClamped("a", length);
 }
 
 function conformantNumber(schema: SchemaConstraint): number {
@@ -159,12 +179,12 @@ export interface StringBoundaryValues {
 export function stringBoundaryValues(schema: SchemaConstraint): StringBoundaryValues {
   const values: StringBoundaryValues = {};
   if (schema.minLength !== undefined) {
-    values.atMinLength = repeatChar("a", schema.minLength);
-    if (schema.minLength > 0) values.belowMinLength = repeatChar("a", schema.minLength - 1);
+    values.atMinLength = repeatCharExact("a", schema.minLength);
+    if (schema.minLength > 0) values.belowMinLength = repeatCharExact("a", schema.minLength - 1);
   }
   if (schema.maxLength !== undefined) {
-    values.atMaxLength = repeatChar("a", schema.maxLength);
-    values.aboveMaxLength = repeatChar("a", schema.maxLength + 1);
+    values.atMaxLength = repeatCharExact("a", schema.maxLength);
+    values.aboveMaxLength = repeatCharExact("a", schema.maxLength + 1);
   }
   return values;
 }
@@ -177,17 +197,31 @@ export interface ArrayBoundaryValues {
   aboveMaxItems?: unknown[];
 }
 
+/**
+ * Same "effectively unbounded" placeholder problem as `MAX_SAFE_GENERATED_STRING_LENGTH`, but
+ * for `maxItems` (real-world specs also declare this as high as INT32_MAX) — building an array
+ * that long would exhaust memory long before an exact boundary count would prove anything.
+ */
+const MAX_SAFE_GENERATED_ARRAY_LENGTH = 1_000;
+
+/** An exact-count array for boundary testing, or `undefined` when `length` exceeds what is safe to materialize (see `repeatCharExact`: a smaller, still-conformant array must not be mislabeled as an "at/above the limit" violation). */
+function arrayOfLengthExact(item: unknown, length: number): unknown[] | undefined {
+  if (length < 0) return undefined;
+  if (length > MAX_SAFE_GENERATED_ARRAY_LENGTH) return undefined;
+  return Array.from({ length }, () => item);
+}
+
 /** Boundary-adjacent array-length values for whichever of minItems/maxItems is declared (FR-007). */
 export function arrayBoundaryValues(schema: SchemaConstraint): ArrayBoundaryValues {
   const item = schema.items ? conformantValue(schema.items) : "item";
   const values: ArrayBoundaryValues = {};
   if (schema.minItems !== undefined) {
-    values.atMinItems = Array.from({ length: schema.minItems }, () => item);
-    if (schema.minItems > 0) values.belowMinItems = Array.from({ length: schema.minItems - 1 }, () => item);
+    values.atMinItems = arrayOfLengthExact(item, schema.minItems);
+    if (schema.minItems > 0) values.belowMinItems = arrayOfLengthExact(item, schema.minItems - 1);
   }
   if (schema.maxItems !== undefined) {
-    values.atMaxItems = Array.from({ length: schema.maxItems }, () => item);
-    values.aboveMaxItems = Array.from({ length: schema.maxItems + 1 }, () => item);
+    values.atMaxItems = arrayOfLengthExact(item, schema.maxItems);
+    values.aboveMaxItems = arrayOfLengthExact(item, schema.maxItems + 1);
   }
   return values;
 }
