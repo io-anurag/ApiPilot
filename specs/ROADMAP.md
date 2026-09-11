@@ -35,7 +35,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
-| AP-017 — Test Execution & Results *(post-MVP)* | Not started — MVP end-to-end validation gate CLOSED 2026-09-11 (see Next Actions #10-11); speccing may now proceed |
+| AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13 |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
@@ -1568,3 +1568,58 @@ Implementation
     operations both took on the order of 1-2 minutes each — worth keeping an eye on if a much
     larger specification is validated in the future, but well within this run's practical
     bounds.
+13. **AP-017 (Test Execution & Results) implemented end-to-end (2026-09-11).** Full Spec Kit
+    lifecycle completed (`specs/018-test-execution-results`): spec → clarify → plan → tasks →
+    implement, all 49 tasks in `tasks.md` marked done.
+    - **Design**: reuses the existing, already-deterministic `generateCollection()` (AP-007)
+      populated with a session-scoped `Environment`'s real `baseUrl`/`variableValues`, executed
+      one request at a time through `newman` (the standard Postman collection runner) under a new
+      `backend/src/execution/` orchestration loop — never a hand-rolled HTTP/assertion engine.
+      See `specs/018-test-execution-results/research.md` for the six recorded decisions,
+      including a mid-implementation correction (D2 addendum): Newman's Node API does not expose
+      `pm.collectionVariables.set(...)` mutations back to the caller between per-item
+      invocations, discovered empirically via throwaway probes — AP-016's workflow-handoff
+      extraction script was switched from `pm.collectionVariables.set` to `pm.environment.set`
+      (`backend/src/postman/assertionScripts.ts`), which Newman *does* expose via
+      `summary.environment`, with no change to any documented contract and no regression in
+      either module's existing test suite.
+    - **New capability**: `Environment` definitions (tier, base URL, variable values, pacing) and
+      `ExecutionRun` history are session-scoped, sibling stores to the guided workflow (not a
+      10th `WorkflowStageId` — runs are repeatable, the workflow's stages are not). New routes:
+      `GET/POST /environments`, `PUT /environments/:id`, `POST /execution/start` (fire-and-poll,
+      never blocks on the whole run), `POST /execution/cancel`, `GET /execution/runs`,
+      `GET /execution/runs/:runId`. Failure categorization
+      (`assertion-failed`/`unexpected-status`/`connectivity-failure`/`timeout`/
+      `could-not-evaluate`) is derived from Newman's own per-item result shape and the stable
+      `pm.test` names `assertionScripts.ts` already assigns — verified empirically against a real
+      Newman run (connection refused, timeout, schema mismatch, non-JSON body) before being
+      encoded in `mapNewmanResult.ts`. Destructive (`POST`/`PUT`/`PATCH`/`DELETE`) or
+      Staging/Production runs require an explicit `confirmed: true` resubmission; only one run may
+      be in progress per session; cancellation lets the in-flight request finish and marks every
+      remaining item `not-attempted`/`"cancelled"`.
+    - **Validation**: 49 new backend tests (unit + Supertest integration against a local Express
+      fixture target, per constitution XXI — no test depends on real external network access) and
+      10 new frontend RTL tests, all passing; full repository suite **885 tests passing** (2
+      pre-existing skips, unrelated), `npm run lint` and `npm run build` clean across all
+      workspaces. A genuine end-to-end walkthrough of every scenario in
+      `specs/018-test-execution-results/quickstart.md` was then run against the actual dev
+      backend (`npm run dev`), the real local AI provider (Qwen2.5-0.5B, not mocked), and a real
+      local target HTTP server: the guided workflow reached `postmanGeneration` complete (26
+      scenarios; AI enhancement genuinely completed in ~31s), a run against a reachable target
+      executed all 26 requests for real (19 passed / 7 failed on this deliberately simplistic
+      target — a real, non-fabricated mixed result) with the summary counts matching
+      `results.length`; stopping the target and re-running produced `connectivity-failure` for
+      every request, never `assertion-failed`; an environment missing a declared variable was
+      refused with `400 missing_variable_values` naming it; a Staging-tier environment was refused
+      with `409 confirmation_required` naming the tier and its one destructive operation; and
+      `GET .../execution/runs` correctly listed both completed runs. Cancellation mid-flight was
+      not re-run manually here since it is already covered by a real-timing automated integration
+      test (start a run with a configured request delay, cancel mid-run, confirm the in-flight
+      request keeps its real outcome and every remaining item is recorded
+      `not-attempted`/`"cancelled"`).
+    - **Known limitation, honestly recorded**: the new frontend components
+      (`EnvironmentForm.tsx`, `ExecutionResultsPanel.tsx`) were verified via React Testing Library
+      component tests (real rendering, real user interaction, real state transitions) and a
+      passing TypeScript build, but **not** via a live browser session — no browser-automation
+      tool was available in this session. This is a real, un-closed gap in visual/interactive
+      verification, not a claim of full UI validation.

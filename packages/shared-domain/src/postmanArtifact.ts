@@ -94,17 +94,24 @@ export interface PostmanEvent {
   script: { type: "text/javascript"; exec: string[] };
 }
 
-/** One runnable request, derived from exactly one approved scenario. */
+/**
+ * One runnable request, derived from exactly one approved scenario. `provenance.scenarioId` is
+ * always present, tying the item back to the `TestScenario` it came from — the
+ * workflow-specific fields are present only when the item is one step of an approved workflow
+ * (AP-016); a standalone request carries `scenarioId` alone. AP-017's execution orchestrator
+ * relies on this to correlate one executed item back to its originating scenario
+ * (specs/018-test-execution-results).
+ */
 export interface PostmanRequestItem {
   id: string;
   name: string;
   request: PostmanRequest;
   event?: PostmanEvent[];
   provenance?: {
-    workflowId: string;
-    stepPosition: number;
     scenarioId: string;
-    relationshipIds: string[];
+    workflowId?: string;
+    stepPosition?: number;
+    relationshipIds?: string[];
   };
 }
 

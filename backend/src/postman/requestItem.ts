@@ -284,16 +284,16 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
       ...(auth ? { auth } : {}),
     },
     ...(event ? { event: [event] } : {}),
-    ...(workflowId !== undefined && workflowStepPosition !== undefined
-      ? {
-          provenance: {
+    provenance: {
+      scenarioId: scenario.id,
+      ...(workflowId !== undefined && workflowStepPosition !== undefined
+        ? {
             workflowId,
             stepPosition: workflowStepPosition,
-            scenarioId: scenario.id,
             relationshipIds: workflowRelationshipIds,
-          },
-        }
-      : {}),
+          }
+        : {}),
+    },
   };
 
   return {
