@@ -216,6 +216,12 @@ Progress exposes batch/unit counts and outcomes but never raw specifications, pr
 responses. Successful enhancement units can reveal scenarios incrementally; their review decisions
 remain intact when later units settle differently.
 
+A batch whose reply cannot be parsed gets exactly one immediate retry with an appended corrective
+instruction, before that batch is recorded as failed — applied uniformly to both AI-assisted
+passes (dependency analysis was brought to parity with scenario enhancement's existing retry).
+This absorbs a one-off malformed generation without masking a genuinely unavailable provider,
+since only one retry is attempted per batch.
+
 ### Hardware and resource footprint
 
 No GPU is required for any ApiPilot capability. Local inference runs on CPU by design;
@@ -243,7 +249,13 @@ offline once the model is cached.
   executes them nor follows arbitrary filesystem/network references.
 - Specifications, credentials, raw prompts, raw model responses, and complete request payloads are
   excluded from ordinary diagnostics. Logs favor stage, category, duration, model identity, and
-  correlation context.
+  correlation context. A request-completion log records only method/path/status/duration/client
+  IP (`backend/src/app.ts`); by default the client IP is the direct TCP peer (the Vite dev proxy's
+  own loopback address for proxied requests), not the browser's real address. The debug-only
+  `DEBUG_LOG_REAL_CLIENT_IP` flag trusts that proxy's `X-Forwarded-For` header instead — Express's
+  `trust proxy` is scoped to `loopback` only when this flag is enabled, so it must never be turned
+  on behind a real reverse proxy without also restricting `trust proxy` to that proxy's actual
+  address, or a client could spoof its own logged IP.
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
   review, dependency detection, or export. Generating a collection is not authorization to execute
   it.

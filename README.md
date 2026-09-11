@@ -151,6 +151,7 @@ See [.env.example](.env.example) for the maintained variable list and guidance.
 | ------------------------------------ | ------------------------------------------------------ | ------------------------------------------------- |
 | `BACKEND_PORT`                       | Backend HTTP listener                                  | `4000`                                            |
 | `FRONTEND_DEV_PORT`                  | Vite development server                                | `5173`                                            |
+| `DEBUG_LOG_REAL_CLIENT_IP`           | Debug-only: log the browser's real IP (via the Vite dev proxy's `X-Forwarded-For`) instead of the proxy's own loopback address in request-completion diagnostics | `false` |
 | `AI_PROVIDER_MODE`                   | `local` or deterministic `mock` provider               | `mock` in tests; `local` otherwise                |
 | `AI_MODEL_ID`                        | Local Hugging Face model identifier                    | `onnx-community/Qwen2.5-0.5B-Instruct`            |
 | `AI_MODEL_CACHE_DIR`                 | Local model cache                                      | If set, that path; otherwise `~/.apipilot/models` |

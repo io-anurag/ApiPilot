@@ -749,6 +749,297 @@ new AI-assisted pass.
 
 ---
 
+## AP-013 — AI Enhancement Viability
+
+### Objective
+
+Make AI-assisted scenario enhancement actually able to succeed on local CPU inference. Five
+compounding defects — missing instruction framing, a pessimizing weight precision, an inflated
+input-capacity estimate, an output allowance and time budget that cannot fit each other, and an
+oversized prompt — combined to make every run fail. This feature corrects all five and replaces
+the resulting five-minute silent timeout with an honest, interruptible, explained wait.
+
+### Input
+
+```text
+ApiModel
++
+Deterministic TestModel
++
+AIProvider (local)
+```
+
+### Output
+
+```text
+Enhanced TestModel (actually reachable)
++
+Pre-flight viability refusal
++
+Cancellable, phase-aware progress
+```
+
+### Scope
+
+- conversational prompt framing for instruction-tuned models
+- model-signalled stop instead of always exhausting the output allowance
+- true positional input capacity, not an inflated tokenizer maximum
+- reduced, task-scoped prompt content
+- an output allowance sized to fit within the run's time budget
+- a pre-flight viability estimate with immediate refusal when work cannot fit
+- preparing-vs-generating phase visibility and elapsed time
+- user cancellation with prompt resource release
+- plain-language, categorized failure explanations with no internal identifiers
+
+### Constraints
+
+- Must not introduce a replacement default model, hardware acceleration, or a cloud/hosted
+  inference path.
+- Must preserve AP-011's batching/outcome semantics and AP-012's progress/concurrency guarantees;
+  this feature deliberately supersedes AP-012's decision to hide progress for single-batch runs.
+- Deterministic scenarios must remain unaffected by any AI outcome, including refusal,
+  cancellation, and failure.
+- Model selection stays evidence-based; a replacement model is a separate decision if
+  implementation evidence requires one.
+
+### Dependencies
+
+Requires AP-004 (`AIProvider`, readiness, queueing, timeout), AP-005 (the enhancement prompt,
+validation, provenance), AP-011 (batch planning and outcome semantics), and AP-012 (progress
+reporting and the concurrency guard) — all of which this feature corrects and finally makes
+reachable.
+
+---
+
+## AP-014 — AI Batching Policy and Run Pacing
+
+### Objective
+
+Make AI-assisted work — scenario enhancement and dependency analysis — size its requests by a
+small fixed amount of work rather than by remaining model context capacity, so a realistic
+specification actually splits into multiple batches. Without this, one oversized request absorbed
+an entire run, so the streaming, progress, cancellation, and partial-retention behavior AP-011,
+AP-012, and AP-013 already built never activated in practice.
+
+### Input
+
+```text
+ApiModel
++
+AIProvider (local)
+```
+
+### Output
+
+```text
+Work-bounded batches
++
+Run-level time ceiling
++
+Honest retryable/non-retryable failure explanations
+```
+
+### Scope
+
+- fixed, caller-specific unit sizing: small for scenario enhancement, larger for dependency
+  analysis, which needs several operations in view at once to infer a relationship
+- a context-capacity check retained only as an upper bound
+- a run-level wall-clock ceiling, distinct from the existing per-request timeout
+- pre-flight viability evaluation wired into the actual enhancement call path
+- a worked-example prompt shape for request-body operations, to reduce truncation
+- retryable-vs-non-retryable failure classification
+- the same work-bounded pacing applied to dependency analysis's AI-assisted pass
+
+### Constraints
+
+- Unit derivation MUST be fully deterministic: the same specification always yields the same
+  units, in the same order.
+- A failing or not-attempted unit MUST NOT discard other units' results; the run settles
+  `partial` and retains everything already produced.
+- The run ceiling governs only the AI-assisted pass; it must not alter deterministic matching,
+  scenario generation, or workflow assembly.
+- Must preserve every guarantee already established by AP-011 (outcome semantics), AP-012
+  (progress reporting), and AP-013 (pre-flight refusal, phase visibility, cancellation).
+- Must not change the default model or move inference off the main thread.
+
+### Dependencies
+
+Requires AP-011 (corrects its stale batch-sizing default) and extends AP-013 (viability
+estimation, honest failure). Applies to both AP-005 (scenario enhancement) and AP-008 (dependency
+analysis) call paths.
+
+---
+
+## AP-015 — AI Batch Retry
+
+### Objective
+
+Let a user retry a single failed or not-attempted batch from a settled AI-enhancement run,
+without re-running every batch that already succeeded and without disturbing any review decision
+already recorded on another batch's scenarios.
+
+### Input
+
+```text
+Settled AI Enhancement run
+(per-batch terminal status + retryability)
+```
+
+### Output
+
+```text
+Updated batch outcome
++
+Recomputed stage-level status
+```
+
+### Scope
+
+- persisted per-batch terminal status and human-readable failure reason, visible after the run
+  settles rather than only while it is in progress
+- a per-batch retry action, offered only for batches whose status is failed/not-attempted and
+  whose failure is classified retryable
+- retry scoped to exactly that batch's original operations, replacing only that batch's scenarios
+  and status
+- automatic recomputation of the AI Enhancement stage's overall status from every batch's current
+  terminal status after each retry
+- rejection of retry once scenario review has been finalized, matching the existing whole-stage
+  retry rule
+
+### Constraints
+
+- Must not affect any scenario, review decision, or status belonging to a batch other than the
+  one retried.
+- Must not allow two AI operations — a whole-stage run, or any batch retry — to run concurrently
+  against the same workflow.
+- Deterministic scenarios must remain completely unaffected by any batch retry.
+- No history of earlier retry attempts is retained; each retry overwrites that batch's own record
+  in place.
+
+### Dependencies
+
+Requires AP-014 (the batches and retryability classification being retried) and preserves
+AP-011/AP-012/AP-013's determinism, provenance, and explicit-failure conventions.
+
+---
+
+## AP-016 — Workflow-Aware Postman Generation
+
+### Objective
+
+Make the workflow-review decision (AP-008/AP-009) consequential to the generated artifact by
+rendering each approved integration workflow as an ordered, dependency-aware Postman request
+sequence with named data handoffs, instead of exporting its operations as unrelated
+single-operation requests.
+
+### Input
+
+```text
+Approved integration workflows
++
+Approved scenario set
++
+Dependency relationships
+```
+
+### Output
+
+```text
+collection.json (workflow sequences + standalone requests)
+environment.json
+README.md (rendered / omitted workflows, handoffs, limitations)
+```
+
+### Scope
+
+- ordered request sequences for each supported approved workflow, preserving approved step order
+- response-to-request variable extraction for documented data handoffs
+- explicit unsupported-workflow reporting (missing step data, unresolved order, cycles,
+  unrepresentable auth/content) instead of a misleading partial sequence
+- continued standalone rendering of approved scenarios not covered by a rendered workflow
+- deterministic, collision-free naming and stable output across repeated exports
+
+### Constraints
+
+- Must not fabricate a step order, extraction, handoff, assertion, or request value unsupported
+  by the approved workflow, dependency data, approved scenario, or specification.
+- Must not execute generated requests or contact any API described by the specification.
+- Must preserve existing single-operation export behavior for inputs with no workflow intent
+  (backward compatible).
+- Must retain existing credential/base-URL variable protections; no secrets embedded in the
+  collection or diagnostics.
+- Does not change how dependencies are discovered or how scenario/workflow approval decisions are
+  made.
+
+### Dependencies
+
+Requires AP-007 (Postman Collection Generator) and AP-009 (End-to-End Test Generation Workflow);
+otherwise independent of the AP-011–AP-015 batching/enhancement chain.
+
+---
+
+## Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`)
+
+### Objective
+
+Let multiple browser sessions run the guided workflow (AP-009) at the same time without one
+session's actions overwriting, hiding, or exposing another's in-progress workflow, by replacing
+the single backend-wide `TestGenerationWorkflow` instance with one instance per unguessable
+session identity — while preserving today's single-user continuity across reloads and additional
+tabs.
+
+Despite the directory-number coincidence, this is **not** the `AP-017` post-MVP feature below
+(Test Execution & Results); see the spec's own "Relationship to Existing Specifications" section
+for why the two are unrelated.
+
+### Input
+
+```text
+Unguessable per-browser session identity
++
+Existing single-instance TestGenerationWorkflow (AP-009)
+```
+
+### Output
+
+```text
+One isolated in-progress workflow per active session
++
+Explicit "session expired" notice on idle eviction
+```
+
+### Scope
+
+- an unguessable, cryptographically random session identifier requiring no login or personal
+  data
+- one in-progress workflow per session, with the existing "starting a new workflow replaces the
+  current one" behavior scoped to that session only
+- continuity of a session's own workflow across page reloads and additional tabs in the same
+  browser
+- idle-session eviction after 60 minutes with an explicit expiry notice, distinct from a
+  genuinely new session's empty state
+- correct per-session behavior of AP-012's batch-level AI-enhancement progress reporting
+
+### Constraints
+
+- The shared local AI provider's readiness state and single serialized inference queue (AP-004)
+  remain one process-wide resource; only workflow progress, decisions, and generated content are
+  isolated per session.
+- No workflow state is persisted to durable storage; a backend restart still clears every
+  session's workflow, unchanged from AP-009.
+- Introduces session isolation, not authentication — no login, accounts, or cross-device identity
+  linking.
+- Must not regress AP-009's reconnect guarantee or AP-012's reconnect/progress-visibility design
+  for the single-user case.
+
+### Dependencies
+
+Requires AP-009 (End-to-End Test Generation Workflow, whose single global instance it replaces)
+and AP-012 (AI Enhancement Progress Visibility, whose reconnect design assumed no session
+identity and must remain compatible).
+
+---
+
 # Post-MVP Features
 
 ## AP-017 — Test Execution & Results
