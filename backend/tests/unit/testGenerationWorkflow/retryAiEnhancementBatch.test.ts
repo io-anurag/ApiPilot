@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
@@ -261,5 +261,63 @@ describe("retryAiEnhancementBatch (specs/015-ai-batch-retry US1)", () => {
     await expect(retryAiEnhancementBatch(FAILING_INDEX, provider)).rejects.toThrow(
       StageNotActiveError,
     );
+  });
+});
+
+/**
+ * A not-attempted batch (skipped only because the run's overall time budget was exhausted
+ * before it could start) is treated as retryable, unlike the run as a whole
+ * (specs/015-ai-batch-retry Edge Cases, Assumptions): retrying just that one batch is a fresh,
+ * isolated attempt that never re-hits the exhausted ceiling, so it does not inherit
+ * run-budget-exhausted's whole-run non-retryable classification (specs/013-ai-enhancement-viability
+ * FR-025).
+ */
+describe("retryAiEnhancementBatch for not-attempted batches (specs/015-ai-batch-retry)", () => {
+  const previousBudget = process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+  const previousOperationsPerUnit = process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT;
+
+  beforeEach(() => resetStore());
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (previousBudget === undefined) delete process.env.AI_ENHANCEMENT_RUN_BUDGET_MS;
+    else process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = previousBudget;
+    if (previousOperationsPerUnit === undefined) {
+      delete process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT;
+    } else {
+      process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT = previousOperationsPerUnit;
+    }
+  });
+
+  it("marks a not-attempted batch retryable, and a retry can succeed it", async () => {
+    // One operation per unit at a 1.5s ceiling with 1s-per-call inference stops the run after two
+    // of valid.yaml's three operations, leaving the third not-attempted.
+    process.env.AI_ENHANCEMENT_RUN_BUDGET_MS = "1500";
+    process.env.AI_ENHANCEMENT_OPERATIONS_PER_UNIT = "1";
+    await reachAiEnhancement();
+
+    const { provider } = makeControllableProvider();
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const timedProvider: AIProvider = {
+      ...provider,
+      infer: async (request) => {
+        now += 1_000;
+        return provider.infer(request);
+      },
+    };
+
+    const wf = await runAiEnhancement(timedProvider);
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    const outcomes = wf.stages.aiEnhancement.batchOutcomes!;
+    const notAttempted = outcomes.find((o) => o.status === "not-attempted");
+    expect(notAttempted).toBeDefined();
+    expect(notAttempted!.failureExplanation?.retryable).toBe(true);
+
+    const retried = await retryAiEnhancementBatch(notAttempted!.index, timedProvider);
+    expect(retried.stages.aiEnhancement.batchOutcomes![notAttempted!.index].status).toBe(
+      "succeeded",
+    );
+    expect(retried.stages.aiEnhancement.status).toBe("complete");
   });
 });

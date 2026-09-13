@@ -88,37 +88,70 @@ describe("postman artifact contracts", () => {
   });
 
   describe("aggregateLimitations", () => {
-    const repeated: GenerationLimitation = {
+    const base: GenerationLimitation = {
       kind: "unresolved-path-parameter",
       scenarioId: "scenario-1",
       location: "GET /customers/{id}",
-      message: 'The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in.',
+      message:
+        'The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in.',
     };
 
-    it("collapses limitations recurring across many rendered occurrences into one entry with a count", () => {
-      const aggregated = aggregateLimitations([repeated, repeated, repeated]);
-      expect(aggregated).toEqual([{ ...repeated, occurrences: 3 }]);
+    it("collapses one scenario recurring across many rendered occurrences into one entry with a count", () => {
+      const aggregated = aggregateLimitations([base, base, base]);
+      expect(aggregated).toEqual([
+        {
+          kind: base.kind,
+          location: base.location,
+          message: base.message,
+          scenarioIds: ["scenario-1"],
+          occurrences: 3,
+        },
+      ]);
     });
 
-    it("keeps limitations distinct when their scenario, location, or message differs", () => {
-      const other: GenerationLimitation = {
-        ...repeated,
+    it("collapses several distinct approved scenarios that hit the same gap at the same location", () => {
+      const other: GenerationLimitation = { ...base, scenarioId: "scenario-2" };
+      const aggregated = aggregateLimitations([base, other]);
+      expect(aggregated).toEqual([
+        {
+          kind: base.kind,
+          location: base.location,
+          message: base.message,
+          scenarioIds: ["scenario-1", "scenario-2"],
+          occurrences: 2,
+        },
+      ]);
+    });
+
+    it("keeps limitations distinct when their location or message differs", () => {
+      const differentLocation: GenerationLimitation = {
+        ...base,
         scenarioId: "scenario-2",
         location: "GET /orders/{id}",
       };
-      const aggregated = aggregateLimitations([repeated, other]);
+      const aggregated = aggregateLimitations([base, differentLocation]);
       expect(aggregated).toEqual([
-        { ...repeated, occurrences: 1 },
-        { ...other, occurrences: 1 },
+        { ...base, scenarioIds: ["scenario-1"], occurrences: 1, scenarioId: undefined },
+        {
+          kind: differentLocation.kind,
+          location: differentLocation.location,
+          message: differentLocation.message,
+          scenarioIds: ["scenario-2"],
+          occurrences: 1,
+        },
       ]);
     });
 
     it("preserves the order each distinct case first appeared", () => {
-      const other: GenerationLimitation = { ...repeated, scenarioId: "scenario-2" };
-      const aggregated = aggregateLimitations([other, repeated, other]);
-      expect(aggregated.map((limitation) => limitation.scenarioId)).toEqual([
-        "scenario-2",
-        "scenario-1",
+      const other: GenerationLimitation = {
+        ...base,
+        scenarioId: "scenario-2",
+        location: "GET /orders/{id}",
+      };
+      const aggregated = aggregateLimitations([other, base]);
+      expect(aggregated.map((limitation) => limitation.location)).toEqual([
+        "GET /orders/{id}",
+        "GET /customers/{id}",
       ]);
     });
   });

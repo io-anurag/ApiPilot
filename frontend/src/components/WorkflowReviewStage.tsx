@@ -370,7 +370,10 @@ export function WorkflowReviewStage({
           )}
         </output>
       )}
-      <div className="flex items-center gap-3 border-t border-border pt-4">
+      {/* Sticky rather than in normal flow: with dozens of workflows to review, the continue
+          action must stay reachable without scrolling past the entire list (matches the same
+          fix applied to ApiReviewStage's and ScenarioReviewStage's continue/finalize bars). */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
         {isActiveStage && (
           <button
             type="button"

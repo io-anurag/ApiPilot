@@ -19,6 +19,13 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
     "Workflow request representations this export cannot render",
 };
 
+/** Labels which approved scenario(s) a grouped limitation entry came from. */
+function scenarioLabel(scenarioIds: string[]): string {
+  if (scenarioIds.length === 0) return "";
+  if (scenarioIds.length === 1) return ` (${scenarioIds[0]})`;
+  return ` (${scenarioIds.length} scenarios)`;
+}
+
 /**
  * Lists what the export could not express (FR-017). A limitation is reported, never silently
  * omitted or filled in, and it does not make the export a failure.
@@ -64,10 +71,9 @@ export function PostmanExportLimitations({
             </h5>
             <ul className="mt-1 ml-4 list-disc text-sm text-slate-700">
               {aggregated.map((limitation, index) => (
-                <li key={`${limitation.location}-${limitation.scenarioId ?? index}`}>
+                <li key={`${limitation.location}-${limitation.scenarioIds[0] ?? index}`}>
                   <code className="font-mono text-xs">{limitation.location}</code>
-                  {limitation.scenarioId ? ` (${limitation.scenarioId})` : ""}:{" "}
-                  {limitation.message}
+                  {scenarioLabel(limitation.scenarioIds)}: {limitation.message}
                   {limitation.occurrences > 1
                     ? ` — affects ${limitation.occurrences} requests`
                     : ""}

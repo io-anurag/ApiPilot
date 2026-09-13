@@ -119,6 +119,55 @@ describe("accompanying document", () => {
     expect(readme.match(/scenario-1/g)).toHaveLength(1);
   });
 
+  it("collapses distinct approved scenarios that hit the same unresolved path parameter at the same location", () => {
+    const forOperation = (scenarioId: string): GenerationLimitation => ({
+      kind: "unresolved-path-parameter",
+      scenarioId,
+      location: "PATCH /api/v1/customers/{id}",
+      message:
+        'The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in.',
+    });
+    const result: Omit<ExportResult, "readme"> = {
+      collection: {
+        info: {
+          name: "Suite",
+          _postman_id: "id",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        variable: [{ key: "baseUrl", value: "" }],
+        item: [],
+      },
+      environment: {
+        name: "Suite environment",
+        _postman_variable_scope: "environment",
+        values: [],
+      },
+      validation: { valid: true, problems: [] },
+      limitations: [
+        forOperation("scenario-a"),
+        forOperation("scenario-b"),
+        forOperation("scenario-c"),
+      ],
+      summary: {
+        requestCount: 3,
+        folderCount: 0,
+        byProvenance: { RULE: 3, AI: 0 },
+        workflowCount: 0,
+        workflowRequestCount: 0,
+        standaloneRequestCount: 3,
+        workflowVariableCount: 0,
+        unsupportedWorkflowCount: 0,
+        omittedWorkflowCount: 0,
+      },
+    };
+    const readme = renderReadme(result, []);
+    expect(readme).toContain("Path parameters with no approved value (3)");
+    expect(readme).toContain(
+      '`PATCH /api/v1/customers/{id}` (3 scenarios): The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in. — affects 3 requests',
+    );
+    expect(readme).not.toContain("scenario-a");
+  });
+
   it("reports no limitations plainly when everything was expressible", () => {
     const outcome = generateCollection(
       { ...exportApiModel, summary: { ...exportApiModel.summary, issues: [] } },

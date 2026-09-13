@@ -79,6 +79,13 @@ function variableSection(variables: ArtifactVariable[]): string[] {
   return lines;
 }
 
+/** Labels which approved scenario(s) a grouped limitation entry came from. */
+function scenarioLabel(scenarioIds: string[]): string {
+  if (scenarioIds.length === 0) return "";
+  if (scenarioIds.length === 1) return ` (${scenarioIds[0]})`;
+  return ` (${scenarioIds.length} scenarios)`;
+}
+
 function limitationSection(limitations: GenerationLimitation[]): string[] {
   const lines = ["## Known limitations", ""];
   if (limitations.length === 0) {
@@ -87,9 +94,10 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
   }
   lines.push(
     "These are cases the export could not express fully. They are reported rather than filled in",
-    "with an assumed value. An identical case recurring across several rendered requests (for",
-    "example, the same scenario reused by multiple workflows) is listed once, with the number of",
-    "requests it affects.",
+    "with an assumed value. An identically worded case recurring across several approved scenarios",
+    "or several rendered requests (for example, the same path parameter left unresolved by many",
+    "negative scenarios for one operation, or one scenario reused by several workflows) is listed",
+    "once, with the number of requests it affects.",
     "",
   );
   const kinds = [...new Set(limitations.map((limitation) => limitation.kind))].sort(
@@ -99,7 +107,7 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
     const forKind = limitations.filter((limitation) => limitation.kind === kind);
     lines.push(`### ${LIMITATION_HEADINGS[kind]} (${forKind.length})`, "");
     for (const limitation of aggregateLimitations(forKind)) {
-      const scenario = limitation.scenarioId ? ` (${limitation.scenarioId})` : "";
+      const scenario = scenarioLabel(limitation.scenarioIds);
       const affected =
         limitation.occurrences > 1 ? ` — affects ${limitation.occurrences} requests` : "";
       lines.push(`- \`${limitation.location}\`${scenario}: ${limitation.message}${affected}`);

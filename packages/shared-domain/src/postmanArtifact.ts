@@ -177,46 +177,50 @@ export interface GenerationLimitation {
 }
 
 /**
- * One distinct known-limitation case, with the number of generated requests it affects. The same
- * underlying gap (e.g. an approved scenario with no value for a given path parameter) recurs once
- * per rendered occurrence — once per workflow step that reuses the scenario, for instance — so
- * without aggregation the accompanying document and review UI repeat an identical line once per
- * occurrence. `occurrences` preserves that magnitude in one line instead.
+ * One distinct known-limitation case: the same gap at the same location, worded identically. Its
+ * message never varies by scenario (e.g. "no value for the \"id\" path parameter" reads the same
+ * whichever approved scenario hit it), so the same gap recurs once per approved scenario that
+ * exercises that location, and again per rendered occurrence of each of those scenarios (once per
+ * workflow step that reuses it, for instance). Without aggregation, the accompanying document and
+ * review UI repeat an identical line once per scenario and again per occurrence. `scenarioIds`
+ * and `occurrences` preserve both counts in one line instead.
  */
 export interface AggregatedLimitation {
   kind: GenerationLimitationKind;
-  scenarioId?: string;
   location: string;
   message: string;
+  /** Distinct approved scenarios this case was recorded against, in first-seen order. */
+  scenarioIds: string[];
+  /** Total recorded limitations collapsed into this entry — the number of requests it affects. */
   occurrences: number;
 }
 
 /**
- * Collapses limitations that share a kind, location, scenario, and message into one entry with an
- * occurrence count, preserving the order each distinct case first appeared. Every case is still
- * reported (FR-017); only the exact-duplicate repetition across occurrences is removed.
+ * Collapses limitations that share a kind, location, and message into one entry, preserving the
+ * order each distinct case first appeared and every scenario it was recorded against. Every case
+ * is still reported (FR-017): only the repetition of an identically worded line — across
+ * occurrences of one scenario, and across the several approved scenarios that hit the same gap at
+ * the same location — is removed.
  */
 export function aggregateLimitations(
   limitations: GenerationLimitation[],
 ): AggregatedLimitation[] {
   const byKey = new Map<string, AggregatedLimitation>();
   for (const limitation of limitations) {
-    const key = JSON.stringify([
-      limitation.kind,
-      limitation.location,
-      limitation.scenarioId ?? "",
-      limitation.message,
-    ]);
+    const key = JSON.stringify([limitation.kind, limitation.location, limitation.message]);
     const existing = byKey.get(key);
     if (existing) {
       existing.occurrences += 1;
+      if (limitation.scenarioId && !existing.scenarioIds.includes(limitation.scenarioId)) {
+        existing.scenarioIds.push(limitation.scenarioId);
+      }
       continue;
     }
     byKey.set(key, {
       kind: limitation.kind,
-      scenarioId: limitation.scenarioId,
       location: limitation.location,
       message: limitation.message,
+      scenarioIds: limitation.scenarioId ? [limitation.scenarioId] : [],
       occurrences: 1,
     });
   }

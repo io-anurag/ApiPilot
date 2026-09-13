@@ -77,6 +77,26 @@ describe("PostmanExportLimitations", () => {
     expect(screen.getAllByText(/scenario-3/)).toHaveLength(1);
     expect(screen.getByText(/affects 3 requests/)).toBeInTheDocument();
   });
+
+  it("collapses distinct approved scenarios that hit the same gap at the same location", () => {
+    const forScenario = (scenarioId: string): GenerationLimitation => ({
+      kind: "unresolved-path-parameter",
+      scenarioId,
+      location: "PATCH /customers/{id}",
+      message: 'The approved scenario supplied no value for the "id" path parameter.',
+    });
+    render(
+      <PostmanExportLimitations
+        limitations={[forScenario("a"), forScenario("b"), forScenario("c")]}
+      />,
+    );
+    expect(screen.getByTestId("export-limitation-unresolved-path-parameter")).toHaveTextContent(
+      "Path parameters with no approved value (3)",
+    );
+    expect(screen.getByText(/\(3 scenarios\)/)).toBeInTheDocument();
+    expect(screen.getByText(/affects 3 requests/)).toBeInTheDocument();
+    expect(screen.queryByText(/^a$|^b$|^c$/)).not.toBeInTheDocument();
+  });
 });
 
 function successResult(): ExportResult {

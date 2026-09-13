@@ -85,6 +85,13 @@ function newlyAddedReviewScenarios(
  * of the same name already relies on (research.md Decision 4) — a `"not-attempted"` batch's
  * cause is read from the live cancellation flag at the moment it settles, since a batch never
  * knows on its own whether the run's ceiling or a user cancellation is why it was never sent.
+ *
+ * `explainFailure("run-budget-exhausted")` marks itself non-retryable at the *run* level, since
+ * re-running the whole stage would just re-hit the same exhausted ceiling in the same order
+ * (FR-025). That reasoning does not carry over to a single not-attempted batch: retrying just
+ * that one batch is a fresh, isolated attempt that never touches the run's ceiling at all, so per
+ * specs/015-ai-batch-retry (Edge Cases, Assumptions) a not-attempted batch is always retryable on
+ * its own merits, regardless of why the run as a whole stopped.
  */
 function buildBatchOutcomeRecord(
   index: number,
@@ -95,13 +102,14 @@ function buildBatchOutcomeRecord(
     return { index, operationKeys, status: "succeeded" };
   }
   if (outcome.status === "not-attempted") {
+    const explanation = explainFailure(
+      isAiEnhancementCancelRequested() ? "cancelled" : "run-budget-exhausted",
+    );
     return {
       index,
       operationKeys,
       status: "not-attempted",
-      failureExplanation: explainFailure(
-        isAiEnhancementCancelRequested() ? "cancelled" : "run-budget-exhausted",
-      ),
+      failureExplanation: { ...explanation, retryable: true },
     };
   }
   return {
