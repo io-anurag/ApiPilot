@@ -1,8 +1,9 @@
-import type {
-  ArtifactVariable,
-  ExportResult,
-  GenerationLimitation,
-  PostmanCollection,
+import {
+  aggregateLimitations,
+  type ArtifactVariable,
+  type ExportResult,
+  type GenerationLimitation,
+  type PostmanCollection,
 } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "./ordering";
 
@@ -86,7 +87,9 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
   }
   lines.push(
     "These are cases the export could not express fully. They are reported rather than filled in",
-    "with an assumed value.",
+    "with an assumed value. An identical case recurring across several rendered requests (for",
+    "example, the same scenario reused by multiple workflows) is listed once, with the number of",
+    "requests it affects.",
     "",
   );
   const kinds = [...new Set(limitations.map((limitation) => limitation.kind))].sort(
@@ -95,9 +98,11 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
   for (const kind of kinds) {
     const forKind = limitations.filter((limitation) => limitation.kind === kind);
     lines.push(`### ${LIMITATION_HEADINGS[kind]} (${forKind.length})`, "");
-    for (const limitation of forKind) {
+    for (const limitation of aggregateLimitations(forKind)) {
       const scenario = limitation.scenarioId ? ` (${limitation.scenarioId})` : "";
-      lines.push(`- \`${limitation.location}\`${scenario}: ${limitation.message}`);
+      const affected =
+        limitation.occurrences > 1 ? ` — affects ${limitation.occurrences} requests` : "";
+      lines.push(`- \`${limitation.location}\`${scenario}: ${limitation.message}${affected}`);
     }
     lines.push("");
   }

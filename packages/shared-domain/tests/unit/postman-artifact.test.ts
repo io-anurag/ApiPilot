@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  aggregateLimitations,
   POSTMAN_COLLECTION_SCHEMA,
   type ArtifactVariable,
   type ExportResult,
@@ -84,5 +85,41 @@ describe("postman artifact contracts", () => {
       byProvenance: { RULE: 1, AI: 1 },
     };
     expect(Object.keys(summary.byProvenance).sort()).toEqual(["AI", "RULE"]);
+  });
+
+  describe("aggregateLimitations", () => {
+    const repeated: GenerationLimitation = {
+      kind: "unresolved-path-parameter",
+      scenarioId: "scenario-1",
+      location: "GET /customers/{id}",
+      message: 'The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in.',
+    };
+
+    it("collapses limitations recurring across many rendered occurrences into one entry with a count", () => {
+      const aggregated = aggregateLimitations([repeated, repeated, repeated]);
+      expect(aggregated).toEqual([{ ...repeated, occurrences: 3 }]);
+    });
+
+    it("keeps limitations distinct when their scenario, location, or message differs", () => {
+      const other: GenerationLimitation = {
+        ...repeated,
+        scenarioId: "scenario-2",
+        location: "GET /orders/{id}",
+      };
+      const aggregated = aggregateLimitations([repeated, other]);
+      expect(aggregated).toEqual([
+        { ...repeated, occurrences: 1 },
+        { ...other, occurrences: 1 },
+      ]);
+    });
+
+    it("preserves the order each distinct case first appeared", () => {
+      const other: GenerationLimitation = { ...repeated, scenarioId: "scenario-2" };
+      const aggregated = aggregateLimitations([other, repeated, other]);
+      expect(aggregated.map((limitation) => limitation.scenarioId)).toEqual([
+        "scenario-2",
+        "scenario-1",
+      ]);
+    });
   });
 });

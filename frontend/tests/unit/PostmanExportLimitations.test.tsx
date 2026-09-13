@@ -60,6 +60,23 @@ describe("PostmanExportLimitations", () => {
       /every approved scenario was expressed in full/i,
     );
   });
+
+  it("collapses a limitation recurring across many occurrences into one line with an affected count", () => {
+    const repeated: GenerationLimitation = {
+      kind: "unresolved-path-parameter",
+      scenarioId: "scenario-3",
+      location: "GET /customers/{id}",
+      message: 'The approved scenario supplied no value for the "id" path parameter.',
+    };
+    render(
+      <PostmanExportLimitations limitations={[repeated, repeated, repeated]} />,
+    );
+    expect(screen.getByTestId("export-limitation-unresolved-path-parameter")).toHaveTextContent(
+      "Path parameters with no approved value (3)",
+    );
+    expect(screen.getAllByText(/scenario-3/)).toHaveLength(1);
+    expect(screen.getByText(/affects 3 requests/)).toBeInTheDocument();
+  });
 });
 
 function successResult(): ExportResult {
