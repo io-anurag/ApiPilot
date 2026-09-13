@@ -43,3 +43,8 @@
   workflow rejections, restricting producer eligibility to positive-outcome scenarios, and
   single-hop-only scope) that were not yet explicit in the spec; added as FR-015–FR-018, matching
   edge cases, and two Out of Scope bullets. All checklist items still pass.
+- 2026-09-13 `/speckit.analyze` session (post-implementation): identified that FR-008 had no
+  dedicated test, and that SC-001/SC-006 had no associated verification task. Remediated by adding
+  a workflow-coexistence test (FR-008; tasks.md T035), a representative resolution-rate test
+  (SC-001; T036), and a README scannability test (SC-006; T037), plus annotating SC-001/SC-006 in
+  spec.md with how each is validated. All checklist items still pass.

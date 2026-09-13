@@ -22,6 +22,13 @@ import {
   workflowStep,
   workflowVariable,
 } from "../../fixtures/postman/workflowFixtures";
+import {
+  chainingApiModel,
+  ordersDeleteRelationship,
+  ordersDeleteScenario,
+  ordersListScenario,
+  testModelOf,
+} from "../../fixtures/postman/dependencyFixtures";
 
 async function validApiModel() {
   const content = readFileSync(
@@ -106,6 +113,29 @@ describe("postmanGenerationStage", () => {
     expect(
       result?.collection.item.some((folder) => folder.name === "Workflow: pets-flow"),
     ).toBe(true);
+  });
+
+  it("forwards dependency-analysis relationships as automatic-chaining context (specs/019-auto-workflow-chaining)", () => {
+    reachPostmanGeneration(chainingApiModel);
+    const dependencyAnalysis: DependencyAnalysisResult = {
+      requestId: "dependency-test-automatic",
+      graph: { relationships: [ordersDeleteRelationship()] },
+      workflows: [],
+      manualConfirmationCandidates: [],
+      cycles: [],
+      aiOutcome: "skipped",
+    };
+    patchWorkflow({
+      dependencyAnalysis,
+      approvedTestModel: testModelOf(ordersListScenario, ordersDeleteScenario),
+      approvedWorkflowIds: [],
+    });
+
+    const result = runPostmanGeneration().postmanArtifact;
+    expect(result?.summary.automaticChainCount).toBe(1);
+    expect(
+      result?.limitations.some((limitation) => limitation.kind === "unresolved-path-parameter"),
+    ).toBe(false);
   });
 
   it("refuses when workflowReview has been marked stale, not just not-yet-reached/active (FR-007)", async () => {

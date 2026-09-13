@@ -40,6 +40,11 @@ export function runPostmanGeneration(options?: ExportOptions): TestGenerationWor
         ? {
             workflows: workflow.dependencyAnalysis.workflows,
             approvedWorkflowIds: workflow.approvedWorkflowIds ?? [],
+            automaticChaining: {
+              graph: workflow.dependencyAnalysis.graph,
+              cycles: workflow.dependencyAnalysis.cycles,
+              workflowDecisions: workflow.workflowDecisions ?? {},
+            },
           }
         : undefined,
     );

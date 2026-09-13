@@ -14,6 +14,7 @@ import type {
   WorkflowExportContext,
 } from "@apipilot/shared-domain";
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
+import { planAutomaticChains } from "./automaticChaining";
 import { baseUrlVariable } from "./artifactVariables";
 import { mapOperationAuth } from "./authMapping";
 import { buildEnvironment } from "./environment";
@@ -78,6 +79,22 @@ function workflowIntentKey(testModel: TestModel): string | undefined {
 
 function operationKey(path: string, method: string): string {
   return `${method.toUpperCase()} ${path}`;
+}
+
+/**
+ * Every relationship id belonging to a workflow a human has explicitly rejected (research.md D7,
+ * FR-016) — an explicit human "no" always overrides automatic chaining, even for a relationship
+ * that independently meets the CONFIRMED/LIKELY eligibility bar.
+ */
+function rejectedRelationshipIds(workflowContext?: WorkflowExportContext): Set<string> {
+  const automatic = workflowContext?.automaticChaining;
+  if (!automatic) return new Set();
+  const ids = new Set<string>();
+  for (const workflow of workflowContext!.workflows) {
+    if (automatic.workflowDecisions[workflow.id]?.state !== "rejected") continue;
+    for (const relationshipId of workflow.relationshipIds) ids.add(relationshipId);
+  }
+  return ids;
 }
 
 function resolveOperations(
@@ -223,7 +240,7 @@ export function generateCollection(
 
   const workflowPlans = planApprovedWorkflows(apiModel, testModel, workflowContext);
   const renderedScenarioIds = workflowPlans.renderedScenarioIds;
-  const standaloneResolved = resolved.filter(
+  const unchainedStandaloneResolved = resolved.filter(
     ({ scenario }) => !renderedScenarioIds.has(scenario.id),
   );
   const workflowResolved = workflowPlans.plans.flatMap((plan) =>
@@ -234,6 +251,25 @@ export function generateCollection(
           operation: step.operation,
         })),
   );
+
+  // The final emission order (path/method/category/scenario-id, per ordering.ts) never depends on
+  // chaining decisions — chaining only ever rewrites `pathParameters` values, never operation
+  // identity or category — so it is computed once, here, over the *unmodified* list and reused
+  // both as automatic chaining's ordering guard (FR-015, research.md D6) and, unchanged, as the
+  // actual folder structure below.
+  const standaloneOrderRank = new Map<string, number>();
+  groupAndName(unchainedStandaloneResolved).forEach((folder) => {
+    folder.entries.forEach((entry) => standaloneOrderRank.set(entry.scenario.id, standaloneOrderRank.size));
+  });
+  const automaticChaining = planAutomaticChains(unchainedStandaloneResolved, {
+    graph: workflowContext?.automaticChaining?.graph ?? { relationships: [] },
+    cycles: workflowContext?.automaticChaining?.cycles ?? [],
+    rejectedRelationshipIds: rejectedRelationshipIds(workflowContext),
+    disabled: workflowContext?.automaticChaining === undefined || options.disableAutomaticChaining === true,
+    standaloneOrderRank,
+  });
+  const standaloneResolved = automaticChaining.scenarios;
+
   const auth = authByOperation(apiModel, [...standaloneResolved, ...workflowResolved]);
   const limitations: GenerationLimitation[] = [
     ...auth.limitations,
@@ -244,6 +280,19 @@ export function generateCollection(
     baseUrlVariable(options.baseUrl ?? ""),
     ...auth.variables,
   ];
+  for (const chain of automaticChaining.chains) {
+    variables.push({
+      name: chain.variableName,
+      purpose: `Value automatically captured from ${chain.producer.operationMethod.toUpperCase()} ${chain.producer.operationPath} ("${chain.producer.field}") for reuse by a dependent request`,
+      secret: false,
+      value: "",
+      provenance: {
+        workflowId: chain.chainId,
+        relationshipId: chain.consumers[0]?.relationshipId,
+        origin: "automatic-chain",
+      },
+    });
+  }
 
   const standaloneFolders: PostmanFolder[] = groupAndName(standaloneResolved).map(
     (folder) => ({
@@ -256,6 +305,7 @@ export function generateCollection(
           auth: auth.byKey.get(
             operationKey(entry.operation.path, entry.operation.method),
           ),
+          workflowExtractions: automaticChaining.extractionsByProducerScenarioId.get(entry.scenario.id),
         });
         limitations.push(...built.limitations);
         variables.push(...built.variables);
@@ -276,6 +326,7 @@ export function generateCollection(
           provenance: {
             workflowId: plan.workflowId,
             relationshipId: variable.relationshipId,
+            origin: "approved-workflow",
           },
         });
       }
@@ -416,6 +467,10 @@ export function generateCollection(
         .reduce((count, plan) => count + plan.variables.length, 0),
       unsupportedWorkflowCount: workflowPlans.unsupportedWorkflowCount,
       omittedWorkflowCount: workflowPlans.omittedWorkflowCount,
+      automaticChainCount: automaticChaining.chains.reduce(
+        (count, chain) => count + chain.consumers.length,
+        0,
+      ),
     },
   };
 
@@ -427,6 +482,9 @@ export function generateCollection(
 
   return {
     ok: true,
-    result: { ...withoutReadme, readme: renderReadme(withoutReadme, declaredVariables) },
+    result: {
+      ...withoutReadme,
+      readme: renderReadme(withoutReadme, declaredVariables, automaticChaining.chains),
+    },
   };
 }

@@ -265,7 +265,12 @@ limitation, never guessed.
 
 - **SC-001**: In representative exports with clear create/read/update/delete relationships between
   operations, at least 90% of path parameters that previously appeared as unresolved-path-parameter
-  limitations are instead resolved as automatic chains.
+  limitations are instead resolved as automatic chains. Validated against the feature's own
+  representative create/read/update/delete case (one producer feeding three consumers) rather than
+  a separate synthetic benchmark corpus — see
+  `backend/tests/unit/postman/generateCollection.test.ts`'s "resolves the representative
+  create/read/update/delete relationship shape at ≥90%" case (added post-`/speckit-analyze`,
+  2026-09-13).
 - **SC-002**: 0% of automatic chains are applied using only POSSIBLE-confidence evidence or
   field-name similarity alone.
 - **SC-003**: 100% of automatically applied chains are listed in the export summary with their
@@ -276,7 +281,13 @@ limitation, never guessed.
   the same export.
 - **SC-006**: An engineer reviewing a generated collection's summary can identify, within 30
   seconds, which path parameters were auto-chained and on what evidence, for a representative export
-  of up to 50 operations.
+  of up to 50 operations. The 30-second human-timing claim itself is qualitative; what is
+  mechanically verified is the structural property that makes it plausible — the README's
+  "Automatically chained requests" section stays one bullet per producer with one "used by"
+  sub-bullet per consumer (never a duplicated line per consumer), so its length grows with the
+  number of distinct producers rather than with fan-out — see
+  `backend/tests/unit/postman/readme.test.ts`'s "keeps the automatic-chains section scannable" case
+  (added post-`/speckit-analyze`, 2026-09-13).
 
 ## Assumptions
 
