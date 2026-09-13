@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExportResult } from "@apipilot/shared-domain";
-import { ARTIFACT_FILENAMES, artifactFilenames, artifactFiles } from "../../src/services/postmanCollectionsClient";
+import {
+  ARTIFACT_FILENAMES,
+  artifactFilenames,
+  artifactFiles,
+  requestPostmanExport,
+} from "../../src/services/postmanCollectionsClient";
 
 function exportResult(): ExportResult {
   return {
@@ -66,5 +71,58 @@ describe("artifactFiles", () => {
       ARTIFACT_FILENAMES.environment,
       ARTIFACT_FILENAMES.readme,
     ]);
+  });
+});
+
+describe("requestPostmanExport logging (FR-010)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("logs a structured entry when a network error is caught", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    const result = await requestPostmanExport(
+      { operations: [], securitySchemes: {}, summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] } },
+      { scenarios: [] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatchObject({
+      level: "error",
+      component: "postmanCollectionsClient",
+      operation: "requestPostmanExport",
+      errorCategory: "network_error",
+    });
+  });
+
+  it("logs a structured entry when the backend returns a non-2xx response", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "empty_approved_test_model", message: "No scenarios approved" }),
+      } as Response),
+    );
+
+    const result = await requestPostmanExport(
+      { operations: [], securitySchemes: {}, summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] } },
+      { scenarios: [] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatchObject({
+      level: "error",
+      component: "postmanCollectionsClient",
+      operation: "requestPostmanExport",
+      errorCategory: "empty_approved_test_model",
+      statusCode: 400,
+    });
   });
 });

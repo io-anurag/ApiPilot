@@ -20,6 +20,7 @@ import {
   testGenerationWorkflowRouter,
 } from "./api/testGenerationWorkflow";
 import { versionRouter } from "./api/version";
+import { clientLogsRouter, CLIENT_LOGS_BODY_LIMIT } from "./api/clientLogs";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 import { createLogger } from "./logger";
@@ -75,11 +76,19 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
     next();
   });
 
+  // A client log entry (specs/020-frontend-application-logging FR-013) gets its own, much
+  // smaller body-size limit than every other route, independent of MAX_UPLOAD_BYTES below.
+  // Mounted for this path only, and before the general parser, so it claims the request first;
+  // body-parser marks a request's body as already parsed once this runs, so the general
+  // `express.json` below safely skips re-parsing it rather than double-parsing or erroring.
+  app.use("/api/client-logs", express.json({ limit: CLIENT_LOGS_BODY_LIMIT }));
+
   // Downstream endpoints (test-model generation/enhancement/review, Postman export) receive
   // the ApiModel/TestModel derived from an uploaded spec as a JSON body. Match express.json's
   // limit to the upload contract (MAX_UPLOAD_BYTES, FR-015) so a spec accepted at upload time
   // is not silently rejected one step later by body-parser's much smaller 100kb default.
   app.use(express.json({ limit: MAX_UPLOAD_BYTES }));
+  app.use("/api", clientLogsRouter);
   app.use("/api", healthRouter);
   app.use("/api", versionRouter);
   app.use("/api", specificationsRouter);
@@ -130,11 +139,16 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
       err !== null &&
       (err as { type?: string }).type === "entity.too.large"
     ) {
+      // body-parser's own error carries the limit that was actually exceeded (`err.limit`) —
+      // read it instead of assuming the global MAX_UPLOAD_BYTES, since a route can configure its
+      // own smaller limit (e.g. specs/020-frontend-application-logging's client-log ingestion
+      // endpoint), and the message must describe whichever limit actually applied.
+      const limit = (err as { limit?: number }).limit ?? MAX_UPLOAD_BYTES;
       statusCode = 413;
       errorCategory = "payload_too_large";
       body = {
         error: "payload_too_large",
-        message: `Request body exceeds the maximum allowed size of ${MAX_UPLOAD_BYTES} bytes`,
+        message: `Request body exceeds the maximum allowed size of ${limit} bytes`,
       };
     } else {
       statusCode = 500;

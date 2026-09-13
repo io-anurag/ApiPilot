@@ -9,6 +9,9 @@ import type {
   TestModel,
   TestScenario,
 } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
+
+const logger = createLogger("reviewsClient");
 
 /** A ReviewScenario as returned over HTTP, with an additive redacted display request (FR-018). */
 export interface ReviewScenarioWire extends Omit<ReviewScenario, "scenario"> {
@@ -44,7 +47,7 @@ export function toReviewSnapshot(
   return { workspaceRevision: review.workspaceRevision, scenarios: review.scenarios };
 }
 
-async function postReview(path: string, body: unknown): Promise<ReviewRequestResult> {
+async function postReview(path: string, operation: string, body: unknown): Promise<ReviewRequestResult> {
   try {
     const response = await fetch(path, {
       method: "POST",
@@ -53,9 +56,11 @@ async function postReview(path: string, body: unknown): Promise<ReviewRequestRes
     });
     const parsed = await response.json().catch(() => null);
     if (!response.ok) {
+      const errorCategory = (parsed?.error as string) ?? "unknown_error";
+      logger.error("request_failed", { operation, errorCategory, statusCode: response.status });
       return {
         ok: false,
-        error: (parsed?.error as string) ?? "unknown_error",
+        error: errorCategory,
         message:
           (parsed?.message as string) ?? `Request failed with status ${response.status}`,
       };
@@ -67,6 +72,7 @@ async function postReview(path: string, body: unknown): Promise<ReviewRequestRes
       outcomes: parsed.outcomes as ReviewUpdateOutcome[],
     };
   } catch (err) {
+    logger.error("network_error", { operation, errorCategory: "network_error" });
     return {
       ok: false,
       error: "network_error",
@@ -80,7 +86,7 @@ export function loadReviewWorkspace(
   apiModel: ApiModel,
   testModel: TestModel,
 ): Promise<ReviewRequestResult> {
-  return postReview("/api/test-models/reviews", { apiModel, testModel });
+  return postReview("/api/test-models/reviews", "loadReviewWorkspace", { apiModel, testModel });
 }
 
 /** Applies one or more accept/reject decisions against the last known workspace state (US2). */
@@ -90,7 +96,7 @@ export function applyReviewDecisions(
   snapshot: ReviewSnapshot | undefined,
   updates: ReviewUpdateRequest[],
 ): Promise<ReviewRequestResult> {
-  return postReview("/api/test-models/reviews", {
+  return postReview("/api/test-models/reviews", "applyReviewDecisions", {
     apiModel,
     testModel,
     review: {
@@ -110,7 +116,7 @@ export function submitReviewEdit(
   revision: number,
   edit: ReviewEditContent,
 ): Promise<ReviewRequestResult> {
-  return postReview("/api/test-models/reviews/edit", {
+  return postReview("/api/test-models/reviews/edit", "submitReviewEdit", {
     apiModel,
     testModel,
     review: snapshot,
@@ -128,7 +134,7 @@ export function requestReviewRegeneration(
   scenarioId: string,
   revision: number,
 ): Promise<ReviewRequestResult> {
-  return postReview("/api/test-models/reviews/regenerate", {
+  return postReview("/api/test-models/reviews/regenerate", "requestReviewRegeneration", {
     apiModel,
     testModel,
     review: snapshot,

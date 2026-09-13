@@ -4,8 +4,11 @@ import type {
   ExecutionConfirmationRequirement,
   ExecutionRun,
 } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
 
 /** One client for every endpoint in contracts/execution-api.md (AP-017). */
+
+const logger = createLogger("executionClient");
 
 export interface ErrorResult {
   ok: false;
@@ -19,9 +22,9 @@ export interface ErrorResult {
   runId?: string;
 }
 
-async function parseError(response: Response): Promise<ErrorResult> {
+async function parseError(response: Response, operation: string): Promise<ErrorResult> {
   const parsed = await response.json().catch(() => null);
-  return {
+  const result: ErrorResult = {
     ok: false,
     error: (parsed?.error as string) ?? "unknown_error",
     message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
@@ -36,9 +39,19 @@ async function parseError(response: Response): Promise<ErrorResult> {
       : {}),
     ...(typeof parsed?.runId === "string" ? { runId: parsed.runId as string } : {}),
   };
+  logger.error("request_failed", {
+    operation,
+    errorCategory: result.error,
+    statusCode: response.status,
+  });
+  return result;
 }
 
-async function postJson(path: string, body?: unknown): Promise<Response | { networkError: string }> {
+async function postJson(
+  path: string,
+  operation: string,
+  body?: unknown,
+): Promise<Response | { networkError: string }> {
   try {
     return await fetch(path, {
       method: "POST",
@@ -46,7 +59,9 @@ async function postJson(path: string, body?: unknown): Promise<Response | { netw
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
-    return { networkError: err instanceof Error ? err.message : "Request failed" };
+    const message = err instanceof Error ? err.message : "Request failed";
+    logger.error("network_error", { operation, errorCategory: "network_error" });
+    return { networkError: message };
   }
 }
 
@@ -65,20 +80,21 @@ export async function fetchEnvironments(): Promise<EnvironmentListResult> {
   try {
     const response = await fetch("/api/test-generation-workflow/environments");
     const parsed = await response.json().catch(() => null);
-    if (!response.ok) return parseError(response);
+    if (!response.ok) return parseError(response, "fetchEnvironments");
     return { ok: true, environments: (parsed?.environments ?? []) as Environment[] };
   } catch (err) {
+    logger.error("network_error", { operation: "fetchEnvironments", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }
 
 export async function createEnvironment(input: EnvironmentInput): Promise<EnvironmentResult> {
-  const response = await postJson("/api/test-generation-workflow/environments", input);
+  const response = await postJson("/api/test-generation-workflow/environments", "createEnvironment", input);
   if ("networkError" in response) {
     return { ok: false, error: "network_error", message: response.networkError };
   }
   const parsed = await response.json().catch(() => null);
-  if (!response.ok) return parseError(response);
+  if (!response.ok) return parseError(response, "createEnvironment");
   return { ok: true, environment: parsed.environment as Environment };
 }
 
@@ -90,12 +106,15 @@ export async function updateEnvironment(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-  }).catch((err) => ({ networkError: err instanceof Error ? err.message : "Request failed" }) as const);
+  }).catch((err) => {
+    logger.error("network_error", { operation: "updateEnvironment", errorCategory: "network_error" });
+    return { networkError: err instanceof Error ? err.message : "Request failed" } as const;
+  });
   if ("networkError" in response) {
     return { ok: false, error: "network_error", message: response.networkError };
   }
   const parsed = await response.json().catch(() => null);
-  if (!response.ok) return parseError(response);
+  if (!response.ok) return parseError(response, "updateEnvironment");
   return { ok: true, environment: parsed.environment as Environment };
 }
 
@@ -107,7 +126,7 @@ export type RunResult = { ok: true; run: ExecutionRun } | ErrorResult;
  * terminal state.
  */
 export async function startExecution(environmentId: string, confirmed = false): Promise<RunResult> {
-  const response = await postJson("/api/test-generation-workflow/execution/start", {
+  const response = await postJson("/api/test-generation-workflow/execution/start", "startExecution", {
     environmentId,
     confirmed,
   });
@@ -115,18 +134,18 @@ export async function startExecution(environmentId: string, confirmed = false): 
     return { ok: false, error: "network_error", message: response.networkError };
   }
   const parsed = await response.json().catch(() => null);
-  if (!response.ok) return parseError(response);
+  if (!response.ok) return parseError(response, "startExecution");
   return { ok: true, run: parsed.run as ExecutionRun };
 }
 
 /** Cancels the session's in-progress run (FR-015). Resolves once accepted (202), not once settled. */
 export async function cancelExecution(): Promise<RunResult> {
-  const response = await postJson("/api/test-generation-workflow/execution/cancel");
+  const response = await postJson("/api/test-generation-workflow/execution/cancel", "cancelExecution");
   if ("networkError" in response) {
     return { ok: false, error: "network_error", message: response.networkError };
   }
   const parsed = await response.json().catch(() => null);
-  if (!response.ok) return parseError(response);
+  if (!response.ok) return parseError(response, "cancelExecution");
   return { ok: true, run: parsed.run as ExecutionRun };
 }
 
@@ -134,9 +153,10 @@ export async function fetchRun(runId: string): Promise<RunResult> {
   try {
     const response = await fetch(`/api/test-generation-workflow/execution/runs/${runId}`);
     const parsed = await response.json().catch(() => null);
-    if (!response.ok) return parseError(response);
+    if (!response.ok) return parseError(response, "fetchRun");
     return { ok: true, run: parsed.run as ExecutionRun };
   } catch (err) {
+    logger.error("network_error", { operation: "fetchRun", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }
@@ -149,9 +169,10 @@ export async function fetchRuns(): Promise<RunSummaryListResult> {
   try {
     const response = await fetch("/api/test-generation-workflow/execution/runs");
     const parsed = await response.json().catch(() => null);
-    if (!response.ok) return parseError(response);
+    if (!response.ok) return parseError(response, "fetchRuns");
     return { ok: true, runs: (parsed?.runs ?? []) as Omit<ExecutionRun, "results">[] };
   } catch (err) {
+    logger.error("network_error", { operation: "fetchRuns", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }

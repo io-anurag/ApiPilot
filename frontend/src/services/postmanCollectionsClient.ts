@@ -1,4 +1,7 @@
 import type { ApiModel, ExportOptions, ExportResult, TestModel } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
+
+const logger = createLogger("postmanCollectionsClient");
 
 /** Generic names used when the specification has no usable title (FR-022). */
 export const ARTIFACT_FILENAMES = {
@@ -59,9 +62,15 @@ export async function requestPostmanExport(
     });
     const parsed = await response.json().catch(() => null);
     if (!response.ok) {
+      const errorCategory = (parsed?.error as string) ?? "unknown_error";
+      logger.error("request_failed", {
+        operation: "requestPostmanExport",
+        errorCategory,
+        statusCode: response.status,
+      });
       return {
         ok: false,
-        error: (parsed?.error as string) ?? "unknown_error",
+        error: errorCategory,
         message:
           (parsed?.message as string) ?? `Request failed with status ${response.status}`,
         ...(Array.isArray(parsed?.problems) ? { problems: parsed.problems as string[] } : {}),
@@ -69,6 +78,10 @@ export async function requestPostmanExport(
     }
     return { ok: true, result: parsed as ExportResult };
   } catch (err) {
+    logger.error("network_error", {
+      operation: "requestPostmanExport",
+      errorCategory: "network_error",
+    });
     return {
       ok: false,
       error: "network_error",
