@@ -13,6 +13,12 @@ existing `LogFields` type. A caller may only pass primitive values; anything els
 runtime before the entry is emitted or forwarded (research.md Decision 5), regardless of what
 TypeScript's structural typing would otherwise allow through a loosely-typed call site.
 
+**Credential-shaped field-name denylist (FR-004/SC-008)**: independent of the value-type check
+above, any field whose name (case-insensitive) is or contains `token`, `apikey`, `api_key`,
+`password`, `secret`, `authorization`, `credential`, or `cookie` is also dropped, regardless of its
+value or type (research.md Decision 7). This check runs in the frontend logger and, independently,
+again in the backend ingestion endpoint (defense in depth).
+
 ## Frontend Log Entry
 
 The record the frontend logger constructs for every `logger.<level>(event, fields?)` call.
@@ -23,7 +29,15 @@ The record the frontend logger constructs for every `logger.<level>(event, field
 | `component` | `string` | Fixed at `createLogger(component)` construction time (e.g. `"executionClient"`, `"globalErrorHandlers"`). Never per-call. |
 | `event` | `string` | The caller-supplied event name (e.g. `"fetch_failed"`, `"uncaught_exception"`). |
 | `timestamp` | `string` (ISO 8601) | Produced by the logger's clock (`Date` by default, injectable per FR-011/research.md Decision 1). |
-| `fields` | `LogFields` | Optional; runtime-filtered to primitives only (FR-003). |
+| `fields` | `LogFields` | Optional; runtime-filtered to primitives only (FR-003) and to non-denylisted field names (FR-004). |
+
+**Field vocabulary by caller** (illustrative, not exhaustive — any primitive, non-denylisted field
+name is accepted):
+- Service-client callers (`frontend/src/services/*`, FR-010): `operation`, `errorCategory`,
+  `statusCode`.
+- The global-handler caller (`globalErrorHandlers.ts`, FR-010a): `message`, `errorCategory`
+  (e.g. `"uncaught_exception"` / `"unhandled_rejection"`), and, where available from the browser's
+  `ErrorEvent`, `source`/`filename` and `lineno`.
 
 **Console emission** (FR-002): serialized as one structured object per call (not a free-form
 string), via the console method matching level (`console.error`/`console.warn`/`console.log`),
@@ -66,6 +80,11 @@ Persists one Frontend Log Entry via the existing `backend/src/logger.ts`.
   field must not discard an otherwise-useful diagnostic entry (FR-007's "reject or drop" is
   satisfied at the field level here; the entry-level fields above are stricter because the entry is
   meaningless without them).
+- Independently of the above, any field whose *name* matches the FR-004 credential-shaped denylist
+  (`token`, `apikey`, `api_key`, `password`, `secret`, `authorization`, `credential`, `cookie`,
+  case-insensitive substring match) is also dropped, regardless of its value or type — applied
+  again here even though the frontend logger already applies the same check, since the backend
+  must not assume every caller is this feature's own frontend logger (FR-004/SC-008).
 - The whole request body MUST NOT exceed the route's own ~4–8 KB limit (FR-013); Express's
   `entity.too.large` body-parser error is handled entirely by the existing centralized error
   handler (research.md Decision 3) — no new validation code for this specific rule.

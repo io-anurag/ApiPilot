@@ -26,7 +26,10 @@ Persists one frontend-originated log entry.
 }
 ```
 
-`level`, `component`, `event`, and `timestamp` are required; `fields` is optional. See
+`level`, `component`, `event`, and `timestamp` are required; `fields` is optional. Any `fields`
+entry whose value is not a primitive, or whose name matches the credential-shaped denylist
+(`token`, `apikey`, `api_key`, `password`, `secret`, `authorization`, `credential`, `cookie` —
+case-insensitive; FR-004/SC-008), is dropped rather than persisted. See
 [data-model.md](../data-model.md) for the full field-by-field validation contract.
 
 The request body is capped at a dedicated, route-scoped limit (~4–8 KB, FR-013) — independent of

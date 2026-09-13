@@ -123,3 +123,28 @@ router/logger conventions exactly — no new pattern is introduced.
 **Alternatives considered**: A separate log file/sink for frontend-originated entries — rejected;
 the spec's Assumptions section already settles this ("rather than introducing a separate log
 store, file, or format").
+
+## Decision 7: Credential-shaped field-name denylist (FR-004/SC-008)
+
+**Decision**: Both the frontend logger (`frontend/src/logger.ts`) and the backend ingestion
+endpoint (`backend/src/api/clientLogs.ts`) drop any field whose name, case-insensitively, is or
+contains one of: `token`, `apikey`, `api_key`, `password`, `secret`, `authorization`, `credential`,
+`cookie` — before the field is emitted, forwarded, or persisted. This is a single, small,
+shared list; the frontend and backend implementations each apply it independently (defense in
+depth — a field that somehow reached the backend without frontend filtering is still caught).
+
+**Rationale**: `/speckit-analyze` found that FR-003's primitive-type restriction alone does not
+satisfy FR-004: a real secret expressed as a plain string field is a valid primitive and passes
+the type check unchanged. Field-name matching is the smallest mechanical check that closes the
+concrete, common case (a caller accidentally passing a variable literally named after a
+credential, e.g. `logger.error("login_failed", { token })`) without requiring content-inspection
+of every string value, which would be both expensive and unreliable (no practical way to tell a
+real secret string from an equally-shaped non-secret string by content alone).
+
+**Alternatives considered**: Scanning field *values* for secret-shaped patterns (e.g. JWT-looking
+strings, high-entropy strings) — rejected as unreliable (high false-positive/false-negative rate)
+and disproportionate to this feature's scope. Doing nothing beyond FR-003 — rejected per the
+`/speckit-analyze` finding; leaving a named, mechanically-detectable gap unaddressed when a small,
+deterministic fix exists would contradict constitution XX's intent. The residual risk of sensitive
+*content* under an unrelated-looking field name is accepted and documented in spec.md's
+Assumptions rather than pursued further, consistent with constitution XXX (Explicit Trade-offs).

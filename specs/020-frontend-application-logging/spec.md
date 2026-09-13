@@ -47,11 +47,31 @@ send anything to an external/cloud service; must remain deterministic/testable."
   (`frontend/src/services/*`), matching FR-010/SC-001 exactly as written. Component-level
   instrumentation is out of scope for this feature and is a candidate follow-up.
 - Q: Should the feature add a global handler for truly uncaught exceptions and unhandled promise
-  rejections (`window.onerror`/`onunhandledrejection`), routed through the same logger, or stay
-  scoped only to errors the service-client modules already catch in a `try`/`catch`? → A: Yes — add
-  a global handler for both, logged at `error` level through the same logging utility, so a crash
-  no `try`/`catch` in application code ever sees is still recorded rather than disappearing
-  silently, which is the feature's core premise (User Story 1).
+  rejections, routed through the same logger, or stay scoped only to errors the service-client
+  modules already catch in a `try`/`catch`? → A: Yes — add a global handler for both, logged at
+  `error` level through the same logging utility, so a crash no `try`/`catch` in application code
+  ever sees is still recorded rather than disappearing silently, which is the feature's core
+  premise (User Story 1). The handler MAY be implemented via `addEventListener("error", …)`/
+  `addEventListener("unhandledrejection", …)` or via the equivalent `window.onerror`/
+  `window.onunhandledrejection` assignment — this requirement describes the capability (observing
+  both kinds of otherwise-unobserved failure), not a specific registration API.
+
+### Session 2026-09-15
+
+- Q: `/speckit-analyze` found that FR-003's primitive-value-shape restriction does not actually
+  enforce FR-004 ("MUST NOT log secrets, API keys, ... content") — a real secret expressed as a
+  plain string field (e.g. `{ token: "abc123realsecret" }`) is a valid primitive and would pass
+  through unchanged. Should FR-004 be backed by a concrete mechanism, or left as caller-discipline
+  guidance only? → A: Add a concrete, mechanical defense-in-depth measure: both the frontend logger
+  and the backend ingestion endpoint MUST drop any field whose *name* (case-insensitive) is or
+  contains one of a fixed set of credential-shaped terms — `token`, `apikey`, `api_key`,
+  `password`, `secret`, `authorization`, `credential`, `cookie` — regardless of that field's value
+  or type. This closes the concrete, mechanically-detectable gap (a caller passing a variable
+  literally named after a credential). It does not claim to catch every possible way sensitive
+  *content* could end up in an unrelated-looking field (e.g. a spec title string accidentally
+  reused as part of an error message); that broader risk remains a caller-discipline/code-review
+  responsibility, same as it already is for the existing backend logger, and is recorded as a
+  residual risk under Assumptions rather than silently treated as solved.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -172,6 +192,12 @@ so sensitive payloads cannot pass through even by caller mistake.
   the logger MUST NOT accept or silently serialize objects, arrays, or functions as field values.
 - **FR-004**: The frontend MUST NOT log secrets, API keys, full uploaded specification content, or
   sensitive AI prompt/response content in any log entry, consistent with constitution principle XX.
+  As a concrete, mechanical enforcement (not merely a convention), both the frontend logger and the
+  backend ingestion endpoint MUST drop any field whose name (case-insensitive) is or contains one
+  of: `token`, `apikey`, `api_key`, `password`, `secret`, `authorization`, `credential`, `cookie` —
+  regardless of that field's value or type. This does not guarantee every possible sensitive value
+  is caught (e.g. sensitive content placed in an unrelated-looking field name); that residual risk
+  is a caller-discipline responsibility (see Assumptions).
 - **FR-005**: `warn`- and `error`-level entries MUST additionally be forwarded to a new, lightweight
   backend endpoint so they persist independently of the originating browser session; `info`-level
   entries remain console-only by default.
@@ -193,10 +219,11 @@ so sensitive payloads cannot pass through even by caller mistake.
   converting it to a thrown `Error` or typed result; severity distinctions (e.g. an expected
   not-found outcome versus an unexpected failure) are expressed via log level and fields, not by
   omitting some errors from logging.
-- **FR-010a**: The frontend MUST install one global handler for uncaught exceptions
-  (`window.onerror`) and one for unhandled promise rejections (`window.onunhandledrejection`),
-  each routing the error through the same logger at `error` level, so a failure no application
-  `try`/`catch` observes is still recorded rather than disappearing silently.
+- **FR-010a**: The frontend MUST install a global handler for uncaught exceptions and a global
+  handler for unhandled promise rejections (by whatever registration mechanism the implementation
+  chooses — see Clarifications), each routing the error through the same logger at `error` level,
+  so a failure no application `try`/`catch` observes is still recorded rather than disappearing
+  silently.
 - **FR-011**: The logger and the backend ingestion path MUST be unit-testable without depending on
   real timers or real network calls (an injectable/mockable time source and transport).
 - **FR-012**: The feature MUST NOT transmit any frontend log data to an external or cloud logging
@@ -236,6 +263,9 @@ so sensitive payloads cannot pass through even by caller mistake.
 - **SC-007**: A simulated uncaught exception and a simulated unhandled promise rejection each
   produce exactly one structured `error`-level log entry, verified by dedicated tests exercising
   the global handlers without depending on an actual unhandled crash in the test runner.
+- **SC-008**: A field whose name matches the FR-004 credential-shaped denylist (e.g. `token`,
+  `password`, `apiKey`) is absent from the emitted entry regardless of its value, verified by
+  dedicated tests at both the frontend logger and the backend ingestion endpoint.
 
 ## Assumptions
 
@@ -251,6 +281,12 @@ so sensitive payloads cannot pass through even by caller mistake.
 - The ingestion endpoint's own request-size limit (FR-013) is enforced independently of the
   existing global 10 MB Express JSON limit in `backend/src/app.ts`, which remains sized for spec
   uploads and is not relied upon to bound log entry size.
+- FR-004's credential-shaped field-name denylist is a mechanical, name-based defense, not a
+  content scanner. Sensitive content placed in a field whose name is not on the denylist (e.g. a
+  spec title or prompt fragment mistakenly passed under a field named `context` or `details`)
+  would not be caught by this feature. This residual risk is accepted and left to caller
+  discipline/code review, consistent with how the existing backend logger (`backend/src/logger.ts`)
+  already relies on the same discipline for its own callers.
 
 ## Out of Scope
 

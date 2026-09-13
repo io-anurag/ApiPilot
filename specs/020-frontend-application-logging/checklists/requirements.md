@@ -52,3 +52,13 @@
   anywhere" problem only partially solved — resolved by adding FR-010a, a new acceptance scenario
   under User Story 1, SC-007, and an edge case addressing possible double-logging with FR-010.
   All checklist items still pass; no regressions.
+- `/speckit-analyze` (2026-09-15) found two issues against the completed plan/tasks: (1) FR-004
+  had no concrete enforcement mechanism or task — FR-003's primitive-type filter doesn't stop a
+  real secret expressed as a string field; resolved by adding a mechanical, name-based denylist to
+  FR-004 (new SC-008), with the residual content-based risk explicitly recorded under Assumptions
+  rather than silently assumed covered. (2) FR-010a named a specific browser API
+  (`window.onerror`/`window.onunhandledrejection`) that the plan/research deliberately implements
+  differently (`addEventListener`); resolved by rewording FR-010a and its Clarifications entry to
+  describe the capability rather than mandate a specific registration API. `plan.md`, `research.md`,
+  `data-model.md`, `contracts/client-logs-api.md`, and `tasks.md` were updated to match. All
+  checklist items still pass.

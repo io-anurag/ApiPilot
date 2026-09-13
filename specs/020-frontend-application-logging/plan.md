@@ -27,11 +27,13 @@ dependency of Express) — consistent with FR-009/SC-004.
 **Storage**: N/A for the frontend logger (console only). Backend persists forwarded entries
 through the existing `logs/backend.log` file sink (`backend/src/logger.ts`) — no new store.
 
-**Testing**: Vitest + `@testing-library/react`/jsdom on the frontend (existing convention: `vi
-.stubGlobal("fetch", …)` for network mocking, as already used in
-`frontend/tests/unit/reviewsClient.test.ts` and `frontend/tests/unit/postmanCollectionsClient
-.test.ts`); Vitest + Supertest on the backend, matching every existing `backend/src/api/*` route
-test.
+**Testing**: Vitest + jsdom on the frontend — plain unit tests exercising `logger.ts`/
+`globalErrorHandlers.ts`/the service-client modules directly (no React component rendering, so
+`@testing-library/react` is not needed for this feature's own tests), matching the existing
+`frontend/tests/unit/reviewsClient.test.ts` style; network mocking via the existing `vi
+.stubGlobal("fetch", …)` convention (also used in
+`frontend/tests/unit/postmanCollectionsClient.test.ts`). Vitest + Supertest on the backend,
+matching every existing `backend/src/api/*` route test.
 
 **Target Platform**: Browser (frontend logger, global handlers) and the existing local Node.js/
 Express backend process (ingestion endpoint) — no new runtime target.
@@ -62,7 +64,7 @@ existing service-client modules").
 | Principle | Assessment |
 |---|---|
 | IX. Separation of Concerns | Pass. Frontend logger is a standalone module; the backend route stays a thin `backend/src/api/*` router that validates and delegates to the existing logger — no business logic in the route beyond validation/adaptation. |
-| XVII. Security and Privacy by Design / XX. Observability Without Sensitive Logging | Pass. This feature exists specifically to extend XX's guarantees to the frontend: primitive-only fields (FR-003), no secrets/specs/prompts (FR-004), a dedicated small request-size limit (FR-013), local-machine-only destination (FR-012). |
+| XVII. Security and Privacy by Design / XX. Observability Without Sensitive Logging | Pass. This feature exists specifically to extend XX's guarantees to the frontend: primitive-only fields (FR-003), a mechanical credential-shaped field-name denylist enforced at both layers (FR-004/SC-008, added after `/speckit-analyze` found FR-003 alone did not cover FR-004), a dedicated small request-size limit (FR-013), local-machine-only destination (FR-012). The residual risk of sensitive content under an unrelated field name is explicitly accepted (spec.md Assumptions), not silently assumed solved. |
 | XXI. Testability at Every Boundary | Pass. FR-011 requires an injectable time source and a mockable transport; both are satisfied using patterns already established in this codebase (see research.md). |
 | XXVII. Prefer Simple Architecture | Pass. No new dependency, no new store, no new abstraction beyond one logger module and one thin route; the per-route body-size limit reuses Express's existing `entity.too.large` → 413 error mapping already present in `backend/src/app.ts`, adding no new error-handling code. |
 | XIX. Fail Safely | Pass. FR-008: a forwarding failure degrades to a local console notice; it never throws or blocks the UI. |
