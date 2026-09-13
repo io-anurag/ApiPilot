@@ -16,6 +16,20 @@
 - Q: Should fields with a declared string format (e.g., email, uuid, date-time) or pattern (regex) constraint get a dedicated invalid-format scenario, in addition to the general invalid-type scenario? → A: Yes — a dedicated invalid-format/invalid-pattern scenario is generated for any field with a declared format or pattern constraint.
 - Q: Should required path/query/header parameters receive the same full set of scenarios as request body fields, or a reduced set appropriate to how parameters actually behave? → A: Reduced, location-appropriate set — path parameters get invalid-type/invalid-enum/boundary only (no missing/null/empty, since a missing path segment is a routing concern); query/header parameters get the full set including missing-value scenarios.
 
+### Session 2026-09-14
+
+- Q: FR-001 says the system generates "a positive scenario" per operation; QA feedback asked for
+  more positive coverage of enum-constrained parameters (e.g. every declared `sort` value), not
+  just the first declared enum member. Does that require a new scenario category, or fit within
+  FR-001's existing "positive" category? → A: Fits within "positive" — no new `ScenarioCategory`
+  is introduced. FR-001 is amended so that, for every field or parameter with a declared enum
+  constraint, the baseline suite includes one additional "positive" scenario per remaining
+  declared enum value (beyond the one already covered by the FR-001 baseline scenario), each still
+  using otherwise specification-conformant values. This mirrors how FR-005/006/007 already produce
+  more than one scenario from a single requirement (boundary values) without needing a new
+  category; it does not change `ScenarioCategory`, the AI prompt vocabulary, or the candidate
+  validator, all of which key off that closed union.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Generate a Baseline Test Suite from an Analyzed Specification (Priority: P1)
@@ -39,6 +53,9 @@ review feature.
 1. **Given** an analyzed specification with a discovered operation, **When** the baseline
    suite is generated, **Then** a positive ("happy path") scenario is produced using
    specification-conformant values for that operation.
+1a. **Given** a field or parameter with a declared enum constraint of N values, **When** the
+   baseline suite is generated, **Then** N positive scenarios exist for that operation covering
+   every declared enum value, each otherwise using specification-conformant values.
 2. **Given** an operation with one or more required request body fields, including fields
    nested at any depth inside object-typed properties, **When** the baseline suite is
    generated, **Then** a missing-field scenario, a null-value scenario, and (for
@@ -167,6 +184,10 @@ retained in the generated suite.
 
 - **FR-001**: The system MUST generate a positive ("happy path") test scenario for every
   discovered API operation in the `ApiModel`, using specification-conformant values.
+- **FR-001a**: For every field or parameter with a declared enum constraint, the system MUST
+  additionally generate one "positive" scenario per remaining declared enum value (the value
+  already used by the FR-001 baseline scenario is not duplicated), so enum coverage in the
+  baseline suite is not limited to a single declared value.
 - **FR-002**: For every required request body field — including required fields nested at
   any depth inside object-typed properties — and for every required query or header
   parameter, the system MUST generate a missing-field scenario and a null-value scenario,

@@ -34,8 +34,8 @@ interface DownloadLink {
   href: string;
 }
 
-function toDownloadLinks(result: ExportResult): DownloadLink[] {
-  return artifactFiles(result).map((file) => ({
+function toDownloadLinks(result: ExportResult, specTitle: string | undefined): DownloadLink[] {
+  return artifactFiles(result, specTitle).map((file) => ({
     filename: file.filename,
     label: file.label,
     href: artifactHref(file.text, file.mimeType),
@@ -91,7 +91,7 @@ export function PostmanExportPanel({
 
     if (outcome.ok) {
       setResult(outcome.result);
-      setLinks(toDownloadLinks(outcome.result));
+      setLinks(toDownloadLinks(outcome.result, apiModel.info?.title));
       setStatus("success");
       return;
     }

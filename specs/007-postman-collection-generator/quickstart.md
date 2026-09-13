@@ -51,7 +51,11 @@ review the scenarios, accept a representative set, and use the export action on 
 
 Confirm:
 
-- One click produces `collection.json`, `environment.json`, and `README.md` (FR-022).
+- One click produces a collection, an environment, and a README (FR-022). The three downloaded
+  file names are derived from the uploaded specification's title (e.g.
+  `petstore.postman_collection.json`, `petstore.postman_environment.json`, `petstore.README.md`),
+  falling back to `collection.json`/`environment.json`/`README.md` when the specification has no
+  usable title.
 - The page reports the validation result and lists the recorded limitations (FR-014, FR-017).
 - The README states the request count, folder organization, counts by origin, and the variables to
   supply before running (FR-016).
@@ -61,7 +65,7 @@ Confirm:
 This is the manual acceptance step for SC-007; the automated suite deliberately does not depend on a
 collection runner.
 
-1. Import `collection.json` and `environment.json` into Postman.
+1. Import the downloaded collection and environment files into Postman.
 2. Select the imported environment and fill in `baseUrl` and any credential variables.
 3. Confirm every request resolves its address and no request needs a manual edit to run.
 
@@ -73,8 +77,8 @@ artifact; it never executes it, and generating it is not authorization to run it
 With a specification whose operations declare authentication, export while supplying a recognizable
 placeholder credential, then search the artifacts:
 
-- `collection.json` must contain the variable reference, never the supplied value.
-- `README.md` must name the variable and its purpose, never its value.
+- The downloaded collection file must contain the variable reference, never the supplied value.
+- The downloaded README file must name the variable and its purpose, never its value.
 - The server log for the export must contain neither the value nor any request payload (FR-025).
 
 ### 4. Confirm the empty and refusal paths

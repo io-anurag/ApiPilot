@@ -141,6 +141,24 @@ describe("PostmanExportPanel", () => {
     );
   });
 
+  it("names downloads after the specification title when one is declared (FR-022)", async () => {
+    const titledApiModel: ApiModel = {
+      ...apiModel,
+      info: { title: "Orders API", version: "1.0.0" },
+    };
+    render(<PostmanExportPanel apiModel={titledApiModel} testModel={testModel} />);
+    fireEvent.click(screen.getByRole("button", { name: /export collection/i }));
+
+    await waitFor(() => expect(screen.getByTestId("export-success")).toBeInTheDocument());
+    expect(
+      screen.getByRole("link", { name: /orders-api\.postman_collection\.json/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /orders-api\.postman_environment\.json/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /orders-api\.README\.md/ })).toBeInTheDocument();
+  });
+
   it("sends the supplied base address as an export option", async () => {
     const fetchMock = mockFetch(200, exportResult);
     vi.stubGlobal("fetch", fetchMock);
