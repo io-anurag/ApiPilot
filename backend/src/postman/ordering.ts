@@ -25,11 +25,20 @@ export function requestSortKey(key: RequestSortKey): RequestSortKey {
   return key;
 }
 
-/** Orders requests by `(path, method, category, scenario id)`, all by code unit. */
+/**
+ * `positive` sorts before every other category, so the happy-path request an engineer reads
+ * first is a working one rather than a deliberately invalid one (research.md: ordering rule).
+ */
+function categoryRank(category: string): number {
+  return category === "positive" ? 0 : 1;
+}
+
+/** Orders requests by `(path, method, positive-before-other, category, scenario id)`, all by code unit. */
 export function compareRequestSortKeys(a: RequestSortKey, b: RequestSortKey): number {
   return (
     compareCodeUnits(a.path, b.path) ||
     compareCodeUnits(a.method, b.method) ||
+    categoryRank(a.category) - categoryRank(b.category) ||
     compareCodeUnits(a.category, b.category) ||
     compareCodeUnits(a.scenarioId, b.scenarioId)
   );

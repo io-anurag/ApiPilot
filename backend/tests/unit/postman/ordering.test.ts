@@ -25,7 +25,7 @@ describe("compareCodeUnits", () => {
 });
 
 describe("requestSortKey", () => {
-  it("orders by path, then method, then category, then scenario id", () => {
+  it("orders by path, then method, then positive-before-other category, then category, then scenario id", () => {
     const keys = [
       requestSortKey({ path: "/b", method: "GET", category: "positive", scenarioId: "s1" }),
       requestSortKey({ path: "/a", method: "POST", category: "positive", scenarioId: "s2" }),
@@ -34,7 +34,16 @@ describe("requestSortKey", () => {
       requestSortKey({ path: "/a", method: "GET", category: "invalid-type", scenarioId: "s0" }),
     ];
     const ordered = [...keys].sort(compareRequestSortKeys).map((key) => key.scenarioId);
-    expect(ordered).toEqual(["s0", "s3", "s4", "s2", "s1"]);
+    expect(ordered).toEqual(["s4", "s0", "s3", "s2", "s1"]);
+  });
+
+  it("ranks positive ahead of every other category regardless of alphabetical order", () => {
+    const keys = [
+      requestSortKey({ path: "/a", method: "GET", category: "array-boundary", scenarioId: "s1" }),
+      requestSortKey({ path: "/a", method: "GET", category: "positive", scenarioId: "s2" }),
+    ];
+    const ordered = [...keys].sort(compareRequestSortKeys).map((key) => key.scenarioId);
+    expect(ordered).toEqual(["s2", "s1"]);
   });
 
   it("produces the same order regardless of input order", () => {

@@ -1,8 +1,16 @@
+/** The uploaded document's own `info` object, when it declares a usable title. */
+export interface ApiInfo {
+  title: string;
+  version: string;
+}
+
 /** Normalized, framework-independent representation of a parsed OpenAPI specification. */
 export interface ApiModel {
   operations: ApiOperation[];
   securitySchemes: Record<string, SecuritySchemeDefinition>;
   summary: AnalysisSummary;
+  /** Absent when the document declares no non-empty `info.title` — never a fabricated name. */
+  info?: ApiInfo;
 }
 
 export interface ApiOperation {

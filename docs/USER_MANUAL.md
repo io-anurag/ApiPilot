@@ -78,22 +78,22 @@ before test generation runs. Click **Continue** to proceed.
 
 ### 3.4 Deterministic Generation
 
-Click **Generate Baseline Test Suite**. ApiPilot produces, for every operation, a
-positive scenario and a set of rule-based negative/boundary scenarios. These never
+Click **Generate Baseline Test Suite**. ApiPilot produces, for every operation, one or
+two positive scenarios and a set of rule-based negative/boundary scenarios. These never
 depend on AI and are fully reproducible from the same spec. The categories are:
 
 | Category | What it tests |
 |---|---|
-| `positive` | A valid request that should succeed |
+| `positive` | A valid request that should succeed — the full happy-path request, a second happy-path request with every optional field/parameter omitted (when the operation has any), and any at-minimum/at-maximum boundary value, since all are equally schema-conformant |
 | `missing-field` | A required field omitted |
 | `null-value` | A field explicitly set to `null` |
 | `empty-value` | A field set to an empty string/array |
 | `invalid-type` | A field given the wrong JSON type |
 | `invalid-format` | A field violating its declared format (e.g. not a valid date) |
 | `invalid-enum` | A field set to a value outside its enum |
-| `numeric-boundary` | A number just below/above its min/max |
-| `string-boundary` | A string just below/above its min/max length |
-| `array-boundary` | An array just below/above its min/max item count |
+| `numeric-boundary` | A number just past its min/max (below minimum or above maximum) |
+| `string-boundary` | A string just past its min/max length (below minimum or above maximum) |
+| `array-boundary` | An array just past its min/max item count (below minimum or above maximum) |
 
 Path parameters only receive the type/format/enum/boundary variants, not
 missing/null/empty, since an omitted path parameter is a routing concern rather than a

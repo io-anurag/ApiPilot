@@ -14,6 +14,14 @@ The normalized, top-level representation of one fully processed specification.
 | `operations` | `ApiOperation[]` | Every discovered path + HTTP method combination (FR-007) |
 | `securitySchemes` | `Record<string, SecuritySchemeDefinition>` | Named security scheme definitions declared by the spec |
 | `summary` | `AnalysisSummary` | Aggregate counts and flagged ambiguities (FR-012) |
+| `info` | `ApiInfo \| undefined` | The document's own `info.title`/`info.version`, present only when `info.title` is a non-empty string — never a fabricated name (added for AP-007 collection/environment naming) |
+
+## ApiInfo
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `title` | `string` | The specification's declared `info.title`, verbatim |
+| `version` | `string` | The specification's declared `info.version`, or `""` when absent |
 
 ## ApiOperation
 

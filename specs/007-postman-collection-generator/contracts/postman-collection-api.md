@@ -51,7 +51,6 @@ rendered.
       "_postman_id": "…",
       "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
-    "variable": [{ "key": "baseUrl", "value": "" }],
     "item": [
       {
         "name": "orders",
@@ -168,8 +167,9 @@ specification content, or variable values (FR-025).
   variables retain their source workflow relationship.
 - No credential value appears in `collection`, `readme`, or any error body; supplied credential
   values appear only in `environment.values` with `type: "secret"` (FR-011, SC-003, SC-004).
-- Every `{{…}}` reference in the collection is declared in both `collection.variable` and
-  `environment.values` (FR-010).
+- Every `{{…}}` reference in the collection is declared in `environment.values` (FR-010).
+  `collection` itself carries no `variable` field — the environment artifact is the single place
+  every variable name and value is declared.
 - Every emitted check corresponds to an assertion carried by the approved scenario; no request
   carries a check the scenario did not define (FR-006, SC-005).
 - Repeating an identical request yields an identical response body (FR-018, SC-002).

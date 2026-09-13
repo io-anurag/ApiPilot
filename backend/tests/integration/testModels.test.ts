@@ -20,7 +20,15 @@ describe("POST /api/test-models", () => {
     expect(response.status).toBe(200);
     const scenarios: TestScenario[] = response.body.testModel.scenarios;
 
-    expect(scenariosFor(scenarios, "positive")).toHaveLength(1);
+    // Base happy-path plus a second, minimal happy-path with the optional "address" object
+    // omitted entirely (it has nothing else optional to strip once "address" itself is gone).
+    const positives = scenariosFor(scenarios, "positive");
+    expect(positives).toHaveLength(2);
+    const minimalPositive = positives.find(
+      (s) => s.provenance.source === "RULE" && s.provenance.rule === "minimal-positive-scenario",
+    );
+    expect(minimalPositive).toBeDefined();
+    expect((minimalPositive!.request.body as Record<string, unknown>).address).toBeUndefined();
 
     // Top-level required field "name".
     expect(scenariosFor(scenarios, "missing-field", "name")).toHaveLength(1);
@@ -59,11 +67,22 @@ describe("POST /api/test-models", () => {
     // The "at-minimum" boundary variant for quantity/label/tags is identical to the
     // conformant base value used by the positive scenario, so it legitimately dedups
     // into the positive scenario rather than appearing as its own entry (FR-012).
-    expect(scenariosFor(scenarios, "numeric-boundary", "quantity")).toHaveLength(3);
-    expect(scenariosFor(scenarios, "string-boundary", "label")).toHaveLength(3);
+    // The "at-maximum" variant is likewise schema-conformant (just not identical to the
+    // base value), so it is categorized "positive" rather than under the boundary category
+    // (boundaryMutation.ts's categoryFor) — only the past-the-boundary, invalid variants
+    // (below-minimum/above-maximum) remain under the boundary category.
+    expect(scenariosFor(scenarios, "numeric-boundary", "quantity")).toHaveLength(2);
+    expect(scenariosFor(scenarios, "string-boundary", "label")).toHaveLength(2);
     // "tags" is also required, so its "below-minimum" (empty array) boundary variant
     // additionally dedups into the required-field "empty-value" scenario (FR-012).
-    expect(scenariosFor(scenarios, "array-boundary", "tags")).toHaveLength(2);
+    expect(scenariosFor(scenarios, "array-boundary", "tags")).toHaveLength(1);
+    expect(scenariosFor(scenarios, "positive", "quantity")).toHaveLength(1);
+    expect(scenariosFor(scenarios, "positive", "label")).toHaveLength(1);
+    expect(scenariosFor(scenarios, "positive", "tags")).toHaveLength(1);
+
+    // Base happy-path, minimal happy-path (label/status omitted, both optional), and the
+    // three reclassified at-maximum variants above.
+    expect(scenariosFor(scenarios, "positive")).toHaveLength(5);
 
     const positive = scenariosFor(scenarios, "positive")[0];
     expect(positive.assertions).toEqual([{ type: "status-code", expectedStatusCode: "400" }]);

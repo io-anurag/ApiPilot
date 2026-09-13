@@ -113,6 +113,26 @@ describe("generateCollection", () => {
     expect(named.result.collection.item).toEqual(unnamed.result.collection.item);
   });
 
+  it("defaults the collection and environment name to the uploaded specification's info.title", () => {
+    const outcome = generateCollection(
+      { ...minimalApiModel, info: { title: "Widgets API", version: "2.0.0" } },
+      minimalTestModel,
+    );
+    if (!outcome.ok) throw new Error("expected a successful export");
+    expect(outcome.result.collection.info.name).toBe("Widgets API");
+    expect(outcome.result.environment.name).toBe("Widgets API environment");
+  });
+
+  it("prefers an explicitly supplied collection name over the specification's info.title", () => {
+    const outcome = generateCollection(
+      { ...minimalApiModel, info: { title: "Widgets API", version: "2.0.0" } },
+      minimalTestModel,
+      { collectionName: "Custom name" },
+    );
+    if (!outcome.ok) throw new Error("expected a successful export");
+    expect(outcome.result.collection.info.name).toBe("Custom name");
+  });
+
   describe("automatic workflow chaining (specs/019-auto-workflow-chaining)", () => {
     const testModel = testModelOf(ordersListScenario, ordersDeleteScenario);
     const automaticContext: WorkflowExportContext = {

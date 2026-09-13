@@ -24,7 +24,7 @@ rejects the export otherwise rather than assuming.
 | ----------------- | ---------------------------------------------- | ------------------------------------------------------------ |
 | `baseUrl`         | Address the engineer will run against          | Optional; when absent the variable is declared with an empty value |
 | `variableValues`  | Values for declared variables, by variable name | Optional; only names the collection actually references are accepted |
-| `collectionName`  | Name for the generated collection              | Optional; defaults to a deterministic name; never affects request content |
+| `collectionName`  | Name for the generated collection              | Optional; defaults to the uploaded specification's `info.title` when present, else a fixed deterministic name; never affects request content |
 
 `variableValues` never reaches the collection artifact. Values for variables marked `secret` are
 written only into the environment artifact (FR-011).
@@ -52,9 +52,13 @@ emits; the generator never produces a field outside this subset.
 - `info`: name, a content-derived `_postman_id`, and the v2.1.0 schema identifier.
 - `auth`: collection-level auth when every operation shares one mapped requirement; otherwise absent
   and applied per request.
-- `variable`: the declared `ArtifactVariable` names with empty values, so the collection is importable
-  and runnable without the environment file present.
 - `item`: an ordered list of `PostmanFolder`.
+
+No collection-level `variable` declaration: the environment artifact (`PostmanEnvironment`) is the
+single place every `ArtifactVariable` name and value is declared, so an engineer never has to
+reconcile two lists of the same names. Importing the collection without also selecting the
+companion environment leaves its `{{…}}` references unresolved in Postman, as with any Postman
+collection whose variables live only in an environment.
 
 ### PostmanFolder
 

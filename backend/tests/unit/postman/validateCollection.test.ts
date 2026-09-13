@@ -11,10 +11,6 @@ const declared: ArtifactVariable[] = [
 function validCollection(): PostmanCollection {
   return {
     info: { name: "Suite", _postman_id: "collection-id", schema: POSTMAN_COLLECTION_SCHEMA },
-    variable: [
-      { key: "baseUrl", value: "" },
-      { key: "token", value: "" },
-    ],
     item: [
       {
         name: "orders",
@@ -132,20 +128,6 @@ describe("validateCollection", () => {
       collection.item[0].item[0].request.url.raw = "{{baseUrl}}/orders/{{orderId}}";
     });
     expect(problems).toContainEqual(expect.stringContaining('undeclared variable "orderId"'));
-  });
-
-  it("rejects a declared variable that is missing from the collection variable list", () => {
-    const problems = problemsFor((collection) => {
-      collection.variable = [{ key: "baseUrl", value: "" }];
-    });
-    expect(problems).toContainEqual(expect.stringContaining('missing the declared variable "token"'));
-  });
-
-  it("rejects a value carried in the collection variable list", () => {
-    const problems = problemsFor((collection) => {
-      collection.variable[0] = { key: "baseUrl", value: "https://qa.example" };
-    });
-    expect(problems).toContainEqual(expect.stringContaining("must be empty"));
   });
 
   it("rejects duplicate item ids", () => {

@@ -5,6 +5,7 @@ import { arrayBoundaryScenarios } from "./rules/arrayBoundaryScenarios";
 import { invalidEnumScenarios } from "./rules/invalidEnumScenarios";
 import { invalidFormatScenarios } from "./rules/invalidFormatScenarios";
 import { invalidTypeScenarios } from "./rules/invalidTypeScenarios";
+import { minimalPositiveScenario } from "./rules/minimalPositiveScenario";
 import { numericBoundaryScenarios } from "./rules/numericBoundaryScenarios";
 import { positiveScenario } from "./rules/positiveScenario";
 import { requiredFieldScenarios } from "./rules/requiredFieldScenarios";
@@ -14,6 +15,7 @@ const logger = createLogger("testDesign.generateTestModel");
 
 const RULES: ((operation: ApiOperation) => TestScenario[])[] = [
   positiveScenario,
+  minimalPositiveScenario,
   requiredFieldScenarios,
   invalidTypeScenarios,
   invalidFormatScenarios,

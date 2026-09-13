@@ -72,7 +72,6 @@ The existing response fields remain. `summary` adds workflow counts:
 {
   "collection": {
     "info": { "name": "Orders API tests", "_postman_id": "…", "schema": "…" },
-    "variable": [{ "key": "baseUrl", "value": "" }],
     "item": [
       {
         "name": "Workflow: workflow-1",

@@ -146,7 +146,13 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
       const itemOutcome = await runSingleItem({
         item,
         collectionAuth: outcome.result.collection.auth,
-        declaredVariables: outcome.result.collection.variable,
+        // The exported collection no longer carries its own `variable` list (the environment
+        // artifact is the single source of declared names); Newman only needs the names here,
+        // since real values already flow in through `environment` below.
+        declaredVariables: outcome.result.environment.values.map((value) => ({
+          key: value.key,
+          value: "",
+        })),
         environment: environmentRecord,
       });
       environmentRecord = itemOutcome.environment;

@@ -17,6 +17,7 @@ describe("buildApiModel", () => {
 
     expect(model.summary.operationCount).toBe(3);
     expect(model.summary.securitySchemeCount).toBe(1);
+    expect(model.info).toEqual({ title: "Pet Store", version: "1.0.0" });
     expect(model.securitySchemes.ApiKeyAuth).toEqual({
       type: "apiKey",
       scheme: undefined,
@@ -65,5 +66,15 @@ describe("buildApiModel", () => {
     const petSchema = createPet?.requestBody?.contentTypes["application/json"];
     expect(petSchema?.properties.name).toEqual(expect.objectContaining({ minLength: 1, maxLength: 100 }));
     expect(petSchema?.properties.photoUrls).toEqual(expect.objectContaining({ minItems: 1, maxItems: 5 }));
+  });
+
+  it("leaves info undefined rather than fabricating a title when the document declares none", () => {
+    const model = buildApiModel({ paths: {} }, []);
+    expect(model.info).toBeUndefined();
+  });
+
+  it("leaves info undefined when info.title is present but blank", () => {
+    const model = buildApiModel({ info: { title: "   " }, paths: {} }, []);
+    expect(model.info).toBeUndefined();
   });
 });

@@ -22,7 +22,11 @@ export interface NewmanItemRunInput {
   item: PostmanRequestItem;
   /** The collection-level shared auth, if `generateCollection()` hoisted one for this run. */
   collectionAuth: PostmanAuth | undefined;
-  /** The collection's declared variables, with real static values already baked in (research.md D1). */
+  /**
+   * The names of every variable the run's collection/environment declares (values left empty
+   * here; real values are supplied separately through `environment` below, and Newman resolves
+   * environment scope over collection scope) — research.md D1.
+   */
   declaredVariables: PostmanCollectionVariable[];
   /**
    * Accumulated environment values from prior items in this run (workflow handoffs,

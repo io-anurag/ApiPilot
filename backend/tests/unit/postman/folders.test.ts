@@ -95,12 +95,12 @@ describe("groupAndName", () => {
     expect(folders).toEqual([]);
   });
 
-  it("orders requests within a folder by path, method, category, then scenario id", () => {
+  it("orders requests within a folder by path, method, positive-first category, then scenario id", () => {
     const listOrders = exportApiModel.operations[1];
     const folders = groupAndName([
       { scenario: scenario("s3", { operationPath: "/orders", category: "positive" }), operation: listOrders },
       { scenario: scenario("s1", { operationPath: "/orders", category: "invalid-type" }), operation: listOrders },
     ]);
-    expect(folders[0].entries.map((entry) => entry.scenario.id)).toEqual(["s1", "s3"]);
+    expect(folders[0].entries.map((entry) => entry.scenario.id)).toEqual(["s3", "s1"]);
   });
 });
