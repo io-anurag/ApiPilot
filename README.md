@@ -260,6 +260,7 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 
 ## Documentation map
 
+- [User manual](docs/USER_MANUAL.md)
 - [Architecture reference](docs/architecture.md)
 - [Product roadmap and implementation status](specs/ROADMAP.md)
 - [Project constitution](specs/constitution.md)
