@@ -110,4 +110,44 @@ describe("reviewsClient", () => {
   it("returns undefined snapshot when no prior workspace has been observed", () => {
     expect(toReviewSnapshot(null)).toBeUndefined();
   });
+
+  it("logs a structured entry when the backend returns a non-2xx response (FR-010)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "invalid_test_scenario_review_request", message: "bad request" }),
+      }),
+    );
+
+    await loadReviewWorkspace(apiModel, testModel);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatchObject({
+      level: "error",
+      component: "reviewsClient",
+      operation: "loadReviewWorkspace",
+      errorCategory: "invalid_test_scenario_review_request",
+      statusCode: 400,
+    });
+    errorSpy.mockRestore();
+  });
+
+  it("logs a structured entry when fetch throws (FR-010)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connection refused")));
+
+    await loadReviewWorkspace(apiModel, testModel);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatchObject({
+      level: "error",
+      component: "reviewsClient",
+      operation: "loadReviewWorkspace",
+      errorCategory: "network_error",
+    });
+    errorSpy.mockRestore();
+  });
 });

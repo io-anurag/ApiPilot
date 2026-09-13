@@ -5,8 +5,11 @@ import type {
   ReviewUpdateRequest,
   TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
+import { createLogger } from "../logger";
 
 /** One client for every endpoint in contracts/test-generation-workflow-api.md. */
+
+const logger = createLogger("testGenerationWorkflowClient");
 
 export type WorkflowResult =
   | { ok: true; workflow: TestGenerationWorkflow }
@@ -16,12 +19,14 @@ export type WorkflowOrNoneResult =
   | { ok: true; workflow: TestGenerationWorkflow | null; sessionExpired?: boolean }
   | { ok: false; error: string; message: string };
 
-async function toWorkflowResult(response: Response): Promise<WorkflowResult> {
+async function toWorkflowResult(response: Response, operation: string): Promise<WorkflowResult> {
   const parsed = await response.json().catch(() => null);
   if (!response.ok) {
+    const errorCategory = (parsed?.error as string) ?? "unknown_error";
+    logger.error("request_failed", { operation, errorCategory, statusCode: response.status });
     return {
       ok: false,
-      error: (parsed?.error as string) ?? "unknown_error",
+      error: errorCategory,
       message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
       ...(Array.isArray(parsed?.problems) ? { problems: parsed.problems as string[] } : {}),
     };
@@ -37,15 +42,16 @@ async function get(path: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-async function postJson(path: string, body?: unknown): Promise<WorkflowResult> {
+async function postJson(path: string, operation: string, body?: unknown): Promise<WorkflowResult> {
   try {
     const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     });
-    return await toWorkflowResult(response);
+    return await toWorkflowResult(response, operation);
   } catch (err) {
+    logger.error("network_error", { operation, errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }
@@ -62,9 +68,15 @@ export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
     if (response.status === 204) return { ok: true, workflow: null };
     const parsed = await response.json().catch(() => null);
     if (!response.ok) {
+      const errorCategory = (parsed?.error as string) ?? "unknown_error";
+      logger.error("request_failed", {
+        operation: "fetchCurrentWorkflow",
+        errorCategory,
+        statusCode: response.status,
+      });
       return {
         ok: false,
-        error: (parsed?.error as string) ?? "unknown_error",
+        error: errorCategory,
         message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
       };
     }
@@ -74,6 +86,7 @@ export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
       ...(parsed?.sessionExpired ? { sessionExpired: true as const } : {}),
     };
   } catch (err) {
+    logger.error("network_error", { operation: "fetchCurrentWorkflow", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }
@@ -87,22 +100,23 @@ export async function startWorkflow(file: File, discardExisting = false): Promis
       `/api/test-generation-workflow${discardExisting ? "?discardExisting=true" : ""}`,
       { method: "POST", body: formData },
     );
-    return await toWorkflowResult(response);
+    return await toWorkflowResult(response, "startWorkflow");
   } catch (err) {
+    logger.error("network_error", { operation: "startWorkflow", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Upload failed" };
   }
 }
 
 export function continueApiReview(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/api-review/continue");
+  return postJson("/api/test-generation-workflow/api-review/continue", "continueApiReview");
 }
 
 export function runDeterministicGeneration(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/deterministic-generation");
+  return postJson("/api/test-generation-workflow/deterministic-generation", "runDeterministicGeneration");
 }
 
 export function runAiEnhancement(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/ai-enhancement");
+  return postJson("/api/test-generation-workflow/ai-enhancement", "runAiEnhancement");
 }
 
 /**
@@ -112,7 +126,7 @@ export function runAiEnhancement(): Promise<WorkflowResult> {
  * through the existing status poll.
  */
 export function cancelAiEnhancement(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/ai-enhancement/cancel");
+  return postJson("/api/test-generation-workflow/ai-enhancement/cancel", "cancelAiEnhancement");
 }
 
 /**
@@ -121,7 +135,9 @@ export function cancelAiEnhancement(): Promise<WorkflowResult> {
  * has settled (succeeded or failed again) — this endpoint does not poll or stream.
  */
 export function retryAiEnhancementBatch(batchIndex: number): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/ai-enhancement/retry-batch", { batchIndex });
+  return postJson("/api/test-generation-workflow/ai-enhancement/retry-batch", "retryAiEnhancementBatch", {
+    batchIndex,
+  });
 }
 
 export type ScenarioDecisionOutcomeResult =
@@ -134,12 +150,21 @@ export async function applyScenarioDecisions(updates: ReviewUpdateRequest[]): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ updates }),
   }).catch(() => null);
-  if (!response) return { ok: false, error: "network_error", message: "Request failed" };
+  if (!response) {
+    logger.error("network_error", { operation: "applyScenarioDecisions", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: "Request failed" };
+  }
   const parsed = await response.json().catch(() => null);
   if (!response.ok) {
+    const errorCategory = (parsed?.error as string) ?? "unknown_error";
+    logger.error("request_failed", {
+      operation: "applyScenarioDecisions",
+      errorCategory,
+      statusCode: response.status,
+    });
     return {
       ok: false,
-      error: (parsed?.error as string) ?? "unknown_error",
+      error: errorCategory,
       message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
     };
   }
@@ -150,18 +175,23 @@ export type ScenarioActionResult =
   | { ok: true; workflow: TestGenerationWorkflow; outcome: ReviewUpdateOutcome }
   | { ok: false; error: string; message: string };
 
-async function postScenarioAction(path: string, body: unknown): Promise<ScenarioActionResult> {
+async function postScenarioAction(path: string, operation: string, body: unknown): Promise<ScenarioActionResult> {
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).catch(() => null);
-  if (!response) return { ok: false, error: "network_error", message: "Request failed" };
+  if (!response) {
+    logger.error("network_error", { operation, errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: "Request failed" };
+  }
   const parsed = await response.json().catch(() => null);
   if (!response.ok) {
+    const errorCategory = (parsed?.error as string) ?? "unknown_error";
+    logger.error("request_failed", { operation, errorCategory, statusCode: response.status });
     return {
       ok: false,
-      error: (parsed?.error as string) ?? "unknown_error",
+      error: errorCategory,
       message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
     };
   }
@@ -173,27 +203,36 @@ export function editScenario(
   revision: number,
   edit: ReviewEditContent,
 ): Promise<ScenarioActionResult> {
-  return postScenarioAction("/api/test-generation-workflow/scenario-review/edit", { scenarioId, revision, edit });
+  return postScenarioAction("/api/test-generation-workflow/scenario-review/edit", "editScenario", {
+    scenarioId,
+    revision,
+    edit,
+  });
 }
 
 export function regenerateScenario(scenarioId: string, revision: number): Promise<ScenarioActionResult> {
-  return postScenarioAction("/api/test-generation-workflow/scenario-review/regenerate", { scenarioId, revision });
+  return postScenarioAction("/api/test-generation-workflow/scenario-review/regenerate", "regenerateScenario", {
+    scenarioId,
+    revision,
+  });
 }
 
 export function finalizeScenarioReview(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/scenario-review/finalize");
+  return postJson("/api/test-generation-workflow/scenario-review/finalize", "finalizeScenarioReview");
 }
 
 export function recordWorkflowDecisions(
   decisions: { workflowId: string; state: "approved" | "rejected"; reason?: string }[],
 ): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/workflow-review/decisions", { decisions });
+  return postJson("/api/test-generation-workflow/workflow-review/decisions", "recordWorkflowDecisions", {
+    decisions,
+  });
 }
 
 export function continueWorkflowReview(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/workflow-review/continue");
+  return postJson("/api/test-generation-workflow/workflow-review/continue", "continueWorkflowReview");
 }
 
 export function generatePostmanCollection(options?: ExportOptions): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/postman-generation", { options });
+  return postJson("/api/test-generation-workflow/postman-generation", "generatePostmanCollection", { options });
 }
