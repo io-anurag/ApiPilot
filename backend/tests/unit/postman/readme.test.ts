@@ -1,5 +1,7 @@
+import type { ExportResult, GenerationLimitation } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { generateCollection } from "../../../src/postman/generateCollection";
+import { renderReadme } from "../../../src/postman/readme";
 import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
 
 function readmeFor(options = {}): string {
@@ -70,6 +72,51 @@ describe("accompanying document", () => {
 
   it("renders identically for identical input", () => {
     expect(readmeFor()).toBe(readmeFor());
+  });
+
+  it("lists a limitation recurring across many rendered occurrences once, with an affected-request count", () => {
+    const repeated: GenerationLimitation = {
+      kind: "unresolved-path-parameter",
+      scenarioId: "scenario-1",
+      location: "GET /customers/{id}",
+      message:
+        'The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in.',
+    };
+    const result: Omit<ExportResult, "readme"> = {
+      collection: {
+        info: {
+          name: "Suite",
+          _postman_id: "id",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        variable: [{ key: "baseUrl", value: "" }],
+        item: [],
+      },
+      environment: {
+        name: "Suite environment",
+        _postman_variable_scope: "environment",
+        values: [],
+      },
+      validation: { valid: true, problems: [] },
+      limitations: [repeated, repeated, repeated],
+      summary: {
+        requestCount: 3,
+        folderCount: 0,
+        byProvenance: { RULE: 3, AI: 0 },
+        workflowCount: 3,
+        workflowRequestCount: 3,
+        standaloneRequestCount: 0,
+        workflowVariableCount: 0,
+        unsupportedWorkflowCount: 0,
+        omittedWorkflowCount: 0,
+      },
+    };
+    const readme = renderReadme(result, []);
+    expect(readme).toContain("Path parameters with no approved value (3)");
+    expect(readme).toContain(
+      '`GET /customers/{id}` (scenario-1): The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in. — affects 3 requests',
+    );
+    expect(readme.match(/scenario-1/g)).toHaveLength(1);
   });
 
   it("reports no limitations plainly when everything was expressible", () => {

@@ -593,9 +593,17 @@ export class LocalProvider implements AIProvider {
       });
       logger.info("load_success", { modelId: this.config.modelId });
       return engine;
-    } catch {
+    } catch (error) {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
-      // automatically, but surface a visible (never silent) notice (FR-008).
+      // automatically, but surface a visible (never silent) notice (FR-008). The readiness
+      // `reason` below stays a generic client-facing message; log the engine-load failure's
+      // category here (server-side only, matching this codebase's logger.error convention
+      // elsewhere — never a message or stack trace) so a DirectML/CUDA/WebGPU failure is at
+      // least diagnosable by category instead of silently discarded.
+      logger.error("accelerator_load_failed", {
+        modelId: this.config.modelId,
+        errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      });
       const engine = await this.loadEngine(
         this.config,
         "cpu",

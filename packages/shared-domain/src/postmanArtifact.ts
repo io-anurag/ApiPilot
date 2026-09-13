@@ -176,6 +176,53 @@ export interface GenerationLimitation {
   message: string;
 }
 
+/**
+ * One distinct known-limitation case, with the number of generated requests it affects. The same
+ * underlying gap (e.g. an approved scenario with no value for a given path parameter) recurs once
+ * per rendered occurrence — once per workflow step that reuses the scenario, for instance — so
+ * without aggregation the accompanying document and review UI repeat an identical line once per
+ * occurrence. `occurrences` preserves that magnitude in one line instead.
+ */
+export interface AggregatedLimitation {
+  kind: GenerationLimitationKind;
+  scenarioId?: string;
+  location: string;
+  message: string;
+  occurrences: number;
+}
+
+/**
+ * Collapses limitations that share a kind, location, scenario, and message into one entry with an
+ * occurrence count, preserving the order each distinct case first appeared. Every case is still
+ * reported (FR-017); only the exact-duplicate repetition across occurrences is removed.
+ */
+export function aggregateLimitations(
+  limitations: GenerationLimitation[],
+): AggregatedLimitation[] {
+  const byKey = new Map<string, AggregatedLimitation>();
+  for (const limitation of limitations) {
+    const key = JSON.stringify([
+      limitation.kind,
+      limitation.location,
+      limitation.scenarioId ?? "",
+      limitation.message,
+    ]);
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.occurrences += 1;
+      continue;
+    }
+    byKey.set(key, {
+      kind: limitation.kind,
+      scenarioId: limitation.scenarioId,
+      location: limitation.location,
+      message: limitation.message,
+      occurrences: 1,
+    });
+  }
+  return [...byKey.values()];
+}
+
 /** Explicit workflow-review input at the artifact boundary. */
 export interface WorkflowExportContext {
   workflows: IntegrationWorkflow[];

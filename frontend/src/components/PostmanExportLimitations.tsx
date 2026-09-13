@@ -1,4 +1,4 @@
-import type { GenerationLimitation } from "@apipilot/shared-domain";
+import { aggregateLimitations, type GenerationLimitation } from "@apipilot/shared-domain";
 
 /** Human-readable headings for each recorded gap, matching the accompanying document. */
 const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
@@ -56,17 +56,21 @@ export function PostmanExportLimitations({
       </p>
       {kinds.map((kind) => {
         const forKind = limitations.filter((limitation) => limitation.kind === kind);
+        const aggregated = aggregateLimitations(forKind);
         return (
           <div key={kind} data-testid={`export-limitation-${kind}`}>
             <h5 className="text-xs font-medium uppercase tracking-wide text-warning-700">
               {LIMITATION_HEADINGS[kind]} ({forKind.length})
             </h5>
             <ul className="mt-1 ml-4 list-disc text-sm text-slate-700">
-              {forKind.map((limitation, index) => (
+              {aggregated.map((limitation, index) => (
                 <li key={`${limitation.location}-${limitation.scenarioId ?? index}`}>
                   <code className="font-mono text-xs">{limitation.location}</code>
                   {limitation.scenarioId ? ` (${limitation.scenarioId})` : ""}:{" "}
                   {limitation.message}
+                  {limitation.occurrences > 1
+                    ? ` — affects ${limitation.occurrences} requests`
+                    : ""}
                 </li>
               ))}
             </ul>
