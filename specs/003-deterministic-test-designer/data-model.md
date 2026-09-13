@@ -106,3 +106,12 @@ A single deterministic test case.
   `targetLocation: "path"` field (FR-009 / research.md).
 - `"numeric-boundary"`/`"string-boundary"`/`"array-boundary"` scenarios MUST NOT be
   generated for a field/parameter lacking the corresponding declared constraint (FR-015).
+  These categories denote only the past-the-boundary (invalid) variant of each rule; the
+  at-boundary variant (e.g. `"numeric-boundary-at-maximum"`) is schema-conformant by
+  definition and therefore carries category `"positive"` instead, still traceable to its
+  originating rule through `Provenance.rule` (see `boundaryMutation.ts`'s `categoryFor`).
+- A second positive scenario ("minimal-positive-scenario") MAY be generated per operation
+  when it has at least one optional body field or optional query/header parameter, using
+  only the fields/parameters the specification requires; it is omitted when there is
+  nothing optional to remove, since it would otherwise be identical to the base positive
+  scenario.

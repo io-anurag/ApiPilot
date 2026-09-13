@@ -143,11 +143,16 @@ export interface PostmanCollectionVariable {
   value: string;
 }
 
-/** The subset of the collection format ApiPilot emits; nothing outside it is generated. */
+/**
+ * The subset of the collection format ApiPilot emits; nothing outside it is generated.
+ *
+ * Deliberately carries no collection-level `variable` declaration: the environment artifact
+ * (`PostmanEnvironment`) is the single place every variable name and value is declared, so an
+ * engineer never has to reconcile two lists of the same names.
+ */
 export interface PostmanCollection {
   info: PostmanInfo;
   auth?: PostmanAuth;
-  variable: PostmanCollectionVariable[];
   item: PostmanFolder[];
 }
 

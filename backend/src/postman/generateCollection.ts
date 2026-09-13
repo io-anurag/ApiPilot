@@ -384,7 +384,10 @@ export function generateCollection(
   }
 
   const declaredVariables = dedupeVariables(variables);
-  const collectionName = options.collectionName ?? DEFAULT_COLLECTION_NAME;
+  // Explicit engineer choice wins; otherwise the uploaded specification's own `info.title` names
+  // the export, so a collection/environment reads as "Orders API" rather than a generic default —
+  // falling back to the generic default only when the specification declares no usable title.
+  const collectionName = options.collectionName ?? apiModel.info?.title ?? DEFAULT_COLLECTION_NAME;
 
   // A supplied value for a variable the collection does not reference is refused rather than
   // silently ignored, so the engineer learns the value would have had no effect.
@@ -419,9 +422,9 @@ export function generateCollection(
       schema: POSTMAN_COLLECTION_SCHEMA,
     },
     ...(sharedAuth ? { auth: sharedAuth } : {}),
-    // Declared with empty values so the collection imports and runs without the environment
-    // file present, and so no value ever lives in the collection artifact (FR-011).
-    variable: declaredVariables.map((variable) => ({ key: variable.name, value: "" })),
+    // No collection-level `variable` declaration: the environment artifact is the single place
+    // every variable name and value is declared (FR-010), so the two artifacts never carry two
+    // separate lists of the same names.
     item: folders,
   };
 

@@ -93,7 +93,7 @@ The existing response fields remain. `summary` adds one field:
 
 ```json
 {
-  "collection": { "info": {}, "variable": [], "item": [] },
+  "collection": { "info": {}, "item": [] },
   "environment": { "name": "Orders API tests environment", "values": [] },
   "readme": "…",
   "validation": { "valid": true, "problems": [] },

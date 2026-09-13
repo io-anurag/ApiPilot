@@ -719,7 +719,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         return;
       }
 
-      const missing = missingVariableValues(outcome.result.collection.variable, environment.variableValues);
+      const missing = missingVariableValues(outcome.result.environment.values, environment.variableValues);
       if (missing.length > 0) {
         logRequestFailed(req, startedAt, 400, "missing_variable_values");
         res.status(400).json({

@@ -58,6 +58,38 @@ export function buildConformantRequest(operation: ApiOperation): GeneratedReques
   return request;
 }
 
+/** True when `operation` has at least one optional body field or optional query/header parameter that `buildMinimalConformantRequest` can omit. */
+export function hasOmittableOptionalInput(operation: ApiOperation): boolean {
+  const hasOptionalParameter = operation.parameters.some(
+    (parameter) => !parameter.required && (parameter.location === "query" || parameter.location === "header"),
+  );
+  if (hasOptionalParameter) return true;
+  const bodySchema = primaryRequestBodySchema(operation);
+  if (!bodySchema) return false;
+  for (const field of walkFields(bodySchema)) {
+    if (!field.required) return true;
+  }
+  return false;
+}
+
+/** Builds a specification-conformant request with every optional body field and optional query/header parameter omitted, leaving only what the specification requires (used by `minimalPositiveScenario`). */
+export function buildMinimalConformantRequest(operation: ApiOperation): GeneratedRequest {
+  const request = buildConformantRequest(operation);
+  for (const parameter of operation.parameters) {
+    if (parameter.required) continue;
+    if (parameter.location === "query") delete request.queryParameters[parameter.name];
+    else if (parameter.location === "header") delete request.headers[parameter.name];
+  }
+  const bodySchema = primaryRequestBodySchema(operation);
+  if (bodySchema) {
+    for (const field of walkFields(bodySchema)) {
+      if (field.required) continue;
+      request.body = deleteAtPath(request.body, field.path);
+    }
+  }
+  return request;
+}
+
 /** Deep-clones a GeneratedRequest so rule modules can mutate a single field without affecting the base. */
 export function cloneRequest(request: GeneratedRequest): GeneratedRequest {
   return structuredClone(request);

@@ -75,13 +75,11 @@ describe("environment artifact within a full export", () => {
     expect(outcome.failure.message).toContain("notAVariable");
   });
 
-  it("declares collection variables with empty values so no value lives in the collection", () => {
+  it("declares no collection-level variable list; the environment is the only declaration", () => {
     const outcome = generateCollection(exportApiModel, approvedTestModel, {
       baseUrl: "https://qa.internal.example",
     });
     if (!outcome.ok) throw new Error("expected a successful export");
-    expect(outcome.result.collection.variable.every((variable) => variable.value === "")).toBe(
-      true,
-    );
+    expect((outcome.result.collection as Record<string, unknown>).variable).toBeUndefined();
   });
 });

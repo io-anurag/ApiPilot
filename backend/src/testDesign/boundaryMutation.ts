@@ -18,13 +18,26 @@ export interface BoundaryVariant {
   outcome: "valid" | "invalid";
 }
 
-/** Configures `generateBoundaryScenarios` for one boundary rule (numeric/string/array): its category, rule-name prefix, description builder, and variant source. */
+/**
+ * Configures `generateBoundaryScenarios` for one boundary rule (numeric/string/array): its
+ * rule-name prefix, description builder, and variant source.
+ *
+ * `category` applies only to "invalid" variants (past the boundary): an "at-boundary" value is
+ * schema-conformant by definition, so those variants are categorized as `"positive"` instead
+ * (see `assertionsFor`/the `buildScenario` call sites below) — the rule name (e.g.
+ * `"numeric-boundary-at-maximum"`) still records which boundary produced it.
+ */
 export interface BoundaryMutationRuleOptions {
   category: ScenarioCategory;
   rulePrefix: string;
   describe: (targetDescription: string, key: string) => string;
   /** Returns the applicable boundary variants for `schema`, or an empty array when no basis exists (FR-015). */
   variantsFor: (schema: SchemaConstraint) => BoundaryVariant[];
+}
+
+/** "Valid" (at-boundary) variants are schema-conformant, so they are positive scenarios; only past-the-boundary variants keep the rule's negative boundary category. */
+function categoryFor(options: BoundaryMutationRuleOptions, outcome: "valid" | "invalid"): ScenarioCategory {
+  return outcome === "valid" ? "positive" : options.category;
 }
 
 type RequestBucket = "pathParameters" | "queryParameters" | "headers";
@@ -57,7 +70,7 @@ export function generateBoundaryScenarios(
         scenarios.push(
           buildScenario({
             operation,
-            category: options.category,
+            category: categoryFor(options, variant.outcome),
             targetLocation: "body",
             targetField: field.path,
             request,
@@ -79,7 +92,7 @@ export function generateBoundaryScenarios(
       scenarios.push(
         buildScenario({
           operation,
-          category: options.category,
+          category: categoryFor(options, variant.outcome),
           targetLocation: parameter.location as "path" | "query" | "header",
           targetField: parameter.name,
           request,

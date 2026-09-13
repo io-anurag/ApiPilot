@@ -153,20 +153,6 @@ export function validateCollection(
     problems.push("info.schema must name the v2.1.0 collection format");
   }
 
-  const declaredKeys = collection.variable.map((variable) => variable.key);
-  for (const name of declared) {
-    if (!declaredKeys.includes(name)) {
-      problems.push(`collection.variable is missing the declared variable "${name}"`);
-    }
-  }
-  for (const variable of collection.variable) {
-    if (variable.value !== "") {
-      problems.push(
-        `collection.variable["${variable.key}"].value must be empty; values belong in the environment`,
-      );
-    }
-  }
-
   const folderNames = collection.item.map((folder) => folder.name);
   for (let index = 1; index < folderNames.length; index += 1) {
     if (compareCodeUnits(folderNames[index - 1], folderNames[index]) >= 0) {

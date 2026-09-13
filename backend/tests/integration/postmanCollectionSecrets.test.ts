@@ -52,23 +52,20 @@ describe(`${ENDPOINT} secret handling`, () => {
     });
   });
 
-  it("declares every variable the collection references in both artifacts", async () => {
+  it("declares every variable the collection references in the environment, and no collection-level variable list", async () => {
     const response = await exportWithValues();
     const referenced = new Set(
       [...JSON.stringify(response.body.collection).matchAll(/\{\{([^}"]+)\}\}/g)].map(
         (match) => match[1],
       ),
     );
-    const inCollection = new Set(
-      response.body.collection.variable.map((variable: { key: string }) => variable.key),
-    );
     const inEnvironment = new Set(
       response.body.environment.values.map((value: { key: string }) => value.key),
     );
     for (const name of referenced) {
-      expect(inCollection).toContain(name);
       expect(inEnvironment).toContain(name);
     }
+    expect(response.body.collection.variable).toBeUndefined();
   });
 
   it("replaces a credential carried by an approved request with a variable reference", async () => {

@@ -78,3 +78,18 @@ describe("generateTestModel — construct-level, not operation-level, issue skip
     expect(testModel.scenarios).toEqual([]);
   });
 });
+
+describe("generateTestModel — minimal-positive-scenario rule", () => {
+  it("skips the minimal-positive scenario when the operation has nothing optional to omit", () => {
+    // operationWithRequiredQueryParam has only required parameters and no request body, so
+    // there is nothing for buildMinimalConformantRequest to strip: generating a second
+    // "positive" scenario here would just duplicate the base one.
+    const testModel = generateTestModel({
+      operations: [operationWithRequiredQueryParam()],
+      securitySchemes: {},
+      summary: { operationCount: 1, schemaCount: 1, securitySchemeCount: 0, issues: [] },
+    });
+
+    expect(testModel.scenarios.filter((scenario) => scenario.category === "positive")).toHaveLength(1);
+  });
+});

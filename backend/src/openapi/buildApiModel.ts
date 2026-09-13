@@ -1,6 +1,7 @@
 import type {
   AnalysisIssue,
   AnalysisSummary,
+  ApiInfo,
   ApiModel,
   ApiOperation,
   Parameter,
@@ -190,6 +191,18 @@ function extractSecurity(rawSecurity: unknown): SecurityRequirement[] {
   return requirements;
 }
 
+/** The document's `info.title`/`info.version`, when `info.title` is a non-empty string (never fabricated). */
+function extractInfo(document: Record<string, unknown>): ApiInfo | undefined {
+  const info = document.info;
+  if (!isPlainObject(info) || typeof info.title !== "string" || info.title.trim().length === 0) {
+    return undefined;
+  }
+  return {
+    title: info.title,
+    version: typeof info.version === "string" ? info.version : "",
+  };
+}
+
 function extractSecuritySchemes(document: Record<string, unknown>): Record<string, SecuritySchemeDefinition> {
   const components = document.components;
   const schemes: Record<string, SecuritySchemeDefinition> = {};
@@ -303,5 +316,5 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
     schemaCount: summary.schemaCount,
     issueCount: summary.issues.length,
   });
-  return { operations, securitySchemes, summary };
+  return { operations, securitySchemes, summary, info: extractInfo(document) };
 }

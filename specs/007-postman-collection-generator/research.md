@@ -80,9 +80,13 @@ request in the artifact can be mapped back to the scenario that produced it. Nod
 ## Decision: Ordering rule
 
 **Decision**: Order folders by their grouping name, then requests within a folder by
-`(path, method, category, scenario id)`, all compared with a fixed, locale-independent code-unit
-comparison. Order environment variables by name using the same comparison. Serialize JSON with a
-fixed key order determined by the emitting types, not by input iteration order.
+`(path, method, positive-before-other-category, category, scenario id)`, all compared with a
+fixed, locale-independent code-unit comparison — the `positive` category always sorts ahead of
+every other category for a given path/method, regardless of alphabetical order, so the happy-path
+request an engineer opens first is a working one rather than a deliberately invalid one; among
+non-`positive` categories, ordering remains plain alphabetical. Order environment variables by name
+using the same comparison. Serialize JSON with a fixed key order determined by the emitting types,
+not by input iteration order.
 
 **Rationale**: Determinism (FR-018) needs an ordering that does not depend on input order, object
 key insertion order, or the host locale. `localeCompare` is explicitly excluded because its result
