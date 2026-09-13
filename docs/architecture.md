@@ -198,6 +198,15 @@ run serially. Load failures are surfaced, require explicit retry, and never trig
 fallback. CPU is the guaranteed mode; an explicitly enabled unavailable accelerator falls back to
 CPU with a notice.
 
+The accelerator device string is platform-specific rather than one generic value: on Windows, the
+local provider requests DirectML (`dml`) directly rather than Transformers.js's generic `"gpu"`
+value, because that generic value resolves to an execution-provider combination
+(`["dml", "webgpu"]`) that onnxruntime-node's DirectML backend rejects outright, which previously
+made the accelerator fall back to CPU on every Windows run regardless of real GPU availability
+(`backend/src/ai/localProvider.ts`'s `resolveAcceleratorDevice()`; see
+[specs/004-ai-provider-local-inference/research.md](../specs/004-ai-provider-local-inference/research.md)
+Decision 6 addendum).
+
 ### Batching, viability, and pacing
 
 AI work must be bounded by the local model's real capacity and by user-tolerable time. The design
@@ -226,7 +235,9 @@ since only one retry is attempted per batch.
 
 No GPU is required for any ApiPilot capability. Local inference runs on CPU by design;
 `AI_USE_ACCELERATOR` defaults to `false`, and an explicitly enabled but unavailable accelerator
-falls back to CPU with a visible notice rather than failing silently.
+falls back to CPU with a visible notice rather than failing silently. When a real accelerator is
+present and enabled, Windows uses DirectML (see "Provider boundary" above); other platforms use
+Transformers.js's generic GPU device resolution (CUDA on Linux x64, CoreML on macOS).
 
 The project's own benchmark harness (`npm run ai:benchmark -w backend`, recorded in
 [specs/004-ai-provider-local-inference/benchmark-results.json](../specs/004-ai-provider-local-inference/benchmark-results.json))

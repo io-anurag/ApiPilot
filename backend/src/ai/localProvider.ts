@@ -163,6 +163,21 @@ const SYSTEM_PROMPTS: Record<"text" | "json", string> = {
 };
 
 /**
+ * Resolves the generic "accelerator requested" intent to the concrete `@huggingface/transformers`
+ * device string `pipeline()` must receive. Windows needs special-casing: the library's own
+ * generic `"gpu"` value resolves (`onnx.js` `deviceToExecutionProviders`) to the execution
+ * provider list `["dml", "webgpu"]` on Windows, and onnxruntime-node's DirectML backend rejects
+ * being combined with any execution provider other than `"cpu"`, throwing "DML EP can only be
+ * used with CPU EPs." at session creation — so every accelerator attempt failed and silently (to
+ * the user) fell back to CPU. Requesting `"dml"` directly on Windows selects only that one
+ * execution provider and avoids the invalid combination. Other platforms are unaffected (Linux's
+ * `"gpu"` resolves to CUDA alone; macOS's to CoreML alone), so they keep using the generic value.
+ */
+function resolveAcceleratorDevice(): "gpu" | "dml" {
+  return process.platform === "win32" ? "dml" : "gpu";
+}
+
+/**
  * Only this function (and this module) imports `@huggingface/transformers` (constitution
  * VI, XXVIII; FR-013) — everything else depends solely on the `AIProvider` abstraction.
  */
@@ -175,7 +190,7 @@ export async function loadTransformersEngine(
   env.cacheDir = config.cacheDir;
 
   const generator = await pipeline("text-generation", config.modelId, {
-    device: device === "gpu" ? "gpu" : "cpu",
+    device: device === "gpu" ? resolveAcceleratorDevice() : "cpu",
     ...(config.dtype ? { dtype: config.dtype } : {}),
   });
 
@@ -596,13 +611,16 @@ export class LocalProvider implements AIProvider {
     } catch (error) {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
       // automatically, but surface a visible (never silent) notice (FR-008). The readiness
-      // `reason` below stays a generic client-facing message; log the engine-load failure's
-      // category here (server-side only, matching this codebase's logger.error convention
-      // elsewhere — never a message or stack trace) so a DirectML/CUDA/WebGPU failure is at
-      // least diagnosable by category instead of silently discarded.
+      // `reason` below stays a generic client-facing message. onnxruntime-node throws a plain
+      // `Error` for every DirectML/CUDA/WebGPU failure mode (no distinguishing subclass), so
+      // logging just its category is uninformative here; include the message too (still
+      // server-side only, never returned to a client) — a deliberate, narrow exception to this
+      // codebase's usual category-only logger.error convention, needed to root-cause the
+      // accelerator failure at all.
       logger.error("accelerator_load_failed", {
         modelId: this.config.modelId,
         errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+        errorMessage: error instanceof Error ? error.message : String(error),
       });
       const engine = await this.loadEngine(
         this.config,

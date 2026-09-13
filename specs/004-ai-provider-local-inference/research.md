@@ -136,6 +136,19 @@ All unknowns from the Technical Context are resolved below before Phase 1 design
   was rejected by the clarification answer; falling back silently (no recorded notice) was
   rejected as it would violate "No Silent Assumptions" (constitution XIV).
 
+**Addendum (Windows accelerator device resolution): "an accelerated execution provider" above was
+under-specified — `loadTransformersEngine` (`backend/src/ai/localProvider.ts`) originally requested
+Transformers.js's generic `"gpu"` device unconditionally. On Windows this generic value resolves
+(`@huggingface/transformers`'s `deviceToExecutionProviders`) to the ONNX Runtime execution-provider
+list `["dml", "webgpu"]`, and onnxruntime-node's DirectML backend rejects being combined with any
+provider other than `"cpu"`, throwing `"DML EP can only be used with CPU EPs."` at session creation —
+so on Windows the accelerator fell back to CPU on every run regardless of whether a usable GPU was
+actually present, which is a stronger failure than the "unavailable at runtime" case this decision
+was written for. The fix (`resolveAcceleratorDevice()`) requests the concrete `"dml"` device on
+`process.platform === "win32"` instead of the generic `"gpu"` value, so DirectML initializes when a
+real DirectML-capable GPU is present; the automatic-CPU-fallback contract above is unchanged and now
+also correctly covers genuine DirectML unavailability (no compatible GPU/driver) on Windows.**
+
 ## 7. Structured inference request/response contract and validation
 
 - **Decision**: Plain, hand-written TypeScript interfaces (`InferenceRequest`,
