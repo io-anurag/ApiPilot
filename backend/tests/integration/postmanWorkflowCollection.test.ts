@@ -6,6 +6,14 @@ import {
   twoStepHandoffWorkflow,
   unsupportedWorkflow,
 } from "../fixtures/postman/workflowFixtures";
+import {
+  chainingApiModel,
+  graphOf,
+  ordersDeleteRelationship,
+  ordersDeleteScenario,
+  ordersListScenario,
+  testModelOf,
+} from "../fixtures/postman/dependencyFixtures";
 
 const producer = {
   id: "workflow-producer",
@@ -153,6 +161,32 @@ describe("workflow-aware Postman export", () => {
           kind: "workflow-unsupported-sequence",
         }),
       ]),
+    );
+  });
+
+  it("chains a CONFIRMED relationship without a manually approved workflow (US1, specs/019-auto-workflow-chaining)", async () => {
+    const response = await exportRequest({
+      apiModel: chainingApiModel,
+      testModel: testModelOf(ordersListScenario, ordersDeleteScenario),
+      workflowContext: {
+        workflows: [],
+        approvedWorkflowIds: [],
+        automaticChaining: { graph: graphOf(ordersDeleteRelationship()), cycles: [], workflowDecisions: {} },
+      },
+    });
+    expect(response.status).toBe(200);
+    const items = response.body.collection.item.flatMap((folder: { item: unknown[] }) => folder.item);
+    const producerItem = items.find((item: { provenance?: { scenarioId?: string } }) =>
+      item.provenance?.scenarioId === ordersListScenario.id,
+    );
+    const consumerItem = items.find((item: { provenance?: { scenarioId?: string } }) =>
+      item.provenance?.scenarioId === ordersDeleteScenario.id,
+    );
+    expect(producerItem.event[0].script.exec.join("\n")).toContain("pm.environment.set");
+    expect(consumerItem.request.url.variable[0].value).toMatch(/^\{\{auto_/);
+    expect(response.body.summary.automaticChainCount).toBe(1);
+    expect(response.body.limitations).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "unresolved-path-parameter" })]),
     );
   });
 

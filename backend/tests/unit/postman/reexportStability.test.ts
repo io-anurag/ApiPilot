@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { ExportResult, TestModel } from "@apipilot/shared-domain";
+import type { ExportResult, IntegrationWorkflow, TestModel, WorkflowExportContext } from "@apipilot/shared-domain";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { serializeArtifact } from "../../../src/postman/ordering";
 import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
+import {
+  chainingApiModel,
+  graphOf,
+  ordersDeleteRelationship,
+  ordersDeleteScenario,
+  ordersGetRelationship,
+  ordersGetScenario,
+  ordersListScenario,
+  ordersPatchRelationship,
+  ordersPatchScenario,
+  testModelOf,
+  workflowDecision,
+} from "../../fixtures/postman/dependencyFixtures";
 
 const options = { baseUrl: "https://qa.internal.example" };
 const REMOVED_SCENARIO = "scenario-list-no-assertions";
@@ -76,5 +89,61 @@ describe("re-export stability", () => {
     for (const [id, entry] of after) {
       expect(before.get(id)?.item.id).toBe(entry.item.id);
     }
+  });
+});
+
+describe("re-export stability for automatic chains (specs/019-auto-workflow-chaining)", () => {
+  const chainingOptions = { baseUrl: "https://qa.internal.example" };
+  const chainingTestModel = testModelOf(
+    ordersListScenario,
+    ordersGetScenario,
+    ordersPatchScenario,
+    ordersDeleteScenario,
+  );
+  const candidateWorkflows: IntegrationWorkflow[] = [
+    { id: "wf-get", steps: [], variables: [], relationshipIds: ["rel-orders-get"] },
+    { id: "wf-patch", steps: [], variables: [], relationshipIds: ["rel-orders-patch"] },
+    { id: "wf-delete", steps: [], variables: [], relationshipIds: ["rel-orders-delete"] },
+  ];
+  const graph = graphOf(ordersGetRelationship(), ordersPatchRelationship(), ordersDeleteRelationship());
+
+  function contextWith(rejectedWorkflowId?: string): WorkflowExportContext {
+    return {
+      workflows: candidateWorkflows,
+      approvedWorkflowIds: [],
+      automaticChaining: {
+        graph,
+        cycles: [],
+        workflowDecisions: rejectedWorkflowId
+          ? { [rejectedWorkflowId]: workflowDecision(rejectedWorkflowId, "rejected") }
+          : {},
+      },
+    };
+  }
+
+  it("removes only the rejected relationship's chain, leaving the others and their ordering stable", () => {
+    const before = generateCollection(chainingApiModel, chainingTestModel, chainingOptions, contextWith());
+    const after = generateCollection(chainingApiModel, chainingTestModel, chainingOptions, contextWith("wf-delete"));
+    if (!before.ok || !after.ok) throw new Error("expected successful exports");
+
+    expect(before.result.summary.automaticChainCount).toBe(3);
+    expect(after.result.summary.automaticChainCount).toBe(2);
+    expect(after.result.limitations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "unresolved-path-parameter", scenarioId: ordersDeleteScenario.id }),
+      ]),
+    );
+
+    const beforeItems = itemsById(before.result);
+    const afterItems = itemsById(after.result);
+    for (const [id, entry] of afterItems) {
+      if (id === beforeItems.get(id)?.item.id && entry.item.provenance?.scenarioId === ordersDeleteScenario.id) {
+        continue; // this one item's request is expected to differ — it lost its chained substitution
+      }
+      expect(afterItems.get(id)).toEqual(beforeItems.get(id));
+    }
+    expect(after.result.collection.item.map((folder) => folder.name)).toEqual(
+      before.result.collection.item.map((folder) => folder.name),
+    );
   });
 });

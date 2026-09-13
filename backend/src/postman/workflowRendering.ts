@@ -66,12 +66,21 @@ function workflowLimitation(
   };
 }
 
-function selectScenario(scenarios: TestScenario[], step: WorkflowStep): TestScenario | undefined {
+/**
+ * Selects the approved scenario for an operation: prefer category `positive`, then the smallest
+ * scenario ID (contracts/workflow-aware-postman-api.md). Exported for reuse by automatic chaining
+ * (automaticChaining.ts, research.md D5/D-selectScenario), which applies the same policy — plus its
+ * own additional requirement that only an actual `positive` result is ever used as a producer.
+ */
+export function selectScenario(
+  scenarios: TestScenario[],
+  operation: { operationPath: string; operationMethod: string },
+): TestScenario | undefined {
   return [...scenarios]
     .filter(
       (scenario) =>
         operationKey(scenario.operationPath, scenario.operationMethod) ===
-        operationKey(step.operationPath, step.operationMethod),
+        operationKey(operation.operationPath, operation.operationMethod),
     )
     .sort(
       (left, right) =>
@@ -80,7 +89,8 @@ function selectScenario(scenarios: TestScenario[], step: WorkflowStep): TestScen
     )[0];
 }
 
-function supportedField(field: string): boolean {
+/** Exported for reuse by automatic chaining (automaticChaining.ts), which applies the same guard to relationship field paths. */
+export function supportedField(field: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(field);
 }
 

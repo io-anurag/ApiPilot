@@ -5,6 +5,7 @@ import {
   type GenerationLimitation,
   type PostmanCollection,
 } from "@apipilot/shared-domain";
+import type { AutomaticChain } from "./automaticChaining";
 import { compareCodeUnits } from "./ordering";
 
 /**
@@ -47,6 +48,7 @@ function coverageSection(
     `- Workflow data handoffs: ${summary.workflowVariableCount}`,
     `- Unsupported approved workflows: ${summary.unsupportedWorkflowCount}`,
     `- Omitted unapproved workflows: ${summary.omittedWorkflowCount}`,
+    `- Automatically chained path parameters: ${summary.automaticChainCount}`,
     "",
     "Workflow folders contain only explicitly approved, fully supported sequences. Standalone",
     "folders contain approved scenarios not covered by a rendered workflow. Requests are",
@@ -117,10 +119,44 @@ function limitationSection(limitations: GenerationLimitation[]): string[] {
   return lines;
 }
 
+/**
+ * Lists every automatically applied chain (specs/019-auto-workflow-chaining FR-010),
+ * distinguishable from an approved workflow's own "Workflow: {id}" folder: each entry names the
+ * producer, every consumer it resolved, and the confidence/relationship evidence that justified
+ * it, so a reviewer never has to guess which requests were chained without prior human approval.
+ */
+function automaticChainSection(chains: AutomaticChain[]): string[] {
+  if (chains.length === 0) return [];
+  const lines = [
+    "## Automatically chained requests",
+    "",
+    "These requests were chained without requiring a manually approved workflow: the producer's",
+    "response value is captured into a variable and the consumer request substitutes it, based on",
+    "an existing CONFIRMED/LIKELY dependency relationship. Disable this for the whole export with",
+    "`options.disableAutomaticChaining: true`.",
+    "",
+  ];
+  for (const chain of [...chains].sort((a, b) => compareCodeUnits(a.chainId, b.chainId))) {
+    lines.push(
+      `- \`${chain.variableName}\` — captured from \`${chain.producer.operationMethod.toUpperCase()} ${chain.producer.operationPath}\` (\`${chain.producer.field}\`)`,
+    );
+    for (const consumer of [...chain.consumers].sort((a, b) =>
+      compareCodeUnits(a.relationshipId, b.relationshipId),
+    )) {
+      lines.push(
+        `  - used by \`${consumer.operationMethod.toUpperCase()} ${consumer.operationPath}\` (\`${consumer.field}\`) — ${consumer.confidence} relationship \`${consumer.relationshipId}\``,
+      );
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
 /** Renders the accompanying README markdown deterministically from the export result and declared variables. */
 export function renderReadme(
   result: Omit<ExportResult, "readme">,
   variables: ArtifactVariable[],
+  automaticChains: AutomaticChain[] = [],
 ): string {
   const lines = [
     `# ${result.collection.info.name}`,
@@ -133,6 +169,7 @@ export function renderReadme(
     "",
     ...variableSection(variables),
     "",
+    ...automaticChainSection(automaticChains),
     "## How to run",
     "",
     "1. Import `collection.json` and `environment.json` into Postman.",

@@ -3,6 +3,18 @@ import { describe, expect, it } from "vitest";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { renderReadme } from "../../../src/postman/readme";
 import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
+import {
+  chainingApiModel,
+  graphOf,
+  ordersDeleteRelationship,
+  ordersDeleteScenario,
+  ordersGetRelationship,
+  ordersGetScenario,
+  ordersListScenario,
+  ordersPatchRelationship,
+  ordersPatchScenario,
+  testModelOf,
+} from "../../fixtures/postman/dependencyFixtures";
 
 function readmeFor(options = {}): string {
   const outcome = generateCollection(exportApiModel, approvedTestModel, options);
@@ -109,6 +121,7 @@ describe("accompanying document", () => {
         workflowVariableCount: 0,
         unsupportedWorkflowCount: 0,
         omittedWorkflowCount: 0,
+        automaticChainCount: 0,
       },
     };
     const readme = renderReadme(result, []);
@@ -158,6 +171,7 @@ describe("accompanying document", () => {
         workflowVariableCount: 0,
         unsupportedWorkflowCount: 0,
         omittedWorkflowCount: 0,
+        automaticChainCount: 0,
       },
     };
     const readme = renderReadme(result, []);
@@ -166,6 +180,50 @@ describe("accompanying document", () => {
       '`PATCH /api/v1/customers/{id}` (3 scenarios): The approved scenario supplied no value for the "id" path parameter, so it is exposed as a variable to fill in. — affects 3 requests',
     );
     expect(readme).not.toContain("scenario-a");
+  });
+
+  it("lists an automatically applied chain with its producer, consumer, and evidence (US2, FR-010)", () => {
+    const outcome = generateCollection(chainingApiModel, testModelOf(ordersListScenario, ordersDeleteScenario), {}, {
+      workflows: [],
+      approvedWorkflowIds: [],
+      automaticChaining: { graph: graphOf(ordersDeleteRelationship()), cycles: [], workflowDecisions: {} },
+    });
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    expect(outcome.result.readme).toContain("## Automatically chained requests");
+    expect(outcome.result.readme).toContain("GET /orders");
+    expect(outcome.result.readme).toContain("DELETE /orders/{id}");
+    expect(outcome.result.readme).toContain("CONFIRMED relationship `rel-orders-delete`");
+    expect(outcome.result.readme).toContain("Automatically chained path parameters: 1");
+  });
+
+  it("omits the automatic-chains section entirely when no chain was applied", () => {
+    const readme = readmeFor();
+    expect(readme).not.toContain("## Automatically chained requests");
+  });
+
+  it("keeps the automatic-chains section scannable — one bullet per producer, one sub-bullet per consumer (SC-006)", () => {
+    const outcome = generateCollection(
+      chainingApiModel,
+      testModelOf(ordersListScenario, ordersGetScenario, ordersPatchScenario, ordersDeleteScenario),
+      {},
+      {
+        workflows: [],
+        approvedWorkflowIds: [],
+        automaticChaining: {
+          graph: graphOf(ordersGetRelationship(), ordersPatchRelationship(), ordersDeleteRelationship()),
+          cycles: [],
+          workflowDecisions: {},
+        },
+      },
+    );
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    const section = outcome.result.readme
+      .split("## Automatically chained requests")[1]
+      .split("## How to run")[0];
+    // One producer feeding three consumers: one top-level bullet (the shared capture), three
+    // "used by" sub-bullets — never one line per consumer duplicating the producer's own capture.
+    expect(section.match(/^- `/gm)).toHaveLength(1);
+    expect(section.match(/^ {2}- used by/gm)).toHaveLength(3);
   });
 
   it("reports no limitations plainly when everything was expressible", () => {

@@ -59,6 +59,12 @@ function isExportOptions(value: unknown): value is ExportOptions | undefined {
   ) {
     return false;
   }
+  if (
+    options.disableAutomaticChaining !== undefined &&
+    typeof options.disableAutomaticChaining !== "boolean"
+  ) {
+    return false;
+  }
   if (options.variableValues === undefined) return true;
   if (typeof options.variableValues !== "object" || options.variableValues === null)
     return false;
@@ -74,6 +80,74 @@ interface ExportRequestBody {
   options?: ExportOptions;
 }
 
+function isFieldRef(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const ref = value as Record<string, unknown>;
+  return (
+    typeof ref.operationPath === "string" &&
+    typeof ref.operationMethod === "string" &&
+    typeof ref.field === "string" &&
+    (ref.location === undefined || typeof ref.location === "string")
+  );
+}
+
+function isApiDependencyRelationship(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const relationship = value as Record<string, unknown>;
+  return (
+    typeof relationship.id === "string" &&
+    isFieldRef(relationship.producer) &&
+    isFieldRef(relationship.consumer) &&
+    (relationship.confidence === "CONFIRMED" ||
+      relationship.confidence === "LIKELY" ||
+      relationship.confidence === "POSSIBLE") &&
+    typeof relationship.explanation === "string"
+  );
+}
+
+function isApiDependencyGraph(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const graph = value as Record<string, unknown>;
+  return Array.isArray(graph.relationships) && graph.relationships.every(isApiDependencyRelationship);
+}
+
+function isDependencyCycleFinding(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const cycle = value as Record<string, unknown>;
+  return (
+    Array.isArray(cycle.relationshipIds) &&
+    cycle.relationshipIds.every((id) => typeof id === "string")
+  );
+}
+
+function isWorkflowReviewDecision(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const decision = value as Record<string, unknown>;
+  return (
+    typeof decision.workflowId === "string" &&
+    (decision.state === "pending" || decision.state === "approved" || decision.state === "rejected") &&
+    typeof decision.recordedAt === "string"
+  );
+}
+
+/**
+ * Validates `workflowContext.automaticChaining` (specs/019-auto-workflow-chaining): optional, and
+ * — like the rest of this route's shallow, structural validation — checked for shape only, not
+ * for cross-referential consistency against `apiModel`/`testModel` beyond what `generateCollection`
+ * itself already refuses explicitly.
+ */
+function isAutomaticChainingContext(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const context = value as Record<string, unknown>;
+  if (!isApiDependencyGraph(context.graph)) return false;
+  if (!Array.isArray(context.cycles) || !context.cycles.every(isDependencyCycleFinding)) return false;
+  if (typeof context.workflowDecisions !== "object" || context.workflowDecisions === null) return false;
+  return Object.values(context.workflowDecisions as Record<string, unknown>).every(
+    isWorkflowReviewDecision,
+  );
+}
+
 function isWorkflowContext(value: unknown): value is WorkflowExportContext | undefined {
   if (value === undefined) return true;
   if (typeof value !== "object" || value === null) return false;
@@ -81,6 +155,7 @@ function isWorkflowContext(value: unknown): value is WorkflowExportContext | und
   if (!Array.isArray(context.workflows) || !Array.isArray(context.approvedWorkflowIds))
     return false;
   if (!context.approvedWorkflowIds.every((id) => typeof id === "string")) return false;
+  if (!isAutomaticChainingContext(context.automaticChaining)) return false;
   const ids = new Set<string>();
   for (const workflow of context.workflows) {
     if (!isIntegrationWorkflow(workflow)) return false;

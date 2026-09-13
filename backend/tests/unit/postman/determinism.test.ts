@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
-import type { ExportResult } from "@apipilot/shared-domain";
+import type { ExportResult, WorkflowExportContext } from "@apipilot/shared-domain";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { serializeArtifact } from "../../../src/postman/ordering";
 import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
+import {
+  chainingApiModel,
+  graphOf,
+  ordersDeleteRelationship,
+  ordersDeleteScenario,
+  ordersGetRelationship,
+  ordersGetScenario,
+  ordersListScenario,
+  ordersPatchRelationship,
+  ordersPatchScenario,
+  testModelOf,
+} from "../../fixtures/postman/dependencyFixtures";
 
 const options = { baseUrl: "https://qa.internal.example", variableValues: { token: "t-1" } };
 
@@ -41,5 +53,36 @@ describe("export determinism", () => {
     const first = exportResult().collection.info._postman_id;
     const second = exportResult().collection.info._postman_id;
     expect(second).toBe(first);
+  });
+});
+
+describe("automatic chaining determinism (specs/019-auto-workflow-chaining SC-004)", () => {
+  const chainingOptions = { baseUrl: "https://qa.internal.example" };
+  const testModel = testModelOf(ordersListScenario, ordersGetScenario, ordersPatchScenario, ordersDeleteScenario);
+  const context: WorkflowExportContext = {
+    workflows: [],
+    approvedWorkflowIds: [],
+    automaticChaining: {
+      graph: graphOf(ordersGetRelationship(), ordersPatchRelationship(), ordersDeleteRelationship()),
+      cycles: [],
+      workflowDecisions: {},
+    },
+  };
+
+  function chainedExportResult(): ExportResult {
+    const outcome = generateCollection(chainingApiModel, testModel, chainingOptions, context);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    return outcome.result;
+  }
+
+  it("produces byte-identical automatic-chaining decisions and artifacts across repeated exports", () => {
+    expect(serialized(chainedExportResult())).toBe(serialized(chainedExportResult()));
+  });
+
+  it("produces the same chaining decisions regardless of the input scenario order", () => {
+    const shuffled = testModelOf(ordersDeleteScenario, ordersPatchScenario, ordersGetScenario, ordersListScenario);
+    const outcome = generateCollection(chainingApiModel, shuffled, chainingOptions, context);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    expect(serialized(outcome.result)).toBe(serialized(chainedExportResult()));
   });
 });

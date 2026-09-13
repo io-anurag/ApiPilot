@@ -1,6 +1,7 @@
 import type { ApiModel } from "./apiModel";
-import type { IntegrationWorkflow } from "./apiDependency";
+import type { ApiDependencyGraph, DependencyCycleFinding, IntegrationWorkflow } from "./apiDependency";
 import type { Provenance, TestModel } from "./testModel";
+import type { WorkflowReviewDecision } from "./testGenerationWorkflow";
 
 /**
  * Artifact contracts for the Postman collection export (AP-007).
@@ -16,7 +17,18 @@ export interface ExportOptions {
   baseUrl?: string;
   variableValues?: Record<string, string>;
   collectionName?: string;
+  /**
+   * Reverts this export to pre-019 behavior: no automatic chain is applied regardless of
+   * `WorkflowExportContext.automaticChaining`, and every otherwise-eligible path parameter is
+   * reported as an `unresolved-path-parameter` limitation exactly as before 019 existed. Default
+   * `false`/absent (specs/019-auto-workflow-chaining FR-002, FR-011). Applies to the whole export;
+   * there is no per-relationship opt-out (019 Clarifications, 2026-09-13).
+   */
+  disableAutomaticChaining?: boolean;
 }
+
+/** Distinguishes an automatically applied chain (019) from a manually approved workflow (016). */
+export type ChainOrigin = "approved-workflow" | "automatic-chain";
 
 /** One named placeholder the collection references in place of a literal value. */
 export interface ArtifactVariable {
@@ -25,8 +37,14 @@ export interface ArtifactVariable {
   secret: boolean;
   value: string;
   provenance?: {
+    /** For an automatic chain, the synthetic chain id (`auto_...`), not an `IntegrationWorkflow.id`. */
     workflowId: string;
     relationshipId?: string;
+    /**
+     * Defaults to `"approved-workflow"` when absent, preserving the meaning every provenance
+     * entry produced before specs/019-auto-workflow-chaining already had.
+     */
+    origin?: ChainOrigin;
   };
 }
 
@@ -227,10 +245,21 @@ export function aggregateLimitations(
   return [...byKey.values()];
 }
 
-/** Explicit workflow-review input at the artifact boundary. */
+/**
+ * Explicit workflow-review input at the artifact boundary. `automaticChaining` is additive
+ * (specs/019-auto-workflow-chaining): absent means no automatic chaining is attempted, regardless
+ * of `ExportOptions.disableAutomaticChaining` — behavior is identical to every export generated
+ * before 019 existed.
+ */
 export interface WorkflowExportContext {
   workflows: IntegrationWorkflow[];
   approvedWorkflowIds: string[];
+  automaticChaining?: {
+    graph: ApiDependencyGraph;
+    cycles: DependencyCycleFinding[];
+    /** Keyed by `IntegrationWorkflow.id`, mirroring `TestGenerationWorkflow.workflowDecisions`. */
+    workflowDecisions: Record<string, WorkflowReviewDecision>;
+  };
 }
 
 /** Pre-delivery check of the emitted collection; `valid: false` withholds the artifacts (FR-015). */
@@ -256,6 +285,8 @@ export interface ExportSummary {
   workflowVariableCount: number;
   unsupportedWorkflowCount: number;
   omittedWorkflowCount: number;
+  /** Count of path parameters resolved via an automatic chain (specs/019-auto-workflow-chaining). */
+  automaticChainCount: number;
 }
 
 /** The human-readable accompanying document (`README.md`) content. */
