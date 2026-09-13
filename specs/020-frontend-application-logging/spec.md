@@ -39,6 +39,20 @@ send anything to an external/cloud service; must remain deterministic/testable."
   in these modules is logged, with no exclusions; severity is expressed through the log level and
   fields rather than by omitting some errors from logging.
 
+### Session 2026-09-14
+
+- Q: Does this feature's retrofit need to cover error handling inside React components (event
+  handlers, data-fetching hooks) in addition to the named service-client modules, or is the
+  service-client layer the complete scope? → A: Service-client modules only
+  (`frontend/src/services/*`), matching FR-010/SC-001 exactly as written. Component-level
+  instrumentation is out of scope for this feature and is a candidate follow-up.
+- Q: Should the feature add a global handler for truly uncaught exceptions and unhandled promise
+  rejections (`window.onerror`/`onunhandledrejection`), routed through the same logger, or stay
+  scoped only to errors the service-client modules already catch in a `try`/`catch`? → A: Yes — add
+  a global handler for both, logged at `error` level through the same logging utility, so a crash
+  no `try`/`catch` in application code ever sees is still recorded rather than disappearing
+  silently, which is the feature's core premise (User Story 1).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See What Went Wrong Without Reproducing It Live (Priority: P1)
@@ -65,6 +79,10 @@ is a viable, demonstrable improvement over today's silence.
 2. **Given** the same failure condition occurs twice with the same inputs, **When** each is logged,
    **Then** both entries have the same shape (fields, level, component/event naming) so entries are
    comparable and parseable, not free-form strings.
+3. **Given** an exception is thrown somewhere no application `try`/`catch` observes (an uncaught
+   exception or an unhandled promise rejection), **When** the global handler fires, **Then** a
+   structured `error`-level log entry is emitted for it, the same as for an already-caught
+   service-client failure.
 
 ---
 
@@ -133,15 +151,21 @@ so sensitive payloads cannot pass through even by caller mistake.
   introduced (see Assumptions/Out of Scope).
 - A log entry is produced during an automated test run: no real network call or real timer is
   required to observe or assert on the logged entry.
+- A service-client module catches an error, logs it via FR-010, and then rethrows it: if nothing
+  downstream catches the rethrow, the global handler (FR-010a) also observes it. This feature does
+  not attempt cross-handler de-duplication (consistent with the no-de-duplication decision already
+  recorded above); a rethrown, already-logged error may be logged a second time by the global
+  handler.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: The frontend MUST provide one structured logging utility (levels `info`/`warn`/
-  `error`, timestamp, a fixed component name, an event name, and optional contextual fields) that
-  all frontend code logs through, rather than ad hoc `console.*` calls scattered across the
-  codebase.
+  `error`, timestamp, a fixed component name, an event name, and optional contextual fields), so
+  that frontend code has a shared, consistent way to log instead of ad hoc `console.*` calls; this
+  feature's own retrofit of existing code is scoped to the service-client modules named in FR-010
+  (component-level instrumentation is future follow-up, per Out of Scope).
 - **FR-002**: Every log entry MUST be written to the browser console in a consistent structured
   form (not a free-form string) for all three levels.
 - **FR-003**: Log entry fields MUST be restricted to primitive values (string, number, boolean);
@@ -169,6 +193,10 @@ so sensitive payloads cannot pass through even by caller mistake.
   converting it to a thrown `Error` or typed result; severity distinctions (e.g. an expected
   not-found outcome versus an unexpected failure) are expressed via log level and fields, not by
   omitting some errors from logging.
+- **FR-010a**: The frontend MUST install one global handler for uncaught exceptions
+  (`window.onerror`) and one for unhandled promise rejections (`window.onunhandledrejection`),
+  each routing the error through the same logger at `error` level, so a failure no application
+  `try`/`catch` observes is still recorded rather than disappearing silently.
 - **FR-011**: The logger and the backend ingestion path MUST be unit-testable without depending on
   real timers or real network calls (an injectable/mockable time source and transport).
 - **FR-012**: The feature MUST NOT transmit any frontend log data to an external or cloud logging
@@ -205,6 +233,9 @@ so sensitive payloads cannot pass through even by caller mistake.
   making a real network call or depending on real wall-clock timing.
 - **SC-006**: A request to the client log ingestion endpoint exceeding its dedicated ~4–8 KB limit
   is rejected before any part of it is persisted, verified by a dedicated test.
+- **SC-007**: A simulated uncaught exception and a simulated unhandled promise rejection each
+  produce exactly one structured `error`-level log entry, verified by dedicated tests exercising
+  the global handlers without depending on an actual unhandled crash in the test runner.
 
 ## Assumptions
 
@@ -230,3 +261,6 @@ so sensitive payloads cannot pass through even by caller mistake.
 - Correlating frontend and backend log entries via a shared request/correlation ID scheme; entries
   are tagged by component but not yet joined across a single request's frontend and backend legs.
 - Rate-limiting, de-duplication, or batching of repeated frontend log events.
+- Retrofitting error handling inside React components (event handlers, data-fetching hooks, etc.)
+  to log through the new utility; this feature's retrofit is scoped to the service-client modules
+  named in FR-010.

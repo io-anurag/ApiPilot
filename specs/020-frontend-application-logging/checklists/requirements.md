@@ -44,3 +44,11 @@
   (now: every caught error, no exclusions). Both are recorded in the spec's Clarifications section
   and integrated into the affected requirements/assumptions; no regressions to prior checklist
   items resulted.
+- `/speckit-clarify` session (2026-09-14) resolved two scope-boundary ambiguities identified by a
+  fresh taxonomy scan: (1) FR-001's "all frontend code" language conflicted with FR-010/SC-001's
+  service-client-only test coverage — resolved by tightening FR-001 and adding an explicit Out of
+  Scope bullet for component-level instrumentation; (2) the spec had no requirement covering truly
+  uncaught exceptions/unhandled rejections, which would have left the stated "nothing is logged
+  anywhere" problem only partially solved — resolved by adding FR-010a, a new acceptance scenario
+  under User Story 1, SC-007, and an edge case addressing possible double-logging with FR-010.
+  All checklist items still pass; no regressions.
