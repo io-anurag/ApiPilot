@@ -80,9 +80,16 @@ describe("POST /api/test-models", () => {
     expect(scenariosFor(scenarios, "positive", "label")).toHaveLength(1);
     expect(scenariosFor(scenarios, "positive", "tags")).toHaveLength(1);
 
-    // Base happy-path, minimal happy-path (label/status omitted, both optional), and the
-    // three reclassified at-maximum variants above.
-    expect(scenariosFor(scenarios, "positive")).toHaveLength(5);
+    // Base happy-path, minimal happy-path (label/status omitted, both optional), the three
+    // reclassified at-maximum variants above, and one enum-positive-variant scenario for
+    // "status"'s remaining declared enum value ("inactive"), per FR-001a.
+    expect(scenariosFor(scenarios, "positive")).toHaveLength(6);
+
+    const enumVariant = scenariosFor(scenarios, "positive", "status").find(
+      (s) => s.provenance.rule === "enum-positive-variant",
+    );
+    expect(enumVariant).toBeDefined();
+    expect((enumVariant!.request.body as Record<string, unknown>).status).toBe("inactive");
 
     const positive = scenariosFor(scenarios, "positive")[0];
     expect(positive.assertions).toEqual([{ type: "status-code", expectedStatusCode: "400" }]);

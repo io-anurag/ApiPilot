@@ -33,3 +33,7 @@
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
 - All items passed on the first validation pass; no clarifications were required.
+- Iteration 2 (2026-09-14): QA feedback asked for broader positive-scenario coverage of
+  enum-constrained parameters. Resolved by amending FR-001 (new FR-001a) so enum fan-out stays
+  within the existing "positive" category rather than introducing a new `ScenarioCategory`.
+  Recorded in the Clarifications section. All checklist items still pass.

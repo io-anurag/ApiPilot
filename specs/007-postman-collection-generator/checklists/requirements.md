@@ -45,3 +45,8 @@
 - The feature name and User Story 1 name Postman explicitly because it is the product's chosen
   output target; the functional requirements deliberately stay format-neutral so the collection
   format version remains a planning decision (constitution VIII).
+- Iteration 3 (2026-09-14): Resolved. QA feedback found the fixed artifact file names unhelpful
+  across multiple exports; FR-022 was amended to require the three downloaded file names be
+  derived from the specification's title, falling back to the existing generic names when no
+  usable title exists. Recorded in the Clarifications section; quickstart.md and the API contract
+  were updated to match. All checklist items still pass.

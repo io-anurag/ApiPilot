@@ -2,6 +2,7 @@ import type { ApiModel, ApiOperation, TestModel, TestScenario } from "@apipilot/
 import { createLogger } from "../logger";
 import { deduplicate } from "./deduplicate";
 import { arrayBoundaryScenarios } from "./rules/arrayBoundaryScenarios";
+import { enumPositiveScenarios } from "./rules/enumPositiveScenarios";
 import { invalidEnumScenarios } from "./rules/invalidEnumScenarios";
 import { invalidFormatScenarios } from "./rules/invalidFormatScenarios";
 import { invalidTypeScenarios } from "./rules/invalidTypeScenarios";
@@ -15,6 +16,7 @@ const logger = createLogger("testDesign.generateTestModel");
 
 const RULES: ((operation: ApiOperation) => TestScenario[])[] = [
   positiveScenario,
+  enumPositiveScenarios,
   minimalPositiveScenario,
   requiredFieldScenarios,
   invalidTypeScenarios,

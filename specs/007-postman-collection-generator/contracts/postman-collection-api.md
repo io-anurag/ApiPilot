@@ -178,8 +178,10 @@ specification content, or variable values (FR-025).
 
 ## Frontend contract
 
-The export UI calls this endpoint once per export and writes three files from the single response:
-`collection.json`, `environment.json`, and `README.md`. It exposes loading, success, empty, and
-failure states with recovery guidance (FR-027), reports the validation outcome and the limitation
-list to the engineer (FR-014, FR-017), and never renders a supplied credential value back to the
-page.
+The export UI calls this endpoint once per export and writes three files from the single response —
+a collection, an environment, and a README. Each file name is derived from the exported
+specification's title (sanitized to a filesystem-safe slug), falling back to the generic names
+`collection.json`, `environment.json`, and `README.md` when the specification has no usable title
+(FR-022). The UI exposes loading, success, empty, and failure states with recovery guidance
+(FR-027), reports the validation outcome and the limitation list to the engineer (FR-014, FR-017),
+and never renders a supplied credential value back to the page.

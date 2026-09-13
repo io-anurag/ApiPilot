@@ -19,6 +19,20 @@
   response-value extraction into variables) so AP-008 has a defined target, but no workflow contract
   is invented and no workflow rendering is implemented here. See FR-028 through FR-030.
 
+### Session 2026-09-14
+
+- Q: QA feedback found the exported artifact file names (`collection.json`, `environment.json`,
+  `README.md`) unhelpful once an engineer has exported more than one specification, since a
+  browser's downloads folder gives no way to tell which download came from which specification.
+  Should FR-022's "single export action" also fix the file names to the exported specification, and
+  if so, what happens when a specification has no usable title? → A: Yes. Each artifact's downloaded
+  file name MUST be derived from the source specification's title (the same `apiModel.info.title`
+  already used for the in-collection `info.name`, per FR-006/data-model.md), sanitized to a
+  filesystem-safe slug, with the existing generic names (`collection.json`, `environment.json`,
+  `README.md`) used unchanged when the specification has no usable title. This does not change the
+  single-export-action requirement, nor the collection/environment/readme content contract — only
+  the three downloaded file names.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Export an Executable Collection (Priority: P1)
@@ -243,7 +257,9 @@ that the difference between the two artifacts is limited to the affected scenari
   be faithfully expressed in the collection format, and MUST NOT silently alter the scenario's test
   intent to make it expressible.
 - **FR-022**: The system MUST allow the engineer to obtain all three artifacts from a single export
-  action.
+  action, and each artifact's downloaded file name MUST be derived from the source specification's
+  title (sanitized to a filesystem-safe slug), falling back to the artifact's existing generic name
+  (`collection.json`, `environment.json`, `README.md`) when the specification has no usable title.
 - **FR-023**: The system MUST NOT execute any generated request, contact any API described by the
   specification, or treat producing an artifact as authorization to run it.
 - **FR-024**: The system MUST NOT retain the generated artifacts, the approved test set, or supplied
