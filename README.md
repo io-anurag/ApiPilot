@@ -1,4 +1,8 @@
-# ApiPilot
+<p align="center">
+  <img src="docs/assets/apipilot-logo.png" alt="ApiPilot logo" width="160" />
+</p>
+
+<h1 align="center">ApiPilot</h1>
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
