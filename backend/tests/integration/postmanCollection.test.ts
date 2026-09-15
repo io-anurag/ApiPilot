@@ -15,6 +15,28 @@ import {
   parameterApiModel,
   sortDefaultOperation,
 } from "../fixtures/postman/parameterFixtures";
+import {
+  adminReportsScenario,
+  ambiguousFieldsApiModel,
+  createSessionScenario,
+  issueAdminTokenScenario,
+  issueTokenAmbiguousFieldsScenario,
+  issueTokenNoPlausibleFieldScenario,
+  issueTokenScenario,
+  noPlausibleFieldApiModel,
+  primaryNoStemMatchApiModel,
+  sessionInfoScenario,
+  tokenInfoScenario,
+  twoIndependentSchemesApiModel,
+} from "../fixtures/postman/credentialFixtures";
+import { graphOf, testModelOf } from "../fixtures/postman/dependencyFixtures";
+
+/** Enables automatic chaining, exactly as specs/019 requires — auth-credential relationships
+ *  (specs/023-auto-auth-credential-chaining) are built internally by `generateCollection` from
+ *  the submitted `apiModel`, not supplied by the caller, so an empty graph/cycles is sufficient. */
+function automaticChainingContext() {
+  return { workflows: [], approvedWorkflowIds: [], automaticChaining: { graph: graphOf(), cycles: [], workflowDecisions: {} } };
+}
 
 const ENDPOINT = "/api/test-models/postman-collection";
 
@@ -289,5 +311,104 @@ describe(`POST ${ENDPOINT}`, () => {
     expect(response.body.limitations).toContainEqual(
       expect.objectContaining({ kind: "unresolved-parameter-style", scenarioId: "scenario-coords" }),
     );
+  });
+
+  describe("automatic auth-credential chaining (specs/023-auto-auth-credential-chaining)", () => {
+    it("captures a login token and wires it into every consumer's Authorization header over HTTP (US1, SC-001)", async () => {
+      const response = await exportRequest({
+        apiModel: twoIndependentSchemesApiModel,
+        testModel: testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+        workflowContext: automaticChainingContext(),
+      });
+      expect(response.status).toBe(200);
+
+      const items = response.body.collection.item.flatMap((folder: { item: unknown[] }) => folder.item) as {
+        provenance?: { scenarioId?: string };
+        event?: { script: { exec: string[] } }[];
+        request: { auth?: { bearer: { key: string; value: string }[] } };
+      }[];
+
+      const producerItem = items.find((item) => item.provenance?.scenarioId === issueTokenScenario.id)!;
+      expect(producerItem.event?.[0]?.script.exec.join("\n")).toContain('pm.environment.set("token"');
+
+      const consumerItem = items.find((item) => item.provenance?.scenarioId === tokenInfoScenario.id)!;
+      expect(consumerItem.request.auth?.bearer?.[0]).toEqual({ key: "token", value: "{{token}}", type: "string" });
+
+      expect(response.body.limitations).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "unresolved-credential-producer", location: 'security scheme "tokenAuth"' }),
+        ]),
+      );
+      expect(response.body.summary.automaticChainCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it("chains two distinctly-keyed schemes independently over HTTP, with zero cross-scheme leakage (US2, SC-002)", async () => {
+      const response = await exportRequest({
+        apiModel: twoIndependentSchemesApiModel,
+        testModel: testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+        workflowContext: automaticChainingContext(),
+      });
+      expect(response.status).toBe(200);
+
+      const items = response.body.collection.item.flatMap((folder: { item: unknown[] }) => folder.item) as {
+        provenance?: { scenarioId?: string };
+        request: { auth?: { bearer: { key: string; value: string }[] } };
+      }[];
+
+      const tokenInfoItem = items.find((item) => item.provenance?.scenarioId === tokenInfoScenario.id)!;
+      expect(tokenInfoItem.request.auth?.bearer?.[0]?.value).toBe("{{token}}");
+      const adminReportsItem = items.find((item) => item.provenance?.scenarioId === adminReportsScenario.id)!;
+      expect(adminReportsItem.request.auth?.bearer?.[0]?.value).toBe("{{adminToken}}");
+
+      expect(response.body.limitations).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: "unresolved-credential-producer" })]),
+      );
+    });
+
+    it("creates no chain and records the limitation over HTTP when the producer's response has two equally plausible fields (US3, FR-004)", async () => {
+      const response = await exportRequest({
+        apiModel: ambiguousFieldsApiModel,
+        testModel: testModelOf(issueTokenAmbiguousFieldsScenario, tokenInfoScenario),
+        workflowContext: automaticChainingContext(),
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.summary.automaticChainCount).toBe(0);
+      expect(response.body.limitations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "unresolved-credential-producer", location: 'security scheme "tokenAuth"' }),
+        ]),
+      );
+    });
+
+    it("creates no chain and records the limitation over HTTP when the producer's response has zero plausible fields (US3, FR-004)", async () => {
+      const response = await exportRequest({
+        apiModel: noPlausibleFieldApiModel,
+        testModel: testModelOf(issueTokenNoPlausibleFieldScenario, tokenInfoScenario),
+        workflowContext: automaticChainingContext(),
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.summary.automaticChainCount).toBe(0);
+      expect(response.body.limitations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "unresolved-credential-producer", location: 'security scheme "tokenAuth"' }),
+        ]),
+      );
+    });
+
+    it("records the limitation over HTTP for a primary scheme whose login endpoint's stem does not match (Clarifications 2026-09-15 Q3)", async () => {
+      const response = await exportRequest({
+        apiModel: primaryNoStemMatchApiModel,
+        testModel: testModelOf(createSessionScenario, sessionInfoScenario),
+        workflowContext: automaticChainingContext(),
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.credentialProducers).toEqual([]);
+      expect(response.body.summary.automaticChainCount).toBe(0);
+      expect(response.body.limitations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "unresolved-credential-producer", location: 'security scheme "bearerAuth"' }),
+        ]),
+      );
+    });
   });
 });

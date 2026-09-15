@@ -51,7 +51,7 @@ function coverageSection(
     `- Workflow data handoffs: ${summary.workflowVariableCount}`,
     `- Unsupported approved workflows: ${summary.unsupportedWorkflowCount}`,
     `- Omitted unapproved workflows: ${summary.omittedWorkflowCount}`,
-    `- Automatically chained path parameters: ${summary.automaticChainCount}`,
+    `- Automatically chained requests: ${summary.automaticChainCount}`,
     "",
     "Workflow folders contain only explicitly approved, fully supported sequences. Standalone",
     "folders contain approved scenarios not covered by a rendered workflow. Requests are",

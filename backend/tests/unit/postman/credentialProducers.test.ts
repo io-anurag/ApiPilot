@@ -4,13 +4,19 @@ import { findCredentialProducers } from "../../../src/postman/credentialProducer
 import {
   adminAuthOperation,
   adminLoginOperation,
-  ambiguousAdminOperation,
   authenticatedAdminLookingOperation,
+  basicOnlyScheme,
+  basicProtectedOperation,
   bearerAuthOperation,
+  bearerAuthOnlyScheme,
+  createSessionOperation,
+  issueTokenOperation,
   operationsWithAmbiguousProducer,
   operationsWithDiscoverableProducer,
   operationsWithNoProducer,
-  regularLoginOperation,
+  sessionInfoOperation,
+  tokenAuthScheme,
+  tokenInfoOperation,
   twoBearerSchemes,
 } from "../../fixtures/postman/credentialFixtures";
 
@@ -45,14 +51,30 @@ describe("findCredentialProducers", () => {
     expect(candidates).toEqual([]);
   });
 
-  it("never searches the primary scheme, even when an unauthenticated operation's path matches its stem", () => {
-    // bearerAuth's stem is "bearer"; regularLoginOperation's path/operationId never contain it,
-    // so this also verifies no accidental match — the real guarantee is structural: only
-    // non-primary plan entries are iterated at all.
-    const candidates = findCredentialProducers(
-      [regularLoginOperation, ambiguousAdminOperation],
-      plan,
-    );
-    expect(candidates.every((candidate) => candidate.schemeKey !== "bearerAuth")).toBe(true);
+  // specs/023-auto-auth-credential-chaining Clarifications 2026-09-15 (Q1/Q3) extend discovery to
+  // the primary scheme too, using the identical stem-match rule with no relaxed fallback.
+  it("also searches the primary scheme, finding a candidate when its stem matches", () => {
+    const tokenPlan = planSchemeVariables(tokenAuthScheme);
+    const candidates = findCredentialProducers([issueTokenOperation, tokenInfoOperation], tokenPlan);
+    expect(candidates).toEqual([
+      {
+        schemeKey: "tokenAuth",
+        variableName: "token",
+        producerOperationPath: issueTokenOperation.path,
+        producerOperationMethod: issueTokenOperation.method,
+      },
+    ]);
+  });
+
+  it("yields no candidate for the primary scheme when its login endpoint's path/operationId does not contain its own stem", () => {
+    const bearerPlan = planSchemeVariables(bearerAuthOnlyScheme);
+    const candidates = findCredentialProducers([createSessionOperation, sessionInfoOperation], bearerPlan);
+    expect(candidates).toEqual([]);
+  });
+
+  it("never yields a candidate for a http/basic scheme, even as the primary (sole) scheme", () => {
+    const basicPlan = planSchemeVariables(basicOnlyScheme);
+    const candidates = findCredentialProducers([basicProtectedOperation], basicPlan);
+    expect(candidates).toEqual([]);
   });
 });

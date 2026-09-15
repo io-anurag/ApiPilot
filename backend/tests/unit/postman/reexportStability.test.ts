@@ -16,7 +16,16 @@ import {
   testModelOf,
   workflowDecision,
 } from "../../fixtures/postman/dependencyFixtures";
-import { adminAuthOperation, bearerAuthOperation, discoverableProducerApiModel } from "../../fixtures/postman/credentialFixtures";
+import {
+  adminAuthOperation,
+  adminReportsScenario,
+  bearerAuthOperation,
+  discoverableProducerApiModel,
+  issueAdminTokenScenario,
+  issueTokenScenario,
+  tokenInfoScenario,
+  twoIndependentSchemesApiModel,
+} from "../../fixtures/postman/credentialFixtures";
 import { filterDeepObjectOperation, parameterApiModel, sortDefaultOperation } from "../../fixtures/postman/parameterFixtures";
 
 const options = { baseUrl: "https://qa.internal.example" };
@@ -212,6 +221,50 @@ describe("re-export stability for distinct-credential schemes (specs/021-multi-c
     expect(withoutAdmin.environment.values.map((value) => value.key)).not.toContain("adminToken");
     // credentialProducers reflects the specification's own structure (research.md D5), not which
     // scenarios happen to be approved — it is unaffected by removing the admin scenario.
+    expect(withoutAdmin.credentialProducers).toEqual(withBoth.credentialProducers);
+  });
+});
+
+describe("re-export stability for auth-credential chains (specs/023-auto-auth-credential-chaining)", () => {
+  const authContext: WorkflowExportContext = {
+    workflows: [],
+    approvedWorkflowIds: [],
+    automaticChaining: { graph: graphOf(), cycles: [], workflowDecisions: {} },
+  };
+
+  function exportOfAuth(testModel: TestModel): ExportResult {
+    const outcome = generateCollection(twoIndependentSchemesApiModel, testModel, {}, authContext);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    return outcome.result;
+  }
+
+  it("leaves the primary scheme's chain and {{token}} routing unchanged when the second scheme's scenarios are removed", () => {
+    const before = exportOfAuth(
+      testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+    );
+    const after = exportOfAuth(testModelOf(issueTokenScenario, tokenInfoScenario));
+
+    expect(before.summary.automaticChainCount).toBe(2);
+    expect(after.summary.automaticChainCount).toBe(1);
+
+    const beforeItems = itemsById(before);
+    const afterItems = itemsById(after);
+    const tokenInfoEntry = [...beforeItems.entries()].find(
+      ([, entry]) => entry.item.provenance?.scenarioId === tokenInfoScenario.id,
+    );
+    expect(tokenInfoEntry).toBeDefined();
+    const [tokenInfoItemId] = tokenInfoEntry!;
+    expect(afterItems.get(tokenInfoItemId)).toEqual(beforeItems.get(tokenInfoItemId));
+  });
+
+  it("drops the second scheme's variable once no exported operation references it, while credentialProducers stays the same", () => {
+    const withBoth = exportOfAuth(
+      testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+    );
+    const withoutAdmin = exportOfAuth(testModelOf(issueTokenScenario, tokenInfoScenario));
+
+    expect(withBoth.environment.values.map((value) => value.key)).toContain("adminToken");
+    expect(withoutAdmin.environment.values.map((value) => value.key)).not.toContain("adminToken");
     expect(withoutAdmin.credentialProducers).toEqual(withBoth.credentialProducers);
   });
 });

@@ -173,6 +173,20 @@ harmless) `pm.environment.set` lines on the producer's test script when this rar
 This keeps FR-006's guarantee ("never a separate chain-scoped name a consuming operation's auth
 block does not already reference") unconditionally true rather than true-except-in-this-corner-case.
 
+**As built** (refinement made during `/speckit-implement`): the grouping key for an `"auth"`
+consumer also includes the scheme key (`consumer.field`), not just the producer field and the
+`"path"`/`"auth"` kind. Reason: it is *also* structurally possible for the same producer operation
+to independently qualify as a producer candidate for two distinctly-keyed schemes whose stems
+happen to coincide (e.g. two scheme keys that both normalize to the same stem) — `credentialProducers`
+already permits this per-scheme, since each scheme's candidate search is independent. Without the
+extra partition, two such schemes' relationships would land in one group and `applyChainGroup`
+would resolve `credentialVariableNames.get(first.consumer.field)` using only the *first*
+relationship's scheme key, silently assigning every consumer — including the other scheme's — the
+wrong credential variable. This is exactly the SC-002 cross-scheme-leakage guarantee D7 exists to
+protect, just via a second, independently-discovered path to the same failure mode; the fix is the
+same technique (split the group), extended by one more key component. See
+`relationshipProducerGroupKey` in `automaticChaining.ts`.
+
 ## D8 — `http`/`basic` needs no new exclusion code; specs/021 already declines it
 
 **Decision**: No change to `credentialProducers.ts`'s existing `if (entry.type === "basic")

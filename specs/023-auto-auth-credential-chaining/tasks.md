@@ -40,7 +40,7 @@ No `frontend/` change (contracts/auth-credential-chaining.md §3).
 **Purpose**: Create fixture data this feature's tests need, without touching any existing fixture
 or behavior.
 
-- [ ] T001 [P] Extend `backend/tests/fixtures/postman/credentialFixtures.ts` with builder
+- [X] T001 [P] Extend `backend/tests/fixtures/postman/credentialFixtures.ts` with builder
       functions: (a) an unauthenticated `POST /auth/token` (`operationId: "issueToken"`) under the
       primary `bearerAuth` scheme, whose 2xx response documents exactly one string field (e.g.
       `token`) — the flagship producer; (b) a consumer operation `GET /auth/token-info` declaring
@@ -66,26 +66,26 @@ or behavior.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Extend `DependencyFieldLocation` in `packages/shared-domain/src/apiDependency.ts` to
+- [X] T002 Extend `DependencyFieldLocation` in `packages/shared-domain/src/apiDependency.ts` to
       `"path" | "query" | "header" | "body" | "auth"` (FR-001, data-model.md §1). Additive only; no
       other type in the file changes.
-- [ ] T003 [P] In `backend/src/postman/assertionScripts.ts`, add an optional
+- [X] T003 [P] In `backend/src/postman/assertionScripts.ts`, add an optional
       `finalVariableName?: string` field to `WorkflowExtraction`, and update `extractionLines` to
       use `extraction.finalVariableName ?? workflowVariableName(extraction.workflowId,
       extraction.variableName)` as the variable passed to `pm.environment.set(...)` (research.md
       D6, data-model.md). Every existing call site omits the field and is byte-for-byte unaffected.
-- [ ] T004 [P] In `backend/src/postman/credentialProducers.ts`, remove the `if (entry.isPrimary)
+- [X] T004 [P] In `backend/src/postman/credentialProducers.ts`, remove the `if (entry.isPrimary)
       continue;` line from `findCredentialProducers` so every plan entry (primary and non-primary
       alike) is searched with the identical, unchanged stem-match heuristic; the
       `entry.type === "basic"` skip is unchanged (Clarifications 2026-09-15 Q1/Q3, FR-002,
       FR-002a, data-model.md). (Depends on T002 only insofar as the file imports
       `SchemeVariablePlanEntry`, unaffected by T002 — no functional dependency.)
-- [ ] T005 [P] Create `backend/src/postman/authCredentialRelationships.ts` with the
+- [X] T005 [P] Create `backend/src/postman/authCredentialRelationships.ts` with the
       `buildAuthCredentialRelationships(operations, credentialProducers)` stub from data-model.md
       (imports `ApiDependencyRelationship`, `ApiOperation`, `CredentialProducerCandidate` from
       `@apipilot/shared-domain` and `producerFieldSchemas` from `../dependencies/fieldExtraction`;
       returns `[]` unconditionally for now — no matching logic yet). (Depends on T002.)
-- [ ] T006 In `backend/src/postman/automaticChaining.ts`: add `credentialVariableNames:
+- [X] T006 In `backend/src/postman/automaticChaining.ts`: add `credentialVariableNames:
       ReadonlyMap<string, string>` to `AutomaticChainingInput`; widen `isEligibleRelationship`'s
       location check to `if (relationship.consumer.location !== "path" &&
       relationship.consumer.location !== "auth") return false;`; add a new function
@@ -94,7 +94,7 @@ or behavior.
       `operation.security[0]?.schemes[0]?.name` (research.md D4, data-model.md) — implemented in
       full now since it is small and pure, but not yet wired into `planAutomaticChains`. (Depends
       on T002.)
-- [ ] T007 In `backend/src/postman/generateCollection.ts`, reorder computation so
+- [X] T007 In `backend/src/postman/generateCollection.ts`, reorder computation so
       `planSchemeVariables(apiModel.securitySchemes)` and `findCredentialProducers(apiModel.
       operations, plan)` run *before* `planAutomaticChains` is called (today they run after, at
       lines ~324-325); thread the resulting `plan`/`credentialProducers` into a new (currently
@@ -126,7 +126,7 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
 
 > Write these first; confirm they fail against the Foundational-phase stubs before implementing.
 
-- [ ] T008 [P] [US1] Unit tests in `backend/tests/unit/postman/authCredentialRelationships.test.ts`:
+- [X] T008 [P] [US1] Unit tests in `backend/tests/unit/postman/authCredentialRelationships.test.ts`:
       `buildAuthCredentialRelationships` — (a) a producer candidate with exactly one string-typed
       response field and one consumer operation yields one `CONFIRMED`, `deterministic`
       relationship with `consumer: {location: "auth", field: schemeKey}`; (b) multiple consumer
@@ -134,12 +134,12 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
       identically for a *primary* scheme candidate (T004's newly-included case), not only a
       secondary one; (d) a non-string response field (e.g. a boolean or number) is never selected as
       the producer field.
-- [ ] T009 [P] [US1] Unit tests in `backend/tests/unit/postman/credentialProducers.test.ts`: extend
+- [X] T009 [P] [US1] Unit tests in `backend/tests/unit/postman/credentialProducers.test.ts`: extend
       for primary-scheme discovery — (a) T001a's primary-scheme login endpoint (path/`operationId`
       contains the scheme's stem) yields one candidate; (b) T001f's primary-scheme login endpoint
       (stem absent from path/`operationId`) yields no candidate; (c) a `http`/`basic` scheme (T001g)
       never yields a candidate even though it is primary.
-- [ ] T010 [P] [US1] Unit tests in `backend/tests/unit/postman/automaticChaining.test.ts`: (a) an
+- [X] T010 [P] [US1] Unit tests in `backend/tests/unit/postman/automaticChaining.test.ts`: (a) an
       `"auth"`-location `CONFIRMED` relationship with an approved positive producer scenario and an
       approved consumer scenario is applied — the resulting `AutomaticChain.variableName` equals the
       scheme's plan-resolved credential variable name (e.g. `"token"`), never a
@@ -153,7 +153,7 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
       with its usual `workflowVariableName`-derived variable, one `"auth"` chain with the scheme's
       credential variable name — never one merged chain with a single, ambiguous variable name
       (research.md D7).
-- [ ] T011 [P] [US1] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
+- [X] T011 [P] [US1] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
       exporting the T001a/b fixture over HTTP (with `workflowContext.automaticChaining` present)
       produces `POST /auth/token`'s request `event` with a test script that sets `token` directly
       (not a chain-derived name), `GET /auth/token-info`'s `auth.bearer` value unchanged at
@@ -162,7 +162,7 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Implement `buildAuthCredentialRelationships` fully in
+- [X] T012 [US1] Implement `buildAuthCredentialRelationships` fully in
       `backend/src/postman/authCredentialRelationships.ts` per data-model.md: for each
       `CredentialProducerCandidate`, look up its operation, call `producerFieldSchemas` (reused
       unmodified from `../dependencies/fieldExtraction`) on it, filter to fields with
@@ -176,7 +176,7 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
       (data-model.md — `evidence`/`aiCorroboration` stay `undefined`, this relationship kind carries
       neither). Zero or 2+ qualifying fields yields no relationships for that scheme. (Depends on
       T005, T004.)
-- [ ] T013 [US1] In `backend/src/postman/automaticChaining.ts`: merge `findAuthConsumerTargets`
+- [X] T013 [US1] In `backend/src/postman/automaticChaining.ts`: merge `findAuthConsumerTargets`
       (T006) output into `targetsByKey` inside `planAutomaticChains`; extend `producerGroups`
       grouping so relationships sharing a producer field but differing in `consumer.location`
       (`"path"` vs `"auth"`) form separate groups, never merged (research.md D7); in
@@ -187,7 +187,7 @@ captures the field into `{{token}}`, the consuming request's `auth.bearer` value
       `input.credentialVariableNames.get(first.producer.field)` instead of
       `workflowVariableName(chainId, first.producer.field)` (research.md D6). (Depends on T006,
       T003.)
-- [ ] T014 [US1] In `backend/src/postman/generateCollection.ts`: replace the Foundational-phase
+- [X] T014 [US1] In `backend/src/postman/generateCollection.ts`: replace the Foundational-phase
       placeholder (T007) — call `buildAuthCredentialRelationships(auth.operations,
       credentialProducers)` and merge its output into the relationships array passed to
       `planAutomaticChains`'s `graph`; build `credentialVariableNames` as a `Map<string, string>`
@@ -210,18 +210,18 @@ only its own scheme's variable (`token` vs. `adminToken`).
 
 ### Tests for User Story 2
 
-- [ ] T015 [P] [US2] Unit test in `backend/tests/unit/postman/authCredentialRelationships.test.ts`:
+- [X] T015 [P] [US2] Unit test in `backend/tests/unit/postman/authCredentialRelationships.test.ts`:
       given two distinctly-keyed schemes each with their own unique producer and consumers,
       `buildAuthCredentialRelationships` returns relationships whose `producer`/`consumer.field`
       never mix across the two schemes (SC-002).
-- [ ] T016 [P] [US2] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
+- [X] T016 [P] [US2] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
       exporting the combined `bearerAuth` + `adminAuth` fixture (T001a/b/e) over HTTP results in two
       independent chains — `bearerAuth`'s consumers reference and receive only `{{token}}}`,
       `adminAuth`'s only `{{adminToken}}` — with zero cross-scheme leakage.
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Verify T012/T013's per-producer-field grouping isolates the two schemes correctly
+- [X] T017 [US2] Verify T012/T013's per-producer-field grouping isolates the two schemes correctly
       against T015/T016 (expected: no code change, since each scheme's producer operation/field is
       already distinct, and `resolveProducerDisambiguation` keys by consumer, not scheme); fix
       anything the tests reveal. (Depends on T012, T013, T015, T016.)
@@ -242,20 +242,20 @@ candidate at all (T001f); verify no chain is created and the limitation is recor
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Unit tests in `backend/tests/unit/postman/generateCollection.test.ts`: extend
+- [X] T018 [P] [US3] Unit tests in `backend/tests/unit/postman/generateCollection.test.ts`: extend
       `unresolvedCredentialProducerLimitations` coverage — (a) T001f's primary scheme with no
       stem-matching producer records the limitation (previously exempt as primary); (b) T001c's
       two-plausible-field producer records the limitation and no relationship/chain exists for that
       scheme; (c) T001d's zero-plausible-field producer records the limitation; (d) the existing
       two-equally-plausible-unauthenticated-operations case (specs/021) still records the
       limitation unchanged.
-- [ ] T019 [P] [US3] Integration test in `backend/tests/integration/postmanCollection.test.ts`: each
+- [X] T019 [P] [US3] Integration test in `backend/tests/integration/postmanCollection.test.ts`: each
       of T001c/d/f, exported over HTTP, produces exactly one `unresolved-credential-producer`
       limitation for the affected scheme and no automatic chain.
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] In `backend/src/postman/generateCollection.ts`'s
+- [X] T020 [US3] In `backend/src/postman/generateCollection.ts`'s
       `unresolvedCredentialProducerLimitations`: remove the `entry.isPrimary` skip; redefine the
       "resolved" scheme-key set from the schemes actually present among
       `buildAuthCredentialRelationships`'s output (field-level resolution, research.md D3) instead
@@ -272,11 +272,11 @@ T018–T019 all pass.
 
 **Purpose**: Repo-wide guarantees and validation that span all three stories.
 
-- [ ] T021 [P] Extend `backend/tests/unit/postman/determinism.test.ts` and
+- [X] T021 [P] Extend `backend/tests/unit/postman/determinism.test.ts` and
       `backend/tests/unit/postman/reexportStability.test.ts` with an auth-credential-chaining case
       (T001a/b): repeated exports of the same inputs produce byte-identical relationships, chains,
       and limitations (SC-004, constitution XVI/XXIV).
-- [ ] T022 [P] Update `ExportSummary.automaticChainCount`'s doc comment in
+- [X] T022 [P] Update `ExportSummary.automaticChainCount`'s doc comment in
       `packages/shared-domain/src/postmanArtifact.ts` to note it also counts auth-credential
       consumers resolved via an automatic chain, not only path parameters (contracts/
       auth-credential-chaining.md §2). Also fix the misleading rendered line this doc comment
@@ -288,7 +288,7 @@ T018–T019 all pass.
       claims "path parameters" when the export's chains include an auth-credential consumer
       (found during `/speckit-analyze`: the summary line was otherwise the only place in the
       pipeline still hard-coding a path-parameter-only description of this counter).
-- [ ] T023 Run quickstart.md's focused checks, then the full repository validation commands (`npm
+- [X] T023 Run quickstart.md's focused checks, then the full repository validation commands (`npm
       run build`, `npm run lint`, `npm test`) from the repository root; fix any fallout before
       considering the feature complete.
 

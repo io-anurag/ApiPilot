@@ -59,6 +59,24 @@ function relationshipProducerKey(relationship: ApiDependencyRelationship): strin
   return `${operationKey(relationship.producer.operationPath, relationship.producer.operationMethod)}|${relationship.producer.field}`;
 }
 
+/**
+ * Groups relationships sharing the same producer field, but never merges a `"path"`-location
+ * consumer with an `"auth"`-location one that happens to share the same producer field
+ * (specs/023-auto-auth-credential-chaining research.md D7): the two kinds resolve to different
+ * variable-naming rules (a derived chain variable vs. a fixed credential variable name), so a
+ * merged group could not honor both without silently dropping one guarantee. For `"auth"`
+ * consumers, the scheme key (`consumer.field`) is also part of the key, so two distinctly-keyed
+ * schemes that happen to share the same producer candidate/field (e.g. two scheme keys with the
+ * same normalized stem) still resolve to two independent chains, never one chain pointed at only
+ * one scheme's credential variable.
+ */
+function relationshipProducerGroupKey(relationship: ApiDependencyRelationship): string {
+  if (relationship.consumer.location === "auth") {
+    return `${relationshipProducerKey(relationship)}|auth|${relationship.consumer.field}`;
+  }
+  return `${relationshipProducerKey(relationship)}|other`;
+}
+
 /** Every unresolved path parameter across the standalone scenario set (FR-001). */
 function findUnresolvedPathConsumers(standaloneResolved: ScenarioOperationPair[]): ConsumerTarget[] {
   const targets: ConsumerTarget[] = [];
@@ -71,6 +89,24 @@ function findUnresolvedPathConsumers(standaloneResolved: ScenarioOperationPair[]
         targets.push({ scenario, operation, field: name });
       }
     }
+  }
+  return targets;
+}
+
+/**
+ * Every operation declaring a security-scheme requirement, across the standalone scenario set —
+ * unconditionally a target, unlike a path parameter (specs/023-auto-auth-credential-chaining
+ * research.md D4): an operation's auth block always references its scheme's credential variable
+ * (`authMapping.ts`), starting empty regardless of the scenario, so there is no "already supplied"
+ * state to check. `field` is the scheme key the operation's *first* declared requirement's *first*
+ * scheme names — the same one `mapOperationAuth` actually configures the rendered auth block from.
+ */
+function findAuthConsumerTargets(standaloneResolved: ScenarioOperationPair[]): ConsumerTarget[] {
+  const targets: ConsumerTarget[] = [];
+  for (const { scenario, operation } of standaloneResolved) {
+    const schemeKey = operation.security[0]?.schemes[0]?.name;
+    if (schemeKey === undefined) continue;
+    targets.push({ scenario, operation, field: schemeKey });
   }
   return targets;
 }
@@ -136,6 +172,16 @@ export interface AutomaticChainingInput {
    * consumer before the producer under the collection's existing, unmodified ordering.
    */
   standaloneOrderRank: ReadonlyMap<string, number>;
+  /**
+   * Security scheme key → the credential variable name `authMapping.ts` already emits for it
+   * (`token`, `adminToken`, `apiKey`, …). Threaded from `generateCollection.ts`'s scheme plan so an
+   * `"auth"`-location chain can resolve the *fixed* variable name its consumers' auth blocks
+   * already reference, instead of deriving a new chain-scoped name
+   * (specs/023-auto-auth-credential-chaining research.md D6). Never consulted for a `"path"`
+   * chain. `http`/`basic` schemes are never keyed here (specs/023 FR-002a) — they never reach an
+   * eligible `"auth"` relationship in the first place.
+   */
+  credentialVariableNames: ReadonlyMap<string, string>;
 }
 
 export interface AutomaticChainingResult {
@@ -160,7 +206,7 @@ function isEligibleRelationship(
   standaloneResolved: ScenarioOperationPair[],
 ): boolean {
   if (relationship.confidence !== "CONFIRMED" && relationship.confidence !== "LIKELY") return false;
-  if (relationship.consumer.location !== "path") return false;
+  if (relationship.consumer.location !== "path" && relationship.consumer.location !== "auth") return false;
   if (cyclicRelationshipIds.has(relationship.id)) return false;
   if (rejectedRelationshipIds.has(relationship.id)) return false;
   if (!supportedField(relationship.producer.field) || !supportedField(relationship.consumer.field)) return false;
@@ -179,11 +225,15 @@ function applyChainGroup(
   targetsByKey: Map<string, ConsumerTarget[]>,
   standaloneOrderRank: ReadonlyMap<string, number>,
   scenarioById: Map<string, ScenarioOperationPair>,
+  credentialVariableNames: ReadonlyMap<string, string>,
 ): { chain: AutomaticChain; extraction: WorkflowExtraction } | undefined {
   const first = relationships[0];
   const producerPair = positiveProducerScenario(standaloneResolved, first.producer)!;
   const chainId = chainIdForProducer(first.producer);
   const producerRank = standaloneOrderRank.get(producerPair.scenario.id);
+  // Every relationship in one group shares the same producer field and the same consumer-location
+  // kind (research.md D7's split grouping), so this is decided once per group, not per consumer.
+  const isAuthChain = first.consumer.location === "auth";
 
   const consumers: AutomaticChain["consumers"] = [];
   for (const relationship of relationships) {
@@ -192,23 +242,29 @@ function applyChainGroup(
       if (producerRank === undefined || consumerRank === undefined || producerRank >= consumerRank) {
         continue; // FR-015: never reorder the collection to make a chain work — decline instead.
       }
-      // Re-read the latest substituted version rather than the original `target.scenario`, so a
-      // second chain targeting a different unresolved parameter on the same scenario (e.g.
-      // `/a/{x}/b/{y}` chained from two different producers) accumulates both substitutions
-      // instead of the second overwriting the first.
-      const current = scenarioById.get(target.scenario.id)!;
-      const substituted = applyWorkflowSubstitutions(current.scenario, chainId, [
-        {
-          name: first.producer.field,
-          producerStepIndex: 0,
-          producerField: first.producer.field,
-          consumerStepIndex: 1,
-          consumerLocation: "path",
-          consumerField: relationship.consumer.field,
-          relationshipId: relationship.id,
-        },
-      ]);
-      scenarioById.set(target.scenario.id, { scenario: substituted, operation: current.operation });
+      if (!isAuthChain) {
+        // Re-read the latest substituted version rather than the original `target.scenario`, so a
+        // second chain targeting a different unresolved parameter on the same scenario (e.g.
+        // `/a/{x}/b/{y}` chained from two different producers) accumulates both substitutions
+        // instead of the second overwriting the first.
+        const current = scenarioById.get(target.scenario.id)!;
+        const substituted = applyWorkflowSubstitutions(current.scenario, chainId, [
+          {
+            name: first.producer.field,
+            producerStepIndex: 0,
+            producerField: first.producer.field,
+            consumerStepIndex: 1,
+            consumerLocation: "path",
+            consumerField: relationship.consumer.field,
+            relationshipId: relationship.id,
+          },
+        ]);
+        scenarioById.set(target.scenario.id, { scenario: substituted, operation: current.operation });
+      }
+      // An `"auth"`-location consumer's request is never mutated: the operation's auth block
+      // already references its scheme's credential variable independently of chaining
+      // (specs/023-auto-auth-credential-chaining research.md D5, FR-007) — the chain's only job is
+      // to make sure something populates that variable at runtime (the extraction below).
       consumers.push({
         operationPath: relationship.consumer.operationPath,
         operationMethod: relationship.consumer.operationMethod,
@@ -221,10 +277,19 @@ function applyChainGroup(
   }
   if (consumers.length === 0) return undefined;
 
+  // An auth-credential chain always resolves to the scheme's already-emitted credential variable
+  // name (specs/023-auto-auth-credential-chaining FR-006), never a derived chain-scoped name.
+  // `credentialVariableNames` is keyed by scheme key, which is `consumer.field` for every
+  // relationship in this group (the producer-grouping key above keeps one scheme's relationships
+  // together, so `first.consumer.field` is that scheme's key for the whole group).
+  const variableName = isAuthChain
+    ? (credentialVariableNames.get(first.consumer.field) ?? workflowVariableName(chainId, first.producer.field))
+    : workflowVariableName(chainId, first.producer.field);
+
   return {
     chain: {
       chainId,
-      variableName: workflowVariableName(chainId, first.producer.field),
+      variableName,
       producer: {
         operationPath: first.producer.operationPath,
         operationMethod: first.producer.operationMethod,
@@ -233,7 +298,12 @@ function applyChainGroup(
       },
       consumers,
     },
-    extraction: { workflowId: chainId, variableName: first.producer.field, responseField: first.producer.field },
+    extraction: {
+      workflowId: chainId,
+      variableName: first.producer.field,
+      responseField: first.producer.field,
+      ...(isAuthChain ? { finalVariableName: variableName } : {}),
+    },
   };
 }
 
@@ -243,7 +313,14 @@ export function planAutomaticChains(
 ): AutomaticChainingResult {
   if (input.disabled) return noop(standaloneResolved);
 
-  const targetsByKey = groupByKey(findUnresolvedPathConsumers(standaloneResolved), consumerTargetKey);
+  // Both target kinds are computed and merged before the emptiness check below, so an export with
+  // no unresolved path parameters but at least one auth-consumer operation still proceeds
+  // (specs/023-auto-auth-credential-chaining) — checking only path targets here would incorrectly
+  // short-circuit before any auth-credential chain was ever considered.
+  const targetsByKey = groupByKey(
+    [...findUnresolvedPathConsumers(standaloneResolved), ...findAuthConsumerTargets(standaloneResolved)],
+    consumerTargetKey,
+  );
   if (targetsByKey.size === 0) return noop(standaloneResolved);
 
   const cyclicRelationshipIds = new Set(input.cycles.flatMap((cycle) => cycle.relationshipIds));
@@ -256,16 +333,24 @@ export function planAutomaticChains(
   // workflow assembly (008-dependency-workflow-engine FR-013a).
   const { resolved } = resolveProducerDisambiguation(candidateRelationships);
 
-  // FR-009: group by producer field so a fan-out (one producer, several consumers) shares one
-  // chain/variable/extraction instead of a redundant capture per consumer.
-  const producerGroups = groupByKey(resolved, relationshipProducerKey);
+  // FR-009: group by producer field (and, for an auth consumer, also by scheme — research.md D7)
+  // so a fan-out (one producer, several consumers) shares one chain/variable/extraction instead of
+  // a redundant capture per consumer.
+  const producerGroups = groupByKey(resolved, relationshipProducerGroupKey);
 
   const scenarioById = new Map(standaloneResolved.map((pair) => [pair.scenario.id, pair]));
   const chains: AutomaticChain[] = [];
   const extractionsByProducerScenarioId = new Map<string, WorkflowExtraction[]>();
 
   for (const relationships of producerGroups.values()) {
-    const outcome = applyChainGroup(relationships, standaloneResolved, targetsByKey, input.standaloneOrderRank, scenarioById);
+    const outcome = applyChainGroup(
+      relationships,
+      standaloneResolved,
+      targetsByKey,
+      input.standaloneOrderRank,
+      scenarioById,
+      input.credentialVariableNames,
+    );
     if (!outcome) continue;
     chains.push(outcome.chain);
     extractionsByProducerScenarioId.set(outcome.chain.producer.scenarioId, [

@@ -1,8 +1,8 @@
 import type {
+  ApiDependencyRelationship,
   ApiModel,
   ApiOperation,
   ArtifactVariable,
-  CredentialProducerCandidate,
   ExportOptions,
   ExportOutcome,
   GenerationLimitation,
@@ -15,6 +15,7 @@ import type {
   WorkflowExportContext,
 } from "@apipilot/shared-domain";
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
+import { buildAuthCredentialRelationships } from "./authCredentialRelationships";
 import { planAutomaticChains } from "./automaticChaining";
 import { baseUrlVariable } from "./artifactVariables";
 import { mapOperationAuth, planSchemeVariables, type SchemeVariablePlanEntry } from "./authMapping";
@@ -165,23 +166,24 @@ function dedupeVariables(variables: ArtifactVariable[]): ArtifactVariable[] {
 /**
  * Auth is mapped once per operation, not once per scenario, so an operation's recorded
  * limitations appear once no matter how many scenarios target it.
+ *
+ * `plan` is computed once by the caller (`generateCollection`), before automatic chaining runs —
+ * not recomputed here — so every stage of the export (producer discovery, auth-credential
+ * relationship building, per-operation auth mapping, unresolved-scheme limitation reporting)
+ * agrees on the same primacy/naming decisions (specs/023-auto-auth-credential-chaining).
  */
 function authByOperation(
   apiModel: ApiModel,
   pairs: { scenario: TestScenario; operation: ApiOperation }[],
+  plan: Map<string, SchemeVariablePlanEntry>,
 ): {
   byKey: Map<string, PostmanAuth | undefined>;
   variables: ArtifactVariable[];
   limitations: GenerationLimitation[];
-  /** The scheme-variable plan computed for this export (specs/021-multi-credential-token-
-   *  provisioning), reused by producer discovery and unresolved-scheme limitation reporting so
-   *  every stage of the export agrees on the same primacy/naming decisions. */
-  plan: Map<string, SchemeVariablePlanEntry>;
   /** Every operation actually present in this export's approved scenarios, deduplicated —
    *  reused by unresolved-scheme limitation reporting to list the affected operations. */
   operations: ApiOperation[];
 } {
-  const plan = planSchemeVariables(apiModel.securitySchemes);
   const byKey = new Map<string, PostmanAuth | undefined>();
   const variables: ArtifactVariable[] = [];
   const limitations: GenerationLimitation[] = [];
@@ -199,24 +201,37 @@ function authByOperation(
     limitations.push(...mapping.limitations);
   }
 
-  return { byKey, variables, limitations, plan, operations };
+  return { byKey, variables, limitations, operations };
 }
 
 /**
- * One aggregated limitation per non-primary scheme with no discovered producer candidate
- * (specs/021-multi-credential-token-provisioning FR-007) — never one per affected operation, so
- * the same unresolved scheme is not reported redundantly for every request that depends on it.
+ * One aggregated limitation per scheme with no auth-credential relationship actually built for it
+ * (specs/021-multi-credential-token-provisioning FR-007, specs/023-auto-auth-credential-chaining
+ * FR-004) — never one per affected operation, so the same unresolved scheme is not reported
+ * redundantly for every request that depends on it.
+ *
+ * Driven by `authRelationships` (field-level resolution), not merely by which schemes had a
+ * discovered producer *operation* (`credentialProducers`): a producer operation can be found by
+ * `findCredentialProducers`'s stem match yet still yield no relationship here, when its response
+ * documents zero or more than one plausible credential field (FR-003/FR-004) — that case must
+ * still report this limitation, not silently report nothing. The primary scheme is no longer
+ * exempt (specs/023 Clarifications 2026-09-15 Q1): producer discovery now covers it too, so it can
+ * now also end up unresolved.
  */
 function unresolvedCredentialProducerLimitations(
   operations: ApiOperation[],
   plan: Map<string, SchemeVariablePlanEntry>,
-  credentialProducers: CredentialProducerCandidate[],
+  authRelationships: ApiDependencyRelationship[],
 ): GenerationLimitation[] {
-  const resolvedSchemeKeys = new Set(credentialProducers.map((candidate) => candidate.schemeKey));
+  const resolvedSchemeKeys = new Set(
+    authRelationships
+      .filter((relationship) => relationship.consumer.location === "auth")
+      .map((relationship) => relationship.consumer.field),
+  );
   const limitations: GenerationLimitation[] = [];
 
   for (const [schemeKey, entry] of plan) {
-    if (entry.isPrimary || resolvedSchemeKeys.has(schemeKey)) continue;
+    if (resolvedSchemeKeys.has(schemeKey)) continue;
 
     const dependentLocations = operations
       .filter((operation) => operation.security[0]?.schemes[0]?.name === schemeKey)
@@ -239,6 +254,21 @@ function unresolvedCredentialProducerLimitations(
   }
 
   return limitations;
+}
+
+/**
+ * Security scheme key → the credential variable name `authMapping.ts` already emits for it
+ * (specs/023-auto-auth-credential-chaining research.md D6). Only `bearer`/`apiKey` schemes are
+ * keyed — `basic` is excluded (FR-002a), consistent with `authCredentialRelationships.ts` never
+ * building a relationship for one.
+ */
+function credentialVariableNamesFor(plan: Map<string, SchemeVariablePlanEntry>): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const [schemeKey, entry] of plan) {
+    if (entry.type === "bearer") names.set(schemeKey, entry.variableNames.token);
+    else if (entry.type === "apiKey") names.set(schemeKey, entry.variableNames.apiKey);
+  }
+  return names;
 }
 
 /**
@@ -312,22 +342,35 @@ export function generateCollection(
   groupAndName(unchainedStandaloneResolved).forEach((folder) => {
     folder.entries.forEach((entry) => standaloneOrderRank.set(entry.scenario.id, standaloneOrderRank.size));
   });
+
+  // Computed here — before automatic chaining runs, not after — because auth-credential chaining
+  // (specs/023-auto-auth-credential-chaining) needs the scheme plan and every auth-credential
+  // relationship *as an input* to `planAutomaticChains`. Every one of these is a pure function of
+  // `apiModel` alone (never the resolved scenario list), so nothing here depends on chaining's own
+  // output; `authByOperation` below reuses this same `plan` for per-operation auth-block mapping.
+  const plan = planSchemeVariables(apiModel.securitySchemes);
+  const credentialProducers = findCredentialProducers(apiModel.operations, plan);
+  const authRelationships = buildAuthCredentialRelationships(apiModel.operations, credentialProducers);
+  const credentialVariableNames = credentialVariableNamesFor(plan);
+
   const automaticChaining = planAutomaticChains(unchainedStandaloneResolved, {
-    graph: workflowContext?.automaticChaining?.graph ?? { relationships: [] },
+    graph: {
+      relationships: [...(workflowContext?.automaticChaining?.graph.relationships ?? []), ...authRelationships],
+    },
     cycles: workflowContext?.automaticChaining?.cycles ?? [],
     rejectedRelationshipIds: rejectedRelationshipIds(workflowContext),
     disabled: workflowContext?.automaticChaining === undefined || options.disableAutomaticChaining === true,
     standaloneOrderRank,
+    credentialVariableNames,
   });
   const standaloneResolved = automaticChaining.scenarios;
 
-  const auth = authByOperation(apiModel, [...standaloneResolved, ...workflowResolved]);
-  const credentialProducers = findCredentialProducers(apiModel.operations, auth.plan);
+  const auth = authByOperation(apiModel, [...standaloneResolved, ...workflowResolved], plan);
   const limitations: GenerationLimitation[] = [
     ...auth.limitations,
     ...analysisIssueLimitations(apiModel, resolved),
     ...workflowPlans.limitations,
-    ...unresolvedCredentialProducerLimitations(auth.operations, auth.plan, credentialProducers),
+    ...unresolvedCredentialProducerLimitations(auth.operations, plan, authRelationships),
   ];
   const variables: ArtifactVariable[] = [
     baseUrlVariable(options.baseUrl ?? ""),

@@ -25,11 +25,32 @@ import { integrationWorkflow, workflowStep, workflowVariable } from "../../fixtu
 import {
   adminAuthOperation,
   adminLoginOperation,
+  adminReportsScenario,
+  ambiguousFieldsApiModel,
   ambiguousProducerApiModel,
   bearerAuthOperation,
+  createSessionScenario,
   discoverableProducerApiModel,
+  issueAdminTokenScenario,
+  issueTokenAmbiguousFieldsScenario,
+  issueTokenNoPlausibleFieldScenario,
+  issueTokenScenario,
+  noPlausibleFieldApiModel,
   noProducerApiModel,
+  primaryNoStemMatchApiModel,
+  sessionInfoOperation,
+  sessionInfoScenario,
+  tokenInfoScenario,
+  twoIndependentSchemesApiModel,
 } from "../../fixtures/postman/credentialFixtures";
+
+/** Enables automatic chaining exactly as `WorkflowExportContext` requires (specs/019 FR-002) —
+ *  absent means disabled, per existing precedent (data-model.md). Auth-credential relationships
+ *  are built internally by `generateCollection` from the ApiModel; the supplied graph/cycles are
+ *  only ever the schema-field-matched ones, empty here since none of these fixtures need one. */
+function automaticChainingContext(): WorkflowExportContext {
+  return { workflows: [], approvedWorkflowIds: [], automaticChaining: { graph: graphOf(), cycles: [], workflowDecisions: {} } };
+}
 
 function credentialScenario(id: string, operation: { path: string; method: string }): TestScenario {
   return {
@@ -301,9 +322,16 @@ describe("generateCollection", () => {
           producerOperationMethod: adminLoginOperation.method,
         },
       ]);
+      // `adminAuth` (non-primary) finds its producer and is never unresolved. `bearerAuth` is now
+      // also searched (specs/023-auto-auth-credential-chaining extends discovery to the primary
+      // scheme too), but neither fixture operation's path/operationId contains its stem ("bearer"),
+      // so it correctly falls through to the same limitation — an intentional, documented
+      // consequence of the widened scope (research.md D3), not a regression.
       expect(
-        outcome.result.limitations.filter((limitation) => limitation.kind === "unresolved-credential-producer"),
-      ).toEqual([]);
+        outcome.result.limitations
+          .filter((limitation) => limitation.kind === "unresolved-credential-producer")
+          .map((limitation) => limitation.location),
+      ).toEqual(['security scheme "bearerAuth"']);
     });
 
     it("leaves credentialProducers empty and records no producer-found limitation when ambiguous", () => {
@@ -327,30 +355,143 @@ describe("generateCollection", () => {
       const adminTokenVariable = outcome.result.environment.values.find((value) => value.key === "adminToken");
       expect(adminTokenVariable).toEqual({ key: "adminToken", value: "", type: "secret", enabled: true });
 
+      // `noProducerApiModel` has no unauthenticated operation at all, so neither scheme finds a
+      // producer — `adminAuth` (the original 021 case) and, since specs/023-auto-auth-credential-
+      // chaining extends producer discovery to the primary scheme too, `bearerAuth` as well.
       const producerLimitations = outcome.result.limitations.filter(
         (limitation) => limitation.kind === "unresolved-credential-producer",
       );
-      expect(producerLimitations).toHaveLength(1);
-      expect(producerLimitations[0].location).toBe('security scheme "adminAuth"');
-      expect(producerLimitations[0].message).toContain("adminAuth");
-      expect(producerLimitations[0].message).toContain(`${adminAuthOperation.method} ${adminAuthOperation.path}`);
+      expect(producerLimitations.map((limitation) => limitation.location).sort()).toEqual([
+        'security scheme "adminAuth"',
+        'security scheme "bearerAuth"',
+      ]);
+      const adminLimitation = producerLimitations.find((l) => l.location === 'security scheme "adminAuth"')!;
+      expect(adminLimitation.message).toContain("adminAuth");
+      expect(adminLimitation.message).toContain(`${adminAuthOperation.method} ${adminAuthOperation.path}`);
     });
 
     it("also records the limitation when the producer match is ambiguous, not just when absent", () => {
       const outcome = generateCollection(ambiguousProducerApiModel, credentialTestModel());
       if (!outcome.ok) throw new Error("expected a successful export");
+      // Both schemes are unresolved here: `adminAuth` because two unauthenticated operations
+      // equally match its stem (the original ambiguous case), `bearerAuth` because neither
+      // matches its own stem (Clarifications 2026-09-15 — the primary scheme is searched too, with
+      // no relaxed fallback).
       const producerLimitations = outcome.result.limitations.filter(
         (limitation) => limitation.kind === "unresolved-credential-producer",
       );
-      expect(producerLimitations).toHaveLength(1);
+      expect(producerLimitations.map((limitation) => limitation.location).sort()).toEqual([
+        'security scheme "adminAuth"',
+        'security scheme "bearerAuth"',
+      ]);
     });
 
-    it("records no unresolved-credential-producer limitation once a producer is found", () => {
+    it("records no unresolved-credential-producer limitation for adminAuth once its producer is found", () => {
       const outcome = generateCollection(discoverableProducerApiModel, credentialTestModel());
       if (!outcome.ok) throw new Error("expected a successful export");
       expect(
-        outcome.result.limitations.filter((limitation) => limitation.kind === "unresolved-credential-producer"),
-      ).toEqual([]);
+        outcome.result.limitations
+          .filter((limitation) => limitation.kind === "unresolved-credential-producer")
+          .map((limitation) => limitation.location),
+      ).not.toContain('security scheme "adminAuth"');
+    });
+  });
+
+  describe("automatic auth-credential chaining (specs/023-auto-auth-credential-chaining)", () => {
+    it("captures the primary scheme's token end-to-end and reports no limitation for it (US1, SC-001)", () => {
+      const outcome = generateCollection(
+        twoIndependentSchemesApiModel,
+        testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+        {},
+        automaticChainingContext(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+
+      const producerItem = items(outcome).find((item) => item.provenance?.scenarioId === issueTokenScenario.id)!;
+      expect(producerItem.event?.[0]?.script.exec.join("\n")).toContain('pm.environment.set("token"');
+
+      const consumerItem = items(outcome).find((item) => item.provenance?.scenarioId === tokenInfoScenario.id)!;
+      expect(consumerItem.request.auth).toEqual({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
+
+      expect(
+        outcome.result.limitations
+          .filter((limitation) => limitation.kind === "unresolved-credential-producer")
+          .map((limitation) => limitation.location),
+      ).not.toContain('security scheme "tokenAuth"');
+      expect(outcome.result.summary.automaticChainCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it("chains two distinctly-keyed schemes independently, with zero cross-scheme leakage (US2, SC-002)", () => {
+      const outcome = generateCollection(
+        twoIndependentSchemesApiModel,
+        testModelOf(issueTokenScenario, tokenInfoScenario, issueAdminTokenScenario, adminReportsScenario),
+        {},
+        automaticChainingContext(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+
+      const tokenInfoItem = items(outcome).find((item) => item.provenance?.scenarioId === tokenInfoScenario.id)!;
+      expect(tokenInfoItem.request.auth).toEqual({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
+
+      const adminReportsItem = items(outcome).find((item) => item.provenance?.scenarioId === adminReportsScenario.id)!;
+      expect(adminReportsItem.request.auth).toEqual({
+        type: "bearer",
+        bearer: [{ key: "token", value: "{{adminToken}}", type: "string" }],
+      });
+
+      const adminProducerItem = items(outcome).find((item) => item.provenance?.scenarioId === issueAdminTokenScenario.id)!;
+      expect(adminProducerItem.event?.[0]?.script.exec.join("\n")).toContain('pm.environment.set("adminToken"');
+
+      expect(outcome.result.limitations.filter((l) => l.kind === "unresolved-credential-producer")).toEqual([]);
+    });
+
+    it("creates no chain and records the limitation when the producer's response has two equally plausible fields (US3, FR-004)", () => {
+      const outcome = generateCollection(
+        ambiguousFieldsApiModel,
+        testModelOf(issueTokenAmbiguousFieldsScenario, tokenInfoScenario),
+        {},
+        automaticChainingContext(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.summary.automaticChainCount).toBe(0);
+      expect(
+        outcome.result.limitations
+          .filter((limitation) => limitation.kind === "unresolved-credential-producer")
+          .map((limitation) => limitation.location),
+      ).toContain('security scheme "tokenAuth"');
+    });
+
+    it("creates no chain and records the limitation when the producer's response has zero plausible fields (US3, FR-004)", () => {
+      const outcome = generateCollection(
+        noPlausibleFieldApiModel,
+        testModelOf(issueTokenNoPlausibleFieldScenario, tokenInfoScenario),
+        {},
+        automaticChainingContext(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.summary.automaticChainCount).toBe(0);
+      expect(
+        outcome.result.limitations
+          .filter((limitation) => limitation.kind === "unresolved-credential-producer")
+          .map((limitation) => limitation.location),
+      ).toContain('security scheme "tokenAuth"');
+    });
+
+    it("records the limitation for the primary scheme when its login endpoint's stem does not match (Clarifications 2026-09-15 Q3)", () => {
+      const outcome = generateCollection(
+        primaryNoStemMatchApiModel,
+        testModelOf(createSessionScenario, sessionInfoScenario),
+        {},
+        automaticChainingContext(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.credentialProducers).toEqual([]);
+      expect(outcome.result.summary.automaticChainCount).toBe(0);
+      const limitation = outcome.result.limitations.find(
+        (l) => l.kind === "unresolved-credential-producer" && l.location === 'security scheme "bearerAuth"',
+      );
+      expect(limitation).toBeDefined();
+      expect(limitation!.message).toContain(`${sessionInfoOperation.method} ${sessionInfoOperation.path}`);
     });
   });
 });

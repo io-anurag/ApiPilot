@@ -1,7 +1,13 @@
 import type { AIErrorCategory, AIProviderMode } from "./aiProvider";
 
-/** Where a consumer reads a field from its request (data-model.md: FieldRef). */
-export type DependencyFieldLocation = "path" | "query" | "header" | "body";
+/**
+ * Where a consumer reads a field from its request (data-model.md: FieldRef). `"auth"`
+ * (specs/023-auto-auth-credential-chaining FR-001) is additive: it represents an operation's
+ * declared security-scheme requirement as a consumer, not a request parameter or body field — a
+ * `FieldRef` with this location has `field` set to the security scheme key from
+ * `components.securitySchemes`, never a parameter/body field path.
+ */
+export type DependencyFieldLocation = "path" | "query" | "header" | "body" | "auth";
 
 /** Identifies one field on one side of a relationship (data-model.md: FieldRef). */
 export interface FieldRef {

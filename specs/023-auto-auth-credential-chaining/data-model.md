@@ -116,7 +116,7 @@ export interface AutomaticChainingInput {
 | Scenario mutation | `applyWorkflowSubstitutions` rewrites the unresolved path parameter to `{{workflowVariableName(chainId, field)}}`. | None — the operation's `PostmanAuth` block already references the fixed credential variable, independent of chaining (research.md D5). |
 | `AutomaticChain.variableName` | `workflowVariableName(chainId, producer.field)` (unchanged). | `credentialVariableNames.get(producer.field)` — the scheme's already-emitted `token`/`adminToken`/… (research.md D6). |
 | `WorkflowExtraction` | No `finalVariableName` (unchanged; capture writes to the derived chain variable). | `finalVariableName` set to the same resolved credential variable name. |
-| Producer grouping | Grouped with other `"path"` relationships sharing the same producer field. | Grouped with other `"auth"` relationships sharing the same producer field, **never** merged with a `"path"` group for the same field (research.md D7). |
+| Producer grouping | Grouped with other `"path"` relationships sharing the same producer field. | Grouped with other `"auth"` relationships sharing the same producer field **and** the same scheme key, **never** merged with a `"path"` group or a different scheme's group for the same field (research.md D7, as-built addendum). |
 
 ## Extended: `WorkflowExtraction` (`backend/src/postman/assertionScripts.ts`)
 

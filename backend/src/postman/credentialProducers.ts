@@ -11,10 +11,13 @@ import type { SchemeVariablePlanEntry } from "./authMapping";
  */
 
 /**
- * For every non-primary scheme in `plan`, finds the sole unauthenticated operation in
- * `operations` whose path or `operationId` contains that scheme's `stem` (case-insensitive
- * substring). Zero or multiple matches for a scheme yields no candidate for it — the caller
- * reports an `unresolved-credential-producer` limitation for that scheme instead of guessing.
+ * For every scheme in `plan` — the primary (first-declared-per-type) scheme included, per
+ * specs/023-auto-auth-credential-chaining Clarifications 2026-09-15 (Q1/Q3), which extends this
+ * discovery to the primary scheme using the identical eligibility rule, with no relaxed or
+ * name-convention-based fallback — finds the sole unauthenticated operation in `operations` whose
+ * path or `operationId` contains that scheme's `stem` (case-insensitive substring). Zero or
+ * multiple matches for a scheme yields no candidate for it — the caller reports an
+ * `unresolved-credential-producer` limitation for that scheme instead of guessing.
  */
 export function findCredentialProducers(
   operations: ApiOperation[],
@@ -24,7 +27,6 @@ export function findCredentialProducers(
   const candidates: CredentialProducerCandidate[] = [];
 
   for (const [schemeKey, entry] of plan) {
-    if (entry.isPrimary) continue;
     // A `basic` scheme has no single producible credential — a login response does not "issue"
     // a username, and inventing a producer relationship for one half of a username/password pair
     // would fabricate a relationship the specification gives no evidence for (constitution I,
