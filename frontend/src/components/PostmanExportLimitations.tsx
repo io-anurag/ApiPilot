@@ -19,6 +19,7 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
     "Workflow request representations this export cannot render",
   "unresolved-credential-producer":
     "Distinct credentials this export could not identify a producer request for",
+  "unresolved-parameter-style": "Parameter serialization styles this export cannot represent",
 };
 
 /** Labels which approved scenario(s) a grouped limitation entry came from. */

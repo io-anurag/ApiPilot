@@ -29,6 +29,17 @@ export interface Parameter {
   location: "path" | "query" | "header" | "cookie";
   required: boolean;
   schema: SchemaConstraint;
+  /** The specification's own declared `style`, verbatim, when present. Absent — never a
+   *  fabricated default — when the specification omits it; the OpenAPI 3.x per-location default
+   *  is resolved at serialization time (specs/022-openapi-parameter-serialization). */
+  style?: string;
+  /** The specification's own declared `explode`, verbatim, when present. Same absent-not-defaulted
+   *  rule as `style`. */
+  explode?: boolean;
+  /** True when the specification declares this parameter via `content` (a media-type-encoded
+   *  value) instead of `schema`+`style`; `style`/`explode` are meaningless when this is true.
+   *  Absent is equivalent to `false` — there is no second meaning omission could carry. */
+  contentEncoded?: boolean;
 }
 
 export interface RequestBody {

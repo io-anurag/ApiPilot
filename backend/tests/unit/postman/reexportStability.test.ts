@@ -17,6 +17,7 @@ import {
   workflowDecision,
 } from "../../fixtures/postman/dependencyFixtures";
 import { adminAuthOperation, bearerAuthOperation, discoverableProducerApiModel } from "../../fixtures/postman/credentialFixtures";
+import { filterDeepObjectOperation, parameterApiModel, sortDefaultOperation } from "../../fixtures/postman/parameterFixtures";
 
 const options = { baseUrl: "https://qa.internal.example" };
 const REMOVED_SCENARIO = "scenario-list-no-assertions";
@@ -212,5 +213,42 @@ describe("re-export stability for distinct-credential schemes (specs/021-multi-c
     // credentialProducers reflects the specification's own structure (research.md D5), not which
     // scenarios happen to be approved — it is unaffected by removing the admin scenario.
     expect(withoutAdmin.credentialProducers).toEqual(withBoth.credentialProducers);
+  });
+});
+
+describe("re-export stability for array/object query parameter serialization (specs/022-openapi-parameter-serialization, SC-004)", () => {
+  const parameterTestModel: TestModel = {
+    scenarios: [
+      {
+        id: "scenario-sort",
+        category: "positive",
+        operationPath: sortDefaultOperation.path,
+        operationMethod: sortDefaultOperation.method,
+        request: { pathParameters: {}, queryParameters: { sort: ["name", "-price"] }, headers: {} },
+        assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+        provenance: { source: "RULE", rule: "positive", description: "GET /catalog with sort.", duplicateOfRules: [] },
+      },
+      {
+        id: "scenario-filter",
+        category: "positive",
+        operationPath: filterDeepObjectOperation.path,
+        operationMethod: filterDeepObjectOperation.method,
+        request: {
+          pathParameters: {},
+          queryParameters: { filter: { status: "active", owner: "alice" } },
+          headers: {},
+        },
+        assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+        provenance: { source: "RULE", rule: "positive", description: "GET /catalog/filter with filter.", duplicateOfRules: [] },
+      },
+    ],
+  };
+
+  it("produces byte-identical repeated-key and deepObject query rendering across repeated exports", () => {
+    const outcomeFirst = generateCollection(parameterApiModel, parameterTestModel);
+    const outcomeSecond = generateCollection(parameterApiModel, parameterTestModel);
+    if (!outcomeFirst.ok || !outcomeSecond.ok) throw new Error("expected successful exports");
+    expect(serializeArtifact(outcomeSecond.result.collection)).toBe(serializeArtifact(outcomeFirst.result.collection));
+    expect(serializeArtifact(outcomeSecond.result.environment)).toBe(serializeArtifact(outcomeFirst.result.environment));
   });
 });
