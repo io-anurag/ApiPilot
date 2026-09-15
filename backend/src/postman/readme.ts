@@ -31,6 +31,7 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
     "Workflow request representations this export cannot express",
   "unresolved-credential-producer":
     "Distinct credentials this export could not identify a producer request for",
+  "unresolved-parameter-style": "Parameter serialization styles this export cannot represent",
 };
 
 function coverageSection(

@@ -77,4 +77,50 @@ describe("buildApiModel", () => {
     const model = buildApiModel({ info: { title: "   " }, paths: {} }, []);
     expect(model.info).toBeUndefined();
   });
+
+  describe("style/explode/contentEncoded extraction (specs/022-openapi-parameter-serialization)", () => {
+    function operationWith(parameters: unknown[]) {
+      return buildApiModel(
+        { paths: { "/things": { get: { operationId: "listThings", parameters } } } },
+        [],
+      );
+    }
+
+    it("copies a declared style and explode verbatim", () => {
+      const model = operationWith([
+        { name: "sort", in: "query", schema: { type: "array" }, style: "spaceDelimited", explode: false },
+      ]);
+      expect(model.operations[0].parameters[0]).toEqual(
+        expect.objectContaining({ style: "spaceDelimited", explode: false }),
+      );
+    });
+
+    it("leaves style and explode undefined when the specification omits them, rather than persisting a fabricated default", () => {
+      const model = operationWith([{ name: "sort", in: "query", schema: { type: "array" } }]);
+      const parameter = model.operations[0].parameters[0];
+      expect(parameter.style).toBeUndefined();
+      expect(parameter.explode).toBeUndefined();
+    });
+
+    it("marks a parameter declaring content instead of schema as contentEncoded", () => {
+      const model = operationWith([
+        { name: "filter", in: "query", content: { "application/json": { schema: { type: "object" } } } },
+      ]);
+      expect(model.operations[0].parameters[0].contentEncoded).toBe(true);
+    });
+
+    it("leaves contentEncoded undefined for an ordinary schema-based parameter", () => {
+      const model = operationWith([{ name: "sort", in: "query", schema: { type: "array" } }]);
+      expect(model.operations[0].parameters[0].contentEncoded).toBeUndefined();
+    });
+
+    it("ignores a non-string style and a non-boolean explode rather than fabricating a coerced value", () => {
+      const model = operationWith([
+        { name: "sort", in: "query", schema: { type: "array" }, style: 123, explode: "yes" },
+      ]);
+      const parameter = model.operations[0].parameters[0];
+      expect(parameter.style).toBeUndefined();
+      expect(parameter.explode).toBeUndefined();
+    });
+  });
 });

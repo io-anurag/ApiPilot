@@ -184,7 +184,8 @@ export type GenerationLimitationKind =
   | "workflow-unresolved-handoff"
   | "workflow-unsupported-extraction-path"
   | "workflow-unsupported-request-representation"
-  | "unresolved-credential-producer";
+  | "unresolved-credential-producer"
+  | "unresolved-parameter-style";
 
 /**
  * One distinct security scheme's identified credential-obtaining operation

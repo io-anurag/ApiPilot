@@ -2,6 +2,7 @@ import type {
   ApiOperation,
   ArtifactVariable,
   GenerationLimitation,
+  Parameter,
   PostmanAuth,
   PostmanBody,
   PostmanHeader,
@@ -27,6 +28,13 @@ import {
 } from "./assertionScripts";
 import { itemIdForScenario, itemIdForWorkflowStep } from "./identifiers";
 import { sortedEntries } from "./ordering";
+import {
+  percentEncode,
+  resolveParameterStyle,
+  serializeQueryParameter,
+  serializeSimpleValue,
+  type ResolvedParameterStyle,
+} from "./parameterSerialization";
 
 /**
  * Converts one approved scenario into one runnable request (FR-002, FR-003).
@@ -39,6 +47,14 @@ import { sortedEntries } from "./ordering";
 const JSON_CONTENT_TYPE = /^application\/(json|[\w.+-]*\+json)$/i;
 const TEXT_CONTENT_TYPE = /^text\//i;
 const PATH_PARAMETER_SEGMENT = /^\{(.+)\}$/;
+const ONLY_VARIABLE_REFERENCE = /^\{\{[^}]+\}\}$/;
+
+/** True for an already-resolved Postman variable reference (e.g. a workflow handoff value
+ *  substituted by `workflowVariables.ts`) — such a value must never be percent-encoded, since
+ *  encoding its literal `{`/`}` characters would break Postman's own templating substitution. */
+function isVariableReference(value: string): boolean {
+  return ONLY_VARIABLE_REFERENCE.test(value);
+}
 
 function toValueText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -49,6 +65,42 @@ function toValueText(value: unknown): string {
 
 function hasHeader(headers: PostmanHeader[], name: string): boolean {
   return headers.some((header) => header.key.toLowerCase() === name.toLowerCase());
+}
+
+function findParameter(
+  operation: ApiOperation,
+  location: Parameter["location"],
+  name: string,
+): Parameter | undefined {
+  return operation.parameters.find((p) => p.location === location && p.name === name);
+}
+
+/** Only an array/object runtime value under an implemented style takes the new serialization
+ *  path (specs/022-openapi-parameter-serialization) — a scalar value renders through the
+ *  pre-existing single-entry path regardless of style (research.md D6, T010). */
+function isSerializableCollection(value: unknown): value is unknown[] | Record<string, unknown> {
+  return Array.isArray(value) || (value !== null && typeof value === "object");
+}
+
+/** One `unresolved-parameter-style` limitation (FR-007) for a parameter whose declared style —
+ *  or `content` encoding — this export cannot serialize; the request itself still renders via
+ *  today's plain-text fallback (research.md D6), this limitation only names the gap. */
+function unresolvedParameterStyleLimitation(
+  parameter: Parameter,
+  resolved: ResolvedParameterStyle,
+  scenarioId: string,
+  location: string,
+): GenerationLimitation {
+  const styleDescription =
+    parameter.contentEncoded === true
+      ? "a content-encoded value"
+      : 'the "' + resolved.style + '" style';
+  return {
+    kind: "unresolved-parameter-style",
+    scenarioId,
+    location,
+    message: `The "${parameter.name}" ${parameter.location} parameter declares ${styleDescription}, which this export cannot serialize, so its value is rendered using today's plain-text fallback.`,
+  };
 }
 
 /**
@@ -180,13 +232,24 @@ function buildUrl(
   const variables: ArtifactVariable[] = [];
   const pathVariables: { key: string; value: string }[] = [];
 
-  /** A credential that reached a URL value still becomes a variable reference (FR-013). */
-  const urlValueText = (value: unknown): string => {
+  /**
+   * A credential that reached a URL value still becomes a variable reference (FR-013). Every
+   * other value is percent-encoded when `encode` is true (specs/022-openapi-parameter-serialization
+   * FR-006) — a `{{token}}` variable placeholder must never be encoded, since Postman's own
+   * templating engine, not the target API, is what consumes its literal `{`/`}` characters.
+   * `encode` is false only for a parameter whose declared style this feature does not implement
+   * (research.md D6): that value must keep today's exact byte-for-byte fallback text forever,
+   * never gain encoding it never had, since encoding an already-unfaithful rendering would not
+   * make it more correct.
+   */
+  const urlValueText = (value: unknown, encode: boolean): string => {
     if (isBearerTokenValue(value)) {
       variables.push(credentialVariable("token"));
       return "{{token}}";
     }
-    return toValueText(value);
+    const text = toValueText(value);
+    if (isVariableReference(text)) return text;
+    return encode ? percentEncode(text) : text;
   };
 
   const segments = operation.path
@@ -209,15 +272,31 @@ function buildUrl(
           message: `The approved scenario supplied no value for the "${name}" path parameter, so it is exposed as a variable to fill in.`,
         });
       } else {
-        pathVariables.push({ key: name, value: urlValueText(approved) });
+        const declaredParameter = findParameter(operation, "path", name);
+        const resolved = declaredParameter ? resolveParameterStyle(declaredParameter) : undefined;
+        if (resolved?.implemented && isSerializableCollection(approved)) {
+          pathVariables.push({ key: name, value: serializeSimpleValue(approved, resolved.explode) });
+        } else {
+          if (declaredParameter && resolved?.implemented === false) {
+            limitations.push(unresolvedParameterStyleLimitation(declaredParameter, resolved, scenario.id, location));
+          }
+          pathVariables.push({ key: name, value: urlValueText(approved, resolved?.implemented !== false) });
+        }
       }
       return `:${name}`;
     });
 
-  const query = sortedEntries(scenario.request.queryParameters).map(([key, value]) => ({
-    key,
-    value: urlValueText(value),
-  }));
+  const query = sortedEntries(scenario.request.queryParameters).flatMap(([key, value]) => {
+    const declaredParameter = findParameter(operation, "query", key);
+    const resolved = declaredParameter ? resolveParameterStyle(declaredParameter) : undefined;
+    if (resolved?.implemented && isSerializableCollection(value)) {
+      return serializeQueryParameter(key, value, resolved);
+    }
+    if (declaredParameter && resolved?.implemented === false) {
+      limitations.push(unresolvedParameterStyleLimitation(declaredParameter, resolved, scenario.id, location));
+    }
+    return [{ key, value: urlValueText(value, resolved?.implemented !== false) }];
+  });
 
   const pathText = segments.length > 0 ? `/${segments.join("/")}` : "";
   const queryText =
@@ -257,12 +336,23 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
   const bodyResult = buildBody(scenario, operation, location, credentialVariables);
   const assertions = translateAssertions(scenario);
 
+  const headerLimitations: GenerationLimitation[] = [];
   const header: PostmanHeader[] = sortedEntries(scenario.request.headers).map(
     ([key, value]) => {
       const kind = credentialKindForHeader(key, value);
-      if (kind === undefined) return { key, value: toValueText(value) };
-      credentialVariables.push(credentialVariable(kind));
-      return { key, value: `{{${kind}}}` };
+      if (kind !== undefined) {
+        credentialVariables.push(credentialVariable(kind));
+        return { key, value: `{{${kind}}}` };
+      }
+      const parameter = findParameter(operation, "header", key);
+      const resolved = parameter ? resolveParameterStyle(parameter) : undefined;
+      if (resolved?.implemented && isSerializableCollection(value)) {
+        return { key, value: serializeSimpleValue(value, resolved.explode) };
+      }
+      if (parameter && resolved?.implemented === false) {
+        headerLimitations.push(unresolvedParameterStyleLimitation(parameter, resolved, scenario.id, location));
+      }
+      return { key, value: toValueText(value) };
     },
   );
   if (bodyResult.contentType !== undefined && !hasHeader(header, "content-type")) {
@@ -300,6 +390,7 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
     item,
     limitations: [
       ...url.limitations,
+      ...headerLimitations,
       ...bodyResult.limitations,
       ...assertions.limitations,
     ],

@@ -148,6 +148,12 @@ function extractParameters(rawParams: unknown): Parameter[] {
       location,
       required: p.required === true || location === "path",
       schema: extractSchemaConstraint(p.schema),
+      ...(typeof p.style === "string" ? { style: p.style } : {}),
+      ...(typeof p.explode === "boolean" ? { explode: p.explode } : {}),
+      // A `content`-based parameter (media-type-encoded value) is mutually exclusive with
+      // `schema`+`style` per OpenAPI 3.x; `style`/`explode` are meaningless when this is true
+      // (specs/022-openapi-parameter-serialization research.md D7).
+      ...(isPlainObject(p.content) ? { contentEncoded: true } : {}),
     });
   }
   return parameters;
