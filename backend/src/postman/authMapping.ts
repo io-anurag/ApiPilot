@@ -26,39 +26,126 @@ function attribute(key: string, value: string) {
   return { key, value, type: "string" as const };
 }
 
-function mapScheme(scheme: SecuritySchemeDefinition): AuthMapping | undefined {
-  if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "bearer") {
+/**
+ * Distinct-credential scheme planning (specs/021-multi-credential-token-provisioning
+ * FR-001–FR-003, FR-005).
+ */
+
+/** A trailing case-insensitive `Auth`/`Scheme` suffix, stripped when deriving a non-primary
+ *  scheme's variable name (FR-003, Clarifications 2026-09-15). */
+const SCHEME_KEY_SUFFIX_PATTERN = /(Auth|Scheme)$/i;
+
+/** The scheme key with its trailing `Auth`/`Scheme` suffix removed, or the full key when no
+ *  such suffix is present (or removing it would leave nothing). Reused by
+ *  `credentialProducers.ts`'s producer-discovery heuristic so the string a QA engineer sees in
+ *  the variable name is exactly the string that heuristic searches for. */
+export function schemeStem(schemeKey: string): string {
+  const stripped = schemeKey.replace(SCHEME_KEY_SUFFIX_PATTERN, "");
+  return stripped.length > 0 ? stripped : schemeKey;
+}
+
+/** The three scheme shapes this export can configure (mirrors `mapScheme`'s conditions below). */
+function classifySchemeType(scheme: SecuritySchemeDefinition): SchemeType | undefined {
+  if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "bearer") return "bearer";
+  if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "basic") return "basic";
+  if (scheme.type === "apiKey" && scheme.name) return "apiKey";
+  return undefined;
+}
+
+export type SchemeType = "bearer" | "basic" | "apiKey";
+
+/** One security scheme key's resolved place in this export (FR-001–FR-003, FR-005). */
+export type SchemeVariablePlanEntry =
+  | { type: "bearer"; isPrimary: boolean; stem: string; variableNames: { token: string } }
+  | { type: "apiKey"; isPrimary: boolean; stem: string; variableNames: { apiKey: string } }
+  | {
+      type: "basic";
+      isPrimary: boolean;
+      stem: string;
+      variableNames: { username: string; password: string };
+    };
+
+function buildPlanEntry(type: SchemeType, isPrimary: boolean, stem: string): SchemeVariablePlanEntry {
+  if (type === "bearer") {
+    return { type, isPrimary, stem, variableNames: { token: isPrimary ? "token" : `${stem}Token` } };
+  }
+  if (type === "apiKey") {
+    return { type, isPrimary, stem, variableNames: { apiKey: isPrimary ? "apiKey" : `${stem}ApiKey` } };
+  }
+  return {
+    type,
+    isPrimary,
+    stem,
+    variableNames: isPrimary
+      ? { username: "username", password: "password" }
+      : { username: `${stem}Username`, password: `${stem}Password` },
+  };
+}
+
+/**
+ * Classifies and names every declared security scheme key for one export (FR-001–FR-003,
+ * FR-005). Pure function of `securitySchemes` alone: groups keys by `(type, scheme-subtype)` in
+ * document declaration order, the first key of each group keeps the legacy default variable
+ * name(s) (`isPrimary: true`), and every other same-type key's name is derived from its own key
+ * (`schemeStem` + a type-specific suffix). A scheme whose type this export cannot configure
+ * (e.g. oauth2, openIdConnect) is omitted — `mapOperationAuth` reports that exactly as today's
+ * `unsupported-auth-scheme` limitation already does.
+ */
+export function planSchemeVariables(
+  securitySchemes: Record<string, SecuritySchemeDefinition>,
+): Map<string, SchemeVariablePlanEntry> {
+  const plan = new Map<string, SchemeVariablePlanEntry>();
+  const seenTypes = new Set<SchemeType>();
+  for (const [key, scheme] of Object.entries(securitySchemes)) {
+    const type = classifySchemeType(scheme);
+    if (!type) continue;
+    const isPrimary = !seenTypes.has(type);
+    seenTypes.add(type);
+    const stem = schemeStem(key);
+    plan.set(key, buildPlanEntry(type, isPrimary, stem));
+  }
+  return plan;
+}
+
+/**
+ * Builds the `PostmanAuth`/`ArtifactVariable`s for one scheme, referencing the plan's resolved
+ * variable name(s) (specs/021-multi-credential-token-provisioning FR-003, FR-004) instead of a
+ * hard-coded literal. `entry.type` is guaranteed consistent with `scheme`'s own shape — both come
+ * from the same `planSchemeVariables`/`classifySchemeType` classification.
+ */
+function buildAuthMapping(scheme: SecuritySchemeDefinition, entry: SchemeVariablePlanEntry): AuthMapping {
+  if (entry.type === "bearer") {
+    const { token } = entry.variableNames;
     return {
-      auth: { type: "bearer", bearer: [attribute("token", "{{token}}")] },
-      variables: [credentialVariable("token")],
+      auth: { type: "bearer", bearer: [attribute("token", `{{${token}}}`)] },
+      variables: [credentialVariable("token", token)],
       limitations: [],
     };
   }
-  if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "basic") {
+  if (entry.type === "basic") {
+    const { username, password } = entry.variableNames;
     return {
       auth: {
         type: "basic",
-        basic: [attribute("username", "{{username}}"), attribute("password", "{{password}}")],
+        basic: [attribute("username", `{{${username}}}`), attribute("password", `{{${password}}}`)],
       },
-      variables: [credentialVariable("username"), credentialVariable("password")],
+      variables: [credentialVariable("username", username), credentialVariable("password", password)],
       limitations: [],
     };
   }
-  if (scheme.type === "apiKey" && scheme.name) {
-    return {
-      auth: {
-        type: "apikey",
-        apikey: [
-          attribute("key", scheme.name),
-          attribute("value", "{{apiKey}}"),
-          attribute("in", scheme.in === "query" ? "query" : "header"),
-        ],
-      },
-      variables: [credentialVariable("apiKey")],
-      limitations: [],
-    };
-  }
-  return undefined;
+  const { apiKey } = entry.variableNames;
+  return {
+    auth: {
+      type: "apikey",
+      apikey: [
+        attribute("key", scheme.name!),
+        attribute("value", `{{${apiKey}}}`),
+        attribute("in", scheme.in === "query" ? "query" : "header"),
+      ],
+    },
+    variables: [credentialVariable("apiKey", apiKey)],
+    limitations: [],
+  };
 }
 
 /**
@@ -69,6 +156,7 @@ function mapScheme(scheme: SecuritySchemeDefinition): AuthMapping | undefined {
 export function mapOperationAuth(
   operation: ApiOperation,
   securitySchemes: Record<string, SecuritySchemeDefinition>,
+  plan: Map<string, SchemeVariablePlanEntry>,
 ): AuthMapping {
   const location = `${operation.method.toUpperCase()} ${operation.path}`;
   const limitations: GenerationLimitation[] = [];
@@ -105,8 +193,8 @@ export function mapOperationAuth(
     return { variables: [], limitations };
   }
 
-  const mapped = mapScheme(scheme);
-  if (!mapped) {
+  const entry = plan.get(primary.name);
+  if (!entry) {
     limitations.push({
       kind: "unsupported-auth-scheme",
       location,
@@ -115,5 +203,6 @@ export function mapOperationAuth(
     return { variables: [], limitations };
   }
 
+  const mapped = buildAuthMapping(scheme, entry);
   return { ...mapped, limitations: [...limitations, ...mapped.limitations] };
 }

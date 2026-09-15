@@ -17,6 +17,8 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
     "Workflow response paths this export cannot extract",
   "workflow-unsupported-request-representation":
     "Workflow request representations this export cannot render",
+  "unresolved-credential-producer":
+    "Distinct credentials this export could not identify a producer request for",
 };
 
 /** Labels which approved scenario(s) a grouped limitation entry came from. */

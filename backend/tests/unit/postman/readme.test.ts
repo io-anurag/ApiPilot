@@ -15,6 +15,8 @@ import {
   ordersPatchScenario,
   testModelOf,
 } from "../../fixtures/postman/dependencyFixtures";
+import { adminAuthOperation, bearerAuthOperation, noProducerApiModel } from "../../fixtures/postman/credentialFixtures";
+import type { TestModel } from "@apipilot/shared-domain";
 
 function readmeFor(options = {}): string {
   const outcome = generateCollection(exportApiModel, approvedTestModel, options);
@@ -59,6 +61,37 @@ describe("accompanying document", () => {
     expect(readme).toContain("Authentication schemes this export cannot configure");
     expect(readme).toContain("Operations carrying specification analysis issues");
     expect(readme).toContain("Request content types this export cannot represent");
+  });
+
+  it("lists an unresolved distinct credential under its own heading, distinct from unsupported-auth-scheme (specs/021-multi-credential-token-provisioning)", () => {
+    const testModel: TestModel = {
+      scenarios: [
+        {
+          id: "scenario-bearer",
+          category: "positive",
+          operationPath: bearerAuthOperation.path,
+          operationMethod: bearerAuthOperation.method,
+          request: { pathParameters: {}, queryParameters: {}, headers: {} },
+          assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+          provenance: { source: "RULE", rule: "positive", description: "GET /orders.", duplicateOfRules: [] },
+        },
+        {
+          id: "scenario-admin",
+          category: "positive",
+          operationPath: adminAuthOperation.path,
+          operationMethod: adminAuthOperation.method,
+          request: { pathParameters: {}, queryParameters: {}, headers: {} },
+          assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+          provenance: { source: "RULE", rule: "positive", description: "GET /reports.", duplicateOfRules: [] },
+        },
+      ],
+    };
+    const outcome = generateCollection(noProducerApiModel, testModel);
+    if (!outcome.ok) throw new Error("expected a successful export");
+    expect(outcome.result.readme).toContain(
+      "Distinct credentials this export could not identify a producer request for",
+    );
+    expect(outcome.result.readme).toContain('security scheme "adminAuth"');
   });
 
   it("states that no AI produced the artifacts and that nothing was executed", () => {

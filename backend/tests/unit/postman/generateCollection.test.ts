@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TestModel, WorkflowExportContext } from "@apipilot/shared-domain";
+import type { TestModel, TestScenario, WorkflowExportContext } from "@apipilot/shared-domain";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import {
   approvedTestModel,
@@ -22,6 +22,35 @@ import {
   testModelOf,
 } from "../../fixtures/postman/dependencyFixtures";
 import { integrationWorkflow, workflowStep, workflowVariable } from "../../fixtures/postman/workflowFixtures";
+import {
+  adminAuthOperation,
+  adminLoginOperation,
+  ambiguousProducerApiModel,
+  bearerAuthOperation,
+  discoverableProducerApiModel,
+  noProducerApiModel,
+} from "../../fixtures/postman/credentialFixtures";
+
+function credentialScenario(id: string, operation: { path: string; method: string }): TestScenario {
+  return {
+    id,
+    category: "positive",
+    operationPath: operation.path,
+    operationMethod: operation.method,
+    request: { pathParameters: {}, queryParameters: {}, headers: {} },
+    assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+    provenance: { source: "RULE", rule: "positive", description: `Deterministic scenario ${id}.`, duplicateOfRules: [] },
+  };
+}
+
+function credentialTestModel(): TestModel {
+  return {
+    scenarios: [
+      credentialScenario("scenario-bearer", bearerAuthOperation),
+      credentialScenario("scenario-admin", adminAuthOperation),
+    ],
+  };
+}
 
 function items(outcome: ReturnType<typeof generateCollection>) {
   if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
@@ -257,6 +286,71 @@ describe("generateCollection", () => {
       const resolutionRate = afterOutcome.result.summary.automaticChainCount / previouslyUnresolvedCount;
       expect(resolutionRate).toBeGreaterThanOrEqual(0.9);
       expect(afterOutcome.result.summary.automaticChainCount).toBe(3);
+    });
+  });
+
+  describe("distinct-credential producer discovery (specs/021-multi-credential-token-provisioning)", () => {
+    it("populates credentialProducers when a sole unauthenticated operation matches the scheme's stem", () => {
+      const outcome = generateCollection(discoverableProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+      expect(outcome.result.credentialProducers).toEqual([
+        {
+          schemeKey: "adminAuth",
+          variableName: "adminToken",
+          producerOperationPath: adminLoginOperation.path,
+          producerOperationMethod: adminLoginOperation.method,
+        },
+      ]);
+      expect(
+        outcome.result.limitations.filter((limitation) => limitation.kind === "unresolved-credential-producer"),
+      ).toEqual([]);
+    });
+
+    it("leaves credentialProducers empty and records no producer-found limitation when ambiguous", () => {
+      const outcome = generateCollection(ambiguousProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+      expect(outcome.result.credentialProducers).toEqual([]);
+    });
+
+    it("leaves credentialProducers empty when no unauthenticated operation exists", () => {
+      const outcome = generateCollection(noProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+      expect(outcome.result.credentialProducers).toEqual([]);
+    });
+  });
+
+  describe("unresolved-credential-producer limitation (specs/021-multi-credential-token-provisioning US3)", () => {
+    it("still emits the empty distinct-scheme variable and records exactly one limitation naming the scheme and its operations", () => {
+      const outcome = generateCollection(noProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+
+      const adminTokenVariable = outcome.result.environment.values.find((value) => value.key === "adminToken");
+      expect(adminTokenVariable).toEqual({ key: "adminToken", value: "", type: "secret", enabled: true });
+
+      const producerLimitations = outcome.result.limitations.filter(
+        (limitation) => limitation.kind === "unresolved-credential-producer",
+      );
+      expect(producerLimitations).toHaveLength(1);
+      expect(producerLimitations[0].location).toBe('security scheme "adminAuth"');
+      expect(producerLimitations[0].message).toContain("adminAuth");
+      expect(producerLimitations[0].message).toContain(`${adminAuthOperation.method} ${adminAuthOperation.path}`);
+    });
+
+    it("also records the limitation when the producer match is ambiguous, not just when absent", () => {
+      const outcome = generateCollection(ambiguousProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+      const producerLimitations = outcome.result.limitations.filter(
+        (limitation) => limitation.kind === "unresolved-credential-producer",
+      );
+      expect(producerLimitations).toHaveLength(1);
+    });
+
+    it("records no unresolved-credential-producer limitation once a producer is found", () => {
+      const outcome = generateCollection(discoverableProducerApiModel, credentialTestModel());
+      if (!outcome.ok) throw new Error("expected a successful export");
+      expect(
+        outcome.result.limitations.filter((limitation) => limitation.kind === "unresolved-credential-producer"),
+      ).toEqual([]);
     });
   });
 });

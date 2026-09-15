@@ -10,7 +10,7 @@ import type {
   WorkflowVariable,
 } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "./ordering";
-import { mapOperationAuth } from "./authMapping";
+import { mapOperationAuth, planSchemeVariables } from "./authMapping";
 import { primaryRequestBodyContentType } from "../testDesign/requestHelpers";
 
 export interface WorkflowRenderStep {
@@ -106,6 +106,7 @@ function planWorkflow(
   apiModel: ApiModel,
   testModel: TestModel,
 ): WorkflowRenderPlan {
+  const schemePlan = planSchemeVariables(apiModel.securitySchemes);
   const sortedSteps = [...workflow.steps].sort((left, right) => left.position - right.position);
   if (
     sortedSteps.length === 0 ||
@@ -229,7 +230,7 @@ function planWorkflow(
         ),
       );
     }
-    const authLimitations = mapOperationAuth(step.operation, apiModel.securitySchemes).limitations;
+    const authLimitations = mapOperationAuth(step.operation, apiModel.securitySchemes, schemePlan).limitations;
     if (authLimitations.some((limitation) => limitation.kind === "unsupported-auth-scheme")) {
       return invalidPlan(
         workflow,

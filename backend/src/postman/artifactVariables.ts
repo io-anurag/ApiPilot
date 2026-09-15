@@ -22,9 +22,18 @@ const CREDENTIAL_PURPOSE: Record<ArtifactCredentialName, string> = {
   username: "Username for the declared basic authentication scheme.",
 };
 
-/** Declares the credential variable of the given kind: secret, with no value until the environment supplies one. */
-export function credentialVariable(name: ArtifactCredentialName): ArtifactVariable {
-  return { name, purpose: CREDENTIAL_PURPOSE[name], secret: true, value: "" };
+/**
+ * Declares a credential variable of the given kind: secret, with no value until the environment
+ * supplies one. `variableName` overrides the emitted variable's name (e.g. a distinct security
+ * scheme's derived name, specs/021-multi-credential-token-provisioning FR-003) while `kind`
+ * continues to select the purpose text; it defaults to `kind` so every existing call site is
+ * unaffected.
+ */
+export function credentialVariable(
+  kind: ArtifactCredentialName,
+  variableName: string = kind,
+): ArtifactVariable {
+  return { name: variableName, purpose: CREDENTIAL_PURPOSE[kind], secret: true, value: "" };
 }
 
 /** Declares the `baseUrl` variable, seeded with the supplied address (or empty if none was given). */

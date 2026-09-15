@@ -16,6 +16,7 @@ import {
   testModelOf,
   workflowDecision,
 } from "../../fixtures/postman/dependencyFixtures";
+import { adminAuthOperation, bearerAuthOperation, discoverableProducerApiModel } from "../../fixtures/postman/credentialFixtures";
 
 const options = { baseUrl: "https://qa.internal.example" };
 const REMOVED_SCENARIO = "scenario-list-no-assertions";
@@ -145,5 +146,71 @@ describe("re-export stability for automatic chains (specs/019-auto-workflow-chai
     expect(after.result.collection.item.map((folder) => folder.name)).toEqual(
       before.result.collection.item.map((folder) => folder.name),
     );
+  });
+});
+
+describe("re-export stability for distinct-credential schemes (specs/021-multi-credential-token-provisioning)", () => {
+  const bearerScenario = {
+    id: "scenario-bearer",
+    category: "positive" as const,
+    operationPath: bearerAuthOperation.path,
+    operationMethod: bearerAuthOperation.method,
+    request: { pathParameters: {}, queryParameters: {}, headers: {} },
+    assertions: [{ type: "status-code" as const, expectedStatusCode: "200" }],
+    provenance: { source: "RULE" as const, rule: "positive", description: "GET /orders.", duplicateOfRules: [] },
+  };
+  const adminScenario = {
+    id: "scenario-admin",
+    category: "positive" as const,
+    operationPath: adminAuthOperation.path,
+    operationMethod: adminAuthOperation.method,
+    request: { pathParameters: {}, queryParameters: {}, headers: {} },
+    assertions: [{ type: "status-code" as const, expectedStatusCode: "200" }],
+    provenance: { source: "RULE" as const, rule: "positive", description: "GET /reports.", duplicateOfRules: [] },
+  };
+
+  function exportOfCredential(testModel: TestModel): ExportResult {
+    const outcome = generateCollection(discoverableProducerApiModel, testModel);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    return outcome.result;
+  }
+
+  it("leaves the primary scheme's request and {{token}} routing unchanged when the distinct scheme's scenario is removed", () => {
+    const before = exportOfCredential({ scenarios: [bearerScenario, adminScenario] });
+    const after = exportOfCredential({ scenarios: [bearerScenario] });
+
+    const beforeItems = itemsById(before);
+    const afterItems = itemsById(after);
+    const bearerItemId = [...beforeItems.entries()].find(
+      ([, entry]) => entry.item.provenance?.scenarioId === bearerScenario.id,
+    )?.[0];
+    expect(bearerItemId).toBeDefined();
+
+    // Method/URL/name/provenance are unaffected either way. `auth` itself may move between the
+    // item and the collection level (an unrelated, pre-existing optimization in
+    // generateCollection.ts that hoists auth shared by every item to `collection.auth`), so the
+    // effective auth — wherever it lives — is compared separately below rather than as part of a
+    // whole-item equality check.
+    const { request: beforeRequest, ...beforeRest } = beforeItems.get(bearerItemId!)!.item;
+    const { request: afterRequest, ...afterRest } = afterItems.get(bearerItemId!)!.item;
+    const { auth: beforeAuth, ...beforeRequestRest } = beforeRequest;
+    const { auth: afterAuth, ...afterRequestRest } = afterRequest;
+    expect(afterRequestRest).toEqual(beforeRequestRest);
+    expect(afterRest).toEqual(beforeRest);
+
+    const expectedAuth = { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] };
+    expect(beforeAuth ?? before.collection.auth).toEqual(expectedAuth);
+    expect(afterAuth ?? after.collection.auth).toEqual(expectedAuth);
+  });
+
+  it("drops the distinct scheme's variable once no exported operation references it, while credentialProducers (a specification-level fact) stays the same", () => {
+    const withBoth = exportOfCredential({ scenarios: [bearerScenario, adminScenario] });
+    const withoutAdmin = exportOfCredential({ scenarios: [bearerScenario] });
+
+    expect(withBoth.environment.values.map((value) => value.key)).toContain("adminToken");
+    expect(withoutAdmin.environment.values.map((value) => value.key)).not.toContain("adminToken");
+    // credentialProducers reflects the specification's own structure (research.md D5), not which
+    // scenarios happen to be approved — it is unaffected by removing the admin scenario.
+    expect(withoutAdmin.credentialProducers).toEqual(withBoth.credentialProducers);
   });
 });

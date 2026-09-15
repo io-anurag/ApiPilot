@@ -29,6 +29,8 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
   "workflow-unsupported-extraction-path": "Workflow response paths this export cannot extract",
   "workflow-unsupported-request-representation":
     "Workflow request representations this export cannot express",
+  "unresolved-credential-producer":
+    "Distinct credentials this export could not identify a producer request for",
 };
 
 function coverageSection(

@@ -1,5 +1,6 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
+import type { TestModel } from "@apipilot/shared-domain";
 import { createApp } from "../../src/app";
 import {
   approvedTestModel,
@@ -7,6 +8,7 @@ import {
   minimalApiModel,
   minimalTestModel,
 } from "../fixtures/postman/exportFixtures";
+import { adminAuthOperation, bearerAuthOperation, twoBearerSchemeApiModel } from "../fixtures/postman/credentialFixtures";
 
 const ENDPOINT = "/api/test-models/postman-collection";
 
@@ -115,5 +117,51 @@ describe(`POST ${ENDPOINT}`, () => {
       globalThis.fetch = fetchSpy;
     }
     expect(called).toBe(false);
+  });
+
+  it("routes a distinct security scheme's operation to its own derived variable over HTTP (specs/021-multi-credential-token-provisioning)", async () => {
+    const testModel: TestModel = {
+      scenarios: [
+        {
+          id: "scenario-orders",
+          category: "positive",
+          operationPath: bearerAuthOperation.path,
+          operationMethod: bearerAuthOperation.method,
+          request: { pathParameters: {}, queryParameters: {}, headers: {} },
+          assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+          provenance: { source: "RULE", rule: "positive", description: "GET /orders.", duplicateOfRules: [] },
+        },
+        {
+          id: "scenario-reports",
+          category: "positive",
+          operationPath: adminAuthOperation.path,
+          operationMethod: adminAuthOperation.method,
+          request: { pathParameters: {}, queryParameters: {}, headers: {} },
+          assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+          provenance: { source: "RULE", rule: "positive", description: "GET /reports.", duplicateOfRules: [] },
+        },
+      ],
+    };
+
+    const response = await exportRequest({ apiModel: twoBearerSchemeApiModel, testModel });
+
+    expect(response.status).toBe(200);
+    const values: { key: string; value: string }[] = response.body.environment.values;
+    expect(values.map((variable) => variable.key)).toEqual(expect.arrayContaining(["token", "adminToken"]));
+
+    const items = response.body.collection.item.flatMap((folder: { item: { name: string; request: { auth?: { bearer: { value: string }[] } } }[] }) => folder.item);
+    const ordersItem = items.find((item: { name: string }) => item.name.includes("GET /orders"));
+    const reportsItem = items.find((item: { name: string }) => item.name.includes("GET /reports"));
+    expect(ordersItem.request.auth?.bearer?.[0]?.value).toBe("{{token}}");
+    expect(reportsItem.request.auth?.bearer?.[0]?.value).toBe("{{adminToken}}");
+  });
+
+  it("preserves byte-identical single-scheme output for a repeated identical request (SC-001)", async () => {
+    const body = { apiModel: exportApiModel, testModel: approvedTestModel };
+    const response = await exportRequest(body);
+    expect(response.status).toBe(200);
+    expect(response.body.environment.values.map((variable: { key: string }) => variable.key)).toEqual(
+      expect.arrayContaining(["token", "username", "password", "apiKey"]),
+    );
   });
 });
