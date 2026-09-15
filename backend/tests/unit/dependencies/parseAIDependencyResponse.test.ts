@@ -51,6 +51,39 @@ describe("parseAIDependencyResponse", () => {
     ).toThrow();
   });
 
+  it("accepts a valid candidate list with responseVersion omitted", () => {
+    const parsed = parseAIDependencyResponse(
+      response(
+        JSON.stringify({
+          candidates: [
+            {
+              candidateId: "c1",
+              producer: { operationPath: "/accounts", operationMethod: "POST", field: "accountId" },
+              consumer: {
+                operationPath: "/transfers",
+                operationMethod: "POST",
+                field: "accountRef",
+                location: "body",
+              },
+              rationale: "semantically related",
+              confidence: 0.9,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(parsed.candidates).toHaveLength(1);
+    expect(parsed.responseVersion).toBe(AI_DEPENDENCY_RESPONSE_VERSION);
+  });
+
+  it("throws when responseVersion is present but does not match the supported version", () => {
+    expect(() =>
+      parseAIDependencyResponse(
+        response(JSON.stringify({ responseVersion: AI_DEPENDENCY_RESPONSE_VERSION + 1, candidates: [] })),
+      ),
+    ).toThrow();
+  });
+
   it("throws when a provider error response is passed through", () => {
     const errorResponse: InferenceResponse = {
       contractVersion: 1,
