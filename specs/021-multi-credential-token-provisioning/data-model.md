@@ -11,6 +11,16 @@ the grouping key. "Credential Variable" is the existing `ArtifactVariable` (unch
 produced with a scheme-derived `name` instead of always one of the four legacy literals. "Credential
 Producer Candidate" is the new `CredentialProducerCandidate` type below.
 
+**As built** (added post-`/speckit-analyze`, 2026-09-15): `SchemeVariablePlanEntry` below is shown
+as originally designed — one interface with a `type: SchemeType` field plus a separately-unioned
+`variableNames`. The actual implementation instead declares it as a proper three-member
+discriminated union (`type: "bearer" | ... ; variableNames: {token}` / `type: "apiKey"; ...` /
+`type: "basic"; ...`), so that narrowing on `entry.type` also narrows `entry.variableNames` without
+a type assertion. The two shapes hold the same data; only the TypeScript declaration differs. Also,
+`mapScheme` (referenced below) was not "extended" as originally planned — it was **replaced** by a
+new function, `buildAuthMapping(scheme, entry)`, taking the plan entry instead of re-deriving names
+internally; `mapScheme` no longer exists in `authMapping.ts`.
+
 ## New (backend-internal): `backend/src/postman/authMapping.ts`
 
 ```ts
@@ -32,10 +42,19 @@ export interface SchemeVariablePlanEntry {
     | { apiKey: string }
     | { username: string; password: string };
 }
+```
+
+As built, this is a discriminated union instead (see "As built" note above):
+
+```ts
+export type SchemeVariablePlanEntry =
+  | { type: "bearer"; isPrimary: boolean; stem: string; variableNames: { token: string } }
+  | { type: "apiKey"; isPrimary: boolean; stem: string; variableNames: { apiKey: string } }
+  | { type: "basic"; isPrimary: boolean; stem: string; variableNames: { username: string; password: string } };
 
 /**
  * Classifies and names every declared security scheme key for one export (FR-001–FR-003, FR-005).
- * Pure function of `securitySchemes` alone; a scheme whose type/scheme/in combination `mapScheme`
+ * Pure function of `securitySchemes` alone; a scheme whose type/scheme/in combination this export
  * cannot configure (e.g. oauth2, openIdConnect) is omitted from the returned map — callers observe
  * this exactly as today's "unsupported-auth-scheme" limitation path already handles it.
  */
@@ -64,11 +83,15 @@ export function mapOperationAuth(
 ): AuthMapping; // unchanged return shape: { auth?, variables, limitations }
 ```
 
-`mapScheme` (private) is extended to accept the resolved `variableNames` for the key being mapped,
-building the same `PostmanAuth`/`ArtifactVariable` shape it does today but referencing the plan's
-name(s) instead of the hard-coded literals. Every operation referencing an unrecognized scheme type
-still falls back to the existing `"unsupported-auth-scheme"` limitation, unchanged (FR-005 does not
-touch this path).
+As built, the former private `mapScheme(scheme)` was replaced by `buildAuthMapping(scheme, entry)`
+(see "As built" note above), which takes the resolved plan `entry` for the key being mapped and
+builds the same `PostmanAuth`/`ArtifactVariable` shape as before but referencing the plan's name(s)
+instead of the hard-coded literals. Every operation referencing an unrecognized scheme type still
+falls back to the existing `"unsupported-auth-scheme"` limitation, unchanged (FR-005 does not touch
+this path). `workflowRendering.ts`'s `planWorkflow` also calls `mapOperationAuth` and now computes
+its own `planSchemeVariables(apiModel.securitySchemes)` to supply the third argument — a second
+production call site the original design (plan.md, before its post-analyze update) did not
+enumerate.
 
 ## New (backend-internal): `backend/src/postman/credentialProducers.ts`
 

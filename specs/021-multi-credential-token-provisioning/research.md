@@ -161,3 +161,21 @@ FR or SC in the spec answers.
   to report a *success* would overload its meaning and break the frontend's existing "no limitations
   recorded" success-state rendering (`PostmanExportLimitations.tsx`) for exports where every distinct
   scheme's producer was found.
+
+## D7 — Producer discovery never runs for a distinct `basic` scheme (implementation-time addendum)
+
+**Decision**: `findCredentialProducers` (`backend/src/postman/credentialProducers.ts`) skips every
+non-primary plan entry whose `type` is `"basic"` — it only ever proposes a producer candidate for a
+distinct `bearer` or `apiKey` scheme.
+
+**Rationale**: `CredentialProducerCandidate.variableName` is one string, because a bearer token or
+an API key is one obtainable value a login-shaped response plausibly returns. Basic authentication
+has no such single value — it is a username/password pair the caller already knows going in, not
+something a login *response* issues. Picking one of the two variables (e.g. always `username`) to
+satisfy the single-`variableName` shape would assert a producer relationship the specification
+gives no evidence for, which constitution I/XIV forbid. Neither spec.md nor its Clarifications
+discuss a `basic`-scheme producer case — every worked example is a bearer token — so declining to
+guess here is the conservative reading of FR-006 rather than a deviation from it. A distinct
+`basic` scheme still gets its correctly-named, empty `{{...Username}}`/`{{...Password}}`
+placeholders and an `unresolved-credential-producer` limitation exactly like any other
+undiscoverable case (FR-007).

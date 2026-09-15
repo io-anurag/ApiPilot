@@ -117,10 +117,11 @@ packages/shared-domain/
 backend/
 ├── src/
 │   ├── postman/
-│   │   ├── authMapping.ts             # add planSchemeVariables(); extend mapOperationAuth()/mapScheme() to consume it
+│   │   ├── authMapping.ts             # add planSchemeVariables(); mapOperationAuth() takes the plan; mapScheme() replaced by buildAuthMapping(scheme, entry)
 │   │   ├── artifactVariables.ts       # credentialVariable() gains an optional variableName override parameter
 │   │   ├── credentialProducers.ts     # NEW — findCredentialProducers(): the FR-006 stem-match heuristic
 │   │   ├── generateCollection.ts      # authByOperation(): compute the plan once, call findCredentialProducers(), emit the new limitation kind and ExportResult.credentialProducers
+│   │   ├── workflowRendering.ts       # planWorkflow()'s own mapOperationAuth call site also needs the plan (a second production call site beyond generateCollection.ts)
 │   │   ├── automaticChaining.ts       # unchanged — FR-009 explicitly scopes wiring to a later extension
 │   │   └── readme.ts                  # extend LIMITATION_HEADINGS for the new kind
 │   └── api/
@@ -131,7 +132,7 @@ backend/
 │   │   ├── credentialProducers.test.ts # NEW
 │   │   └── generateCollection.test.ts # extend: end-to-end multi-scheme export, unresolved-producer limitation
 │   ├── fixtures/postman/
-│   │   └── exportFixtures.ts          # extend with a second same-type security scheme fixture
+│   │   └── credentialFixtures.ts      # NEW — multi-scheme fixtures, kept separate from exportFixtures.ts so every pre-existing single-scheme test's fixture stays byte-identical (SC-001)
 │   └── integration/
 │       └── postmanCollection.test.ts  # extend with an HTTP-level multi-scheme case
 
@@ -146,6 +147,13 @@ the existing `backend/src/postman/` artifact-generation module (with one new sib
 on the existing `packages/shared-domain/src/postmanArtifact.ts` contract. The only `frontend/`
 change is the one-line heading TypeScript's exhaustive `Record<GenerationLimitationKind, string>`
 requires — no new UI surface is introduced (research.md D6).
+
+*As built* (added post-`/speckit-analyze`, 2026-09-15): widening `mapOperationAuth`'s signature to
+take the plan required updating a second production call site the original design missed —
+`workflowRendering.ts`'s `planWorkflow` also calls `mapOperationAuth` (to decide whether a workflow
+step's auth is representable), and now computes its own `planSchemeVariables(apiModel.securitySchemes)`
+for that call. `tsc` caught the missed call site immediately, so no behavior shipped incorrectly;
+this note exists purely so a future reader can find both call sites from the plan.
 
 ## Complexity Tracking
 

@@ -183,7 +183,21 @@ export type GenerationLimitationKind =
   | "workflow-unsupported-sequence"
   | "workflow-unresolved-handoff"
   | "workflow-unsupported-extraction-path"
-  | "workflow-unsupported-request-representation";
+  | "workflow-unsupported-request-representation"
+  | "unresolved-credential-producer";
+
+/**
+ * One distinct security scheme's identified credential-obtaining operation
+ * (specs/021-multi-credential-token-provisioning FR-006). Identification only — this feature
+ * does not wire the producer's response value into the variable; that is a later extension to
+ * automatic chaining (FR-009), for which this is the target contract.
+ */
+export interface CredentialProducerCandidate {
+  schemeKey: string;
+  variableName: string;
+  producerOperationPath: string;
+  producerOperationMethod: string;
+}
 
 /**
  * A recorded gap. A limitation never blocks the export; a validation problem always does.
@@ -305,6 +319,11 @@ export interface ExportResult {
   validation: ValidationReport;
   limitations: GenerationLimitation[];
   summary: ExportSummary;
+  /**
+   * One entry per distinct scheme whose credential-producer operation was identified (FR-006).
+   * Always present; empty when no distinct scheme had a discoverable producer.
+   */
+  credentialProducers: CredentialProducerCandidate[];
 }
 
 /** Refusals, not results: each produces an error response rather than an ExportResult. */

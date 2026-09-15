@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExportResult, WorkflowExportContext } from "@apipilot/shared-domain";
+import type { ExportResult, TestModel, WorkflowExportContext } from "@apipilot/shared-domain";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { serializeArtifact } from "../../../src/postman/ordering";
 import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
@@ -15,6 +15,7 @@ import {
   ordersPatchScenario,
   testModelOf,
 } from "../../fixtures/postman/dependencyFixtures";
+import { adminAuthOperation, bearerAuthOperation, discoverableProducerApiModel } from "../../fixtures/postman/credentialFixtures";
 
 const options = { baseUrl: "https://qa.internal.example", variableValues: { token: "t-1" } };
 
@@ -84,5 +85,50 @@ describe("automatic chaining determinism (specs/019-auto-workflow-chaining SC-00
     const outcome = generateCollection(chainingApiModel, shuffled, chainingOptions, context);
     if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
     expect(serialized(outcome.result)).toBe(serialized(chainedExportResult()));
+  });
+});
+
+describe("distinct-credential determinism (specs/021-multi-credential-token-provisioning)", () => {
+  const testModel: TestModel = {
+    scenarios: [
+      {
+        id: "scenario-bearer",
+        category: "positive",
+        operationPath: bearerAuthOperation.path,
+        operationMethod: bearerAuthOperation.method,
+        request: { pathParameters: {}, queryParameters: {}, headers: {} },
+        assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+        provenance: { source: "RULE", rule: "positive", description: "GET /orders.", duplicateOfRules: [] },
+      },
+      {
+        id: "scenario-admin",
+        category: "positive",
+        operationPath: adminAuthOperation.path,
+        operationMethod: adminAuthOperation.method,
+        request: { pathParameters: {}, queryParameters: {}, headers: {} },
+        assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+        provenance: { source: "RULE", rule: "positive", description: "GET /reports.", duplicateOfRules: [] },
+      },
+    ],
+  };
+
+  function distinctCredentialResult(): ExportResult {
+    const outcome = generateCollection(discoverableProducerApiModel, testModel);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    return outcome.result;
+  }
+
+  it("produces byte-identical variable names, auth blocks, and credentialProducers across repeated exports", () => {
+    const first = distinctCredentialResult();
+    const second = distinctCredentialResult();
+    expect(serialized(second)).toBe(serialized(first));
+    expect(second.credentialProducers).toEqual(first.credentialProducers);
+  });
+
+  it("produces the same scheme-variable routing regardless of the input scenario order", () => {
+    const shuffled: TestModel = { scenarios: [...testModel.scenarios].reverse() };
+    const outcome = generateCollection(discoverableProducerApiModel, shuffled);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    expect(serialized(outcome.result)).toBe(serialized(distinctCredentialResult()));
   });
 });

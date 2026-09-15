@@ -39,7 +39,7 @@ Existing monorepo layout — no new project or workspace:
 **Purpose**: Create fixture data this feature's tests need, without touching any existing fixture
 or behavior.
 
-- [ ] T001 [P] Create `backend/tests/fixtures/postman/credentialFixtures.ts` with builder
+- [X] T001 [P] Create `backend/tests/fixtures/postman/credentialFixtures.ts` with builder
       functions (not modifying the existing `exportFixtures.ts`, so every pre-existing test's
       fixture stays byte-identical — SC-001): (a) a `securitySchemes` record declaring `bearerAuth`
       then `adminAuth` (both `http`/`bearer`, in that declaration order) for primacy testing; (b) a
@@ -60,18 +60,18 @@ or behavior.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Extend `packages/shared-domain/src/postmanArtifact.ts` per data-model.md: add the
+- [X] T002 Extend `packages/shared-domain/src/postmanArtifact.ts` per data-model.md: add the
       `CredentialProducerCandidate` interface, add `"unresolved-credential-producer"` to
       `GenerationLimitationKind`, and add `credentialProducers: CredentialProducerCandidate[]` to
       `ExportResult`.
-- [ ] T003 [P] Add the `"unresolved-credential-producer"` heading to the
+- [X] T003 [P] Add the `"unresolved-credential-producer"` heading to the
       `Record<GenerationLimitationKind, string>` `LIMITATION_HEADINGS` map in
       `backend/src/postman/readme.ts` (e.g. `"Security-scheme credentials this export could not
       identify a producer for"`). (Depends on T002.)
-- [ ] T004 [P] Add the same `"unresolved-credential-producer"` heading to the
+- [X] T004 [P] Add the same `"unresolved-credential-producer"` heading to the
       `Record<GenerationLimitationKind, string>` `LIMITATION_HEADINGS` map in
       `frontend/src/components/PostmanExportLimitations.tsx`. (Depends on T002.)
-- [ ] T005 [P] In `backend/src/postman/authMapping.ts`, add `SchemeType`,
+- [X] T005 [P] In `backend/src/postman/authMapping.ts`, add `SchemeType`,
       `SchemeVariablePlanEntry`, a private `schemeStem(schemeKey)` helper (strips a trailing
       case-insensitive `Auth`/`Scheme` suffix, else returns the key unchanged), and
       `planSchemeVariables(securitySchemes)` per data-model.md: classify each key's type by reusing
@@ -80,16 +80,16 @@ or behavior.
       resolving to the legacy literal name(s), and derive every other key's name(s) from
       `schemeStem` + the type-specific suffix (`Token`/`ApiKey`/`Username`+`Password`). Pure
       function; not yet wired into `mapOperationAuth`.
-- [ ] T006 [P] In `backend/src/postman/artifactVariables.ts`, extend `credentialVariable` to
+- [X] T006 [P] In `backend/src/postman/artifactVariables.ts`, extend `credentialVariable` to
       `credentialVariable(kind: ArtifactCredentialName, variableName: string = kind):
       ArtifactVariable`, using `variableName` for the emitted `ArtifactVariable.name` and `kind`
       unchanged for the `CREDENTIAL_PURPOSE` lookup. Every existing one-argument call site
       (`requestItem.ts`, `authMapping.ts`) is unaffected.
-- [ ] T007 Create `backend/src/postman/credentialProducers.ts` with the `findCredentialProducers`
+- [X] T007 Create `backend/src/postman/credentialProducers.ts` with the `findCredentialProducers`
       stub from data-model.md (imports `CredentialProducerCandidate` from `@apipilot/shared-domain`
       and `SchemeVariablePlanEntry` from `./authMapping`; returns `[]` unconditionally for now — no
       matching logic yet). (Depends on T002, T005.)
-- [ ] T008 In `backend/src/postman/generateCollection.ts`, add `credentialProducers: []` as a new
+- [X] T008 In `backend/src/postman/generateCollection.ts`, add `credentialProducers: []` as a new
       field on the `withoutReadme` object literal (~line 453) so `ExportResult` always carries the
       field, even before it is populated. (Depends on T002.)
 
@@ -113,27 +113,27 @@ schemes (`bearerAuth`, `adminAuth`); verify the environment contains `{{token}}`
 
 > Write these first; confirm they fail against the T005/T007 stubs before implementing.
 
-- [ ] T009 [P] [US1] Unit tests in `backend/tests/unit/postman/authMapping.test.ts`:
+- [X] T009 [P] [US1] Unit tests in `backend/tests/unit/postman/authMapping.test.ts`:
       `planSchemeVariables` — (a) with `bearerAuth` then `adminAuth`, `bearerAuth` is
       `isPrimary: true`/`{token: "token"}` and `adminAuth` is `isPrimary: false`/
       `{token: "adminToken"}`; (b) with the `partnerCredential`-keyed fixture (T001c), the
       non-primary key resolves to `partnerCredentialToken` (no `Auth`/`Scheme` suffix to strip); (c)
       two same-header-name `apiKey` schemes (T001b) resolve to two distinct `apiKey`-shaped
       entries; (d) a single scheme of a type is always `isPrimary: true` with the legacy name.
-- [ ] T010 [P] [US1] Unit tests in `backend/tests/unit/postman/authMapping.test.ts`: extend every
+- [X] T010 [P] [US1] Unit tests in `backend/tests/unit/postman/authMapping.test.ts`: extend every
       existing `mapOperationAuth` call site to pass `planSchemeVariables(schemes)` as the third
       argument, asserting today's single-scheme fixtures (`bearerAuth`/`basicAuth`/`apiKeyAuth`
       from the existing `exportApiModel`) still produce byte-identical `PostmanAuth`/
       `ArtifactVariable` output (SC-001); add a new case asserting a distinct-scheme operation's
       auth block references the derived variable name (FR-004), using T001a's fixture.
-- [ ] T011 [P] [US1] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
+- [X] T011 [P] [US1] Integration test in `backend/tests/integration/postmanCollection.test.ts`:
       exporting a spec built from T001a's two-`bearerAuth`-scheme fixture over HTTP produces two
       environment variables (`token`, `adminToken`) and correctly-routed auth blocks; exporting the
       existing single-scheme fixture is byte-identical to pre-feature output.
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] In `backend/src/postman/authMapping.ts`, extend `mapOperationAuth`'s signature to
+- [X] T012 [US1] In `backend/src/postman/authMapping.ts`, extend `mapOperationAuth`'s signature to
       `mapOperationAuth(operation, securitySchemes, plan: Map<string, SchemeVariablePlanEntry>)`,
       and extend the private `mapScheme` to accept the resolved `variableNames` for the key being
       mapped, building the same `PostmanAuth`/`ArtifactVariable` shape as today but referencing the
@@ -141,7 +141,7 @@ schemes (`bearerAuth`, `adminAuth`); verify the environment contains `{{token}}`
       literals `"token"`/`"apiKey"`/`"username"`/`"password"`. The existing
       `"unsupported-auth-scheme"` fallback path for unrecognized scheme types is unchanged. (Depends
       on T005, T006.)
-- [ ] T013 [US1] In `backend/src/postman/generateCollection.ts`'s `authByOperation`, compute
+- [X] T013 [US1] In `backend/src/postman/generateCollection.ts`'s `authByOperation`, compute
       `planSchemeVariables(apiModel.securitySchemes)` once at the top of the function and pass it as
       the third argument to every `mapOperationAuth(pair.operation, apiModel.securitySchemes,
       plan)` call in its loop. (Depends on T012.)
@@ -162,26 +162,26 @@ contains `adminAuth`'s stem) alongside an operation under `adminAuth`; verify
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Unit tests in `backend/tests/unit/postman/credentialProducers.test.ts`:
+- [X] T014 [P] [US2] Unit tests in `backend/tests/unit/postman/credentialProducers.test.ts`:
       `findCredentialProducers` — (a) T001d's sole-unauthenticated-stem-match yields exactly one
       `CredentialProducerCandidate` for `adminAuth`; (b) T001e's two equally-plausible matches yields
       none for that scheme; (c) T001f's zero matches yields none; (d) an *authenticated* operation
       whose path/`operationId` matches the stem is never selected (Edge Cases); (e) the primary
       scheme in a plan is never searched, even when an unauthenticated operation's path happens to
       match its stem.
-- [ ] T015 [P] [US2] Unit test in `backend/tests/unit/postman/generateCollection.test.ts`: a full
+- [X] T015 [P] [US2] Unit test in `backend/tests/unit/postman/generateCollection.test.ts`: a full
       export built from T001d's fixture populates `ExportResult.credentialProducers` with the
       correct `schemeKey`/`variableName`/`producerOperationPath`/`producerOperationMethod`, and
       records no `unresolved-credential-producer` limitation for `adminAuth`.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Implement `findCredentialProducers` in `backend/src/postman/credentialProducers.ts`
+- [X] T016 [US2] Implement `findCredentialProducers` in `backend/src/postman/credentialProducers.ts`
       per data-model.md: for every `plan` entry with `isPrimary: false`, filter `operations` to
       `security.length === 0` whose `path` or `operationId` contains that entry's `stem`
       case-insensitively; emit one `CredentialProducerCandidate` when exactly one operation
       matches, none otherwise. (Depends on T007.)
-- [ ] T017 [US2] In `backend/src/postman/generateCollection.ts`, call
+- [X] T017 [US2] In `backend/src/postman/generateCollection.ts`, call
       `findCredentialProducers(apiModel.operations, plan)` (reusing the `plan` computed in T013) and
       assign its result to the `credentialProducers` field added in T008. (Depends on T008, T013,
       T016.)
@@ -202,20 +202,20 @@ references it.
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Unit test in `backend/tests/unit/postman/generateCollection.test.ts`: an
+- [X] T018 [P] [US3] Unit test in `backend/tests/unit/postman/generateCollection.test.ts`: an
       export built from T001f's fixture (no unauthenticated operations at all) still emits an empty
       `{{adminToken}}` environment variable and exactly one `unresolved-credential-producer`
       limitation whose `location` names the `adminAuth` scheme and whose `message` lists every
       operation among the export's approved scenarios that references it; repeat with T001e's
       ambiguous-match fixture, verifying the same limitation is recorded (not a silently-ignored
       case).
-- [ ] T019 [P] [US3] Unit test in `backend/tests/unit/postman/readme.test.ts`: an export carrying an
+- [X] T019 [P] [US3] Unit test in `backend/tests/unit/postman/readme.test.ts`: an export carrying an
       `unresolved-credential-producer` limitation renders it under its own heading in the README,
       distinguishable from `unsupported-auth-scheme` entries.
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] In `backend/src/postman/generateCollection.ts`, after computing
+- [X] T020 [US3] In `backend/src/postman/generateCollection.ts`, after computing
       `credentialProducers` (T017), determine every non-primary scheme in `plan` with no matching
       entry in `credentialProducers`, and for each, push one `GenerationLimitation` (`kind:
       "unresolved-credential-producer"`, `location: 'security scheme "<schemeKey>"'`, `message`
@@ -232,11 +232,11 @@ T018–T019 all pass.
 
 **Purpose**: Repo-wide guarantees and validation that span all three stories.
 
-- [ ] T021 [P] Extend `backend/tests/unit/postman/determinism.test.ts` and
+- [X] T021 [P] Extend `backend/tests/unit/postman/determinism.test.ts` and
       `backend/tests/unit/postman/reexportStability.test.ts` with a multi-scheme case (T001a):
       repeated exports of the same inputs produce byte-identical `credentialProducers`,
       `ArtifactVariable`, and `PostmanAuth` output (SC-001, SC-002, constitution XVI/XXIV).
-- [ ] T022 Run quickstart.md's focused checks, then the full repository validation commands (`npm
+- [X] T022 Run quickstart.md's focused checks, then the full repository validation commands (`npm
       run build`, `npm run lint`, `npm test`) from the repository root; fix any fallout before
       considering the feature complete.
 

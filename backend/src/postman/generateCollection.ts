@@ -2,6 +2,7 @@ import type {
   ApiModel,
   ApiOperation,
   ArtifactVariable,
+  CredentialProducerCandidate,
   ExportOptions,
   ExportOutcome,
   GenerationLimitation,
@@ -16,7 +17,8 @@ import type {
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
 import { planAutomaticChains } from "./automaticChaining";
 import { baseUrlVariable } from "./artifactVariables";
-import { mapOperationAuth } from "./authMapping";
+import { mapOperationAuth, planSchemeVariables, type SchemeVariablePlanEntry } from "./authMapping";
+import { findCredentialProducers } from "./credentialProducers";
 import { buildEnvironment } from "./environment";
 import { groupAndName } from "./folders";
 import { collectionIdForScenarios } from "./identifiers";
@@ -171,23 +173,72 @@ function authByOperation(
   byKey: Map<string, PostmanAuth | undefined>;
   variables: ArtifactVariable[];
   limitations: GenerationLimitation[];
+  /** The scheme-variable plan computed for this export (specs/021-multi-credential-token-
+   *  provisioning), reused by producer discovery and unresolved-scheme limitation reporting so
+   *  every stage of the export agrees on the same primacy/naming decisions. */
+  plan: Map<string, SchemeVariablePlanEntry>;
+  /** Every operation actually present in this export's approved scenarios, deduplicated —
+   *  reused by unresolved-scheme limitation reporting to list the affected operations. */
+  operations: ApiOperation[];
 } {
+  const plan = planSchemeVariables(apiModel.securitySchemes);
   const byKey = new Map<string, PostmanAuth | undefined>();
   const variables: ArtifactVariable[] = [];
   const limitations: GenerationLimitation[] = [];
+  const operations: ApiOperation[] = [];
   const seen = new Set<string>();
 
   for (const pair of pairs) {
     const key = operationKey(pair.operation.path, pair.operation.method);
     if (seen.has(key)) continue;
     seen.add(key);
-    const mapping = mapOperationAuth(pair.operation, apiModel.securitySchemes);
+    operations.push(pair.operation);
+    const mapping = mapOperationAuth(pair.operation, apiModel.securitySchemes, plan);
     byKey.set(key, mapping.auth);
     variables.push(...mapping.variables);
     limitations.push(...mapping.limitations);
   }
 
-  return { byKey, variables, limitations };
+  return { byKey, variables, limitations, plan, operations };
+}
+
+/**
+ * One aggregated limitation per non-primary scheme with no discovered producer candidate
+ * (specs/021-multi-credential-token-provisioning FR-007) — never one per affected operation, so
+ * the same unresolved scheme is not reported redundantly for every request that depends on it.
+ */
+function unresolvedCredentialProducerLimitations(
+  operations: ApiOperation[],
+  plan: Map<string, SchemeVariablePlanEntry>,
+  credentialProducers: CredentialProducerCandidate[],
+): GenerationLimitation[] {
+  const resolvedSchemeKeys = new Set(credentialProducers.map((candidate) => candidate.schemeKey));
+  const limitations: GenerationLimitation[] = [];
+
+  for (const [schemeKey, entry] of plan) {
+    if (entry.isPrimary || resolvedSchemeKeys.has(schemeKey)) continue;
+
+    const dependentLocations = operations
+      .filter((operation) => operation.security[0]?.schemes[0]?.name === schemeKey)
+      .map((operation) => `${operation.method.toUpperCase()} ${operation.path}`)
+      .sort(compareCodeUnits);
+    if (dependentLocations.length === 0) continue;
+
+    const variableNames =
+      entry.type === "basic"
+        ? `${entry.variableNames.username}, ${entry.variableNames.password}`
+        : entry.type === "bearer"
+          ? entry.variableNames.token
+          : entry.variableNames.apiKey;
+
+    limitations.push({
+      kind: "unresolved-credential-producer",
+      location: `security scheme "${schemeKey}"`,
+      message: `No operation in the specification could be identified as obtaining the "${schemeKey}" credential; populate {{${variableNames}}} manually. Affected operations: ${dependentLocations.join(", ")}.`,
+    });
+  }
+
+  return limitations;
 }
 
 /**
@@ -271,10 +322,12 @@ export function generateCollection(
   const standaloneResolved = automaticChaining.scenarios;
 
   const auth = authByOperation(apiModel, [...standaloneResolved, ...workflowResolved]);
+  const credentialProducers = findCredentialProducers(apiModel.operations, auth.plan);
   const limitations: GenerationLimitation[] = [
     ...auth.limitations,
     ...analysisIssueLimitations(apiModel, resolved),
     ...workflowPlans.limitations,
+    ...unresolvedCredentialProducerLimitations(auth.operations, auth.plan, credentialProducers),
   ];
   const variables: ArtifactVariable[] = [
     baseUrlVariable(options.baseUrl ?? ""),
@@ -455,6 +508,7 @@ export function generateCollection(
     environment: buildEnvironment(collectionName, valuedVariables),
     validation,
     limitations: orderedLimitations,
+    credentialProducers,
     summary: {
       requestCount: folders.reduce((count, folder) => count + folder.item.length, 0),
       folderCount: folders.length,
