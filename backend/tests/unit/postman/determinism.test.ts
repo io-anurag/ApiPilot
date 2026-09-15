@@ -15,7 +15,16 @@ import {
   ordersPatchScenario,
   testModelOf,
 } from "../../fixtures/postman/dependencyFixtures";
-import { adminAuthOperation, bearerAuthOperation, discoverableProducerApiModel } from "../../fixtures/postman/credentialFixtures";
+import {
+  adminAuthOperation,
+  adminReportsScenario,
+  bearerAuthOperation,
+  discoverableProducerApiModel,
+  issueAdminTokenScenario,
+  issueTokenScenario,
+  tokenInfoScenario,
+  twoIndependentSchemesApiModel,
+} from "../../fixtures/postman/credentialFixtures";
 
 const options = { baseUrl: "https://qa.internal.example", variableValues: { token: "t-1" } };
 
@@ -130,5 +139,39 @@ describe("distinct-credential determinism (specs/021-multi-credential-token-prov
     const outcome = generateCollection(discoverableProducerApiModel, shuffled);
     if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
     expect(serialized(outcome.result)).toBe(serialized(distinctCredentialResult()));
+  });
+});
+
+describe("auth-credential chaining determinism (specs/023-auto-auth-credential-chaining SC-004)", () => {
+  const authTestModel = testModelOf(
+    issueTokenScenario,
+    tokenInfoScenario,
+    issueAdminTokenScenario,
+    adminReportsScenario,
+  );
+  const authContext: WorkflowExportContext = {
+    workflows: [],
+    approvedWorkflowIds: [],
+    automaticChaining: { graph: graphOf(), cycles: [], workflowDecisions: {} },
+  };
+
+  function authChainedResult(testModel = authTestModel): ExportResult {
+    const outcome = generateCollection(twoIndependentSchemesApiModel, testModel, {}, authContext);
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    return outcome.result;
+  }
+
+  it("produces byte-identical auth-credential relationships, chains, and limitations across repeated exports", () => {
+    expect(serialized(authChainedResult())).toBe(serialized(authChainedResult()));
+  });
+
+  it("produces the same auth-credential chaining decisions regardless of the input scenario order", () => {
+    const shuffled = testModelOf(
+      adminReportsScenario,
+      issueAdminTokenScenario,
+      tokenInfoScenario,
+      issueTokenScenario,
+    );
+    expect(serialized(authChainedResult(shuffled))).toBe(serialized(authChainedResult()));
   });
 });

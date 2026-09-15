@@ -21,11 +21,21 @@ import {
   ordersPatchRelationship,
   ordersPatchScenario,
 } from "../../fixtures/postman/dependencyFixtures";
+import type { ApiOperation } from "@apipilot/shared-domain";
+import {
+  issueTokenScenario,
+  mixedProducerGroupApiModel,
+  tokenAuthRelationship,
+  tokenInfoScenario,
+  tokenPathConsumerScenario,
+  tokenPathRelationship,
+} from "../../fixtures/postman/credentialFixtures";
+
+/** Every fixture operation this test file draws scenarios from, across both fixture models. */
+const ALL_OPERATIONS: ApiOperation[] = [...chainingApiModel.operations, ...mixedProducerGroupApiModel.operations];
 
 function operationFor(path: string, method: string) {
-  const operation = chainingApiModel.operations.find(
-    (candidate) => candidate.path === path && candidate.method === method,
-  );
+  const operation = ALL_OPERATIONS.find((candidate) => candidate.path === path && candidate.method === method);
   if (!operation) throw new Error(`fixture operation not found: ${method} ${path}`);
   return operation;
 }
@@ -54,6 +64,7 @@ function baseInput(overrides: Partial<AutomaticChainingInput> = {}): AutomaticCh
     rejectedRelationshipIds: new Set(),
     disabled: false,
     standaloneOrderRank: new Map(),
+    credentialVariableNames: new Map(),
     ...overrides,
   };
 }
@@ -221,5 +232,101 @@ describe("planAutomaticChains", () => {
     expect(result.chains[0].consumers.map((consumer) => consumer.scenarioId).sort()).toEqual(
       [ordersDeleteScenario.id, ordersDeleteInvalidScenario.id].sort(),
     );
+  });
+
+  // specs/023-auto-auth-credential-chaining: "auth"-location consumers.
+  describe("auth-credential consumers", () => {
+    it("applies an auth chain, resolving to the credential variable name and never mutating the consumer request (research.md D5/D6)", () => {
+      const standalone = scenarioOperationPairs([issueTokenScenario, tokenInfoScenario]);
+      const result = planAutomaticChains(
+        standalone,
+        baseInput({
+          graph: graphOf(tokenAuthRelationship()),
+          standaloneOrderRank: rankOf(standalone),
+          credentialVariableNames: new Map([["tokenAuth", "token"]]),
+        }),
+      );
+
+      expect(result.chains).toHaveLength(1);
+      const chain = result.chains[0];
+      expect(chain.variableName).toBe("token"); // never a workflowVariableName-derived name
+      expect(chain.consumers).toEqual([
+        expect.objectContaining({ scenarioId: tokenInfoScenario.id, field: "tokenAuth", confidence: "CONFIRMED" }),
+      ]);
+
+      const consumerPair = result.scenarios.find((pair) => pair.scenario.id === tokenInfoScenario.id)!;
+      expect(consumerPair.scenario.request).toEqual(tokenInfoScenario.request); // no substitution applied
+
+      const extractions = result.extractionsByProducerScenarioId.get(issueTokenScenario.id);
+      expect(extractions).toEqual([
+        { workflowId: chain.chainId, variableName: "token", responseField: "token", finalVariableName: "token" },
+      ]);
+    });
+
+    it("declines an auth chain that would place the consumer before the producer in emission order (FR-015)", () => {
+      const standalone = scenarioOperationPairs([issueTokenScenario, tokenInfoScenario]);
+      // Deliberately places the consumer's rank before the producer's, bypassing folder-grouping
+      // uncertainty (mirrors dependencyFixtures.ts's own ordering-violation fixture in spirit).
+      const rank = new Map([
+        [tokenInfoScenario.id, 0],
+        [issueTokenScenario.id, 1],
+      ]);
+      const result = planAutomaticChains(
+        standalone,
+        baseInput({
+          graph: graphOf(tokenAuthRelationship()),
+          standaloneOrderRank: rank,
+          credentialVariableNames: new Map([["tokenAuth", "token"]]),
+        }),
+      );
+      expect(result.chains).toHaveLength(0);
+    });
+
+    it("disables auth chaining exactly like path-parameter chaining, via the same flag (FR-008)", () => {
+      const standalone = scenarioOperationPairs([issueTokenScenario, tokenInfoScenario]);
+      const result = planAutomaticChains(
+        standalone,
+        baseInput({
+          graph: graphOf(tokenAuthRelationship()),
+          standaloneOrderRank: rankOf(standalone),
+          credentialVariableNames: new Map([["tokenAuth", "token"]]),
+          disabled: true,
+        }),
+      );
+      expect(result.chains).toHaveLength(0);
+      expect(result.scenarios).toBe(standalone);
+    });
+
+    it("splits a producer field shared by an auth consumer and a path consumer into two independent chains (research.md D7)", () => {
+      const standalone = scenarioOperationPairs([issueTokenScenario, tokenInfoScenario, tokenPathConsumerScenario]);
+      const rank = new Map([
+        [issueTokenScenario.id, 0],
+        [tokenInfoScenario.id, 1],
+        [tokenPathConsumerScenario.id, 2],
+      ]);
+      const result = planAutomaticChains(
+        standalone,
+        baseInput({
+          graph: graphOf(tokenAuthRelationship(), tokenPathRelationship()),
+          standaloneOrderRank: rank,
+          credentialVariableNames: new Map([["tokenAuth", "token"]]),
+        }),
+      );
+
+      expect(result.chains).toHaveLength(2);
+      const authChain = result.chains.find((chain) => chain.consumers[0]?.field === "tokenAuth")!;
+      const pathChain = result.chains.find((chain) => chain.consumers[0]?.field === "token")!;
+      expect(authChain.variableName).toBe("token");
+      expect(pathChain.variableName).not.toBe("token"); // its own workflowVariableName-derived name
+      expect(authChain.variableName).not.toBe(pathChain.variableName);
+
+      const pathConsumerPair = result.scenarios.find((pair) => pair.scenario.id === tokenPathConsumerScenario.id)!;
+      expect(pathConsumerPair.scenario.request.pathParameters.token).toBe(`{{${pathChain.variableName}}}`);
+      const authConsumerPair = result.scenarios.find((pair) => pair.scenario.id === tokenInfoScenario.id)!;
+      expect(authConsumerPair.scenario.request).toEqual(tokenInfoScenario.request);
+
+      // Two independent extraction captures on the same producer scenario, not one merged entry.
+      expect(result.extractionsByProducerScenarioId.get(issueTokenScenario.id)).toHaveLength(2);
+    });
   });
 });

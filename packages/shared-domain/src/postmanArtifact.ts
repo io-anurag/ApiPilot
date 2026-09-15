@@ -305,7 +305,11 @@ export interface ExportSummary {
   workflowVariableCount: number;
   unsupportedWorkflowCount: number;
   omittedWorkflowCount: number;
-  /** Count of path parameters resolved via an automatic chain (specs/019-auto-workflow-chaining). */
+  /**
+   * Count of consumers resolved via an automatic chain (specs/019-auto-workflow-chaining): path
+   * parameters, plus, per specs/023-auto-auth-credential-chaining, auth-credential consumers —
+   * one shared counter, since both are reported through the same `AutomaticChain` mechanism.
+   */
   automaticChainCount: number;
 }
 

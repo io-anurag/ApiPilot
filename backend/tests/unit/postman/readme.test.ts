@@ -2,7 +2,12 @@ import type { ExportResult, GenerationLimitation } from "@apipilot/shared-domain
 import { describe, expect, it } from "vitest";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { renderReadme } from "../../../src/postman/readme";
-import { approvedTestModel, exportApiModel } from "../../fixtures/postman/exportFixtures";
+import {
+  approvedTestModel,
+  exportApiModel,
+  minimalApiModel,
+  minimalTestModel,
+} from "../../fixtures/postman/exportFixtures";
 import {
   chainingApiModel,
   graphOf,
@@ -226,7 +231,7 @@ describe("accompanying document", () => {
     expect(outcome.result.readme).toContain("GET /orders");
     expect(outcome.result.readme).toContain("DELETE /orders/{id}");
     expect(outcome.result.readme).toContain("CONFIRMED relationship `rel-orders-delete`");
-    expect(outcome.result.readme).toContain("Automatically chained path parameters: 1");
+    expect(outcome.result.readme).toContain("Automatically chained requests: 1");
   });
 
   it("omits the automatic-chains section entirely when no chain was applied", () => {
@@ -260,10 +265,11 @@ describe("accompanying document", () => {
   });
 
   it("reports no limitations plainly when everything was expressible", () => {
-    const outcome = generateCollection(
-      { ...exportApiModel, summary: { ...exportApiModel.summary, issues: [] } },
-      { scenarios: [approvedTestModel.scenarios[0]] },
-    );
+    // A model with no declared security scheme at all (rather than `exportApiModel`, whose
+    // `bearerAuth` scheme now also participates in primary-scheme producer discovery per
+    // specs/023-auto-auth-credential-chaining, and would otherwise record an unrelated
+    // unresolved-credential-producer limitation this test isn't about).
+    const outcome = generateCollection(minimalApiModel, minimalTestModel);
     if (!outcome.ok) throw new Error("expected a successful export");
     expect(outcome.result.readme).toContain("None recorded");
   });

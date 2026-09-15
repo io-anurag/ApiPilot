@@ -172,6 +172,14 @@ export interface WorkflowExtraction {
   workflowId: string;
   variableName: string;
   responseField: string;
+  /**
+   * When present, the capture writes to exactly this variable name instead of deriving one via
+   * `workflowVariableName(workflowId, variableName)` (specs/023-auto-auth-credential-chaining
+   * research.md D6). Used only for an auth-credential chain's extraction, whose target is a fixed,
+   * already-emitted credential variable name (e.g. "token"), not a chain-scoped derived name — the
+   * operation's auth block already references that exact name independently of this extraction.
+   */
+  finalVariableName?: string;
 }
 
 function extractionLines(extraction: WorkflowExtraction): string[] {
@@ -179,7 +187,8 @@ function extractionLines(extraction: WorkflowExtraction): string[] {
     .split(".")
     .map((part) => `[${JSON.stringify(part)}]`)
     .join("");
-  const variable = workflowVariableName(extraction.workflowId, extraction.variableName);
+  const variable =
+    extraction.finalVariableName ?? workflowVariableName(extraction.workflowId, extraction.variableName);
   // Environment scope, not collection scope: Newman's Node API only exposes a run's mutated
   // environment back to the caller (`summary.environment`), which is exactly what AP-017's
   // execution orchestrator needs to carry a workflow handoff forward from one item's Newman
