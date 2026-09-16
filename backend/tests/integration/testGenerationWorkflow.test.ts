@@ -73,6 +73,31 @@ describe("test generation workflow orchestration", () => {
     expect(response.status).toBe(204);
   });
 
+  it("GET ?progressOnly=true still returns 204 when no workflow is in progress", async () => {
+    const app = createApp();
+    const response = await request(app).get("/api/test-generation-workflow?progressOnly=true");
+    expect(response.status).toBe(204);
+  });
+
+  it("GET ?progressOnly=true omits apiModel/approvedTestModel and trims reviewWorkspace to AI-sourced scenarios (contracts/ai-enhancement-progress-v2.md addendum)", async () => {
+    const app = createApp(fixedProvider(emptyCandidates));
+    const agent = request.agent(app);
+
+    await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    await agent.post("/api/test-generation-workflow/ai-enhancement");
+
+    const response = await agent.get("/api/test-generation-workflow?progressOnly=true");
+    expect(response.status).toBe(200);
+    expect(response.body.workflow).toBeUndefined();
+    expect(response.body.progress.aiEnhancement.status).toBe("complete");
+    // The mock provider returns no candidates, so there is no AI-sourced scenario to report.
+    expect(response.body.progress.liveScenarios).toEqual([]);
+  });
+
   it("walks the full sequence from upload to a downloadable Postman collection (US1)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
     const agent = request.agent(app);

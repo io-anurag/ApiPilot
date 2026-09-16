@@ -1,4 +1,5 @@
 import type {
+  AiEnhancementProgressSnapshot,
   ExportOptions,
   ReviewEditContent,
   ReviewUpdateOutcome,
@@ -87,6 +88,42 @@ export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
     };
   } catch (err) {
     logger.error("network_error", { operation: "fetchCurrentWorkflow", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
+export type AiEnhancementProgressResult =
+  | { ok: true; snapshot: AiEnhancementProgressSnapshot | null; sessionExpired?: boolean }
+  | { ok: false; error: string; message: string };
+
+/**
+ * Polls the lightweight `progressOnly` variant of the workflow endpoint
+ * (contracts/ai-enhancement-progress-v2.md addendum) instead of `fetchCurrentWorkflow()`'s full
+ * payload — this is what `AiEnhancementStage` calls every 2s while a run is active, so it must
+ * not resend `apiModel`/`approvedTestModel`/the full `reviewWorkspace` on every tick.
+ */
+export async function fetchAiEnhancementProgress(): Promise<AiEnhancementProgressResult> {
+  try {
+    const response = await get("/api/test-generation-workflow?progressOnly=true");
+    if (response.status === 204) return { ok: true, snapshot: null };
+    const parsed = await response.json().catch(() => null);
+    if (!response.ok) {
+      const errorCategory = (parsed?.error as string) ?? "unknown_error";
+      logger.error("request_failed", {
+        operation: "fetchAiEnhancementProgress",
+        errorCategory,
+        statusCode: response.status,
+      });
+      return {
+        ok: false,
+        error: errorCategory,
+        message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
+      };
+    }
+    if (parsed?.sessionExpired) return { ok: true, snapshot: null, sessionExpired: true };
+    return { ok: true, snapshot: (parsed?.progress as AiEnhancementProgressSnapshot | undefined) ?? null };
+  } catch (err) {
+    logger.error("network_error", { operation: "fetchAiEnhancementProgress", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }
