@@ -2,8 +2,6 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../src/app";
 import { resetStore } from "../../../src/testGenerationWorkflow/workflowStore";
-import { resetEnvironmentStore } from "../../../src/execution/environmentStore";
-import { resetExecutionRunStore } from "../../../src/execution/executionRunStore";
 import { driveToPostmanGenerationComplete } from "../../fixtures/execution/driveWorkflow";
 import { TargetServer } from "../../fixtures/execution/targetServer";
 
@@ -27,8 +25,6 @@ describe("execution routes (US1)", () => {
 
   beforeEach(() => {
     resetStore();
-    resetEnvironmentStore();
-    resetExecutionRunStore();
     targetServer = new TargetServer();
   });
 

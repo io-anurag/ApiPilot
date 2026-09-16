@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
 import type { RequestResult } from "@apipilot/shared-domain";
 import {
   appendResult,
@@ -7,10 +11,13 @@ import {
   getRun,
   listRuns,
   requestCancel,
-  resetExecutionRunStore,
   settleRun,
 } from "../../../src/execution/executionRunStore";
 import { RunNotFoundError } from "../../../src/execution/errors";
+import { enterTestSession } from "../../../src/session/sessionContext";
+import { forceExpireForTest } from "../../../src/session/sessionRegistry";
+import { SqliteConnection, setSharedConnectionForTest } from "../../../src/persistence/connection";
+import { getExecutionRunRepository } from "../../../src/persistence/executionRunRepository";
 
 const environmentSnapshot = { name: "Local", tier: "local" as const, baseUrl: "http://localhost:4000" };
 
@@ -29,8 +36,6 @@ function passedResult(overrides: Partial<RequestResult> = {}): RequestResult {
 }
 
 describe("executionRunStore", () => {
-  beforeEach(() => resetExecutionRunStore());
-
   it("creates a run in-progress and exposes it as the in-progress run", () => {
     const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
     expect(run.status).toBe("in-progress");
@@ -80,7 +85,78 @@ describe("executionRunStore", () => {
     expect(listRuns().map((r) => r.id)).toEqual([second.id, first.id]);
   });
 
+  it("listRuns stays newest-first even when two runs share the same millisecond timestamp", () => {
+    // `startedAt` alone is not a safe sort key at millisecond resolution — a fast machine can
+    // create two runs within the same millisecond, which is exactly the tie this forces
+    // deterministically rather than relying on real-clock timing to (sometimes) reproduce it.
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    const tiedTimestamp = new Date().toISOString();
+    const base = {
+      workflowId: "wf-1",
+      environmentId: "env-1",
+      environmentSnapshot,
+      status: "completed" as const,
+      startedAt: tiedTimestamp,
+      completedAt: tiedTimestamp,
+      summary: { total: 0, passed: 0, failed: 0, notAttempted: 0, durationMs: 0 },
+      results: [],
+      cancelRequested: false,
+    };
+    const repo = getExecutionRunRepository();
+    repo.create(sessionId, { ...base, id: "run-a" });
+    repo.create(sessionId, { ...base, id: "run-b" });
+    expect(listRuns().map((r) => r.id)).toEqual(["run-b", "run-a"]);
+  });
+
   it("throws RunNotFoundError for an unknown run id", () => {
     expect(() => getRun("missing")).toThrow(RunNotFoundError);
+  });
+
+  it("records cancelReason 'user-requested' when the caller passes it (specs/025 Clarifications Q1)", () => {
+    const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+    const cancelled = settleRun(run.id, "cancelled", "user-requested");
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.cancelReason).toBe("user-requested");
+  });
+
+  it("markInterruptedRunsCancelled settles an in-progress run as cancelled/'backend-restart' (FR-008)", () => {
+    const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+    getExecutionRunRepository().markInterruptedRunsCancelled();
+    const settled = getRun(run.id);
+    expect(settled.status).toBe("cancelled");
+    expect(settled.cancelReason).toBe("backend-restart");
+  });
+
+  it("removes a session's execution run history when its session is idle-evicted", () => {
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+    expect(listRuns()).toHaveLength(1);
+
+    forceExpireForTest(sessionId);
+    expect(listRuns()).toEqual([]);
+  });
+
+  it("survives closing and reopening the database file, simulating a backend restart (specs/025 FR-002)", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "apipilot-test-"));
+    const dbPath = path.join(dir, "apipilot.db");
+    try {
+      let connection = new SqliteConnection(dbPath);
+      setSharedConnectionForTest(connection);
+      const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+      settleRun(run.id, "completed");
+      connection.close();
+
+      connection = new SqliteConnection(dbPath);
+      setSharedConnectionForTest(connection);
+      const runs = listRuns();
+      expect(runs).toHaveLength(1);
+      expect(runs[0].id).toBe(run.id);
+      expect(runs[0].status).toBe("completed");
+      connection.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,9 +1,15 @@
 import type { ReadinessState } from "@apipilot/shared-domain";
+import { getAiDiagnosticsRepository } from "../persistence/aiDiagnosticsRepository";
 
 /**
  * Tracks the lifecycle state of a local AIProvider (FR-004). Transitions are only ever
  * driven by explicit calls (markLoading/markReady/markUnavailable/reset) — nothing in
  * this class re-attempts a load automatically after a failure (FR-019).
+ *
+ * Every transition is additionally recorded to durable storage (specs/025-local-persistence-
+ * layer research.md D5) purely as historical/diagnostic information — `getState()`'s live
+ * value is never resumed or influenced by that history; a restart always starts fresh at
+ * not-loaded, exactly as before this feature.
  */
 export class ReadinessTracker {
   private state: ReadinessState;
@@ -23,6 +29,7 @@ export class ReadinessTracker {
       acceleratorActive: false,
       updatedAt: new Date().toISOString(),
     };
+    this.recordTransition();
   }
 
   markReady(params: {
@@ -40,6 +47,7 @@ export class ReadinessTracker {
       acceleratorActive: params.acceleratorActive,
       updatedAt: new Date().toISOString(),
     };
+    this.recordTransition();
   }
 
   /** `reason` is required and MUST be non-empty (no silent unavailability). */
@@ -55,11 +63,16 @@ export class ReadinessTracker {
       acceleratorActive: params.acceleratorActive ?? false,
       updatedAt: new Date().toISOString(),
     };
+    this.recordTransition();
   }
 
   /** Explicit reset back to not-loaded — the only way to clear an "unavailable" state (FR-019). */
   reset(): void {
     this.state = notLoadedState();
+  }
+
+  private recordTransition(): void {
+    getAiDiagnosticsRepository().recordReadinessTransition(this.state);
   }
 }
 

@@ -5,6 +5,6 @@ export default defineConfig({
     name: "backend",
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    setupFiles: ["./tests/setup/sessionTestContext.ts"],
+    setupFiles: ["./tests/setup/sessionTestContext.ts", "./tests/setup/testDb.ts"],
   },
 });

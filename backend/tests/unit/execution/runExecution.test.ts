@@ -1,7 +1,7 @@
 import type { ApiModel, TestModel } from "@apipilot/shared-domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runExecution } from "../../../src/execution/runExecution";
-import { createRun, getRun, resetExecutionRunStore } from "../../../src/execution/executionRunStore";
+import { createRun, getRun } from "../../../src/execution/executionRunStore";
 import { enterTestSession } from "../../../src/session/sessionContext";
 import { TargetServer } from "../../fixtures/execution/targetServer";
 import {
@@ -49,7 +49,6 @@ describe("runExecution — OAuth2 token-fetch items (specs/024-oauth2-client-cre
 
   beforeEach(() => {
     enterTestSession("test-session-oauth2-execution");
-    resetExecutionRunStore();
     targetServer = new TargetServer();
   });
 

@@ -2,13 +2,11 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../src/app";
 import { resetStore } from "../../../src/testGenerationWorkflow/workflowStore";
-import { resetEnvironmentStore } from "../../../src/execution/environmentStore";
 import { driveToPostmanGenerationComplete } from "../../fixtures/execution/driveWorkflow";
 
 describe("environments routes", () => {
   beforeEach(() => {
     resetStore();
-    resetEnvironmentStore();
   });
 
   it("refuses every environments route until postmanGeneration is complete (409 stage_not_active)", async () => {
