@@ -238,7 +238,7 @@ export function TestScenarioReviewList({
             No scenarios match the current filters.
           </p>
         ) : (
-          <ul className="min-w-0 divide-y divide-border rounded-md border border-border">
+          <ul className="min-w-0 overflow-hidden divide-y divide-border rounded-lg border border-border">
             <li className="flex flex-col gap-1 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
               <div className="flex items-center gap-3">
                 <span className="w-4" aria-hidden="true" />

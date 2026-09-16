@@ -68,11 +68,14 @@ export function PostmanExportLimitations({
         const forKind = limitations.filter((limitation) => limitation.kind === kind);
         const aggregated = aggregateLimitations(forKind);
         return (
-          <div key={kind} data-testid={`export-limitation-${kind}`}>
-            <h5 className="text-xs font-medium uppercase tracking-wide text-warning-700">
+          // Collapsed by default (mirrors WorkflowStageTracker's/AnalysisSummary's identical
+          // fix): a specification with hundreds of limitations of one kind previously rendered
+          // its entire list inline here, unbounded.
+          <details key={kind} data-testid={`export-limitation-${kind}`}>
+            <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-warning-700 marker:text-warning-500">
               {LIMITATION_HEADINGS[kind]} ({forKind.length})
-            </h5>
-            <ul className="mt-1 ml-4 list-disc text-sm text-slate-700">
+            </summary>
+            <ul className="mt-1 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2 text-sm text-slate-700">
               {aggregated.map((limitation, index) => (
                 <li key={`${limitation.location}-${limitation.scenarioIds[0] ?? index}`}>
                   <code className="font-mono text-xs">{limitation.location}</code>
@@ -83,7 +86,7 @@ export function PostmanExportLimitations({
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         );
       })}
     </section>

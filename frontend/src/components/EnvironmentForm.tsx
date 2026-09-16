@@ -174,7 +174,7 @@ export function EnvironmentForm({
         <button
           type="button"
           onClick={() => setRows((current) => [...current, { key: "", value: "" }])}
-          className="text-sm font-medium text-brand-700 hover:text-brand-800"
+          className={BUTTON_STYLES.ghost}
         >
           + Add variable
         </button>

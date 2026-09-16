@@ -68,7 +68,8 @@ export interface PostmanAuthAttribute {
 export type PostmanAuth =
   | { type: "bearer"; bearer: PostmanAuthAttribute[] }
   | { type: "basic"; basic: PostmanAuthAttribute[] }
-  | { type: "apikey"; apikey: PostmanAuthAttribute[] };
+  | { type: "apikey"; apikey: PostmanAuthAttribute[] }
+  | { type: "oauth2"; oauth2: PostmanAuthAttribute[] };
 
 export interface PostmanQueryParameter {
   key: string;

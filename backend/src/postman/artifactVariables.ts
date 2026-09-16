@@ -13,13 +13,16 @@ import type { CredentialKind } from "../testDesign/sensitiveValueDetection";
 export const BASE_URL_VARIABLE = "baseUrl";
 
 /** Variable names the export may declare for credentials (data-model.md: standard variables). */
-export type ArtifactCredentialName = CredentialKind | "username";
+export type ArtifactCredentialName = CredentialKind | "username" | "clientId" | "clientSecret" | "accessToken";
 
 const CREDENTIAL_PURPOSE: Record<ArtifactCredentialName, string> = {
   token: "Bearer token the requests reference in place of a literal credential value.",
   apiKey: "API key the requests reference in place of a literal credential value.",
   password: "Password the requests reference in place of a literal credential value.",
   username: "Username for the declared basic authentication scheme.",
+  clientId: "OAuth2 client ID used to obtain an access token for the declared clientCredentials scheme.",
+  clientSecret: "OAuth2 client secret used to obtain an access token for the declared clientCredentials scheme.",
+  accessToken: "OAuth2 access token, obtained automatically from the declared token endpoint before dependent requests run.",
 };
 
 /**

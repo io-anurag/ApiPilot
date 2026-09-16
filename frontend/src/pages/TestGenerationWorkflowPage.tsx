@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import type {
   DependencyAnalysisResult,
   TestGenerationWorkflow,
@@ -55,6 +55,56 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
   );
 }
 
+/** Small feature-strip icons (CLAUDE.md §28: consistent, minimal stroke iconography). */
+function LockIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <rect x="5" y="11" width="14" height="9" rx="1.5" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V8a4 4 0 118 0v3" />
+    </svg>
+  );
+}
+
+function RepeatIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.5 6.34V4m0 2.34h2.34M6.5 17.66V20m0-2.34H4.16" />
+    </svg>
+  );
+}
+
+function TrailIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="18" cy="18" r="2" />
+      <path strokeLinecap="round" strokeDasharray="2 2.5" d="M8 7l8 10" />
+    </svg>
+  );
+}
+
+function CheckShieldIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path strokeLinejoin="round" d="M12 4l7 3v5c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5V7l7-3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.5l2 2 4-4.5" />
+    </svg>
+  );
+}
+
+/** Feature-strip content: label, one-line description, and the icon that represents it. */
+const HOME_FEATURES: {
+  label: string;
+  description: string;
+  Icon: (props: Readonly<{ className?: string }>) => ReactNode;
+}[] = [
+  { label: "LOCAL", description: "Private by default", Icon: LockIcon },
+  { label: "REPEATABLE", description: "Deterministic core", Icon: RepeatIcon },
+  { label: "TRACEABLE", description: "Visible provenance", Icon: TrailIcon },
+  { label: "VERIFIABLE", description: "Runs against your API", Icon: CheckShieldIcon },
+];
+
 /**
  * The guided workflow's sole composition root (research.md D8) — the exclusive way to reach any
  * stage screen (FR-017). Always resumes from server state on mount (FR-014, FR-018).
@@ -76,6 +126,8 @@ export function TestGenerationWorkflowPage() {
   // (specs/017-session-workflow-isolation FR-007a) — distinct from a session that never
   // started one, which never sets this.
   const [sessionExpired, setSessionExpired] = useState(false);
+  // Purely presentational: highlights the upload dropzone while a file is dragged over it.
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,13 +154,11 @@ export function TestGenerationWorkflowPage() {
     setViewedStageId(result.workflow.activeStageId);
   }
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
+  // Shared by both the native file picker and the dropzone's onDrop — the extension check must
+  // run for a dropped file too, since a drop, like the picker's "All Files" filter, bypasses the
+  // input's `accept` attribute entirely.
+  async function processFile(file: File) {
     setUploadError(null);
-    // The native file picker's "All Files" filter lets users select any file regardless of the
-    // input's `accept` attribute, so the extension must also be checked here before upload.
     if (!/\.ya?ml$/i.test(file.name)) {
       setUploadError("Only .yaml or .yml OpenAPI specification files are supported.");
       return;
@@ -116,6 +166,32 @@ export function TestGenerationWorkflowPage() {
     // Reaching the starting page while a workflow exists only happens after the user already
     // confirmed the discard (see confirmDiscard below), so no second confirmation is needed here.
     await doUpload(file, workflow !== null);
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await processFile(file);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    if (!uploading) setDragActive(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragActive(false);
+  }
+
+  async function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragActive(false);
+    if (uploading) return;
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    await processFile(file);
   }
 
   async function doUpload(file: File, discardExisting: boolean) {
@@ -200,95 +276,120 @@ export function TestGenerationWorkflowPage() {
         </output>
       )}
       {showHome && (
-        <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-8 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)] lg:gap-x-16">
-          <div className="space-y-7">
-            <div className="space-y-4">
-              <p className="font-mono text-xs font-semibold uppercase text-brand-700">
-                Specification to executable tests
-              </p>
-              <h2 className="max-w-3xl text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
-                Turn an OpenAPI specification into a test suite
-              </h2>
-              <p className="max-w-2xl text-base leading-7 text-muted">
-                Analyze endpoints, generate deterministic scenarios, and enhance selectively
-                with local AI. Review every result with its provenance intact, then run the
-                approved suite against your own environment to see real pass/fail results.
-              </p>
-            </div>
-            <div className="grid max-w-2xl grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
-              <div className="bg-surface px-3 py-3">
-                <p className="font-mono text-xs text-brand-700">LOCAL</p>
-                <p className="mt-1 text-xs text-muted">Private by default</p>
-              </div>
-              <div className="bg-surface px-3 py-3">
-                <p className="font-mono text-xs text-brand-700">REPEATABLE</p>
-                <p className="mt-1 text-xs text-muted">Deterministic core</p>
-              </div>
-              <div className="bg-surface px-3 py-3">
-                <p className="font-mono text-xs text-brand-700">TRACEABLE</p>
-                <p className="mt-1 text-xs text-muted">Visible provenance</p>
-              </div>
-              <div className="bg-surface px-3 py-3">
-                <p className="font-mono text-xs text-brand-700">VERIFIABLE</p>
-                <p className="mt-1 text-xs text-muted">Runs against your API</p>
-              </div>
-            </div>
-          </div>
-          <div className="border border-slate-300 bg-surface shadow-[8px_8px_0_0_#dce3e0]">
-            <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  New test generation run
+        <div className="relative isolate overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl"
+          />
+          <div className="grid grid-cols-1 min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700">
+                  <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                  <span>Specification to executable tests</span>
                 </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  OpenAPI 3.x · YAML · up to 10 MB
+                <h2 className="max-w-3xl text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl">
+                  Turn an OpenAPI specification into a test suite
+                </h2>
+                <p className="max-w-2xl text-base leading-7 text-muted">
+                  Analyze endpoints, generate deterministic scenarios, and enhance selectively
+                  with local AI. Review every result with its provenance intact, then run the
+                  approved suite against your own environment to see real pass/fail results.
                 </p>
               </div>
-              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+              <dl className="grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+                {HOME_FEATURES.map(({ label, description, Icon }) => (
+                  <div
+                    key={label}
+                    className="space-y-2 rounded-lg border border-border bg-surface px-3 py-3"
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-700">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <dt className="font-mono text-xs text-brand-700">{label}</dt>
+                    <dd className="text-xs text-muted">{description}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
-            <div className="space-y-5 p-5 sm:p-6">
-              <div className="flex h-12 w-12 items-center justify-center border border-brand-200 bg-brand-50 text-brand-700">
-                <UploadIcon className="h-6 w-6" />
+            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_#dce3e0]">
+              <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
+              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    New test generation run
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    OpenAPI 3.x · YAML · up to 10 MB
+                  </p>
+                </div>
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-semibold text-slate-950">
-                  Upload specification
-                </h3>
-                <p className="text-sm leading-6 text-muted">
-                  The document stays in your local workflow and is never sent to a cloud
-                  AI provider.
-                </p>
-              </div>
-              <input
-                type="file"
-                accept=".yaml,.yml"
-                aria-label="Upload OpenAPI specification"
-                onChange={handleFileChange}
-                disabled={uploading}
-                className="block w-full border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-700 file:mr-3 file:cursor-pointer file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:border-brand-400 hover:file:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              {workflow && (
-                <button
-                  type="button"
-                  onClick={() => setShowStartPage(false)}
-                  className="text-sm font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus-visible:underline"
+              <div className="space-y-4 p-5 sm:p-6">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold text-slate-950">
+                    Upload specification
+                  </h3>
+                  <p className="text-sm leading-6 text-muted">
+                    The document stays in your local workflow and is never sent to a cloud
+                    AI provider.
+                  </p>
+                </div>
+                <label
+                  htmlFor="home-spec-upload"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
+                    dragActive
+                      ? "border-brand-500 bg-brand-50"
+                      : "border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40"
+                  } ${uploading ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
-                  Cancel — return to my in-progress workflow
-                </button>
-              )}
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700">
+                    <UploadIcon className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-800">
+                    Drag and drop your specification here
+                  </p>
+                  <p className="text-xs text-muted">or click to browse your files</p>
+                  <input
+                    id="home-spec-upload"
+                    type="file"
+                    accept=".yaml,.yml"
+                    aria-label="Upload OpenAPI specification"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  />
+                </label>
+                {workflow && (
+                  <button
+                    type="button"
+                    onClick={() => setShowStartPage(false)}
+                    className={BUTTON_STYLES.ghost}
+                  >
+                    Cancel — return to my in-progress workflow
+                  </button>
+                )}
+              </div>
             </div>
+            <ol className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+              {PIPELINE_PREVIEW_STEPS.map((label, index) => (
+                <li key={label} className="flex flex-1 items-center gap-2 sm:gap-0">
+                  <div className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 sm:w-auto">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 font-mono text-[11px] font-semibold text-brand-700">
+                      {index + 1}
+                    </span>
+                    <span className="text-xs font-medium text-slate-700">{label}</span>
+                  </div>
+                  {index < PIPELINE_PREVIEW_STEPS.length - 1 && (
+                    <span aria-hidden="true" className="hidden h-px flex-1 bg-border sm:block" />
+                  )}
+                </li>
+              ))}
+            </ol>
           </div>
-          <ol className="col-span-full grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-5">
-            {PIPELINE_PREVIEW_STEPS.map((label, index) => (
-              <li
-                key={label}
-                className="flex items-center gap-2 bg-surface px-3 py-2.5 text-xs font-medium text-slate-600"
-              >
-                <span className="font-mono text-brand-700">0{index + 1}</span>
-                <span>{label}</span>
-              </li>
-            ))}
-          </ol>
         </div>
       )}
       {workflow && !showStartPage && (
@@ -305,7 +406,7 @@ export function TestGenerationWorkflowPage() {
             type="button"
             aria-label="Start a new workflow from a different specification"
             onClick={() => setConfirmDiscard(true)}
-            className="border border-border bg-surface px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className={BUTTON_STYLES.secondary}
           >
             Start a new workflow
           </button>

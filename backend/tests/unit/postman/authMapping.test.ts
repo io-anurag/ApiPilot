@@ -6,8 +6,14 @@ import {
   adminAuthOperation,
   bearerAuthOperation,
   noSuffixSchemes,
+  oauth2AuthorizationCodeOnlyScheme,
+  oauth2ClientCredentialsScheme,
+  oauth2PasswordOnlyScheme,
+  oauth2ProtectedOperation,
+  partnerOauth2ProtectedOperation,
   twoApiKeySchemesSameHeader,
   twoBearerSchemes,
+  twoOAuth2Schemes,
 } from "../../fixtures/postman/credentialFixtures";
 
 const schemes: Record<string, SecuritySchemeDefinition> = exportApiModel.securitySchemes;
@@ -86,6 +92,43 @@ describe("planSchemeVariables", () => {
 
   it("omits a scheme whose type this export cannot configure", () => {
     expect(plan.has("oauth2Auth")).toBe(false);
+  });
+
+  describe("OAuth2 clientCredentials (specs/024-oauth2-client-credentials-auth)", () => {
+    it("classifies an oauth2 scheme declaring a clientCredentials flow as oauth2, with clientId/clientSecret/accessToken variables", () => {
+      const oauth2Plan = planSchemeVariables(oauth2ClientCredentialsScheme);
+      expect(oauth2Plan.get("oauth2Auth")).toEqual({
+        type: "oauth2",
+        isPrimary: true,
+        stem: "oauth2",
+        variableNames: { clientId: "clientId", clientSecret: "clientSecret", accessToken: "accessToken" },
+      });
+    });
+
+    it("derives a distinct, second oauth2 scheme's variable names from its own stem", () => {
+      const twoOAuth2Plan = planSchemeVariables(twoOAuth2Schemes);
+      expect(twoOAuth2Plan.get("oauth2Auth")?.isPrimary).toBe(true);
+      expect(twoOAuth2Plan.get("partnerOauth2Auth")).toEqual({
+        type: "oauth2",
+        isPrimary: false,
+        stem: "partnerOauth2",
+        variableNames: {
+          clientId: "partnerOauth2ClientId",
+          clientSecret: "partnerOauth2ClientSecret",
+          accessToken: "partnerOauth2AccessToken",
+        },
+      });
+    });
+
+    it("does not classify an oauth2 scheme whose only flow is authorizationCode (User Story 3)", () => {
+      const authCodePlan = planSchemeVariables(oauth2AuthorizationCodeOnlyScheme);
+      expect(authCodePlan.has("oauth2Auth")).toBe(false);
+    });
+
+    it("does not classify an oauth2 scheme whose only flow is password (User Story 3, deferred)", () => {
+      const passwordPlan = planSchemeVariables(oauth2PasswordOnlyScheme);
+      expect(passwordPlan.has("oauth2Auth")).toBe(false);
+    });
   });
 });
 
@@ -186,6 +229,62 @@ describe("mapOperationAuth", () => {
   it("never invents an authentication mechanism the specification does not declare", () => {
     const mapping = mapOperationAuth(requiring("oauth2Auth"), schemes, plan);
     expect(JSON.stringify(mapping.auth ?? null)).not.toContain("bearer");
+  });
+
+  describe("OAuth2 clientCredentials (specs/024-oauth2-client-credentials-auth)", () => {
+    const oauth2Plan = planSchemeVariables(oauth2ClientCredentialsScheme);
+
+    it("maps a classified oauth2 scheme to a distinct oauth2 PostmanAuth block referencing the accessToken variable", () => {
+      const mapping = mapOperationAuth(oauth2ProtectedOperation, oauth2ClientCredentialsScheme, oauth2Plan);
+      expect(mapping.auth).toEqual({
+        type: "oauth2",
+        oauth2: [
+          { key: "accessToken", value: "{{accessToken}}", type: "string" },
+          { key: "addTokenTo", value: "header", type: "string" },
+          { key: "tokenType", value: "bearer", type: "string" },
+        ],
+      });
+      expect(mapping.variables.map((variable) => variable.name)).toEqual([
+        "clientId",
+        "clientSecret",
+        "accessToken",
+      ]);
+      expect(mapping.variables.every((variable) => variable.secret)).toBe(true);
+      expect(mapping.limitations).toEqual([]);
+    });
+
+    it("routes a distinct, second oauth2 scheme's operation to its own derived variables, not the primary's", () => {
+      const twoOAuth2Plan = planSchemeVariables(twoOAuth2Schemes);
+      const mapping = mapOperationAuth(
+        partnerOauth2ProtectedOperation,
+        twoOAuth2Schemes,
+        twoOAuth2Plan,
+      );
+      expect(mapping.auth).toEqual({
+        type: "oauth2",
+        oauth2: [
+          { key: "accessToken", value: "{{partnerOauth2AccessToken}}", type: "string" },
+          { key: "addTokenTo", value: "header", type: "string" },
+          { key: "tokenType", value: "bearer", type: "string" },
+        ],
+      });
+      expect(mapping.variables.map((variable) => variable.name)).toEqual([
+        "partnerOauth2ClientId",
+        "partnerOauth2ClientSecret",
+        "partnerOauth2AccessToken",
+      ]);
+    });
+
+    it("keeps configuring no auth and recording unsupported-auth-scheme for authorizationCode-only oauth2 (User Story 3)", () => {
+      const authCodeOperation = requiring("oauth2Auth");
+      const authCodePlan = planSchemeVariables(oauth2AuthorizationCodeOnlyScheme);
+      const mapping = mapOperationAuth(authCodeOperation, oauth2AuthorizationCodeOnlyScheme, authCodePlan);
+      expect(mapping.auth).toBeUndefined();
+      expect(mapping.variables).toEqual([]);
+      expect(mapping.limitations).toEqual([
+        expect.objectContaining({ kind: "unsupported-auth-scheme" }),
+      ]);
+    });
   });
 
   describe("distinct-credential schemes (specs/021-multi-credential-token-provisioning)", () => {

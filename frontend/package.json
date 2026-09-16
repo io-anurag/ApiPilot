@@ -1,6 +1,6 @@
 {
   "name": "@apipilot/frontend",
-  "version": "11.4.5",
+  "version": "13.2.0",
   "private": true,
   "type": "module",
   "scripts": {

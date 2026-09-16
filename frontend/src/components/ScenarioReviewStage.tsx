@@ -181,7 +181,7 @@ export function ScenarioReviewStage({
   return (
     <section
       data-testid="scenario-review-stage"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">
         Review Generated Scenarios
@@ -214,7 +214,7 @@ export function ScenarioReviewStage({
               <button
                 type="button"
                 onClick={() => setSelectedScenarioId(null)}
-                className="rounded-md border border-border bg-surface px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className={BUTTON_STYLES.secondary}
               >
                 Close details
               </button>
@@ -289,7 +289,7 @@ export function ScenarioReviewStage({
           action must stay reachable without scrolling past the entire list (matches the
           sticky app header pattern in App.tsx). Negative margins extend it to the section's
           full padded width so the opaque background fully covers scrolled-past content. */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
         {isActiveStage && (
           <button
             type="button"

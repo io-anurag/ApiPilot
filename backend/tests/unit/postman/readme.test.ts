@@ -20,7 +20,13 @@ import {
   ordersPatchScenario,
   testModelOf,
 } from "../../fixtures/postman/dependencyFixtures";
-import { adminAuthOperation, bearerAuthOperation, noProducerApiModel } from "../../fixtures/postman/credentialFixtures";
+import {
+  adminAuthOperation,
+  bearerAuthOperation,
+  noProducerApiModel,
+  oauth2ApiModel,
+  oauth2ProtectedOperation,
+} from "../../fixtures/postman/credentialFixtures";
 import type { TestModel } from "@apipilot/shared-domain";
 
 function readmeFor(options = {}): string {
@@ -272,5 +278,27 @@ describe("accompanying document", () => {
     const outcome = generateCollection(minimalApiModel, minimalTestModel);
     if (!outcome.ok) throw new Error("expected a successful export");
     expect(outcome.result.readme).toContain("None recorded");
+  });
+
+  it("lists the OAuth2 setup folder and its credential variables through the existing generic rendering (specs/024-oauth2-client-credentials-auth)", () => {
+    const outcome = generateCollection(oauth2ApiModel, {
+      scenarios: [
+        {
+          id: "scenario-oauth2",
+          category: "positive",
+          operationPath: oauth2ProtectedOperation.path,
+          operationMethod: oauth2ProtectedOperation.method,
+          request: { pathParameters: {}, queryParameters: {}, headers: {} },
+          assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+          provenance: { source: "RULE", rule: "positive", description: "d.", duplicateOfRules: [] },
+        },
+      ],
+    });
+    if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+    const readme = outcome.result.readme;
+    expect(readme).toContain("`OAuth2 Token Setup` — 1 request(s)");
+    expect(readme).toContain("| `clientId` | yes |");
+    expect(readme).toContain("| `clientSecret` | yes |");
+    expect(readme).toContain("| `accessToken` | yes |");
   });
 });

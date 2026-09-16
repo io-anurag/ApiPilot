@@ -26,7 +26,7 @@ export function App() {
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-white/15 bg-white/5">
             <img
-              src="/logo.png"
+              src="/logo-icon.png"
               alt=""
               aria-hidden="true"
               className="h-8 w-8 object-contain"

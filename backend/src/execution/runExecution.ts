@@ -58,7 +58,12 @@ function executionOrder(items: PostmanRequestItem[]): PostmanRequestItem[] {
   return [...orderedWorkflowItems, ...standaloneItems];
 }
 
-/** Appends a `not-attempted` result for every item in `items`, in order (constitution XIX — every request gets an explicit outcome). */
+/**
+ * Appends a `not-attempted` result for every scenario-backed item in `items`, in order
+ * (constitution XIX — every request gets an explicit outcome). A synthesized, non-scenario item
+ * (e.g. an OAuth2 token-fetch request, AP-024) is skipped here too, consistent with its outcome
+ * never being independently reported on the normal execution path either (research.md D6).
+ */
 function appendNotAttempted(
   runId: string,
   items: PostmanRequestItem[],
@@ -67,6 +72,7 @@ function appendNotAttempted(
 ): void {
   const nowIso = new Date().toISOString();
   for (const item of items) {
+    if (item.provenance?.scenarioId === undefined) continue;
     const scenario = scenarioById.get(item.provenance?.scenarioId ?? "");
     const result: RequestResult = {
       scenarioId: scenario?.id ?? item.provenance?.scenarioId ?? "unknown",
@@ -137,7 +143,30 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
 
       const item = orderedItems[index];
       const scenarioId = item.provenance?.scenarioId;
-      const scenario = scenarioId ? scenarioById.get(scenarioId) : undefined;
+
+      const declaredVariables = outcome.result.environment.values.map((value) => ({
+        key: value.key,
+        value: "",
+      }));
+
+      if (scenarioId === undefined) {
+        // A synthesized, non-scenario item (e.g. an OAuth2 token-fetch request, AP-024) — the
+        // only case an item legitimately carries no scenarioId. Run it for its side effect on the
+        // shared environment record (e.g. capturing an access token); its own outcome is not
+        // independently reported as a RequestResult — a failure surfaces via whichever dependent,
+        // scenario-backed request actually needs the value it was meant to produce.
+        const itemOutcome = await runSingleItem({
+          item,
+          collectionAuth: outcome.result.collection.auth,
+          declaredVariables,
+          environment: environmentRecord,
+        });
+        environmentRecord = itemOutcome.environment;
+        attempted = index + 1;
+        continue;
+      }
+
+      const scenario = scenarioById.get(scenarioId);
       if (!scenario) {
         throw new Error(`Execution item at position ${index} carries no resolvable scenarioId.`);
       }
@@ -149,10 +178,7 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
         // The exported collection no longer carries its own `variable` list (the environment
         // artifact is the single source of declared names); Newman only needs the names here,
         // since real values already flow in through `environment` below.
-        declaredVariables: outcome.result.environment.values.map((value) => ({
-          key: value.key,
-          value: "",
-        })),
+        declaredVariables,
         environment: environmentRecord,
       });
       environmentRecord = itemOutcome.environment;

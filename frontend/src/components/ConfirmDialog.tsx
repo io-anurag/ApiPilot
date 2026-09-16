@@ -84,7 +84,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-message"
         data-testid="confirm-dialog"
-        className="w-full max-w-md space-y-3 rounded-md border border-brand-300 bg-surface p-4 shadow-xl"
+        className="w-full max-w-md space-y-3 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl"
       >
         {errorOnlyMessage ? (
           <p

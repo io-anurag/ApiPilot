@@ -8,6 +8,7 @@ import {
   type PostmanExportResult,
 } from "../services/postmanCollectionsClient";
 import { PostmanExportLimitations } from "./PostmanExportLimitations";
+import { BUTTON_STYLES } from "./controlStyles";
 
 /** Recovery guidance per refusal, so a failed export tells the engineer what to do next (FR-027). */
 const RECOVERY_GUIDANCE: Record<string, string> = {
@@ -106,7 +107,7 @@ export function PostmanExportPanel({
     <section
       aria-labelledby="postman-export-heading"
       data-testid="postman-export-panel"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <div className="space-y-1">
         <h3
@@ -182,7 +183,7 @@ export function PostmanExportPanel({
         type="button"
         onClick={handleExport}
         disabled={status === "loading"}
-        className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        className={BUTTON_STYLES.primary}
       >
         {status === "loading" ? "Exporting…" : "Export collection"}
       </button>

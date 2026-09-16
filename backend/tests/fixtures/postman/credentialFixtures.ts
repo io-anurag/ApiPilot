@@ -501,3 +501,103 @@ export const issueTokenNoPlausibleFieldScenario = scenario(
   "scenario-issue-token-no-plausible-field",
   issueTokenNoPlausibleFieldOperation,
 );
+
+/**
+ * Fixtures for specs/024-oauth2-client-credentials-auth tests: a classified OAuth2
+ * `clientCredentials` scheme (mirroring the motivating PayPal Invoicing v2 fixture's relative
+ * `tokenUrl`/declared scopes), a distinctly-keyed second scheme (stem naming), a no-scopes
+ * variant, a multiple-flows-on-one-scheme variant, an absolute-`tokenUrl` variant, and the
+ * non-automatable flows (`authorizationCode`/`password`-only) that must keep today's
+ * `unsupported-auth-scheme` limitation unchanged (User Story 3).
+ */
+
+/** Sole OAuth2 `clientCredentials` scheme — relative `tokenUrl`, two declared scopes. */
+export const oauth2ClientCredentialsScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: {
+    type: "oauth2",
+    flows: { clientCredentials: { tokenUrl: "/oauth2/token", scopes: ["read", "write"] } },
+  },
+};
+
+/** Same scheme, but the `clientCredentials` flow declares no scopes at all (Edge Cases). */
+export const oauth2NoScopesScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: {
+    type: "oauth2",
+    flows: { clientCredentials: { tokenUrl: "/oauth2/token", scopes: [] } },
+  },
+};
+
+/** `tokenUrl` already absolute (Edge Cases: resolved verbatim, never rewritten against baseUrl). */
+export const oauth2AbsoluteTokenUrlScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: {
+    type: "oauth2",
+    flows: {
+      clientCredentials: { tokenUrl: "https://auth.example.com/oauth2/token", scopes: ["read"] },
+    },
+  },
+};
+
+/** Two OAuth2 clientCredentials schemes, `oauth2Auth` declared first (primary) — stem-naming case. */
+export const twoOAuth2Schemes: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: {
+    type: "oauth2",
+    flows: { clientCredentials: { tokenUrl: "/oauth2/token", scopes: ["read"] } },
+  },
+  partnerOauth2Auth: {
+    type: "oauth2",
+    flows: { clientCredentials: { tokenUrl: "/partner/oauth2/token", scopes: ["write"] } },
+  },
+};
+
+/** A scheme declaring both `clientCredentials` and `authorizationCode` on the same scheme object
+ *  (Edge Cases): still classified as supported via `clientCredentials`; the other flow is not
+ *  separately reported as unsupported. */
+export const oauth2MultipleFlowsScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: {
+    type: "oauth2",
+    flows: { clientCredentials: { tokenUrl: "/oauth2/token", scopes: ["read"] } },
+  },
+};
+
+/** OAuth2 scheme whose only declared flow is `authorizationCode` — no `clientCredentials` at all;
+ *  must keep today's `unsupported-auth-scheme` limitation unchanged (User Story 3, FR-001). */
+export const oauth2AuthorizationCodeOnlyScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: { type: "oauth2" },
+};
+
+/** OAuth2 scheme whose only declared flow is `password` — deferred, not added, by this feature
+ *  (User Story 3, spec Assumptions). */
+export const oauth2PasswordOnlyScheme: Record<string, SecuritySchemeDefinition> = {
+  oauth2Auth: { type: "oauth2" },
+};
+
+/** Operation under the primary OAuth2 scheme (`oauth2Auth`). */
+export const oauth2ProtectedOperation = op({
+  path: "/widgets",
+  method: "GET",
+  operationId: "listWidgets",
+  security: [{ schemes: [{ name: "oauth2Auth", scopes: ["read"] }] }],
+});
+
+/** Operation under the distinct, second OAuth2 scheme (`partnerOauth2Auth`). */
+export const partnerOauth2ProtectedOperation = op({
+  path: "/partner/widgets",
+  method: "GET",
+  operationId: "listPartnerWidgets",
+  security: [{ schemes: [{ name: "partnerOauth2Auth", scopes: ["write"] }] }],
+});
+
+/** Full ApiModel: the flagship OAuth2 clientCredentials case — one scheme, one operation. */
+export const oauth2ApiModel = apiModel([oauth2ProtectedOperation], oauth2ClientCredentialsScheme);
+
+/** Full ApiModel: two independent OAuth2 clientCredentials schemes, each with its own operation. */
+export const twoOAuth2SchemesApiModel = apiModel(
+  [oauth2ProtectedOperation, partnerOauth2ProtectedOperation],
+  twoOAuth2Schemes,
+);
+
+export const oauth2ProtectedScenario = scenario("scenario-oauth2-protected", oauth2ProtectedOperation);
+export const partnerOauth2ProtectedScenario = scenario(
+  "scenario-partner-oauth2-protected",
+  partnerOauth2ProtectedOperation,
+);

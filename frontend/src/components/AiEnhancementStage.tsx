@@ -406,7 +406,7 @@ export function AiEnhancementStage({
             type="button"
             onClick={handleRun}
             disabled={running}
-            className="inline-flex items-center gap-2 rounded-md bg-warning-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-warning-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-warning-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`inline-flex items-center gap-2 ${BUTTON_STYLES.warning}`}
           >
             <RetryIcon className={`h-4 w-4 ${running ? "animate-spin" : ""}`} />
             {running ? "Retrying…" : "Retry AI enhancement"}
@@ -455,7 +455,7 @@ export function AiEnhancementStage({
   return (
     <section
       data-testid="ai-enhancement-stage"
-      className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">Enhance With Local AI</h2>
       <p className="text-sm text-slate-600">

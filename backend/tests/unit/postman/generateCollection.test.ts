@@ -37,11 +37,16 @@ import {
   issueTokenScenario,
   noPlausibleFieldApiModel,
   noProducerApiModel,
+  oauth2ApiModel,
+  oauth2AuthorizationCodeOnlyScheme,
+  oauth2PasswordOnlyScheme,
+  oauth2ProtectedOperation,
   primaryNoStemMatchApiModel,
   sessionInfoOperation,
   sessionInfoScenario,
   tokenInfoScenario,
   twoIndependentSchemesApiModel,
+  twoOAuth2SchemesApiModel,
 } from "../../fixtures/postman/credentialFixtures";
 
 /** Enables automatic chaining exactly as `WorkflowExportContext` requires (specs/019 FR-002) —
@@ -492,6 +497,106 @@ describe("generateCollection", () => {
       );
       expect(limitation).toBeDefined();
       expect(limitation!.message).toContain(`${sessionInfoOperation.method} ${sessionInfoOperation.path}`);
+    });
+  });
+
+  describe("OAuth2 clientCredentials (specs/024-oauth2-client-credentials-auth)", () => {
+    function oauth2TestModel(): TestModel {
+      return { scenarios: [credentialScenario("scenario-oauth2", oauth2ProtectedOperation)] };
+    }
+
+    it("records no unsupported-auth-scheme or unresolved-credential-producer limitation, and provisions three new environment variables (US1, SC-001, SC-002)", () => {
+      const outcome = generateCollection(oauth2ApiModel, oauth2TestModel());
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+
+      expect(outcome.result.limitations.filter((l) => l.kind === "unsupported-auth-scheme")).toEqual([]);
+      expect(
+        outcome.result.limitations.filter((l) => l.kind === "unresolved-credential-producer"),
+      ).toEqual([]);
+      expect(outcome.result.credentialProducers).toEqual([]);
+
+      const byName = Object.fromEntries(outcome.result.environment.values.map((v) => [v.key, v]));
+      expect(byName.baseUrl).toBeDefined();
+      expect(byName.clientId).toEqual({ key: "clientId", value: "", type: "secret", enabled: true });
+      expect(byName.clientSecret).toEqual({ key: "clientSecret", value: "", type: "secret", enabled: true });
+      expect(byName.accessToken).toEqual({ key: "accessToken", value: "", type: "secret", enabled: true });
+    });
+
+    it("positions the OAuth2 setup folder first, containing exactly one token-fetch request per required scheme (US2, FR-004)", () => {
+      const outcome = generateCollection(oauth2ApiModel, oauth2TestModel());
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.collection.item[0].name).toBe("OAuth2 Token Setup");
+      expect(outcome.result.collection.item[0].item).toHaveLength(1);
+      expect(outcome.result.summary.requestCount).toBe(
+        outcome.result.collection.item.reduce((count, folder) => count + folder.item.length, 0),
+      );
+    });
+
+    it("synthesizes no token-fetch request, and no setup folder, when no approved scenario requires the scheme (US2, Acceptance Scenario 3)", () => {
+      const pingOnlyApiModel = {
+        ...twoOAuth2SchemesApiModel,
+        operations: [
+          ...twoOAuth2SchemesApiModel.operations,
+          {
+            path: "/ping",
+            method: "GET",
+            operationId: "ping",
+            parameters: [],
+            requestBody: undefined,
+            responses: [],
+            security: [],
+            tags: [],
+          },
+        ],
+      };
+      const outcome = generateCollection(pingOnlyApiModel, {
+        scenarios: [credentialScenario("scenario-ping", { path: "/ping", method: "GET" })],
+      });
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.collection.item.some((folder) => folder.name === "OAuth2 Token Setup")).toBe(
+        false,
+      );
+    });
+
+    it("still includes the OAuth2 setup folder when options.disableAutomaticChaining is true (FR-008)", () => {
+      const outcome = generateCollection(oauth2ApiModel, oauth2TestModel(), {
+        disableAutomaticChaining: true,
+      });
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.collection.item[0].name).toBe("OAuth2 Token Setup");
+    });
+
+    it("re-exporting the same approved input twice produces a byte-identical collection and environment (FR-007, SC-005)", () => {
+      const first = generateCollection(oauth2ApiModel, oauth2TestModel());
+      const second = generateCollection(oauth2ApiModel, oauth2TestModel());
+      if (!first.ok || !second.ok) throw new Error("expected two successful exports");
+      expect(JSON.stringify(first.result.collection)).toBe(JSON.stringify(second.result.collection));
+      expect(JSON.stringify(first.result.environment)).toBe(JSON.stringify(second.result.environment));
+    });
+
+    it("still records unsupported-auth-scheme, unchanged, for an authorizationCode-only oauth2 scheme (US3, SC-004)", () => {
+      const outcome = generateCollection(
+        { ...oauth2ApiModel, securitySchemes: oauth2AuthorizationCodeOnlyScheme },
+        oauth2TestModel(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.limitations).toContainEqual(
+        expect.objectContaining({ kind: "unsupported-auth-scheme" }),
+      );
+      expect(outcome.result.collection.item.some((folder) => folder.name === "OAuth2 Token Setup")).toBe(
+        false,
+      );
+    });
+
+    it("still records unsupported-auth-scheme, unchanged, for a password-only oauth2 scheme (US3)", () => {
+      const outcome = generateCollection(
+        { ...oauth2ApiModel, securitySchemes: oauth2PasswordOnlyScheme },
+        oauth2TestModel(),
+      );
+      if (!outcome.ok) throw new Error(`expected a successful export, got ${outcome.failure.code}`);
+      expect(outcome.result.limitations).toContainEqual(
+        expect.objectContaining({ kind: "unsupported-auth-scheme" }),
+      );
     });
   });
 });

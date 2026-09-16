@@ -110,7 +110,7 @@ export function PostmanGenerationStage({
     <section
       aria-labelledby="postman-generation-heading"
       data-testid="postman-generation-stage"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2
         id="postman-generation-heading"
