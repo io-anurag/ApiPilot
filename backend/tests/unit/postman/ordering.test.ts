@@ -25,7 +25,7 @@ describe("compareCodeUnits", () => {
 });
 
 describe("requestSortKey", () => {
-  it("orders by path, then method, then positive-before-other category, then category, then scenario id", () => {
+  it("orders by path, then method priority, then positive-before-other category, then category, then scenario id", () => {
     const keys = [
       requestSortKey({ path: "/b", method: "GET", category: "positive", scenarioId: "s1" }),
       requestSortKey({ path: "/a", method: "POST", category: "positive", scenarioId: "s2" }),
@@ -34,7 +34,30 @@ describe("requestSortKey", () => {
       requestSortKey({ path: "/a", method: "GET", category: "invalid-type", scenarioId: "s0" }),
     ];
     const ordered = [...keys].sort(compareRequestSortKeys).map((key) => key.scenarioId);
-    expect(ordered).toEqual(["s4", "s0", "s3", "s2", "s1"]);
+    // Path "/a" before "/b"; within "/a", POST outranks GET regardless of category, then the
+    // GET entries fall back to positive-before-other category, then scenario id.
+    expect(ordered).toEqual(["s2", "s4", "s0", "s3", "s1"]);
+  });
+
+  it("orders methods POST, PUT, GET, DELETE within the same path, not alphabetically", () => {
+    const keys = [
+      requestSortKey({ path: "/a", method: "DELETE", category: "positive", scenarioId: "s1" }),
+      requestSortKey({ path: "/a", method: "GET", category: "positive", scenarioId: "s2" }),
+      requestSortKey({ path: "/a", method: "PUT", category: "positive", scenarioId: "s3" }),
+      requestSortKey({ path: "/a", method: "POST", category: "positive", scenarioId: "s4" }),
+    ];
+    const ordered = [...keys].sort(compareRequestSortKeys).map((key) => key.scenarioId);
+    expect(ordered).toEqual(["s4", "s3", "s2", "s1"]);
+  });
+
+  it("sorts a method outside the known CRUD set after POST/PUT/GET/DELETE", () => {
+    const keys = [
+      requestSortKey({ path: "/a", method: "PATCH", category: "positive", scenarioId: "s1" }),
+      requestSortKey({ path: "/a", method: "DELETE", category: "positive", scenarioId: "s2" }),
+      requestSortKey({ path: "/a", method: "GET", category: "positive", scenarioId: "s3" }),
+    ];
+    const ordered = [...keys].sort(compareRequestSortKeys).map((key) => key.scenarioId);
+    expect(ordered).toEqual(["s3", "s2", "s1"]);
   });
 
   it("ranks positive ahead of every other category regardless of alphabetical order", () => {
