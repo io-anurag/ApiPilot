@@ -181,7 +181,7 @@ export function WorkflowReviewStage({
     return (
       <section
         data-testid="workflow-review-stage"
-        className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-sm"
+        className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
       >
         <h2 className="text-base font-semibold text-slate-900">
           Review Integration Workflows
@@ -220,7 +220,7 @@ export function WorkflowReviewStage({
   return (
     <section
       data-testid="workflow-review-stage"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">
         Review Integration Workflows
@@ -373,7 +373,7 @@ export function WorkflowReviewStage({
       {/* Sticky rather than in normal flow: with dozens of workflows to review, the continue
           action must stay reachable without scrolling past the entire list (matches the same
           fix applied to ApiReviewStage's and ScenarioReviewStage's continue/finalize bars). */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
         {isActiveStage && (
           <button
             type="button"

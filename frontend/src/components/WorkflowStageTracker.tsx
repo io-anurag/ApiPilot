@@ -99,6 +99,16 @@ export function WorkflowStageTracker({
   viewedStageId?: WorkflowStageId | null;
 }>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
+  // The upload/analysis/apiReview screens already render these same issues via AnalysisSummary,
+  // right alongside the operation/schema counts they're actually about — showing this tracker-
+  // level banner too, on exactly those screens, duplicated the same list twice on one page. Per
+  // this component's own purpose ("worth surfacing outside the active stage's own screen"), the
+  // banner now only appears on every *other* stage, where nothing else already shows them.
+  const currentlyDisplayedStageId = viewedStageId ?? workflow.activeStageId;
+  const analysisIssuesShownElsewhereOnThisScreen =
+    currentlyDisplayedStageId === "upload" ||
+    currentlyDisplayedStageId === "analysis" ||
+    currentlyDisplayedStageId === "apiReview";
   // Only a genuine full-failure outcome belongs in this blanket "did not complete" banner.
   // "partial" means some batches DID succeed — that nuance (and the accurate, outcome-specific
   // wording backend already provides via aiErrorMessage) is what DependencyAnalysisSummary shows
@@ -204,20 +214,27 @@ export function WorkflowStageTracker({
           );
         })}
       </ol>
-      {issues.length > 0 && (
-        <output
+      {issues.length > 0 && !analysisIssuesShownElsewhereOnThisScreen && (
+        // Collapsed by default (native <details>, no extra JS state needed): a specification
+        // with hundreds of issues previously rendered its entire list inline here, at the
+        // tracker's top level — tall enough to push the actual active stage below the fold on
+        // every visit. The count is still always visible; the full list is one click away.
+        <details
           data-testid="workflow-analysis-issues"
-          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
-          <p>{issues.length} specification analysis issue(s) were found:</p>
-          <ul className="ml-4 list-disc">
+          <summary className="cursor-pointer font-medium marker:text-warning-500">
+            {issues.length} specification analysis issue{issues.length === 1 ? "" : "s"} found
+            — click to expand
+          </summary>
+          <ul className="mt-2 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2">
             {issues.map((issue) => (
               <li key={`${issue.kind}-${issue.location}`}>
                 <strong>{issue.kind}</strong> at {issue.location}: {issue.message}
               </li>
             ))}
           </ul>
-        </output>
+        </details>
       )}
       {dependencyAiIssue && (
         <output

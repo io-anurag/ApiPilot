@@ -45,7 +45,7 @@ export function ApiReviewStage({
   return (
     <section
       data-testid="api-review-stage"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2 className="text-base font-semibold text-slate-900">Review Discovered APIs</h2>
       <AnalysisSummary summary={apiModel.summary} />
@@ -62,7 +62,7 @@ export function ApiReviewStage({
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="rounded-md border border-border bg-surface px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className={BUTTON_STYLES.secondary}
               >
                 Close details
               </button>
@@ -75,7 +75,7 @@ export function ApiReviewStage({
         // Sticky rather than in normal flow: with dozens of discovered operations to review, the
         // continue action must stay reachable without scrolling past the entire list (matches
         // the same fix applied to ScenarioReviewStage's "Finalize Review" bar).
-        <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-md border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
           <button
             type="button"
             onClick={handleContinue}

@@ -122,11 +122,7 @@ function EnvironmentPicker({
       >
         {starting ? "Starting…" : "Run"}
       </button>
-      <button
-        type="button"
-        onClick={onAddAnother}
-        className="text-sm font-medium text-brand-700 hover:text-brand-800"
-      >
+      <button type="button" onClick={onAddAnother} className={BUTTON_STYLES.ghost}>
         + Add another environment
       </button>
     </div>
@@ -448,7 +444,7 @@ export function ExecutionResultsPanel() {
     <section
       aria-labelledby="execution-results-heading"
       data-testid="execution-results-panel"
-      className="space-y-4 rounded-md border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <h2 id="execution-results-heading" className="text-base font-semibold text-slate-900">
         Run &amp; Results

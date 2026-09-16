@@ -68,8 +68,7 @@ describe("WorkflowStageTracker", () => {
     expect(screen.queryByTestId("workflow-ai-unavailable")).not.toBeInTheDocument();
   });
 
-  it("surfaces specification analysis issues at the tracker level", () => {
-    const workflow = workflowWithStatuses({});
+  function withOneAnalysisIssue(workflow: TestGenerationWorkflow): TestGenerationWorkflow {
     workflow.apiModel = {
       operations: [],
       securitySchemes: {},
@@ -86,10 +85,26 @@ describe("WorkflowStageTracker", () => {
         ],
       },
     };
-    render(<WorkflowStageTracker workflow={workflow} />);
+    return workflow;
+  }
+
+  it("surfaces specification analysis issues at the tracker level on a stage that doesn't already show them itself", () => {
+    const workflow = withOneAnalysisIssue(workflowWithStatuses({}));
+    render(<WorkflowStageTracker workflow={workflow} viewedStageId="scenarioReview" />);
     expect(screen.getByTestId("workflow-analysis-issues")).toHaveTextContent(
       "1 specification analysis issue",
     );
+  });
+
+  it("does not duplicate the analysis-issues banner on upload/analysis/apiReview — AnalysisSummary already shows them there", () => {
+    const workflow = withOneAnalysisIssue(workflowWithStatuses({}));
+    for (const stageId of ["upload", "analysis", "apiReview"] as const) {
+      const { unmount } = render(
+        <WorkflowStageTracker workflow={workflow} viewedStageId={stageId} />,
+      );
+      expect(screen.queryByTestId("workflow-analysis-issues")).not.toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("lets a completed scenarioReview be revisited, and a completed apiReview be viewed read-only (research.md D3 addendum)", () => {

@@ -18,13 +18,19 @@ export function AnalysisSummary({ summary }: Readonly<{ summary: AnalysisSummary
         </div>
       </dl>
       {summary.issues.length > 0 && (
-        <div
+        // Collapsed by default (mirrors WorkflowStageTracker's identical fix): a specification
+        // with hundreds of issues previously rendered its entire list inline here, tall enough
+        // to push the operation list below the fold on every visit to this stage.
+        <details
           role="alert"
           data-testid="analysis-issues"
           className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
         >
-          <p className="font-medium">{summary.issues.length} issue(s) found:</p>
-          <ul className="ml-4 list-disc">
+          <summary className="cursor-pointer font-medium marker:text-warning-500">
+            {summary.issues.length} issue{summary.issues.length === 1 ? "" : "s"} found —
+            click to expand
+          </summary>
+          <ul className="mt-2 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2">
             {summary.issues.map((issue) => (
               <li key={`${issue.kind}-${issue.location}-${issue.message}`}>
                 <strong>{issue.kind}</strong> at{" "}
@@ -35,7 +41,7 @@ export function AnalysisSummary({ summary }: Readonly<{ summary: AnalysisSummary
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
     </section>
   );
