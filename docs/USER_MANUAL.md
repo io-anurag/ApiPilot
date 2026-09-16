@@ -195,13 +195,23 @@ you get:
 
 - **A Postman collection** — one request per accepted single-operation scenario, plus
   one ordered request sequence per *approved* workflow (with response values wired into
-  variables consumed by later steps), organized into folders by the spec's tags.
+  variables consumed by later steps), organized into folders by the spec's tags. Beyond
+  approved workflows, a standalone scenario with an unresolved path parameter (e.g. an
+  `{id}` no workflow covers) is automatically chained to a confirmed/likely producer's
+  response value where one exists, so fewer requests need manual variable entry.
 - **An environment file** listing every variable the collection references (base URL,
   credentials/identifiers), left empty for you to fill in — no real secrets are ever
-  written into the collection.
+  written into the collection. If the spec declares more than one distinct authentication
+  scheme, each gets its own named variable rather than sharing one. If a scheme uses
+  OAuth2 client-credentials, the collection also includes a prepended "OAuth2 Token
+  Setup" folder with one request that fetches an access token before the rest run, plus
+  `clientId`/`clientSecret` variables for you to fill in. If a token or API key is itself
+  obtainable from another operation's response, that value is wired in automatically
+  instead of left blank.
 - **A README** describing the request count, folder layout, how to run the collection,
   and a list of known limitations for this export (e.g., scenarios with no expected
-  outcome, unsupported auth schemes, or workflows that couldn't be faithfully rendered).
+  outcome, unsupported auth schemes, unsupported parameter serialization styles, or
+  workflows that couldn't be faithfully rendered).
 
 All three files are downloadable from this screen. If generation fails validation, you
 get an explicit error and a list of the specific problems — never a silently broken
@@ -215,7 +225,9 @@ tracker (this isn't a numbered stage — it stays available for the rest of the 
 **Define an environment** the first time you use it: name, risk tier (Local / Dev / QA /
 Staging / Production), base URL, an optional delay between requests in milliseconds, and
 any variables the collection needs (e.g., an auth token). If you have more than one
-environment, pick one explicitly from the dropdown — none is pre-selected.
+environment, pick one explicitly from the dropdown — none is pre-selected. Environments
+you define, and every run's results, are saved so they're still there if the backend
+restarts while your session is active (see [Sessions](#4-sessions)).
 
 Click **Run**. If the selected environment is tagged Staging or Production, or the
 collection includes any destructive request (POST/PUT/PATCH/DELETE), you'll see a
@@ -239,7 +251,9 @@ counts) and a **Cancel run** button. Each request's row shows an outcome:
 Expand a row to see duration, the response status code, and each assertion's individual
 result. Raw request/response bodies and credential values are never shown. Use **Show
 failures only** to filter the list. Past runs from this session are listed below and can
-be reopened for review without re-running them.
+be reopened for review without re-running them, even after a backend restart. If a run
+was in progress when the backend was restarted, it's recorded as cancelled with a reason
+that distinguishes it from a run you cancelled yourself.
 
 ## 4. Sessions
 
@@ -250,8 +264,14 @@ other's uploads, reviews, or runs. Reloading the page, or opening a second tab i
 than 60 minutes, its workflow is discarded and the next visit shows an explicit
 "session expired" notice rather than silently starting over.
 
-Nothing is stored durably: workflows, environments, and run history all live in memory
-and are lost if the backend restarts.
+Your in-progress guided workflow itself lives in memory only and is lost if the backend
+restarts. Environments you've defined and your execution run history are saved to a
+local database on disk, so they survive a backend restart for as long as your session
+stays active — you won't need to re-enter credentials or lose past results just because
+the server restarted. That saved data is still tied to your session: if your session
+times out from inactivity, its environments and run history are removed along with it,
+the same as before. Credential values you enter into an environment are encrypted before
+being stored.
 
 ## 5. AI behavior you should know about
 
@@ -280,6 +300,16 @@ and are lost if the backend restarts.
   before confirming a Staging/Production run.
 - AI-assisted analysis of *why* an execution failed (as opposed to reporting that it
   failed) is not part of the current product.
+- Automatic chaining of an unresolved path parameter or auth credential to another
+  operation's response is single-hop only (one producer, one consumer) and only applies
+  to confirmed/likely relationships — it does not assemble multi-step chains on its own;
+  use Workflow Review for that.
+- OAuth2 support covers the client-credentials flow only. Authorization-code, implicit,
+  and password grant flows are not automated and are reported as an unsupported auth
+  scheme.
+- Persisted environments and execution run history are tied to your browser session —
+  they are not shared across different browsers/devices and are removed if that session
+  is idle-evicted, the same as the rest of the session-scoped model.
 
 ## 7. Troubleshooting
 
@@ -294,7 +324,7 @@ and are lost if the backend restarts.
 | Postman generation fails | Approved scenarios/workflows contain unresolved data ApiPilot cannot faithfully render | Read the listed validation problems and address them in Scenario/Workflow Review, then regenerate |
 | Confirmation banner appears before Run | Target environment is Staging/Production, or the collection includes destructive requests | Review the named requests, then confirm explicitly if intended |
 | "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
-| Everything reset after a backend restart | Workflow/session/run history are in-memory only by design | Re-run the workflow from Upload |
+| Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your environments and past execution run history are unaffected and still there |
 
 ## 8. Where to look next
 

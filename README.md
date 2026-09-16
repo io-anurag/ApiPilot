@@ -26,6 +26,21 @@ OpenAPI YAML -> ApiModel -> deterministic TestModel -> optional AI enhancement
 
 The deterministic path is the product foundation. AI contributes bounded, validated suggestions; it never replaces specification facts, deterministic scenarios, or explicit human approval.
 
+## Contents
+
+- [Quick start](#quick-start)
+- [System requirements](#system-requirements)
+- [Guided workflow](#guided-workflow)
+- [Product capabilities and specification status](#product-capabilities-and-specification-status)
+- [Specification behavior](#specification-behavior)
+- [Core guarantees](#core-guarantees)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Development and validation](#development-and-validation)
+- [Scope and limitations](#scope-and-limitations)
+- [Documentation map](#documentation-map)
+- [License](#license)
+
 ## Quick start
 
 Prerequisites: Node.js 20 LTS or newer and npm.
@@ -104,6 +119,13 @@ The [roadmap](specs/ROADMAP.md) is authoritative for implementation status. Indi
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented | Isolates the in-progress guided workflow per browser session behind an unguessable cookie identity, so concurrent users no longer collide on one shared workflow; idle sessions are evicted after 60 minutes with an explicit expiry notice. Not the same feature as AP-017 below despite the directory-number coincidence. |
 | AP-017 Test Execution and Results                | Implemented                                 | Run an approved collection against an explicitly chosen, authorized environment; categorized pass/fail/not-attempted results per request; environment/tier safety, destructive-run confirmation, cancellation, and session run history. |
 | AP-018 AI Failure Analysis                       | Post-MVP, not started                       | Analyze execution failures using AI as an explicitly bounded assistant.                                                                                                                |
+| AP-019 Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented | Chains a standalone scenario's unresolved path parameter to a CONFIRMED/LIKELY dependency's producer value at Postman export time, without requiring a pre-approved integration workflow; single-hop, deterministic, and skippable via an export option. |
+| AP-020 Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented | Structured frontend logging with global error/rejection capture; `warn`/`error` entries forward to a dedicated, size-limited backend endpoint and persist through the existing server-side logger, with credential-shaped fields stripped on both sides. |
+| AP-021 Distinct-Credential Token Provisioning (`specs/021-multi-credential-token-provisioning`) | Implemented | Gives each distinctly-keyed OpenAPI security scheme its own Postman credential variable instead of colliding on one shared name, and identifies candidate credential-producing operations for later chaining. |
+| AP-022 Specification-Conformant Parameter Serialization (`specs/022-openapi-parameter-serialization`) | Implemented | Renders array/object query, header, and path parameters per their declared OpenAPI `style`/`explode` rules with percent-encoding instead of JSON-stringifying them; unsupported styles are reported as a limitation. |
+| AP-023 Automatic Auth-Credential Chaining (`specs/023-auto-auth-credential-chaining`) | Implemented | Extends dependency chaining to authentication: a token or API key obtained from one operation's response is automatically wired into the Authorization variable of operations that need it. |
+| AP-024 OAuth2 Client-Credentials Auth Support (`specs/024-oauth2-client-credentials-auth`) | Implemented | Recognizes OpenAPI `oauth2` client-credentials schemes and generates an automatic token-fetch request plus credential variables in the exported collection. |
+| AP-025 Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented | Persists environments (with encrypted credentials), execution run history, and AI readiness/benchmark diagnostics to a local SQLite file so they survive a backend restart for the life of the owning session; guided-workflow generation progress remains in-memory only. |
 
 ## Specification behavior
 
@@ -125,9 +147,9 @@ AI may suggest semantic scenarios and relationships but cannot add executable en
 
 Review states are pending, accepted, and rejected. Pending/rejected scenarios are ineligible downstream. Edits preserve and revalidate provenance; failed edits or regeneration retain the last valid state. Filtered and manually selected bulk actions require explicit confirmation and create the same per-item decision record as individual actions. Bulk rejection uses a shared justification.
 
-Dependency relationships are `CONFIRMED`, `LIKELY`, or `POSSIBLE`. Field names alone never justify confirmed/likely classifications; corroborating type, format, path, tag, description, or example evidence is needed. Only confirmed/likely edges automatically assemble into workflows; possible edges remain review candidates. Workflows use stable tie-breaks and named producer/consumer hand-off variables. Cycles, unresolved order, batching limitations, and AI unavailability are visible rather than fabricated away.
+Dependency relationships are `CONFIRMED`, `LIKELY`, or `POSSIBLE`. Field names alone never justify confirmed/likely classifications; corroborating type, format, path, tag, description, or example evidence is needed. Only confirmed/likely edges automatically assemble into workflows; possible edges remain review candidates. Workflows use stable tie-breaks and named producer/consumer hand-off variables. Cycles, unresolved order, batching limitations, and AI unavailability are visible rather than fabricated away. Beyond human-approved workflows, a standalone scenario with an unresolved path parameter is automatically chained to a confirmed/likely producer's response value at export time — single-hop only, deterministic, and skippable via an export option (AP-019).
 
-Postman export is deterministic, invokes no AI, and does not execute requests. It emits exactly one request per approved single-operation scenario, preserves deliberate negative values, applies only approved assertions, validates output, and generates an environment plus README. Base URLs, credentials, and absent values are declared variables rather than literals or guesses. Empty sets, unsupported auth/content, missing assertions, and analysis issues are reported as limitations. Approved multi-step workflows are rendered as ordered, dependency-aware request sequences (AP-016).
+Postman export is deterministic, invokes no AI, and does not execute requests. It emits exactly one request per approved single-operation scenario, preserves deliberate negative values, applies only approved assertions, validates output, and generates an environment plus README. Base URLs, credentials, and absent values are declared variables rather than literals or guesses. Empty sets, unsupported auth/content, missing assertions, and analysis issues are reported as limitations. Approved multi-step workflows are rendered as ordered, dependency-aware request sequences (AP-016). Each distinctly-keyed security scheme gets its own credential variable rather than colliding on a shared name (AP-021); a token or API key obtained from one operation's response can be automatically wired into another operation's Authorization variable (AP-023); OpenAPI `oauth2` client-credentials schemes generate an automatic token-fetch request and credential variables (AP-024); and array/object parameters render per their declared `style`/`explode` rules with percent-encoding rather than being JSON-stringified (AP-022).
 
 ### Execution and results
 
@@ -140,9 +162,12 @@ Failure is always categorized rather than reported as one generic error: an asse
 and disagreed with the response is distinguished from a wrong status code, a connectivity failure
 (target unreachable or connection refused), a timeout, and an assertion that could not be
 evaluated at all (for example, a non-JSON response body). Diagnostic detail never includes a raw
-request/response body or a credential value. Environments, executed requests, and results are
-session-scoped and held only in memory, matching the guided workflow's own no-durable-persistence
-model — nothing here is retained across a backend restart.
+request/response body or a credential value. Environments and execution run history are
+session-scoped and persisted to a local SQLite database (AP-025), so they survive a backend
+restart for as long as the owning session remains active; a run interrupted by a restart is
+recorded as cancelled with a reason that distinguishes it from a user-initiated cancellation, and
+environment credential values are encrypted at rest. Guided-workflow generation progress itself
+remains in-memory only and does not survive a restart.
 
 ## Core guarantees
 
@@ -150,7 +175,7 @@ model — nothing here is retained across a backend restart.
 - **Determinism first**: parsing, validation, test generation, assertions, deduplication, review gating, and artifacts are reproducible without an LLM.
 - **Explainability**: scenarios, relationships, workflows, and artifacts retain specification, rule, AI, or user provenance.
 - **Human ownership**: AI validation is not approval, and exporting does not authorize API execution.
-- **Privacy**: specifications, prompts, and credentials are not sent to cloud AI; sensitive content stays out of normal diagnostics and artifacts.
+- **Privacy**: specifications, prompts, and credentials are not sent to cloud AI; sensitive content stays out of normal diagnostics and artifacts; credential values persisted to disk are encrypted at rest (AP-025).
 - **Explicit failure**: unsupported, ambiguous, unavailable, invalid, partial, stale, empty, and cancelled outcomes are never presented as success.
 - **Framework independence**: `ApiModel`, `TestModel`, and workflow contracts do not depend on Postman.
 
@@ -196,6 +221,7 @@ See [.env.example](.env.example) for the maintained variable list and guidance.
 | `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Wall-clock ceiling for one enhancement run             | see `.env.example`                                |
 | `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Work-bounded dependency-analysis batch size            | `3`                                               |
 | `AI_DEPENDENCY_RUN_BUDGET_MS`        | Wall-clock ceiling for one dependency-analysis AI pass | `120000`                                          |
+| `APIPILOT_DB_PATH`                   | Local SQLite database file (environments, execution run history, AI diagnostics) | `~/.apipilot/apipilot.db`. A sibling key file (`db.key`) is generated alongside it to encrypt credential-like environment values at rest — back up both files together or neither will decrypt. |
 
 Whole-specification AI enhancement is practical to roughly **5–10 operations** at the default run
 budget on the reference CPU profile — larger specifications settle `partial` at the ceiling, with
@@ -258,7 +284,7 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 
 - Input is one OpenAPI 3.x YAML file. Swagger 2.0, JSON input, external `$ref` retrieval, and executing uploaded content are unsupported.
 - ApiPilot only contacts an API described by a specification when a user explicitly starts an execution run against an environment they defined themselves; nothing is ever contacted automatically, unattended, or on a schedule. AI failure analysis (AP-018) remains post-MVP.
-- Workflow state, environments, and execution run history are isolated per browser session (an unguessable cookie identity, not a login/account) and kept in process memory only — none of it is durable across a backend restart, and an idle session's workflow is evicted after 60 minutes.
+- Workflow generation progress is isolated per browser session (an unguessable cookie identity, not a login/account) and kept in process memory only — it does not survive a backend restart, and an idle session's workflow is evicted after 60 minutes. Environments and execution run history are also session-scoped but persisted to a local SQLite database (AP-025); they survive a restart for as long as the owning session stays active and are removed when that session is idle-evicted, not retained indefinitely. AI readiness state and benchmark results persist across restarts independently of any session.
 - Local model provisioning may require an initial download. Normal tests do not download models.
 - AP-013 and AP-014 have a small number of real-model validation tasks deliberately left open (blocked on an uncached local model); see their task lists and the roadmap for detail.
 
@@ -286,6 +312,13 @@ ApiPilot versions root, backend, and frontend packages with semantic versioning.
 - [AP-016 workflow-aware Postman generation](specs/016-workflow-aware-postman/spec.md)
 - [Session-scoped concurrent workflow isolation](specs/017-session-workflow-isolation/spec.md)
 - [AP-017 test execution and results](specs/018-test-execution-results/spec.md)
+- [AP-019 automatic workflow chaining](specs/019-auto-workflow-chaining/spec.md)
+- [AP-020 frontend application logging](specs/020-frontend-application-logging/spec.md)
+- [AP-021 distinct-credential token provisioning](specs/021-multi-credential-token-provisioning/spec.md)
+- [AP-022 OpenAPI parameter serialization](specs/022-openapi-parameter-serialization/spec.md)
+- [AP-023 automatic auth-credential chaining](specs/023-auto-auth-credential-chaining/spec.md)
+- [AP-024 OAuth2 client-credentials auth support](specs/024-oauth2-client-credentials-auth/spec.md)
+- [AP-025 local persistence layer](specs/025-local-persistence-layer/spec.md)
 
 Each feature directory contains the normative specification, implementation plan, task list, data model, research, quickstart, and API contracts where relevant.
 

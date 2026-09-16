@@ -33,9 +33,12 @@ flowchart LR
   WREVIEW --> APPROVED
   APPROVED --> PM["Postman generator"]
   PM --> ART["Collection + environment + README"]
+  ART --> EXEC["Execution (Newman)"]
+  EXEC --> RESULTS["Execution results"]
   AI --> PROVIDER["AIProvider"]
   DEP --> PROVIDER
   PROVIDER --> LOCAL["Local model or deterministic mock"]
+  EXEC --> DB[("SQLite: environments, run history, AI diagnostics")]
 ```
 
 The frontend and backend consume the same contracts from `packages/shared-domain`. The browser
@@ -56,6 +59,8 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/postman/`                | Collection/environment/document rendering and collection validation.                                                                           |
 | `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle — keyed per session by `backend/src/session/`.       |
 | `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation). |
+| `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
+| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, and AI readiness/benchmark diagnostics; at-rest credential encryption (specs/025-local-persistence-layer). |
 | `frontend/src/pages/`                 | The guided workflow composition root.                                                                                                          |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
@@ -147,6 +152,24 @@ ordered folders. Producer response fields are extracted into workflow-scoped var
 referenced by later approved requests; unsupported workflows are omitted atomically. Workflow
 requests and variables retain source workflow, step, scenario, and relationship provenance.
 Standalone scenarios not covered by a rendered workflow continue to use the existing folder layout.
+
+Four further hardening features refine this export path. A standalone scenario's unresolved path
+parameter can be automatically resolved from a `CONFIRMED`/`LIKELY` producer's response value —
+single-hop only, skippable via an export option — without requiring a pre-approved workflow
+(AP-019, `backend/src/postman/automaticChaining.ts`). Each distinctly-keyed security scheme gets
+its own credential variable instead of colliding on one shared name, and candidate
+credential-producing operations are identified for later chaining (AP-021,
+`backend/src/postman/credentialProducers.ts`). That chaining is then completed for authentication
+specifically — a token or API key obtained from one operation's response is wired into the
+`Authorization` variable of operations that need it, excluding `http`/`basic` schemes (AP-023,
+`backend/src/postman/authCredentialRelationships.ts`). OpenAPI `oauth2` schemes using the
+`clientCredentials` flow are recognized and rendered as a prepended "OAuth2 Token Setup" folder
+containing one synthesized token-fetch request per scheme, always included regardless of the
+chaining opt-out (AP-024, `backend/src/postman/oauth2TokenFetch.ts`). Separately, array/object
+query, header, and path parameters render per their declared OpenAPI `style`/`explode` rules with
+percent-encoding rather than being JSON-stringified; unsupported styles (`matrix`, `label`,
+content-based) are reported as a limitation instead of guessed (AP-022,
+`backend/src/postman/parameterSerialization.ts`).
 
 ## Workflow orchestration
 
@@ -254,6 +277,42 @@ fp32, under `AI_MODEL_CACHE_DIR` (`~/.apipilot/models` by default). `.env.exampl
 fp32 on the reference profile and produced malformed structured output. Local AI operates fully
 offline once the model is cached.
 
+## Local persistence
+
+`backend/src/persistence/` (specs/025-local-persistence-layer) gives three categories of data,
+previously held only in in-memory maps, a local SQLite (`better-sqlite3`) file that survives a
+backend restart: `Environment` definitions and their credential configuration, `ExecutionRun`
+history (status, timing, per-request results), and the AI subsystem's readiness-state and
+benchmark-result history. `backend/src/execution/environmentStore.ts` and
+`executionRunStore.ts` delegate their reads/writes to dedicated repositories
+(`environmentRepository.ts`, `executionRunRepository.ts`, `aiDiagnosticsRepository.ts`) rather than
+exposing SQLite directly to callers. The database file initializes itself idempotently on first
+use (`CREATE TABLE IF NOT EXISTS`); a corrupted or unreadable file fails startup explicitly instead
+of being silently discarded.
+
+Persistence lifetime follows the existing session model rather than replacing it: an environment or
+execution run survives a restart only for as long as its owning browser session remains active, and
+is removed when that session is idle-evicted (specs/017-session-workflow-isolation's unchanged
+60-minute timeout) — not retained indefinitely or across sessions. Execution run history itself is
+never automatically pruned within that window. AI readiness/benchmark history is process-wide, not
+session-scoped, and persists independently of any session. An execution run left in progress when
+the backend stops is recorded on restart as cancelled with a `cancelReason` of
+`"backend-restart"`, distinguishable in run history from a user-initiated cancellation.
+
+Guided-workflow generation state (`backend/src/testGenerationWorkflow/workflowStore.ts`) and the
+session registry itself (`backend/src/session/sessionRegistry.ts`) are deliberately **not** part of
+this feature and remain in-memory-only `Map`s — an in-progress workflow still does not survive a
+backend restart.
+
+`Environment.variableValues` — the field carrying credential-like values — is encrypted at rest
+with AES-256-GCM (`backend/src/persistence/credentialCipher.ts`, Node's built-in `node:crypto`,
+chosen over adding a dependency). The symmetric key lives in a sibling file next to the database
+(not inside it), so a copied database file alone cannot be decrypted; both files must be backed up
+together. No credential value ever appears in plaintext in logs, error responses, or diagnostics.
+The database location is configurable via `APIPILOT_DB_PATH` (default
+`~/.apipilot/apipilot.db`); automated tests use an isolated location, never the location a real
+running instance uses.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -273,9 +332,16 @@ offline once the model is cached.
 - Local-only operation never silently transfers inference inputs externally. The current provider
   modes are local and mock.
 - The product isolates concurrent browser sessions (an unguessable cookie identity, evicted after
-  60 minutes idle) but has no login/account system, and workflow state remains in-memory and
-  non-persistent. No external queue, database, authentication system, or cloud AI provider is
-  part of the core architecture.
+  60 minutes idle) but has no login/account system, and guided-workflow generation state remains
+  in-memory and non-persistent. Environments, execution run history, and AI diagnostics are
+  persisted to a local, embedded SQLite database (see "Local persistence" above) — not an external
+  or shared one. No external queue, networked database, authentication system, or cloud AI
+  provider is part of the core architecture.
+- Frontend runtime errors are captured by global `window` handlers and forwarded, best-effort, to
+  a dedicated backend endpoint (`POST /api/client-logs`) that persists them through the existing
+  server-side logger under a distinct component name (specs/020-frontend-application-logging). A
+  credential-shaped field-name denylist is enforced independently on both sides; forwarding never
+  blocks the UI and is never retried, and nothing is sent to an external service.
 
 ## Frontend architecture
 
@@ -312,6 +378,6 @@ tests and benchmarks are opt-in because they may provision or load a local model
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
 feature-level behavior, contracts, success criteria, and implementation status live in the
-[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/017-*`.
+[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/025-*`.
 Where this document and a feature specification differ, the applicable specification and
 constitution take precedence.

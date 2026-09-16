@@ -1,10 +1,13 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. AP-001 through AP-016 have each been run through
+**Status**: Reference document. AP-001 through AP-025 have each been run through
 `/speckit-specify` individually, in dependency order. See the Implementation Status table below
 for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
-`analyze` → `implement` → `converge` lifecycle. AP-017 (Test Execution & Results) and AP-018 (AI
-Failure Analysis) — the two post-MVP features — have not been started.
+`analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
+(Test Execution & Results) is implemented; AP-018 (AI Failure Analysis) has not been started.
+AP-019 through AP-025 are further hardening/extension features layered on top of the shipped MVP
+and AP-017, mirroring how AP-011 through AP-016 relate to their own prerequisites (see their own
+Feature Decomposition sections below).
 
 AP-011 through AP-016 were originally tracked as unnumbered "hardening" specs to avoid a
 numbering collision with the post-MVP features, which were numbered AP-011/AP-012 at the time.
@@ -37,6 +40,13 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
 | AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13 |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
+| AP-019 — Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented — all tasks (T001–T037) complete |
+| AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete |
+| AP-021 — Distinct-Credential Token Provisioning (`specs/021-multi-credential-token-provisioning`) | Implemented — all 22 tasks complete |
+| AP-022 — Specification-Conformant Parameter Serialization (`specs/022-openapi-parameter-serialization`) | Implemented — all 25 tasks complete |
+| AP-023 — Automatic Auth-Credential Chaining (`specs/023-auto-auth-credential-chaining`) | Implemented — all 23 tasks complete |
+| AP-024 — OAuth2 Client-Credentials Auth Support (`specs/024-oauth2-client-credentials-auth`) | Implemented — all 30 tasks complete, re-validated against the PayPal Invoicing API fixture (0/22 operations unsupported, down from 22/22) |
+| AP-025 — Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented — all 34 tasks complete |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -57,6 +67,19 @@ Existing Specifications" section for why the two are unrelated and how to tell t
 Each spec's own `spec.md` still carries a template-default `**Status**: Draft` header — that
 field is not maintained after `/speckit-specify` runs and should not be read as the feature's
 real implementation status; this table is the accurate source for that.
+
+AP-019 through AP-024 trace directly back to real-world Postman-export gaps found while
+exercising AP-017: AP-021 (distinct credential variables), AP-022 (parameter serialization), and
+AP-024 (OAuth2 client-credentials) each fix a defect a real specification actually triggered, and
+AP-019/AP-023 extend the existing dependency-chaining engine (AP-008) so those exports need less
+manual workflow assembly. AP-020 (frontend logging) is unrelated infrastructure closing a gap
+between the backend's existing structured logging and the frontend's total absence of one.
+AP-025 (local persistence layer) is the most consequential of the seven for this document's own
+claims: it makes environments, execution run history, and AI readiness/benchmark diagnostics
+survive a backend restart via a local SQLite database, which **supersedes every earlier statement
+in this roadmap and the project's other documentation that environments/execution history are
+"in-memory only"** — guided-workflow generation progress itself remains in-memory only and
+unaffected. See AP-025's own Feature Decomposition section below for the precise scope.
 
 ## Product Vision
 
@@ -1040,6 +1063,263 @@ identity and must remain compatible).
 
 ---
 
+## AP-019 — Automatic Workflow Chaining for Postman Export
+
+### Objective
+
+Extend the deterministic Postman export path so a standalone scenario's unresolved path parameter
+can be automatically resolved from a corroborated dependency relationship, without requiring a
+human to first assemble and approve a full integration workflow. This closes the dominant class of
+"unresolved path parameter" limitations found while exercising AP-017 against a real specification
+(701 of 709 limitations in one representative export).
+
+### Scope
+
+- Match each standalone (non-workflow) scenario's unresolved path parameter against the existing
+  `ApiDependencyGraph` (AP-008).
+- Apply the substitution only when the relationship is `CONFIRMED` or `LIKELY` and the producing
+  operation has an approved positive-outcome scenario in the same export.
+- Capture the producer's response value once and reuse it across every consumer that needs it
+  (fan-out).
+- Single-hop resolution only; no multi-hop chain assembly.
+- Deterministic tie-break when more than one candidate producer exists.
+- An explicit per-export opt-out (`disableAutomaticChaining`) that also governs AP-023's later
+  auth-credential chaining.
+
+### Constraints
+
+- Never applies to a `POSSIBLE`-confidence relationship.
+- Never reorders the collection to make a chain work; falls back to the existing
+  unresolved-parameter limitation instead.
+- Never conflicts with or duplicates an already-rendered, human-approved `IntegrationWorkflow`
+  (AP-016), which always takes precedence.
+- Respects an explicit human rejection of the underlying dependency/workflow.
+- Fully deterministic and reproducible across repeated exports of the same approved input.
+- Introduces no new AI call at export time.
+
+### Dependencies
+
+Requires AP-008 (dependency graph and confidence classification) and AP-016 (workflow-aware
+chained-rendering primitives), which it reuses rather than replaces.
+
+---
+
+## AP-020 — Frontend Application Logging
+
+### Objective
+
+Give the frontend a structured, persistent logging trail equivalent to the backend's existing
+`backend/src/logger.ts`, so runtime frontend errors are diagnosable instead of visible only in a
+developer's own browser console.
+
+### Scope
+
+- A frontend logger (`frontend/src/logger.ts`) with `info`/`warn`/`error` levels, timestamps, and
+  component/event naming.
+- Global `window` `error`/`unhandledrejection` handlers wired in at application bootstrap.
+- Every existing service-client module logs its own caught errors.
+- `warn`/`error` entries are additionally forwarded, best-effort, to a new backend endpoint and
+  persisted through the existing server-side logger under a dedicated component name.
+
+### Constraints
+
+- No new runtime dependency; uses the browser's native `fetch`.
+- Logged context is restricted to primitive values; objects, arrays, and functions are dropped
+  rather than serialized.
+- A credential-shaped field-name denylist (token, API key, password, secret, authorization,
+  credential, cookie) is enforced independently on both the frontend logger and the backend
+  ingestion endpoint.
+- A forwarding failure never throws or blocks the UI, and is never retried.
+- Nothing is ever sent to an external/cloud service — only the local backend.
+- Out of scope: a log-viewer UI, cross-log correlation IDs, and log persistence beyond the
+  existing server-side logging destination.
+
+### Dependencies
+
+None on other AP-### features; reuses the backend's existing logging pattern.
+
+---
+
+## AP-021 — Distinct-Credential Token Provisioning for Postman Export
+
+### Objective
+
+Fix a Postman export defect: every security scheme of the same type (e.g., two distinct bearer
+schemes) collided on one shared credential variable (`{{token}}`), silently overwriting one
+scheme's value with another's. Hardens AP-007/AP-016's export path.
+
+### Scope
+
+- One credential variable per distinctly-keyed `components.securitySchemes` entry, not per type.
+- The first-declared scheme of a type keeps the existing variable name; later schemes of the same
+  type get a name derived from their own scheme key.
+- Discovers a candidate unauthenticated "producer" operation that could obtain a given credential
+  (by path/operation-ID similarity to the scheme key), recorded for AP-023 to consume — this
+  feature does not itself wire the value in.
+
+### Constraints
+
+- A specification with only one scheme per type is byte-identical to prior export output.
+- Tag/folder names are never used as a naming signal — only the declared scheme key.
+- No fabricated token-issuing request is invented; an unresolved producer is reported as an
+  explicit limitation.
+- Fully deterministic and stable across repeated exports.
+
+### Dependencies
+
+Hardens AP-007 and AP-016; feeds AP-019's chaining option and AP-023's auth-credential wiring.
+
+---
+
+## AP-022 — Specification-Conformant Parameter Serialization
+
+### Objective
+
+Fix a Postman export defect: array/object query and header parameters were JSON-stringified into
+the request rather than following the OpenAPI 3.x `style`/`explode` serialization rules declared
+for that parameter, and neither the URL nor header values were percent-encoded.
+
+### Scope
+
+- Resolves each parameter's effective `style`/`explode` (spec-declared value, or the
+  OpenAPI-defined per-location default) and renders array/object values accordingly — repeated
+  keys, comma-joined, space/pipe-delimited, or `deepObject`, as applicable.
+- Percent-encodes every key/value emitted into a request URL or header.
+- Reports an explicit limitation for styles this feature does not implement (`matrix`, `label`,
+  content-based parameters) instead of guessing.
+
+### Constraints
+
+- Does not change which parameters are populated, `GeneratedRequest`'s shape, or any rule module's
+  generated value — this is a rendering-correctness fix only.
+- A negative scenario's deliberately wrong-shaped value (e.g., a scalar substituted for an array)
+  still renders as given; serialization never "repairs" an intentional constraint violation.
+
+### Dependencies
+
+Hardens the existing AP-003 deterministic designer's output as rendered by AP-007/AP-016's Postman
+export; no dependency on the credential-chaining features.
+
+---
+
+## AP-023 — Automatic Auth-Credential Chaining
+
+### Objective
+
+Extend AP-019's dependency chaining to authentication: a token or API key obtained from one
+operation's response (e.g., `POST /auth/token`) previously had no path into the `Authorization`
+header/variable of operations that require it, even after AP-021 had already given that scheme its
+own named variable.
+
+### Scope
+
+- Adds `auth` as a new dependency field location alongside the existing path/query/header/body
+  locations.
+- When a producer identified by AP-021 has a response with exactly one plausible string-typed
+  credential field, its value is captured and written into the same variable AP-021 already
+  named — no separate chain-scoped variable.
+- Reuses AP-019's existing `disableAutomaticChaining` opt-out; no second flag.
+
+### Constraints
+
+- `http`/`basic` schemes are explicitly excluded from automatic chaining and always fall to the
+  existing unresolved-credential limitation.
+- Ambiguity — zero or multiple plausible response fields, or zero or multiple producer
+  candidates — never guesses; it falls through to AP-021's unresolved-producer limitation.
+- Never reorders the collection to make a chain work.
+- Fully deterministic and stable across repeated exports; no real credential value is fabricated
+  and no request is executed.
+
+### Dependencies
+
+Requires AP-021 (credential-variable naming and producer discovery) and AP-008/AP-019 (the
+dependency graph and chaining engine it extends).
+
+---
+
+## AP-024 — OAuth2 Client-Credentials Auth Support for Postman Export
+
+### Objective
+
+Recognize OpenAPI `oauth2` security schemes using the `clientCredentials` flow, which previously
+fell through entirely to an "unsupported auth scheme" limitation — found to affect 22 of 22
+operations on a real-world validation specification.
+
+### Scope
+
+- Classifies `oauth2` schemes with a `clientCredentials` flow as supported; `authorizationCode`,
+  `implicit`, and password-only flows remain explicitly unsupported.
+- Provisions `clientId`/`clientSecret`/`accessToken` credential variables per scheme, named per
+  AP-021's convention.
+- Synthesizes exactly one token-fetch request per required scheme — HTTP Basic client
+  authentication, `grant_type=client_credentials`, optional `scope`, resolved against the declared
+  token URL — placed in a prepended "OAuth2 Token Setup" folder.
+- The token-fetch request is included regardless of the `disableAutomaticChaining` option, which
+  governs only scenario-to-scenario chaining.
+
+### Constraints
+
+- The token-fetch request targets the specification's own declared token URL — the user's own
+  target API — never a third-party or cloud AI service; this is unrelated to the project's
+  AI-provider rules.
+- The client secret is provisioned as an empty, user-filled placeholder variable, never fabricated,
+  logged, or sent elsewhere.
+- A failed token fetch is not retried and does not silently fall back.
+
+### Dependencies
+
+Requires AP-019 (the chaining-option contract), AP-021 (credential-variable naming), and AP-023
+(the credential-wiring pattern it extends to a new grant type).
+
+---
+
+## AP-025 — Local Persistence Layer
+
+### Objective
+
+Let data currently held only in in-memory maps — environments and their credentials, execution run
+history, and AI readiness/benchmark diagnostics — survive a backend restart, using a lightweight
+local SQLite database (`better-sqlite3`), without introducing a networked or shared database or
+changing the product's session-scoped, no-login model.
+
+### Scope
+
+- Persists `Environment` definitions (including credential configuration), `ExecutionRun` history
+  (status, timing, per-request results), and AI readiness-state/benchmark-result history, each for
+  as long as its owning browser session remains active.
+- Automatically initializes and loads the local storage file on startup, with no manual migration
+  step.
+- Distinguishes an execution run interrupted by a backend restart from one the user explicitly
+  cancelled, via a `cancelReason` field.
+- Encrypts environment credential values at rest (AES-256-GCM, via Node's built-in `node:crypto`)
+  with the symmetric key held in a separate sibling file, so a copied database file alone cannot be
+  decrypted.
+- The storage file's location is configurable (`APIPILOT_DB_PATH`), with a safe default requiring
+  no configuration.
+
+### Constraints
+
+- Guided-workflow generation progress and session-registry bookkeeping remain in-memory only and
+  are explicitly out of scope — this feature does not make an in-progress workflow durable.
+- Corrupted or unreadable storage fails startup explicitly rather than being silently discarded or
+  partially loaded.
+- No credential value ever appears in plaintext in logs, error responses, or diagnostic output.
+- Automated tests never read from or write to the storage location a real running instance uses.
+- Execution run history is retained indefinitely (no automatic pruning) for as long as its owning
+  session remains active; it is removed when that session is idle-evicted, matching the platform's
+  existing 60-minute session-timeout behavior rather than being retained beyond it.
+- Restart-time recovery adds under 500ms at a representative local data volume (a few hundred
+  environments/runs).
+
+### Dependencies
+
+Builds on AP-017 (`specs/018-test-execution-results`, the `Environment`/`ExecutionRun` types it
+persists), `specs/017-session-workflow-isolation` (the session-scoping/idle-eviction model that
+bounds persistence lifetime), and AP-004 (the AI readiness/benchmark contracts it extends with
+historical fields).
+
+---
+
 # Post-MVP Features
 
 ## AP-017 — Test Execution & Results
@@ -1226,6 +1506,14 @@ AP-012's local-inference assumptions; AP-014 requires AP-011 (corrects its batch
 and extends AP-013; AP-015 requires AP-014; AP-016 requires AP-007 and AP-009 and is otherwise
 independent of the AP-011–AP-015 batching/enhancement chain.
 
+AP-019 through AP-025 are a further round of hardening/extension features, layered onto AP-017 and
+the already-shipped export/dependency chain, and are likewise omitted from the main pipeline above.
+Their dependencies: AP-019 requires AP-008 and AP-016; AP-020 is independent of every other
+AP-### feature; AP-021 hardens AP-007/AP-016; AP-022 hardens AP-003 as rendered by AP-007/AP-016;
+AP-023 requires AP-021 and AP-008/AP-019; AP-024 requires AP-019, AP-021, and AP-023; AP-025
+requires AP-017 (`specs/018-test-execution-results`), `specs/017-session-workflow-isolation`, and
+AP-004. See each feature's own Feature Decomposition section above for detail.
+
 ---
 
 # MVP Boundary
@@ -1256,9 +1544,9 @@ AP-017  Test Execution & Results
 AP-018  AI Failure Analysis
 ```
 
-AP-011 through AP-016 (hardening features layered onto AP-004/AP-005/AP-007/AP-008/AP-009) are
-also outside the formal MVP boundary above, but — unlike AP-017/AP-018 — all six are already
-implemented; see the Implementation Status table.
+AP-011 through AP-016, and AP-019 through AP-025 (hardening/extension features layered onto
+AP-004/AP-005/AP-007/AP-008/AP-009/AP-017), are also outside the formal MVP boundary above, but —
+unlike AP-018 — all thirteen are already implemented; see the Implementation Status table.
 
 ---
 
@@ -1623,3 +1911,19 @@ Implementation
       passing TypeScript build, but **not** via a live browser session — no browser-automation
       tool was available in this session. This is a real, un-closed gap in visual/interactive
       verification, not a claim of full UI validation.
+14. **AP-019 through AP-025 implemented (2026-09-11 through 2026-09-16), closing gaps found by
+    exercising AP-017 against real specifications, plus one durability gap.** Each ran the full
+    Spec Kit lifecycle independently; see the Implementation Status table and each feature's own
+    Feature Decomposition section above for scope. In short: AP-021 (distinct credential
+    variables), AP-022 (OpenAPI-conformant parameter serialization), and AP-024 (OAuth2
+    client-credentials support) each fix a Postman-export defect a real specification actually
+    triggered; AP-019 and AP-023 extend AP-008's dependency-chaining engine so fewer exports need
+    manual workflow assembly; AP-020 (frontend application logging) closes an unrelated
+    backend/frontend logging-infrastructure gap; and AP-025 (local persistence layer) adds a
+    SQLite-backed durability layer for environments, execution run history, and AI
+    readiness/benchmark diagnostics, superseding this roadmap's and the project's other
+    documentation's earlier blanket "in-memory only" claims for that data — guided-workflow
+    generation progress itself remains in-memory only, unaffected.
+15. **README.md, docs/architecture.md, and docs/USER_MANUAL.md brought into sync with AP-019
+    through AP-025 (2026-09-16)**, correcting the persistence-related claims AP-025 changed and
+    adding the six export/logging features to each document's capability/feature listings.
