@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ReadinessTracker } from "../../../src/ai/readiness";
+import { getAiDiagnosticsRepository } from "../../../src/persistence/aiDiagnosticsRepository";
 
 describe("ReadinessTracker", () => {
   it("starts in the not-loaded state", () => {
@@ -39,5 +40,19 @@ describe("ReadinessTracker", () => {
 
     tracker.reset();
     expect(tracker.getState().state).toBe("not-loaded");
+  });
+
+  it("records each transition to durable history without affecting the live state (specs/025 research.md D5)", () => {
+    const tracker = new ReadinessTracker();
+
+    tracker.markUnavailable({ reason: "model cache is corrupted" });
+    const lastKnown = getAiDiagnosticsRepository().getLastKnownReadiness();
+    expect(lastKnown?.state).toBe("unavailable");
+    expect(lastKnown?.reason).toBe("model cache is corrupted");
+
+    // A brand-new tracker (simulating a fresh process) still starts at not-loaded — history is
+    // never resumed as live state.
+    const freshTracker = new ReadinessTracker();
+    expect(freshTracker.getState().state).toBe("not-loaded");
   });
 });

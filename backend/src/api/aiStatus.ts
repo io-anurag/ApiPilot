@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { getAIProvider } from "../ai";
 import { createLogger } from "../logger";
+import { getAiDiagnosticsRepository } from "../persistence/aiDiagnosticsRepository";
 
 const logger = createLogger("api.aiStatus");
 
@@ -16,6 +17,9 @@ export function createAiStatusRouter(provider: AIProvider): Router {
       logger.info("request_received", { method: req.method, path: req.path });
       try {
         const readiness = provider.getReadiness();
+        const diagnostics = getAiDiagnosticsRepository();
+        const lastKnownReadiness = diagnostics.getLastKnownReadiness();
+        const latestBenchmarkRun = diagnostics.getLatestBenchmarkRun();
         res.status(200).json({
           state: readiness.state,
           modelId: readiness.modelId ?? null,
@@ -24,6 +28,24 @@ export function createAiStatusRouter(provider: AIProvider): Router {
           acceleratorActive: readiness.acceleratorActive,
           reason: readiness.reason ?? null,
           updatedAt: readiness.updatedAt,
+          // Historical/diagnostic only (specs/025-local-persistence-layer) — never a substitute
+          // for the live `state` above, which always reflects a real load attempt in this
+          // process (research.md D5).
+          lastKnownReadiness: lastKnownReadiness
+            ? {
+                state: lastKnownReadiness.state,
+                reason: lastKnownReadiness.reason ?? null,
+                modelId: lastKnownReadiness.modelId ?? null,
+                updatedAt: lastKnownReadiness.updatedAt,
+              }
+            : null,
+          latestBenchmarkRun: latestBenchmarkRun
+            ? {
+                runAt: latestBenchmarkRun.runAt,
+                selectedModelId: latestBenchmarkRun.selectedModelId,
+                selectionRationale: latestBenchmarkRun.selectionRationale,
+              }
+            : null,
         });
         logger.info("request_succeeded", {
           method: req.method,

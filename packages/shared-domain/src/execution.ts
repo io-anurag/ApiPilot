@@ -13,9 +13,11 @@ import type { Assertion } from "./testModel";
 export type EnvironmentTier = "local" | "dev" | "qa" | "staging" | "production";
 
 /**
- * A named target an approved collection can be executed against (FR-001, FR-002). Session-scoped
- * and retained only for the session's lifetime — no durable persistence (research.md D3),
- * matching specs/017-session-workflow-isolation's existing model.
+ * A named target an approved collection can be executed against (FR-001, FR-002). Session-scoped:
+ * still removed when its session is idle-evicted, matching specs/017-session-workflow-isolation's
+ * existing model, but as of specs/025-local-persistence-layer it is durably persisted (encrypted
+ * at rest) so it survives a backend restart for as long as its owning session remains active
+ * (specs/018-test-execution-results FR-005, as amended).
  */
 export interface Environment {
   id: string;
@@ -27,8 +29,8 @@ export interface Environment {
   /**
    * Every other value the collection's declared variables need, keyed by the same variable
    * names `generateCollection()`'s `options.variableValues` already accepts — including
-   * credential-like values (FR-005), retained in memory for the session per the resolved
-   * clarification.
+   * credential-like values (FR-005), persisted encrypted at rest for the session's lifetime
+   * (specs/025-local-persistence-layer research.md D7).
    */
   variableValues: Record<string, string>;
   /** FR-011; `0` (no pause) by default. Applies to every run started against this environment. */
@@ -129,6 +131,14 @@ export interface ExecutionRun {
    * itself, but kept on the record so the store's cancel operation is a plain field write.
    */
   cancelRequested: boolean;
+  /**
+   * Present only when `status === "cancelled"` (specs/025-local-persistence-layer Clarifications
+   * 2026-09-16 Q1): distinguishes a run the user explicitly cancelled (`"user-requested"`) from
+   * one left `"in-progress"` by a prior backend process and settled as cancelled on the next
+   * startup (`"backend-restart"`), so run history stays diagnostically honest about which
+   * happened.
+   */
+  cancelReason?: "user-requested" | "backend-restart";
 }
 
 /**

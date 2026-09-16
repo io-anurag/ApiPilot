@@ -2,6 +2,9 @@ import "./loadEnv";
 import { createApp } from "./app";
 import { loadConfig, validateAIConfiguration } from "./config";
 import { createLogger } from "./logger";
+import { getSharedConnection } from "./persistence/connection";
+import { PersistenceInitializationError } from "./persistence/errors";
+import { getExecutionRunRepository } from "./persistence/executionRunRepository";
 
 const logger = createLogger("server");
 
@@ -33,6 +36,26 @@ if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
 
 const config = loadConfig();
 validateAIConfiguration();
+
+// Opens (and, on first run, initializes) the local persistence layer before anything else
+// starts, so a corrupted/unreadable database file fails startup explicitly rather than
+// surfacing later as a confusing runtime error (specs/025-local-persistence-layer FR-007,
+// research.md D9).
+try {
+  getSharedConnection();
+} catch (err) {
+  if (err instanceof PersistenceInitializationError) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  throw err;
+}
+
+// Any execution run left "in-progress" by a prior process (crash, restart, kill) settles as
+// cancelled/"backend-restart" before the HTTP listener accepts requests, rather than being
+// silently reported as successful or left in a permanently stuck state (FR-008).
+getExecutionRunRepository().markInterruptedRunsCancelled();
+
 const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 
 const server = app.listen(config.backendPort, () => {

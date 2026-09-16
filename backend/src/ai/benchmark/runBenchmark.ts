@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { BenchmarkCandidateResult, ModelDType } from "@apipilot/shared-domain";
 import { LocalProvider } from "../localProvider";
 import { loadAIConfig } from "../modelConfig";
+import { getAiDiagnosticsRepository } from "../../persistence/aiDiagnosticsRepository";
 import { buildBenchmarkReport } from "./report";
 import { SAMPLE_WORKLOADS, WORKLOAD_SET_ID } from "./workloads";
 
@@ -133,6 +134,12 @@ async function main(): Promise<void> {
   );
   const outputPath = path.join(outputDir, "benchmark-results.json");
   await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
+
+  // Additive: the JSON file above remains the durable, git-tracked engineering artifact
+  // (constitution XXIII); this also records the same report so the running server can answer
+  // "what did the last benchmark find" without filesystem access to a spec directory
+  // (specs/025-local-persistence-layer research.md D6).
+  getAiDiagnosticsRepository().recordBenchmarkRun(report);
 
   // eslint-disable-next-line no-console
   console.log(`Benchmark report written to ${outputPath}`);

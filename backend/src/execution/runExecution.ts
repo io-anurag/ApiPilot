@@ -127,7 +127,7 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
     for (let index = 0; index < orderedItems.length; index += 1) {
       if (isCancelRequested(runId)) {
         appendNotAttempted(runId, orderedItems.slice(index), scenarioById, "cancelled");
-        settleRun(runId, "cancelled");
+        settleRun(runId, "cancelled", "user-requested");
         return;
       }
       if (index > 0 && environment.requestDelayMs > 0) {
@@ -136,7 +136,7 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
         // before the next request is dispatched rather than after (research.md D6).
         if (isCancelRequested(runId)) {
           appendNotAttempted(runId, orderedItems.slice(index), scenarioById, "cancelled");
-          settleRun(runId, "cancelled");
+          settleRun(runId, "cancelled", "user-requested");
           return;
         }
       }

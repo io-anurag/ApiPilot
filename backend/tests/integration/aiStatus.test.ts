@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import request from "supertest";
 import type { AIProvider, ReadinessState } from "@apipilot/shared-domain";
 import { createAiStatusRouter } from "../../src/api/aiStatus";
+import { getAiDiagnosticsRepository } from "../../src/persistence/aiDiagnosticsRepository";
 
 function fakeProvider(state: ReadinessState): AIProvider {
   return {
@@ -73,6 +74,62 @@ describe("GET /api/ai/status", () => {
     expect(response.status).toBe(200);
     expect(response.body.state).toBe("unavailable");
     expect(response.body.reason).toBe("model cache is corrupted");
+  });
+
+  it("includes lastKnownReadiness/latestBenchmarkRun from persisted history (specs/025-local-persistence-layer)", async () => {
+    getAiDiagnosticsRepository().recordReadinessTransition({
+      state: "unavailable",
+      reason: "model cache is corrupted",
+      modelId: "fake-model",
+      acceleratorRequested: false,
+      acceleratorActive: false,
+      updatedAt: "2026-09-15T08:00:00.000Z",
+    });
+    getAiDiagnosticsRepository().recordBenchmarkRun({
+      runAt: "2026-08-20T00:00:00.000Z",
+      workloadSetId: "set-1",
+      candidates: [{ modelId: "fake-model", structuredOutputSuccessRate: 1, averageLatencyMs: 10 }],
+      selectedModelId: "fake-model",
+      selectionRationale: "best of the candidates evaluated",
+    });
+
+    const app = appWithProvider(
+      fakeProvider({
+        state: "not-loaded",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const response = await request(app).get("/api/ai/status");
+
+    expect(response.status).toBe(200);
+    expect(response.body.state).toBe("not-loaded");
+    expect(response.body.lastKnownReadiness).toMatchObject({
+      state: "unavailable",
+      reason: "model cache is corrupted",
+    });
+    expect(response.body.latestBenchmarkRun).toMatchObject({
+      selectedModelId: "fake-model",
+      selectionRationale: "best of the candidates evaluated",
+    });
+  });
+
+  it("reports null lastKnownReadiness/latestBenchmarkRun when no history has been recorded", async () => {
+    const app = appWithProvider(
+      fakeProvider({
+        state: "not-loaded",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const response = await request(app).get("/api/ai/status");
+
+    expect(response.body.lastKnownReadiness).toBeNull();
+    expect(response.body.latestBenchmarkRun).toBeNull();
   });
 
   it("returns 405 for unsupported methods", async () => {
