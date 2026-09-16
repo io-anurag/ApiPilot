@@ -274,10 +274,12 @@ retrieved again without re-executing anything.
   directly into the generated Postman collection itself, and any credential value supplied for
   execution MUST be entered through the environment configuration mechanism, not hand-edited
   into the collection. A defined environment's values, including credential-like ones such as a
-  token, MAY be retained in memory for reuse across multiple runs within the same working
-  session, consistent with the platform's existing non-durable, session-scoped state model
-  (constitution XVII/`specs/017-session-workflow-isolation`) — never written to durable storage,
-  and cleared on backend restart along with every other session-scoped state.
+  token, remain scoped to the session that created them and are still subject to the existing
+  60-minute idle-session eviction (constitution XVII/`specs/017-session-workflow-isolation`);
+  as of `specs/025-local-persistence-layer`, they are additionally written to local durable
+  storage so an active session's environments survive a backend restart, superseding this FR's
+  original "never written to durable storage" posture. Credential values MUST still never
+  appear in plaintext in logs or error output, whether backed by memory or durable storage.
 
 **Execution authorization and safety**
 
@@ -386,11 +388,12 @@ retrieved again without re-executing anything.
 
 ## Assumptions
 
-- **Execution history persistence matches the rest of the platform's existing architecture**:
-  runs and their results are retained only for the current session/process lifetime (the same
-  no-durable-persistence, backend-restart-clears-state model already established by AP-009 and
-  `specs/017-session-workflow-isolation`), not written to a database or file store. A future
-  specification may extend this if durable execution history becomes a concrete need.
+- **Execution history persistence** (superseded by `specs/025-local-persistence-layer`): runs
+  and their results remain scoped to the session that produced them and subject to the existing
+  60-minute idle-session eviction, but are now additionally written to local durable storage so
+  an active session's execution history survives a backend restart. This supersedes the
+  original assumption (inherited from AP-009/`specs/017-session-workflow-isolation`) that
+  execution history was never written to a database or file store.
 - **"Destructive" is scoped to HTTP method for v1**: a request is treated as destructive-capable
   if its method is POST, PUT, PATCH, or DELETE. This is a coarse, conservative heuristic (a
   read-only POST-based search endpoint would still be flagged) chosen because it requires no new
