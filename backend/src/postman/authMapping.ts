@@ -10,10 +10,13 @@ import { credentialVariable } from "./artifactVariables";
 /**
  * Maps declared security schemes to collection auth (FR-009).
  *
- * Only schemes the export can configure from what the specification declares are mapped. A
- * bearer token is a plausible-looking stand-in for OAuth2, but the flow, token endpoint, and
- * scopes are not something this export can supply, so configuring one would present a guess as
- * a contract (constitution I). Unmappable schemes become recorded limitations instead.
+ * Only schemes the export can configure from what the specification declares are mapped. An
+ * OAuth2 scheme is mappable only when it declares a `clientCredentials` flow (AP-024, FR-001):
+ * its own `tokenUrl` and scopes are then a real, declared source this export can build a
+ * token-fetch request from (`oauth2TokenFetch.ts`). `authorizationCode`/`implicit`/`password`-only
+ * OAuth2 requires an interactive user redirect or a discouraged grant this export cannot script,
+ * so configuring one would present a guess as a contract (constitution I). Unmappable schemes
+ * become recorded limitations instead.
  */
 
 export interface AuthMapping {
@@ -44,15 +47,21 @@ export function schemeStem(schemeKey: string): string {
   return stripped.length > 0 ? stripped : schemeKey;
 }
 
-/** The three scheme shapes this export can configure (mirrors `mapScheme`'s conditions below). */
+/**
+ * The four scheme shapes this export can configure (mirrors `mapScheme`'s conditions below). An
+ * `oauth2` scheme with no declared `clientCredentials` flow (e.g. `authorizationCode`/`implicit`/
+ * `password`-only) is not classified here — it falls through to the existing, unchanged
+ * `unsupported-auth-scheme` limitation (FR-001, User Story 3).
+ */
 function classifySchemeType(scheme: SecuritySchemeDefinition): SchemeType | undefined {
   if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "bearer") return "bearer";
   if (scheme.type === "http" && scheme.scheme?.toLowerCase() === "basic") return "basic";
   if (scheme.type === "apiKey" && scheme.name) return "apiKey";
+  if (scheme.type === "oauth2" && scheme.flows?.clientCredentials !== undefined) return "oauth2";
   return undefined;
 }
 
-export type SchemeType = "bearer" | "basic" | "apiKey";
+export type SchemeType = "bearer" | "basic" | "apiKey" | "oauth2";
 
 /** One security scheme key's resolved place in this export (FR-001–FR-003, FR-005). */
 export type SchemeVariablePlanEntry =
@@ -63,6 +72,12 @@ export type SchemeVariablePlanEntry =
       isPrimary: boolean;
       stem: string;
       variableNames: { username: string; password: string };
+    }
+  | {
+      type: "oauth2";
+      isPrimary: boolean;
+      stem: string;
+      variableNames: { clientId: string; clientSecret: string; accessToken: string };
     };
 
 function buildPlanEntry(type: SchemeType, isPrimary: boolean, stem: string): SchemeVariablePlanEntry {
@@ -71,6 +86,20 @@ function buildPlanEntry(type: SchemeType, isPrimary: boolean, stem: string): Sch
   }
   if (type === "apiKey") {
     return { type, isPrimary, stem, variableNames: { apiKey: isPrimary ? "apiKey" : `${stem}ApiKey` } };
+  }
+  if (type === "oauth2") {
+    return {
+      type,
+      isPrimary,
+      stem,
+      variableNames: isPrimary
+        ? { clientId: "clientId", clientSecret: "clientSecret", accessToken: "accessToken" }
+        : {
+            clientId: `${stem}ClientId`,
+            clientSecret: `${stem}ClientSecret`,
+            accessToken: `${stem}AccessToken`,
+          },
+    };
   }
   return {
     type,
@@ -130,6 +159,25 @@ function buildAuthMapping(scheme: SecuritySchemeDefinition, entry: SchemeVariabl
         basic: [attribute("username", `{{${username}}}`), attribute("password", `{{${password}}}`)],
       },
       variables: [credentialVariable("username", username), credentialVariable("password", password)],
+      limitations: [],
+    };
+  }
+  if (entry.type === "oauth2") {
+    const { clientId, clientSecret, accessToken } = entry.variableNames;
+    return {
+      auth: {
+        type: "oauth2",
+        oauth2: [
+          attribute("accessToken", `{{${accessToken}}}`),
+          attribute("addTokenTo", "header"),
+          attribute("tokenType", "bearer"),
+        ],
+      },
+      variables: [
+        credentialVariable("clientId", clientId),
+        credentialVariable("clientSecret", clientSecret),
+        credentialVariable("accessToken", accessToken),
+      ],
       limitations: [],
     };
   }

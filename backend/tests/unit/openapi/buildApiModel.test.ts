@@ -155,6 +155,121 @@ describe("buildApiModel", () => {
     });
   });
 
+  describe("OAuth2 clientCredentials flow extraction (specs/024-oauth2-client-credentials-auth)", () => {
+    function documentWithScheme(scheme: unknown): Record<string, unknown> {
+      return {
+        openapi: "3.0.1",
+        info: { title: "OAuth2", version: "1.0.0" },
+        paths: {},
+        components: { securitySchemes: { Oauth2: scheme } },
+      };
+    }
+
+    it("extracts tokenUrl and scope identifiers verbatim, in declaration order", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: {
+            clientCredentials: {
+              tokenUrl: "/v1/oauth2/token",
+              scopes: { read: "Read access", write: "Write access" },
+            },
+          },
+        }),
+        [],
+      );
+
+      expect(model.securitySchemes.Oauth2.flows).toEqual({
+        clientCredentials: { tokenUrl: "/v1/oauth2/token", scopes: ["read", "write"] },
+      });
+    });
+
+    it("yields an empty scopes array, not a missing/error case, when clientCredentials declares no scopes", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: { clientCredentials: { tokenUrl: "/oauth2/token", scopes: {} } },
+        }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toEqual({
+        clientCredentials: { tokenUrl: "/oauth2/token", scopes: [] },
+      });
+    });
+
+    it("omits flows entirely for an oauth2 scheme whose only declared flow is authorizationCode", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: {
+            authorizationCode: {
+              authorizationUrl: "/authorize",
+              tokenUrl: "/token",
+              scopes: { read: "Read access" },
+            },
+          },
+        }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toBeUndefined();
+    });
+
+    it("omits flows entirely for an oauth2 scheme whose only declared flow is password", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: { password: { tokenUrl: "/token", scopes: {} } },
+        }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toBeUndefined();
+    });
+
+    it("omits flows entirely for an oauth2 scheme declaring no flows object at all", () => {
+      const model = buildApiModel(documentWithScheme({ type: "oauth2" }), []);
+      expect(model.securitySchemes.Oauth2.flows).toBeUndefined();
+    });
+
+    it("never fabricates a tokenUrl when clientCredentials declares a non-string one", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: { clientCredentials: { tokenUrl: 12345, scopes: {} } },
+        }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toBeUndefined();
+    });
+
+    it("classifies both clientCredentials and authorizationCode on the same scheme as supported via clientCredentials", () => {
+      const model = buildApiModel(
+        documentWithScheme({
+          type: "oauth2",
+          flows: {
+            clientCredentials: { tokenUrl: "/oauth2/token", scopes: { read: "Read access" } },
+            authorizationCode: {
+              authorizationUrl: "/authorize",
+              tokenUrl: "/token",
+              scopes: { read: "Read access" },
+            },
+          },
+        }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toEqual({
+        clientCredentials: { tokenUrl: "/oauth2/token", scopes: ["read"] },
+      });
+    });
+
+    it("leaves a non-oauth2 scheme's flows field untouched (undefined)", () => {
+      const model = buildApiModel(
+        documentWithScheme({ type: "http", scheme: "bearer" }),
+        [],
+      );
+      expect(model.securitySchemes.Oauth2.flows).toBeUndefined();
+    });
+  });
+
   it("leaves info undefined rather than fabricating a title when the document declares none", () => {
     const model = buildApiModel({ paths: {} }, []);
     expect(model.info).toBeUndefined();

@@ -268,17 +268,42 @@ function extractInfo(document: Record<string, unknown>): ApiInfo | undefined {
   };
 }
 
+/**
+ * Reads `flows.clientCredentials` off a raw `oauth2` scheme node, verbatim, when present
+ * (FR-001). `scopes` is an OpenAPI object mapping scope-identifier → human-readable description;
+ * only the identifiers are needed for the grant request (FR-005), kept in declaration order
+ * rather than re-sorted. A missing/non-string `tokenUrl` yields no `flows` at all — never a
+ * fabricated placeholder URL.
+ */
+function extractClientCredentialsFlow(
+  value: Record<string, unknown>,
+): SecuritySchemeDefinition["flows"] | undefined {
+  const flows = value.flows;
+  if (!isPlainObject(flows) || !isPlainObject(flows.clientCredentials)) return undefined;
+  const tokenUrl = flows.clientCredentials.tokenUrl;
+  if (typeof tokenUrl !== "string" || tokenUrl.length === 0) return undefined;
+  const scopes = flows.clientCredentials.scopes;
+  return {
+    clientCredentials: {
+      tokenUrl,
+      scopes: isPlainObject(scopes) ? Object.keys(scopes) : [],
+    },
+  };
+}
+
 function extractSecuritySchemes(document: Record<string, unknown>): Record<string, SecuritySchemeDefinition> {
   const components = document.components;
   const schemes: Record<string, SecuritySchemeDefinition> = {};
   if (!isPlainObject(components) || !isPlainObject(components.securitySchemes)) return schemes;
   for (const [name, value] of Object.entries(components.securitySchemes)) {
     if (!isPlainObject(value) || typeof value.type !== "string") continue;
+    const flows = value.type === "oauth2" ? extractClientCredentialsFlow(value) : undefined;
     schemes[name] = {
       type: value.type,
       scheme: typeof value.scheme === "string" ? value.scheme : undefined,
       in: typeof value.in === "string" ? value.in : undefined,
       name: typeof value.name === "string" ? value.name : undefined,
+      ...(flows ? { flows } : {}),
     };
   }
   return schemes;

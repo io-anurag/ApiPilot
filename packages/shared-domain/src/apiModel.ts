@@ -81,6 +81,16 @@ export interface SecuritySchemeDefinition {
   scheme?: string;
   in?: string;
   name?: string;
+  /** Present only for `type: "oauth2"` when the specification declares a `clientCredentials`
+   *  flow; absent for every other scheme and for an oauth2 scheme with no such flow. Read
+   *  verbatim from the specification — never inferred. */
+  flows?: {
+    clientCredentials?: {
+      tokenUrl: string;
+      /** Scope identifiers, in declaration order — never the scopes object's description text. */
+      scopes: string[];
+    };
+  };
 }
 
 export interface AnalysisSummary {

@@ -24,6 +24,8 @@ import {
   issueTokenNoPlausibleFieldScenario,
   issueTokenScenario,
   noPlausibleFieldApiModel,
+  oauth2ApiModel,
+  oauth2ProtectedOperation,
   primaryNoStemMatchApiModel,
   sessionInfoScenario,
   tokenInfoScenario,
@@ -409,6 +411,61 @@ describe(`POST ${ENDPOINT}`, () => {
           expect.objectContaining({ kind: "unresolved-credential-producer", location: 'security scheme "bearerAuth"' }),
         ]),
       );
+    });
+  });
+
+  describe("OAuth2 clientCredentials over HTTP (specs/024-oauth2-client-credentials-auth)", () => {
+    it("returns the ExportResult fields the contract documents: setup folder first, oauth2 auth block, new environment variables, no unsupported-auth-scheme", async () => {
+      const response = await exportRequest({
+        apiModel: oauth2ApiModel,
+        testModel: {
+          scenarios: [
+            {
+              id: "scenario-oauth2-http",
+              category: "positive",
+              operationPath: oauth2ProtectedOperation.path,
+              operationMethod: oauth2ProtectedOperation.method,
+              request: { pathParameters: {}, queryParameters: {}, headers: {} },
+              assertions: [{ type: "status-code", expectedStatusCode: "200" }],
+              provenance: { source: "RULE", rule: "positive", description: "d.", duplicateOfRules: [] },
+            },
+          ],
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.collection.item[0].name).toBe("OAuth2 Token Setup");
+      expect(response.body.collection.item[0].item[0].request.auth.type).toBe("basic");
+      expect(response.body.collection.item[0].item[0].request.url.raw).toBe(
+        "{{baseUrl}}/oauth2/token",
+      );
+
+      const consumingItem = response.body.collection.item
+        .flatMap((folder: { item: unknown[] }) => folder.item)
+        .find((item: { request: { auth?: { type: string } } }) => item.request.auth?.type === "oauth2");
+      expect(consumingItem.request.auth).toEqual({
+        type: "oauth2",
+        oauth2: [
+          { key: "accessToken", value: "{{accessToken}}", type: "string" },
+          { key: "addTokenTo", value: "header", type: "string" },
+          { key: "tokenType", value: "bearer", type: "string" },
+        ],
+      });
+
+      const byName = Object.fromEntries(
+        response.body.environment.values.map((v: { key: string; type: string; value: string }) => [
+          v.key,
+          v,
+        ]),
+      );
+      expect(byName.clientId).toEqual({ key: "clientId", value: "", type: "secret", enabled: true });
+      expect(byName.clientSecret).toEqual({ key: "clientSecret", value: "", type: "secret", enabled: true });
+      expect(byName.accessToken).toEqual({ key: "accessToken", value: "", type: "secret", enabled: true });
+
+      expect(
+        response.body.limitations.some((l: { kind: string }) => l.kind === "unsupported-auth-scheme"),
+      ).toBe(false);
+      expect(response.body.summary.requestCount).toBe(2);
     });
   });
 });

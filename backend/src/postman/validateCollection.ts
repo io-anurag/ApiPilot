@@ -10,6 +10,7 @@ import {
   credentialKindForHeader,
   isBearerTokenValue,
 } from "../testDesign/sensitiveValueDetection";
+import { OAUTH2_SETUP_FOLDER_NAME } from "./oauth2TokenFetch";
 import { compareCodeUnits } from "./ordering";
 import { createLogger } from "../logger";
 
@@ -154,9 +155,20 @@ export function validateCollection(
   }
 
   const folderNames = collection.item.map((folder) => folder.name);
+  // The OAuth2 setup folder (AP-024) is always positioned first, regardless of its name's
+  // alphabetical position relative to every other folder (research.md D5) — so it is exempted
+  // from this check at index 0 only; every other folder, and a second occurrence of this name at
+  // any other position, is still held to strict alphabetical order.
+  const offset = folderNames[0] === OAUTH2_SETUP_FOLDER_NAME ? 1 : 0;
+  const sortedFolderNames = folderNames.slice(offset);
+  for (let index = 1; index < sortedFolderNames.length; index += 1) {
+    if (compareCodeUnits(sortedFolderNames[index - 1], sortedFolderNames[index]) >= 0) {
+      problems.push(`item[${index + offset}] is out of the defined folder order`);
+    }
+  }
   for (let index = 1; index < folderNames.length; index += 1) {
-    if (compareCodeUnits(folderNames[index - 1], folderNames[index]) >= 0) {
-      problems.push(`item[${index}] is out of the defined folder order`);
+    if (folderNames[index] === OAUTH2_SETUP_FOLDER_NAME) {
+      problems.push(`item[${index}] "${OAUTH2_SETUP_FOLDER_NAME}" folder must be first`);
     }
   }
 

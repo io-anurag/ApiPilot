@@ -32,6 +32,9 @@ export function findCredentialProducers(
     // would fabricate a relationship the specification gives no evidence for (constitution I,
     // XIV). Only bearer/apiKey schemes have one obtainable credential value.
     if (entry.type === "basic") continue;
+    // An oauth2 clientCredentials scheme's credential source is always the scheme's own declared
+    // `tokenUrl` (AP-024, FR-004) — never discovered via this stem-match heuristic.
+    if (entry.type === "oauth2") continue;
 
     const stem = entry.stem.toLowerCase();
     const matches = unauthenticated.filter(

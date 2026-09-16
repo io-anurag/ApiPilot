@@ -11,6 +11,8 @@ import {
   bearerAuthOnlyScheme,
   createSessionOperation,
   issueTokenOperation,
+  oauth2ClientCredentialsScheme,
+  oauth2ProtectedOperation,
   operationsWithAmbiguousProducer,
   operationsWithDiscoverableProducer,
   operationsWithNoProducer,
@@ -75,6 +77,28 @@ describe("findCredentialProducers", () => {
   it("never yields a candidate for a http/basic scheme, even as the primary (sole) scheme", () => {
     const basicPlan = planSchemeVariables(basicOnlyScheme);
     const candidates = findCredentialProducers([basicProtectedOperation], basicPlan);
+    expect(candidates).toEqual([]);
+  });
+
+  // specs/024-oauth2-client-credentials-auth: an oauth2 clientCredentials scheme's credential
+  // source is always the scheme's own declared tokenUrl (research.md D3) — never discovered via
+  // this stem-match heuristic, even when an unauthenticated operation would otherwise match.
+  it("never yields a candidate for an oauth2 clientCredentials scheme, even with a stem-matching unauthenticated operation", () => {
+    const oauth2Plan = planSchemeVariables(oauth2ClientCredentialsScheme);
+    const tokenLoginOperation = {
+      path: "/oauth2/login",
+      method: "POST",
+      operationId: "oauth2Login",
+      parameters: [],
+      requestBody: undefined,
+      responses: [],
+      security: [],
+      tags: [],
+    };
+    const candidates = findCredentialProducers(
+      [tokenLoginOperation, oauth2ProtectedOperation],
+      oauth2Plan,
+    );
     expect(candidates).toEqual([]);
   });
 });

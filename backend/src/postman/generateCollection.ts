@@ -22,6 +22,7 @@ import { mapOperationAuth, planSchemeVariables, type SchemeVariablePlanEntry } f
 import { findCredentialProducers } from "./credentialProducers";
 import { buildEnvironment } from "./environment";
 import { groupAndName } from "./folders";
+import { buildOAuth2SetupFolders } from "./oauth2TokenFetch";
 import { collectionIdForScenarios } from "./identifiers";
 import { compareCodeUnits } from "./ordering";
 import { renderReadme } from "./readme";
@@ -232,6 +233,10 @@ function unresolvedCredentialProducerLimitations(
 
   for (const [schemeKey, entry] of plan) {
     if (resolvedSchemeKeys.has(schemeKey)) continue;
+    // An oauth2 clientCredentials scheme's token-fetch request is always synthesized whenever at
+    // least one approved scenario requires it (AP-024, FR-004) — it can never be "unresolved" in
+    // the sense this limitation models, unlike a bearer/apiKey scheme's discovered producer.
+    if (entry.type === "oauth2") continue;
 
     const dependentLocations = operations
       .filter((operation) => operation.security[0]?.schemes[0]?.name === schemeKey)
@@ -459,9 +464,16 @@ export function generateCollection(
       };
     });
 
-  const folders = [...workflowFolders, ...standaloneFolders].sort((left, right) =>
-    compareCodeUnits(left.name, right.name),
-  );
+  // Computed unconditionally — never gated by `options.disableAutomaticChaining` (FR-008): unlike
+  // bearer/apiKey credential chaining, this is not a chain discovered between two approved
+  // scenarios, but synthesized directly from the security scheme's own declaration.
+  const oauth2SetupFolders = buildOAuth2SetupFolders(auth.operations, apiModel.securitySchemes, plan);
+  const folders = [
+    ...oauth2SetupFolders,
+    ...[...workflowFolders, ...standaloneFolders].sort((left, right) =>
+      compareCodeUnits(left.name, right.name),
+    ),
+  ];
 
   // One auth configuration shared by every request moves to the collection level; a mixture
   // stays on the individual requests (data-model.md).
