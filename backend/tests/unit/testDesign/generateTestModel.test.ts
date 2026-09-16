@@ -21,9 +21,11 @@ function operationWithRequiredQueryParam(): ApiOperation {
       {
         statusCode: "200",
         description: "OK",
-        // Response schema composed via `allOf`, deliberately unrelated to this operation's own
+        // Response schema uses `oneOf`, deliberately unrelated to this operation's own
         // parameters — buildApiModel.ts flags this as an unsupported-construct issue whose
-        // location is still under this operation's path prefix.
+        // location is still under this operation's path prefix. (`allOf` is not used here: it is
+        // now merged into real constraints rather than skipped — see buildApiModel.test.ts's
+        // "allOf composition" suite.)
         contentTypes: { "application/json": { required: [], properties: {} } },
         examples: {},
       },
@@ -46,7 +48,7 @@ function apiModelWithUnrelatedResponseIssue(): ApiModel {
         {
           kind: "unsupported-construct",
           location: `#/paths${operation.path}/${operation.method.toLowerCase()}/responses/200/content/application~1json/schema`,
-          message: 'Unsupported OpenAPI construct "allOf" was found and is not processed',
+          message: 'Unsupported OpenAPI construct "oneOf" was found and is not processed',
         },
       ],
     },

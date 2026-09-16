@@ -33,10 +33,25 @@ function categoryRank(category: string): number {
   return category === "positive" ? 0 : 1;
 }
 
-/** Orders requests by `(path, method, positive-before-other, category, scenario id)`, all by code unit. */
+/**
+ * Method priority within an endpoint: create, replace, read, then remove — reads as the CRUD
+ * lifecycle of the resource rather than the alphabetical DELETE/GET/POST/PUT order the plain
+ * string would give. A method outside this set (e.g. PATCH) has no defined place in that
+ * lifecycle, so it sorts after all four, in code-unit order among themselves via the
+ * `compareCodeUnits` tiebreaker below, keeping the ordering total rather than undefined.
+ */
+const METHOD_ORDER = ["POST", "PUT", "GET", "DELETE"];
+
+function methodRank(method: string): number {
+  const index = METHOD_ORDER.indexOf(method);
+  return index === -1 ? METHOD_ORDER.length : index;
+}
+
+/** Orders requests by `(path, method priority, positive-before-other, category, scenario id)`. */
 export function compareRequestSortKeys(a: RequestSortKey, b: RequestSortKey): number {
   return (
     compareCodeUnits(a.path, b.path) ||
+    methodRank(a.method) - methodRank(b.method) ||
     compareCodeUnits(a.method, b.method) ||
     categoryRank(a.category) - categoryRank(b.category) ||
     compareCodeUnits(a.category, b.category) ||
