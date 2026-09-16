@@ -17,8 +17,14 @@ const logger = createLogger("openapi.buildApiModel");
 
 const HTTP_METHODS = ["get", "put", "post", "delete", "options", "head", "patch", "trace"] as const;
 
-/** OpenAPI 3.x constructs this engine deliberately does not extract (FR-013). */
-const UNSUPPORTED_CONSTRUCTS = ["callbacks", "links", "discriminator", "oneOf", "anyOf", "allOf", "webhooks"];
+/**
+ * OpenAPI 3.x constructs this engine deliberately does not extract (FR-013). `allOf` is not
+ * among them: unlike `oneOf`/`anyOf` (which branch applies is genuinely ambiguous) or
+ * `discriminator` (polymorphic dispatch), `allOf` unambiguously means every branch's constraints
+ * apply simultaneously — merging them (see `extractSchemaConstraint` below) is the construct's
+ * literal meaning, not a guess, so it is extracted rather than skipped.
+ */
+const UNSUPPORTED_CONSTRUCTS = ["callbacks", "links", "discriminator", "oneOf", "anyOf", "webhooks"];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -65,7 +71,51 @@ function extractSchemaConstraint(
   if (node.items !== undefined) {
     constraint.items = extractSchemaConstraint(node.items, seen, depth + 1);
   }
+  mergeAllOfBranches(node.allOf, constraint, seen, depth);
   return constraint;
+}
+
+/** Extracts and folds in every `allOf` branch's constraint, when `allOf` is declared (see `mergeSchemaConstraint`). */
+function mergeAllOfBranches(
+  allOf: unknown,
+  constraint: SchemaConstraint,
+  seen: WeakSet<object>,
+  depth: number,
+): void {
+  if (!Array.isArray(allOf)) return;
+  for (const branch of allOf) {
+    mergeSchemaConstraint(constraint, extractSchemaConstraint(branch, seen, depth + 1));
+  }
+}
+
+/**
+ * Folds an `allOf` branch's already-extracted constraint into the composing node's own
+ * (`extractSchemaConstraint` above) — `allOf` means every branch applies simultaneously, so this
+ * is the construct's literal meaning rather than a guess. `required` names union (order of first
+ * appearance); a `properties` key keeps whichever branch declared it first (the composing node's
+ * own properties, having been extracted before any branch is merged in, always win); every scalar
+ * constraint keeps the first value seen for the same reason. A real conflict between branches
+ * (e.g. two incompatible `type`s) is not reported — the composed schema still legitimately limits
+ * scenarios to the intersection this resolves, it just does not surface as a distinct issue.
+ */
+function mergeSchemaConstraint(into: SchemaConstraint, branch: SchemaConstraint): void {
+  for (const name of branch.required) {
+    if (!into.required.includes(name)) into.required.push(name);
+  }
+  for (const [key, value] of Object.entries(branch.properties)) {
+    if (!(key in into.properties)) into.properties[key] = value;
+  }
+  into.type ??= branch.type;
+  into.enum ??= branch.enum;
+  into.format ??= branch.format;
+  into.minimum ??= branch.minimum;
+  into.maximum ??= branch.maximum;
+  into.pattern ??= branch.pattern;
+  into.minLength ??= branch.minLength;
+  into.maxLength ??= branch.maxLength;
+  into.minItems ??= branch.minItems;
+  into.maxItems ??= branch.maxItems;
+  into.items ??= branch.items;
 }
 
 
@@ -101,6 +151,15 @@ function findUnsupportedConstructs(
         message: `Unsupported OpenAPI construct "${construct}" was found and is not processed`,
       });
     }
+  }
+  // Recorded informationally, not as `unsupported-construct` — extractSchemaConstraint above
+  // does merge these branches into real constraints, so scenarios ARE generated from them.
+  if (Array.isArray(node.allOf)) {
+    issues.push({
+      kind: "composed-schema",
+      location: path,
+      message: `Schema constraints were merged from ${node.allOf.length} allOf branch${node.allOf.length === 1 ? "" : "es"}`,
+    });
   }
   for (const [key, value] of Object.entries(node)) {
     findUnsupportedConstructs(value, `${path}/${key}`, issues, seen);

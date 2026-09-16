@@ -91,7 +91,12 @@ export interface AnalysisSummary {
 }
 
 export interface AnalysisIssue {
-  kind: "unresolved-ref" | "circular-ref" | "unsupported-construct" | "duplicate-operation";
+  kind:
+    | "unresolved-ref"
+    | "circular-ref"
+    | "unsupported-construct"
+    | "duplicate-operation"
+    | "composed-schema";
   location: string;
   message: string;
 }

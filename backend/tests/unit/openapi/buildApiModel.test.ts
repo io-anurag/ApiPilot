@@ -68,6 +68,93 @@ describe("buildApiModel", () => {
     expect(petSchema?.properties.photoUrls).toEqual(expect.objectContaining({ minItems: 1, maxItems: 5 }));
   });
 
+  describe("allOf composition", () => {
+    function documentWithBodySchema(schema: unknown): Record<string, unknown> {
+      return {
+        openapi: "3.0.1",
+        info: { title: "Composed", version: "1.0.0" },
+        paths: {
+          "/widgets": {
+            post: {
+              operationId: "createWidget",
+              requestBody: {
+                required: true,
+                content: { "application/json": { schema } },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+      };
+    }
+
+    const composedSchema = {
+      allOf: [
+        { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        {
+          type: "object",
+          required: ["quantity"],
+          properties: { quantity: { type: "integer", minimum: 1 } },
+        },
+      ],
+    };
+
+    it("merges every allOf branch's properties and required fields into one constraint", () => {
+      const model = buildApiModel(documentWithBodySchema(composedSchema), []);
+      const operation = model.operations.find((op) => op.operationId === "createWidget");
+      const schema = operation?.requestBody?.contentTypes["application/json"];
+
+      expect(schema?.required).toEqual(["id", "quantity"]);
+      expect(schema?.properties.id).toEqual(expect.objectContaining({ type: "string" }));
+      expect(schema?.properties.quantity).toEqual(expect.objectContaining({ type: "integer", minimum: 1 }));
+    });
+
+    it("records a composed-schema issue rather than an unsupported-construct issue for allOf", () => {
+      const model = buildApiModel(documentWithBodySchema(composedSchema), []);
+
+      expect(model.summary.issues).toEqual([
+        expect.objectContaining({
+          kind: "composed-schema",
+          location: "#/paths//widgets/post/requestBody/content/application/json/schema",
+        }),
+      ]);
+      expect(model.summary.issues.some((issue) => issue.kind === "unsupported-construct")).toBe(false);
+    });
+
+    it("still reports oneOf as an unsupported construct (branch ambiguity is not merged)", () => {
+      const model = buildApiModel(
+        documentWithBodySchema({ oneOf: [{ type: "object" }, { type: "string" }] }),
+        [],
+      );
+
+      expect(model.summary.issues).toEqual([
+        expect.objectContaining({ kind: "unsupported-construct" }),
+      ]);
+      const operation = model.operations.find((op) => op.operationId === "createWidget");
+      expect(operation?.requestBody?.contentTypes["application/json"]).toEqual({
+        required: [],
+        properties: {},
+      });
+    });
+
+    it("keeps the composing node's own declared field over a same-named allOf branch field", () => {
+      const model = buildApiModel(
+        documentWithBodySchema({
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", minLength: 5 } },
+          allOf: [{ type: "object", properties: { id: { type: "string", minLength: 1 } } }],
+        }),
+        [],
+      );
+      const operation = model.operations.find((op) => op.operationId === "createWidget");
+      const schema = operation?.requestBody?.contentTypes["application/json"];
+
+      // The node's own "id" (minLength: 5) wins over the branch's "id" (minLength: 1).
+      expect(schema?.properties.id).toEqual(expect.objectContaining({ minLength: 5 }));
+    });
+  });
+
   it("leaves info undefined rather than fabricating a title when the document declares none", () => {
     const model = buildApiModel({ paths: {} }, []);
     expect(model.info).toBeUndefined();
