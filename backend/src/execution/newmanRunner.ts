@@ -41,14 +41,19 @@ export interface NewmanItemRunOutput {
 }
 
 /**
- * Runs one Postman request item in isolation and reports its outcome plus updated environment
- * state. Loads Newman on first use rather than at process startup — its module graph is large
- * and otherwise adds noticeable latency to every backend boot even when no execution ever runs.
+ * Newman's module graph is large enough to add noticeable latency to backend startup if pulled in
+ * through this module's top-level (static) imports, so it is loaded through a dynamic `import()`
+ * instead. The import is kicked off here, once, as soon as this module loads — not deferred until
+ * the first `runSingleItem()` call — so it resolves in the background while the process finishes
+ * starting up rather than adding load time to the first actual execution request.
  */
+const newmanModule = import("newman");
+
+/** Runs one Postman request item in isolation and reports its outcome plus updated environment state. */
 export async function runSingleItem(
   input: NewmanItemRunInput,
 ): Promise<NewmanItemRunOutput> {
-  const { default: newman } = await import("newman");
+  const { default: newman } = await newmanModule;
   return new Promise((resolve, reject) => {
     newman.run(
       {
