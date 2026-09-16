@@ -99,7 +99,18 @@ export function WorkflowStageTracker({
   viewedStageId?: WorkflowStageId | null;
 }>) {
   const issues = workflow.apiModel?.summary.issues ?? [];
-  const dependencyAiIssue = workflow.dependencyAnalysis?.aiErrorCategory;
+  // Only a genuine full-failure outcome belongs in this blanket "did not complete" banner.
+  // "partial" means some batches DID succeed — that nuance (and the accurate, outcome-specific
+  // wording backend already provides via aiErrorMessage) is what DependencyAnalysisSummary shows
+  // instead; repeating it here as "did not complete" would misreport a partially-successful run
+  // as a total one.
+  const dependencyAiFullFailure =
+    workflow.dependencyAnalysis?.aiOutcome === "unavailable" ||
+    workflow.dependencyAnalysis?.aiOutcome === "timeout" ||
+    workflow.dependencyAnalysis?.aiOutcome === "invalid-response";
+  const dependencyAiIssue = dependencyAiFullFailure
+    ? workflow.dependencyAnalysis?.aiErrorCategory
+    : undefined;
   const activeStageRef = useRef<HTMLLIElement | null>(null);
 
   // The stage list scrolls horizontally, so the active stage can start off-screen (e.g. on

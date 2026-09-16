@@ -9,8 +9,10 @@ import {
   flagshipTokenApiModel,
   flagshipTokenFanOutApiModel,
   issueAdminTokenOperation,
+  issueApiKeyOperation,
   issueTokenOperation,
   noPlausibleFieldApiModel,
+  realisticCredentialResponseApiModel,
   tokenAndAdminSchemes,
   tokenInfoOperation,
   tokenProfileOperation,
@@ -82,6 +84,16 @@ describe("buildAuthCredentialRelationships", () => {
 
   it("builds no relationship when the producer's response documents zero plausible string fields (US3, FR-004)", () => {
     expect(relationshipsFor(noPlausibleFieldApiModel)).toEqual([]);
+  });
+
+  it("resolves to the sole non-structured, non-echoed field when a realistic credential response also documents an id, an enum, timestamps, and an echoed request field (FR-003 addendum)", () => {
+    const relationships = relationshipsFor(realisticCredentialResponseApiModel);
+    expect(relationships).toHaveLength(1);
+    expect(relationships[0].producer).toEqual({
+      operationPath: issueApiKeyOperation.path,
+      operationMethod: issueApiKeyOperation.method,
+      field: "apiKey",
+    });
   });
 
   it("keeps two distinctly-keyed schemes' relationships fully independent, never mixing producer/consumer fields (US2, SC-002)", () => {

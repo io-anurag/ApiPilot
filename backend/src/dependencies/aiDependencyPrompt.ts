@@ -22,17 +22,22 @@ export const AI_DEPENDENCY_RESPONSE_VERSION = 2;
  * `ANALYSIS_TIMEOUT_MS`/`AI_DEPENDENCY_RUN_BUDGET_MS` (`analyzeDependencies.ts`), neither of which
  * this bounds (FR-033).
  *
- * 45 seconds, not the original 8: that figure predated the prompt projection (T051) and was never
- * actually achievable on the reference hardware — this codebase's own previously-measured
- * throughput seeds (`DEFAULT_PREFILL_MS_PER_TOKEN=42`, `DEFAULT_DECODE_MS_PER_TOKEN=180`) project a
- * *single*-operation unit's prefill alone at ~9.9s, before any decode time. 45s comfortably covers
- * the default 3-operation unit's measured worst case (~1,106 chars ≈ 369 prompt tokens ≈ 15.5s
- * prefill, plus `AI_DEPENDENCY_MAX_OUTPUT_TOKENS` decode ≈ 23s ≈ 38.5s total) with headroom for
- * real-world variance, per specs/014-ai-batching-policy research.md Decision 7's addendum. Serves
- * double duty as the pre-flight viability budget (`analyzeDependencies.ts`), so planning and
- * enforcement cannot disagree about what "fits."
+ * 50 seconds, not the original 8 or the intermediate 45: that figure predated the prompt
+ * projection (T051) and was never actually achievable on the reference hardware — this codebase's
+ * own previously-measured throughput seeds (`DEFAULT_PREFILL_MS_PER_TOKEN=42`,
+ * `DEFAULT_DECODE_MS_PER_TOKEN=180`) project a *single*-operation unit's prefill alone at ~9.9s,
+ * before any decode time. 45s comfortably covered the original 3-operation unit's measured worst
+ * case (~1,106 chars ≈ 369 prompt tokens), but the worked `example` later added to
+ * `buildAIDependencyPrompt` (needed to stop the model inventing a non-conforming candidate shape)
+ * is a fixed per-batch overhead that pushed a real 99-operation specification's typical unit to 554
+ * prompt tokens ≈ 23.3s prefill, plus `AI_DEPENDENCY_MAX_OUTPUT_TOKENS` decode ≈ 23s ≈ 46.3s total —
+ * already past 45s, so the pre-flight viability check refused the AI-assisted pass outright for
+ * every unit of that specification (deterministic relationships still shown; nothing was actually
+ * run). 50s restores real headroom over that measured case. Serves double duty as the pre-flight
+ * viability budget (`analyzeDependencies.ts`), so planning and enforcement cannot disagree about
+ * what "fits."
  */
-export const AI_DEPENDENCY_TIMEOUT_MS = 45_000;
+export const AI_DEPENDENCY_TIMEOUT_MS = 50_000;
 
 /**
  * Generation bound for a dependency-analysis response (specs/014-ai-batching-policy, mirroring
@@ -92,6 +97,33 @@ function summarizeDependencyOperation(
   return summary;
 }
 
+/**
+ * One worked candidate, shaped exactly like `isDependencyCandidateShape` requires. Mirrors
+ * `aiScenarioPrompt.ts`'s `WORKED_EXAMPLE` (measured there to be cheaper and more reliable than
+ * describing the shape in prose): reproducing this prompt directly against the reference local
+ * model without an example showed the model invents a materially simpler, non-conforming shape —
+ * `producer`/`consumer` as bare path strings and a numeric `candidateId` — which
+ * `isDependencyCandidateShape` then rejects outright, silently discarding every candidate a batch
+ * produces even when its JSON parses cleanly. Showing the real nested shape once is what prevents
+ * that invention.
+ */
+const WORKED_EXAMPLE = {
+  candidates: [
+    {
+      candidateId: "ex1",
+      producer: { operationPath: "/accounts", operationMethod: "POST", field: "accountId" },
+      consumer: {
+        operationPath: "/transfers",
+        operationMethod: "POST",
+        field: "sourceRef",
+        location: "body",
+      },
+      rationale: "accountId feeds sourceRef",
+      confidence: 0.8,
+    },
+  ],
+};
+
 /** Builds the JSON prompt string sent to the AI provider for one dependency-analysis batch. */
 export function buildAIDependencyPrompt(apiModel: ApiModel): string {
   return JSON.stringify({
@@ -100,14 +132,12 @@ export function buildAIDependencyPrompt(apiModel: ApiModel): string {
       "Suggest additional API dependency relationships (a producer operation's responseFields " +
       "entry feeding a consumer operation's requestFields entry) that field-name matching alone " +
       "cannot find, such as semantically related fields with dissimilar names. Do not invent " +
-      "operations or fields that are not listed below.",
+      'operations or fields that are not listed below. Reply with only {"candidates":[...]} ' +
+      "shaped exactly like example.",
     operations: apiModel.operations.map((operation) =>
       summarizeDependencyOperation(operation, apiModel.securitySchemes),
     ),
-    output: {
-      candidates: "array of structured candidates",
-      requiredFields: ["candidateId", "producer", "consumer", "rationale", "confidence"],
-    },
+    example: WORKED_EXAMPLE,
   });
 }
 

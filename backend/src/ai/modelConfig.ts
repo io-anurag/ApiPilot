@@ -131,7 +131,7 @@ const DEFAULT_DEPENDENCY_OPERATIONS_PER_UNIT = 3;
  * workflow assembly) and from `AI_DEPENDENCY_TIMEOUT_MS` (which bounds one request).
  *
  * Two minutes, matching the "this can take a couple of minutes" copy already shown while
- * finalizing scenario review. With `AI_DEPENDENCY_TIMEOUT_MS` raised to a realistic 45s per
+ * finalizing scenario review. With `AI_DEPENDENCY_TIMEOUT_MS` raised to a realistic 50s per
  * request (see its own doc comment — the original 8s was never achievable on the reference
  * hardware even for a single operation), this budget needs to cover more than one real attempt:
  * two minutes allows roughly two full-cost units, or several cheaper/faster ones. Remaining units

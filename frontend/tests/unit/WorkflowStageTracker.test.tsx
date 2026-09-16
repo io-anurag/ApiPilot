@@ -222,4 +222,20 @@ describe("WorkflowStageTracker", () => {
       "PROVIDER_UNAVAILABLE",
     );
   });
+
+  it("does not surface the tracker-level 'did not complete' banner for a partially-successful AI pass", () => {
+    const workflow = workflowWithStatuses({});
+    workflow.dependencyAnalysis = {
+      requestId: "req-1",
+      graph: { relationships: [] },
+      workflows: [],
+      manualConfirmationCandidates: [],
+      cycles: [],
+      aiOutcome: "partial",
+      aiErrorCategory: "INVALID_RESPONSE",
+      aiErrorMessage: "AI provider returned invalid output for 1 of 33 batches",
+    };
+    render(<WorkflowStageTracker workflow={workflow} />);
+    expect(screen.queryByTestId("workflow-dependency-ai-issue")).not.toBeInTheDocument();
+  });
 });

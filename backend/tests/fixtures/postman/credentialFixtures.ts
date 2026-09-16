@@ -201,6 +201,14 @@ function booleanField(): SchemaConstraint {
   return { type: "boolean", required: [], properties: {} };
 }
 
+function stringFieldWithFormat(format: string): SchemaConstraint {
+  return { type: "string", format, required: [], properties: {} };
+}
+
+function enumStringField(values: string[]): SchemaConstraint {
+  return { type: "string", enum: values, required: [], properties: {} };
+}
+
 function jsonResponse(properties: Record<string, SchemaConstraint>) {
   return {
     statusCode: "200",
@@ -235,6 +243,42 @@ export const issueTokenNoPlausibleFieldOperation = op({
   method: "POST",
   operationId: "issueToken",
   responses: [jsonResponse({ success: booleanField() })],
+});
+
+/**
+ * A realistic credential-resource response: alongside the actual secret (`apiKey`), the body also
+ * documents a `keyId` (uuid), a `status` (enum), and `issuedAt`/`expiresAt` (date-time) — all
+ * `type: "string"` in OpenAPI terms — plus `label`, which the request body already supplied and
+ * the response only echoes back. Every one of these would previously have counted as an "equally
+ * plausible" credential field alongside `apiKey`, discarding the scheme as ambiguous (FR-004). The
+ * refined filter excludes structured formats/enums and echoed request fields, leaving `apiKey` as
+ * the sole plausible field.
+ */
+export const issueApiKeyOperation = op({
+  path: "/auth/api-key",
+  method: "POST",
+  // "issueToken" rather than "issueApiKey": this fixture reuses `tokenAuthScheme` /
+  // `tokenInfoOperation` (stem "token") so the test isolates the field-plausibility filter this
+  // fixture exists for, rather than also exercising stem matching (already covered elsewhere) —
+  // and a hyphenated path like this one's is exactly the case where operationId, not path, is
+  // what has to carry the stem match.
+  operationId: "issueToken",
+  requestBody: {
+    required: true,
+    contentTypes: {
+      "application/json": { required: ["label"], properties: { label: stringField() } },
+    },
+  },
+  responses: [
+    jsonResponse({
+      apiKey: stringField(),
+      keyId: stringFieldWithFormat("uuid"),
+      label: stringField(),
+      status: enumStringField(["active", "expired", "revoked"]),
+      issuedAt: stringFieldWithFormat("date-time"),
+      expiresAt: stringFieldWithFormat("date-time"),
+    }),
+  ],
 });
 
 /** Consumes the primary scheme's credential (User Story 1). */
@@ -333,6 +377,14 @@ export const ambiguousFieldsApiModel = apiModel(
 /** Full ApiModel: zero plausible fields — no chain, limitation recorded. */
 export const noPlausibleFieldApiModel = apiModel(
   [issueTokenNoPlausibleFieldOperation, tokenInfoOperation],
+  tokenAuthScheme,
+);
+
+/** Full ApiModel: a realistic credential-resource response (id/label/status/timestamps alongside
+ *  the actual secret) — resolves to exactly one plausible field once structured formats, enums,
+ *  and echoed request fields are excluded (FR-003 addendum). */
+export const realisticCredentialResponseApiModel = apiModel(
+  [issueApiKeyOperation, tokenInfoOperation],
   tokenAuthScheme,
 );
 

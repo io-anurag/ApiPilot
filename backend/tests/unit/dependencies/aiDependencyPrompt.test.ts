@@ -18,15 +18,15 @@ describe("buildAIDependencyRequest", () => {
   });
 
   /**
-   * 45s, not the original 8s: that figure predated the prompt projection and was never actually
-   * achievable on the reference hardware — even a single-operation unit's prefill alone measures
-   * ~9.9s at this codebase's own previously-measured throughput rate (specs/014-ai-batching-policy
-   * research.md Decision 7 addendum).
+   * 50s, not the original 8s or the intermediate 45s: that figure predated the prompt's worked
+   * `example` (added to stop the model inventing a non-conforming candidate shape), whose fixed
+   * per-batch overhead pushed a real 99-operation specification's typical unit to ~46.3s projected
+   * — already past 45s (specs/014-ai-batching-policy research.md Decision 7 addendum).
    */
   it("sets a feature-specific timeout override large enough for a real request to actually complete", () => {
     const request = buildAIDependencyRequest("dep-1", crudChainApiModel);
     expect(request.timeoutMs).toBe(AI_DEPENDENCY_TIMEOUT_MS);
-    expect(AI_DEPENDENCY_TIMEOUT_MS).toBe(45_000);
+    expect(AI_DEPENDENCY_TIMEOUT_MS).toBe(50_000);
   });
 
   it("sets an explicit, capped output allowance rather than the generic default", () => {
