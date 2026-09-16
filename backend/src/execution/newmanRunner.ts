@@ -1,4 +1,3 @@
-import newman from "newman";
 import type {
   PostmanAuth,
   PostmanCollectionVariable,
@@ -41,8 +40,15 @@ export interface NewmanItemRunOutput {
   environment: Record<string, string>;
 }
 
-/** Runs one Postman request item in isolation and reports its outcome plus updated environment state. */
-export function runSingleItem(input: NewmanItemRunInput): Promise<NewmanItemRunOutput> {
+/**
+ * Runs one Postman request item in isolation and reports its outcome plus updated environment
+ * state. Loads Newman on first use rather than at process startup — its module graph is large
+ * and otherwise adds noticeable latency to every backend boot even when no execution ever runs.
+ */
+export async function runSingleItem(
+  input: NewmanItemRunInput,
+): Promise<NewmanItemRunOutput> {
+  const { default: newman } = await import("newman");
   return new Promise((resolve, reject) => {
     newman.run(
       {
