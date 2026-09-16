@@ -217,6 +217,33 @@ export interface WorkflowStageState {
   cancelled?: boolean;
 }
 
+/**
+ * One AI-sourced scenario's identity, as shown by the live preview while a run is still in
+ * progress. Deliberately not a `ReviewScenario` — the poll that carries this must stay cheap
+ * (specs/013-ai-enhancement-viability/contracts/ai-enhancement-progress-v2.md "progressOnly"
+ * addendum), so this omits the full `TestScenario` (request, assertions, history) the live
+ * preview never renders.
+ */
+export interface LiveScenarioSummary {
+  scenarioId: string;
+  operationMethod: string;
+  operationPath: string;
+  category: string;
+}
+
+/**
+ * The lightweight payload `GET /api/test-generation-workflow?progressOnly=true` returns in place
+ * of the full `TestGenerationWorkflow` (contracts/ai-enhancement-progress-v2.md "progressOnly"
+ * addendum). Carries only what a 2-second poll needs to render — `stages.aiEnhancement` and a
+ * trimmed AI-scenario list — instead of the whole workflow's `apiModel`, `approvedTestModel`, and
+ * full `reviewWorkspace`, which made each poll response scale with specification/scenario size
+ * rather than staying constant.
+ */
+export interface AiEnhancementProgressSnapshot {
+  aiEnhancement: WorkflowStageState;
+  liveScenarios: LiveScenarioSummary[];
+}
+
 /** data-model.md: WorkflowReviewDecision — mirrors ReviewState/ReviewDecision (research.md D5). */
 export type WorkflowReviewState = "pending" | "approved" | "rejected";
 

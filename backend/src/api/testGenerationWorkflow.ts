@@ -1,8 +1,10 @@
 import { Router, type Response } from "express";
 import type {
   AIProvider,
+  AiEnhancementProgressSnapshot,
   EnvironmentTier,
   ExportOptions,
+  LiveScenarioSummary,
   ReviewEditContent,
   ReviewUpdateRequest,
   TestGenerationWorkflow,
@@ -203,6 +205,24 @@ function toWorkflowResponse(workflow: TestGenerationWorkflow): TestGenerationWor
   } as TestGenerationWorkflow;
 }
 
+/**
+ * Reduces a workflow to the `progressOnly` poll shape (contracts/ai-enhancement-progress-v2.md
+ * addendum): `stages.aiEnhancement` plus a trimmed AI-scenario list, omitting `apiModel`,
+ * `approvedTestModel`, and the rest of `reviewWorkspace` — the fields that made the existing
+ * 2-second poll ship megabytes per response regardless of what the poller actually renders.
+ */
+function toProgressSnapshot(workflow: TestGenerationWorkflow): AiEnhancementProgressSnapshot {
+  const liveScenarios: LiveScenarioSummary[] = (workflow.reviewWorkspace?.scenarios ?? [])
+    .filter((reviewScenario) => reviewScenario.scenario.provenance.source === "AI")
+    .map((reviewScenario) => ({
+      scenarioId: reviewScenario.scenarioId,
+      operationMethod: reviewScenario.scenario.operationMethod,
+      operationPath: reviewScenario.scenario.operationPath,
+      category: reviewScenario.scenario.category,
+    }));
+  return { aiEnhancement: workflow.stages.aiEnhancement, liveScenarios };
+}
+
 function isReviewUpdateRequestArray(value: unknown): value is ReviewUpdateRequest[] {
   return (
     Array.isArray(value) &&
@@ -262,6 +282,14 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         }
         res.status(204).end();
         logRequestSucceeded(req, startedAt, 204);
+        return;
+      }
+      // Lightweight poll mode (contracts/ai-enhancement-progress-v2.md addendum): same endpoint,
+      // additive query param, so the 2s AI-enhancement poll no longer resends the whole workflow
+      // on every tick — see toProgressSnapshot().
+      if (req.query.progressOnly === "true") {
+        res.status(200).json({ progress: toProgressSnapshot(workflow) });
+        logRequestSucceeded(req, startedAt, 200);
         return;
       }
       res.status(200).json({ workflow: toWorkflowResponse(workflow) });

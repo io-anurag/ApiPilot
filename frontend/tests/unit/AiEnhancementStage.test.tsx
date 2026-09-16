@@ -241,9 +241,11 @@ describe("AiEnhancementStage run ceiling progress", () => {
 
   /**
    * Stubs fetch so the run POST never resolves — keeping the component in its running state, which
-   * is the only state that renders progress — while the status poll returns `progress`.
+   * is the only state that renders progress — while the `progressOnly` status poll returns
+   * `progress` and, optionally, a trimmed `liveScenarios` list (contracts/
+   * ai-enhancement-progress-v2.md "progressOnly" addendum).
    */
-  function stubPollingWith(progress: unknown, reviewWorkspace?: unknown) {
+  function stubPollingWith(progress: unknown, liveScenarios: unknown[] = []) {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((_url: string, init?: { method?: string } | null) => {
@@ -253,9 +255,9 @@ describe("AiEnhancementStage run ceiling progress", () => {
           status: 200,
           json: () =>
             Promise.resolve({
-              workflow: {
-                stages: { aiEnhancement: { progress } },
-                ...(reviewWorkspace ? { reviewWorkspace } : {}),
+              progress: {
+                aiEnhancement: { progress },
+                liveScenarios,
               },
             }),
         });
@@ -337,30 +339,14 @@ describe("AiEnhancementStage run ceiling progress", () => {
         phase: "generating",
         cancelRequested: false,
       },
-      {
-        scenarios: [
-          {
-            scenarioId: "ai-scenario-1",
-            revision: 1,
-            state: "pending",
-            isUserModified: false,
-            history: [],
-            scenario: {
-              id: "ai-scenario-1",
-              operationPath: "/items",
-              operationMethod: "GET",
-              category: "positive",
-              request: { pathParameters: {}, queryParameters: {}, headers: {} },
-              assertions: [],
-              provenance: {
-                source: "AI",
-                description: "AI suggestion",
-                duplicateOfRules: [],
-              },
-            },
-          },
-        ],
-      },
+      [
+        {
+          scenarioId: "ai-scenario-1",
+          operationMethod: "GET",
+          operationPath: "/items",
+          category: "positive",
+        },
+      ],
     );
 
     await startRun();
@@ -424,18 +410,36 @@ describe("AiEnhancementStage resuming an in-progress run after reload", () => {
 
   it("keeps polling the resumed run and reports the outcome once it settles", async () => {
     const onAdvanced = vi.fn();
+    // The `progressOnly` poll reports the run has settled (no `progress` field); the component
+    // then makes one follow-up full-workflow fetch for the `onAdvanced` handoff (contracts/
+    // ai-enhancement-progress-v2.md "progressOnly" addendum).
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            workflow: {
-              activeStageId: "scenarioReview",
-              stages: { aiEnhancement: { status: "complete" } },
-            },
-          }),
+      vi.fn().mockImplementation((url: string) => {
+        if (typeof url === "string" && url.includes("progressOnly")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                progress: {
+                  aiEnhancement: { status: "complete" },
+                  liveScenarios: [],
+                },
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              workflow: {
+                activeStageId: "scenarioReview",
+                stages: { aiEnhancement: { status: "complete" } },
+              },
+            }),
+        });
       }),
     );
 
@@ -457,6 +461,12 @@ describe("AiEnhancementStage resuming an in-progress run after reload", () => {
     );
 
     await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS + 100));
+    // The follow-up full-workflow fetch is a separate microtask hop beyond the poll tick itself;
+    // flush it explicitly rather than relying on `advanceTimersByTimeAsync` alone.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     expect(onAdvanced).toHaveBeenCalledWith(
       expect.objectContaining({

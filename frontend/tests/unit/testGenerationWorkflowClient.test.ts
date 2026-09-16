@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyScenarioDecisions,
   editScenario,
+  fetchAiEnhancementProgress,
   fetchCurrentWorkflow,
   runDeterministicGeneration,
   startWorkflow,
@@ -60,6 +61,41 @@ describe("testGenerationWorkflowClient logging (FR-010)", () => {
     expect(errorSpy.mock.calls[0][0]).toMatchObject({
       operation: "fetchCurrentWorkflow",
       errorCategory: "network_error",
+    });
+  });
+
+  it("logs via fetchAiEnhancementProgress's own catch on a network error", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
+
+    await fetchAiEnhancementProgress();
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatchObject({
+      operation: "fetchAiEnhancementProgress",
+      errorCategory: "network_error",
+    });
+  });
+
+  it("fetchAiEnhancementProgress requests the progressOnly query variant and unwraps the snapshot", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        progress: { aiEnhancement: { status: "active" }, liveScenarios: [] },
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchAiEnhancementProgress();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/test-generation-workflow?progressOnly=true",
+      undefined,
+    );
+    expect(result).toEqual({
+      ok: true,
+      snapshot: { aiEnhancement: { status: "active" }, liveScenarios: [] },
     });
   });
 

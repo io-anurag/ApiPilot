@@ -146,3 +146,62 @@ User-facing text states durations in human units; raw milliseconds stay in `aiEr
   validator and every existing consumer are unaffected.
 - `POST /api/test-generation-workflow/ai-enhancement` keeps its existing request shape, response
   shape, and `409 ai_enhancement_already_running` guard from `012`.
+
+---
+
+## Addendum: `progressOnly` query parameter
+
+`012`'s research.md (Decision 1) deliberately rejected a dedicated progress endpoint, reasoning
+that the existing `GET /api/test-generation-workflow` already returns the whole workflow and a
+second endpoint would duplicate that pattern for no benefit. In practice, polling that full
+response every 2 seconds for the duration of a run (research.md Decision 6) means every poll
+resends `apiModel`, `approvedTestModel`, and the full `reviewWorkspace` — none of which the
+2-second poll loop in `AiEnhancementStage.tsx` renders — so response size scales with
+specification/scenario count instead of staying constant. This addendum keeps Decision 1's "no
+new endpoint" constraint intact while fixing that: same endpoint, one new optional query
+parameter.
+
+### `GET /api/test-generation-workflow?progressOnly=true`
+
+When a workflow exists, responds `200` with `{ "progress": AiEnhancementProgressSnapshot }`
+instead of `{ "workflow": TestGenerationWorkflow }`:
+
+```json
+{
+  "progress": {
+    "aiEnhancement": {
+      "stageId": "aiEnhancement",
+      "status": "active",
+      "progress": {
+        "totalBatches": 3,
+        "batches": [
+          { "index": 0, "status": "succeeded" },
+          { "index": 1, "status": "in-progress" },
+          { "index": 2, "status": "pending" }
+        ],
+        "startedAt": "2026-09-06T09:35:58.521Z",
+        "phase": "generating",
+        "generatingSince": "2026-09-06T09:36:11.204Z",
+        "cancelRequested": false
+      }
+    },
+    "liveScenarios": [
+      { "scenarioId": "s1", "operationMethod": "GET", "operationPath": "/items", "category": "positive" }
+    ]
+  }
+}
+```
+
+`liveScenarios` mirrors only the AI-sourced entries of `reviewWorkspace.scenarios`
+(`provenance.source === "AI"`), trimmed to the fields `LiveScenarioPreview` renders. It omits
+`request`, `assertions`, `history`, and every non-AI scenario.
+
+When no workflow exists, behavior is unchanged from the base endpoint (`204`, or `200` with
+`sessionExpired: true`) — `progressOnly` only changes the shape of a successful response.
+
+**Consumer impact**: `AiEnhancementStage.tsx`'s two poll loops call this instead of
+`fetchCurrentWorkflow()`. Once `progress` is absent (the run reached a terminal state), the
+component makes one final `fetchCurrentWorkflow()` call to obtain the full workflow for its
+`onAdvanced` handoff — the full payload is fetched once per run, not once per poll tick.
+`TestGenerationWorkflowPage.tsx`'s one-time mount fetch is unaffected; it continues to call the
+base endpoint without `progressOnly`.

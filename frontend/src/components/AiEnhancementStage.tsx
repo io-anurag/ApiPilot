@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   cancelAiEnhancement,
+  fetchAiEnhancementProgress,
   fetchCurrentWorkflow,
   retryAiEnhancementBatch,
   runAiEnhancement,
@@ -10,7 +11,7 @@ import type {
   AiEnhancementProgress,
   BatchOutcomeRecord,
   FailureExplanation,
-  ReviewWorkspace,
+  LiveScenarioSummary,
 } from "@apipilot/shared-domain";
 import { BatchOutcomeList } from "./BatchOutcomeList";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
@@ -158,11 +159,8 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
   );
 }
 
-function LiveScenarioPreview({ workspace }: Readonly<{ workspace: ReviewWorkspace }>) {
-  const aiScenarios = workspace.scenarios.filter(
-    (item) => item.scenario.provenance.source === "AI",
-  );
-  if (aiScenarios.length === 0) return null;
+function LiveScenarioPreview({ scenarios }: Readonly<{ scenarios: LiveScenarioSummary[] }>) {
+  if (scenarios.length === 0) return null;
 
   return (
     <section
@@ -171,20 +169,20 @@ function LiveScenarioPreview({ workspace }: Readonly<{ workspace: ReviewWorkspac
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-success-900">
-          {aiScenarios.length} AI scenario{aiScenarios.length === 1 ? "" : "s"} ready
+          {scenarios.length} AI scenario{scenarios.length === 1 ? "" : "s"} ready
         </h3>
         <span className="text-xs text-success-700">
           Review actions unlock when generation finishes.
         </span>
       </div>
       <ul className="space-y-1 text-sm text-success-900" aria-label="Live AI scenarios">
-        {aiScenarios.map((item) => (
+        {scenarios.map((item) => (
           <li key={item.scenarioId} className="flex flex-wrap gap-x-2 gap-y-1">
             <span className="font-mono font-medium">
-              {item.scenario.operationMethod.toUpperCase()}
+              {item.operationMethod.toUpperCase()}
             </span>
-            <span className="font-mono">{item.scenario.operationPath}</span>
-            <span className="text-success-700">{item.scenario.category}</span>
+            <span className="font-mono">{item.operationPath}</span>
+            <span className="text-success-700">{item.category}</span>
           </li>
         ))}
       </ul>
@@ -271,9 +269,7 @@ export function AiEnhancementStage({
   const [progress, setProgress] = useState<AiEnhancementProgress | undefined>(
     activeProgress,
   );
-  const [liveWorkspace, setLiveWorkspace] = useState<ReviewWorkspace | undefined>(
-    undefined,
-  );
+  const [liveScenarios, setLiveScenarios] = useState<LiveScenarioSummary[]>([]);
   const [retryingBatchIndex, setRetryingBatchIndex] = useState<number | null>(null);
   const pollHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -308,10 +304,10 @@ export function AiEnhancementStage({
   useEffect(() => {
     if (!activeProgress) return;
     pollHandleRef.current = setInterval(() => {
-      void fetchCurrentWorkflow().then((result) => {
-        if (!result.ok || !result.workflow) return;
-        const currentProgress = result.workflow.stages.aiEnhancement.progress;
-        setLiveWorkspace(result.workflow.reviewWorkspace);
+      void fetchAiEnhancementProgress().then((result) => {
+        if (!result.ok || !result.snapshot) return;
+        const currentProgress = result.snapshot.aiEnhancement.progress;
+        setLiveScenarios(result.snapshot.liveScenarios);
         if (currentProgress) {
           setProgress(currentProgress);
           return;
@@ -319,8 +315,14 @@ export function AiEnhancementStage({
         stopPolling();
         setRunning(false);
         setProgress(undefined);
-        setLiveWorkspace(undefined);
-        onAdvanced({ ok: true, workflow: result.workflow });
+        setLiveScenarios([]);
+        // The poll itself only carries the lightweight snapshot — fetch the full workflow once,
+        // now that the run has settled, for the terminal `onAdvanced` handoff.
+        void fetchCurrentWorkflow().then((finalResult) => {
+          if (finalResult.ok && finalResult.workflow) {
+            onAdvanced({ ok: true, workflow: finalResult.workflow });
+          }
+        });
       });
     }, PROGRESS_POLL_INTERVAL_MS);
     return stopPolling;
@@ -333,12 +335,12 @@ export function AiEnhancementStage({
     setError(null);
     setCancelling(false);
     setProgress(undefined);
-    setLiveWorkspace(undefined);
+    setLiveScenarios([]);
     pollHandleRef.current = setInterval(() => {
-      void fetchCurrentWorkflow().then((result) => {
-        if (result.ok && result.workflow) {
-          setProgress(result.workflow.stages.aiEnhancement.progress);
-          setLiveWorkspace(result.workflow.reviewWorkspace);
+      void fetchAiEnhancementProgress().then((result) => {
+        if (result.ok && result.snapshot) {
+          setProgress(result.snapshot.aiEnhancement.progress);
+          setLiveScenarios(result.snapshot.liveScenarios);
         }
       });
     }, PROGRESS_POLL_INTERVAL_MS);
@@ -348,7 +350,7 @@ export function AiEnhancementStage({
     setRunning(false);
     setCancelling(false);
     setProgress(undefined);
-    setLiveWorkspace(undefined);
+    setLiveScenarios([]);
     if (!result.ok) {
       setError(result.message);
       return;
@@ -432,7 +434,7 @@ export function AiEnhancementStage({
           }}
         />
         {running && progress && <RunProgress progress={progress} />}
-        {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
+        {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
         {running && (
           <CancelButton
             onCancel={handleCancel}
@@ -478,7 +480,7 @@ export function AiEnhancementStage({
         )}
       </div>
       {running && progress && <RunProgress progress={progress} />}
-      {running && liveWorkspace && <LiveScenarioPreview workspace={liveWorkspace} />}
+      {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
       {error && (
         <p
           role="alert"
