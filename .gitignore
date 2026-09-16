@@ -39,3 +39,4 @@ Thumbs.db
 .specify/*
 .playwright-mcp/
 backend/models/**
+backend/db/**
