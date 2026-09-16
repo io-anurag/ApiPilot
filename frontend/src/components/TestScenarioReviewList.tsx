@@ -36,6 +36,13 @@ const STATE_ROW_TONE_CLASSES: Record<ReviewScenarioWire["state"], string> = {
  * these tracks: CSS Grid's default `justify-items: stretch` otherwise forces every badge to fill
  * its entire column width, which is what actually produced the oversized boxes/wasted whitespace
  * around Method/Source/Status — the fixed track widths were already sized correctly.
+ *
+ * That same `start` alignment, though, stops a grid item from being bound to its track width by
+ * default: without an explicit width, the item sizes to its own content instead, so a long Path or
+ * Category value grows past its track and visually overlaps Source/Status rather than being
+ * clipped by `truncate`. The Path/Category spans below counter this locally with
+ * `justify-self-stretch`, so only those two are bound to the track (letting `truncate` actually
+ * ellipsis them) while the badges keep the content-sized `start` behavior this comment describes.
  */
 const ROW_GRID_COLUMNS =
   "grid-cols-[3.75rem_minmax(0,1.6fr)_minmax(0,1fr)_8rem_7rem] justify-items-start";
@@ -274,13 +281,13 @@ export function TestScenarioReviewList({
                     >
                       <HttpMethodBadge method={item.scenario.operationMethod} />
                       <span
-                        className="min-w-0 truncate font-mono text-slate-800"
+                        className="min-w-0 justify-self-stretch truncate font-mono text-slate-800"
                         title={item.scenario.operationPath}
                       >
                         {item.scenario.operationPath}
                       </span>
                       <span
-                        className="min-w-0 truncate text-slate-700"
+                        className="min-w-0 justify-self-stretch truncate text-slate-700"
                         title={categoryLabel}
                       >
                         {categoryLabel}
