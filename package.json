@@ -4,7 +4,7 @@
   "private": true,
   "description": "ApiPilot monorepo: backend, frontend, and shared domain packages.",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "workspaces": [
     "backend",

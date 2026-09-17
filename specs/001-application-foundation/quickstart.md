@@ -5,7 +5,7 @@ covering User Stories 1–3 in [spec.md](./spec.md).
 
 ## Prerequisites
 
-- Node.js 20 LTS installed (`node --version`)
+- Node.js 22 LTS or newer installed (`node --version`)
 - npm (bundled with Node.js)
 - A freshly cloned copy of this repository
 

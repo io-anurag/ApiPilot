@@ -181,7 +181,7 @@ Execution reuses the same generated collection logic used for export. The operat
 
 ### Requirements
 
-- Node.js 20 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
+- Node.js 22 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
 - npm.
 - For local AI: disk space for the selected model, free memory for inference, and network access only for the initial model download. No GPU is required.
 - For deterministic-only use and routine tests: set `AI_PROVIDER_MODE=mock`; no model download is needed.
