@@ -1,5 +1,17 @@
-import { Collection, type Item } from "postman-collection";
+import type { Collection, Item } from "postman-collection";
+import postmanCollection from "postman-collection";
 import { InvalidCollectionError, InvalidEnvironmentError } from "./errors";
+
+/**
+ * `postman-collection` is CommonJS and re-exports itself via `module.exports = require(...)`
+ * (`node_modules/postman-collection/index.js`), which Node's ESM/CJS interop cannot statically
+ * analyze into named exports — `import { Collection } from "postman-collection"` throws "does
+ * not provide an export named 'Collection'" at runtime despite type-checking cleanly against
+ * `@types/postman-collection`. The default-import form above always works because it reads the
+ * whole `module.exports` object at runtime instead of relying on static named-export detection.
+ */
+const CollectionCtor = (postmanCollection as unknown as { Collection: new (definition?: unknown) => Collection })
+  .Collection;
 
 /**
  * Constructs a `postman-collection` `Collection` from the uploaded JSON and verifies it contains
@@ -20,7 +32,7 @@ export function parseUploadedCollection(raw: string): Collection {
   let collection: Collection;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postman-collection's own constructor accepts any well-formed collection JSON; validity is judged by whether it yields any request items below, not by this constructor call alone.
-    collection = new Collection(parsedJson as any);
+    collection = new CollectionCtor(parsedJson as any);
   } catch (cause) {
     throw new InvalidCollectionError(cause instanceof Error ? cause.message : "the collection could not be parsed.");
   }
