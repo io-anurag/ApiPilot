@@ -16,6 +16,9 @@ function stubFetch() {
       if (url.includes("/api/test-generation-workflow")) {
         return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
       }
+      if (url.includes("/api/external-collections")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ uploadedCollections: [] }) });
+      }
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     }),
   );
@@ -62,5 +65,22 @@ describe("App", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
     );
+  });
+
+  it("switches to the standalone 'Import & Run Collection' tab, reachable with no prior OpenAPI upload (FR-011, research.md D9)", async () => {
+    stubFetch();
+
+    render(<App />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
+    );
+
+    screen.getByRole("button", { name: "Import & Run Collection" }).click();
+
+    expect(await screen.findByText("Import a Postman Collection")).toBeInTheDocument();
+    expect(screen.getByTestId("external-collection-upload")).toBeInTheDocument();
+    // Switching back preserves the guided workflow's own state rather than remounting it.
+    screen.getByRole("button", { name: "Guided Workflow" }).click();
+    expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument();
   });
 });

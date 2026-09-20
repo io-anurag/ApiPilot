@@ -1,0 +1,413 @@
+import { useEffect, useRef, useState } from "react";
+import type {
+  ExecutionConfirmationRequirement,
+  RawHeader,
+  UploadedCollectionExecutionRun,
+  UploadedRequestResult,
+} from "@apipilot/shared-domain";
+import {
+  cancelUploadedCollectionExecution,
+  fetchUploadedCollectionRun,
+  fetchUploadedCollectionRuns,
+  startUploadedCollectionExecution,
+  type UploadedCollectionSummary,
+} from "../services/externalCollectionsClient";
+import { CodeBlock } from "./CodeBlock";
+import { HttpMethodBadge } from "./HttpMethodBadge";
+import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { BUTTON_STYLES } from "./controlStyles";
+
+const POLL_INTERVAL_MS = 750;
+
+function outcomeTone(result: UploadedRequestResult): StatusTone {
+  if (result.outcome === "passed") return "success";
+  if (result.outcome === "failed") return "danger";
+  return "neutral";
+}
+
+function outcomeLabel(result: UploadedRequestResult): string {
+  if (result.outcome === "passed") return "Passed";
+  if (result.outcome === "failed") return result.failureCategory ?? "Failed";
+  return result.notAttemptedReason ?? "Not attempted";
+}
+
+function runStatusTone(status: UploadedCollectionExecutionRun["status"]): StatusTone {
+  if (status === "in-progress") return "info";
+  if (status === "cancelled") return "warning";
+  return "success";
+}
+
+/** One labeled number in the run overview stat row (mirrors ExecutionResultsPanel's `OverviewStat`). */
+function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
+  const toneClass: Record<StatusTone, string> = {
+    neutral: "text-slate-900",
+    info: "text-info-700",
+    success: "text-success-700",
+    warning: "text-warning-700",
+    danger: "text-danger-700",
+  };
+  return (
+    <div className="min-w-[6rem]">
+      <dt className="text-xs font-medium uppercase text-muted">{label}</dt>
+      <dd className={`text-lg font-semibold ${toneClass[tone ?? "neutral"]}`}>{value}</dd>
+    </div>
+  );
+}
+
+function RunOverview({ run }: Readonly<{ run: UploadedCollectionExecutionRun }>) {
+  return (
+    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3">
+      <OverviewStat label="Requests" value={String(run.summary.total)} />
+      <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
+      <OverviewStat
+        label="Failed"
+        value={String(run.summary.failed)}
+        tone={run.summary.failed > 0 ? "danger" : "neutral"}
+      />
+      <OverviewStat label="Not attempted" value={String(run.summary.notAttempted)} />
+      <OverviewStat label="Duration" value={`${run.summary.durationMs} ms`} />
+    </dl>
+  );
+}
+
+function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
+  if (headers.length === 0) return <p className="text-xs text-muted">No headers.</p>;
+  return (
+    <table className="w-full text-xs">
+      <tbody>
+        {headers.map((header) => (
+          <tr key={header.key} className="border-b border-border last:border-0">
+            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600">{header.key}</td>
+            <td className="py-1 font-mono text-slate-700 break-all">{header.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Per-request diagnostic detail: each named test outcome, duration, response status, and — for a
+ * `"local"`-tier run only — the full raw request/response headers/bodies (FR-017a parity). */
+function ResultDetail({ result }: Readonly<{ result: UploadedRequestResult }>) {
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600">
+      <p>
+        {result.durationMs}ms
+        {result.responseStatusCode !== undefined && ` · Response status ${result.responseStatusCode}`}
+      </p>
+      {result.testOutcomes.length > 0 && (
+        <ul className="space-y-1">
+          {result.testOutcomes.map((test) => (
+            <li key={test.name} className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-slate-700">{test.name}</span>
+              <StatusBadge label={test.outcome} tone={test.outcome === "passed" ? "success" : "danger"} />
+              {test.detail && <span>{test.detail}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.rawCapture && (
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase text-muted">Request</p>
+            <p className="break-all font-mono text-xs text-slate-600">{result.rawCapture.requestUrl}</p>
+            <HeaderTable headers={result.rawCapture.requestHeaders} />
+            {result.rawCapture.requestBody && <CodeBlock label="Body" content={result.rawCapture.requestBody} />}
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase text-muted">Response</p>
+            <HeaderTable headers={result.rawCapture.responseHeaders} />
+            {result.rawCapture.responseBody && <CodeBlock label="Body" content={result.rawCapture.responseBody} />}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExternalCollectionResultRow({ result }: Readonly<{ result: UploadedRequestResult }>) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <li className="py-2 text-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <HttpMethodBadge method={result.requestMethod} />
+          <span className="min-w-0 truncate font-mono text-xs text-slate-700" title={result.requestName}>
+            {result.requestName}
+          </span>
+        </div>
+        <StatusBadge label={outcomeLabel(result)} tone={outcomeTone(result)} />
+      </button>
+      {expanded && <ResultDetail result={result} />}
+    </li>
+  );
+}
+
+/** Required before an uploaded collection's very first request ever dispatches (FR-007) — a
+ * distinct action naming that this content was not generated or verified by ApiPilot. */
+function UnverifiedContentDialog({
+  onConfirm,
+  onDecline,
+}: Readonly<{ onConfirm: () => void; onDecline: () => void }>) {
+  return (
+    <div
+      role="alertdialog"
+      data-testid="unverified-content-dialog"
+      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+    >
+      <p className="text-sm text-warning-700">
+        This collection&apos;s requests, and any embedded pre-request/test scripts, were{" "}
+        <strong>not generated or verified by ApiPilot</strong>. They will execute exactly as
+        authored, with the same real network access Postman/Newman itself would give them.
+      </p>
+      <div className="flex gap-2">
+        <button type="button" onClick={onConfirm} className={BUTTON_STYLES.danger}>
+          Confirm and run
+        </button>
+        <button type="button" onClick={onDecline} className={BUTTON_STYLES.secondary}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Risk-tier / destructive-request gate (FR-013) — identical concern to `ExecutionResultsPanel`'s
+ * own confirmation banner, evaluated every run start rather than once per artifact. */
+function RiskTierConfirmationBanner({
+  requirement,
+  onConfirm,
+  onCancel,
+}: Readonly<{ requirement: ExecutionConfirmationRequirement; onConfirm: () => void; onCancel: () => void }>) {
+  return (
+    <div
+      role="alertdialog"
+      data-testid="risk-tier-confirmation-banner"
+      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+    >
+      <p className="text-sm text-warning-700">
+        This run targets a <strong>{requirement.environmentTier}</strong> environment
+        {requirement.destructiveOperations.length > 0 && " and includes destructive requests"}.
+      </p>
+      {requirement.destructiveOperations.length > 0 && (
+        <ul className="space-y-1 text-sm text-warning-700">
+          {requirement.destructiveOperations.map((operation) => (
+            <li key={`${operation.operationMethod} ${operation.operationPath}`} className="flex items-center gap-2">
+              <HttpMethodBadge method={operation.operationMethod} />
+              <span className="font-mono text-xs">{operation.operationPath}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <button type="button" onClick={onConfirm} className={BUTTON_STYLES.danger}>
+          Confirm and run
+        </button>
+        <button type="button" onClick={onCancel} className={BUTTON_STYLES.secondary}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RunHistory({
+  runs,
+  selectedRunId,
+  onSelect,
+}: Readonly<{
+  runs: Omit<UploadedCollectionExecutionRun, "results">[];
+  selectedRunId: string | undefined;
+  onSelect: (runId: string) => void;
+}>) {
+  if (runs.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold uppercase text-muted">Run history</h3>
+      <ul className="divide-y divide-border">
+        {runs.map((historyRun) => (
+          <li key={historyRun.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(historyRun.id)}
+              aria-current={historyRun.id === selectedRunId}
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                historyRun.id === selectedRunId ? "bg-slate-50" : ""
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <StatusBadge label={historyRun.status} tone={runStatusTone(historyRun.status)} />
+                <StatusBadge label="Uploaded" tone="neutral" />
+              </span>
+              <span className="text-xs text-muted">
+                {historyRun.summary.passed} passed · {historyRun.summary.failed} failed
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Runs a selected uploaded collection and renders its live/completed results (US1, US2), always
+ * labeled "Uploaded" so it is never mistaken for a generated-collection run (US3, FR-010) — this
+ * panel's own runs are always `source: "uploaded"`.
+ */
+export function ExternalCollectionRunPanel({
+  uploadedCollection,
+}: Readonly<{ uploadedCollection: UploadedCollectionSummary }>) {
+  const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
+  const [runHistory, setRunHistory] = useState<Omit<UploadedCollectionExecutionRun, "results">[]>([]);
+  const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [showUnverifiedDialog, setShowUnverifiedDialog] = useState(false);
+  const [pendingRiskTierConfirmation, setPendingRiskTierConfirmation] =
+    useState<ExecutionConfirmationRequirement | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function refreshHistory() {
+    fetchUploadedCollectionRuns(uploadedCollection.id).then((result) => {
+      if (result.ok) setRunHistory(result.runs);
+    });
+  }
+
+  useEffect(() => {
+    setRun(null);
+    setStartError(null);
+    setShowUnverifiedDialog(false);
+    setPendingRiskTierConfirmation(null);
+    refreshHistory();
+  }, [uploadedCollection.id]);
+
+  useEffect(() => {
+    if (run?.status !== "in-progress") return;
+    pollTimer.current = setTimeout(async () => {
+      const result = await fetchUploadedCollectionRun(uploadedCollection.id, run.id);
+      if (result.ok) {
+        setRun(result.run);
+        if (result.run.status !== "in-progress") refreshHistory();
+      }
+    }, POLL_INTERVAL_MS);
+    return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, [run, uploadedCollection.id]);
+
+  async function handleSelectHistoryRun(runId: string) {
+    const result = await fetchUploadedCollectionRun(uploadedCollection.id, runId);
+    if (result.ok) setRun(result.run);
+  }
+
+  async function performStart(confirmed: boolean) {
+    setStarting(true);
+    setStartError(null);
+    const result = await startUploadedCollectionExecution(uploadedCollection.id, confirmed);
+    setStarting(false);
+    if (!result.ok) {
+      if (result.error === "unverified_content_confirmation_required") {
+        setShowUnverifiedDialog(true);
+        return;
+      }
+      if (result.error === "confirmation_required" && result.confirmation) {
+        setPendingRiskTierConfirmation(result.confirmation);
+        return;
+      }
+      setStartError(result.message);
+      return;
+    }
+    setShowUnverifiedDialog(false);
+    setPendingRiskTierConfirmation(null);
+    setRun(result.run);
+    refreshHistory();
+  }
+
+  function handleRunClick() {
+    if (!uploadedCollection.confirmedAt) {
+      setShowUnverifiedDialog(true);
+      return;
+    }
+    performStart(false);
+  }
+
+  async function handleCancel() {
+    setCancelling(true);
+    const result = await cancelUploadedCollectionExecution(uploadedCollection.id);
+    setCancelling(false);
+    if (result.ok) setRun(result.run);
+  }
+
+  return (
+    <section
+      data-testid="external-collection-run-panel"
+      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">{uploadedCollection.name}</h3>
+        <button
+          type="button"
+          onClick={handleRunClick}
+          disabled={starting || run?.status === "in-progress"}
+          className={BUTTON_STYLES.primary}
+        >
+          {starting ? "Starting…" : "Run"}
+        </button>
+      </div>
+
+      {showUnverifiedDialog && (
+        <UnverifiedContentDialog
+          onConfirm={() => performStart(true)}
+          onDecline={() => setShowUnverifiedDialog(false)}
+        />
+      )}
+
+      {pendingRiskTierConfirmation && (
+        <RiskTierConfirmationBanner
+          requirement={pendingRiskTierConfirmation}
+          onConfirm={() => performStart(true)}
+          onCancel={() => setPendingRiskTierConfirmation(null)}
+        />
+      )}
+
+      {startError && (
+        <p role="alert" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+          {startError}
+        </p>
+      )}
+
+      {run && (
+        <div data-testid="external-collection-run-summary" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge label={run.status} tone={runStatusTone(run.status)} />
+            <StatusBadge label="Uploaded" tone="neutral" />
+            {run.status === "in-progress" && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling || run.cancelRequested}
+                className={BUTTON_STYLES.secondary}
+              >
+                {run.cancelRequested || cancelling ? "Cancelling…" : "Cancel run"}
+              </button>
+            )}
+          </div>
+          <RunOverview run={run} />
+          <ul className="divide-y divide-border">
+            {run.results.map((result, index) => (
+              <ExternalCollectionResultRow key={`${result.requestName}-${index}`} result={result} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectHistoryRun} />
+    </section>
+  );
+}

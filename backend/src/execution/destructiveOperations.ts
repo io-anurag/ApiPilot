@@ -6,9 +6,12 @@ import type {
 
 /**
  * HTTP-method heuristic for which operations count as "destructive" (spec.md Assumptions, v1):
- * any operation whose method plausibly changes server-side state.
+ * any operation whose method plausibly changes server-side state. Exported (specs/026-external-
+ * collection-execution research.md D3) so `externalCollections/destructiveRequests.ts` classifies
+ * an uploaded collection's own requests against the exact same vocabulary rather than a second,
+ * independently-defined set that could silently drift from this one.
  */
-const DESTRUCTIVE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+export const DESTRUCTIVE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 export interface DestructiveOperation {
   operationPath: string;

@@ -33,6 +33,7 @@ import {
   listRuns,
   requestCancel,
 } from "../execution/executionRunStore";
+import { getInProgressRun as getUploadedInProgressRun } from "../externalCollections/uploadedCollectionExecutionStore";
 import { missingVariableValues } from "../execution/variableCompleteness";
 import { confirmationRequirement } from "../execution/destructiveOperations";
 import { generateCollection } from "../postman/generateCollection";
@@ -726,7 +727,9 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       reactivateExecutionStage();
 
       // Checked first (FR-008): no point evaluating anything else while a run is already active.
-      const inProgress = getInProgressRun();
+      // FR-015 (specs/026-external-collection-execution, research.md D7): the slot is shared
+      // across both run kinds, so an in-progress uploaded-collection run also refuses this start.
+      const inProgress = getInProgressRun() ?? getUploadedInProgressRun();
       if (inProgress) {
         logRequestFailed(req, startedAt, 409, "execution_in_progress");
         res

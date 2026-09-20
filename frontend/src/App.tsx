@@ -2,9 +2,20 @@ import { useEffect, useState } from "react";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { VersionBadge } from "./components/VersionBadge";
 import { TestGenerationWorkflowPage } from "./pages/TestGenerationWorkflowPage";
+import { ExternalCollectionsPage } from "./pages/ExternalCollectionsPage";
+
+type ActiveTab = "guided-workflow" | "import-collection";
+
+/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: two views do
+ * not warrant a routing dependency, mirroring AP-009's own original decision. */
+const TABS: Array<{ id: ActiveTab; label: string }> = [
+  { id: "guided-workflow", label: "Guided Workflow" },
+  { id: "import-collection", label: "Import & Run Collection" },
+];
 
 export function App() {
   const [health, setHealth] = useState<HealthCheckResult | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("guided-workflow");
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +93,31 @@ export function App() {
         </div>
       </header>
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <TestGenerationWorkflowPage />
+        <nav className="mb-6 flex gap-1 border-b border-border" aria-label="Top-level views">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                activeTab === tab.id
+                  ? "border-brand-600 text-brand-700"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+        {/* Both views stay mounted so switching tabs never discards either one's in-progress
+         * state (e.g. a partially-filled form) — only visibility toggles. */}
+        <div hidden={activeTab !== "guided-workflow"}>
+          <TestGenerationWorkflowPage />
+        </div>
+        <div hidden={activeTab !== "import-collection"}>
+          <ExternalCollectionsPage />
+        </div>
       </div>
     </main>
   );

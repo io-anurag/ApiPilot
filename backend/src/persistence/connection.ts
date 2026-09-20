@@ -85,6 +85,37 @@ export class SqliteConnection {
       );
       CREATE INDEX IF NOT EXISTS idx_execution_runs_session ON execution_runs(session_id);
 
+      CREATE TABLE IF NOT EXISTS uploaded_collections (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        tier TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        variable_values_encrypted BLOB NOT NULL,
+        variable_values_iv BLOB NOT NULL,
+        request_delay_ms INTEGER NOT NULL,
+        confirmed_at TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE (session_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_uploaded_collections_session ON uploaded_collections(session_id);
+
+      CREATE TABLE IF NOT EXISTS uploaded_collection_runs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        uploaded_collection_set_id TEXT NOT NULL,
+        uploaded_collection_snapshot TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        results TEXT NOT NULL,
+        raw_captures_encrypted BLOB,
+        raw_captures_iv BLOB,
+        cancel_requested INTEGER NOT NULL,
+        cancel_reason TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_uploaded_collection_runs_session ON uploaded_collection_runs(session_id);
+
       CREATE TABLE IF NOT EXISTS ai_readiness_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         state TEXT NOT NULL,

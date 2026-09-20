@@ -5,6 +5,7 @@ import { createLogger } from "./logger";
 import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
+import { getUploadedCollectionRunRepository } from "./persistence/uploadedCollectionRunRepository";
 
 const logger = createLogger("server");
 
@@ -62,6 +63,9 @@ try {
 // cancelled/"backend-restart" before the HTTP listener accepts requests, rather than being
 // silently reported as successful or left in a permanently stuck state (FR-008).
 getExecutionRunRepository().markInterruptedRunsCancelled();
+// Same guard for an uploaded-collection run left "in-progress" by a prior process
+// (specs/026-external-collection-execution, mirrors FR-008's rationale exactly).
+getUploadedCollectionRunRepository().markInterruptedRunsCancelled();
 
 const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 

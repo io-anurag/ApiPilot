@@ -92,6 +92,9 @@ describe("ExecutionResultsPanel", () => {
     await waitFor(() =>
       expect(screen.getByTestId("execution-run-summary")).toHaveTextContent("1 passed"),
     );
+    // US3/FR-010 (specs/026-external-collection-execution): a generated run is always labeled
+    // "Generated" so it is never mistaken for an uploaded-collection run.
+    expect(screen.getByTestId("execution-run-summary")).toHaveTextContent("Generated");
   });
 
   it("requires an explicit environment choice when more than one exists (FR-003)", async () => {

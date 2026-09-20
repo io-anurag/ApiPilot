@@ -51,6 +51,8 @@ describe("SqliteConnection", () => {
         "environments",
         "execution_runs",
         "sqlite_sequence",
+        "uploaded_collection_runs",
+        "uploaded_collections",
       ]);
       connection.close();
     } finally {
