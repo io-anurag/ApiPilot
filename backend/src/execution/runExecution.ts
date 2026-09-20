@@ -182,7 +182,9 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
         environment: environmentRecord,
       });
       environmentRecord = itemOutcome.environment;
-      appendResult(runId, mapNewmanResult(scenario, itemOutcome.execution, startedAt));
+      // FR-017a: raw request/response capture is gated strictly to "local"-tier runs.
+      const captureRawDetails = environment.tier === "local";
+      appendResult(runId, mapNewmanResult(scenario, itemOutcome.execution, startedAt, captureRawDetails));
       attempted = index + 1;
     }
 

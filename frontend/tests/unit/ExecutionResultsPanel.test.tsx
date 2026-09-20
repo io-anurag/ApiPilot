@@ -215,6 +215,107 @@ describe("ExecutionResultsPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Cancelling…" })).toBeDisabled());
   });
 
+  it("shows endpoint coverage and aggregate stats in the run overview (asks #1/#4)", async () => {
+    const finished = completedRun({
+      summary: { total: 2, passed: 1, failed: 1, notAttempted: 0, durationMs: 20 },
+      results: [
+        {
+          scenarioId: "s-1",
+          operationPath: "/pets",
+          operationMethod: "GET",
+          outcome: "passed",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          durationMs: 10,
+          responseStatusCode: 200,
+          assertionOutcomes: [],
+        },
+        {
+          scenarioId: "s-2",
+          // Same endpoint, different scenario — endpoint count should still read 1, not 2.
+          operationPath: "/pets",
+          operationMethod: "GET",
+          outcome: "failed",
+          failureCategory: "unexpected-status",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          durationMs: 30,
+          responseStatusCode: 500,
+          assertionOutcomes: [],
+        },
+      ],
+    });
+    stubFetch([env()], [{ run: finished }]);
+
+    render(<ExecutionResultsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run" }));
+    const overview = await screen.findByTestId("execution-run-overview");
+    expect(overview).toHaveTextContent("Endpoints");
+    expect(overview).toHaveTextContent("1");
+    expect(overview).toHaveTextContent("Requests");
+    expect(overview).toHaveTextContent("2");
+  });
+
+  it("shows full raw request/response headers and bodies for a Local-tier run (asks #2/#3)", async () => {
+    const finished = completedRun({
+      results: [
+        {
+          scenarioId: "s-1",
+          operationPath: "/pets",
+          operationMethod: "GET",
+          outcome: "passed",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          durationMs: 10,
+          responseStatusCode: 200,
+          assertionOutcomes: [],
+          rawCapture: {
+            requestUrl: "http://localhost:4000/pets",
+            requestHeaders: [{ key: "Authorization", value: "Bearer test-token" }],
+            responseHeaders: [{ key: "Content-Type", value: "application/json" }],
+            responseBody: '{"id":1}',
+          },
+        },
+      ],
+    });
+    stubFetch([env()], [{ run: finished }]);
+
+    render(<ExecutionResultsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run" }));
+    await screen.findByTestId("execution-run-summary");
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+
+    const detail = await screen.findByTestId("execution-result-detail");
+    expect(detail).toHaveTextContent("Authorization");
+    expect(detail).toHaveTextContent("Bearer test-token");
+    expect(detail).toHaveTextContent("Content-Type");
+    expect(detail).toHaveTextContent('{"id":1}');
+  });
+
+  it("explains that raw headers/bodies are Local-only when a non-local run has none (FR-017a)", async () => {
+    const finished = completedRun({
+      environmentSnapshot: { name: "Staging", tier: "staging", baseUrl: "http://localhost:4000" },
+      results: [
+        {
+          scenarioId: "s-1",
+          operationPath: "/pets",
+          operationMethod: "GET",
+          outcome: "passed",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          durationMs: 10,
+          responseStatusCode: 200,
+          assertionOutcomes: [],
+        },
+      ],
+    });
+    stubFetch([env({ tier: "staging" })], [{ run: finished }]);
+
+    render(<ExecutionResultsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run" }));
+    await screen.findByTestId("execution-run-summary");
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+
+    const detail = await screen.findByTestId("execution-result-detail");
+    expect(detail).toHaveTextContent("only captured for Local-tier runs");
+  });
+
   it("lists run history and selecting a past run shows its full results again (US5, FR-019/FR-020)", async () => {
     const pastRun = completedRun({ id: "run-past", environmentSnapshot: { name: "Local", tier: "local", baseUrl: "http://localhost:4000" } });
     vi.stubGlobal(

@@ -134,4 +134,7 @@ parameter.
 
 **200 OK** — `{ "run": { "...": "...", "results": [ { "scenarioId": "...", "operationPath": "...", "operationMethod": "...", "outcome": "failed", "failureCategory": "assertion-failed", "durationMs": 214, "responseStatusCode": 500, "assertionOutcomes": [ { "assertionIndex": 0, "type": "status-code", "outcome": "failed", "detail": "expected 201, got 500" } ] } ] } }`
 
+Each `RequestResult` additionally carries a `rawCapture` field (FR-017a, 2026-09-20 amendment)
+only when the run's `environmentSnapshot.tier === "local"` — `{ "requestUrl": "...", "requestHeaders": [ { "key": "Authorization", "value": "Bearer ..." } ], "requestBody": "...", "responseHeaders": [ ... ], "responseBody": "..." }`. Absent entirely for every other tier.
+
 **404 `run_not_found`**

@@ -1,4 +1,10 @@
-import type { Environment, ExecutionRun, ExecutionRunStatus, RequestResult } from "@apipilot/shared-domain";
+import type {
+  Environment,
+  ExecutionRun,
+  ExecutionRunStatus,
+  RawRequestCapture,
+  RequestResult,
+} from "@apipilot/shared-domain";
 import { RunNotFoundError } from "../execution/errors";
 import { getSharedConnection, type SqliteConnection } from "./connection";
 
@@ -37,6 +43,15 @@ interface ExecutionRunRow {
   results: string;
   cancel_requested: number;
   cancel_reason: string | null;
+  /**
+   * FR-017a (2026-09-20 amendment): populated only for a `"local"`-tier run, so a non-local
+   * run's row has both columns `NULL` regardless of what `RequestResult.rawCapture` the caller
+   * ever passes in — see `decryptRawCaptures`/`appendResult` below. Encrypted with the same
+   * `CredentialCipher` `Environment.variableValues` already uses; never stored inside `results`
+   * itself, which stays exactly the shape it had before this amendment.
+   */
+  raw_captures_encrypted: Buffer | null;
+  raw_captures_iv: Buffer | null;
 }
 
 function emptySummary(): ExecutionRun["summary"] {
@@ -63,8 +78,23 @@ function recomputeSummary(startedAt: string, results: RequestResult[]): Executio
 export class SqliteExecutionRunRepository implements ExecutionRunRepository {
   constructor(private readonly connection: SqliteConnection) {}
 
+  /** Decrypts `row`'s raw-capture column, `[]` when absent (predates FR-017a, or non-"local"). */
+  private decryptRawCaptures(row: ExecutionRunRow): Array<RawRequestCapture | null> {
+    if (!row.raw_captures_encrypted || !row.raw_captures_iv) return [];
+    const json = this.connection.cipher.decrypt(row.raw_captures_encrypted, row.raw_captures_iv);
+    return JSON.parse(json) as Array<RawRequestCapture | null>;
+  }
+
   private toRun(row: ExecutionRunRow): ExecutionRun {
     const results = JSON.parse(row.results) as RequestResult[];
+    const rawCaptures = this.decryptRawCaptures(row);
+    const mergedResults =
+      rawCaptures.length === 0
+        ? results
+        : results.map((result, index) => {
+            const rawCapture = rawCaptures[index];
+            return rawCapture ? { ...result, rawCapture } : result;
+          });
     return {
       id: row.id,
       workflowId: row.workflow_id,
@@ -73,8 +103,8 @@ export class SqliteExecutionRunRepository implements ExecutionRunRepository {
       status: row.status as ExecutionRunStatus,
       startedAt: row.started_at,
       completedAt: row.completed_at ?? undefined,
-      summary: recomputeSummary(row.started_at, results),
-      results,
+      summary: recomputeSummary(row.started_at, mergedResults),
+      results: mergedResults,
       cancelRequested: row.cancel_requested === 1,
       cancelReason: (row.cancel_reason as "user-requested" | "backend-restart" | null) ?? undefined,
     };
@@ -92,10 +122,14 @@ export class SqliteExecutionRunRepository implements ExecutionRunRepository {
     return rows.map((row) => this.toRun(row));
   }
 
-  get(sessionId: string, runId: string): ExecutionRun | undefined {
-    const row = this.connection.db
+  private getRow(sessionId: string, runId: string): ExecutionRunRow | undefined {
+    return this.connection.db
       .prepare("SELECT * FROM execution_runs WHERE session_id = ? AND id = ?")
       .get(sessionId, runId) as ExecutionRunRow | undefined;
+  }
+
+  get(sessionId: string, runId: string): ExecutionRun | undefined {
+    const row = this.getRow(sessionId, runId);
     return row ? this.toRun(row) : undefined;
   }
 
@@ -107,12 +141,17 @@ export class SqliteExecutionRunRepository implements ExecutionRunRepository {
   }
 
   create(sessionId: string, run: ExecutionRun): void {
+    // FR-017a: a "local"-tier run starts its raw-capture column as an encrypted `[]` so
+    // `appendResult` below only ever has to append to it; every other tier starts (and stays)
+    // `NULL` — it never becomes a byte this run's row can carry.
+    const capturesEnabled = run.environmentSnapshot.tier === "local";
+    const initialCaptures = capturesEnabled ? this.connection.cipher.encrypt(JSON.stringify([])) : undefined;
     this.connection.db
       .prepare(
         `INSERT INTO execution_runs
            (id, session_id, workflow_id, environment_id, environment_snapshot, status, started_at,
-            completed_at, results, cancel_requested, cancel_reason)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            completed_at, results, cancel_requested, cancel_reason, raw_captures_encrypted, raw_captures_iv)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         run.id,
@@ -123,19 +162,38 @@ export class SqliteExecutionRunRepository implements ExecutionRunRepository {
         run.status,
         run.startedAt,
         run.completedAt ?? null,
+        // `run.results` is always `[]` at creation time (`createRun()`), so there is nothing to
+        // strip a `rawCapture` out of yet.
         JSON.stringify(run.results),
         run.cancelRequested ? 1 : 0,
         run.cancelReason ?? null,
+        initialCaptures?.ciphertext ?? null,
+        initialCaptures?.iv ?? null,
       );
   }
 
   appendResult(sessionId: string, runId: string, result: RequestResult): ExecutionRun {
-    const current = this.get(sessionId, runId);
-    if (!current) throw new RunNotFoundError(runId);
-    const results = [...current.results, result];
+    const row = this.getRow(sessionId, runId);
+    if (!row) throw new RunNotFoundError(runId);
+    const { rawCapture, ...safeResult } = result;
+    const results = [...(JSON.parse(row.results) as RequestResult[]), safeResult];
+
+    const capturesEnabled =
+      (JSON.parse(row.environment_snapshot) as Pick<Environment, "tier">).tier === "local";
+    if (!capturesEnabled) {
+      this.connection.db
+        .prepare("UPDATE execution_runs SET results = ? WHERE session_id = ? AND id = ?")
+        .run(JSON.stringify(results), sessionId, runId);
+      return this.get(sessionId, runId)!;
+    }
+
+    const rawCaptures = [...this.decryptRawCaptures(row), rawCapture ?? null];
+    const encrypted = this.connection.cipher.encrypt(JSON.stringify(rawCaptures));
     this.connection.db
-      .prepare("UPDATE execution_runs SET results = ? WHERE session_id = ? AND id = ?")
-      .run(JSON.stringify(results), sessionId, runId);
+      .prepare(
+        "UPDATE execution_runs SET results = ?, raw_captures_encrypted = ?, raw_captures_iv = ? WHERE session_id = ? AND id = ?",
+      )
+      .run(JSON.stringify(results), encrypted.ciphertext, encrypted.iv, sessionId, runId);
     return this.get(sessionId, runId)!;
   }
 

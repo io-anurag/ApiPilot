@@ -95,6 +95,16 @@ export class SqliteConnection {
         updated_at TEXT NOT NULL
       );
 
+      PRAGMA user_version = 1;
+    `);
+    // FR-017a (2026-09-20 amendment): added after the v1 schema above shipped, so an existing
+    // on-disk DB needs these two columns added explicitly — `CREATE TABLE IF NOT EXISTS` alone
+    // is a no-op against a table that already exists. Nullable: a row predating this amendment,
+    // or one from a non-"local" run, simply has no raw-capture data.
+    this.ensureColumn("execution_runs", "raw_captures_encrypted", "BLOB");
+    this.ensureColumn("execution_runs", "raw_captures_iv", "BLOB");
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS benchmark_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         run_at TEXT NOT NULL,
@@ -106,6 +116,14 @@ export class SqliteConnection {
 
       PRAGMA user_version = 1;
     `);
+  }
+
+  /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */
+  private ensureColumn(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!columns.some((existing) => existing.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
   }
 
   close(): void {

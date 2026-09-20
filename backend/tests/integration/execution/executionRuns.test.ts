@@ -89,6 +89,15 @@ describe("execution routes (US1)", () => {
     for (const result of run.results as { operationPath: string }[]) {
       expect(typeof result.operationPath).toBe("string");
     }
+
+    // FR-017a: a "local"-tier run's stored results carry the full raw request/response detail.
+    const resultsWithRawCapture = run.results as Array<{
+      rawCapture?: { requestUrl: string; requestHeaders: unknown[]; responseHeaders: unknown[] };
+    }>;
+    expect(resultsWithRawCapture.every((result) => result.rawCapture !== undefined)).toBe(true);
+    expect(resultsWithRawCapture[0].rawCapture!.requestUrl).toContain(baseUrl);
+    expect(Array.isArray(resultsWithRawCapture[0].rawCapture!.requestHeaders)).toBe(true);
+    expect(Array.isArray(resultsWithRawCapture[0].rawCapture!.responseHeaders)).toBe(true);
   }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("reports connectivity-failure for every request when the target is unreachable, never assertion-failed", async () => {
@@ -118,6 +127,38 @@ describe("execution routes (US1)", () => {
     for (const result of run.results as { outcome: string; failureCategory?: string }[]) {
       expect(result.outcome).toBe("failed");
       expect(result.failureCategory).toBe("connectivity-failure");
+    }
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
+
+  it("never includes rawCapture for a non-'local'-tier run (FR-017a)", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/pets", { status: 200, body: [{ id: 1, name: "Rex", status: "available" }] });
+    targetServer.configure("POST", "/pets", { status: 201, body: { id: 2, name: "Fido" } });
+    targetServer.configure("GET", "/pets/1", { status: 200, body: { id: 1, name: "Rex" } });
+
+    const app = createApp();
+    const agent = request.agent(app);
+    await driveToPostmanGenerationComplete(agent);
+
+    const env = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "Staging",
+      tier: "staging",
+      baseUrl,
+      variableValues: { "apiKey": "test-key" },
+    });
+    expect(env.status).toBe(200);
+
+    const started = await agent
+      .post("/api/test-generation-workflow/execution/start")
+      .send({ environmentId: env.body.environment.id, confirmed: true });
+    expect(started.status).toBe(200);
+
+    const finalResponse = await pollUntilSettled(agent, started.body.run.id);
+    const run = finalResponse.body.run;
+    expect(run.status).toBe("completed");
+    expect(run.results.length).toBeGreaterThan(0);
+    for (const result of run.results as Array<{ rawCapture?: unknown }>) {
+      expect(result.rawCapture).toBeUndefined();
     }
   }, SINGLE_RUN_TEST_TIMEOUT_MS);
 

@@ -79,10 +79,28 @@ XIX — Fail Safely: every request gets an explicit, named outcome, never an unl
 | `durationMs` | `number` | `0` for `not-attempted`. |
 | `responseStatusCode` | `number?` | Absent for `not-attempted` and for `connectivity-failure`/`timeout` (no response was received). |
 | `assertionOutcomes` | `AssertionOutcome[]` | Empty for `not-attempted`. |
+| `rawCapture` | `RawRequestCapture?` | Present only when the run's `environmentSnapshot.tier === "local"` (FR-017a, 2026-09-20 amendment). Absent for every other tier — see `RawRequestCapture` below. |
 
-Deliberately excludes raw request/response bodies and header values (FR-017); a future
-diagnostics enhancement that needs them must add explicit, separately-gated opt-in fields rather
-than default to including them.
+Deliberately excludes raw request/response bodies and header values by default (FR-017); the
+`rawCapture` field above is the explicit, separately-gated opt-in this document originally
+reserved for that need, rather than a change to the default.
+
+## `RawRequestCapture`
+
+| Field | Type | Notes |
+|---|---|---|
+| `requestUrl` | `string` | The fully resolved request URL (variables substituted). |
+| `requestHeaders` | `RawHeader[]` (`{ key, value }`) | Exactly as sent — not redacted (FR-017a). |
+| `requestBody` | `string?` | Absent when the request had no body. |
+| `responseHeaders` | `RawHeader[]` | Exactly as received — not redacted (FR-017a). |
+| `responseBody` | `string?` | Absent when no response was received. |
+
+Only ever populated for a `"local"`-tier run (FR-017a). Persisted encrypted at rest via the same
+`CredentialCipher` mechanism `Environment.variableValues` already uses (specs/025-local-
+persistence-layer research.md D7), in a column separate from `results` — `execution_runs.
+raw_captures_encrypted`/`raw_captures_iv`, aligned by array position with `results` — so a
+non-local run's stored row physically cannot carry this data even if a future code change got
+the tier check wrong.
 
 ## `ExecutionRunSummary`
 

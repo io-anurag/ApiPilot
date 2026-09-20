@@ -74,6 +74,33 @@ export interface AssertionOutcome {
   detail?: string;
 }
 
+/** One raw header exactly as sent or received on the wire. */
+export interface RawHeader {
+  key: string;
+  value: string;
+}
+
+/**
+ * Full raw request/response detail for one executed request — the resolved request URL, its
+ * headers and body, and the response's headers and body, exactly as sent/received. Deliberately
+ * separate from `AssertionOutcome.detail` (which stays a non-sensitive summary for every tier,
+ * FR-017): this shape is the explicit, separately-gated opt-in `RequestResult` originally
+ * reserved for a future diagnostics enhancement rather than defaulting to include (data-model.md,
+ * FR-017 amendment, Clarifications 2026-09-20). Never populated for any tier other than `"local"`
+ * — a local run is assumed to target the developer's own non-production service, so nothing here
+ * is redacted, unlike the credential-safety behavior that remains in force for every other tier.
+ * Persisted encrypted at rest via the same mechanism `Environment.variableValues` already uses
+ * (specs/025-local-persistence-layer research.md D7), kept in a column separate from the rest of
+ * `RequestResult` so a non-local run's stored row can never carry this data even by accident.
+ */
+export interface RawRequestCapture {
+  requestUrl: string;
+  requestHeaders: RawHeader[];
+  requestBody?: string;
+  responseHeaders: RawHeader[];
+  responseBody?: string;
+}
+
 /** One executed (or explicitly not-attempted) request within an `ExecutionRun` (FR-016). */
 export interface RequestResult {
   /** Ties back to the originating `TestScenario.id`. */
@@ -92,6 +119,8 @@ export interface RequestResult {
   responseStatusCode?: number;
   /** Empty for `not-attempted`. */
   assertionOutcomes: AssertionOutcome[];
+  /** Present only when the run's `environmentSnapshot.tier === "local"` (see `RawRequestCapture`). */
+  rawCapture?: RawRequestCapture;
 }
 
 /** Aggregate counts, recomputed from `ExecutionRun.results` whenever it changes. */

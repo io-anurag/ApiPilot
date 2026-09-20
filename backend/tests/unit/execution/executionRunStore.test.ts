@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { RequestResult } from "@apipilot/shared-domain";
+import type { RawRequestCapture, RequestResult } from "@apipilot/shared-domain";
 import {
   appendResult,
   createRun,
@@ -16,7 +16,7 @@ import {
 import { RunNotFoundError } from "../../../src/execution/errors";
 import { enterTestSession } from "../../../src/session/sessionContext";
 import { forceExpireForTest } from "../../../src/session/sessionRegistry";
-import { SqliteConnection, setSharedConnectionForTest } from "../../../src/persistence/connection";
+import { SqliteConnection, setSharedConnectionForTest, getSharedConnection } from "../../../src/persistence/connection";
 import { getExecutionRunRepository } from "../../../src/persistence/executionRunRepository";
 
 const environmentSnapshot = { name: "Local", tier: "local" as const, baseUrl: "http://localhost:4000" };
@@ -136,6 +136,51 @@ describe("executionRunStore", () => {
 
     forceExpireForTest(sessionId);
     expect(listRuns()).toEqual([]);
+  });
+
+  it("round-trips rawCapture for a 'local'-tier run (FR-017a)", () => {
+    const rawCapture: RawRequestCapture = {
+      requestUrl: "http://localhost:4000/pets",
+      requestHeaders: [{ key: "Authorization", value: "Bearer secret" }],
+      requestBody: '{"name":"Rex"}',
+      responseHeaders: [{ key: "Content-Type", value: "application/json" }],
+      responseBody: '{"id":"1"}',
+    };
+    const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+    const updated = appendResult(run.id, passedResult({ rawCapture }));
+    expect(updated.results[0].rawCapture).toEqual(rawCapture);
+    expect(getRun(run.id).results[0].rawCapture).toEqual(rawCapture);
+  });
+
+  it("never persists rawCapture for a non-'local'-tier run, even if the caller passes one (FR-017a)", () => {
+    const stagingSnapshot = { name: "Staging", tier: "staging" as const, baseUrl: "https://staging.example.com" };
+    const rawCapture: RawRequestCapture = {
+      requestUrl: "https://staging.example.com/pets",
+      requestHeaders: [{ key: "Authorization", value: "Bearer secret" }],
+      responseHeaders: [],
+      responseBody: "should never be stored",
+    };
+    const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot: stagingSnapshot });
+    const updated = appendResult(run.id, passedResult({ rawCapture }));
+    expect(updated.results[0].rawCapture).toBeUndefined();
+    expect(getRun(run.id).results[0].rawCapture).toBeUndefined();
+  });
+
+  it("stores rawCapture encrypted at rest, never as plaintext in the 'results' column (FR-017a, constitution XVII)", () => {
+    const rawCapture: RawRequestCapture = {
+      requestUrl: "http://localhost:4000/pets",
+      requestHeaders: [{ key: "Authorization", value: "Bearer super-secret-token" }],
+      responseHeaders: [],
+      responseBody: "super-secret-response-body",
+    };
+    const run = createRun({ workflowId: "wf-1", environmentId: "env-1", environmentSnapshot });
+    appendResult(run.id, passedResult({ rawCapture }));
+
+    const row = getSharedConnection().db
+      .prepare("SELECT results, raw_captures_encrypted FROM execution_runs WHERE id = ?")
+      .get(run.id) as { results: string; raw_captures_encrypted: Buffer };
+    expect(row.results).not.toContain("super-secret");
+    expect(row.raw_captures_encrypted.toString("utf-8")).not.toContain("super-secret");
   });
 
   it("survives closing and reopening the database file, simulating a backend restart (specs/025 FR-002)", () => {
