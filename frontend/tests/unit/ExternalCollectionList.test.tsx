@@ -14,7 +14,7 @@ function collection(overrides: Partial<UploadedCollectionSummary> = {}): Uploade
 describe("ExternalCollectionList", () => {
   it("shows an empty state when there are no uploaded collections", () => {
     render(<ExternalCollectionList uploadedCollections={[]} selectedId={undefined} onSelect={vi.fn()} onRemoved={vi.fn()} />);
-    expect(screen.getByText("No uploaded collections yet.")).toBeInTheDocument();
+    expect(screen.getByText("No uploaded collections yet")).toBeInTheDocument();
   });
 
   it("lists each collection's name and tier, and labels an unconfirmed one", () => {

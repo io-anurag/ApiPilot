@@ -39,21 +39,44 @@ export function ExternalCollectionsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Import a Postman Collection</h2>
-        <p className="text-sm text-slate-600">
-          Upload an existing Postman collection and environment — exported from Postman itself,
-          received from a teammate, or hand-authored — and run it, without first uploading an
-          OpenAPI specification.
-        </p>
-        <ExternalCollectionUpload onUploaded={handleUploaded} />
-        <ExternalCollectionList
-          uploadedCollections={uploadedCollections}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onRemoved={handleRemoved}
-        />
+      <div className="flex items-center justify-between border-b border-border pb-4">
+        <div>
+          <p className="font-mono text-xs font-semibold uppercase text-brand-700">
+            Bring your own collection
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Run an existing Postman collection and environment, without first uploading an OpenAPI
+            specification.
+          </p>
+        </div>
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
+        <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Import a Postman collection</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Collection + environment JSON · exported from Postman, shared by a teammate, or
+              hand-authored
+            </p>
+          </div>
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+        </div>
+        <div className="space-y-5 p-5 sm:p-6">
+          <ExternalCollectionUpload onUploaded={handleUploaded} />
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase text-muted">Uploaded collections</h3>
+            <ExternalCollectionList
+              uploadedCollections={uploadedCollections}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onRemoved={handleRemoved}
+            />
+          </div>
+        </div>
       </section>
+
       {selected && <ExternalCollectionRunPanel uploadedCollection={selected} />}
     </div>
   );
