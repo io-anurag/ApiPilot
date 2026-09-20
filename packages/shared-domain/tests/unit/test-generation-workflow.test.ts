@@ -9,7 +9,7 @@ import {
 } from "../../src/testGenerationWorkflow";
 
 describe("test generation workflow contracts", () => {
-  it("WORKFLOW_STAGE_ORDER has exactly the nine stage ids spec.md FR-001 names, in order", () => {
+  it("WORKFLOW_STAGE_ORDER has exactly the ten stage ids spec.md FR-001 names, in order (specs/009 Clarifications 2026-09-20 amendment adds 'execution')", () => {
     expect(WORKFLOW_STAGE_ORDER).toEqual([
       "upload",
       "analysis",
@@ -20,6 +20,7 @@ describe("test generation workflow contracts", () => {
       "dependencyAnalysis",
       "workflowReview",
       "postmanGeneration",
+      "execution",
     ] satisfies WorkflowStageId[]);
   });
 

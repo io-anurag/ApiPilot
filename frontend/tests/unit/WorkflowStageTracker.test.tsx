@@ -49,6 +49,14 @@ describe("WorkflowStageTracker", () => {
     );
   });
 
+  it("labels the 'execution' stage and renders its skipped status distinctly (specs/009 Clarifications 2026-09-20)", () => {
+    render(
+      <WorkflowStageTracker workflow={workflowWithStatuses({ execution: "skipped" })} />,
+    );
+    expect(screen.getByText("Execution")).toBeInTheDocument();
+    expect(screen.getByTestId("stage-status-execution")).toHaveTextContent("Skipped");
+  });
+
   it("renders a 'partial' AI enhancement status distinctly from 'skipped' (FR-011)", () => {
     render(
       <WorkflowStageTracker

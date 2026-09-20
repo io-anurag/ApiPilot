@@ -273,3 +273,16 @@ export function continueWorkflowReview(): Promise<WorkflowResult> {
 export function generatePostmanCollection(options?: ExportOptions): Promise<WorkflowResult> {
   return postJson("/api/test-generation-workflow/postman-generation", "generatePostmanCollection", { options });
 }
+
+/**
+ * Explicitly skips the `execution` stage without running anything (specs/009 Clarifications
+ * 2026-09-20). May be reopened later by starting a run from `ExecutionResultsPanel`.
+ */
+export function skipExecutionStage(): Promise<WorkflowResult> {
+  return postJson("/api/test-generation-workflow/execution/skip", "skipExecutionStage");
+}
+
+/** Explicitly marks the `execution` stage complete (specs/009 Clarifications 2026-09-20). */
+export function finishExecutionStage(): Promise<WorkflowResult> {
+  return postJson("/api/test-generation-workflow/execution/finish", "finishExecutionStage");
+}

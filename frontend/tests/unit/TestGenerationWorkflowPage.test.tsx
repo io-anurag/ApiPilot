@@ -19,6 +19,7 @@ function baseStages() {
     "dependencyAnalysis",
     "workflowReview",
     "postmanGeneration",
+    "execution",
   ] as const;
   return Object.fromEntries(
     ids.map((id) => [id, { stageId: id, status: "not-yet-reached" }]),
@@ -518,5 +519,114 @@ describe("TestGenerationWorkflowPage", () => {
     expect(screen.getByTestId("dependency-analysis-ai-error")).toHaveTextContent(
       "more than the configured 45s budget",
     );
+  });
+
+  describe("execution stage (specs/009 Clarifications 2026-09-20)", () => {
+    const postmanArtifact = {
+      collection: { info: { name: "c" }, item: [] },
+      environment: { values: [] },
+      readme: "readme text",
+      summary: { requestCount: 3, folderCount: 1, byProvenance: { RULE: 3, AI: 0 } },
+      limitations: [],
+    };
+
+    function executionWorkflow(executionStatus: string) {
+      const stages = baseStages() as Record<string, { stageId: string; status: string }>;
+      stages.postmanGeneration = { stageId: "postmanGeneration", status: "complete" };
+      stages.execution = { stageId: "execution", status: executionStatus };
+      return {
+        id: "wf-1",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        activeStageId: "execution",
+        stages,
+        specificationFilename: "valid.yaml",
+        apiModel: emptyApiModel,
+        postmanArtifact,
+      };
+    }
+
+    function stubExecutionFetch(workflow: unknown, postHandlers: Record<string, unknown> = {}) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input.toString();
+          const method = init?.method ?? "GET";
+          if (method === "GET" && url.endsWith("/api/test-generation-workflow")) {
+            return { ok: true, status: 200, json: () => Promise.resolve({ workflow }) };
+          }
+          if (method === "GET" && url.endsWith("/environments")) {
+            return { ok: true, status: 200, json: () => Promise.resolve({ environments: [] }) };
+          }
+          if (method === "GET" && url.endsWith("/execution/runs")) {
+            return { ok: true, status: 200, json: () => Promise.resolve({ runs: [] }) };
+          }
+          for (const [suffix, response] of Object.entries(postHandlers)) {
+            if (method === "POST" && url.endsWith(suffix)) {
+              return { ok: true, status: 200, json: () => Promise.resolve(response) };
+            }
+          }
+          throw new Error(`Unexpected fetch: ${method} ${url}`);
+        }),
+      );
+    }
+
+    it("shows the execution stage's skip/finish actions and Run & Results only while it is active, not for other stages", async () => {
+      stubExecutionFetch(executionWorkflow("active"));
+
+      render(<TestGenerationWorkflowPage />);
+      await waitFor(() =>
+        expect(screen.getByTestId("execution-stage-actions")).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId("execution-results-panel")).toBeInTheDocument();
+      expect(screen.queryByTestId("postman-generation-stage")).not.toBeInTheDocument();
+    });
+
+    it("skipping execution hides the skip/finish actions but keeps Run & Results available", async () => {
+      const skipped = executionWorkflow("skipped");
+      stubExecutionFetch(executionWorkflow("active"), {
+        "/execution/skip": { workflow: skipped },
+      });
+
+      render(<TestGenerationWorkflowPage />);
+      fireEvent.click(await screen.findByRole("button", { name: "Skip execution" }));
+
+      await waitFor(() =>
+        expect(screen.queryByTestId("execution-stage-actions")).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTestId("execution-results-panel")).toBeInTheDocument();
+    });
+
+    it("finishing execution hides the skip/finish actions but keeps Run & Results available", async () => {
+      const finished = executionWorkflow("complete");
+      stubExecutionFetch(executionWorkflow("active"), {
+        "/execution/finish": { workflow: finished },
+      });
+
+      render(<TestGenerationWorkflowPage />);
+      fireEvent.click(await screen.findByRole("button", { name: "Finish" }));
+
+      await waitFor(() =>
+        expect(screen.queryByTestId("execution-stage-actions")).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTestId("execution-results-panel")).toBeInTheDocument();
+    });
+
+    it("still shows the interactive Postman Generation form with download links when revisited after advancing to execution", async () => {
+      stubExecutionFetch(executionWorkflow("active"));
+
+      render(<TestGenerationWorkflowPage />);
+      await waitFor(() =>
+        expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByTestId("stage-status-postmanGeneration"));
+      expect(screen.getByTestId("postman-generation-stage")).toBeInTheDocument();
+      expect(screen.getByTestId("postman-generation-downloads")).toBeInTheDocument();
+      // Regenerable, not read-only — the generic "nothing here can be changed" notice must not
+      // apply to a stage that stays fully interactive.
+      expect(screen.queryByTestId("read-only-stage-notice")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Generate Postman Collection" })).toBeEnabled();
+    });
   });
 });

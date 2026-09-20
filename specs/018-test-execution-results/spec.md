@@ -20,7 +20,10 @@ Test Generation Workflow), and AP-016 (Workflow-Aware Postman Generation). It do
 how that artifact is generated, reviewed, or approved. Per `specs/ROADMAP.md`'s MVP Boundary
 and Next Actions #9-12, this feature's specification work begins only after the full MVP
 boundary (AP-001 through AP-010) was validated end-to-end against two independent real-world
-OpenAPI specifications (2026-09-11).
+OpenAPI specifications (2026-09-11). Originally surfaced as a panel bundled into AP-009's
+`postmanGeneration` screen; specs/009's 2026-09-20 amendment splits it into its own, explicitly
+skippable guided-workflow stage (`execution`) — this feature's own endpoints and data model are
+unaffected by that placement change.
 
 ## Clarifications
 

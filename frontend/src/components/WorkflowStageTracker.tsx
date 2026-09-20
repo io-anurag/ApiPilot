@@ -49,6 +49,7 @@ const STAGE_LABELS: Record<WorkflowStageId, string> = {
   dependencyAnalysis: "Dependency Analysis",
   workflowReview: "Workflow Review",
   postmanGeneration: "Postman Generation",
+  execution: "Execution",
 };
 
 const STATUS_LABELS: Record<StageStatus, string> = {

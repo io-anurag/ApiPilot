@@ -6,7 +6,7 @@ import {
   PostmanGenerationRefusedError,
   StageNotActiveError,
 } from "./errors";
-import { getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
+import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
 
 const logger = createLogger("testGenerationWorkflow.postmanGenerationStage");
 
@@ -58,6 +58,12 @@ export function runPostmanGeneration(options?: ExportOptions): TestGenerationWor
     patchWorkflow({ postmanArtifact: outcome.result });
     if (workflow.stages.postmanGeneration.status !== "complete") {
       updateStage("postmanGeneration", "complete");
+      // 2026-09-20 amendment (specs/009 Clarifications): execution is now its own guided-workflow
+      // stage, entered automatically the first time postmanGeneration completes — mirrors every
+      // other forward stage transition in US1 (e.g. `completeWorkflowReview()`). A later,
+      // idempotent regeneration (this `if` not taken) never re-advances the active stage away
+      // from wherever the user currently is.
+      advanceActiveStage("execution");
     }
     const result = getCurrentWorkflow()!;
     logger.info("stage_complete", {

@@ -7,7 +7,9 @@ import type {
 } from "@apipilot/shared-domain";
 import {
   fetchCurrentWorkflow,
+  finishExecutionStage,
   runDeterministicGeneration,
+  skipExecutionStage,
   startWorkflow,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
@@ -23,7 +25,6 @@ import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
 import { ExecutionResultsPanel } from "../components/ExecutionResultsPanel";
 import { AnalysisSummary } from "../components/AnalysisSummary";
-import { PostmanExportLimitations } from "../components/PostmanExportLimitations";
 import { BUTTON_STYLES } from "../components/controlStyles";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
@@ -217,6 +218,14 @@ export function TestGenerationWorkflowPage() {
     displayStageId === "aiEnhancement" &&
     (workflow?.stages.aiEnhancement.status === "skipped" ||
       workflow?.stages.aiEnhancement.status === "partial");
+  // ExecutionResultsPanel always accepts a new run regardless of the stage's own status —
+  // "skipped"/"complete" reopen to "active" the moment one starts (executionStage.ts) — so the
+  // generic "nothing here can be changed" read-only notice would be actively misleading here.
+  const executionStageAlwaysActionable = displayStageId === "execution";
+  // PostmanGenerationStage stays interactive (regenerable) even once `activeStageId` has moved on
+  // to `execution` — it was never gated on being the active stage to begin with (see its own
+  // render call below) — so the same read-only notice would misreport it too.
+  const postmanGenerationAlwaysActionable = displayStageId === "postmanGeneration";
 
   if (loading) {
     return (
@@ -433,6 +442,8 @@ export function TestGenerationWorkflowPage() {
           </div>
           {displayStageId !== workflow.activeStageId &&
             !aiEnhancementHasRetryableOutcome &&
+            !executionStageAlwaysActionable &&
+            !postmanGenerationAlwaysActionable &&
             (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
               <output
                 data-testid="revisiting-notice"
@@ -510,17 +521,104 @@ export function TestGenerationWorkflowPage() {
               isActiveStage={workflow.activeStageId === "workflowReview"}
             />
           )}
-          {displayStageId === "postmanGeneration" &&
-            (workflow.activeStageId === "postmanGeneration" ? (
-              <PostmanGenerationStage
-                postmanArtifact={workflow.postmanArtifact}
-                onGenerated={handleAdvanced}
-              />
-            ) : (
-              <PostmanGenerationSummary postmanArtifact={workflow.postmanArtifact} />
-            ))}
-          {workflow.stages.postmanGeneration.status === "complete" && <ExecutionResultsPanel />}
+          {displayStageId === "postmanGeneration" && (
+            // Always the interactive form, never a static summary — regenerating with different
+            // export options was always possible at any time even before the 2026-09-20
+            // `execution` stage amendment (postmanGeneration was previously the last stage, so it
+            // never stopped being "active"). PostmanGenerationStage already reseeds its download
+            // links from `postmanArtifact` on mount specifically to support being revisited.
+            <PostmanGenerationStage
+              postmanArtifact={workflow.postmanArtifact}
+              onGenerated={handleAdvanced}
+            />
+          )}
+          {displayStageId === "execution" && (
+            <>
+              {workflow.stages.execution.status === "active" && (
+                <ExecutionStageActions onAdvanced={handleAdvanced} />
+              )}
+              <ExecutionResultsPanel />
+            </>
+          )}
         </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Explicit "I'm done with this stage" actions for `execution` (specs/009 Clarifications
+ * 2026-09-20): unlike every earlier stage, there is no single action whose completion implies
+ * the user is finished — they may run against several environments, or none at all — so finishing
+ * or skipping is a distinct, explicit choice rather than something inferred from a run settling.
+ * Shown only while the stage is still `"active"`; once skipped/complete, `ExecutionResultsPanel`
+ * alone remains (starting another run silently reopens the stage server-side).
+ */
+function ExecutionStageActions({
+  onAdvanced,
+}: Readonly<{ onAdvanced: (result: WorkflowResult) => void }>) {
+  const [pending, setPending] = useState<"skip" | "finish" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSkip() {
+    setPending("skip");
+    setError(null);
+    const result = await skipExecutionStage();
+    setPending(null);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    onAdvanced(result);
+  }
+
+  async function handleFinish() {
+    setPending("finish");
+    setError(null);
+    const result = await finishExecutionStage();
+    setPending(null);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    onAdvanced(result);
+  }
+
+  return (
+    <section
+      data-testid="execution-stage-actions"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm"
+    >
+      <p className="text-sm text-slate-600">
+        Running the approved collection against a real environment is optional. Skip this stage
+        if you don&apos;t need to run it now, or finish once you&apos;re done.
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleSkip}
+          disabled={pending !== null}
+          className={BUTTON_STYLES.secondary}
+        >
+          {pending === "skip" ? "Skipping…" : "Skip execution"}
+        </button>
+        <button
+          type="button"
+          onClick={handleFinish}
+          disabled={pending !== null}
+          className={BUTTON_STYLES.primary}
+        >
+          {pending === "finish" ? "Finishing…" : "Finish"}
+        </button>
+      </div>
+      {error && (
+        <p
+          role="alert"
+          data-testid="execution-stage-actions-error"
+          className="w-full rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        >
+          {error}
+        </p>
       )}
     </section>
   );
@@ -609,41 +707,6 @@ function DependencyAnalysisSummary({
           {aiBatchingLimitation}
         </p>
       )}
-    </section>
-  );
-}
-
-function PostmanGenerationSummary({
-  postmanArtifact,
-}: Readonly<{ postmanArtifact?: TestGenerationWorkflow["postmanArtifact"] }>) {
-  if (!postmanArtifact) {
-    return (
-      <section
-        data-testid="postman-generation-summary"
-        className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
-      >
-        <h2 className="text-base font-semibold text-slate-900">Postman Generation</h2>
-        <p className="text-sm text-slate-600">
-          No Postman artifact was generated for this stage.
-        </p>
-      </section>
-    );
-  }
-
-  const { summary, limitations } = postmanArtifact;
-  return (
-    <section
-      data-testid="postman-generation-summary"
-      className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
-    >
-      <h2 className="text-base font-semibold text-slate-900">
-        Postman Collection Generated
-      </h2>
-      <p className="text-sm text-slate-600">
-        {summary.requestCount} request{summary.requestCount === 1 ? "" : "s"} in{" "}
-        {summary.folderCount} folder{summary.folderCount === 1 ? "" : "s"}.
-      </p>
-      <PostmanExportLimitations limitations={limitations} />
     </section>
   );
 }
