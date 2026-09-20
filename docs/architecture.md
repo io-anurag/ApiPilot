@@ -39,6 +39,9 @@ flowchart LR
   DEP --> PROVIDER
   PROVIDER --> LOCAL["Local model or deterministic mock"]
   EXEC --> DB[("SQLite: environments, run history, AI diagnostics")]
+  UI --> EXTC["External collection import & execution (standalone)"]
+  EXTC -->|"shares Newman dispatch"| EXEC
+  EXTC --> DB
 ```
 
 The frontend and backend consume the same contracts from `packages/shared-domain`. The browser
@@ -60,7 +63,8 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle — keyed per session by `backend/src/session/`.       |
 | `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation). |
 | `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
-| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, and AI readiness/benchmark diagnostics; at-rest credential encryption (specs/025-local-persistence-layer). |
+| `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection/environment pair, sibling to `execution/` rather than an extension of it (specs/026-external-collection-execution). Reuses `execution/newmanRunner.ts`'s dispatch unchanged; maps results through its own, narrower mapper rather than `execution/mapNewmanResult.ts`, since an uploaded collection's arbitrary named tests have no `TestScenario` to interpret them against. |
+| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, and AI readiness/benchmark diagnostics; at-rest credential encryption (specs/025-local-persistence-layer, specs/026-external-collection-execution). |
 | `frontend/src/pages/`                 | The guided workflow composition root.                                                                                                          |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
@@ -313,10 +317,69 @@ The database location is configurable via `APIPILOT_DB_PATH` (default
 `~/.apipilot/apipilot.db`); automated tests use an isolated location, never the location a real
 running instance uses.
 
+## External collection import & execution
+
+`backend/src/externalCollections/` (specs/026-external-collection-execution) is a parallel,
+"bring your own artifact" capability rather than an extension of the OpenAPI-driven pipeline above
+— it deliberately does not flow through `ApiModel`/`TestModel`, and requires no active
+`TestGenerationWorkflow`. An operator uploads a Postman Collection v2.1 JSON file and a Postman
+Environment JSON file directly; both are validated with the real `postman-collection` SDK
+(constitution XXVIII — reuse the standard implementation rather than a custom schema check) instead
+of a hand-rolled check.
+
+`runUploadedCollectionExecution.ts` walks the parsed `Collection` via its own `forEachItem()`
+method, which visits every request at any folder nesting depth in the collection's own document
+order, and converts each visited item into `PostmanRawItem` (`packages/shared-domain/src/
+externalCollections.ts`) — a type deliberately separate from `postmanArtifact.ts`'s generator-only
+`PostmanRequestItem`/`PostmanEvent`, which can represent only a `"test"` script event and a `"raw"`
+body mode because that is all ApiPilot's own generator ever emits. An uploaded collection may
+legitimately use a `"prerequest"` script event, a non-`"raw"` body mode, or an auth scheme outside
+the four the generator configures, so `PostmanRawItem` widens exactly that boundary rather than
+stretching the generator's own type past its documented purpose. `execution/newmanRunner.ts`'s
+`runSingleItem()` is reused unchanged for dispatch — its signature was widened (not behaviorally
+modified) to accept either item type, since `newman.run()` already accepts either shape as plain
+JSON.
+
+Result *interpretation* is not shared with the generated-collection path: `mapUploadedResult.ts`
+reads `testOutcomes` directly off Newman's own `execution.assertions[]`, naming each test exactly
+as the collection's own `pm.test(...)` script named it, rather than forcing it through
+`mapNewmanResult.ts`'s `TestScenario`-typed `"status-code"`/`"schema-conformance"` vocabulary — an
+uploaded collection's tests have no `TestScenario` to interpret them against, and guessing a
+classification the collection never declared would itself violate constitution I/XIV. The two
+result/run shapes (`UploadedRequestResult`/`UploadedCollectionExecutionRun`) are consequently
+distinct sibling types, kept structurally parallel to but not merged with AP-017's own
+`RequestResult`/`ExecutionRun`, which remain completely unmodified.
+
+Two independent confirmation gates apply before a run starts: an unverified-content gate (FR-007),
+evaluated only while the uploaded collection has never before been confirmed and permanently
+satisfied once accepted, then the same staging/production/destructive-request gate the
+guided-workflow execution path already has (FR-013), evaluated on every run start. A brand-new
+upload against a risky tier requires two separate confirmed resubmissions, one per gate, rather
+than one submission silently satisfying both. Uploaded-collection runs and guided-workflow runs
+share the same single session-wide "one execution in progress at a time" slot, enforced by a
+small cross-check in each path's own route rather than merging their two separate stores/tables.
+
+Executing the collection's own pre-request/test scripts inside Newman's existing sandboxed script
+engine — the same engine `newmanRunner.ts` already invokes for every generated request — required
+a narrow, explicit amendment to constitution XVII ("avoid executing uploaded specifications or
+generated scripts on the server"), gated behind the FR-007 confirmation above and scoped only to
+this feature; it does not apply to ApiPilot-generated artifacts, AI output, or uploaded OpenAPI
+specifications, and no new sandboxing layer was introduced.
+
+The frontend's "Import & Run Collection" tab (`frontend/src/pages/ExternalCollectionsPage.tsx`) is
+a sibling top-level view to the guided workflow, switched via a two-tab header in `App.tsx` — both
+views stay mounted (visibility toggling, not conditional unmount) so switching tabs never discards
+either one's in-progress state. No routing library was introduced, mirroring the guided workflow's
+own original decision against one for stage navigation.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
   executes them nor follows arbitrary filesystem/network references.
+- The one narrow exception to "never execute uploaded content" is a user-initiated, explicitly
+  confirmed run of an uploaded Postman collection's own scripts, inside Newman's existing sandbox
+  (specs/026-external-collection-execution, constitution XVII amendment). It does not extend to
+  OpenAPI specifications, ApiPilot-generated artifacts, or AI output.
 - Specifications, credentials, raw prompts, raw model responses, and complete request payloads are
   excluded from ordinary diagnostics. Logs favor stage, category, duration, model identity, and
   correlation context. A request-completion log records only method/path/status/duration/client
@@ -345,8 +408,11 @@ running instance uses.
 
 ## Frontend architecture
 
-The frontend is a React/Vite technical workspace, not a set of independent stage pages. The page
-composition root renders the active guided stage and its shared progress/state. Components own
+The frontend is a React/Vite technical workspace, not a set of independent stage pages. `App.tsx`
+switches between two top-level views — the guided workflow and the standalone external-collection
+import/execution page (specs/026-external-collection-execution) — both kept mounted so neither
+loses state when the other is active. Within the guided workflow, the page composition root
+renders the active guided stage and its shared progress/state. Components own
 presentation, interaction, local UI state, accessible names, keyboard behavior, and visible focus.
 Service modules own HTTP transport. Shared domain types preserve a type-safe boundary instead of
 duplicating backend/frontend representations.
@@ -378,6 +444,6 @@ tests and benchmarks are opt-in because they may provision or load a local model
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
 feature-level behavior, contracts, success criteria, and implementation status live in the
-[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/025-*`.
+[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/026-*`.
 Where this document and a feature specification differ, the applicable specification and
 constitution take precedence.

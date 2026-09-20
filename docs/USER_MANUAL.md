@@ -15,8 +15,15 @@ review and approve everything before anything is exported or executed. Approved 
 become a Postman collection, which you can then run yourself against an environment you
 define, with results reported back in the same screen.
 
+If you already have a Postman collection and environment of your own — exported from
+Postman, received from a teammate, or hand-authored — you can instead import and run it
+directly, without uploading an OpenAPI specification at all. See
+[section 4](#4-importing-and-running-your-own-postman-collection).
+
 Nothing is ever sent to a cloud AI service, and no request is made against the API
-described by your specification until you explicitly start an execution run.
+described by your specification until you explicitly start an execution run. The one
+exception is your own imported collection's requests and scripts, which you separately
+and explicitly confirm before they run (section 4).
 
 ## 2. Starting ApiPilot
 
@@ -31,10 +38,12 @@ The header shows a live connection indicator — **Connecting…**, **Connected*
 
 ## 3. The guided workflow
 
-ApiPilot has a single entry point: the guided workflow. There are no other screens or
-routes — every step below is reached in this fixed order, and a completed step can be
-revisited read-only (or, for the two review stages, reopened) by clicking its chip in the
-stage tracker at the top of the page.
+The header has two tabs: **Guided Workflow** (the default, described in this section) and
+**Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)).
+Switching tabs never discards either one's state. Within the guided workflow, every step
+below is reached in this fixed order, and a completed step can be revisited read-only (or,
+for the two review stages, reopened) by clicking its chip in the stage tracker at the top
+of the page.
 
 ```text
 Upload → Analysis → API Review → Deterministic Generation → AI Enhancement
@@ -227,7 +236,7 @@ Staging / Production), base URL, an optional delay between requests in milliseco
 any variables the collection needs (e.g., an auth token). If you have more than one
 environment, pick one explicitly from the dropdown — none is pre-selected. Environments
 you define, and every run's results, are saved so they're still there if the backend
-restarts while your session is active (see [Sessions](#4-sessions)).
+restarts while your session is active (see [Sessions](#5-sessions)).
 
 Click **Run**. If the selected environment is tagged Staging or Production, or the
 collection includes any destructive request (POST/PUT/PATCH/DELETE), you'll see a
@@ -255,7 +264,59 @@ be reopened for review without re-running them, even after a backend restart. If
 was in progress when the backend was restarted, it's recorded as cancelled with a reason
 that distinguishes it from a run you cancelled yourself.
 
-## 4. Sessions
+## 4. Importing and running your own Postman collection
+
+Click the **Import & Run Collection** tab in the header. This is a separate, standalone
+area — it never requires an OpenAPI upload or a guided workflow, and nothing you do in
+the guided workflow tab affects it.
+
+### 4.1 Upload
+
+Provide a name (unique among your uploads), a risk tier (Local / Dev / QA / Staging /
+Production — the same vocabulary as a guided-workflow environment), your Postman
+Collection v2.1 JSON file, and your Postman Environment JSON file. Both files are
+validated immediately: a malformed collection, a collection with no requests at all, or a
+malformed environment is refused with a specific error, never silently repaired.
+
+### 4.2 The uploaded-content confirmation
+
+The first time you run a newly uploaded collection, a warning appears: its requests, and
+any pre-request/test scripts it carries, were **not generated or verified by ApiPilot**
+and will execute exactly as authored — including any additional network calls a script
+itself makes. You must explicitly confirm before the first request is ever dispatched;
+declining runs nothing. This confirmation is required only once per uploaded collection,
+not on every run of an already-confirmed one.
+
+### 4.3 Running it
+
+Click **Run**. Exactly as in the guided workflow, a Staging/Production tier or a
+destructive request (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the
+collection's own requests) triggers a second, separate confirmation naming the tier and
+the specific requests involved. Requests then run one at a time, in the collection's own
+order — including everything inside nested folders.
+
+Results are reported the same way as the guided workflow's Run & Results panel: a
+summary row, an expandable list of per-request outcomes, and each request's own named
+test results (exactly as your collection's `pm.test(...)` scripts named them — ApiPilot
+never invents a status-code or schema expectation your collection didn't declare). Runs
+are always labeled **Uploaded** so you never mistake one for a guided-workflow run.
+
+You can upload and keep multiple named collection/environment pairs at once, switch
+between them, and remove one you no longer need — removing a collection never changes
+the results of a run you already completed against it.
+
+### 4.4 Things to know
+
+- An uploaded-collection run and a guided-workflow run share the same single "one run at
+  a time" slot for your session — starting either kind is refused while the other is
+  still in progress.
+- A variable your collection's own pre-request script computes at runtime, rather than
+  one your environment file supplies, is not currently distinguished from a genuinely
+  missing one if that same variable name is also referenced directly in a request's URL,
+  header, or body text. If your run is refused as missing a variable your script actually
+  provides, that is a known limitation, not a sign your collection is broken.
+
+## 5. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
 random cookie), so two people working from different browsers never see or affect each
@@ -273,7 +334,7 @@ times out from inactivity, its environments and run history are removed along wi
 the same as before. Credential values you enter into an environment are encrypted before
 being stored.
 
-## 5. AI behavior you should know about
+## 6. AI behavior you should know about
 
 - AI runs entirely on your own machine (Transformers.js); nothing about your
   specification, scenarios, or results is ever sent to an external service.
@@ -287,7 +348,7 @@ being stored.
   marked "not attempted" rather than silently dropped, and you can retry them in
   smaller batches.
 
-## 6. Limitations to keep in mind
+## 7. Limitations to keep in mind
 
 - Only a single OpenAPI 3.x YAML file is supported per workflow (max 10 MB). Swagger 2.0
   and JSON OpenAPI input are not supported.
@@ -310,8 +371,14 @@ being stored.
 - Persisted environments and execution run history are tied to your browser session —
   they are not shared across different browsers/devices and are removed if that session
   is idle-evicted, the same as the rest of the session-scoped model.
+- An imported collection's scripts execute with real effect, including any additional
+  network calls a script itself makes — you are trusting the collection's author (or
+  yourself) exactly as you would running it in Postman directly.
+- A collection variable set only by a pre-request script, then also referenced via
+  `{{...}}` in a static request URL/header/body, may be wrongly refused as "missing"
+  (see section 4.4).
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
@@ -325,8 +392,10 @@ being stored.
 | Confirmation banner appears before Run | Target environment is Staging/Production, or the collection includes destructive requests | Review the named requests, then confirm explicitly if intended |
 | "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
 | Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your environments and past execution run history are unaffected and still there |
+| "Import & Run Collection" tab refuses my collection/environment file | File isn't valid JSON, or the collection has no requests at all | Fix the file locally; ApiPilot never attempts to repair a malformed upload |
+| Uploaded-collection run refused as "missing" a variable my script sets | The variable is only ever produced by a pre-request script, not supplied by the environment file | Known limitation (section 4.4/7) — no workaround in the current product beyond removing the static `{{...}}` reference to that variable |
 
-## 8. Where to look next
+## 9. Where to look next
 
 - [README](../README.md) — installation, configuration, AI model selection, and full
   scope/limitations.
