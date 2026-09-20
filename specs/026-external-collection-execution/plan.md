@@ -64,7 +64,7 @@ and an uploaded run (FR-015).
 | VIII. Framework-Independent Test Model | PASS (N/A by design) | This feature deliberately does **not** flow through `ApiModel`/`TestModel` — it is a parallel, "bring your own artifact" capability, not an extension of the generation pipeline. Does not weaken VIII's guarantee for the existing pipeline. |
 | IX. Separation of Concerns | PASS | New code lives in its own module (`backend/src/externalCollections/`), sibling to `execution/`, reusing but not modifying the existing generation pipeline. |
 | XI. Human-in-the-Loop | PASS | FR-007's mandatory, explicit, per-artifact confirmation before first run is a stronger human-in-the-loop gate than AP-017's own (which only triggers for staging/production/destructive operations). |
-| XIII. Test Provenance and Traceability | PASS (extended) | `ExecutionRun.source` discriminant (data-model.md) satisfies FR-010's traceability requirement without a `TestScenario` to point to — `RequestResult.scenarioId` becomes optional rather than the vocabulary being silently reused for something it doesn't apply to. |
+| XIII. Test Provenance and Traceability | PASS (extended) | `UploadedCollectionExecutionRun.source: "uploaded"` (data-model.md) satisfies FR-010's traceability requirement without a `TestScenario` to point to. `RequestResult`/`ExecutionRun` are untouched (research.md D8) — the existing generated-run path needs no new discriminant since it is never rendered in the same list as an uploaded run (research.md D9). |
 | XVII. Security and Privacy by Design | PASS (post-amendment) | Full-fidelity script execution (FR-008) conflicted with "avoid arbitrary code execution" as originally written. Resolved 2026-09-20 by an explicit, narrow constitutional amendment (Sync Impact Report, `.specify/memory/constitution.md` v2.2.0) rather than a silent plan-level deviation, per Governance's conflict-resolution procedure. The amendment's own conditions (per-artifact confirmation, Newman's existing sandbox, no broader applicability) are exactly FR-007/FR-008 as specified. |
 | XVIII. Secrets Must Never Be Part of Generated Artifacts | PASS | This feature does not generate artifacts containing secrets; FR-009 requires the same encrypted-at-rest handling `Environment.variableValues` already has for any credential-like uploaded value. |
 | XIX. Fail Safely | PASS | FR-002/FR-003/FR-004 all require explicit, specific refusals rather than silent repair or guessing. |
@@ -106,8 +106,11 @@ specs/026-external-collection-execution/
 
 ```text
 packages/shared-domain/src/
-└── externalCollections.ts   # UploadedCollectionSet, UploadedCollectionExecutionRun types;
-                              # extends ExecutionRun/RequestResult (data-model.md)
+└── externalCollections.ts   # UploadedCollectionSet, UploadedRequestResult,
+                              # UploadedCollectionExecutionRun, PostmanRawItem/PostmanRawEvent/
+                              # PostmanRawRequest types; sibling to, not an extension of,
+                              # ExecutionRun/RequestResult, which remain unmodified (data-model.md,
+                              # research.md D6/D8)
 
 backend/src/externalCollections/     # New module, sibling to execution/ (constitution IX)
 ├── uploadedCollectionParsing.ts     # FR-002/FR-003/FR-004: structural validation via
@@ -118,9 +121,14 @@ backend/src/externalCollections/     # New module, sibling to execution/ (consti
 ├── uploadedCollectionExecutionStore.ts  # Session-scoped run store (mirrors
 │                                    # execution/executionRunStore.ts); cross-checked against
 │                                    # execution/executionRunStore.ts for the shared FR-015 slot
-├── runUploadedCollectionExecution.ts # Orchestrator (mirrors execution/runExecution.ts), reusing
-│                                    # execution/newmanRunner.ts and execution/mapNewmanResult.ts
-│                                    # unchanged
+├── runUploadedCollectionExecution.ts # Orchestrator (mirrors execution/runExecution.ts): walks the
+│                                    # collection via postman-collection's forEachItem() and reuses
+│                                    # execution/newmanRunner.ts's runSingleItem() (widened item
+│                                    # type only, research.md D6) — execution/mapNewmanResult.ts is
+│                                    # NOT reused; see mapUploadedResult.ts below
+├── mapUploadedResult.ts             # New, smaller result mapper (research.md D6) — reads
+│                                    # testOutcomes directly off Newman's execution.assertions[]
+│                                    # rather than interpreting them against a TestScenario
 └── errors.ts                        # UploadedCollectionNotFoundError, DuplicateNameError, etc.
 
 backend/src/persistence/

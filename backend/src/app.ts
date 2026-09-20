@@ -19,6 +19,7 @@ import {
   createTestGenerationWorkflowRouter,
   testGenerationWorkflowRouter,
 } from "./api/testGenerationWorkflow";
+import { externalCollectionsRouter } from "./api/externalCollections";
 import { versionRouter } from "./api/version";
 import { clientLogsRouter, CLIENT_LOGS_BODY_LIMIT } from "./api/clientLogs";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
@@ -111,6 +112,9 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
     provider ? createTestGenerationWorkflowRouter(provider) : testGenerationWorkflowRouter,
   );
   app.use("/api", aiStatusRouter);
+  // Standalone route family (FR-011) — mounted independently of testGenerationWorkflowRouter;
+  // no active TestGenerationWorkflow is required for any endpoint below.
+  app.use("/api", externalCollectionsRouter);
 
   // Centralized error-handling middleware (constitution XIX, Fail Safely):
   // never leak stack traces, always respond with a safe JSON shape.

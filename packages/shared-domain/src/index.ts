@@ -30,3 +30,4 @@ export * from "./postmanArtifact";
 export * from "./apiDependency";
 export * from "./testGenerationWorkflow";
 export * from "./execution";
+export * from "./externalCollections";

@@ -365,6 +365,11 @@ function RunSummary({
     <div data-testid="execution-run-summary" className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge label={runStatusLabel(run.status)} tone={runStatusTone(run.status)} />
+        {/* Static label (US3, FR-010, specs/026-external-collection-execution): this panel only
+         * ever renders ApiPilot-generated runs — no shared `source` field on `ExecutionRun` is
+         * needed, since an uploaded-collection run is always rendered in its own separate panel
+         * (research.md D8/D9). */}
+        <StatusBadge label="Generated" tone="neutral" />
         <StatusBadge label={run.environmentSnapshot.tier} tone={TIER_TONE[run.environmentSnapshot.tier]} />
         <p className="text-sm text-slate-600">
           {run.summary.passed} passed · {run.summary.failed} failed · {run.summary.notAttempted}{" "}
@@ -415,6 +420,7 @@ function RunHistory({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <StatusBadge label={runStatusLabel(historyRun.status)} tone={runStatusTone(historyRun.status)} />
+                <StatusBadge label="Generated" tone="neutral" />
                 <span className="min-w-0 truncate text-slate-700">{historyRun.environmentSnapshot.name}</span>
                 <StatusBadge
                   label={historyRun.environmentSnapshot.tier}

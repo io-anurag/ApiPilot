@@ -1,6 +1,6 @@
 import type {
-  PostmanAuth,
   PostmanCollectionVariable,
+  PostmanRawItem,
   PostmanRequestItem,
 } from "@apipilot/shared-domain";
 import type { NewmanExecutionResult } from "./mapNewmanResult";
@@ -18,9 +18,25 @@ import type { NewmanExecutionResult } from "./mapNewmanResult";
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface NewmanItemRunInput {
-  item: PostmanRequestItem;
-  /** The collection-level shared auth, if `generateCollection()` hoisted one for this run. */
-  collectionAuth: PostmanAuth | undefined;
+  /**
+   * `PostmanRawItem` (research.md D6, specs/026-external-collection-execution) is accepted
+   * alongside the generator-only `PostmanRequestItem`: an uploaded collection's own item may
+   * carry a `"prerequest"` event, a non-`"raw"` body mode, or an auth scheme `PostmanRequestItem`
+   * cannot represent. This is a type-only widening — `newman.run()` already accepts either shape
+   * as plain JSON, so the dispatch logic below is unchanged.
+   */
+  item: PostmanRequestItem | PostmanRawItem;
+  /**
+   * The collection-level shared auth, if `generateCollection()` hoisted one for this run, or —
+   * for an uploaded collection (specs/026-external-collection-execution) — whatever `auth` object
+   * `postman-collection` itself parsed off the uploaded collection's `info`/top level, so an item
+   * that relies on inheriting collection-level auth (a common authored pattern this codebase's
+   * own `PostmanAuth` union does not need to model) still authenticates correctly. Untyped
+   * (`unknown`) rather than widened to a second closed union, since this is passed straight
+   * through to `newman.run()` as plain JSON either way (research.md D6) — `PostmanAuth` remains
+   * the typed vocabulary for what ApiPilot's own generator hoists.
+   */
+  collectionAuth: unknown;
   /**
    * The names of every variable the run's collection/environment declares (values left empty
    * here; real values are supplied separately through `environment` below, and Newman resolves

@@ -59,7 +59,8 @@ function toRawHeaders(headers: NewmanHeaderList | undefined): RawHeader[] {
  * Callers gate this to `"local"`-tier runs only (`runExecution.ts`) — this function itself does
  * not know or care about the environment tier.
  */
-function buildRawCapture(execution: NewmanExecutionResult): RawRequestCapture | undefined {
+/** Exported for reuse by `externalCollections/mapUploadedResult.ts` — raw-capture handling is source-agnostic (data-model.md). */
+export function buildRawCapture(execution: NewmanExecutionResult): RawRequestCapture | undefined {
   if (!execution.request) return undefined;
   return {
     requestUrl: execution.request.url?.toString() ?? "",
@@ -70,7 +71,8 @@ function buildRawCapture(execution: NewmanExecutionResult): RawRequestCapture | 
   };
 }
 
-function isTimeoutError(error: { code?: string } | undefined): boolean {
+/** Exported for reuse by `externalCollections/mapUploadedResult.ts` (research.md D6) — not duplicated. */
+export function isTimeoutError(error: { code?: string } | undefined): boolean {
   return error?.code === "ESOCKETTIMEDOUT" || error?.code === "ETIMEDOUT";
 }
 
@@ -95,7 +97,8 @@ const GENERIC_SCHEMA_FAILURE_DETAIL =
  * rules, the same ones AP-006/AP-007 redact against, so detection can never disagree between
  * review, export, and execution), the whole message is replaced rather than trusted verbatim.
  */
-function redactIfSensitive(message: string): string {
+/** Exported for reuse by `externalCollections/mapUploadedResult.ts` (research.md D6) — not duplicated. */
+export function redactIfSensitive(message: string): string {
   const mentionsSensitiveField = message
     .split(/\W+/)
     .some((word) => word.length > 0 && isSensitiveFieldName(word));
