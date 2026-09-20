@@ -83,20 +83,33 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
   const elapsed = formatElapsed(now - new Date(since).getTime());
 
   return (
-    <div data-testid="ai-enhancement-run-progress" className="space-y-2">
-      <output aria-live="polite" className="block text-sm text-slate-600">
+    <div data-testid="ai-enhancement-run-progress" className="space-y-3">
+      <output aria-live="polite" className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         {preparing ? (
           <>
-            <span data-testid="ai-enhancement-phase">Preparing the local model</span>
-            {" — this can take a few minutes the first time, while the model downloads. "}
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800">
+              Preparing the local model
+            </span>
+            <span className="text-xs text-muted">
+              {"— this can take a few minutes the first time, while the model downloads. "}
+              <span data-testid="ai-enhancement-elapsed">{elapsed} elapsed</span>
+            </span>
           </>
         ) : (
           <>
-            <span data-testid="ai-enhancement-phase">Generating scenarios</span>{" "}
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800">
+              Generating scenarios
+            </span>
+            <span className="text-xs text-muted">
+              <span data-testid="ai-enhancement-elapsed">{elapsed} elapsed</span>
+            </span>
           </>
         )}
-        <span data-testid="ai-enhancement-elapsed">{elapsed} elapsed</span>
-        {progress.cancelRequested && " — finishing the current batch, then stopping."}
+        {progress.cancelRequested && (
+          <span className="text-xs font-medium text-warning-700">
+            — finishing the current batch, then stopping.
+          </span>
+        )}
       </output>
       <BatchProgressList progress={progress} />
     </div>
@@ -112,38 +125,60 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
   const currentIndex = progress.batches.findIndex(
     (batch) => batch.status === "in-progress",
   );
-  const settledCount = progress.batches.filter(
-    (batch) =>
-      batch.status === "succeeded" ||
-      batch.status === "failed" ||
-      batch.status === "not-attempted",
+  const succeededCount = progress.batches.filter((b) => b.status === "succeeded").length;
+  const unsuccessfulCount = progress.batches.filter(
+    (b) => b.status === "failed" || b.status === "not-attempted",
   ).length;
+  const settledCount = succeededCount + unsuccessfulCount;
+  const percentComplete = Math.round((settledCount / progress.totalBatches) * 100);
 
   return (
-    <div data-testid="ai-enhancement-progress" className="space-y-2">
-      <p className="text-sm text-slate-600">
-        {currentIndex >= 0
-          ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
-          : `${settledCount} of ${progress.totalBatches} ${progress.totalBatches === 1 ? "unit" : "batches"} complete`}
-        {/*
-          The planned batch count on its own overstates what a run will do: a 39-batch plan under a
-          five-minute ceiling completes roughly the first seven, and a denominator the run never
-          intends to reach reads as a queue of failures waiting to happen
-          (specs/014-ai-batching-policy FR-012).
-        */}
-        {progress.runBudgetRemainingMs !== undefined && (
-          <>
-            {" — "}
-            <span data-testid="ai-enhancement-run-budget-remaining">
+    <div
+      data-testid="ai-enhancement-progress"
+      className="space-y-2.5 rounded-md border border-border bg-background p-3"
+    >
+      <div className="space-y-1.5">
+        <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
+          <span className="font-medium text-slate-800">
+            {currentIndex >= 0
+              ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
+              : `${settledCount} of ${progress.totalBatches} ${progress.totalBatches === 1 ? "unit" : "batches"} complete`}
+          </span>
+          {/*
+            The planned batch count on its own overstates what a run will do: a 39-batch plan under a
+            five-minute ceiling completes roughly the first seven, and a denominator the run never
+            intends to reach reads as a queue of failures waiting to happen
+            (specs/014-ai-batching-policy FR-012).
+          */}
+          {progress.runBudgetRemainingMs !== undefined && (
+            <span data-testid="ai-enhancement-run-budget-remaining" className="text-xs text-muted">
               {progress.runBudgetRemainingMs > 0
                 ? `${formatElapsed(progress.runBudgetRemainingMs)} of run time left`
                 : "run time limit reached; finishing the current batch"}
             </span>
-          </>
+          )}
+        </p>
+        <div
+          role="progressbar"
+          aria-label="Batches settled"
+          aria-valuenow={percentComplete}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-1.5 overflow-hidden rounded-full bg-slate-200"
+        >
+          <div
+            className="h-full rounded-full bg-brand-500 transition-[width] duration-500 ease-out"
+            style={{ width: `${percentComplete}%` }}
+          />
+        </div>
+        {unsuccessfulCount > 0 && (
+          <p className="text-xs text-muted">
+            {succeededCount} succeeded, {unsuccessfulCount} unsuccessful
+          </p>
         )}
-      </p>
+      </div>
       <ul
-        className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+        className="grid max-h-72 grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto rounded-md border border-border bg-surface p-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
         aria-label="Batch progress"
       >
         {progress.batches.map((batch) => (
