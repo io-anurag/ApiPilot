@@ -20,7 +20,10 @@ Test Generation Workflow), and AP-016 (Workflow-Aware Postman Generation). It do
 how that artifact is generated, reviewed, or approved. Per `specs/ROADMAP.md`'s MVP Boundary
 and Next Actions #9-12, this feature's specification work begins only after the full MVP
 boundary (AP-001 through AP-010) was validated end-to-end against two independent real-world
-OpenAPI specifications (2026-09-11).
+OpenAPI specifications (2026-09-11). Originally surfaced as a panel bundled into AP-009's
+`postmanGeneration` screen; specs/009's 2026-09-20 amendment splits it into its own, explicitly
+skippable guided-workflow stage (`execution`) — this feature's own endpoints and data model are
+unaffected by that placement change.
 
 ## Clarifications
 
@@ -35,6 +38,22 @@ OpenAPI specifications (2026-09-11).
 - Q: Should a QA engineer be able to cancel an execution run that's already in progress? → A:
   Yes — already-attempted results are kept, remaining requests are marked not-attempted with
   reason "cancelled," matching the AP-013 cancellation precedent.
+
+### Session 2026-09-20
+
+- Q: The Run & Results UI needs a Postman-like per-request view (full request/response headers
+  and bodies), which FR-017 excludes by default. `data-model.md`'s original design already
+  reserved this as "a future diagnostics enhancement that needs them must add explicit,
+  separately-gated opt-in fields rather than default to including them" — how should that opt-in
+  be scoped? → A: Gated strictly to `Environment.tier === "local"` runs. A local run targets the
+  developer's own non-production service, so its captured headers/bodies are shown exactly as
+  sent/received, with no redaction — unlike `AssertionOutcome.detail`, which remains a
+  non-sensitive summary for every tier, including `"local"`, unchanged. Every other tier
+  (`dev`/`qa`/`staging`/`production`) continues to receive no raw request/response detail at
+  all, exactly as before this amendment. The new `RawRequestCapture` data is persisted encrypted
+  at rest via the same mechanism `Environment.variableValues` already uses, in a column
+  physically separate from the rest of `RequestResult`, so a non-local run's stored row can never
+  carry it even by accident.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -333,6 +352,12 @@ retrieved again without re-executing anything.
   MUST favor operation/request identifiers, processing stage, duration, error category, and
   assertion identifiers, consistent with the platform's existing observability principle
   (constitution XX).
+- **FR-017a** (2026-09-20 amendment): The one exception to FR-017 is a run's full raw request
+  URL, headers, and body and its full raw response headers and body (`RawRequestCapture`),
+  gated strictly to `Environment.tier === "local"` runs (Clarifications 2026-09-20). The system
+  MUST NOT include this data for a run against any other tier. Where present, it MUST be
+  persisted encrypted at rest and MUST NOT be included in the same storage representation as the
+  rest of `RequestResult` (data-model.md).
 - **FR-018**: When a request in the run depends on a value produced by an earlier request in
   the same run (a workflow data handoff) and that earlier request did not succeed, the dependent
   request MUST be recorded as not attempted, with the specific unmet dependency identified,

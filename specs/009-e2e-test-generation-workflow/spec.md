@@ -23,6 +23,21 @@
   retry it later, or is the skip permanent for that workflow run? → A: The user can retry AI
   enhancement later, as long as scenario review has not yet been finalized.
 
+### Session 2026-09-20
+
+- Q: specs/018-test-execution-results (AP-017) added running the approved Postman collection
+  against a real environment, but it was bundled into the `postmanGeneration` screen rather than
+  being a stage of its own — should it become a distinct, ordered guided-workflow stage, and if
+  so, is it mandatory like every stage before it? → A: Yes to both. `execution` becomes the tenth
+  and last guided-workflow stage, entered automatically the moment `postmanGeneration` first
+  completes (mirroring every other forward stage transition in FR-001). Unlike every earlier
+  stage, it is explicitly optional: the user may skip it without running anything (a new
+  `"skipped"` outcome for this stage, alongside the status `aiEnhancement` already uses) or
+  explicitly finish it after running zero or more times against zero or more environments — there
+  is no single action whose completion implies the user is done, since they may reasonably want to
+  run against several environments in sequence. Skipping or finishing does not block returning to
+  it later: starting a new run reopens it automatically regardless of its current status.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Go From Specification to Executable Tests in One Guided Flow (Priority: P1)
@@ -182,8 +197,10 @@ deterministic TestModel, with the AI-unavailable condition visibly recorded.
 
 - **FR-001**: The system MUST guide the user through the complete workflow — specification
   upload, analysis, API review, deterministic scenario generation, AI enhancement, scenario
-  review, dependency analysis, workflow review/approval, and Postman generation — as stages of
-  one continuous, ordered workflow.
+  review, dependency analysis, workflow review/approval, Postman generation, and execution — as
+  stages of one continuous, ordered workflow. `execution` (2026-09-20 amendment, Clarifications)
+  is the only stage that does not require an explicit completing action of its own: it is entered
+  automatically once `postmanGeneration` completes, and the user may explicitly skip or finish it.
 - **FR-002**: The system MUST NOT allow a user to enter a stage whose required input (the
   approved or completed output of a prior stage) does not yet exist, and MUST explain what is
   still required when entry is blocked.

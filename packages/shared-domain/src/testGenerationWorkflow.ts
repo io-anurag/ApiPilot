@@ -7,8 +7,11 @@ import type { ReviewWorkspace } from "./testScenarioReview";
 import type { TestModel } from "./testModel";
 
 /**
- * The nine guided-workflow stages, in fixed order (spec.md FR-001, Key Entities: Workflow
+ * The ten guided-workflow stages, in fixed order (spec.md FR-001, Key Entities: Workflow
  * Stage). "upload" and "analysis" always complete together in one backend call (research.md D4).
+ * "execution" was added by the 2026-09-20 amendment (specs/009 Clarifications) splitting
+ * execution out of the `postmanGeneration` screen into its own, explicitly skippable stage —
+ * see `EXECUTION_ONLY_TRANSITIONS` in `workflowStore.ts` and `executionStage.ts`.
  */
 export type WorkflowStageId =
   | "upload"
@@ -19,7 +22,8 @@ export type WorkflowStageId =
   | "scenarioReview"
   | "dependencyAnalysis"
   | "workflowReview"
-  | "postmanGeneration";
+  | "postmanGeneration"
+  | "execution";
 
 /** Single source of truth for stage order, iterated by gating and staleness computation. */
 export const WORKFLOW_STAGE_ORDER: readonly WorkflowStageId[] = [
@@ -32,9 +36,14 @@ export const WORKFLOW_STAGE_ORDER: readonly WorkflowStageId[] = [
   "dependencyAnalysis",
   "workflowReview",
   "postmanGeneration",
+  "execution",
 ];
 
-/** data-model.md: StageStatus. `skipped` and `partial` apply only to `aiEnhancement`. */
+/**
+ * data-model.md: StageStatus. `partial` applies only to `aiEnhancement`. `skipped` originally
+ * applied only to `aiEnhancement` too; the 2026-09-20 amendment extends it to `execution`, which
+ * a user may explicitly skip without running anything (specs/009 Clarifications 2026-09-20).
+ */
 export type StageStatus =
   "not-yet-reached" | "active" | "complete" | "stale" | "skipped" | "partial";
 

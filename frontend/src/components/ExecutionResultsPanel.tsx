@@ -4,6 +4,7 @@ import type {
   EnvironmentTier,
   ExecutionConfirmationRequirement,
   ExecutionRun,
+  RawHeader,
   RequestResult,
 } from "@apipilot/shared-domain";
 import {
@@ -13,6 +14,7 @@ import {
   fetchRuns,
   startExecution,
 } from "../services/executionClient";
+import { CodeBlock } from "./CodeBlock";
 import { EnvironmentForm } from "./EnvironmentForm";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
@@ -129,6 +131,88 @@ function EnvironmentPicker({
   );
 }
 
+/** One labeled number in `RunOverview`'s stat row. */
+function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
+  const toneClass: Record<StatusTone, string> = {
+    neutral: "text-slate-900",
+    info: "text-info-700",
+    success: "text-success-700",
+    warning: "text-warning-700",
+    danger: "text-danger-700",
+  };
+  return (
+    <div className="min-w-[6rem]">
+      <dt className="text-xs font-medium uppercase text-muted">{label}</dt>
+      <dd className={`text-lg font-semibold ${toneClass[tone ?? "neutral"]}`}>{value}</dd>
+    </div>
+  );
+}
+
+/** Endpoint coverage and aggregate timing for one run (asks #1/#4: how many endpoints this run
+ * covers, and its overall result, at a glance — mirrors `PostmanGenerationStage`'s own
+ * "N request(s) in M folder(s)" summary-line convention, extended into a small stat row). */
+function RunOverview({ run }: Readonly<{ run: ExecutionRun }>) {
+  const endpointCount = new Set(run.results.map((r) => `${r.operationMethod} ${r.operationPath}`)).size;
+  const settledDurations = run.results
+    .filter((r) => r.outcome !== "not-attempted")
+    .map((r) => r.durationMs);
+  const avgResponseMs =
+    settledDurations.length > 0
+      ? Math.round(settledDurations.reduce((sum, ms) => sum + ms, 0) / settledDurations.length)
+      : 0;
+
+  return (
+    <dl data-testid="execution-run-overview" className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3">
+      <OverviewStat label="Endpoints" value={String(endpointCount)} />
+      <OverviewStat label="Requests" value={String(run.summary.total)} />
+      <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
+      <OverviewStat label="Failed" value={String(run.summary.failed)} tone={run.summary.failed > 0 ? "danger" : "neutral"} />
+      <OverviewStat label="Not attempted" value={String(run.summary.notAttempted)} />
+      <OverviewStat label="Duration" value={`${run.summary.durationMs} ms`} />
+      <OverviewStat label="Avg. response time" value={`${avgResponseMs} ms`} />
+    </dl>
+  );
+}
+
+/** A `RawHeader[]` as a compact key/value table (ask #2 — every captured header, not a subset). */
+function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
+  if (headers.length === 0) {
+    return <p className="text-xs text-muted">No headers.</p>;
+  }
+  return (
+    <table className="w-full text-xs">
+      <tbody>
+        {headers.map((header) => (
+          <tr key={header.key} className="border-b border-border last:border-0">
+            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600">{header.key}</td>
+            <td className="py-1 font-mono text-slate-700 break-all">{header.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Full raw request/response detail (ask #3), present only when `RequestResult.rawCapture` is
+ * set — i.e. only for a `"local"`-tier run (FR-017a). */
+function RawCaptureDetail({ rawCapture }: Readonly<{ rawCapture: NonNullable<RequestResult["rawCapture"]> }>) {
+  return (
+    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase text-muted">Request</p>
+        <p className="break-all font-mono text-xs text-slate-600">{rawCapture.requestUrl}</p>
+        <HeaderTable headers={rawCapture.requestHeaders} />
+        {rawCapture.requestBody && <CodeBlock label="Body" content={rawCapture.requestBody} />}
+      </div>
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase text-muted">Response</p>
+        <HeaderTable headers={rawCapture.responseHeaders} />
+        {rawCapture.responseBody && <CodeBlock label="Body" content={rawCapture.responseBody} />}
+      </div>
+    </div>
+  );
+}
+
 function assertionOutcomeTone(outcome: "passed" | "failed" | "could-not-evaluate"): StatusTone {
   if (outcome === "passed") return "success";
   if (outcome === "failed") return "danger";
@@ -136,9 +220,10 @@ function assertionOutcomeTone(outcome: "passed" | "failed" | "could-not-evaluate
 }
 
 /** Per-request diagnostic detail (FR-016): failure category, each assertion evaluated and its
- * outcome, duration, and response status — everything needed to understand a failure without
- * exposing a raw request/response body (FR-017). */
-function ResultDetail({ result }: Readonly<{ result: RequestResult }>) {
+ * outcome, duration, and response status. `rawCapture` (ask #2/#3) adds every request/response
+ * header and body exactly as sent/received — present only for a `"local"`-tier run (FR-017a); for
+ * every other tier this stays exactly the non-sensitive summary FR-017 always required. */
+function ResultDetail({ result, tier }: Readonly<{ result: RequestResult; tier: EnvironmentTier }>) {
   return (
     <div
       data-testid="execution-result-detail"
@@ -164,11 +249,20 @@ function ResultDetail({ result }: Readonly<{ result: RequestResult }>) {
           ))}
         </ul>
       )}
+      {result.rawCapture ? (
+        <RawCaptureDetail rawCapture={result.rawCapture} />
+      ) : (
+        tier !== "local" && (
+          <p className="text-slate-500">
+            Full request/response headers and bodies are only captured for Local-tier runs.
+          </p>
+        )
+      )}
     </div>
   );
 }
 
-function ExecutionResultRow({ result }: Readonly<{ result: RequestResult }>) {
+function ExecutionResultRow({ result, tier }: Readonly<{ result: RequestResult; tier: EnvironmentTier }>) {
   const [expanded, setExpanded] = useState(false);
   return (
     <li className="py-2 text-sm">
@@ -186,14 +280,14 @@ function ExecutionResultRow({ result }: Readonly<{ result: RequestResult }>) {
         </div>
         <StatusBadge label={outcomeLabel(result)} tone={outcomeTone(result)} />
       </button>
-      {expanded && <ResultDetail result={result} />}
+      {expanded && <ResultDetail result={result} tier={tier} />}
     </li>
   );
 }
 
 /** Client-side failure-only filter over the already-returned full result list (FR-021) — no
  * server-side filter parameter exists (contracts/execution-api.md). */
-function ExecutionResultList({ results }: Readonly<{ results: RequestResult[] }>) {
+function ExecutionResultList({ results, tier }: Readonly<{ results: RequestResult[]; tier: EnvironmentTier }>) {
   const [failuresOnly, setFailuresOnly] = useState(false);
   const visible = failuresOnly ? results.filter((result) => result.outcome === "failed") : results;
 
@@ -209,7 +303,7 @@ function ExecutionResultList({ results }: Readonly<{ results: RequestResult[] }>
       </label>
       <ul data-testid="execution-result-list" className="divide-y divide-border">
         {visible.map((result, index) => (
-          <ExecutionResultRow key={`${result.scenarioId}-${index}`} result={result} />
+          <ExecutionResultRow key={`${result.scenarioId}-${index}`} result={result} tier={tier} />
         ))}
       </ul>
       {visible.length === 0 && (
@@ -287,7 +381,8 @@ function RunSummary({
           </button>
         )}
       </div>
-      <ExecutionResultList results={run.results} />
+      <RunOverview run={run} />
+      <ExecutionResultList results={run.results} tier={run.environmentSnapshot.tier} />
     </div>
   );
 }

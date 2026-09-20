@@ -22,7 +22,7 @@ function workflowWithStatuses(
 }
 
 describe("workflowStages", () => {
-  it("WORKFLOW_STAGE_ORDER matches spec.md FR-001's nine-stage list", () => {
+  it("WORKFLOW_STAGE_ORDER matches spec.md FR-001's ten-stage list (specs/009 Clarifications 2026-09-20 amendment adds 'execution')", () => {
     expect(WORKFLOW_STAGE_ORDER).toEqual([
       "upload",
       "analysis",
@@ -33,6 +33,7 @@ describe("workflowStages", () => {
       "dependencyAnalysis",
       "workflowReview",
       "postmanGeneration",
+      "execution",
     ]);
   });
 
@@ -67,6 +68,6 @@ describe("workflowStages", () => {
       expect(nextStageId(WORKFLOW_STAGE_ORDER[i - 1])).toBe(WORKFLOW_STAGE_ORDER[i]);
     }
     expect(previousStageId("upload")).toBeUndefined();
-    expect(nextStageId("postmanGeneration")).toBeUndefined();
+    expect(nextStageId("execution")).toBeUndefined();
   });
 });

@@ -1,4 +1,11 @@
-import type { AssertionOutcome, FailureCategory, RequestResult, TestScenario } from "@apipilot/shared-domain";
+import type {
+  AssertionOutcome,
+  FailureCategory,
+  RawHeader,
+  RawRequestCapture,
+  RequestResult,
+  TestScenario,
+} from "@apipilot/shared-domain";
 import { assertionTestPlan } from "../postman/assertionScripts";
 import { isSensitiveFieldName } from "../testDesign/sensitiveValueDetection";
 
@@ -21,11 +28,46 @@ export interface NewmanAssertionResult {
   error?: NewmanAssertionError;
 }
 
+/** Minimal shape of a `postman-collection` `HeaderList` — just enough to read entries out. */
+export interface NewmanHeaderList {
+  all(): Array<{ key: string; value: string; disabled?: boolean }>;
+}
+
+/** Minimal shape of a `postman-collection` `Request`, post-variable-resolution. */
+export interface NewmanRequestLike {
+  url?: { toString(): string };
+  headers?: NewmanHeaderList;
+  body?: { toString(): string };
+}
+
 export interface NewmanExecutionResult {
-  response?: { code?: number; responseTime?: number };
+  request?: NewmanRequestLike;
+  response?: { code?: number; responseTime?: number; headers?: NewmanHeaderList; text?(): string };
   /** Present only for a connection-level failure (refused, DNS, TLS, timeout) — no response was received. */
   requestError?: { code?: string; message?: string };
   assertions?: NewmanAssertionResult[];
+}
+
+function toRawHeaders(headers: NewmanHeaderList | undefined): RawHeader[] {
+  return (headers?.all() ?? [])
+    .filter((header) => !header.disabled)
+    .map((header) => ({ key: header.key, value: header.value }));
+}
+
+/**
+ * Builds the FR-017a raw capture from Newman's already-resolved request/response objects.
+ * Callers gate this to `"local"`-tier runs only (`runExecution.ts`) — this function itself does
+ * not know or care about the environment tier.
+ */
+function buildRawCapture(execution: NewmanExecutionResult): RawRequestCapture | undefined {
+  if (!execution.request) return undefined;
+  return {
+    requestUrl: execution.request.url?.toString() ?? "",
+    requestHeaders: toRawHeaders(execution.request.headers),
+    requestBody: execution.request.body?.toString() || undefined,
+    responseHeaders: toRawHeaders(execution.response?.headers),
+    responseBody: execution.response?.text?.() || undefined,
+  };
 }
 
 function isTimeoutError(error: { code?: string } | undefined): boolean {
@@ -93,10 +135,17 @@ function categorizeFailure(failing: AssertionOutcome[]): FailureCategory {
   return "could-not-evaluate";
 }
 
+/**
+ * @param captureRawDetails FR-017a (2026-09-20 amendment): the caller passes `true` only for a
+ * `"local"`-tier run. When `false` (every other tier), no raw header/body data is ever read off
+ * `execution`, let alone attached to the returned `RequestResult` — the omission happens here,
+ * not just at render time.
+ */
 export function mapNewmanResult(
   scenario: TestScenario,
   execution: NewmanExecutionResult,
   startedAt: string,
+  captureRawDetails = false,
 ): RequestResult {
   const base = {
     scenarioId: scenario.id,
@@ -104,6 +153,7 @@ export function mapNewmanResult(
     operationMethod: scenario.operationMethod,
     startedAt,
   };
+  const rawCapture = captureRawDetails ? buildRawCapture(execution) : undefined;
 
   if (execution.requestError) {
     return {
@@ -112,6 +162,7 @@ export function mapNewmanResult(
       failureCategory: isTimeoutError(execution.requestError) ? "timeout" : "connectivity-failure",
       durationMs: 0,
       assertionOutcomes: [],
+      rawCapture,
     };
   }
 
@@ -142,7 +193,7 @@ export function mapNewmanResult(
 
   const failing = assertionOutcomes.filter((outcome) => outcome.outcome !== "passed");
   if (failing.length === 0) {
-    return { ...base, outcome: "passed", durationMs, responseStatusCode, assertionOutcomes };
+    return { ...base, outcome: "passed", durationMs, responseStatusCode, assertionOutcomes, rawCapture };
   }
   return {
     ...base,
@@ -151,5 +202,6 @@ export function mapNewmanResult(
     durationMs,
     responseStatusCode,
     assertionOutcomes,
+    rawCapture,
   };
 }

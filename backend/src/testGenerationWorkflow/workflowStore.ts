@@ -124,6 +124,14 @@ const AI_ENHANCEMENT_ONLY_TRANSITIONS: ReadonlySet<string> = new Set([
   "partial->active",
 ]);
 
+/**
+ * `execution` is the one other stage a `"skipped"` status applies to (specs/009 Clarifications
+ * 2026-09-20): a user may explicitly skip it without running anything, and may later reopen it
+ * (e.g. to run after all) — "skipped->active" mirrors aiEnhancement's own retry path. Unlike
+ * aiEnhancement, `execution` has no `"partial"` outcome — a run either happens or it doesn't.
+ */
+const EXECUTION_ONLY_TRANSITIONS: ReadonlySet<string> = new Set(["active->skipped", "skipped->active"]);
+
 function isValidTransition(
   stageId: WorkflowStageId,
   from: StageStatus,
@@ -132,7 +140,8 @@ function isValidTransition(
   if (from === to) return false;
   const transition = `${from}->${to}`;
   if (GENERAL_TRANSITIONS.has(transition)) return true;
-  return stageId === "aiEnhancement" && AI_ENHANCEMENT_ONLY_TRANSITIONS.has(transition);
+  if (stageId === "aiEnhancement" && AI_ENHANCEMENT_ONLY_TRANSITIONS.has(transition)) return true;
+  return stageId === "execution" && EXECUTION_ONLY_TRANSITIONS.has(transition);
 }
 
 /** Optional extras for `updateStage`: aiEnhancement-only error details and an active-stage move. */

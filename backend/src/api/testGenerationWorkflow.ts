@@ -57,6 +57,11 @@ import {
 } from "../testGenerationWorkflow/errors";
 import { runPostmanGeneration } from "../testGenerationWorkflow/postmanGenerationStage";
 import {
+  finishExecution,
+  reactivateExecutionStage,
+  skipExecution,
+} from "../testGenerationWorkflow/executionStage";
+import {
   applyScenarioDecisions,
   editScenario,
   finalizeScenarioReview,
@@ -716,6 +721,9 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
     const confirmed = body?.confirmed === true;
     try {
       const workflow = requireCompletedWorkflow();
+      // 2026-09-20 amendment (specs/009 Clarifications): starting a run always reflects an active
+      // `execution` stage, reopening it if the user had skipped it or already finished a prior run.
+      reactivateExecutionStage();
 
       // Checked first (FR-008): no point evaluating anything else while a run is already active.
       const inProgress = getInProgressRun();
@@ -837,6 +845,36 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         logRequestFailed(req, startedAt, 409, "no_run_in_progress");
         res.status(409).json({ error: "no_run_in_progress", message: err.message });
         return;
+      }
+      throw err;
+    }
+  });
+
+  /** 2026-09-20 amendment (specs/009 Clarifications): explicitly skips the `execution` stage. */
+  router.post("/test-generation-workflow/execution/skip", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      res.status(200).json({ workflow: toWorkflowResponse(skipExecution()) });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
+      }
+      throw err;
+    }
+  });
+
+  /** 2026-09-20 amendment (specs/009 Clarifications): explicitly completes the `execution` stage. */
+  router.post("/test-generation-workflow/execution/finish", (req, res) => {
+    const startedAt = logRequestReceived(req);
+    try {
+      res.status(200).json({ workflow: toWorkflowResponse(finishExecution()) });
+      logRequestSucceeded(req, startedAt, 200);
+    } catch (err) {
+      if (err instanceof StageNotActiveError) {
+        logRequestFailed(req, startedAt, 409, "stage_not_active");
+        return stageNotActive(res, err.message);
       }
       throw err;
     }

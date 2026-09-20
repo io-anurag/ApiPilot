@@ -150,4 +150,42 @@ describe("mapNewmanResult", () => {
     expect(result.outcome).toBe("passed");
     expect(result.assertionOutcomes).toEqual([]);
   });
+
+  describe("rawCapture (FR-017a)", () => {
+    const executionWithRawDetails: NewmanExecutionResult = {
+      request: {
+        url: { toString: () => "http://localhost:4000/pets" },
+        headers: { all: () => [{ key: "Authorization", value: "Bearer secret" }, { key: "X-Off", value: "x", disabled: true }] },
+        body: { toString: () => '{"name":"Rex"}' },
+      },
+      response: {
+        code: 201,
+        responseTime: 12,
+        headers: { all: () => [{ key: "Content-Type", value: "application/json" }] },
+        text: () => '{"id":"1"}',
+      },
+    };
+
+    it("attaches rawCapture when captureRawDetails is true", () => {
+      const result = mapNewmanResult(scenario([]), executionWithRawDetails, startedAt, true);
+      expect(result.rawCapture).toEqual({
+        requestUrl: "http://localhost:4000/pets",
+        requestHeaders: [{ key: "Authorization", value: "Bearer secret" }],
+        requestBody: '{"name":"Rex"}',
+        responseHeaders: [{ key: "Content-Type", value: "application/json" }],
+        responseBody: '{"id":"1"}',
+      });
+    });
+
+    it("never attaches rawCapture when captureRawDetails is false, even if the caller omits the argument", () => {
+      const result = mapNewmanResult(scenario([]), executionWithRawDetails, startedAt);
+      expect(result.rawCapture).toBeUndefined();
+    });
+
+    it("never attaches rawCapture for a connection-level failure when captureRawDetails is false", () => {
+      const execution: NewmanExecutionResult = { requestError: { code: "ECONNREFUSED", message: "refused" } };
+      const result = mapNewmanResult(scenario([]), execution, startedAt, false);
+      expect(result.rawCapture).toBeUndefined();
+    });
+  });
 });
