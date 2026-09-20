@@ -14,6 +14,7 @@ import type {
   LiveScenarioSummary,
 } from "@apipilot/shared-domain";
 import { BatchOutcomeList } from "./BatchOutcomeList";
+import { ErrorState } from "./ErrorState";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
 
@@ -476,15 +477,7 @@ export function AiEnhancementStage({
             cancelling={cancelling || !!progress?.cancelRequested}
           />
         )}
-        {error && (
-          <p
-            role="alert"
-            data-testid="ai-enhancement-error"
-            className="text-sm font-medium text-danger-700"
-          >
-            {error}
-          </p>
-        )}
+        {error && <ErrorState testId="ai-enhancement-error" message={error} />}
       </section>
     );
   }
@@ -516,15 +509,7 @@ export function AiEnhancementStage({
       </div>
       {running && progress && <RunProgress progress={progress} />}
       {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
-      {error && (
-        <p
-          role="alert"
-          data-testid="ai-enhancement-error"
-          className="text-sm font-medium text-danger-700"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorState testId="ai-enhancement-error" message={error} />}
     </section>
   );
 }

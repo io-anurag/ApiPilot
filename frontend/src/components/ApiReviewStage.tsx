@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ApiModel, ApiOperation } from "@apipilot/shared-domain";
 import { AnalysisSummary } from "./AnalysisSummary";
+import { ErrorState } from "./ErrorState";
 import { OperationDetail } from "./OperationDetail";
 import { OperationList } from "./OperationList";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -84,15 +85,7 @@ export function ApiReviewStage({
           >
             {continuing ? "Continuing…" : "Continue"}
           </button>
-          {error && (
-            <p
-              role="alert"
-              data-testid="api-review-error"
-              className="text-sm font-medium text-danger-700"
-            >
-              {error}
-            </p>
-          )}
+          {error && <ErrorState testId="api-review-error" message={error} />}
         </div>
       )}
     </section>

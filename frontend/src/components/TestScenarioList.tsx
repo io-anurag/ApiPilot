@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { TestScenario } from "@apipilot/shared-domain";
+import { EmptyState } from "./EmptyState";
 
 function groupByOperation(scenarios: TestScenario[]): Map<string, TestScenario[]> {
   const groups = new Map<string, TestScenario[]>();
@@ -24,12 +25,10 @@ export function TestScenarioList({
 
   if (scenarios.length === 0) {
     return (
-      <p
-        data-testid="test-scenario-list-empty"
-        className="border border-dashed border-border bg-slate-50 px-4 py-6 text-center text-sm text-muted"
-      >
-        No test scenarios were generated for this specification.
-      </p>
+      <EmptyState
+        testId="test-scenario-list-empty"
+        message="No test scenarios were generated for this specification."
+      />
     );
   }
 

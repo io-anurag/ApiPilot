@@ -49,6 +49,25 @@ describe("WorkflowStageTracker", () => {
     );
   });
 
+  it("explains why a not-yet-reached stage is locked (spec 027 FR-004)", () => {
+    render(
+      <WorkflowStageTracker
+        workflow={workflowWithStatuses({
+          upload: "complete",
+          analysis: "complete",
+          apiReview: "active",
+        })}
+      />,
+    );
+    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
+      "Complete API Review first",
+    );
+    // The lock reason is additional text alongside the status label, not a replacement for it.
+    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
+      "Not yet reached",
+    );
+  });
+
   it("labels the 'execution' stage and renders its skipped status distinctly (specs/009 Clarifications 2026-09-20)", () => {
     render(
       <WorkflowStageTracker workflow={workflowWithStatuses({ execution: "skipped" })} />,

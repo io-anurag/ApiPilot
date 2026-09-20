@@ -4,6 +4,8 @@ import type {
   TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire, ReviewWorkspaceWire } from "../services/reviewsClient";
+import { ErrorState } from "./ErrorState";
+import { Skeleton } from "./Skeleton";
 import {
   applyScenarioDecisions,
   editScenario,
@@ -301,20 +303,18 @@ export function ScenarioReviewStage({
           </button>
         )}
         {finalizing && (
-          <p data-testid="finalize-in-progress" className="text-sm text-muted">
-            Running dependency analysis with the local AI model — this can take a couple
-            of minutes.
-          </p>
-        )}
-        {finalizeError && (
           <p
-            role="alert"
-            data-testid="finalize-error"
-            className="text-sm font-medium text-danger-700"
+            data-testid="finalize-in-progress"
+            className="flex items-center gap-2 text-sm text-muted"
           >
-            {finalizeError}
+            <Skeleton className="h-2 w-2 rounded-full bg-brand-500" />
+            <span>
+              Running dependency analysis with the local AI model — this can take a couple
+              of minutes.
+            </span>
           </p>
         )}
+        {finalizeError && <ErrorState testId="finalize-error" message={finalizeError} />}
       </div>
       {confirmingFinalize && (
         <ConfirmDialog

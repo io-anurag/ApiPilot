@@ -13,6 +13,7 @@ import {
   type UploadedCollectionSummary,
 } from "../services/externalCollectionsClient";
 import { CodeBlock } from "./CodeBlock";
+import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -376,11 +377,7 @@ export function ExternalCollectionRunPanel({
         />
       )}
 
-      {startError && (
-        <p role="alert" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
-          {startError}
-        </p>
-      )}
+      {startError && <ErrorState message={startError} />}
 
       {run && (
         <div data-testid="external-collection-run-summary" className="space-y-3">

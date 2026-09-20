@@ -25,6 +25,8 @@ import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
 import { ExecutionResultsPanel } from "../components/ExecutionResultsPanel";
 import { AnalysisSummary } from "../components/AnalysisSummary";
+import { ErrorState } from "../components/ErrorState";
+import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
@@ -234,10 +236,7 @@ export function TestGenerationWorkflowPage() {
         className="flex min-h-64 items-center justify-center"
       >
         <p className="flex items-center gap-3 border border-border bg-surface px-4 py-3 text-sm text-muted shadow-sm">
-          <span
-            aria-hidden="true"
-            className="h-2 w-2 animate-pulse rounded-full bg-brand-500"
-          />
+          <Skeleton className="h-2 w-2 rounded-full bg-brand-500" />
           <span>Restoring workflow…</span>
         </p>
       </div>
@@ -422,15 +421,7 @@ export function TestGenerationWorkflowPage() {
         </div>
       )}
       {uploading && <p className="text-sm text-muted">Uploading…</p>}
-      {uploadError && (
-        <p
-          role="alert"
-          data-testid="upload-error"
-          className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-        >
-          {uploadError}
-        </p>
-      )}
+      {uploadError && <ErrorState testId="upload-error" message={uploadError} />}
       {workflow && !showStartPage && (
         <>
           <div className="border border-border bg-surface p-3 shadow-sm">
@@ -612,13 +603,9 @@ function ExecutionStageActions({
         </button>
       </div>
       {error && (
-        <p
-          role="alert"
-          data-testid="execution-stage-actions-error"
-          className="w-full rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-        >
-          {error}
-        </p>
+        <div className="w-full">
+          <ErrorState testId="execution-stage-actions-error" message={error} />
+        </div>
       )}
     </section>
   );
@@ -747,15 +734,7 @@ function DeterministicGenerationTrigger({
       >
         {generating ? "Generating…" : "Generate Baseline Test Suite"}
       </button>
-      {error && (
-        <p
-          role="alert"
-          data-testid="deterministic-generation-error"
-          className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorState testId="deterministic-generation-error" message={error} />}
     </section>
   );
 }

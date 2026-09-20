@@ -9,6 +9,8 @@ import {
 } from "../services/postmanCollectionsClient";
 import { PostmanExportLimitations } from "./PostmanExportLimitations";
 import { BUTTON_STYLES } from "./controlStyles";
+import { EmptyState } from "./EmptyState";
+import { ErrorState } from "./ErrorState";
 
 /** Recovery guidance per refusal, so a failed export tells the engineer what to do next (FR-027). */
 const RECOVERY_GUIDANCE: Record<string, string> = {
@@ -198,23 +200,19 @@ export function PostmanExportPanel({
       )}
 
       {status === "empty" && (
-        <p
-          data-testid="export-empty"
-          className="border border-dashed border-border bg-slate-50 px-4 py-5 text-sm text-slate-700"
-        >
-          There are no accepted scenarios to export.{" "}
-          {RECOVERY_GUIDANCE.empty_approved_test_model}
-        </p>
+        <EmptyState
+          testId="export-empty"
+          message="There are no accepted scenarios to export."
+          description={RECOVERY_GUIDANCE.empty_approved_test_model}
+        />
       )}
 
       {status === "error" && failure && (
-        <div
-          role="alert"
-          data-testid="export-error"
-          className="space-y-1 rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-700"
+        <ErrorState
+          testId="export-error"
+          message={`Export failed: ${failure.message}`}
+          detail={RECOVERY_GUIDANCE[failure.error] ?? "Try the export again."}
         >
-          <p className="font-semibold">Export failed: {failure.message}</p>
-          <p>{RECOVERY_GUIDANCE[failure.error] ?? "Try the export again."}</p>
           {failure.problems && failure.problems.length > 0 && (
             <ul data-testid="export-validation-problems" className="ml-4 list-disc">
               {failure.problems.map((problem) => (
@@ -222,7 +220,7 @@ export function PostmanExportPanel({
               ))}
             </ul>
           )}
-        </div>
+        </ErrorState>
       )}
 
       {status === "success" && result && (

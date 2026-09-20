@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 /** Accept/reject controls with required rejection feedback and failure recovery (US2, FR-006-FR-010). */
 export function TestScenarioReviewDecision({
@@ -67,15 +68,7 @@ export function TestScenarioReviewDecision({
           Reject
         </button>
       </div>
-      {error && (
-        <p
-          role="alert"
-          data-testid="review-decision-error"
-          className="text-sm font-medium text-danger-700"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorState testId="review-decision-error" message={error} />}
     </div>
   );
 }

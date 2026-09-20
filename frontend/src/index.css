@@ -50,6 +50,25 @@
   --color-border: #dce3e0;
 }
 
+/**
+ * Dark-mode surface tokens (spec 027 FR-008, research.md D2). Scoped to the shell and shared
+ * components (StatusBadge/HttpMethodBadge/ProvenanceBadge/controlStyles/WorkflowStageTracker/
+ * EmptyState/ErrorState/Dialog/Tabs, and AppHeader which is already dark by design) — per-page
+ * content dark-mode is out of this feature's scope (FR-014) and is applied by later,
+ * per-page-content specs. Redefining these custom properties means every existing `bg-surface`,
+ * `bg-background`, `text-muted`, and `border-border` utility automatically follows; raw
+ * `slate-*`/`white` utilities do not (Tailwind's built-in palette isn't theme-aware), so those
+ * are handled per component with explicit `dark:` variants instead.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #151b1a;
+    --color-background: #0d1211;
+    --color-muted: #8b9895;
+    --color-border: #2a3331;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-background);

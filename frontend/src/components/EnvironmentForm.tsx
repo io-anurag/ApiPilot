@@ -6,6 +6,7 @@ import {
   type EnvironmentInput,
 } from "../services/executionClient";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 const TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 
@@ -180,11 +181,7 @@ export function EnvironmentForm({
         </button>
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-danger-700">
-          {error}
-        </p>
-      )}
+      {error && <ErrorState message={error} />}
 
       <div className="flex gap-2">
         <button

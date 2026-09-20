@@ -4,6 +4,7 @@ import type { ReviewScenarioWire } from "../../src/services/reviewsClient";
 import { TestScenarioReviewList } from "../../src/components/TestScenarioReviewList";
 import { TestScenarioReviewDecision } from "../../src/components/TestScenarioReviewDecision";
 import { TestScenarioReviewDetail } from "../../src/components/TestScenarioReviewDetail";
+import { ConfirmDialog } from "../../src/components/ConfirmDialog";
 
 const pendingItem: ReviewScenarioWire = {
   scenarioId: "s1",
@@ -168,5 +169,17 @@ describe("Test scenario review accessibility", () => {
 
     const requestBlock = screen.getByTestId("review-scenario-request");
     expect(requestBlock.tagName).toBe("PRE");
+  });
+
+  it("focuses Cancel by default when a bulk-decision confirmation opens, so an accidental Enter never confirms it (spec 027 FR-011)", () => {
+    render(
+      <ConfirmDialog
+        message="Reject 3 scenarios?"
+        affectedCount={3}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
   });
 });

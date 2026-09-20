@@ -10,6 +10,7 @@ import { ApiReviewStage } from "../../src/components/ApiReviewStage";
 import { AiEnhancementStage } from "../../src/components/AiEnhancementStage";
 import { WorkflowReviewStage } from "../../src/components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../../src/components/PostmanGenerationStage";
+import { Tabs } from "../../src/components/Tabs";
 
 function workflowWithStatuses(
   statuses: Partial<Record<string, StageStatus>>,
@@ -145,5 +146,38 @@ describe("Test generation workflow accessibility", () => {
     const approveSelected = screen.getByRole("button", { name: "Approve selected (2)" });
     approveSelected.focus();
     expect(document.activeElement).toBe(approveSelected);
+  });
+
+  it("communicates a locked stage's reason through visible text, not color alone (spec 027 FR-004)", () => {
+    render(
+      <WorkflowStageTracker
+        workflow={workflowWithStatuses({
+          upload: "complete",
+          analysis: "complete",
+          apiReview: "active",
+        })}
+      />,
+    );
+    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
+      "Complete API Review first",
+    );
+  });
+
+  it("keeps every tab a native, keyboard-focusable button with a visible focus ring (spec 027 FR-011)", () => {
+    render(
+      <Tabs
+        tabs={[
+          { id: "one", label: "One" },
+          { id: "two", label: "Two" },
+        ]}
+        activeTab="one"
+        onChange={() => {}}
+        label="Test tabs"
+      />,
+    );
+    const tab = screen.getByRole("button", { name: "Two" });
+    expect(tab.tagName).toBe("BUTTON");
+    tab.focus();
+    expect(document.activeElement).toBe(tab);
   });
 });

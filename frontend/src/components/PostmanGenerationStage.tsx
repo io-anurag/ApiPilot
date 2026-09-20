@@ -11,6 +11,7 @@ import {
 } from "../services/testGenerationWorkflowClient";
 import { PostmanExportLimitations } from "./PostmanExportLimitations";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 const RECOVERY_GUIDANCE: Record<string, string> = {
   empty_approved_scenarios:
@@ -153,13 +154,11 @@ export function PostmanGenerationStage({
         </output>
       )}
       {status === "error" && error && (
-        <div
-          role="alert"
-          data-testid="postman-generation-error"
-          className="space-y-1 rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        <ErrorState
+          testId="postman-generation-error"
+          message={`Generation failed: ${error.message}`}
+          detail={RECOVERY_GUIDANCE[error.error] ?? "Try again."}
         >
-          <p className="font-medium">Generation failed: {error.message}</p>
-          <p>{RECOVERY_GUIDANCE[error.error] ?? "Try again."}</p>
           {error.problems && error.problems.length > 0 && (
             <ul className="ml-4 list-disc">
               {error.problems.map((problem) => (
@@ -167,7 +166,7 @@ export function PostmanGenerationStage({
               ))}
             </ul>
           )}
-        </div>
+        </ErrorState>
       )}
       {status === "success" && result && (
         <div

@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { reviewStateLabel } from "./TestScenarioReviewDetail";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { EmptyState } from "./EmptyState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
@@ -234,9 +235,11 @@ export function TestScenarioReviewList({
 
       <div className="order-3">
         {filtered.length === 0 ? (
-          <p data-testid="review-scenario-list-empty" className="text-sm text-muted">
-            No scenarios match the current filters.
-          </p>
+          <EmptyState
+            compact
+            testId="review-scenario-list-empty"
+            message="No scenarios match the current filters."
+          />
         ) : (
           <ul className="min-w-0 overflow-hidden divide-y divide-border rounded-lg border border-border">
             <li className="flex flex-col gap-1 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">

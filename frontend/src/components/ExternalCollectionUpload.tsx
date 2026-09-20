@@ -2,6 +2,7 @@ import { useRef, useState, type RefObject } from "react";
 import type { EnvironmentTier } from "@apipilot/shared-domain";
 import { createUploadedCollection, type UploadedCollectionSummary } from "../services/externalCollectionsClient";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 const TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 
@@ -163,11 +164,7 @@ export function ExternalCollectionUpload({
         />
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">
-          {error}
-        </p>
-      )}
+      {error && <ErrorState message={error} />}
 
       <button type="button" onClick={handleSubmit} disabled={!canSubmit} className={BUTTON_STYLES.primary}>
         {uploading ? "Uploading…" : "Upload collection"}

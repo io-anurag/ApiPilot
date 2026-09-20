@@ -15,7 +15,9 @@ import {
   startExecution,
 } from "../services/executionClient";
 import { CodeBlock } from "./CodeBlock";
+import { EmptyState } from "./EmptyState";
 import { EnvironmentForm } from "./EnvironmentForm";
+import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -307,7 +309,7 @@ function ExecutionResultList({ results, tier }: Readonly<{ results: RequestResul
         ))}
       </ul>
       {visible.length === 0 && (
-        <p className="text-sm text-muted">No results match the current filter.</p>
+        <EmptyState compact message="No results match the current filter." />
       )}
     </div>
   );
@@ -582,15 +584,7 @@ export function ExecutionResultsPanel() {
         />
       )}
 
-      {startError && (
-        <p
-          role="alert"
-          data-testid="execution-start-error"
-          className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-        >
-          {startError}
-        </p>
-      )}
+      {startError && <ErrorState testId="execution-start-error" message={startError} />}
 
       {run && <RunSummary run={run} onCancel={handleCancel} cancelling={cancelling} />}
 

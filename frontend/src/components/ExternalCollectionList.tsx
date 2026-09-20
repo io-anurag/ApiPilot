@@ -2,6 +2,7 @@ import type { EnvironmentTier } from "@apipilot/shared-domain";
 import { removeUploadedCollection, type UploadedCollectionSummary } from "../services/externalCollectionsClient";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
+import { EmptyState } from "./EmptyState";
 
 const TIER_TONE: Record<EnvironmentTier, StatusTone> = {
   local: "neutral",
@@ -10,15 +11,6 @@ const TIER_TONE: Record<EnvironmentTier, StatusTone> = {
   staging: "warning",
   production: "danger",
 };
-
-function InboxIcon({ className }: Readonly<{ className?: string }>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12l2.5-6.5A1.5 1.5 0 018 4.5h8a1.5 1.5 0 011.5 1l2.5 6.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12h4.5l1 2h5l1-2H20v6a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18v-6z" />
-    </svg>
-  );
-}
 
 /** Lists, selects among, and removes uploaded collections (FR-016/FR-017). */
 export function ExternalCollectionList({
@@ -39,13 +31,10 @@ export function ExternalCollectionList({
 
   if (uploadedCollections.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted">
-          <InboxIcon className="h-5 w-5" />
-        </span>
-        <p className="text-sm font-medium text-slate-700">No uploaded collections yet</p>
-        <p className="text-xs text-muted">Upload a collection above to run it here.</p>
-      </div>
+      <EmptyState
+        message="No uploaded collections yet"
+        description="Upload a collection above to run it here."
+      />
     );
   }
 

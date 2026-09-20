@@ -1,11 +1,11 @@
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const TONE_CLASSES: Record<StatusTone, string> = {
-  neutral: "bg-slate-100 text-slate-700",
-  info: "bg-info-100 text-info-700",
-  success: "bg-success-100 text-success-700",
-  warning: "bg-warning-100 text-warning-700",
-  danger: "bg-danger-100 text-danger-700",
+  neutral: "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-100",
+  info: "bg-info-100 text-info-700 dark:bg-info-500/15 dark:text-info-100",
+  success: "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-100",
+  warning: "bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-100",
+  danger: "bg-danger-100 text-danger-700 dark:bg-danger-500/15 dark:text-danger-100",
 };
 
 /**

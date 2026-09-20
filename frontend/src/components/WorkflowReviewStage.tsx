@@ -14,6 +14,7 @@ import {
 } from "../services/testGenerationWorkflowClient";
 import { useBulkDecision, type BulkChunkResult } from "../hooks/useBulkDecision";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -207,11 +208,7 @@ export function WorkflowReviewStage({
             Continue
           </button>
         )}
-        {error && (
-          <p role="alert" className="text-sm font-medium text-danger-700">
-            {error}
-          </p>
-        )}
+        {error && <ErrorState message={error} />}
       </section>
     );
   }
@@ -390,15 +387,7 @@ export function WorkflowReviewStage({
             {continuing ? "Continuing…" : "Continue"}
           </button>
         )}
-        {error && (
-          <p
-            role="alert"
-            data-testid="workflow-review-error"
-            className="text-sm font-medium text-danger-700"
-          >
-            {error}
-          </p>
-        )}
+        {error && <ErrorState testId="workflow-review-error" message={error} />}
       </div>
       {pendingBulk && (
         <ConfirmDialog
