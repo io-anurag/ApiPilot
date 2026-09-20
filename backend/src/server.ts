@@ -27,10 +27,11 @@ process.on("unhandledRejection", (reason) => {
 const MIN_SUPPORTED_NODE_MAJOR = 20;
 const currentMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
 if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
-  console.error(
-    `Unsupported Node.js version v${process.versions.node}. ApiPilot requires Node.js ` +
-      `${MIN_SUPPORTED_NODE_MAJOR}+ (see .nvmrc). Please upgrade and retry.`,
-  );
+  logger.error("unsupported_node_version", {
+    nodeVersion: process.versions.node,
+    minimumMajor: MIN_SUPPORTED_NODE_MAJOR,
+    remediation: "Upgrade Node.js (see .nvmrc) and retry.",
+  });
   process.exit(1);
 }
 
@@ -45,7 +46,13 @@ try {
   getSharedConnection();
 } catch (err) {
   if (err instanceof PersistenceInitializationError) {
-    console.error(err.message);
+    // `reason` carries the error's own operator-facing guidance (database path plus underlying
+    // cause). It is a local filesystem diagnostic, never spec content or a credential, and it is
+    // written only to the server-side log — never returned to a client (constitution XX).
+    logger.error("persistence_initialization_failed", {
+      errorCategory: err.name,
+      reason: err.message,
+    });
     process.exit(1);
   }
   throw err;
@@ -59,17 +66,25 @@ getExecutionRunRepository().markInterruptedRunsCancelled();
 const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 
 const server = app.listen(config.backendPort, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Backend listening on http://localhost:${config.backendPort}`);
+  logger.info("server_listening", {
+    port: config.backendPort,
+    url: `http://localhost:${config.backendPort}`,
+  });
 });
 
 server.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
-    console.error(
-      `Port ${config.backendPort} is already in use. Set BACKEND_PORT to a free port and retry.`,
-    );
+    logger.error("server_start_failed", {
+      errorCategory: "EADDRINUSE",
+      port: config.backendPort,
+      remediation: "Set BACKEND_PORT to a free port and retry.",
+    });
   } else {
-    console.error("Failed to start backend server:", err.message);
+    logger.error("server_start_failed", {
+      errorCategory: err.code ?? err.name,
+      port: config.backendPort,
+      reason: err.message,
+    });
   }
   process.exit(1);
 });

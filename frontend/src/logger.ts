@@ -88,13 +88,16 @@ function forward(entry: {
     })
       .then((response) => {
         if (!response.ok) {
+          // eslint-disable-next-line no-console
           console.warn("[logger] backend rejected forwarded log entry", response.status);
         }
       })
       .catch(() => {
+        // eslint-disable-next-line no-console
         console.warn("[logger] failed to forward log entry to backend");
       });
   } catch {
+    // eslint-disable-next-line no-console
     console.warn("[logger] failed to forward log entry to backend");
   }
 }
@@ -111,9 +114,11 @@ export function createLogger(component: string, options: CreateLoggerOptions = {
     const timestamp = now().toISOString();
     const sanitized = sanitizeFields(fields);
     const consoleEntry = { timestamp, level, component, event, ...sanitized };
+    /* eslint-disable no-console */
     if (level === "error") console.error(consoleEntry);
     else if (level === "warn") console.warn(consoleEntry);
     else console.log(consoleEntry);
+    /* eslint-enable no-console */
 
     if (level === "warn" || level === "error") {
       forward({ level, component, event, timestamp, fields: sanitized });

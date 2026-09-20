@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import type { BenchmarkCandidateResult, ModelDType } from "@apipilot/shared-domain";
 import { LocalProvider } from "../localProvider";
 import { loadAIConfig } from "../modelConfig";
+import { createLogger } from "../../logger";
 import { getAiDiagnosticsRepository } from "../../persistence/aiDiagnosticsRepository";
 import { buildBenchmarkReport } from "./report";
 import { SAMPLE_WORKLOADS, WORKLOAD_SET_ID } from "./workloads";
+
+const logger = createLogger("ai.benchmark");
 
 interface BenchmarkCandidate {
   modelId: string;
@@ -106,14 +109,18 @@ async function main(): Promise<void> {
   const candidates: BenchmarkCandidateResult[] = [];
 
   for (const candidate of CANDIDATES) {
-    const dtypeSuffix = candidate.dtype ? " (dtype=" + candidate.dtype + ")" : "";
-    // eslint-disable-next-line no-console
-    console.log(`Benchmarking ${candidate.modelId}${dtypeSuffix}...`);
+    logger.info("benchmark_candidate_started", {
+      modelId: candidate.modelId,
+      dtype: candidate.dtype,
+    });
     try {
       candidates.push(await evaluateCandidate(candidate, model.cacheDir));
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(`Skipping ${candidate.modelId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error("benchmark_candidate_skipped", {
+        modelId: candidate.modelId,
+        errorCategory: error instanceof Error ? error.name : typeof error,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -141,14 +148,14 @@ async function main(): Promise<void> {
   // (specs/025-local-persistence-layer research.md D6).
   getAiDiagnosticsRepository().recordBenchmarkRun(report);
 
-  // eslint-disable-next-line no-console
-  console.log(`Benchmark report written to ${outputPath}`);
-  // eslint-disable-next-line no-console
-  console.log(`Selected model: ${selectedModelId}`);
+  logger.info("benchmark_report_written", { outputPath });
+  logger.info("benchmark_model_selected", { modelId: selectedModelId });
 }
 
-main().catch((error) => {
-  // eslint-disable-next-line no-console
-  console.error("Benchmark run failed:", error instanceof Error ? error.message : error);
+main().catch((error: unknown) => {
+  logger.error("benchmark_run_failed", {
+    errorCategory: error instanceof Error ? error.name : typeof error,
+    reason: error instanceof Error ? error.message : String(error),
+  });
   process.exitCode = 1;
 });

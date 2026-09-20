@@ -70,8 +70,11 @@ type PendingBulkDecision = { state: "approved" | "rejected"; workflowIds: string
 
 /**
  * Lists discovered IntegrationWorkflows (AP-008) with approve/reject controls. There is no
- * edit/regenerate concept for workflows (research.md D5); approved workflows are retained for
- * traceability but never rendered into the Postman artifact (research.md D2).
+ * edit/regenerate concept for workflows (AP-009 research.md D5). Approving a workflow renders it
+ * as an ordered Postman request sequence with the detected data hand-offs wired between steps;
+ * rejecting it omits that sequence from the export, and its steps instead render as standalone or
+ * automatically-chained requests (AP-016 workflow-aware-postman; AP-009's original D2, which
+ * deferred this rendering entirely, is superseded — see AP-009 research.md D2's own note).
  */
 export function WorkflowReviewStage({
   dependencyAnalysis,
@@ -227,9 +230,12 @@ export function WorkflowReviewStage({
       </h2>
       <p className="text-sm text-muted">
         Each item below is a call chain (e.g. create then reference by ID) discovered across the
-        operations you accepted a scenario for in the previous stage. Approving or rejecting only
-        records a decision for traceability; it does not add or remove any generated test
-        scenario, and no workflow is ever included in the Postman output.
+        operations you accepted a scenario for in the previous stage. Approving a workflow renders
+        it as an ordered Postman request sequence with the detected data hand-offs wired between
+        steps; rejecting it excludes that sequence from the export (its steps still appear as
+        standalone or automatically-chained requests). This decision never adds or removes a
+        generated test scenario — it only changes how already-approved scenarios are sequenced in
+        the Postman output.
       </p>
       <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
         <input

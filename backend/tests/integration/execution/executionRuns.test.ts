@@ -5,16 +5,40 @@ import { resetStore } from "../../../src/testGenerationWorkflow/workflowStore";
 import { driveToPostmanGenerationComplete } from "../../fixtures/execution/driveWorkflow";
 import { TargetServer } from "../../fixtures/execution/targetServer";
 
+/**
+ * Every request in a run is dispatched through its own Newman invocation, so one full run over
+ * the fixture collection costs seconds, not milliseconds, and takes substantially longer when the
+ * whole suite's workers are competing for CPU. The budgets below are sized for that contended
+ * case; they are deliberately generous because an expired deadline here means a genuine hang, not
+ * a slow machine.
+ */
+const POLL_TIMEOUT_MS = 30_000;
+/** One end-to-end execution run, plus the workflow setup that precedes it. */
+const SINGLE_RUN_TEST_TIMEOUT_MS = 60_000;
+/** Tests that drive two full runs back to back against separate target servers. */
+const DOUBLE_RUN_TEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Polls one run until it leaves `in-progress`. An expired deadline throws instead of returning
+ * the still-running response: returning it made a hung run surface as a misleading
+ * `expected 'in-progress' to be 'completed'` assertion somewhere further down the test, hiding
+ * the actual failure (constitution XIX — fail explicitly rather than silently degrading).
+ */
 async function pollUntilSettled(
   agent: ReturnType<typeof request.agent>,
   runId: string,
-  timeoutMs = 10_000,
+  timeoutMs = POLL_TIMEOUT_MS,
 ): Promise<{ status: number; body: { run: Record<string, unknown> & { status: string } } }> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const response = await agent.get(`/api/test-generation-workflow/execution/runs/${runId}`);
-    if (response.body.run.status !== "in-progress" || Date.now() > deadline) {
+    if (response.body.run.status !== "in-progress") {
       return response;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Run ${runId} was still "in-progress" after ${timeoutMs}ms; it never settled.`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -65,7 +89,7 @@ describe("execution routes (US1)", () => {
     for (const result of run.results as { operationPath: string }[]) {
       expect(typeof result.operationPath).toBe("string");
     }
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("reports connectivity-failure for every request when the target is unreachable, never assertion-failed", async () => {
     // Never started: nothing is listening on this port.
@@ -95,7 +119,7 @@ describe("execution routes (US1)", () => {
       expect(result.outcome).toBe("failed");
       expect(result.failureCategory).toBe("connectivity-failure");
     }
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("returns 409 stage_not_active before postmanGeneration is complete", async () => {
     const app = createApp();
@@ -168,7 +192,7 @@ describe("execution routes (US1)", () => {
       await serverA.stop();
       await serverB.stop();
     }
-  }, 15000);
+  }, DOUBLE_RUN_TEST_TIMEOUT_MS);
 
   it("returns 400 missing_variable_values naming the missing variable, and sends no request (US2, FR-004)", async () => {
     const app = createApp();
@@ -244,7 +268,7 @@ describe("execution routes (US1)", () => {
       (r) => r.operationMethod === "POST" && r.operationPath === "/pets" && r.outcome === "failed",
     );
     expect(postPets?.failureCategory).toBe("unexpected-status");
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("requires explicit confirmation for a staging environment, and proceeds once confirmed (US4, FR-007)", async () => {
     const baseUrl = await targetServer.start();
@@ -272,7 +296,7 @@ describe("execution routes (US1)", () => {
       .send({ environmentId: env.body.environment.id, confirmed: true });
     expect(started.status).toBe(200);
     await pollUntilSettled(agent, started.body.run.id);
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("requires explicit confirmation for a local environment with destructive operations (US4, FR-007)", async () => {
     const baseUrl = await targetServer.start();
@@ -323,7 +347,7 @@ describe("execution routes (US1)", () => {
     expect(second.body.runId).toBe(first.body.run.id);
 
     await pollUntilSettled(agent, first.body.run.id);
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("cancels a run mid-flight: the in-flight request finishes, the rest are recorded cancelled (US1/US4, FR-015)", async () => {
     const baseUrl = await targetServer.start();
@@ -364,7 +388,7 @@ describe("execution routes (US1)", () => {
     }
     // Whatever was already dispatched keeps its own real outcome, never silently dropped.
     expect(run.results.some((r) => r.outcome !== "not-attempted")).toBe(true);
-  }, 15000);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("returns 409 no_run_in_progress when cancelling with nothing running", async () => {
     const app = createApp();
@@ -430,5 +454,5 @@ describe("execution routes (US1)", () => {
       await serverA.stop();
       await serverB.stop();
     }
-  }, 20000);
+  }, DOUBLE_RUN_TEST_TIMEOUT_MS);
 });
