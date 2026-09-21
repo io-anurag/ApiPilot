@@ -249,9 +249,9 @@ export function TestGenerationWorkflowPage() {
         <div
           role="alertdialog"
           data-testid="discard-existing-confirmation"
-          className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+          className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
         >
-          <p className="text-sm text-warning-700">
+          <p className="text-sm text-warning-700 dark:text-warning-100">
             A workflow is already in progress. Starting a new one discards it. Continue?
           </p>
           <div className="flex gap-2">
@@ -278,7 +278,7 @@ export function TestGenerationWorkflowPage() {
       {sessionExpired && !workflow && (
         <output
           data-testid="session-expired-notice"
-          className="block border-l-4 border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700"
+          className="block border-l-4 border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
         >
           Your previous session expired due to inactivity. Start a new run below.
         </output>
@@ -287,16 +287,16 @@ export function TestGenerationWorkflowPage() {
         <div className="relative isolate overflow-hidden">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-500/10"
           />
           <div className="grid grid-cols-1 min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
               <div className="space-y-4">
-                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700">
+                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
                   <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
                   <span>Specification to executable tests</span>
                 </p>
-                <h2 className="max-w-3xl text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl">
+                <h2 className="max-w-3xl text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl dark:text-white">
                   Turn an OpenAPI specification into a test suite
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-muted">
@@ -311,20 +311,20 @@ export function TestGenerationWorkflowPage() {
                     key={label}
                     className="space-y-2 rounded-lg border border-border bg-surface px-3 py-3"
                   >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-700">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
                       <Icon className="h-4 w-4" />
                     </div>
-                    <dt className="font-mono text-xs text-brand-700">{label}</dt>
+                    <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">{label}</dt>
                     <dd className="text-xs text-muted">{description}</dd>
                   </div>
                 ))}
               </dl>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_#dce3e0]">
+            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
               <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3">
+              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
                     New test generation run
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
@@ -335,7 +335,7 @@ export function TestGenerationWorkflowPage() {
               </div>
               <div className="space-y-4 p-5 sm:p-6">
                 <div className="space-y-1">
-                  <h3 className="text-lg font-semibold text-slate-950">
+                  <h3 className="text-lg font-semibold text-slate-950 dark:text-white">
                     Upload specification
                   </h3>
                   <p className="text-sm leading-6 text-muted">
@@ -350,14 +350,14 @@ export function TestGenerationWorkflowPage() {
                   onDrop={handleDrop}
                   className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
                     dragActive
-                      ? "border-brand-500 bg-brand-50"
-                      : "border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40"
+                      ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15"
+                      : "border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-white/5 dark:hover:bg-brand-500/10"
                   } ${uploading ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300">
                     <UploadIcon className="h-5 w-5" />
                   </div>
-                  <p className="text-sm font-medium text-slate-800">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
                     Drag and drop your specification here
                   </p>
                   <p className="text-xs text-muted">or click to browse your files</p>
@@ -386,10 +386,10 @@ export function TestGenerationWorkflowPage() {
               {PIPELINE_PREVIEW_STEPS.map((label, index) => (
                 <li key={label} className="flex flex-1 items-center gap-2 sm:gap-0">
                   <div className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 sm:w-auto">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 font-mono text-[11px] font-semibold text-brand-700">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 font-mono text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
                       {index + 1}
                     </span>
-                    <span className="text-xs font-medium text-slate-700">{label}</span>
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{label}</span>
                   </div>
                   {index < PIPELINE_PREVIEW_STEPS.length - 1 && (
                     <span aria-hidden="true" className="hidden h-px flex-1 bg-border sm:block" />
@@ -403,7 +403,7 @@ export function TestGenerationWorkflowPage() {
       {workflow && !showStartPage && (
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
-            <p className="font-mono text-xs font-semibold uppercase text-brand-700">
+            <p className="font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
               Active run
             </p>
             <p className="mt-1 text-sm text-muted">
@@ -438,7 +438,7 @@ export function TestGenerationWorkflowPage() {
             (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
               <output
                 data-testid="revisiting-notice"
-                className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
+                className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
               >
                 Revisiting a completed stage. Making a change here will mark later stages
                 as needing to be redone.
@@ -446,7 +446,7 @@ export function TestGenerationWorkflowPage() {
             ) : (
               <output
                 data-testid="read-only-stage-notice"
-                className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-muted"
+                className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-muted dark:bg-white/5"
               >
                 Read-only view of a completed stage — nothing here can be changed.
               </output>
@@ -580,7 +580,7 @@ function ExecutionStageActions({
       data-testid="execution-stage-actions"
       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm"
     >
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         Running the approved collection against a real environment is optional. Skip this stage
         if you don&apos;t need to run it now, or finish once you&apos;re done.
       </p>
@@ -626,10 +626,12 @@ function UploadAnalysisSummary({
       data-testid={`${stageId}-stage-summary`}
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
         {isUpload ? "Specification Uploaded" : "Specification Analysis"}
       </h2>
-      {isUpload && <p className="text-sm text-slate-600">{specificationFilename}</p>}
+      {isUpload && (
+        <p className="text-sm text-slate-600 dark:text-slate-400">{specificationFilename}</p>
+      )}
       <AnalysisSummary summary={apiModel.summary} />
     </section>
   );
@@ -645,10 +647,10 @@ function DeterministicGenerationSummary({
       data-testid="deterministic-generation-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
         Deterministic Test Suite Generated
       </h2>
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         {scenarioCount} baseline scenario{scenarioCount === 1 ? "" : "s"} generated from
         the reviewed specification.
       </p>
@@ -674,8 +676,8 @@ function DependencyAnalysisSummary({
       data-testid="dependency-analysis-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900">Dependency Analysis</h2>
-      <p className="text-sm text-slate-600">
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">Dependency Analysis</h2>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         {graph.relationships.length} relationship
         {graph.relationships.length === 1 ? "" : "s"} found; {workflows.length}{" "}
         integration workflow{workflows.length === 1 ? "" : "s"} assembled.
@@ -723,7 +725,7 @@ function DeterministicGenerationTrigger({
       data-testid="deterministic-generation-stage"
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
         Generate Deterministic Test Suite
       </h2>
       <button
