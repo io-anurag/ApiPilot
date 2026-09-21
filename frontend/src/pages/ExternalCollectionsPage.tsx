@@ -85,9 +85,7 @@ export function ExternalCollectionsPage({
   }, []);
 
   const refreshCollectionView = useCallback(async (id: string) => {
-    console.log("DEBUG refreshCollectionView start", id);
     const result = await fetchUploadedCollectionView(id);
-    console.log("DEBUG refreshCollectionView result", result);
     if (result.ok) {
       setCollectionView(result.collectionView);
       setViewError(null);

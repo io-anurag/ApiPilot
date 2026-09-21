@@ -50,26 +50,35 @@ function stubFetch() {
   );
 }
 
+/**
+ * Finds the collection tree's own selection button for a request by its exact name — distinct
+ * from that same request's "Actions for <name>" menu button and its "Run order" checklist row
+ * (neither is a selection control). `getByRole`'s `name` filter computes the accessible name via
+ * the W3C accname algorithm, which does not behave like plain `textContent` concatenation here
+ * (`HttpMethodBadge` and the name `<span>` have no literal space between them in the JSX), so this
+ * matches on `textContent` directly instead of guessing the exact computed-name string.
+ */
+async function findRequestRowButton(name: string): Promise<HTMLElement> {
+  return waitFor(() => {
+    const match = screen.getAllByRole("button").find((el) => el.textContent === `GET${name}`);
+    if (!match) throw new Error(`No request row button found for "${name}" yet`);
+    return match;
+  });
+}
+
 describe("ExternalCollectionsPage", () => {
   it("loads the newly selected request's own fields into the editor, not the previously selected request's", async () => {
     stubFetch();
     render(<ExternalCollectionsPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
-    await waitFor(() => expect(screen.queryByText("Get widget")).toBeInTheDocument(), { timeout: 5000 });
-    // Both the collection tree and the run panel's own "Run order" checklist list every request
-    // by name — the tree's row is the only one that's a selection `<button>`, so target that
-    // specifically rather than `findByText`, which would match both and throw on ambiguity.
-    // The row's accessible name also includes its HttpMethodBadge text ("GET"), and a plain
-    // substring regex would also match the row's own "Actions for Get widget" menu button — anchor
-    // to the start so only the selection button (name starts with the method) matches.
-    fireEvent.click(await screen.findByRole("button", { name: /^GET Get widget/ }));
+    fireEvent.click(await findRequestRowButton("Get widget"));
     expect(await screen.findByLabelText("URL")).toHaveValue("https://api.example.com/widgets");
 
-    fireEvent.click(await screen.findByRole("button", { name: /^GET Get order/ }));
+    fireEvent.click(await findRequestRowButton("Get order"));
     // Without a `key` tied to the selected request's id, RequestEditorPanel's own `useState`
-    // initializer only ever runs once, and the URL input would still show "Get widget"'s value
-    // here instead of loading "Get order"'s own `{{baseUrl}}/orders`.
+    // initializer only ever runs once, and the URL input would still show "Get widget"'s value here
+    // instead of loading "Get order"'s own `{{baseUrl}}/orders`.
     expect(await screen.findByLabelText("URL")).toHaveValue("{{baseUrl}}/orders");
   });
 });
