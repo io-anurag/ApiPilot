@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BUTTON_STYLES } from "./controlStyles";
+import { Dialog } from "./Dialog";
 
 /**
  * Shared confirmation step for a bulk decision (FR-011): shows the number of items the action
@@ -31,44 +32,11 @@ export function ConfirmDialog({
   onCancel: () => void;
 }>) {
   const [reason, setReason] = useState("");
-  const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement;
     cancelButtonRef.current?.focus();
-    return () => {
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
-    };
   }, []);
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusable || focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
 
   const reasonMissing = Boolean(requireReason) && reason.trim().length === 0;
 
@@ -77,33 +45,34 @@ export function ConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div
-        ref={dialogRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-message"
-        data-testid="confirm-dialog"
-        className="w-full max-w-md space-y-3 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl"
-      >
+    <Dialog
+      role="alertdialog"
+      labelledBy="confirm-dialog-message"
+      testId="confirm-dialog"
+      onClose={onCancel}
+    >
+      <>
         {errorOnlyMessage ? (
           <p
             id="confirm-dialog-message"
             role="alert"
-            className="text-sm font-medium text-danger-700"
+            className="text-sm font-medium text-danger-700 dark:text-danger-200"
           >
             {errorOnlyMessage}
           </p>
         ) : (
           <>
-            <p id="confirm-dialog-message" className="text-sm font-medium text-slate-900">
+            <p
+              id="confirm-dialog-message"
+              className="text-sm font-medium text-slate-900 dark:text-slate-100"
+            >
               {message}
             </p>
             <p data-testid="confirm-dialog-count" className="text-sm text-muted">
               {affectedCount} item{affectedCount === 1 ? "" : "s"} will be affected.
             </p>
             {confirmDisabledMessage && (
-              <p role="alert" className="text-sm font-medium text-danger-700">
+              <p role="alert" className="text-sm font-medium text-danger-700 dark:text-danger-200">
                 {confirmDisabledMessage}
               </p>
             )}
@@ -157,7 +126,7 @@ export function ConfirmDialog({
             </>
           )}
         </div>
-      </div>
-    </div>
+      </>
+    </Dialog>
   );
 }

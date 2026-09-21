@@ -83,7 +83,9 @@ afterEach(() => {
 describe("PostmanExportPanel", () => {
   it("offers an export action with an accessible name", () => {
     render(<PostmanExportPanel apiModel={apiModel} testModel={testModel} />);
-    expect(screen.getByRole("button", { name: /export collection/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /export collection/i }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/base address/i)).toBeInTheDocument();
   });
 
@@ -92,10 +94,12 @@ describe("PostmanExportPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /export collection/i }));
 
     await waitFor(() => expect(screen.getByTestId("export-success")).toBeInTheDocument());
-    expect(screen.getByRole("link", { name: /collection\.json/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /environment\.json/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /README\.md/ })).toBeInTheDocument();
-    expect(screen.getByTestId("export-validation-result")).toHaveTextContent(/validation passed/i);
+    expect(screen.getByRole("button", { name: /collection\.json/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /environment\.json/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /README\.md/ })).toBeInTheDocument();
+    expect(screen.getByTestId("export-validation-result")).toHaveTextContent(
+      /validation passed/i,
+    );
   });
 
   it("distinguishes the empty result from a failure", async () => {
@@ -111,7 +115,9 @@ describe("PostmanExportPanel", () => {
 
     await waitFor(() => expect(screen.getByTestId("export-empty")).toBeInTheDocument());
     expect(screen.queryByTestId("export-error")).not.toBeInTheDocument();
-    expect(screen.getByTestId("export-empty")).toHaveTextContent(/accept at least one scenario/i);
+    expect(screen.getByTestId("export-empty")).toHaveTextContent(
+      /accept at least one scenario/i,
+    );
   });
 
   it("reports a failure with recovery guidance in text, not colour alone", async () => {
@@ -135,7 +141,9 @@ describe("PostmanExportPanel", () => {
     render(<PostmanExportPanel apiModel={apiModel} testModel={testModel} />);
     fireEvent.click(screen.getByRole("button", { name: /export collection/i }));
 
-    await waitFor(() => expect(screen.getByTestId("export-limitations")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("export-limitations")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("export-limitation-no-expected-outcome")).toHaveTextContent(
       /GET \/orders/,
     );
@@ -151,12 +159,14 @@ describe("PostmanExportPanel", () => {
 
     await waitFor(() => expect(screen.getByTestId("export-success")).toBeInTheDocument());
     expect(
-      screen.getByRole("link", { name: /orders-api\.postman_collection\.json/ }),
+      screen.getByRole("button", { name: /orders-api\.postman_collection\.json/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /orders-api\.postman_environment\.json/ }),
+      screen.getByRole("button", { name: /orders-api\.postman_environment\.json/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /orders-api\.README\.md/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /orders-api\.README\.md/ }),
+    ).toBeInTheDocument();
   });
 
   it("sends the supplied base address as an export option", async () => {

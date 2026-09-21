@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { reviewStateLabel } from "./TestScenarioReviewDetail";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { EmptyState } from "./EmptyState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
@@ -22,8 +23,8 @@ const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
  * is scannable across the whole list rather than only legible one row at a time. */
 const STATE_ROW_TONE_CLASSES: Record<ReviewScenarioWire["state"], string> = {
   pending: "",
-  accepted: "bg-success-50",
-  rejected: "bg-danger-50",
+  accepted: "bg-success-50 dark:bg-success-500/15",
+  rejected: "bg-danger-50 dark:bg-danger-500/15",
 };
 
 /**
@@ -234,12 +235,14 @@ export function TestScenarioReviewList({
 
       <div className="order-3">
         {filtered.length === 0 ? (
-          <p data-testid="review-scenario-list-empty" className="text-sm text-muted">
-            No scenarios match the current filters.
-          </p>
+          <EmptyState
+            compact
+            testId="review-scenario-list-empty"
+            message="No scenarios match the current filters."
+          />
         ) : (
           <ul className="min-w-0 overflow-hidden divide-y divide-border rounded-lg border border-border">
-            <li className="flex flex-col gap-1 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted">
+            <li className="flex flex-col gap-1 border-b border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-muted">
               <div className="flex items-center gap-3">
                 <span className="w-4" aria-hidden="true" />
                 <div
@@ -275,19 +278,19 @@ export function TestScenarioReviewList({
                       data-testid={`review-scenario-row-${item.scenarioId}`}
                       aria-pressed={item.scenarioId === selectedScenarioId}
                       onClick={() => onSelect(item)}
-                      className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${STATE_ROW_TONE_CLASSES[item.state]} ${
+                      className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${STATE_ROW_TONE_CLASSES[item.state]} ${
                         item.scenarioId === selectedScenarioId ? "ring-2 ring-inset ring-brand-400" : ""
                       }`}
                     >
                       <HttpMethodBadge method={item.scenario.operationMethod} />
                       <span
-                        className="min-w-0 justify-self-stretch truncate font-mono text-slate-800"
+                        className="min-w-0 justify-self-stretch truncate font-mono text-slate-800 dark:text-slate-200"
                         title={item.scenario.operationPath}
                       >
                         {item.scenario.operationPath}
                       </span>
                       <span
-                        className="min-w-0 justify-self-stretch truncate text-slate-700"
+                        className="min-w-0 justify-self-stretch truncate text-slate-700 dark:text-slate-300"
                         title={categoryLabel}
                       >
                         {categoryLabel}
@@ -303,7 +306,7 @@ export function TestScenarioReviewList({
                     </button>
                   </li>
                   {item.scenarioId === selectedScenarioId && (
-                    <li className="border-t border-brand-200 bg-brand-50/20">
+                    <li className="border-t border-brand-200 bg-brand-50/20 dark:border-brand-500 dark:bg-brand-500/10">
                       {renderSelected?.(item)}
                     </li>
                   )}
@@ -316,9 +319,9 @@ export function TestScenarioReviewList({
 
       <div
         data-testid="review-bulk-actions"
-        className="order-1 flex flex-wrap items-center gap-2 rounded-md border border-brand-200 bg-brand-50 p-3"
+        className="order-1 flex flex-wrap items-center gap-2 rounded-md border border-brand-200 bg-brand-50 p-3 dark:border-brand-500 dark:bg-brand-500/10"
       >
-        <label className="mr-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+        <label className="mr-2 flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
           <input
             type="checkbox"
             checked={allFilteredSelected}

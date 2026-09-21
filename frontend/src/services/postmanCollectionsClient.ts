@@ -1,4 +1,9 @@
-import type { ApiModel, ExportOptions, ExportResult, TestModel } from "@apipilot/shared-domain";
+import type {
+  ApiModel,
+  ExportOptions,
+  ExportResult,
+  TestModel,
+} from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 
 const logger = createLogger("postmanCollectionsClient");
@@ -73,7 +78,9 @@ export async function requestPostmanExport(
         error: errorCategory,
         message:
           (parsed?.message as string) ?? `Request failed with status ${response.status}`,
-        ...(Array.isArray(parsed?.problems) ? { problems: parsed.problems as string[] } : {}),
+        ...(Array.isArray(parsed?.problems)
+          ? { problems: parsed.problems as string[] }
+          : {}),
       };
     }
     return { ok: true, result: parsed as ExportResult };
@@ -106,6 +113,26 @@ export function revokeArtifactHref(href: string): void {
   if (href.startsWith("blob:") && typeof URL.revokeObjectURL === "function") {
     URL.revokeObjectURL(href);
   }
+}
+
+/**
+ * Triggers a browser download for one artifact directly, creating its object URL only at click
+ * time rather than ahead of time. Pre-creating and storing object URLs in React state tied a
+ * blob's lifetime to the *rendering* component's mount/unmount timing — a stage screen that
+ * advances the moment its action completes (as every stage here does) could unmount and revoke
+ * the URL before the browser finished the download, breaking it non-deterministically. Revoking
+ * on a delay instead gives the browser ample time to start reading the blob regardless of what
+ * the UI does afterward.
+ */
+export function downloadArtifact(text: string, mimeType: string, filename: string): void {
+  const href = artifactHref(text, mimeType);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => revokeArtifactHref(href), 30_000);
 }
 
 /**

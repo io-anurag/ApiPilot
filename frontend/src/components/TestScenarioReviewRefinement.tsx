@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReviewEditContent } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 /** Edit and AI-regeneration controls for AI-derived and user-modified scenarios (US3, FR-011-FR-016). */
 export function TestScenarioReviewRefinement({
@@ -63,15 +64,7 @@ export function TestScenarioReviewRefinement({
           className="w-full rounded-md border border-border bg-surface p-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
         />
       </div>
-      {bodyError && (
-        <p
-          role="alert"
-          data-testid="review-edit-body-error"
-          className="text-sm font-medium text-danger-700"
-        >
-          {bodyError}
-        </p>
-      )}
+      {bodyError && <ErrorState testId="review-edit-body-error" message={bodyError} />}
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -97,15 +90,7 @@ export function TestScenarioReviewRefinement({
         )}
       </div>
 
-      {error && (
-        <p
-          role="alert"
-          data-testid="review-refinement-error"
-          className="text-sm font-medium text-danger-700"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorState testId="review-refinement-error" message={error} />}
     </div>
   );
 }

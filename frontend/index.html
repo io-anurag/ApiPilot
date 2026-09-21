@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/logo-icon.png" />
     <title>ApiPilot</title>
+    <script>
+      // Sets data-theme before first paint so an explicit or system dark preference doesn't flash
+      // light first (useTheme.ts owns this same read/write logic for the in-app toggle).
+      (function () {
+        try {
+          var stored = window.localStorage.getItem("apipilot-theme");
+          var theme = stored === "light" || stored === "dark" ? stored : null;
+          if (theme === null) {
+            var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            theme = prefersDark ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          // localStorage/matchMedia unavailable (e.g. disabled storage) — fall back to CSS's own
+          // prefers-color-scheme handling instead of leaving the page unstyled.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -14,8 +14,10 @@ import {
 } from "../services/testGenerationWorkflowClient";
 import { useBulkDecision, type BulkChunkResult } from "../hooks/useBulkDecision";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { SummaryPanel, type SummaryPanelSegment } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
 
 function workflowSummary(
@@ -50,8 +52,8 @@ const STATE_TONES: Record<WorkflowReviewState, StatusTone> = {
  * across the whole list rather than only legible one card at a time. */
 const STATE_CARD_TONE_CLASSES: Record<WorkflowReviewState, string> = {
   pending: "",
-  approved: "bg-success-50",
-  rejected: "bg-danger-50",
+  approved: "bg-success-50 dark:bg-success-500/15",
+  rejected: "bg-danger-50 dark:bg-danger-500/15",
 };
 
 const CONFIDENCE_LABELS: Record<DependencyConfidence, string> = {
@@ -180,38 +182,73 @@ export function WorkflowReviewStage({
     onAdvanced(result);
   }
 
+  const decisionSegments: SummaryPanelSegment[] = [
+    {
+      key: "pending",
+      label: STATE_LABELS.pending,
+      count: dependencyAnalysis.workflows.filter(
+        (w) => (decisions?.[w.id]?.state ?? "pending") === "pending",
+      ).length,
+      tone: STATE_TONES.pending,
+    },
+    {
+      key: "approved",
+      label: STATE_LABELS.approved,
+      count: dependencyAnalysis.workflows.filter(
+        (w) => decisions?.[w.id]?.state === "approved",
+      ).length,
+      tone: STATE_TONES.approved,
+    },
+    {
+      key: "rejected",
+      label: STATE_LABELS.rejected,
+      count: dependencyAnalysis.workflows.filter(
+        (w) => decisions?.[w.id]?.state === "rejected",
+      ).length,
+      tone: STATE_TONES.rejected,
+    },
+  ];
+  const cycleCount = dependencyAnalysis.cycles?.length ?? 0;
+  const summaryDescription =
+    cycleCount > 0
+      ? `${cycleCount} dependency cycle${cycleCount === 1 ? "" : "s"} detected among the discovered relationships.`
+      : "Each workflow keeps the relationships it was assembled from for review.";
+
   if (dependencyAnalysis.workflows.length === 0) {
     return (
       <section
         data-testid="workflow-review-stage"
-        className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
       >
-        <h2 className="text-base font-semibold text-slate-900">
-          Review Integration Workflows
-        </h2>
-        <p className="text-sm text-muted">
-          This analyzes multi-step call chains (e.g. create then reference by ID) across the
-          operations you accepted a scenario for in the previous stage — a workflow describes how
-          those operations relate, not which test scenarios exist.
-        </p>
-        <p data-testid="workflow-review-empty" className="text-sm text-muted">
-          No integration workflows were discovered.
-        </p>
-        {isActiveStage && (
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={continuing}
-            className={BUTTON_STYLES.primary}
-          >
-            Continue
-          </button>
-        )}
-        {error && (
-          <p role="alert" className="text-sm font-medium text-danger-700">
-            {error}
+        <div className="min-w-0 space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+            Review Integration Workflows
+          </h2>
+          <p className="text-sm text-muted">
+            This analyzes multi-step call chains (e.g. create then reference by ID) across
+            the operations you accepted a scenario for in the previous stage — a workflow
+            describes how those operations relate, not which test scenarios exist.
           </p>
-        )}
+          <p data-testid="workflow-review-empty" className="text-sm text-muted">
+            No integration workflows were discovered.
+          </p>
+          {error && <ErrorState testId="workflow-review-error" message={error} />}
+        </div>
+        <SummaryPanel
+          testId="workflow-review-summary-panel"
+          statValue={0}
+          statLabel="integration workflows discovered"
+          description="This decision never adds or removes a generated test scenario — it only changes how already-approved scenarios are sequenced in the Postman output."
+          action={
+            isActiveStage
+              ? {
+                  label: continuing ? "Continuing…" : "Continue",
+                  onClick: handleContinue,
+                  disabled: continuing,
+                }
+              : undefined
+          }
+        />
       </section>
     );
   }
@@ -223,183 +260,185 @@ export function WorkflowReviewStage({
   return (
     <section
       data-testid="workflow-review-stage"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
-      <h2 className="text-base font-semibold text-slate-900">
-        Review Integration Workflows
-      </h2>
-      <p className="text-sm text-muted">
-        Each item below is a call chain (e.g. create then reference by ID) discovered across the
-        operations you accepted a scenario for in the previous stage. Approving a workflow renders
-        it as an ordered Postman request sequence with the detected data hand-offs wired between
-        steps; rejecting it excludes that sequence from the export (its steps still appear as
-        standalone or automatically-chained requests). This decision never adds or removes a
-        generated test scenario — it only changes how already-approved scenarios are sequenced in
-        the Postman output.
-      </p>
-      <label className="flex w-fit items-center gap-2 text-sm text-slate-700">
-        <input
-          ref={selectAllRef}
-          type="checkbox"
-          checked={allSelected}
-          onChange={toggleSelectAll}
-          aria-label="Select all workflows"
-          data-testid="workflow-review-select-all"
-          className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-        />
-        Select all
-      </label>
-      {manuallySelectedIds.length > 0 && (
-        <div data-testid="workflow-review-bulk-actions" className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setPendingBulk({ state: "approved", workflowIds: manuallySelectedIds })
-            }
-            className={BUTTON_STYLES.secondary}
+      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+          Review Integration Workflows
+        </h2>
+        <p className="text-sm text-muted">
+          Each item below is a call chain (e.g. create then reference by ID) discovered
+          across the operations you accepted a scenario for in the previous stage.
+          Approving a workflow renders it as an ordered Postman request sequence with the
+          detected data hand-offs wired between steps; rejecting it excludes that sequence
+          from the export (its steps still appear as standalone or automatically-chained
+          requests). This decision never adds or removes a generated test scenario — it
+          only changes how already-approved scenarios are sequenced in the Postman output.
+        </p>
+        <label className="flex w-fit items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+          <input
+            ref={selectAllRef}
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleSelectAll}
+            aria-label="Select all workflows"
+            data-testid="workflow-review-select-all"
+            className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          />
+          Select all
+        </label>
+        {manuallySelectedIds.length > 0 && (
+          <div
+            data-testid="workflow-review-bulk-actions"
+            className="flex flex-wrap gap-2"
           >
-            Approve selected ({manuallySelectedIds.length})
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setPendingBulk({ state: "rejected", workflowIds: manuallySelectedIds })
-            }
-            className={BUTTON_STYLES.secondary}
-          >
-            Reject selected ({manuallySelectedIds.length})
-          </button>
-        </div>
-      )}
-      <ul className="space-y-3">
-        {dependencyAnalysis.workflows.map((workflow) => {
-          const state = decisions?.[workflow.id]?.state ?? "pending";
-          return (
-            <li
-              key={workflow.id}
-              data-testid={`workflow-review-item-${workflow.id}`}
-              className={`space-y-3 rounded-md border border-border p-3 ${STATE_CARD_TONE_CLASSES[state]}`}
-            >
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={manualSelectionIds.has(workflow.id)}
-                  onChange={() => toggleManualSelection(workflow.id)}
-                  aria-label={`Select workflow ${workflow.id}`}
-                  className="mt-1 h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                />
-                <ol className="flex-1 space-y-1.5">
-                  {workflowSummary(workflow, dependencyAnalysis.graph).map(
-                    ({ step, relationship }) => (
-                      <li
-                        key={`${workflow.id}-${step.position}`}
-                        className="flex flex-wrap items-center gap-2 text-sm"
-                      >
-                        <HttpMethodBadge method={step.operationMethod} />
-                        <span className="font-mono text-slate-800">
-                          {step.operationPath}
-                        </span>
-                        {relationship && (
-                          <>
-                            <StatusBadge
-                              label={CONFIDENCE_LABELS[relationship.confidence]}
-                              tone={CONFIDENCE_TONES[relationship.confidence]}
-                            />
-                            <span className="text-muted">
-                              — {relationship.explanation}
-                            </span>
-                          </>
-                        )}
-                      </li>
-                    ),
-                  )}
-                </ol>
-              </div>
-              <div className="flex items-center gap-3">
-                <span data-testid={`workflow-review-state-${workflow.id}`}>
-                  <StatusBadge label={STATE_LABELS[state]} tone={STATE_TONES[state]} />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => decide(workflow.id, "approved")}
-                  disabled={submittingId === workflow.id}
-                  className={BUTTON_STYLES.success}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  onClick={() => decide(workflow.id, "rejected")}
-                  disabled={submittingId === workflow.id}
-                  className={BUTTON_STYLES.danger}
-                >
-                  Reject
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      {bulkDecision.status === "running" && (
-        <output
-          data-testid="workflow-bulk-progress"
-          className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
-        >
-          Applying to {bulkDecision.processed} of {bulkDecision.total}…
-        </output>
-      )}
-      {bulkDecision.status === "done" && (
-        <output
-          data-testid="workflow-bulk-summary"
-          className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-slate-700"
-        >
-          <p>
-            <span className="font-medium text-success-700">{bulkDecision.succeeded}</span>
-            {" succeeded, "}
-            <span
-              className={
-                bulkDecision.failed.length > 0 ? "font-medium text-danger-700" : ""
+            <button
+              type="button"
+              onClick={() =>
+                setPendingBulk({ state: "approved", workflowIds: manuallySelectedIds })
               }
+              className={BUTTON_STYLES.secondary}
             >
-              {bulkDecision.failed.length}
-            </span>
-            {" failed."}
-          </p>
-          {bulkDecision.failed.length > 0 && (
-            <ul className="mt-1 ml-4 list-disc">
-              {bulkDecision.failed.map((failure) => (
-                <li key={failure.id}>
-                  {failure.id}: {failure.message}
-                </li>
-              ))}
-            </ul>
-          )}
-        </output>
-      )}
-      {/* Sticky rather than in normal flow: with dozens of workflows to review, the continue
-          action must stay reachable without scrolling past the entire list (matches the same
-          fix applied to ApiReviewStage's and ScenarioReviewStage's continue/finalize bars). */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
-        {isActiveStage && (
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={continuing}
-            className={BUTTON_STYLES.primary}
-          >
-            {continuing ? "Continuing…" : "Continue"}
-          </button>
+              Approve selected ({manuallySelectedIds.length})
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPendingBulk({ state: "rejected", workflowIds: manuallySelectedIds })
+              }
+              className={BUTTON_STYLES.secondary}
+            >
+              Reject selected ({manuallySelectedIds.length})
+            </button>
+          </div>
         )}
-        {error && (
-          <p
-            role="alert"
-            data-testid="workflow-review-error"
-            className="text-sm font-medium text-danger-700"
+        <ul className="space-y-3">
+          {dependencyAnalysis.workflows.map((workflow) => {
+            const state = decisions?.[workflow.id]?.state ?? "pending";
+            return (
+              <li
+                key={workflow.id}
+                data-testid={`workflow-review-item-${workflow.id}`}
+                className={`space-y-3 rounded-md border border-border p-3 ${STATE_CARD_TONE_CLASSES[state]}`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={manualSelectionIds.has(workflow.id)}
+                    onChange={() => toggleManualSelection(workflow.id)}
+                    aria-label={`Select workflow ${workflow.id}`}
+                    className="mt-1 h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  />
+                  <ol className="flex-1 space-y-1.5">
+                    {workflowSummary(workflow, dependencyAnalysis.graph).map(
+                      ({ step, relationship }) => (
+                        <li
+                          key={`${workflow.id}-${step.position}`}
+                          className="flex flex-wrap items-center gap-2 text-sm"
+                        >
+                          <HttpMethodBadge method={step.operationMethod} />
+                          <span className="font-mono text-slate-800 dark:text-slate-200">
+                            {step.operationPath}
+                          </span>
+                          {relationship && (
+                            <>
+                              <StatusBadge
+                                label={CONFIDENCE_LABELS[relationship.confidence]}
+                                tone={CONFIDENCE_TONES[relationship.confidence]}
+                              />
+                              <span className="text-muted">
+                                — {relationship.explanation}
+                              </span>
+                            </>
+                          )}
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span data-testid={`workflow-review-state-${workflow.id}`}>
+                    <StatusBadge label={STATE_LABELS[state]} tone={STATE_TONES[state]} />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => decide(workflow.id, "approved")}
+                    disabled={submittingId === workflow.id}
+                    className={BUTTON_STYLES.success}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => decide(workflow.id, "rejected")}
+                    disabled={submittingId === workflow.id}
+                    className={BUTTON_STYLES.danger}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {bulkDecision.status === "running" && (
+          <output
+            data-testid="workflow-bulk-progress"
+            className="block rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
           >
-            {error}
-          </p>
+            Applying to {bulkDecision.processed} of {bulkDecision.total}…
+          </output>
         )}
+        {bulkDecision.status === "done" && (
+          <output
+            data-testid="workflow-bulk-summary"
+            className="block rounded-md border border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300"
+          >
+            <p>
+              <span className="font-medium text-success-700 dark:text-success-400">
+                {bulkDecision.succeeded}
+              </span>
+              {" succeeded, "}
+              <span
+                className={
+                  bulkDecision.failed.length > 0
+                    ? "font-medium text-danger-700 dark:text-danger-400"
+                    : ""
+                }
+              >
+                {bulkDecision.failed.length}
+              </span>
+              {" failed."}
+            </p>
+            {bulkDecision.failed.length > 0 && (
+              <ul className="mt-1 ml-4 list-disc">
+                {bulkDecision.failed.map((failure) => (
+                  <li key={failure.id}>
+                    {failure.id}: {failure.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </output>
+        )}
+        {error && <ErrorState testId="workflow-review-error" message={error} />}
       </div>
+      <SummaryPanel
+        testId="workflow-review-summary-panel"
+        statValue={dependencyAnalysis.workflows.length}
+        statLabel={`integration workflow${dependencyAnalysis.workflows.length === 1 ? "" : "s"} discovered`}
+        segments={decisionSegments}
+        description={summaryDescription}
+        action={
+          isActiveStage
+            ? {
+                label: continuing ? "Continuing…" : "Continue",
+                onClick: handleContinue,
+                disabled: continuing,
+              }
+            : undefined
+        }
+      />
       {pendingBulk && (
         <ConfirmDialog
           message={

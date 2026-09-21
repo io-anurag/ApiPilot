@@ -6,6 +6,7 @@ import {
   type EnvironmentInput,
 } from "../services/executionClient";
 import { BUTTON_STYLES } from "./controlStyles";
+import { ErrorState } from "./ErrorState";
 
 const TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 
@@ -81,7 +82,7 @@ export function EnvironmentForm({
   return (
     <div
       data-testid="environment-form"
-      className="space-y-3 rounded-md border border-border bg-slate-50 p-4"
+      className="space-y-3 rounded-md border border-border bg-slate-50 p-4 dark:bg-white/5"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -165,7 +166,7 @@ export function EnvironmentForm({
               type="button"
               aria-label={`Remove variable row ${index + 1}`}
               onClick={() => removeRow(index)}
-              className="text-sm text-muted hover:text-danger-700"
+              className="text-sm text-muted hover:text-danger-700 dark:hover:text-danger-400"
             >
               ✕
             </button>
@@ -180,11 +181,7 @@ export function EnvironmentForm({
         </button>
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-danger-700">
-          {error}
-        </p>
-      )}
+      {error && <ErrorState message={error} />}
 
       <div className="flex gap-2">
         <button

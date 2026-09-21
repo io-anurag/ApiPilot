@@ -1,5 +1,6 @@
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { BatchOutcomeList } from "./BatchOutcomeList";
+import { SummaryBreakdown, type SummaryPanelSegment } from "./SummaryPanel";
 
 /**
  * Read-only account of one AI enhancement run's outcome (how many AI-suggested scenarios were
@@ -27,14 +28,20 @@ export function AiEnhancementOutcomeSummary({
   const addedLabel = `${added.length} AI-suggested scenario${added.length === 1 ? "" : "s"} added to review`;
   const rejectedLabel = `${deduplicated.length} duplicate, ${rejected.length} rejected, and ${nonExecutable.length} non-executable candidate${totalCandidates === 1 ? "" : "s"}.`;
   const failureExplanation = workflow.stages.aiEnhancement.failureExplanation;
+  const candidateSegments: SummaryPanelSegment[] = [
+    { key: "added", label: "Added", count: added.length, tone: "success" },
+    { key: "deduplicated", label: "Duplicate", count: deduplicated.length, tone: "neutral" },
+    { key: "rejected", label: "Rejected", count: rejected.length, tone: "danger" },
+    { key: "nonExecutable", label: "Non-executable", count: nonExecutable.length, tone: "warning" },
+  ];
 
   return (
     <section
       data-testid="ai-review-outcome"
       className={`rounded-md border p-3 text-sm ${
         hasUniqueScenarios
-          ? "border-brand-200 bg-brand-50 text-brand-900"
-          : "border-warning-200 bg-warning-50 text-warning-800"
+          ? "border-brand-200 bg-brand-50 text-brand-900 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
+          : "border-warning-200 bg-warning-50 text-warning-800 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100"
       }`}
     >
       <p className="font-semibold">
@@ -48,6 +55,11 @@ export function AiEnhancementOutcomeSummary({
           : rejectedLabel}
       </p>
       {failureExplanation && <p className="mt-1">{failureExplanation.summary}</p>}
+      {totalCandidates > 0 && (
+        <div className="mt-3">
+          <SummaryBreakdown segments={candidateSegments} />
+        </div>
+      )}
       {/* Read-only here — no retry action; retrying lives on the AI Enhancement stage's own
           screen (TestGenerationWorkflowPage.tsx), reachable via "view" once it's skipped/partial,
           since the workflow always advances past it immediately and it is never active again. */}

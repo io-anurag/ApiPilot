@@ -4,6 +4,8 @@ import type {
   TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire, ReviewWorkspaceWire } from "../services/reviewsClient";
+import { ErrorState } from "./ErrorState";
+import { Skeleton } from "./Skeleton";
 import {
   applyScenarioDecisions,
   editScenario,
@@ -21,7 +23,9 @@ import { TestScenarioReviewDetail } from "./TestScenarioReviewDetail";
 import { TestScenarioReviewDecision } from "./TestScenarioReviewDecision";
 import { TestScenarioReviewRefinement } from "./TestScenarioReviewRefinement";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { SummaryPanel } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
+import { groupScenarioCategories } from "../utils/scenarioCategoryGroups";
 
 /**
  * Wraps AP-006's existing review components, driven by the workflow-scoped client instead of
@@ -177,145 +181,153 @@ export function ScenarioReviewStage({
   // hidden until that happens, since finalizing requires the stage to already be active and
   // would otherwise fail with `stage_not_active` the instant it's clicked.
   const isActiveStage = workflow.activeStageId === "scenarioReview";
+  const total = reviewWorkspace.scenarios.length;
+  const categorySegments = groupScenarioCategories(
+    reviewWorkspace.scenarios.map((item) => item.scenario.category),
+  );
 
   return (
     <section
       data-testid="scenario-review-stage"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
-      <h2 className="text-base font-semibold text-slate-900">
-        Review Generated Scenarios
-      </h2>
-      <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
-      <AiEnhancementOutcomeSummary workflow={workflow} />
-      <TestScenarioReviewList
-        scenarios={reviewWorkspace.scenarios}
-        selectedScenarioId={selectedScenarioId}
-        onSelect={(item) => {
-          setSelectedScenarioId(item.scenarioId);
-          setActionError(null);
-        }}
-        onBulkDecision={handleBulkDecision}
-        renderSelected={(item) => (
-          <div
-            className="space-y-4 border-2 border-brand-200 bg-brand-50/40 p-4"
-            aria-label="Selected scenario review"
-            data-testid="selected-scenario-panel"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
-                  Selected scenario
-                </p>
-                <p className="text-sm text-slate-600">
-                  Review the request and decide before continuing.
-                </p>
+      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+          Review Generated Scenarios
+        </h2>
+        <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
+        <AiEnhancementOutcomeSummary workflow={workflow} />
+        <TestScenarioReviewList
+          scenarios={reviewWorkspace.scenarios}
+          selectedScenarioId={selectedScenarioId}
+          onSelect={(item) => {
+            setSelectedScenarioId(item.scenarioId);
+            setActionError(null);
+          }}
+          onBulkDecision={handleBulkDecision}
+          renderSelected={(item) => (
+            <div
+              className="space-y-4 border-2 border-brand-200 bg-brand-50/40 p-4 dark:border-brand-500 dark:bg-brand-500/10"
+              aria-label="Selected scenario review"
+              data-testid="selected-scenario-panel"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                    Selected scenario
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Review the request and decide before continuing.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedScenarioId(null)}
+                  className={BUTTON_STYLES.secondary}
+                >
+                  Close details
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedScenarioId(null)}
-                className={BUTTON_STYLES.secondary}
-              >
-                Close details
-              </button>
-            </div>
-            <TestScenarioReviewDetail item={item} />
-            <TestScenarioReviewDecision
-              item={item}
-              submitting={submittingScenarioId === item.scenarioId}
-              error={actionError ?? undefined}
-              onAccept={() => handleAccept(item)}
-              onReject={(reason) => handleReject(item, reason)}
-            />
-            <TestScenarioReviewRefinement
-              item={item}
-              submitting={submittingScenarioId === item.scenarioId}
-              error={actionError ?? undefined}
-              onEdit={(edit) => handleEdit(item, edit)}
-              onRegenerate={() => handleRegenerate(item)}
-            />
-          </div>
-        )}
-      />
-      {bulkDecision.status === "running" && (
-        <output
-          data-testid="scenario-bulk-progress"
-          className="block w-full rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700"
-        >
-          Applying decisions: {bulkDecision.processed} of {bulkDecision.total} complete…
-        </output>
-      )}
-      {bulkDecision.status === "done" && (
-        <output
-          data-testid="scenario-bulk-summary"
-          className="block w-full rounded-md border border-border bg-slate-50 px-3 py-3 text-sm text-slate-700"
-        >
-          <p className="font-semibold text-slate-900">Bulk review complete</p>
-          <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
-            <div>
-              <dt className="inline text-muted">Accepted or rejected: </dt>
-              <dd className="inline font-medium text-success-700">
-                {bulkDecision.succeeded}
-              </dd>
-            </div>
-            <div>
-              <dt className="inline text-muted">Failed: </dt>
-              <dd
-                className={
-                  bulkDecision.failed.length > 0
-                    ? "inline font-medium text-danger-700"
-                    : "inline font-medium text-slate-700"
-                }
-              >
-                {bulkDecision.failed.length}
-              </dd>
-            </div>
-          </dl>
-          {bulkDecision.failed.length > 0 && (
-            <div className="mt-2 rounded-md border border-danger-200 bg-danger-50 p-2 text-danger-800">
-              <p className="font-medium">Items needing attention</p>
-              <ul className="mt-1 ml-4 list-disc">
-                {bulkDecision.failed.map((failure) => (
-                  <li key={failure.id}>
-                    {failure.id}: {failure.message}
-                  </li>
-                ))}
-              </ul>
+              <TestScenarioReviewDetail item={item} />
+              <TestScenarioReviewDecision
+                item={item}
+                submitting={submittingScenarioId === item.scenarioId}
+                error={actionError ?? undefined}
+                onAccept={() => handleAccept(item)}
+                onReject={(reason) => handleReject(item, reason)}
+              />
+              <TestScenarioReviewRefinement
+                item={item}
+                submitting={submittingScenarioId === item.scenarioId}
+                error={actionError ?? undefined}
+                onEdit={(edit) => handleEdit(item, edit)}
+                onRegenerate={() => handleRegenerate(item)}
+              />
             </div>
           )}
-        </output>
-      )}
-      {/* Sticky rather than in normal flow: with hundreds of scenarios to review, the finalize
-          action must stay reachable without scrolling past the entire list (matches the
-          sticky app header pattern in App.tsx). Negative margins extend it to the section's
-          full padded width so the opaque background fully covers scrolled-past content. */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
-        {isActiveStage && (
-          <button
-            type="button"
-            onClick={handleFinalizeClick}
-            disabled={finalizing}
-            className={BUTTON_STYLES.primary}
+        />
+        {bulkDecision.status === "running" && (
+          <output
+            data-testid="scenario-bulk-progress"
+            className="block w-full rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
           >
-            {finalizing ? "Finalizing…" : "Finalize Review"}
-          </button>
+            Applying decisions: {bulkDecision.processed} of {bulkDecision.total} complete…
+          </output>
         )}
-        {finalizing && (
-          <p data-testid="finalize-in-progress" className="text-sm text-muted">
-            Running dependency analysis with the local AI model — this can take a couple
-            of minutes.
-          </p>
-        )}
-        {finalizeError && (
-          <p
-            role="alert"
-            data-testid="finalize-error"
-            className="text-sm font-medium text-danger-700"
+        {bulkDecision.status === "done" && (
+          <output
+            data-testid="scenario-bulk-summary"
+            className="block w-full rounded-md border border-border bg-slate-50 dark:bg-white/5 px-3 py-3 text-sm text-slate-700 dark:text-slate-300"
           >
-            {finalizeError}
-          </p>
+            <p className="font-semibold text-slate-900 dark:text-white">Bulk review complete</p>
+            <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+              <div>
+                <dt className="inline text-muted">Accepted or rejected: </dt>
+                <dd className="inline font-medium text-success-700 dark:text-success-400">
+                  {bulkDecision.succeeded}
+                </dd>
+              </div>
+              <div>
+                <dt className="inline text-muted">Failed: </dt>
+                <dd
+                  className={
+                    bulkDecision.failed.length > 0
+                      ? "inline font-medium text-danger-700 dark:text-danger-400"
+                      : "inline font-medium text-slate-700 dark:text-slate-300"
+                  }
+                >
+                  {bulkDecision.failed.length}
+                </dd>
+              </div>
+            </dl>
+            {bulkDecision.failed.length > 0 && (
+              <div className="mt-2 rounded-md border border-danger-200 bg-danger-50 p-2 text-danger-800 dark:border-danger-500 dark:bg-danger-500/10 dark:text-danger-100">
+                <p className="font-medium">Items needing attention</p>
+                <ul className="mt-1 ml-4 list-disc">
+                  {bulkDecision.failed.map((failure) => (
+                    <li key={failure.id}>
+                      {failure.id}: {failure.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </output>
+        )}
+        {(finalizing || finalizeError) && (
+          <div className="space-y-2 border-t border-border pt-4">
+            {finalizing && (
+              <p
+                data-testid="finalize-in-progress"
+                className="flex items-center gap-2 text-sm text-muted"
+              >
+                <Skeleton className="h-2 w-2 rounded-full bg-brand-500" />
+                <span>
+                  Running dependency analysis with the local AI model — this can take a couple
+                  of minutes.
+                </span>
+              </p>
+            )}
+            {finalizeError && <ErrorState testId="finalize-error" message={finalizeError} />}
+          </div>
         )}
       </div>
+      <SummaryPanel
+        testId="scenario-review-summary-panel"
+        statValue={total}
+        statLabel={`scenario${total === 1 ? "" : "s"} generated`}
+        segments={categorySegments}
+        description="Each scenario keeps its generating rule and category for review — nothing here is unexplained."
+        action={
+          isActiveStage
+            ? {
+                label: finalizing ? "Finalizing…" : "Finalize Review",
+                onClick: handleFinalizeClick,
+                disabled: finalizing,
+              }
+            : undefined
+        }
+      />
       {confirmingFinalize && (
         <ConfirmDialog
           message={`${reviewWorkspace.summary.pending} scenario${reviewWorkspace.summary.pending === 1 ? " has" : "s have"} no decision and will be excluded — finalize anyway?`}

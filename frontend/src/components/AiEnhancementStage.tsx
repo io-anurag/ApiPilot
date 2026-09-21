@@ -14,6 +14,7 @@ import type {
   LiveScenarioSummary,
 } from "@apipilot/shared-domain";
 import { BatchOutcomeList } from "./BatchOutcomeList";
+import { ErrorState } from "./ErrorState";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
 
@@ -87,7 +88,7 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
       <output aria-live="polite" className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         {preparing ? (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800">
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800 dark:text-slate-200">
               Preparing the local model
             </span>
             <span className="text-xs text-muted">
@@ -97,7 +98,7 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
           </>
         ) : (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800">
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800 dark:text-slate-200">
               Generating scenarios
             </span>
             <span className="text-xs text-muted">
@@ -106,7 +107,7 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
           </>
         )}
         {progress.cancelRequested && (
-          <span className="text-xs font-medium text-warning-700">
+          <span className="text-xs font-medium text-warning-700 dark:text-warning-400">
             — finishing the current batch, then stopping.
           </span>
         )}
@@ -139,7 +140,7 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
     >
       <div className="space-y-1.5">
         <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
-          <span className="font-medium text-slate-800">
+          <span className="font-medium text-slate-800 dark:text-slate-200">
             {currentIndex >= 0
               ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
               : `${settledCount} of ${progress.totalBatches} ${progress.totalBatches === 1 ? "unit" : "batches"} complete`}
@@ -164,7 +165,7 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
           aria-valuenow={percentComplete}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="h-1.5 overflow-hidden rounded-full bg-slate-200"
+          className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
         >
           <div
             className="h-full rounded-full bg-brand-500 transition-[width] duration-500 ease-out"
@@ -200,24 +201,24 @@ function LiveScenarioPreview({ scenarios }: Readonly<{ scenarios: LiveScenarioSu
   return (
     <section
       data-testid="ai-enhancement-live-results"
-      className="space-y-2 rounded-md border border-success-200 bg-success-50 p-3"
+      className="space-y-2 rounded-md border border-success-200 bg-success-50 p-3 dark:border-success-500 dark:bg-success-500/10"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-success-900">
+        <h3 className="text-sm font-semibold text-success-900 dark:text-success-100">
           {scenarios.length} AI scenario{scenarios.length === 1 ? "" : "s"} ready
         </h3>
-        <span className="text-xs text-success-700">
+        <span className="text-xs text-success-700 dark:text-success-100">
           Review actions unlock when generation finishes.
         </span>
       </div>
-      <ul className="space-y-1 text-sm text-success-900" aria-label="Live AI scenarios">
+      <ul className="space-y-1 text-sm text-success-900 dark:text-success-100" aria-label="Live AI scenarios">
         {scenarios.map((item) => (
           <li key={item.scenarioId} className="flex flex-wrap gap-x-2 gap-y-1">
             <span className="font-mono font-medium">
               {item.operationMethod.toUpperCase()}
             </span>
             <span className="font-mono">{item.operationPath}</span>
-            <span className="text-success-700">{item.category}</span>
+            <span className="text-success-700 dark:text-success-100">{item.category}</span>
           </li>
         ))}
       </ul>
@@ -418,11 +419,11 @@ export function AiEnhancementStage({
     return (
       <section
         data-testid={isPartial ? "ai-enhancement-partial" : "ai-enhancement-skipped"}
-        className="space-y-3 rounded-md border border-warning-200 bg-warning-50 p-4"
+        className="space-y-3 rounded-md border border-warning-200 bg-warning-50 p-4 dark:border-warning-500 dark:bg-warning-500/10"
       >
         <output
           data-testid="ai-enhancement-skip-banner"
-          className="block space-y-1 text-sm text-warning-700"
+          className="block space-y-1 text-sm text-warning-700 dark:text-warning-100"
         >
           <p className="font-medium">
             {failureExplanation?.summary ??
@@ -476,15 +477,7 @@ export function AiEnhancementStage({
             cancelling={cancelling || !!progress?.cancelRequested}
           />
         )}
-        {error && (
-          <p
-            role="alert"
-            data-testid="ai-enhancement-error"
-            className="text-sm font-medium text-danger-700"
-          >
-            {error}
-          </p>
-        )}
+        {error && <ErrorState testId="ai-enhancement-error" message={error} />}
       </section>
     );
   }
@@ -494,8 +487,8 @@ export function AiEnhancementStage({
       data-testid="ai-enhancement-stage"
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900">Enhance With Local AI</h2>
-      <p className="text-sm text-slate-600">
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">Enhance With Local AI</h2>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         Enhance the deterministic baseline with semantic AI-generated scenarios.
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -516,15 +509,7 @@ export function AiEnhancementStage({
       </div>
       {running && progress && <RunProgress progress={progress} />}
       {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
-      {error && (
-        <p
-          role="alert"
-          data-testid="ai-enhancement-error"
-          className="text-sm font-medium text-danger-700"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorState testId="ai-enhancement-error" message={error} />}
     </section>
   );
 }

@@ -6,6 +6,7 @@ import {
   type WorkflowStageId,
 } from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { STAGE_LABELS, getLockReason } from "./workflowStageViewModel";
 
 function CheckIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -23,33 +24,20 @@ function CheckIcon({ className }: Readonly<{ className?: string }>) {
  * whole chip reads as a unit; the badge's text remains the sole load-bearing signal (FR-016). */
 const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
   "not-yet-reached": "border-transparent bg-surface",
-  active: "border-brand-300 bg-brand-50",
-  complete: "border-transparent bg-success-50",
-  stale: "border-warning-300 bg-warning-50",
-  skipped: "border-transparent bg-slate-50",
-  partial: "border-warning-300 bg-warning-50",
+  active: "border-brand-300 bg-brand-50 dark:border-brand-500 dark:bg-brand-500/15",
+  complete: "border-transparent bg-success-50 dark:bg-success-500/15",
+  stale: "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
+  skipped: "border-transparent bg-slate-50 dark:bg-slate-500/15",
+  partial: "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
 };
 
 const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
-  "not-yet-reached": "bg-slate-200 text-slate-600",
+  "not-yet-reached": "bg-slate-200 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
   active: "bg-brand-600 text-white",
   complete: "bg-success-600 text-white",
   stale: "bg-warning-500 text-white",
-  skipped: "bg-slate-300 text-slate-600",
+  skipped: "bg-slate-300 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
   partial: "bg-warning-500 text-white",
-};
-
-const STAGE_LABELS: Record<WorkflowStageId, string> = {
-  upload: "Upload",
-  analysis: "Analysis",
-  apiReview: "API Review",
-  deterministicGeneration: "Deterministic Generation",
-  aiEnhancement: "AI Enhancement",
-  scenarioReview: "Scenario Review",
-  dependencyAnalysis: "Dependency Analysis",
-  workflowReview: "Workflow Review",
-  postmanGeneration: "Postman Generation",
-  execution: "Execution",
 };
 
 const STATUS_LABELS: Record<StageStatus, string> = {
@@ -126,10 +114,15 @@ export function WorkflowStageTracker({
 
   // The stage list scrolls horizontally, so the active stage can start off-screen (e.g. on
   // initial load once several stages are already complete). Keep it in view automatically
-  // instead of requiring the user to scroll the strip manually.
+  // instead of requiring the user to scroll the strip manually. A JS-triggered smooth scroll
+  // isn't covered by index.css's CSS-only prefers-reduced-motion rule (FR-015), so it's checked
+  // here explicitly.
   useEffect(() => {
+    const prefersReducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
     activeStageRef.current?.scrollIntoView?.({
-      behavior: "smooth",
+      behavior: prefersReducedMotion ? "auto" : "smooth",
       block: "nearest",
       inline: "center",
     });
@@ -173,12 +166,14 @@ export function WorkflowStageTracker({
           } else if (isRevisitable) {
             actionLabel = "revisit";
           }
+          const lockReason =
+            stage.status === "not-yet-reached" ? getLockReason(stageId, workflow) : undefined;
           return (
             <li
               key={stageId}
               ref={isActive ? activeStageRef : undefined}
               aria-current={isCurrentlyViewed ? "step" : undefined}
-              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-slate-950" : "text-slate-600"}`}
+              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-slate-950 dark:text-slate-50" : "text-slate-600 dark:text-slate-300"}`}
             >
               <span
                 aria-hidden="true"
@@ -206,7 +201,11 @@ export function WorkflowStageTracker({
               ) : (
                 <span data-testid={`stage-status-${stageId}`}>
                   <StatusBadge
-                    label={STATUS_LABELS[stage.status]}
+                    label={
+                      lockReason
+                        ? `${STATUS_LABELS[stage.status]} — ${lockReason}`
+                        : STATUS_LABELS[stage.status]
+                    }
                     tone={STATUS_TONES[stage.status]}
                   />
                 </span>
@@ -222,7 +221,7 @@ export function WorkflowStageTracker({
         // every visit. The count is still always visible; the full list is one click away.
         <details
           data-testid="workflow-analysis-issues"
-          className="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="rounded-md border border-warning-100 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100"
         >
           <summary className="cursor-pointer font-medium marker:text-warning-500">
             {issues.length} specification analysis issue{issues.length === 1 ? "" : "s"} found
@@ -240,7 +239,7 @@ export function WorkflowStageTracker({
       {dependencyAiIssue && (
         <output
           data-testid="workflow-dependency-ai-issue"
-          className="block rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
+          className="block rounded-md border border-warning-100 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100"
         >
           AI-assisted dependency detection did not complete ({dependencyAiIssue});
           deterministic relationships are still shown.
