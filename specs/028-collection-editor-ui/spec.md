@@ -244,7 +244,13 @@ items; verify the collection view reflects all three changes immediately.
   headers, and body content, in addition to setting variable values.
 - **FR-008**: This capability MUST be available for both uploaded external collections
   (specs/026-external-collection-execution) and ApiPilot-generated collections handed off to
-  execution (specs/018-test-execution-results, specs/016-workflow-aware-postman).
+  execution (specs/018-test-execution-results, specs/016-workflow-aware-postman). **Known gap,
+  found 2026-09-21 while updating this documentation**: only the uploaded-external-collection half
+  is actually wired up — `CollectionTreeView`/`RequestEditorPanel`/`VariablePanel` are mounted
+  exclusively in `ExternalCollectionsPage.tsx`, with no equivalent surface in the guided-workflow/
+  generated-collection page. Every other FR in this spec (FR-001 through FR-018) is implemented and
+  tested, but only against `UploadedCollectionSet`. Extending this view to ApiPilot-generated
+  collections is unimplemented, tracked as follow-up work rather than closed.
 - **FR-009**: A variable override made in this view MUST be persisted into the selected
   environment's stored values (`Environment.variableValues`), consistent with how
   `EnvironmentForm` already persists variable edits, so it is available and reused across
@@ -333,3 +339,30 @@ items; verify the collection view reflects all three changes immediately.
   not change how the artifact is generated"). That boundary is preserved at the generation layer;
   this spec adds an execution-time override layer specs/018 did not previously have. Reconciling
   specs/018's text with this addition is a documentation follow-up, not a behavioral conflict.
+
+## Post-implementation follow-up (2026-09-21)
+
+After the initial implementation (tasks.md T001–T049) shipped, live use surfaced additional gaps
+addressed directly against this spec and tasks.md rather than through a separate spec-kit pass —
+each is additive, none changes an existing FR's behavior:
+
+- **Request test scripts** (FR-002/FR-007 addendum): a request's own `pm.test(...)` script was
+  executed on every run but never shown or editable anywhere pre-run. `CollectionRequestView`
+  gained `testScript`; `RequestEditorPanel` gained a "Tests" tab (quickstart.md Scenario 8).
+- **Selective run**: the run panel gained a Postman-Runner-style checklist to choose which
+  requests actually run, backed by a new optional `selectedRequestIds` field on
+  specs/026-external-collection-execution's `execution/start` (that spec's own FR-018 addendum).
+- **UI layout**: the collection editor's presentation was reworked based on direct usability
+  feedback — a tabbed request editor (Headers/Body/Tests, method+URL+Save always visible, resolved
+  preview always visible below the tabs) instead of every field stacked vertically; the sidebar
+  shows the collection tree with a "Variables" toggle that switches the main pane rather than
+  cramming a second panel into the same ~320px rail; per-row add/rename/delete/move controls
+  collapsed into one actions menu per row instead of four-to-five individually tiny buttons. No
+  FR changed — this is presentation only.
+- **Bug fixes discovered through this same usability pass**: `VariablePanel`'s "missing" styling
+  used a stale snapshot and didn't clear as soon as a value was typed; a newly added variable had
+  no way to type its name (the field was accidentally read-only); the panel's local edit state
+  never re-synced after a successful save, so a just-saved variable kept showing "Not yet saved".
+  All three are fixed; see `frontend/tests/unit/VariablePanel.test.tsx` for regression coverage.
+
+See tasks.md's Phase 8 for the per-task breakdown of this addendum.

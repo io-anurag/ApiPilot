@@ -20,16 +20,24 @@ JSON body, applied only at write time by the new repository methods below:
 The read model `GET /api/external-collections/:id/collection` (contracts/collection-editor-api.md)
 returns — computed on demand from the stored `UploadedCollectionSet`, never persisted itself.
 
+**Corrected from the original design below** (caught and fixed during implementation, before any
+consumer existed — tasks.md T001's own deviation note): the root container is `items`/`folders`
+directly on `CollectionView`, not a single `tree: CollectionFolderView[]` wrapper. A `tree` array
+of folders had no place to put a root-level request that lives directly in the collection root
+rather than inside any folder — `items`/`folders` mirrors `CollectionFolderView`'s own shape at
+the root instead, matching the `containerId: "root"` literal the reorder endpoint already uses.
+
 | Field | Type | Notes |
 |---|---|---|
 | `id` | `string` | The `UploadedCollectionSet.id` this view was computed from. |
-| `tree` | `CollectionFolderView[]` | The collection's own folder/item structure, in source order (FR-001). |
-| `variables` | `VariableBinding[]` | Every variable referenced anywhere in the collection (FR-003). |
+| `items` | `CollectionRequestView[]` | The collection's own root-level requests, in source order (FR-001). |
+| `folders` | `CollectionFolderView[]` | The collection's own root-level folders, in source order (FR-001). |
+| `variables` | `VariableBinding[]` | Every variable referenced anywhere in the collection, plus any user-defined-ahead-of-use one (FR-003, FR-018). |
 
 ```ts
 interface CollectionFolderView {
-  id: string;                  // stable folder id (research.md D9); "root" itself has no id —
-                                // the top-level `CollectionView.tree` array IS the root container
+  id: string;                  // stable folder id (research.md D9); the root itself has no id —
+                                // it's CollectionView's own items/folders, not a synthesized folder
   name: string;
   items: CollectionRequestView[];
   folders: CollectionFolderView[]; // nested folders, arbitrary depth
@@ -52,8 +60,29 @@ interface CollectionRequestView {
     body?: string;
   };
   unresolvedVariables: string[]; // names still unresolved within this specific request
+  testScript?: string;          // post-implementation addendum (2026-09-21) — see below
 }
 ```
+
+### Post-implementation addendum (2026-09-21): the request's own test script
+
+Added directly against this spec once a live UI walkthrough surfaced that a request's own
+`pm.test(...)` script — the exact thing `UploadedTestOutcome.name` in a run result is named after
+(specs/026 data-model.md) — was executed but never made visible or editable anywhere pre-run,
+despite FR-007's "directly edit... in addition to setting variable values" already covering every
+other raw field. Not a new FR number; folded into FR-002/FR-007's existing scope rather than
+renumbered, since it is the same "see and edit what will actually run" capability applied to one
+more field this spec's original field list happened to omit.
+
+- `CollectionRequestView.testScript` — the item's "test" event script(s), concatenated in order,
+  read via `postman-collection`'s `item.events.listeners("test")`. Undefined when the item carries
+  no test event. Deliberately has no `resolved` counterpart the way `raw`/`resolved` request fields
+  do — the script isn't textually substituted for display, it runs against the live response.
+- `PUT /:id/requests/:requestId` (contracts/collection-editor-api.md) accepts an optional
+  `testScript` field on the same request body as `method`/`url`/`headers`/`body`: omitted leaves
+  the request's existing test event(s) untouched (mirrors `body`'s own omission rule); an
+  empty/whitespace-only string removes every test event from the request; otherwise it replaces
+  them with one new event carrying the given script.
 
 ## New: `VariableBinding` (part of `CollectionView`, not independently stored)
 
@@ -102,10 +131,20 @@ within the session — no new error type.
 
 ## New pure functions (`backend/src/externalCollections/`)
 
+**Signatures below are corrected to match the actual implementation** — the original design
+(inline in this section before implementation) shaped every mutator as `Collection -> Collection`;
+`postman-collection`'s own mutation methods (`Request.update()`, `PropertyList.add()`/`.remove()`)
+mutate the parsed `Collection` in place instead of returning a new one, so every function here
+returns void (or a small result payload) and the caller re-serializes the *same* mutated instance
+via `.toJSON()` to get the string to persist.
+
 ```ts
 // collectionView.ts
 function buildCollectionView(
-  collection: Collection,          // parsed postman-collection instance
+  uploadedCollectionSetId: string,
+  collection: Collection,           // parsed postman-collection instance
+  rawCollectionJson: string,        // the exact JSON string `collection` was parsed from — recovers
+                                     // the `_apipilotEdited` marker the SDK itself strips (D6/D9's editedItems.ts)
   variableValues: Record<string, string>,
 ): CollectionView
 
@@ -113,29 +152,32 @@ function buildCollectionView(
 function applyRequestOverride(
   collection: Collection,
   requestId: string,
-  edit: { method: string; url: string; headers: Array<{key:string;value:string}>; body?: string },
-): Collection                       // throws RequestNotFoundError if requestId doesn't resolve (FR-012)
+  edit: {
+    method: string; url: string; headers: Array<{key:string;value:string}>; body?: string;
+    testScript?: string; // post-implementation addendum — see the CollectionRequestView note above
+  },
+): string                           // final JSON string ready to persist; throws RequestNotFoundError if requestId doesn't resolve (FR-012)
 
 // itemIdentity.ts
-function ensureStableIds(collection: Collection): Collection // research.md D2/D9, run once at upload/handoff time; covers both requests and folders
+function ensureStableIds(collection: Collection): string // research.md D2/D9 — re-serializes the already-parsed collection to make the SDK's own auto-generated ids durable; run once at upload time
 
 // collectionStructure.ts (research.md D10)
 function addRequest(
   collection: Collection,
   parentFolderId: string | null,     // null = collection root
-  request: { name: string; method: string; url: string; headers: Array<{key:string;value:string}>; body?: string },
-): { collection: Collection; newItemId: string }
+  input: { name: string; method: string; url: string; headers: Array<{key:string;value:string}>; body?: string },
+): { newItemId: string }             // mutates `collection` in place; caller re-serializes it
 
-function deleteItem(collection: Collection, id: string): Collection
+function deleteItem(collection: Collection, id: string): void
   // removes a request OR folder (and everything nested) by id; throws ItemNotFoundError
 
-function renameItem(collection: Collection, id: string, name: string): Collection
+function renameItem(collection: Collection, id: string, name: string): void
 
 function reorderContainer(
   collection: Collection,
-  containerId: string | null,        // null = collection root
-  orderedIds: string[],              // every direct child id of that container, in the new order
-): Collection
+  containerId: string,                // literal "root" for the collection root, otherwise a folder id
+  orderedIds: string[],                // every direct child id of that container, in the new order
+): void
   // throws InvalidOrderError if orderedIds doesn't exactly match the container's current child id set
 
 // runLock.ts (research.md D11)

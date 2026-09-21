@@ -121,6 +121,26 @@ describe("CollectionTreeView", () => {
     expect(screen.getByText("This collection is read-only while a run is in progress.")).toBeInTheDocument();
   });
 
+  it("truncates a long request/folder name instead of pushing the actions menu out of the row", () => {
+    const longName = "POST /booking — invalid-format-with-a-very-long-descriptive-scenario-name (2)";
+    render(
+      <CollectionTreeView
+        items={[request({ name: longName })]}
+        folders={[folder({ name: "A very long folder name that would otherwise overflow the sidebar" })]}
+        onSelectRequest={vi.fn()}
+        locked={false}
+        actions={actions()}
+      />,
+    );
+    const requestNameSpan = screen.getByText(longName);
+    expect(requestNameSpan).toHaveClass("truncate", "min-w-0");
+    // The row's flex-1 name button must be allowed to shrink (min-w-0) so the fixed-size actions
+    // menu never gets pushed past the row/card boundary by a long, unwrapped name.
+    expect(requestNameSpan.closest("button")).toHaveClass("min-w-0");
+    expect(screen.getByRole("button", { name: `Actions for ${longName}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Actions for A very long folder name that would otherwise overflow the sidebar" })).toBeInTheDocument();
+  });
+
   it("renders headerAction alongside + Add request in the same header row", () => {
     render(
       <CollectionTreeView

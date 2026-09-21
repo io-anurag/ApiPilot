@@ -172,6 +172,99 @@ Existing web-application layout (plan.md Structure Decision): `backend/src/`, `f
 
 ---
 
+## Phase 8: Post-implementation follow-up (2026-09-21)
+
+**Purpose**: Live usability feedback after T001–T049 shipped drove test-script support, a
+selective run, a layout rework, and three `VariablePanel` bug fixes — each addressed directly
+against this spec/tasks.md rather than a separate spec-kit pass (spec.md's own "Post-implementation
+follow-up" section has the product-level summary). No prior FR's behavior changed; every item here
+is additive or presentation-only.
+
+### Request test scripts (spec.md FR-002/FR-007 addendum)
+
+- [X] T051 `packages/shared-domain/src/externalCollections.ts`: `CollectionRequestView` gains an
+  optional `testScript?: string`.
+- [X] T052 `backend/src/externalCollections/collectionView.ts`: new `testScriptOf(item)` reads the
+  item's "test" event script(s) via `item.events.listeners("test")`, concatenated in order; wired
+  into `toRequestView()`.
+- [X] T053 `backend/src/externalCollections/requestOverride.ts`: `RequestEditInput` gains an
+  optional `testScript`; `applyTestScript()` replaces the item's "test" event(s) when provided
+  (clearing them entirely for an empty/whitespace string), leaves them untouched when omitted.
+- [X] T054 `PUT /:id/requests/:requestId` (`externalCollections.ts`) parses `body.testScript`
+  through to T053; `contracts/collection-editor-api.md` and `data-model.md` updated.
+- [X] T055 [P] Unit tests: `collectionView.test.ts` (reads a test event into `testScript`, absent
+  when none), `requestOverride.test.ts` (sets, clears, and leaves-untouched-when-omitted cases).
+- [X] T056 [P] Integration test extending `requestFieldEdit.test.ts`: a saved test script is
+  surfaced by the collection view and actually executes on the next run, producing a matching
+  `testOutcomes` entry (proves the vertical slice end-to-end, not just storage).
+- [X] T057 `frontend/src/services/externalCollectionsClient.ts`: `RequestEdit` gains `testScript?`.
+- [X] T058 `frontend/src/components/RequestEditorPanel.tsx`: new "Tests" tab (see UI layout rework
+  below for the tabbed structure this landed inside), seeded from `request.testScript`, always
+  included in the save payload.
+- [X] T059 [P] `frontend/tests/unit/RequestEditorPanel.test.tsx`: pre-fills and saves an edited test
+  script; the Tests tab shows a marker only when a script is present.
+
+### Selective run
+
+Backend capability lives in specs/026-external-collection-execution (its own FR-018/Phase 7
+addendum) — cross-referenced here only for the frontend half:
+
+- [X] T060 `frontend/src/services/externalCollectionsClient.ts`:
+  `startUploadedCollectionExecution()` gains an optional `selectedRequestIds?: string[]` parameter.
+- [X] T061 `frontend/src/components/CollectionTreeView.tsx`: new exported
+  `flattenCollectionRequests(items, folders)` — flattens the tree into the same folders-then-items
+  order the tree itself renders in, for the checklist below.
+- [X] T062 `frontend/src/components/ExternalCollectionRunPanel.tsx`: new `RunOrderChecklist`
+  (checkbox per request, method badge, "N of M selected · Reset"), pre-selects every request,
+  re-selects everything whenever the underlying id set changes (switching collections, or an edit
+  adding/removing a request), Start Run disabled once nothing is selected.
+- [X] T063 [P] `frontend/tests/unit/ExternalCollectionRunPanel.test.tsx`: checklist absent until
+  the collection view has loaded; every request pre-selected and sent on start; unchecking one
+  excludes it from the payload; Start Run disabled at zero selected, Reset restores all.
+
+### UI layout rework (presentation only — no FR change)
+
+Driven by direct screenshots/feedback during this session rather than a written acceptance
+scenario; recorded here for traceability rather than as new testable requirements.
+
+- [X] T064 `RequestEditorPanel.tsx`: method/URL/Save collapsed into one top bar; Headers/Body/Tests
+  moved behind tabs; resolved preview stays always-visible below the tabs (not itself a tab) since
+  "see what will actually be sent" is this panel's core purpose.
+- [X] T065 `ExternalCollectionsPage.tsx`: replaced a "Collection"/"Variables" sidebar tab pair
+  (which put `VariablePanel`'s row layout inside a ~320px rail too narrow for it — a regression
+  caught from a live screenshot) with the collection tree always in the sidebar and a "Variables"
+  toggle that switches the wide main pane between the request editor and `VariablePanel`.
+- [X] T066 `CollectionTreeView.tsx`: per-row add/rename/delete/move controls (four-to-five
+  individually tiny, opacity-gated icon buttons that visually overflowed a nested row's card
+  boundary in the narrow sidebar) collapsed into one always-visible `RowActionsMenu` ("⋮") per row.
+- [X] T067 `ExternalCollectionsPage.tsx`/`CollectionTreeView.tsx`: the page's "Variables" toggle
+  moved into the tree's own header row (new `headerAction` prop), next to "+ Add request", and
+  restyled to the same ghost text-link weight as that button for visual consistency (was a boxed
+  pill that read as a different control family).
+- [X] T068 [P] `frontend/tests/unit/CollectionTreeView.test.tsx` extended for the actions-menu
+  interaction pattern (open menu → click menu item) and the `headerAction` slot.
+
+### `VariablePanel` bug fixes (found via live usability review, not part of the original T026/T044)
+
+- [X] T069 A newly added variable's name rendered as a read-only `<span>`, not an input — there
+  was no way to type a name. Now editable (an `<input>`) only for `source === "new"` rows.
+- [X] T070 The "missing"/red styling used the `VariableBinding.resolved` snapshot from when the
+  view loaded, which went stale (and stayed red) the moment a value was typed into a previously-
+  unresolved row, before saving. Now derived from the live edit buffer (`row.value` non-empty).
+- [X] T071 The panel's local `rows` state was set once via a `useState` initializer and never
+  re-synced with later `variables` prop changes — so a variable that was actually just saved kept
+  showing its pre-save "Not yet saved" source label. Added a `useEffect` keyed on the `variables`
+  prop's content that re-syncs `rows` whenever the parent's own copy changes.
+- [X] T072 [P] `frontend/tests/unit/VariablePanel.test.tsx` extended: name input works and its
+  value is sent on save; the panel re-syncs (and "Not yet saved" disappears) once the parent passes
+  back a freshly persisted variable.
+
+**Checkpoint**: `npm run build`, `npm run lint`, and `npm test` all pass from the repo root
+(shared-domain, backend, frontend) with this phase included — verified after every task group
+above, not only once at the end.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

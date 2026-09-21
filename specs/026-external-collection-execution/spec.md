@@ -230,6 +230,21 @@ that neither can be mistaken for the other.
   `ExecutionRun`'s `environmentSnapshot` already survives its source `Environment` later changing
   (specs/018 data-model.md).
 
+### Post-implementation addendum (2026-09-21, driven by specs/028-collection-editor-ui follow-up)
+
+Added directly against this spec (not routed through a separate spec-kit pass) once
+specs/028-collection-editor-ui's own follow-up work needed a Postman-Runner-style "choose which
+requests to run" screen, which FR-005 as originally written did not support.
+
+- **FR-018**: The system MUST allow the user to start a run against a chosen subset of the
+  uploaded collection's own requests, rather than always every request (FR-005's original
+  "execute every request" behavior remains the default when no subset is chosen). A request
+  excluded from the run MUST be skipped entirely — it MUST NOT appear in that run's `results`, not
+  even as `"not-attempted"` (research.md/data-model.md for the exact request/response shape). Both
+  confirmation gates (FR-007, FR-013) and the missing-variable-values check (FR-004) MUST be
+  evaluated against only the chosen subset, not the whole collection, so an unselected request's
+  destructive method or unresolved variable never blocks a run that never included it.
+
 ### Key Entities *(include if feature involves data)*
 
 - **UploadedCollection**: A validated Postman collection supplied directly by the user rather than

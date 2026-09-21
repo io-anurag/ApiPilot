@@ -85,7 +85,9 @@ export function ExternalCollectionsPage({
   }, []);
 
   const refreshCollectionView = useCallback(async (id: string) => {
+    console.log("DEBUG refreshCollectionView start", id);
     const result = await fetchUploadedCollectionView(id);
+    console.log("DEBUG refreshCollectionView result", result);
     if (result.ok) {
       setCollectionView(result.collectionView);
       setViewError(null);
@@ -300,7 +302,13 @@ export function ExternalCollectionsPage({
             {mainView === "variables" ? (
               <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} />
             ) : selectedRequest ? (
-              <RequestEditorPanel request={selectedRequest} locked={locked} onSave={handleSaveRequest} />
+              // `key` forces a fresh mount per request id — RequestEditorPanel's form fields are
+              // local `useState`, initialized once from `request.raw`; without this key, selecting
+              // a different request left the previously selected request's form values on screen
+              // (same component instance, same position in the tree, so React reuses it rather
+              // than reinitializing state) instead of loading the newly selected request's own
+              // method/URL/headers/body/test script.
+              <RequestEditorPanel key={selectedRequest.id} request={selectedRequest} locked={locked} onSave={handleSaveRequest} />
             ) : (
               <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
                 Select a request from the collection to view and edit it.

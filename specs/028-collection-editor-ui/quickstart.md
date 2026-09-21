@@ -98,6 +98,27 @@ run is in progress, and succeeds again once the run reaches a terminal status
 **Expected**: after step 3, the same variable now resolves in that request's preview using the
 value already defined in step 1, with no further action needed.
 
+## Scenario 8 — View and edit a request's own test script (FR-002/FR-007 addendum, 2026-09-21)
+
+1. Select a request whose collection author gave it a `pm.test(...)` script (e.g. a collection
+   imported from Postman's own export, which commonly ships with one).
+2. Open the request editor's "Tests" tab.
+
+**Expected**: the tab shows the exact script text Newman would execute for this request — the same
+script a run's `UploadedTestOutcome.name` values are drawn from.
+
+3. Edit the script (e.g. change the expected status code) and save.
+4. Start a run and open its results.
+
+**Expected**: the run's `testOutcomes` for this request reflect the edited script, not the
+original, and the request is marked `wasEdited: true` (FR-011, unchanged from Scenario 4's
+existing behavior for other fields).
+
+5. Clear the Tests tab entirely (empty the textarea) and save.
+
+**Expected**: the request runs with zero test outcomes — `testOutcomes: []` — rather than the
+save being rejected or the prior script silently surviving.
+
 ## Regression checks
 
 - Existing specs/026 flows (upload, list, remove, run, cancel, run history) continue to work

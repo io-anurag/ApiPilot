@@ -146,6 +146,20 @@ Existing web-application layout (plan.md Structure Decision): `backend/src/`, `f
 
 ---
 
+## Phase 7: Post-implementation addendum (2026-09-21) — selective run (FR-018)
+
+**Purpose**: specs/028-collection-editor-ui's follow-up work added a Postman-Runner-style "choose which requests to run" screen; this phase is the backend capability it needed, added directly against this spec rather than through a separate spec-kit pass (small, additive, no new entity).
+
+- [X] T048 [P] `extractReferencedVariables()` (`uploadedCollectionParsing.ts`) and `findDestructiveRequests()` (`destructiveRequests.ts`) each gain an optional `selectedItemIds?: Set<string>` parameter — scans only the given item ids when provided, unchanged when omitted.
+- [X] T049 `runUploadedCollectionExecution()` gains an optional `selectedItemIds?: Set<string>` — an item not in the set is skipped inside the existing `Collection.forEachItem()` walk and never produces a result entry (not even `"not-attempted"`).
+- [X] T050 `POST /:id/execution/start` parses an optional `selectedRequestIds: string[]` from the request body into a `Set<string>`, threads it through T048/T049, and returns `400 no_requests_selected` when the set is provided but matches none of the collection's current items.
+- [X] T051 [P] Integration tests in `backend/tests/integration/externalCollections/selectiveRun.test.ts`: a selected subset is the only thing that runs and appears in `results`/`summary`; `400 no_requests_selected` for a selection matching nothing; omitting the field still runs (and gates against) every request, unchanged from before this addendum.
+- [X] T052 `contracts/external-collections-api.md` and `data-model.md` updated for the new field/behavior.
+
+**Checkpoint**: `npm test -w backend` passes with the new suite included; existing `uploadAndRun`/`confirmationGates` tests (T048's era) pass unmodified, confirming the omitted-field default is truly unchanged.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

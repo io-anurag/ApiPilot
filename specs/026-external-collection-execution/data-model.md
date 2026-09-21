@@ -80,6 +80,34 @@ One execution of an `UploadedCollectionSet` (FR-005 onward) — structurally par
   not (a generated collection already carries its own declared-variables list from
   `generateCollection()`'s output).
 
+## Selective run (spec.md FR-018, post-implementation addendum)
+
+`POST /:id/execution/start`'s request body gains one optional field, additive to the existing
+`{ confirmed: boolean }` shape:
+
+```ts
+interface ExecutionStartRequest {
+  confirmed: boolean;
+  selectedRequestIds?: string[]; // omitted = every request runs, unchanged from before this field existed
+}
+```
+
+Three functions gain an optional `selectedItemIds?: Set<string>` parameter, each filtering to only
+the given item ids when it's provided (undefined behaves exactly as before):
+
+- `extractReferencedVariables(collection, selectedItemIds?)` (`uploadedCollectionParsing.ts`) — the
+  FR-004 missing-variable-values check.
+- `findDestructiveRequests(collection, selectedItemIds?)` (`destructiveRequests.ts`) — feeds the
+  FR-013 risk-tier confirmation gate.
+- `runUploadedCollectionExecution({ runId, uploadedCollection, selectedItemIds? })` — an item not
+  in the set is skipped inside the `Collection.forEachItem()` walk (FR-005's original document-order
+  walk is otherwise unchanged) and never produces a `UploadedRequestResult`, not even
+  `"not-attempted"`.
+
+**Validation**: when `selectedRequestIds` is provided but matches none of the collection's current
+item ids, the route returns `400 no_requests_selected` before either confirmation gate or the
+missing-variable check runs.
+
 ## Persistence
 
 One new table, `uploaded_collections`, added to `backend/src/persistence/connection.ts`'s schema

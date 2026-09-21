@@ -134,12 +134,12 @@ function RequestRow({
         <button
           type="button"
           onClick={() => onSelectRequest(item)}
-          className="flex flex-1 items-center gap-2 text-left text-sm"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
         >
           <HttpMethodBadge method={item.raw.method} />
-          <span className="truncate text-slate-800 dark:text-slate-100">{item.name}</span>
+          <span className="min-w-0 truncate text-slate-800 dark:text-slate-100">{item.name}</span>
           {item.wasEdited && (
-            <span className="rounded bg-warning-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
+            <span className="shrink-0 rounded bg-warning-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
               Edited
             </span>
           )}
@@ -190,10 +190,12 @@ function FolderRow({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
-          className="flex flex-1 items-center gap-2 text-left text-sm font-medium text-slate-800 dark:text-slate-100"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-slate-800 dark:text-slate-100"
         >
-          <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-          <span className="truncate">{folder.name}</span>
+          <span aria-hidden="true" className="shrink-0">
+            {expanded ? "▾" : "▸"}
+          </span>
+          <span className="min-w-0 truncate">{folder.name}</span>
         </button>
         <RowActionsMenu
           label={folder.name}
