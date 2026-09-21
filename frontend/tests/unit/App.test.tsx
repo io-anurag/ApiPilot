@@ -77,7 +77,7 @@ describe("App", () => {
 
     screen.getByRole("button", { name: "Import & Run Collection" }).click();
 
-    expect(await screen.findByText("Import a Postman Collection")).toBeInTheDocument();
+    expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
     expect(screen.getByTestId("external-collection-upload")).toBeInTheDocument();
     // Switching back preserves the guided workflow's own state rather than remounting it.
     screen.getByRole("button", { name: "Guided Workflow" }).click();
