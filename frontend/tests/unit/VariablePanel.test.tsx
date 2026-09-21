@@ -61,4 +61,37 @@ describe("VariablePanel", () => {
     expect(screen.getByLabelText("Value for baseUrl")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save variables" })).toBeDisabled();
   });
+
+  it("+ Add variable gives an editable name field, and saving a new variable sends both name and value", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<VariablePanel variables={[variable()]} locked={false} onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add variable" }));
+    const nameInput = screen.getByLabelText("Name for new variable 2");
+    fireEvent.change(nameInput, { target: { value: "apiKey" } });
+    fireEvent.change(screen.getByLabelText("Value for new variable 2"), { target: { value: "secret-value" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save variables" }));
+    await screen.findByRole("button", { name: "Save variables" });
+    expect(onSave).toHaveBeenCalledWith({ baseUrl: "https://api.example.com", apiKey: "secret-value" });
+  });
+
+  it("re-syncs from a fresh variables prop after saving, so a just-saved row stops showing 'Not yet saved'", () => {
+    const { rerender } = render(<VariablePanel variables={[variable()]} locked={false} onSave={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add variable" }));
+    expect(screen.getByText("Not yet saved")).toBeInTheDocument();
+
+    // Simulates the parent re-fetching the collection view after `onSave` resolves and passing
+    // back the now-persisted variable.
+    rerender(
+      <VariablePanel
+        variables={[variable(), variable({ name: "apiKey", value: "secret-value", source: "environment" })]}
+        locked={false}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Not yet saved")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Value for apiKey")).toHaveValue("secret-value");
+  });
 });

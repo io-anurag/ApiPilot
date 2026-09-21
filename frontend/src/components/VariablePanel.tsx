@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { VariableBinding } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
@@ -42,8 +42,21 @@ export function VariablePanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function updateRow(index: number, value: string) {
-    setRows((current) => current.map((row, i) => (i === index ? { ...row, value } : row)));
+  // Re-syncs the local edit buffer from `variables` whenever the parent's own copy actually
+  // changes — most importantly right after a successful save, when the parent re-fetches the
+  // collection view and passes back the just-saved values. Without this, `rows` stayed exactly
+  // as it was when the panel first mounted (a plain `useState` initializer only ever runs once),
+  // so a freshly saved variable kept showing its pre-save "Not yet saved" source label forever.
+  // Deliberately keyed on this joined string, not `variables` itself (a fresh array every render).
+  const variablesKey = variables.map((v) => `${v.name}=${v.value ?? ""}|${v.source}|${v.referenced}`).join(";");
+  useEffect(() => {
+    const nextRows = toRows(variables);
+    setRows(nextRows);
+    initialValues.current = Object.fromEntries(nextRows.map((r) => [r.name, r.value]));
+  }, [variablesKey]);
+
+  function updateRow(index: number, patch: Partial<Pick<VariableRow, "name" | "value">>) {
+    setRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
   function removeRow(index: number) {
@@ -85,17 +98,29 @@ export function VariablePanel({
           // row, before saving.
           const hasValue = row.value.trim().length > 0;
           return (
-            <div key={row.name || index} className="flex items-center gap-2">
-              <span className="w-40 truncate font-mono text-sm" title={row.name}>
-                {row.name}
-              </span>
+            <div key={index} className="flex items-center gap-2">
+              {row.source === "new" ? (
+                <input
+                  type="text"
+                  aria-label={`Name for new variable ${index + 1}`}
+                  placeholder="variable name"
+                  value={row.name}
+                  disabled={locked}
+                  onChange={(event) => updateRow(index, { name: event.target.value })}
+                  className="w-40 shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              ) : (
+                <span className="w-40 shrink-0 truncate font-mono text-sm" title={row.name}>
+                  {row.name}
+                </span>
+              )}
               <input
                 type="text"
-                aria-label={`Value for ${row.name}`}
+                aria-label={row.source === "new" ? `Value for new variable ${index + 1}` : `Value for ${row.name}`}
                 placeholder={hasValue ? undefined : "missing"}
                 value={row.value}
                 disabled={locked}
-                onChange={(event) => updateRow(index, event.target.value)}
+                onChange={(event) => updateRow(index, { value: event.target.value })}
                 className={`flex-1 rounded-md border px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border bg-surface" : "border-danger-200 bg-danger-50 dark:border-danger-500 dark:bg-danger-500/10"}`}
               />
               <span className="w-32 shrink-0 text-xs text-muted">{SOURCE_LABEL[row.source]}</span>
@@ -107,7 +132,7 @@ export function VariablePanel({
               )}
               <button
                 type="button"
-                aria-label={`Remove ${row.name}`}
+                aria-label={row.source === "new" ? `Remove new variable ${index + 1}` : `Remove ${row.name}`}
                 disabled={locked}
                 onClick={() => removeRow(index)}
                 className="text-sm text-muted hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-danger-400"
