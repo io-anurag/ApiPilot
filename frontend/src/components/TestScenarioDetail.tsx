@@ -13,11 +13,11 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
       className="space-y-4 rounded-md border border-border bg-surface p-4"
     >
       <div>
-        <h4 className="text-sm font-semibold text-slate-900">
+        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
           {scenario.category}
           {scenario.targetField ? ` — ${scenario.targetField}` : ""}
         </h4>
-        <p className="mt-1 break-all font-mono text-xs text-slate-600">
+        <p className="mt-1 break-all font-mono text-xs text-slate-600 dark:text-slate-400">
           {scenario.operationMethod} {scenario.operationPath}
         </p>
       </div>
@@ -25,10 +25,10 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
         <h5 className="text-xs font-medium uppercase text-muted">
           {scenario.provenance.source === "RULE" ? "Rule" : "AI source"}
         </h5>
-        <p data-testid="scenario-rule" className="font-mono text-xs text-slate-700">
+        <p data-testid="scenario-rule" className="font-mono text-xs text-slate-700 dark:text-slate-300">
           {provenanceLabel}
         </p>
-        <p className="text-sm leading-6 text-slate-700">
+        <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">
           {scenario.provenance.description}
         </p>
       </section>
@@ -45,7 +45,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
             No documented response was available to assert against.
           </p>
         ) : (
-          <ul className="space-y-1 text-sm text-slate-700">
+          <ul className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
             {scenario.assertions.map((assertion) => (
               <li key={JSON.stringify(assertion)}>
                 {assertion.type === "status-code"

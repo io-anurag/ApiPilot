@@ -46,7 +46,7 @@ export function TestScenarioReviewDecision({
         <div className="flex flex-col gap-1">
           <label
             htmlFor="review-rejection-reason"
-            className="text-xs font-medium text-slate-700"
+            className="text-xs font-medium text-slate-700 dark:text-slate-300"
           >
             Rejection reason
           </label>

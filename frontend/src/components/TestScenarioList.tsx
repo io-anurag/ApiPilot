@@ -39,8 +39,8 @@ export function TestScenarioList({
           key={operationKey}
           className="overflow-hidden rounded-md border border-border bg-surface"
         >
-          <div className="flex items-center justify-between gap-3 border-b border-border bg-slate-50 px-3 py-2">
-            <h4 className="min-w-0 break-all font-mono text-xs font-semibold text-slate-800">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-slate-50 dark:bg-white/5 px-3 py-2">
+            <h4 className="min-w-0 break-all font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
               {operationKey}
             </h4>
             <span className="shrink-0 text-xs text-muted">
@@ -54,7 +54,7 @@ export function TestScenarioList({
                 <button
                   type="button"
                   onClick={() => onSelect(scenario)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
                 >
                   <span>
                     {scenario.category}

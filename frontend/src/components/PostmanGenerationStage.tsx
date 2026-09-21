@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react";
-import type { ExportResult } from "@apipilot/shared-domain";
-import {
-  artifactFiles,
-  artifactHref,
-  revokeArtifactHref,
-} from "../services/postmanCollectionsClient";
+import { useState } from "react";
+import type { ExportResult, ProvenanceCounts } from "@apipilot/shared-domain";
+import { artifactFiles, downloadArtifact } from "../services/postmanCollectionsClient";
 import {
   generatePostmanCollection,
   type WorkflowResult,
@@ -12,6 +8,7 @@ import {
 import { PostmanExportLimitations } from "./PostmanExportLimitations";
 import { BUTTON_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
+import { SummaryPanel, type SummaryPanelSegment } from "./SummaryPanel";
 
 const RECOVERY_GUIDANCE: Record<string, string> = {
   empty_approved_scenarios:
@@ -28,12 +25,6 @@ const RECOVERY_GUIDANCE: Record<string, string> = {
 
 type ExportStatus = "idle" | "loading" | "success" | "error";
 
-interface DownloadLink {
-  filename: string;
-  label: string;
-  href: string;
-}
-
 /**
  * Mirrors PostmanExportPanel.tsx's structure (research.md D10) but drives the workflow-scoped
  * `postman-generation` endpoint instead of the stateless export endpoint — the approved TestModel
@@ -42,10 +33,17 @@ interface DownloadLink {
  */
 export function PostmanGenerationStage({
   postmanArtifact,
+  specTitle,
   onGenerated,
+  onContinue,
 }: Readonly<{
   postmanArtifact?: ExportResult;
+  specTitle?: string;
   onGenerated: (result: WorkflowResult) => void;
+  /** Present once the artifact exists, so the success screen (with its downloads) can stay put
+   * instead of the workflow jumping straight to execution the moment generation finishes —
+   * moving on is the user's own explicit next step. */
+  onContinue?: () => void;
 }>) {
   const [status, setStatus] = useState<ExportStatus>(
     postmanArtifact ? "success" : "idle",
@@ -57,25 +55,6 @@ export function PostmanGenerationStage({
     problems?: string[];
   } | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
-  // Seeded from `postmanArtifact` too, mirroring `result`/`status` above: without this, revisiting
-  // this stage (the component remounts, losing `handleGenerate`'s in-memory links) showed the
-  // success summary correctly but rendered zero download links, since only a fresh generation
-  // call ever populated this state.
-  const [links, setLinks] = useState<DownloadLink[]>(() =>
-    postmanArtifact
-      ? artifactFiles(postmanArtifact).map((file) => ({
-          filename: file.filename,
-          label: file.label,
-          href: artifactHref(file.text, file.mimeType),
-        }))
-      : [],
-  );
-
-  useEffect(() => {
-    return () => {
-      for (const link of links) revokeArtifactHref(link.href);
-    };
-  }, [links]);
 
   async function handleGenerate() {
     setStatus("loading");
@@ -95,13 +74,6 @@ export function PostmanGenerationStage({
     const artifact = outcome.workflow.postmanArtifact;
     if (artifact) {
       setResult(artifact);
-      setLinks(
-        artifactFiles(artifact).map((file) => ({
-          filename: file.filename,
-          label: file.label,
-          href: artifactHref(file.text, file.mimeType),
-        })),
-      );
     }
     setStatus("success");
     onGenerated(outcome);
@@ -115,11 +87,11 @@ export function PostmanGenerationStage({
     >
       <h2
         id="postman-generation-heading"
-        className="text-base font-semibold text-slate-900"
+        className="text-base font-semibold text-slate-900 dark:text-white"
       >
         Generate a Postman Collection
       </h2>
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
         Exports the approved scenarios as a runnable collection, a companion environment,
         and a README. Nothing is executed and no credential is written into the
         collection.
@@ -169,31 +141,50 @@ export function PostmanGenerationStage({
         </ErrorState>
       )}
       {status === "success" && result && (
-        <div
-          data-testid="postman-generation-success"
-          className="space-y-3 rounded-md border border-success-200 bg-success-50 p-4"
-        >
-          <p className="text-sm text-success-700">
-            {result.summary.requestCount} request(s) in {result.summary.folderCount}{" "}
-            folder(s); {result.summary.byProvenance.RULE} rule-derived and{" "}
-            {result.summary.byProvenance.AI} AI-derived.
-          </p>
-          <ul data-testid="postman-generation-downloads" className="space-y-1 text-sm">
-            {links.map((link) => (
-              <li key={link.filename}>
-                <a
-                  href={link.href}
-                  download={link.filename}
-                  className="font-medium text-brand-700 underline decoration-brand-300 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                >
-                  {link.label} ({link.filename})
-                </a>
-              </li>
-            ))}
-          </ul>
-          <PostmanExportLimitations limitations={result.limitations} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+          <div
+            data-testid="postman-generation-success"
+            className="min-w-0 space-y-3 rounded-md border border-success-200 bg-success-50 p-4 dark:border-success-500 dark:bg-success-500/10"
+          >
+            <p className="text-sm text-success-700 dark:text-success-100">
+              {result.summary.requestCount} request(s) in {result.summary.folderCount}{" "}
+              folder(s); {result.summary.byProvenance.RULE} rule-derived and{" "}
+              {result.summary.byProvenance.AI} AI-derived.
+            </p>
+            <ul data-testid="postman-generation-downloads" className="space-y-1 text-sm">
+              {artifactFiles(result, specTitle).map((file) => (
+                <li key={file.filename}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadArtifact(file.text, file.mimeType, file.filename)
+                    }
+                    className="font-medium text-brand-700 underline decoration-brand-300 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-300 dark:hover:text-brand-200"
+                  >
+                    {file.label} ({file.filename})
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <PostmanExportLimitations limitations={result.limitations} />
+          </div>
+          <SummaryPanel
+            testId="postman-generation-summary-panel"
+            statValue={result.summary.requestCount}
+            statLabel={`request${result.summary.requestCount === 1 ? "" : "s"} in ${result.summary.folderCount} folder${result.summary.folderCount === 1 ? "" : "s"}`}
+            segments={provenanceSegments(result.summary.byProvenance)}
+            description="Nothing is executed and no credential is written into the collection — download it and run it from your own environment."
+            action={onContinue ? { label: "Continue to Import & Run Collection", onClick: onContinue } : undefined}
+          />
         </div>
       )}
     </section>
   );
+}
+
+function provenanceSegments(byProvenance: ProvenanceCounts): SummaryPanelSegment[] {
+  return [
+    { key: "RULE", label: "Rule-derived", count: byProvenance.RULE, tone: "neutral" },
+    { key: "AI", label: "AI-derived", count: byProvenance.AI, tone: "brand" },
+  ];
 }

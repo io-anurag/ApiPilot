@@ -20,7 +20,8 @@ const USER_MODIFIED_CLASSES =
  */
 export function ProvenanceBadge({ source, modifiedByUser }: { source: string; modifiedByUser?: boolean }) {
   const label = modifiedByUser ? "User-modified" : (SOURCE_LABELS[source] ?? source);
-  const toneClasses = modifiedByUser ? USER_MODIFIED_CLASSES : (SOURCE_CLASSES[source] ?? "border border-slate-300 text-slate-700");
+  const toneClasses =
+    modifiedByUser ? USER_MODIFIED_CLASSES : (SOURCE_CLASSES[source] ?? SOURCE_CLASSES.RULE);
   return (
     <span
       data-testid="provenance-badge"

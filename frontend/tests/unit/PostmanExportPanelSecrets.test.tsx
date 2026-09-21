@@ -64,7 +64,9 @@ function resultWithTokenValue(tokenValue: string): ExportResult {
 }
 
 function mockFetch(body: unknown) {
-  return vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body } as Response);
+  return vi
+    .fn()
+    .mockResolvedValue({ ok: true, status: 200, json: async () => body } as Response);
 }
 
 beforeEach(() => {
@@ -90,7 +92,9 @@ describe("PostmanExportPanel secret handling", () => {
     expect(tokenInput).toBeInTheDocument();
     expect(tokenInput).toHaveAttribute("type", "password");
     // baseUrl has its own field and is not duplicated in the variable list.
-    expect(screen.getByTestId("postman-export-variables")).not.toHaveTextContent("baseUrl");
+    expect(screen.getByTestId("postman-export-variables")).not.toHaveTextContent(
+      "baseUrl",
+    );
   });
 
   it("sends supplied credential values as export options", async () => {
@@ -99,7 +103,9 @@ describe("PostmanExportPanel secret handling", () => {
     render(<PostmanExportPanel apiModel={apiModel} testModel={testModel} />);
     await exportOnce();
 
-    fireEvent.change(screen.getByLabelText("token"), { target: { value: SUPPLIED_TOKEN } });
+    fireEvent.change(screen.getByLabelText("token"), {
+      target: { value: SUPPLIED_TOKEN },
+    });
     fireEvent.click(screen.getByRole("button", { name: /export collection/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -120,8 +126,7 @@ describe("PostmanExportPanel secret handling", () => {
     render(<PostmanExportPanel apiModel={apiModel} testModel={testModel} />);
     await exportOnce();
 
-    const link = screen.getByRole("link", { name: /environment\.json/ });
-    expect(link).toHaveAttribute("download", "environment.json");
+    expect(screen.getByRole("button", { name: /environment\.json/ })).toBeInTheDocument();
   });
 
   it("explains that supplied values go to the environment file only", async () => {

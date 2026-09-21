@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ApiModel, ExportResult, TestModel } from "@apipilot/shared-domain";
 import {
   artifactFiles,
-  artifactHref,
+  downloadArtifact,
   requestPostmanExport,
-  revokeArtifactHref,
   type PostmanExportResult,
 } from "../services/postmanCollectionsClient";
 import { PostmanExportLimitations } from "./PostmanExportLimitations";
@@ -31,20 +30,6 @@ const RECOVERY_GUIDANCE: Record<string, string> = {
 
 type ExportStatus = "idle" | "loading" | "success" | "empty" | "error";
 
-interface DownloadLink {
-  filename: string;
-  label: string;
-  href: string;
-}
-
-function toDownloadLinks(result: ExportResult, specTitle: string | undefined): DownloadLink[] {
-  return artifactFiles(result, specTitle).map((file) => ({
-    filename: file.filename,
-    label: file.label,
-    href: artifactHref(file.text, file.mimeType),
-  }));
-}
-
 /**
  * The export action: one click produces the collection, the environment, and the accompanying
  * document (FR-022), with distinct loading, success, empty, and failure states (FR-027).
@@ -65,13 +50,6 @@ export function PostmanExportPanel({
   );
   const [baseUrl, setBaseUrl] = useState("");
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
-  const [links, setLinks] = useState<DownloadLink[]>([]);
-
-  useEffect(() => {
-    return () => {
-      for (const link of links) revokeArtifactHref(link.href);
-    };
-  }, [links]);
 
   const declaredVariables = (result?.environment.values ?? []).filter(
     (value) => value.key !== "baseUrl",
@@ -94,14 +72,12 @@ export function PostmanExportPanel({
 
     if (outcome.ok) {
       setResult(outcome.result);
-      setLinks(toDownloadLinks(outcome.result, apiModel.info?.title));
       setStatus("success");
       return;
     }
 
     setFailure(outcome);
     setResult(null);
-    setLinks([]);
     setStatus(outcome.error === "empty_approved_test_model" ? "empty" : "error");
   }
 
@@ -114,11 +90,11 @@ export function PostmanExportPanel({
       <div className="space-y-1">
         <h3
           id="postman-export-heading"
-          className="text-base font-semibold text-slate-900"
+          className="text-base font-semibold text-slate-900 dark:text-white"
         >
           Export a Postman collection
         </h3>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">
+        <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
           Exports the scenarios you accepted as a runnable collection, a companion
           environment, and a README. Nothing is executed and no credential is written into
           the collection.
@@ -148,7 +124,7 @@ export function PostmanExportPanel({
           data-testid="postman-export-variables"
           className="space-y-3 border-t border-border pt-4"
         >
-          <legend className="text-sm font-semibold text-slate-900">
+          <legend className="text-sm font-semibold text-slate-900 dark:text-white">
             Values for referenced variables
           </legend>
           <p className="text-sm leading-6 text-muted">
@@ -159,7 +135,7 @@ export function PostmanExportPanel({
             <div key={variable.key} className="flex max-w-lg flex-col gap-1">
               <label
                 htmlFor={`postman-export-variable-${variable.key}`}
-                className="font-mono text-xs font-medium text-slate-700"
+                className="font-mono text-xs font-medium text-slate-700 dark:text-slate-300"
               >
                 {variable.key}
               </label>
@@ -193,7 +169,7 @@ export function PostmanExportPanel({
       {status === "loading" && (
         <output
           data-testid="export-loading"
-          className="block border-l-4 border-brand-500 bg-brand-50 px-3 py-2 text-sm text-brand-800"
+          className="block border-l-4 border-brand-500 bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-500/10 dark:text-brand-100"
         >
           Generating the collection, environment, and README…
         </output>
@@ -226,11 +202,11 @@ export function PostmanExportPanel({
       {status === "success" && result && (
         <div
           data-testid="export-success"
-          className="space-y-3 rounded-md border border-success-200 bg-success-50 p-4 text-sm text-slate-700"
+          className="space-y-3 rounded-md border border-success-200 bg-success-50 p-4 text-sm text-slate-700 dark:border-success-500 dark:bg-success-500/10 dark:text-slate-300"
         >
           <p
             data-testid="export-validation-result"
-            className="font-semibold text-success-700"
+            className="font-semibold text-success-700 dark:text-success-100"
           >
             Validation passed: the collection was checked against the expected collection
             format before delivery.
@@ -241,15 +217,17 @@ export function PostmanExportPanel({
             {result.summary.byProvenance.AI} AI-derived.
           </p>
           <ul data-testid="export-downloads" className="space-y-1">
-            {links.map((link) => (
-              <li key={link.filename}>
-                <a
-                  href={link.href}
-                  download={link.filename}
-                  className="font-medium text-brand-700 underline decoration-brand-300 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            {artifactFiles(result, apiModel.info?.title).map((file) => (
+              <li key={file.filename}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadArtifact(file.text, file.mimeType, file.filename)
+                  }
+                  className="font-medium text-brand-700 underline decoration-brand-300 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-300 dark:hover:text-brand-200"
                 >
-                  {link.label} ({link.filename})
-                </a>
+                  {file.label} ({file.filename})
+                </button>
               </li>
             ))}
           </ul>

@@ -82,7 +82,7 @@ export function EnvironmentForm({
   return (
     <div
       data-testid="environment-form"
-      className="space-y-3 rounded-md border border-border bg-slate-50 p-4"
+      className="space-y-3 rounded-md border border-border bg-slate-50 p-4 dark:bg-white/5"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -166,7 +166,7 @@ export function EnvironmentForm({
               type="button"
               aria-label={`Remove variable row ${index + 1}`}
               onClick={() => removeRow(index)}
-              className="text-sm text-muted hover:text-danger-700"
+              className="text-sm text-muted hover:text-danger-700 dark:hover:text-danger-400"
             >
               ✕
             </button>

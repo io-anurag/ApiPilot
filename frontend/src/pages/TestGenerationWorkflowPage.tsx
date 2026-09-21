@@ -1,15 +1,21 @@
-import { useEffect, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import type {
   DependencyAnalysisResult,
+  ExportResult,
   TestGenerationWorkflow,
   TestModel,
   WorkflowStageId,
 } from "@apipilot/shared-domain";
 import {
   fetchCurrentWorkflow,
-  finishExecutionStage,
   runDeterministicGeneration,
-  skipExecutionStage,
   startWorkflow,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
@@ -23,7 +29,6 @@ import { AiEnhancementOutcomeSummary } from "../components/AiEnhancementOutcomeS
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
-import { ExecutionResultsPanel } from "../components/ExecutionResultsPanel";
 import { AnalysisSummary } from "../components/AnalysisSummary";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
@@ -61,7 +66,13 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
 /** Small feature-strip icons (CLAUDE.md §28: consistent, minimal stroke iconography). */
 function LockIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={className}
+    >
       <rect x="5" y="11" width="14" height="9" rx="1.5" strokeLinejoin="round" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V8a4 4 0 118 0v3" />
     </svg>
@@ -70,16 +81,36 @@ function LockIcon({ className }: Readonly<{ className?: string }>) {
 
 function RepeatIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17.5 6.34V4m0 2.34h2.34M6.5 17.66V20m0-2.34H4.16" />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={className}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 12a8 8 0 0113.66-5.66M20 12a8 8 0 01-13.66 5.66"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.5 6.34V4m0 2.34h2.34M6.5 17.66V20m0-2.34H4.16"
+      />
     </svg>
   );
 }
 
 function TrailIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={className}
+    >
       <circle cx="6" cy="6" r="2" />
       <circle cx="18" cy="18" r="2" />
       <path strokeLinecap="round" strokeDasharray="2 2.5" d="M8 7l8 10" />
@@ -89,8 +120,17 @@ function TrailIcon({ className }: Readonly<{ className?: string }>) {
 
 function CheckShieldIcon({ className }: Readonly<{ className?: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
-      <path strokeLinejoin="round" d="M12 4l7 3v5c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5V7l7-3z" />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={className}
+    >
+      <path
+        strokeLinejoin="round"
+        d="M12 4l7 3v5c0 4.5-3 7.5-7 8.5-4-1-7-4-7-8.5V7l7-3z"
+      />
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.5l2 2 4-4.5" />
     </svg>
   );
@@ -112,7 +152,20 @@ const HOME_FEATURES: {
  * The guided workflow's sole composition root (research.md D8) — the exclusive way to reach any
  * stage screen (FR-017). Always resumes from server state on mount (FR-014, FR-018).
  */
-export function TestGenerationWorkflowPage() {
+export function TestGenerationWorkflowPage({
+  onExit,
+  onHandoffToExecution,
+}: Readonly<{
+  /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
+  onExit?: () => void;
+  /** Fired the moment the workflow reaches the `execution` stage with a generated Postman
+   * artifact — the guided workflow no longer runs collections itself (requirement 4); it hands
+   * off to "Import & Run Collection" instead. */
+  onHandoffToExecution?: (
+    postmanArtifact: ExportResult,
+    specTitle: string | undefined,
+  ) => void;
+}>) {
   const [workflow, setWorkflow] = useState<TestGenerationWorkflow | null>(null);
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,6 +184,19 @@ export function TestGenerationWorkflowPage() {
   const [sessionExpired, setSessionExpired] = useState(false);
   // Purely presentational: highlights the upload dropzone while a file is dragged over it.
   const [dragActive, setDragActive] = useState(false);
+  // Guards against handing off more than once for the same generated artifact (StrictMode's
+  // double-invoke, or simply re-rendering) — keyed on the workflow id + updatedAt pair, which
+  // changes exactly when a fresh Postman artifact was produced.
+  const lastHandoffKey = useRef<string | null>(null);
+
+  function maybeHandoff(wf: TestGenerationWorkflow) {
+    if (wf.activeStageId !== "execution" || !wf.postmanArtifact || !onHandoffToExecution)
+      return;
+    const key = `${wf.id}:${wf.updatedAt}`;
+    if (lastHandoffKey.current === key) return;
+    lastHandoffKey.current = key;
+    onHandoffToExecution(wf.postmanArtifact, wf.apiModel?.info?.title);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +205,7 @@ export function TestGenerationWorkflowPage() {
       if (result.ok && result.workflow) {
         setWorkflow(result.workflow);
         setViewedStageId(result.workflow.activeStageId);
+        maybeHandoff(result.workflow);
       } else if (result.ok && result.sessionExpired) {
         setSessionExpired(true);
       }
@@ -155,6 +222,24 @@ export function TestGenerationWorkflowPage() {
     // Forward progress, or a revision snapping the workflow back to the stage being revised
     // (research.md D6/FR-006), always follows the workflow's own activeStageId.
     setViewedStageId(result.workflow.activeStageId);
+  }
+
+  // Postman generation's own onGenerated: deliberately does NOT follow activeStageId to
+  // "execution" — the success screen (with its downloads) must stay visible until the user
+  // explicitly continues, rather than the workflow jumping away from it the instant generation
+  // finishes.
+  function handlePostmanGenerated(result: WorkflowResult) {
+    if (!result.ok) return;
+    setWorkflow(result.workflow);
+  }
+
+  /** The Postman Generation success screen's own "Continue" action — the explicit moment the
+   * user hands off to "Import & Run Collection" (requirements 3 & 4), rather than that happening
+   * automatically the instant the artifact is generated. */
+  function handleContinueToExecution() {
+    if (!workflow) return;
+    setViewedStageId(workflow.activeStageId);
+    maybeHandoff(workflow);
   }
 
   // Shared by both the native file picker and the dropzone's onDrop — the extension check must
@@ -220,10 +305,6 @@ export function TestGenerationWorkflowPage() {
     displayStageId === "aiEnhancement" &&
     (workflow?.stages.aiEnhancement.status === "skipped" ||
       workflow?.stages.aiEnhancement.status === "partial");
-  // ExecutionResultsPanel always accepts a new run regardless of the stage's own status —
-  // "skipped"/"complete" reopen to "active" the moment one starts (executionStage.ts) — so the
-  // generic "nothing here can be changed" read-only notice would be actively misleading here.
-  const executionStageAlwaysActionable = displayStageId === "execution";
   // PostmanGenerationStage stays interactive (regenerable) even once `activeStageId` has moved on
   // to `execution` — it was never gated on being the active stage to begin with (see its own
   // render call below) — so the same read-only notice would misreport it too.
@@ -245,6 +326,18 @@ export function TestGenerationWorkflowPage() {
 
   return (
     <section data-testid="test-generation-workflow-page" className="space-y-5">
+      {onExit && (
+        <div className="flex justify-start">
+          <button
+            type="button"
+            aria-label="Exit the guided workflow and return to the start screen"
+            onClick={onExit}
+            className={BUTTON_STYLES.ghost}
+          >
+            ← Back to start
+          </button>
+        </div>
+      )}
       {confirmDiscard && (
         <div
           role="alertdialog"
@@ -293,28 +386,34 @@ export function TestGenerationWorkflowPage() {
             <div className="space-y-8">
               <div className="space-y-4">
                 <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-                  <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                  <span
+                    aria-hidden="true"
+                    className="h-3 w-1 rounded-full bg-brand-500"
+                  />
                   <span>Specification to executable tests</span>
                 </p>
-                <h2 className="max-w-3xl text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl dark:text-white">
+                <h2 className="max-w-3xl font-display text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl dark:text-white">
                   Turn an OpenAPI specification into a test suite
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-muted">
-                  Analyze endpoints, generate deterministic scenarios, and enhance selectively
-                  with local AI. Review every result with its provenance intact, then run the
-                  approved suite against your own environment to see real pass/fail results.
+                  Analyze endpoints, generate deterministic scenarios, and enhance
+                  selectively with local AI. Review every result with its provenance
+                  intact, then run the approved suite against your own environment to see
+                  real pass/fail results.
                 </p>
               </div>
-              <dl className="grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
-                {HOME_FEATURES.map(({ label, description, Icon }) => (
+              <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
+                {HOME_FEATURES.map(({ label, description, Icon }, index) => (
                   <div
                     key={label}
-                    className="space-y-2 rounded-lg border border-border bg-surface px-3 py-3"
+                    className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${
+                      index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""
+                    }`}
                   >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">{label}</dt>
+                    <Icon className="h-4 w-4 text-brand-700 dark:text-brand-300" />
+                    <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">
+                      {label}
+                    </dt>
                     <dd className="text-xs text-muted">{description}</dd>
                   </div>
                 ))}
@@ -335,7 +434,7 @@ export function TestGenerationWorkflowPage() {
               </div>
               <div className="space-y-4 p-5 sm:p-6">
                 <div className="space-y-1">
-                  <h3 className="text-lg font-semibold text-slate-950 dark:text-white">
+                  <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">
                     Upload specification
                   </h3>
                   <p className="text-sm leading-6 text-muted">
@@ -384,15 +483,30 @@ export function TestGenerationWorkflowPage() {
             </div>
             <ol className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
               {PIPELINE_PREVIEW_STEPS.map((label, index) => (
-                <li key={label} className="flex flex-1 items-center gap-2 sm:gap-0">
-                  <div className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2.5 sm:w-auto">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 font-mono text-[11px] font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                <li key={label} className="flex flex-1 items-center gap-2.5 sm:gap-0">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${
+                        index === 0
+                          ? "border-brand-500 text-brand-700 dark:text-brand-300"
+                          : "border-border text-muted"
+                      }`}
+                    >
                       {index + 1}
                     </span>
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{label}</span>
+                    <span
+                      className={`whitespace-nowrap text-xs font-medium ${
+                        index === 0 ? "text-slate-900 dark:text-white" : "text-muted"
+                      }`}
+                    >
+                      {label}
+                    </span>
                   </div>
                   {index < PIPELINE_PREVIEW_STEPS.length - 1 && (
-                    <span aria-hidden="true" className="hidden h-px flex-1 bg-border sm:block" />
+                    <span
+                      aria-hidden="true"
+                      className="mx-3 hidden h-px flex-1 bg-border sm:block"
+                    />
                   )}
                 </li>
               ))}
@@ -410,14 +524,16 @@ export function TestGenerationWorkflowPage() {
               Review and advance the generated test workflow.
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Start a new workflow from a different specification"
-            onClick={() => setConfirmDiscard(true)}
-            className={BUTTON_STYLES.secondary}
-          >
-            Start a new workflow
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              aria-label="Start a new workflow from a different specification"
+              onClick={() => setConfirmDiscard(true)}
+              className={BUTTON_STYLES.secondary}
+            >
+              Start a new workflow
+            </button>
+          </div>
         </div>
       )}
       {uploading && <p className="text-sm text-muted">Uploading…</p>}
@@ -433,7 +549,6 @@ export function TestGenerationWorkflowPage() {
           </div>
           {displayStageId !== workflow.activeStageId &&
             !aiEnhancementHasRetryableOutcome &&
-            !executionStageAlwaysActionable &&
             !postmanGenerationAlwaysActionable &&
             (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
               <output
@@ -520,16 +635,24 @@ export function TestGenerationWorkflowPage() {
             // links from `postmanArtifact` on mount specifically to support being revisited.
             <PostmanGenerationStage
               postmanArtifact={workflow.postmanArtifact}
-              onGenerated={handleAdvanced}
+              specTitle={workflow.apiModel?.info?.title}
+              onGenerated={handlePostmanGenerated}
+              onContinue={
+                workflow.postmanArtifact ? handleContinueToExecution : undefined
+              }
             />
           )}
           {displayStageId === "execution" && (
-            <>
-              {workflow.stages.execution.status === "active" && (
-                <ExecutionStageActions onAdvanced={handleAdvanced} />
-              )}
-              <ExecutionResultsPanel />
-            </>
+            <ExecutionHandoffNotice
+              onGoToImportAndRun={() => {
+                if (workflow.postmanArtifact) {
+                  onHandoffToExecution?.(
+                    workflow.postmanArtifact,
+                    workflow.apiModel?.info?.title,
+                  );
+                }
+              }}
+            />
           )}
         </>
       )}
@@ -538,75 +661,32 @@ export function TestGenerationWorkflowPage() {
 }
 
 /**
- * Explicit "I'm done with this stage" actions for `execution` (specs/009 Clarifications
- * 2026-09-20): unlike every earlier stage, there is no single action whose completion implies
- * the user is finished — they may run against several environments, or none at all — so finishing
- * or skipping is a distinct, explicit choice rather than something inferred from a run settling.
- * Shown only while the stage is still `"active"`; once skipped/complete, `ExecutionResultsPanel`
- * alone remains (starting another run silently reopens the stage server-side).
+ * Replaces the guided workflow's former, standalone execution screen (specs/009 Clarifications
+ * 2026-09-20) — running a generated collection duplicated "Import & Run Collection" (requirement
+ * 4), so this stage now only hands off to it instead of running anything itself. The handoff
+ * normally already happened automatically the moment the artifact was generated
+ * (`maybeHandoff`); this notice's own button exists only to recover that handoff on demand — e.g.
+ * after a page reload that resumed directly onto this stage.
  */
-function ExecutionStageActions({
-  onAdvanced,
-}: Readonly<{ onAdvanced: (result: WorkflowResult) => void }>) {
-  const [pending, setPending] = useState<"skip" | "finish" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSkip() {
-    setPending("skip");
-    setError(null);
-    const result = await skipExecutionStage();
-    setPending(null);
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
-    onAdvanced(result);
-  }
-
-  async function handleFinish() {
-    setPending("finish");
-    setError(null);
-    const result = await finishExecutionStage();
-    setPending(null);
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
-    onAdvanced(result);
-  }
-
+function ExecutionHandoffNotice({
+  onGoToImportAndRun,
+}: Readonly<{ onGoToImportAndRun: () => void }>) {
   return (
     <section
-      data-testid="execution-stage-actions"
+      data-testid="execution-handoff-notice"
       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm"
     >
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        Running the approved collection against a real environment is optional. Skip this stage
-        if you don&apos;t need to run it now, or finish once you&apos;re done.
+        The Postman collection has been generated. Run it against a real environment from
+        &quot;Import &amp; Run Collection&quot;.
       </p>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleSkip}
-          disabled={pending !== null}
-          className={BUTTON_STYLES.secondary}
-        >
-          {pending === "skip" ? "Skipping…" : "Skip execution"}
-        </button>
-        <button
-          type="button"
-          onClick={handleFinish}
-          disabled={pending !== null}
-          className={BUTTON_STYLES.primary}
-        >
-          {pending === "finish" ? "Finishing…" : "Finish"}
-        </button>
-      </div>
-      {error && (
-        <div className="w-full">
-          <ErrorState testId="execution-stage-actions-error" message={error} />
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={onGoToImportAndRun}
+        className={BUTTON_STYLES.primary}
+      >
+        Go to Import &amp; Run Collection
+      </button>
     </section>
   );
 }
@@ -630,7 +710,9 @@ function UploadAnalysisSummary({
         {isUpload ? "Specification Uploaded" : "Specification Analysis"}
       </h2>
       {isUpload && (
-        <p className="text-sm text-slate-600 dark:text-slate-400">{specificationFilename}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          {specificationFilename}
+        </p>
       )}
       <AnalysisSummary summary={apiModel.summary} />
     </section>
@@ -676,7 +758,9 @@ function DependencyAnalysisSummary({
       data-testid="dependency-analysis-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">Dependency Analysis</h2>
+      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+        Dependency Analysis
+      </h2>
       <p className="text-sm text-slate-600 dark:text-slate-400">
         {graph.relationships.length} relationship
         {graph.relationships.length === 1 ? "" : "s"} found; {workflows.length}{" "}
@@ -692,7 +776,10 @@ function DependencyAnalysisSummary({
       {/* FR-034: a relationship spanning a batch boundary is unchecked, not confirmed absent —
           that distinction must reach the user, not stay a backend-only detail. */}
       {aiBatchingLimitation && (
-        <p data-testid="dependency-analysis-batching-limitation" className="text-sm text-muted">
+        <p
+          data-testid="dependency-analysis-batching-limitation"
+          className="text-sm text-muted"
+        >
           {aiBatchingLimitation}
         </p>
       )}

@@ -34,7 +34,7 @@ export function BatchOutcomeList({
             }
           />
           {batch.failureExplanation && (
-            <span className="text-xs text-slate-600">{batch.failureExplanation.summary}</span>
+            <span className="text-xs text-slate-600 dark:text-slate-400">{batch.failureExplanation.summary}</span>
           )}
           {renderAction?.(batch)}
         </li>

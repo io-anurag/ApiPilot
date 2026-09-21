@@ -47,7 +47,9 @@ export function ExternalCollectionList({
         <li
           key={uploadedCollection.id}
           className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm ${
-            uploadedCollection.id === selectedId ? "bg-brand-50/50" : "hover:bg-slate-50"
+            uploadedCollection.id === selectedId
+              ? "bg-brand-50/50 dark:bg-brand-500/15"
+              : "hover:bg-slate-50 dark:hover:bg-white/10"
           }`}
         >
           <button
@@ -56,7 +58,7 @@ export function ExternalCollectionList({
             aria-current={uploadedCollection.id === selectedId}
             className="flex min-w-0 flex-1 items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            <span className="min-w-0 truncate font-medium text-slate-700">{uploadedCollection.name}</span>
+            <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-300">{uploadedCollection.name}</span>
             <StatusBadge label={uploadedCollection.tier} tone={TIER_TONE[uploadedCollection.tier]} />
             {!uploadedCollection.confirmedAt && <StatusBadge label="Unverified" tone="warning" />}
           </button>

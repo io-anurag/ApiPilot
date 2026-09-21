@@ -4,11 +4,13 @@ import { AnalysisSummary } from "./AnalysisSummary";
 import { ErrorState } from "./ErrorState";
 import { OperationDetail } from "./OperationDetail";
 import { OperationList } from "./OperationList";
+import { SummaryPanel } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
 import {
   continueApiReview,
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
+import { groupOperationsByMethod } from "../utils/operationMethodGroups";
 
 /**
  * The apiReview confirmation gate (research.md D3): there is no selectable data here, only an
@@ -46,48 +48,47 @@ export function ApiReviewStage({
   return (
     <section
       data-testid="api-review-stage"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
-      <h2 className="text-base font-semibold text-slate-900">Review Discovered APIs</h2>
-      <AnalysisSummary summary={apiModel.summary} />
-      <OperationList
-        operations={apiModel.operations}
-        selected={selected}
-        onSelect={setSelected}
-        renderSelected={(operation) => (
-          <div className="space-y-3 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
-                Operation details
-              </p>
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className={BUTTON_STYLES.secondary}
-              >
-                Close details
-              </button>
+      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-white">Review Discovered APIs</h2>
+        <AnalysisSummary summary={apiModel.summary} />
+        <OperationList
+          operations={apiModel.operations}
+          selected={selected}
+          onSelect={setSelected}
+          renderSelected={(operation) => (
+            <div className="space-y-3 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                  Operation details
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className={BUTTON_STYLES.secondary}
+                >
+                  Close details
+                </button>
+              </div>
+              <OperationDetail operation={operation} />
             </div>
-            <OperationDetail operation={operation} />
-          </div>
-        )}
+          )}
+        />
+        {error && <ErrorState testId="api-review-error" message={error} />}
+      </div>
+      <SummaryPanel
+        testId="api-review-summary-panel"
+        statValue={apiModel.operations.length}
+        statLabel={`operation${apiModel.operations.length === 1 ? "" : "s"} discovered`}
+        segments={groupOperationsByMethod(apiModel.operations)}
+        description="Every discovered operation keeps its declared parameters, security, and responses for review below."
+        action={
+          !readOnly
+            ? { label: continuing ? "Continuing…" : "Continue", onClick: handleContinue, disabled: continuing }
+            : undefined
+        }
       />
-      {!readOnly && (
-        // Sticky rather than in normal flow: with dozens of discovered operations to review, the
-        // continue action must stay reachable without scrolling past the entire list (matches
-        // the same fix applied to ScenarioReviewStage's "Finalize Review" bar).
-        <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center gap-3 rounded-b-lg border-t border-border bg-surface px-5 pt-4 pb-5 shadow-[0_-4px_6px_-4px_rgba(0,0,0,0.15)]">
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={continuing}
-            className={BUTTON_STYLES.primary}
-          >
-            {continuing ? "Continuing…" : "Continue"}
-          </button>
-          {error && <ErrorState testId="api-review-error" message={error} />}
-        </div>
-      )}
     </section>
   );
 }

@@ -20,7 +20,17 @@ import { EnvironmentForm } from "./EnvironmentForm";
 import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { SummaryPanel, type SummaryPanelSegment } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
+
+/** `RunSummary`'s Passed/Failed/Not-attempted counts as a `SummaryPanel` breakdown. */
+function runResultSegments(run: ExecutionRun): SummaryPanelSegment[] {
+  return [
+    { key: "passed", label: "Passed", count: run.summary.passed, tone: "success" },
+    { key: "failed", label: "Failed", count: run.summary.failed, tone: "danger" },
+    { key: "not-attempted", label: "Not attempted", count: run.summary.notAttempted, tone: "neutral" },
+  ];
+}
 
 const POLL_INTERVAL_MS = 750;
 
@@ -136,11 +146,11 @@ function EnvironmentPicker({
 /** One labeled number in `RunOverview`'s stat row. */
 function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
   const toneClass: Record<StatusTone, string> = {
-    neutral: "text-slate-900",
-    info: "text-info-700",
-    success: "text-success-700",
-    warning: "text-warning-700",
-    danger: "text-danger-700",
+    neutral: "text-slate-900 dark:text-white",
+    info: "text-info-700 dark:text-info-400",
+    success: "text-success-700 dark:text-success-400",
+    warning: "text-warning-700 dark:text-warning-400",
+    danger: "text-danger-700 dark:text-danger-400",
   };
   return (
     <div className="min-w-[6rem]">
@@ -164,7 +174,7 @@ function RunOverview({ run }: Readonly<{ run: ExecutionRun }>) {
       : 0;
 
   return (
-    <dl data-testid="execution-run-overview" className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3">
+    <dl data-testid="execution-run-overview" className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3 dark:bg-white/5">
       <OverviewStat label="Endpoints" value={String(endpointCount)} />
       <OverviewStat label="Requests" value={String(run.summary.total)} />
       <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
@@ -186,8 +196,8 @@ function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
       <tbody>
         {headers.map((header) => (
           <tr key={header.key} className="border-b border-border last:border-0">
-            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600">{header.key}</td>
-            <td className="py-1 font-mono text-slate-700 break-all">{header.value}</td>
+            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600 dark:text-slate-400">{header.key}</td>
+            <td className="py-1 font-mono text-slate-700 break-all dark:text-slate-300">{header.value}</td>
           </tr>
         ))}
       </tbody>
@@ -202,7 +212,7 @@ function RawCaptureDetail({ rawCapture }: Readonly<{ rawCapture: NonNullable<Req
     <div className="mt-2 grid gap-3 sm:grid-cols-2">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase text-muted">Request</p>
-        <p className="break-all font-mono text-xs text-slate-600">{rawCapture.requestUrl}</p>
+        <p className="break-all font-mono text-xs text-slate-600 dark:text-slate-400">{rawCapture.requestUrl}</p>
         <HeaderTable headers={rawCapture.requestHeaders} />
         {rawCapture.requestBody && <CodeBlock label="Body" content={rawCapture.requestBody} />}
       </div>
@@ -229,7 +239,7 @@ function ResultDetail({ result, tier }: Readonly<{ result: RequestResult; tier: 
   return (
     <div
       data-testid="execution-result-detail"
-      className="mt-2 space-y-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600"
+      className="mt-2 space-y-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-400"
     >
       <p>
         {result.durationMs}ms
@@ -239,7 +249,7 @@ function ResultDetail({ result, tier }: Readonly<{ result: RequestResult; tier: 
         <ul className="space-y-1">
           {result.assertionOutcomes.map((assertion) => (
             <li key={assertion.assertionIndex} className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-slate-700 dark:text-slate-300">
                 {assertion.type === "status-code" ? "Status code" : "Schema conformance"}
               </span>
               <StatusBadge
@@ -255,7 +265,7 @@ function ResultDetail({ result, tier }: Readonly<{ result: RequestResult; tier: 
         <RawCaptureDetail rawCapture={result.rawCapture} />
       ) : (
         tier !== "local" && (
-          <p className="text-slate-500">
+          <p className="text-slate-500 dark:text-slate-400">
             Full request/response headers and bodies are only captured for Local-tier runs.
           </p>
         )
@@ -276,7 +286,7 @@ function ExecutionResultRow({ result, tier }: Readonly<{ result: RequestResult; 
       >
         <div className="flex min-w-0 items-center gap-2">
           <HttpMethodBadge method={result.operationMethod} />
-          <span className="min-w-0 truncate font-mono text-xs text-slate-700" title={result.operationPath}>
+          <span className="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={result.operationPath}>
             {result.operationPath}
           </span>
         </div>
@@ -330,14 +340,14 @@ function ConfirmationBanner({
     <div
       role="alertdialog"
       data-testid="execution-confirmation-banner"
-      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
     >
-      <p className="text-sm text-warning-700">
+      <p className="text-sm text-warning-700 dark:text-warning-100">
         This run targets a <strong>{requirement.environmentTier}</strong> environment
         {requirement.destructiveOperations.length > 0 && " and includes destructive requests"}.
       </p>
       {requirement.destructiveOperations.length > 0 && (
-        <ul className="space-y-1 text-sm text-warning-700">
+        <ul className="space-y-1 text-sm text-warning-700 dark:text-warning-100">
           {requirement.destructiveOperations.map((operation) => (
             <li key={`${operation.operationMethod} ${operation.operationPath}`} className="flex items-center gap-2">
               <HttpMethodBadge method={operation.operationMethod} />
@@ -373,7 +383,7 @@ function RunSummary({
          * (research.md D8/D9). */}
         <StatusBadge label="Generated" tone="neutral" />
         <StatusBadge label={run.environmentSnapshot.tier} tone={TIER_TONE[run.environmentSnapshot.tier]} />
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           {run.summary.passed} passed · {run.summary.failed} failed · {run.summary.notAttempted}{" "}
           not attempted · {run.results.length} result{run.results.length === 1 ? "" : "s"} so far
         </p>
@@ -416,14 +426,14 @@ function RunHistory({
               type="button"
               onClick={() => onSelect(historyRun.id)}
               aria-current={historyRun.id === selectedRunId}
-              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                historyRun.id === selectedRunId ? "bg-slate-50" : ""
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                historyRun.id === selectedRunId ? "bg-slate-50 dark:bg-white/5" : ""
               }`}
             >
               <span className="flex min-w-0 items-center gap-2">
                 <StatusBadge label={runStatusLabel(historyRun.status)} tone={runStatusTone(historyRun.status)} />
                 <StatusBadge label="Generated" tone="neutral" />
-                <span className="min-w-0 truncate text-slate-700">{historyRun.environmentSnapshot.name}</span>
+                <span className="min-w-0 truncate text-slate-700 dark:text-slate-300">{historyRun.environmentSnapshot.name}</span>
                 <StatusBadge
                   label={historyRun.environmentSnapshot.tier}
                   tone={TIER_TONE[historyRun.environmentSnapshot.tier]}
@@ -547,48 +557,63 @@ export function ExecutionResultsPanel() {
     <section
       aria-labelledby="execution-results-heading"
       data-testid="execution-results-panel"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className={
+        run
+          ? "grid grid-cols-1 gap-6 rounded-lg border border-border bg-surface p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
+          : "space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      }
     >
-      <h2 id="execution-results-heading" className="text-base font-semibold text-slate-900">
-        Run &amp; Results
-      </h2>
-      <p className="text-sm text-slate-600">
-        Execute the approved collection against a real environment and see pass/fail results per
-        request.
-      </p>
+      <div className="min-w-0 space-y-4">
+        <h2 id="execution-results-heading" className="text-base font-semibold text-slate-900 dark:text-white">
+          Run &amp; Results
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Execute the approved collection against a real environment and see pass/fail results per
+          request.
+        </p>
 
-      {hasEnvironments && !showEnvironmentForm && (
-        <EnvironmentPicker
-          environments={environments!}
-          selectedEnvironmentId={selectedEnvironmentId}
-          onSelect={setSelectedEnvironmentId}
-          onStart={handleStart}
-          onAddAnother={() => setShowEnvironmentForm(true)}
-          starting={starting}
-          runInProgress={run?.status === "in-progress"}
+        {hasEnvironments && !showEnvironmentForm && (
+          <EnvironmentPicker
+            environments={environments!}
+            selectedEnvironmentId={selectedEnvironmentId}
+            onSelect={setSelectedEnvironmentId}
+            onStart={handleStart}
+            onAddAnother={() => setShowEnvironmentForm(true)}
+            starting={starting}
+            runInProgress={run?.status === "in-progress"}
+          />
+        )}
+
+        {(!hasEnvironments || showEnvironmentForm) && (
+          <EnvironmentForm
+            onSaved={handleEnvironmentSaved}
+            onCancel={hasEnvironments ? () => setShowEnvironmentForm(false) : undefined}
+          />
+        )}
+
+        {pendingConfirmation && (
+          <ConfirmationBanner
+            requirement={pendingConfirmation}
+            onConfirm={() => handleStart(true)}
+            onCancel={() => setPendingConfirmation(null)}
+          />
+        )}
+
+        {startError && <ErrorState testId="execution-start-error" message={startError} />}
+
+        {run && <RunSummary run={run} onCancel={handleCancel} cancelling={cancelling} />}
+
+        <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectRun} />
+      </div>
+      {run && (
+        <SummaryPanel
+          testId="execution-summary-panel"
+          statValue={run.summary.total}
+          statLabel={`request${run.summary.total === 1 ? "" : "s"} run`}
+          segments={runResultSegments(run)}
+          description={`Completed in ${run.summary.durationMs} ms against the ${run.environmentSnapshot.tier} environment.`}
         />
       )}
-
-      {(!hasEnvironments || showEnvironmentForm) && (
-        <EnvironmentForm
-          onSaved={handleEnvironmentSaved}
-          onCancel={hasEnvironments ? () => setShowEnvironmentForm(false) : undefined}
-        />
-      )}
-
-      {pendingConfirmation && (
-        <ConfirmationBanner
-          requirement={pendingConfirmation}
-          onConfirm={() => handleStart(true)}
-          onCancel={() => setPendingConfirmation(null)}
-        />
-      )}
-
-      {startError && <ErrorState testId="execution-start-error" message={startError} />}
-
-      {run && <RunSummary run={run} onCancel={handleCancel} cancelling={cancelling} />}
-
-      <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectRun} />
     </section>
   );
 }

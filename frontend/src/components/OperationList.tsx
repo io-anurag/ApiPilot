@@ -34,7 +34,7 @@ export function OperationList({
     <ul data-testid="operation-list" className="overflow-hidden divide-y divide-border rounded-lg border border-border">
       <li
         aria-hidden="true"
-        className={`grid items-center gap-3 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted ${ROW_GRID_COLUMNS}`}
+        className={`grid items-center gap-3 border-b border-border bg-slate-50 px-3 py-2 text-xs font-semibold text-muted dark:bg-white/5 ${ROW_GRID_COLUMNS}`}
       >
         <span>Method</span>
         <span>Path</span>
@@ -48,18 +48,18 @@ export function OperationList({
                 type="button"
                 onClick={() => onSelect(operation)}
                 aria-pressed={isSelected}
-                className={`grid w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
-                  isSelected ? "bg-brand-50" : ""
+                className={`grid w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
+                  isSelected ? "bg-brand-50 dark:bg-brand-500/15" : ""
                 }`}
               >
                 <HttpMethodBadge method={operation.method} />
-                <span className="min-w-0 truncate font-mono text-slate-800" title={operation.path}>
+                <span className="min-w-0 truncate font-mono text-slate-800 dark:text-slate-200" title={operation.path}>
                   {operation.path}
                 </span>
               </button>
             </li>
             {isSelected && (
-              <li className="border-t border-brand-200 bg-brand-50/20">
+              <li className="border-t border-brand-200 bg-brand-50/20 dark:border-brand-500 dark:bg-brand-500/10">
                 {renderSelected?.(operation)}
               </li>
             )}

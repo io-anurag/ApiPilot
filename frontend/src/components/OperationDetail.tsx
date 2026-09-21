@@ -7,7 +7,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
       data-testid="operation-detail"
       className="space-y-4 rounded-md border border-border bg-surface p-4"
     >
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
         <HttpMethodBadge method={operation.method} />
         <span className="font-mono">{operation.path}</span>
       </h3>
@@ -18,7 +18,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
         {operation.parameters.length === 0 ? (
           <p className="text-sm text-muted">None</p>
         ) : (
-          <ul className="mt-1 space-y-1 text-sm text-slate-700">
+          <ul className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
             {operation.parameters.map((parameter) => (
               <li key={`${parameter.location}-${parameter.name}`}>
                 <code className="font-mono text-xs">{parameter.name}</code> (
@@ -33,7 +33,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
           <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
             Request Body{operation.requestBody.required ? " (required)" : ""}
           </h4>
-          <ul className="mt-1 space-y-1 text-sm text-slate-700">
+          <ul className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
             {Object.keys(operation.requestBody.contentTypes).map((contentType) => (
               <li key={contentType} className="font-mono text-xs">
                 {contentType}
@@ -46,7 +46,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
         <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
           Responses
         </h4>
-        <ul className="mt-1 space-y-1 text-sm text-slate-700">
+        <ul className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
           {operation.responses.map((response) => (
             <li key={response.statusCode}>
               <span className="font-mono font-semibold">{response.statusCode}</span> -{" "}
@@ -62,7 +62,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
         {operation.security.length === 0 ? (
           <p className="text-sm text-muted">No security requirement</p>
         ) : (
-          <ul className="mt-1 space-y-1 text-sm text-slate-700">
+          <ul className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
             {operation.security.map((requirement) => {
               const schemeNames = requirement.schemes
                 .map((scheme) => scheme.name)

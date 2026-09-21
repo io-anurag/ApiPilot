@@ -41,11 +41,11 @@ function runStatusTone(status: UploadedCollectionExecutionRun["status"]): Status
 /** One labeled number in the run overview stat row (mirrors ExecutionResultsPanel's `OverviewStat`). */
 function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
   const toneClass: Record<StatusTone, string> = {
-    neutral: "text-slate-900",
-    info: "text-info-700",
-    success: "text-success-700",
-    warning: "text-warning-700",
-    danger: "text-danger-700",
+    neutral: "text-slate-900 dark:text-white",
+    info: "text-info-700 dark:text-info-400",
+    success: "text-success-700 dark:text-success-400",
+    warning: "text-warning-700 dark:text-warning-400",
+    danger: "text-danger-700 dark:text-danger-400",
   };
   return (
     <div className="min-w-[6rem]">
@@ -57,7 +57,7 @@ function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: s
 
 function RunOverview({ run }: Readonly<{ run: UploadedCollectionExecutionRun }>) {
   return (
-    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3">
+    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3 dark:bg-white/5">
       <OverviewStat label="Requests" value={String(run.summary.total)} />
       <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
       <OverviewStat
@@ -78,8 +78,8 @@ function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
       <tbody>
         {headers.map((header) => (
           <tr key={header.key} className="border-b border-border last:border-0">
-            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600">{header.key}</td>
-            <td className="py-1 font-mono text-slate-700 break-all">{header.value}</td>
+            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600 dark:text-slate-400">{header.key}</td>
+            <td className="py-1 font-mono text-slate-700 dark:text-slate-300 break-all">{header.value}</td>
           </tr>
         ))}
       </tbody>
@@ -91,7 +91,7 @@ function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
  * `"local"`-tier run only — the full raw request/response headers/bodies (FR-017a parity). */
 function ResultDetail({ result }: Readonly<{ result: UploadedRequestResult }>) {
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600">
+    <div className="mt-2 space-y-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-400">
       <p>
         {result.durationMs}ms
         {result.responseStatusCode !== undefined && ` · Response status ${result.responseStatusCode}`}
@@ -100,7 +100,7 @@ function ResultDetail({ result }: Readonly<{ result: UploadedRequestResult }>) {
         <ul className="space-y-1">
           {result.testOutcomes.map((test) => (
             <li key={test.name} className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-slate-700">{test.name}</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">{test.name}</span>
               <StatusBadge label={test.outcome} tone={test.outcome === "passed" ? "success" : "danger"} />
               {test.detail && <span>{test.detail}</span>}
             </li>
@@ -111,7 +111,7 @@ function ResultDetail({ result }: Readonly<{ result: UploadedRequestResult }>) {
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase text-muted">Request</p>
-            <p className="break-all font-mono text-xs text-slate-600">{result.rawCapture.requestUrl}</p>
+            <p className="break-all font-mono text-xs text-slate-600 dark:text-slate-400">{result.rawCapture.requestUrl}</p>
             <HeaderTable headers={result.rawCapture.requestHeaders} />
             {result.rawCapture.requestBody && <CodeBlock label="Body" content={result.rawCapture.requestBody} />}
           </div>
@@ -138,7 +138,7 @@ function ExternalCollectionResultRow({ result }: Readonly<{ result: UploadedRequ
       >
         <div className="flex min-w-0 items-center gap-2">
           <HttpMethodBadge method={result.requestMethod} />
-          <span className="min-w-0 truncate font-mono text-xs text-slate-700" title={result.requestName}>
+          <span className="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={result.requestName}>
             {result.requestName}
           </span>
         </div>
@@ -159,9 +159,9 @@ function UnverifiedContentDialog({
     <div
       role="alertdialog"
       data-testid="unverified-content-dialog"
-      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
     >
-      <p className="text-sm text-warning-700">
+      <p className="text-sm text-warning-700 dark:text-warning-100">
         This collection&apos;s requests, and any embedded pre-request/test scripts, were{" "}
         <strong>not generated or verified by ApiPilot</strong>. They will execute exactly as
         authored, with the same real network access Postman/Newman itself would give them.
@@ -189,14 +189,14 @@ function RiskTierConfirmationBanner({
     <div
       role="alertdialog"
       data-testid="risk-tier-confirmation-banner"
-      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm"
+      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
     >
-      <p className="text-sm text-warning-700">
+      <p className="text-sm text-warning-700 dark:text-warning-100">
         This run targets a <strong>{requirement.environmentTier}</strong> environment
         {requirement.destructiveOperations.length > 0 && " and includes destructive requests"}.
       </p>
       {requirement.destructiveOperations.length > 0 && (
-        <ul className="space-y-1 text-sm text-warning-700">
+        <ul className="space-y-1 text-sm text-warning-700 dark:text-warning-100">
           {requirement.destructiveOperations.map((operation) => (
             <li key={`${operation.operationMethod} ${operation.operationPath}`} className="flex items-center gap-2">
               <HttpMethodBadge method={operation.operationMethod} />
@@ -237,8 +237,8 @@ function RunHistory({
               type="button"
               onClick={() => onSelect(historyRun.id)}
               aria-current={historyRun.id === selectedRunId}
-              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                historyRun.id === selectedRunId ? "bg-slate-50" : ""
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                historyRun.id === selectedRunId ? "bg-slate-50 dark:bg-white/5" : ""
               }`}
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -351,7 +351,7 @@ export function ExternalCollectionRunPanel({
       className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">{uploadedCollection.name}</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{uploadedCollection.name}</h3>
         <button
           type="button"
           onClick={handleRunClick}
