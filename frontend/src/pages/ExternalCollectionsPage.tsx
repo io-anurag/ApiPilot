@@ -15,10 +15,11 @@ import {
 import { ExternalCollectionUpload } from "../components/ExternalCollectionUpload";
 import { ExternalCollectionList } from "../components/ExternalCollectionList";
 import { ExternalCollectionRunPanel } from "../components/ExternalCollectionRunPanel";
-import { CollectionTreeView, type CollectionTreeActions } from "../components/CollectionTreeView";
+import { CollectionTreeView, flattenCollectionRequests, type CollectionTreeActions } from "../components/CollectionTreeView";
 import { RequestEditorPanel } from "../components/RequestEditorPanel";
 import { VariablePanel } from "../components/VariablePanel";
 import { ErrorState } from "../components/ErrorState";
+import { BUTTON_STYLES } from "../components/controlStyles";
 import type { ImportPreload } from "../services/importPreload";
 
 /** Runs a light poll (2s) only to drive the collection editor's read-only lock (FR-017) — the
@@ -71,6 +72,7 @@ export function ExternalCollectionsPage({
   const [selectedRequestId, setSelectedRequestId] = useState<string | undefined>(undefined);
   const [locked, setLocked] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<"request" | "variables">("request");
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +98,7 @@ export function ExternalCollectionsPage({
     setCollectionView(undefined);
     setSelectedRequestId(undefined);
     setViewError(null);
+    setMainView("request");
     if (selectedId) {
       refreshCollectionView(selectedId);
     }
@@ -160,6 +163,7 @@ export function ExternalCollectionsPage({
       if (result.ok) {
         setCollectionView(result.collectionView);
         setSelectedRequestId(result.newItemId);
+        setMainView("request");
       } else {
         setViewError(result.message);
       }
@@ -252,32 +256,66 @@ export function ExternalCollectionsPage({
       </section>
 
       {selected && collectionView && (
-        <section className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-          <div className="space-y-4">
+        <section className="grid gap-4 lg:grid-cols-[320px_1fr]">
+          <div className="space-y-3">
             {viewError && <ErrorState message={viewError} />}
+            {/* The collection tree always stays in the sidebar (it's the primary navigation);
+                variables get the full-width main pane below instead of this ~320px rail — their
+                row layout (name + value + source label) doesn't fit a sidebar this narrow. The
+                "Variables" toggle lives in the tree's own header row, next to "+ Add request". */}
             <CollectionTreeView
               items={collectionView.items}
               folders={collectionView.folders}
-              selectedRequestId={selectedRequestId}
-              onSelectRequest={(item) => setSelectedRequestId(item.id)}
+              selectedRequestId={mainView === "request" ? selectedRequestId : undefined}
+              onSelectRequest={(item) => {
+                setSelectedRequestId(item.id);
+                setMainView("request");
+              }}
               locked={locked}
               actions={treeActions}
+              headerAction={
+                // Same ghost text-link weight as "+ Add request" right next to it (rather than a
+                // boxed pill), so the two header actions read as one visual family; "selected"
+                // (mainView === "variables") is shown the same way CollectionTreeView already
+                // shows the selected request — an underline plus the brand color, not a filled box.
+                <button
+                  type="button"
+                  aria-pressed={mainView === "variables"}
+                  onClick={() => setMainView("variables")}
+                  className={`flex items-center gap-1.5 ${BUTTON_STYLES.ghost} ${mainView === "variables" ? "underline" : ""}`}
+                >
+                  Variables
+                  {collectionView.variables.some((v) => !v.resolved) && (
+                    <span
+                      aria-label="Some variables are unresolved"
+                      title="Some variables are unresolved"
+                      className="inline-block h-1.5 w-1.5 rounded-full bg-danger-500"
+                    />
+                  )}
+                </button>
+              }
             />
-            <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} />
           </div>
           <div>
-            {selectedRequest ? (
+            {mainView === "variables" ? (
+              <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} />
+            ) : selectedRequest ? (
               <RequestEditorPanel request={selectedRequest} locked={locked} onSave={handleSaveRequest} />
             ) : (
-              <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted">
-                Select a request to view and edit it.
+              <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
+                Select a request from the collection to view and edit it.
               </p>
             )}
           </div>
         </section>
       )}
 
-      {selected && <ExternalCollectionRunPanel uploadedCollection={selected} />}
+      {selected && (
+        <ExternalCollectionRunPanel
+          uploadedCollection={selected}
+          requests={collectionView ? flattenCollectionRequests(collectionView.items, collectionView.folders) : []}
+        />
+      )}
     </div>
   );
 }

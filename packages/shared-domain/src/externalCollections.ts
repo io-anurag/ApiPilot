@@ -176,6 +176,14 @@ export interface CollectionRequestView {
   resolved: CollectionRequestFields;
   /** Variable names referenced by this specific request that remain unresolved. */
   unresolvedVariables: string[];
+  /**
+   * The request's own Postman "test" event script, exactly as stored (its `pm.test(...)` calls
+   * are what `UploadedTestOutcome.name` in a run result is named after). Undefined/empty when the
+   * item carries no test event. Editable like every other raw field (FR-007) — there is no
+   * "resolved" counterpart, since the script runs against the live response at execution time
+   * rather than being substituted for display.
+   */
+  testScript?: string;
 }
 
 /** One folder within a `CollectionView` (research.md D9) — arbitrary nesting depth. */

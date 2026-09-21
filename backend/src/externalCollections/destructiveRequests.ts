@@ -12,9 +12,15 @@ import { DESTRUCTIVE_METHODS } from "../execution/destructiveOperations";
  * envelope is genuinely identical for both gates (contracts/external-collections-api.md) — here,
  * `operationPath` carries the request's own name (there is no OpenAPI path to report instead).
  */
-export function findDestructiveRequests(collection: Collection): DestructiveOperation[] {
+/**
+ * @param selectedItemIds When provided (a selective run — AP-028 follow-up), only items in this
+ * set are considered; an item excluded from the run can't warrant a destructive-request warning
+ * for a run it isn't part of.
+ */
+export function findDestructiveRequests(collection: Collection, selectedItemIds?: Set<string>): DestructiveOperation[] {
   const found: DestructiveOperation[] = [];
   collection.forEachItem((item: Item) => {
+    if (selectedItemIds && !selectedItemIds.has(item.id)) return;
     const method = item.request.method.toUpperCase();
     if (DESTRUCTIVE_METHODS.has(method)) {
       found.push({ operationPath: item.name, operationMethod: method });

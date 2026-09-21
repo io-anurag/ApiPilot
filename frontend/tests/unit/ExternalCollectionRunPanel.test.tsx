@@ -1,8 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { UploadedCollectionExecutionRun } from "@apipilot/shared-domain";
+import type { CollectionRequestView, UploadedCollectionExecutionRun } from "@apipilot/shared-domain";
 import type { UploadedCollectionSummary } from "../../src/services/externalCollectionsClient";
 import { ExternalCollectionRunPanel } from "../../src/components/ExternalCollectionRunPanel";
+
+function requestView(overrides: Partial<CollectionRequestView> = {}): CollectionRequestView {
+  return {
+    id: "item-1",
+    name: "Get widget",
+    wasEdited: false,
+    raw: { method: "GET", url: "https://example.test", headers: [] },
+    resolved: { method: "GET", url: "https://example.test", headers: [] },
+    unresolvedVariables: [],
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -92,7 +104,7 @@ describe("ExternalCollectionRunPanel", () => {
     const calls = stubFetch([{ status: 200, body: { run: completedRun() } }]);
     render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(await screen.findByTestId("unverified-content-dialog")).toBeInTheDocument();
 
     // Declining dispatches no start request.
@@ -101,7 +113,7 @@ describe("ExternalCollectionRunPanel", () => {
     expect(calls.some((call) => call.url.includes("/execution/start"))).toBe(false);
 
     // Accepting proceeds and starts the run.
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm and run" }));
 
     await waitFor(() =>
@@ -114,7 +126,7 @@ describe("ExternalCollectionRunPanel", () => {
   it("does not show the unverified-content dialog once a collection is already confirmed", () => {
     stubFetch([{ status: 200, body: { run: completedRun() } }]);
     render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} />);
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
   });
 
@@ -122,7 +134,7 @@ describe("ExternalCollectionRunPanel", () => {
     stubFetch([{ status: 200, body: { run: completedRun() } }]);
     render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     await screen.findByTestId("external-collection-run-summary");
 
     // US3/FR-010: an uploaded-collection run is always labeled "Uploaded" so it is never mistaken
@@ -139,5 +151,57 @@ describe("ExternalCollectionRunPanel", () => {
 
     fireEvent.click(screen.getByText("Create widget"));
     expect(await screen.findByText("expected 201, got 500")).toBeInTheDocument();
+  });
+
+  it("shows no run-order checklist when the collection view hasn't loaded (requests omitted)", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} />);
+    expect(screen.queryByText("Run order")).not.toBeInTheDocument();
+  });
+
+  it("shows every request pre-selected, and starting a run sends every id", async () => {
+    const calls = stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const requests = [requestView({ id: "item-1", name: "Get widget" }), requestView({ id: "item-2", name: "Create widget" })];
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} requests={requests} />);
+
+    expect(screen.getByText("2 of 2 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    await waitFor(() => expect(calls.some((call) => call.url.includes("/execution/start"))).toBe(true));
+    const startCall = calls.find((call) => call.url.includes("/execution/start"));
+    expect(JSON.parse(startCall!.init!.body as string)).toEqual({
+      confirmed: false,
+      selectedRequestIds: ["item-1", "item-2"],
+    });
+  });
+
+  it("unchecking a request excludes it from the selection sent to the backend", async () => {
+    const calls = stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const requests = [requestView({ id: "item-1", name: "Get widget" }), requestView({ id: "item-2", name: "Create widget" })];
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} requests={requests} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Create widget in this run" }));
+    expect(screen.getByText("1 of 2 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    await waitFor(() => expect(calls.some((call) => call.url.includes("/execution/start"))).toBe(true));
+    const startCall = calls.find((call) => call.url.includes("/execution/start"));
+    expect(JSON.parse(startCall!.init!.body as string)).toEqual({
+      confirmed: false,
+      selectedRequestIds: ["item-1"],
+    });
+  });
+
+  it("disables Start run once every request is unchecked, and Reset restores the full selection", async () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const requests = [requestView({ id: "item-1", name: "Get widget" })];
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} requests={requests} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get widget in this run" }));
+    expect(screen.getByText("0 of 1 selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start run" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.getByText("1 of 1 selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start run" })).not.toBeDisabled();
   });
 });

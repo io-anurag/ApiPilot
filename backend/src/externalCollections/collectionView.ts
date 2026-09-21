@@ -1,4 +1,4 @@
-import type { Collection, Item, ItemGroup, Variable } from "postman-collection";
+import type { Collection, Event, Item, ItemGroup, Variable } from "postman-collection";
 import type {
   CollectionFolderView,
   CollectionRequestFields,
@@ -36,6 +36,17 @@ function rawFields(item: Item): CollectionRequestFields {
   };
 }
 
+/**
+ * The request's "test" event script, exactly as stored (research.md D6 — read directly off the
+ * SDK's own model, never reclassified). A collection item may carry more than one "test" event;
+ * every one Newman would run is concatenated in order, matching what a run actually executes.
+ */
+function testScriptOf(item: Item): string | undefined {
+  const events: Event[] = item.events.listeners("test");
+  const sources = events.map((event) => event.script?.toSource()).filter((source): source is string => Boolean(source));
+  return sources.length > 0 ? sources.join("\n") : undefined;
+}
+
 function resolvedFields(raw: CollectionRequestFields, variableValues: Record<string, string>): CollectionRequestFields {
   return {
     method: raw.method,
@@ -59,6 +70,7 @@ function unresolvedVariablesFor(raw: CollectionRequestFields, variableValues: Re
 
 function toRequestView(item: Item, variableValues: Record<string, string>, editedItemIds: Set<string>): CollectionRequestView {
   const raw = rawFields(item);
+  const testScript = testScriptOf(item);
   return {
     id: item.id,
     name: item.name,
@@ -66,6 +78,7 @@ function toRequestView(item: Item, variableValues: Record<string, string>, edite
     raw,
     resolved: resolvedFields(raw, variableValues),
     unresolvedVariables: unresolvedVariablesFor(raw, variableValues),
+    ...(testScript !== undefined ? { testScript } : {}),
   };
 }
 

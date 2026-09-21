@@ -12,6 +12,10 @@ const logger = createLogger("externalCollections.runUploadedCollectionExecution"
 export interface RunUploadedCollectionExecutionInput {
   runId: string;
   uploadedCollection: UploadedCollectionSet;
+  /** When provided (a selective run — AP-028 follow-up), only these item ids actually dispatch;
+   * everything else in the collection is skipped entirely rather than reported "not-attempted" —
+   * a deselected request was never part of this run to begin with. */
+  selectedItemIds?: Set<string>;
 }
 
 function delay(ms: number): Promise<void> {
@@ -39,20 +43,23 @@ function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedRe
 }
 
 /**
- * Runs every request in an uploaded collection, strictly one at a time, in the collection's own
- * document order (FR-005) — walked via `postman-collection`'s own `Collection.forEachItem()`
- * (research.md D6), which visits every request item at any folder nesting depth (the Edge Cases'
- * "nested folders" case). Mirrors `execution/runExecution.ts`'s structure: never throws, settles
- * the run as `completed`/`cancelled` regardless of outcome (constitution XIX).
+ * Runs every request in an uploaded collection — or, when `input.selectedItemIds` narrows it to a
+ * chosen subset (a Postman-Runner-style selective run), only those — strictly one at a time, in
+ * the collection's own document order (FR-005) — walked via `postman-collection`'s own
+ * `Collection.forEachItem()` (research.md D6), which visits every request item at any folder
+ * nesting depth (the Edge Cases' "nested folders" case). Mirrors `execution/runExecution.ts`'s
+ * structure: never throws, settles the run as `completed`/`cancelled` regardless of outcome
+ * (constitution XIX).
  */
 export async function runUploadedCollectionExecution(input: RunUploadedCollectionExecutionInput): Promise<void> {
-  const { runId, uploadedCollection } = input;
+  const { runId, uploadedCollection, selectedItemIds } = input;
   const orderedItems: Item[] = [];
   let attempted = 0;
 
   try {
     const collection = parseUploadedCollection(uploadedCollection.collection);
     collection.forEachItem((item: Item) => {
+      if (selectedItemIds && !selectedItemIds.has(item.id)) return;
       orderedItems.push(item);
     });
 

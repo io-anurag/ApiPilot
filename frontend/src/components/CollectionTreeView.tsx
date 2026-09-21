@@ -1,7 +1,23 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CollectionFolderView, CollectionRequestView } from "@apipilot/shared-domain";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { BUTTON_STYLES } from "./controlStyles";
+
+/**
+ * Every request in `items`/`folders`, flattened into the same folders-then-items order this
+ * component itself renders in (its own doc comment below explains why that's a "kind-grouped"
+ * simplification rather than always-exact original document order). Shared with
+ * `ExternalCollectionRunPanel`'s run-order checklist, so what a user sees listed there matches
+ * what they see in the tree, even though the backend's actual run order is its own true document
+ * order via `Collection.forEachItem()` — a pre-existing, documented gap between the two only for
+ * a collection that originally interleaved folders and requests at the same level.
+ */
+export function flattenCollectionRequests(
+  items: CollectionRequestView[],
+  folders: CollectionFolderView[],
+): CollectionRequestView[] {
+  return [...folders.flatMap((folder) => flattenCollectionRequests(folder.items, folder.folders)), ...items];
+}
 
 export interface CollectionTreeActions {
   /** `parentFolderId: null` targets the collection root. */
@@ -16,7 +32,79 @@ export interface CollectionTreeActions {
   onMoveItem: (containerId: string, itemId: string, direction: "up" | "down") => void;
 }
 
-const ICON_BUTTON = "rounded px-1.5 py-0.5 text-xs text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white";
+interface RowMenuItem {
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}
+
+/**
+ * A row's move/rename/delete (and, for a folder, "add request") actions collapsed into one
+ * always-visible "⋮" menu button, rather than a row of individually tiny icon buttons — that
+ * earlier layout was both hard to notice (opacity-gated, ~12px glyphs) and, in the ~320px
+ * sidebar, wide enough to visually overflow a nested row's card boundary. One fixed-size button
+ * per row can never overflow, and stays a single easy target regardless of nesting depth.
+ */
+function RowActionsMenu({ label, items, disabled }: Readonly<{ label: string; items: RowMenuItem[]; disabled: boolean }>) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-label={`Actions for ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+      >
+        ⋮
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Actions for ${label}`}
+          className="absolute right-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-surface py-1 shadow-md"
+        >
+          {items.map((menuItem) => (
+            <button
+              key={menuItem.label}
+              type="button"
+              role="menuitem"
+              disabled={menuItem.disabled}
+              onClick={() => {
+                setOpen(false);
+                menuItem.onSelect();
+              }}
+              className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 ${menuItem.danger ? "text-danger-700 dark:text-danger-300" : "text-slate-700 dark:text-slate-200"}`}
+            >
+              {menuItem.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function RequestRow({
   item,
@@ -41,7 +129,7 @@ function RequestRow({
   return (
     <li>
       <div
-        className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isSelected ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
+        className={`group flex items-center gap-2 rounded-md px-2 py-1.5 ${isSelected ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
       >
         <button
           type="button"
@@ -56,42 +144,20 @@ function RequestRow({
             </span>
           )}
         </button>
-        <button
-          type="button"
-          aria-label={`Move ${item.name} up`}
-          disabled={locked || index === 0}
-          onClick={() => actions.onMoveItem(containerId, item.id, "up")}
-          className={ICON_BUTTON}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${item.name} down`}
-          disabled={locked || index === siblingCount - 1}
-          onClick={() => actions.onMoveItem(containerId, item.id, "down")}
-          className={ICON_BUTTON}
-        >
-          ↓
-        </button>
-        <button
-          type="button"
-          aria-label={`Rename ${item.name}`}
+        <RowActionsMenu
+          label={item.name}
           disabled={locked}
-          onClick={() => actions.onRenameItem(item.id, item.name)}
-          className={ICON_BUTTON}
-        >
-          Rename
-        </button>
-        <button
-          type="button"
-          aria-label={`Delete ${item.name}`}
-          disabled={locked}
-          onClick={() => actions.onDeleteItem(item.id)}
-          className={`${ICON_BUTTON} hover:text-danger-700 dark:hover:text-danger-300`}
-        >
-          Delete
-        </button>
+          items={[
+            { label: "Move up", disabled: index === 0, onSelect: () => actions.onMoveItem(containerId, item.id, "up") },
+            {
+              label: "Move down",
+              disabled: index === siblingCount - 1,
+              onSelect: () => actions.onMoveItem(containerId, item.id, "down"),
+            },
+            { label: "Rename", onSelect: () => actions.onRenameItem(item.id, item.name) },
+            { label: "Delete", danger: true, onSelect: () => actions.onDeleteItem(item.id) },
+          ]}
+        />
       </div>
     </li>
   );
@@ -119,7 +185,7 @@ function FolderRow({
   const [expanded, setExpanded] = useState(true);
   return (
     <li>
-      <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
+      <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
         <button
           type="button"
           aria-expanded={expanded}
@@ -129,51 +195,21 @@ function FolderRow({
           <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
           <span className="truncate">{folder.name}</span>
         </button>
-        <button
-          type="button"
-          aria-label={`Add request to ${folder.name}`}
+        <RowActionsMenu
+          label={folder.name}
           disabled={locked}
-          onClick={() => actions.onAddRequest(folder.id)}
-          className={ICON_BUTTON}
-        >
-          + Request
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${folder.name} up`}
-          disabled={locked || index === 0}
-          onClick={() => actions.onMoveItem(containerId, folder.id, "up")}
-          className={ICON_BUTTON}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${folder.name} down`}
-          disabled={locked || index === siblingCount - 1}
-          onClick={() => actions.onMoveItem(containerId, folder.id, "down")}
-          className={ICON_BUTTON}
-        >
-          ↓
-        </button>
-        <button
-          type="button"
-          aria-label={`Rename ${folder.name}`}
-          disabled={locked}
-          onClick={() => actions.onRenameItem(folder.id, folder.name)}
-          className={ICON_BUTTON}
-        >
-          Rename
-        </button>
-        <button
-          type="button"
-          aria-label={`Delete ${folder.name}`}
-          disabled={locked}
-          onClick={() => actions.onDeleteItem(folder.id)}
-          className={`${ICON_BUTTON} hover:text-danger-700 dark:hover:text-danger-300`}
-        >
-          Delete
-        </button>
+          items={[
+            { label: "Add request here", onSelect: () => actions.onAddRequest(folder.id) },
+            { label: "Move up", disabled: index === 0, onSelect: () => actions.onMoveItem(containerId, folder.id, "up") },
+            {
+              label: "Move down",
+              disabled: index === siblingCount - 1,
+              onSelect: () => actions.onMoveItem(containerId, folder.id, "down"),
+            },
+            { label: "Rename", onSelect: () => actions.onRenameItem(folder.id, folder.name) },
+            { label: "Delete", danger: true, onSelect: () => actions.onDeleteItem(folder.id) },
+          ]}
+        />
       </div>
       {expanded && (
         <ul className="ml-5 space-y-0.5 border-l border-border pl-2">
@@ -229,6 +265,7 @@ export function CollectionTreeView({
   onSelectRequest,
   locked,
   actions,
+  headerAction,
 }: Readonly<{
   items: CollectionRequestView[];
   folders: CollectionFolderView[];
@@ -236,16 +273,19 @@ export function CollectionTreeView({
   onSelectRequest: (item: CollectionRequestView) => void;
   locked: boolean;
   actions: CollectionTreeActions;
+  /** Rendered at the start of the header row, before "+ Add request" (e.g. the page's own
+   * "Variables" toggle) — so both live on the one header row rather than stacking separately. */
+  headerAction?: ReactNode;
 }>) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase text-muted">Collection</h3>
+    <div className="space-y-2 rounded-md border border-border bg-surface p-3">
+      <div className="flex items-center gap-2">
+        {headerAction}
         <button
           type="button"
           disabled={locked}
           onClick={() => actions.onAddRequest(null)}
-          className={BUTTON_STYLES.ghost}
+          className={`ml-auto ${BUTTON_STYLES.ghost}`}
         >
           + Add request
         </button>

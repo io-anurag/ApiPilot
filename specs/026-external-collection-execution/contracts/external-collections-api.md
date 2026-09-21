@@ -57,9 +57,18 @@ requiring its own `confirmed: true` resubmission — mirrors `execution/start`'s
    items (research.md D3) instead of `ApiModel` operations. Evaluated every run start, exactly
    like the existing generated-collection behavior.
 
-**Request**: `{ "confirmed": boolean }`
+**Request**: `{ "confirmed": boolean, "selectedRequestIds"?: string[] }`
+
+`selectedRequestIds` is optional (AP-028 follow-up, Postman-Runner-style selective run). Omitting
+it runs every request in the collection, exactly as before this field existed. When present, only
+items whose id is in the array actually dispatch — everything else is skipped entirely (it never
+appears in `results`, not even as `"not-attempted"`), and both confirmation gates plus the
+`missing_variable_values` check are evaluated against only the selected subset.
 
 **200 OK** — `{ "run": { "...": "...", "source": "uploaded", "results": [] } }`
+
+**400 `no_requests_selected`** — `selectedRequestIds` was provided but matched none of the
+collection's current items.
 
 **409 `execution_in_progress`** — a run of *either* kind (generated or uploaded) is already in
 progress in this session (FR-015, research.md D7). Carries `runId` exactly like the existing

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  CollectionRequestView,
   ExecutionConfirmationRequirement,
   RawHeader,
   UploadedCollectionExecutionRun,
@@ -257,13 +258,77 @@ function RunHistory({
 }
 
 /**
+ * Postman-Runner-style "which requests will run, in what order" checklist (AP-028 follow-up) —
+ * only the parts of Postman's own Runner screen ApiPilot's backend actually supports: choosing a
+ * subset of the collection's own requests to run. Performance/load mode, Mock, Schedule, a
+ * Postman-CLI/CI-CD export, and data-driven "Iterations" have no backend behind them and are
+ * deliberately left out rather than shown as non-functional controls.
+ */
+function RunOrderChecklist({
+  requests,
+  selectedIds,
+  onToggle,
+  onSelectAll,
+  disabled,
+}: Readonly<{
+  requests: CollectionRequestView[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  disabled: boolean;
+}>) {
+  return (
+    <div className="space-y-2 rounded-md border border-border bg-surface p-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase text-muted">Run order</h4>
+        <span className="text-xs text-muted">
+          <span>
+            {selectedIds.size} of {requests.length} selected
+          </span>{" "}
+          ·{" "}
+          <button type="button" onClick={onSelectAll} disabled={disabled} className={BUTTON_STYLES.ghost}>
+            Reset
+          </button>
+        </span>
+      </div>
+      <ul className="max-h-56 space-y-0.5 overflow-y-auto">
+        {requests.map((item, index) => (
+          <li key={item.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5">
+            <input
+              type="checkbox"
+              aria-label={`Include ${item.name} in this run`}
+              checked={selectedIds.has(item.id)}
+              disabled={disabled}
+              onChange={() => onToggle(item.id)}
+              className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
+            />
+            <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
+            <HttpMethodBadge method={item.raw.method} />
+            <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={item.name}>
+              {item.name}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
  * Runs a selected uploaded collection and renders its live/completed results (US1, US2), always
  * labeled "Uploaded" so it is never mistaken for a generated-collection run (US3, FR-010) — this
  * panel's own runs are always `source: "uploaded"`.
  */
 export function ExternalCollectionRunPanel({
   uploadedCollection,
-}: Readonly<{ uploadedCollection: UploadedCollectionSummary }>) {
+  requests = [],
+}: Readonly<{
+  uploadedCollection: UploadedCollectionSummary;
+  /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
+   * run-order checklist. Omitted/empty while the collection view hasn't loaded yet; the panel
+   * still works, it just runs the whole collection with no checklist shown (pre-AP-028 behavior). */
+  requests?: CollectionRequestView[];
+}>) {
   const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
   const [runHistory, setRunHistory] = useState<Omit<UploadedCollectionExecutionRun, "results">[]>([]);
   const [starting, setStarting] = useState(false);
@@ -272,7 +337,18 @@ export function ExternalCollectionRunPanel({
   const [showUnverifiedDialog, setShowUnverifiedDialog] = useState(false);
   const [pendingRiskTierConfirmation, setPendingRiskTierConfirmation] =
     useState<ExecutionConfirmationRequirement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(requests.map((item) => item.id)));
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Re-selects everything whenever the *set* of runnable request ids changes (switching
+  // collections, or adding/deleting a request while the editor is open) rather than trying to
+  // preserve a partial selection across an edit — simplest predictable behavior, and "Reset"
+  // below gets you back to it explicitly at any time regardless.
+  // Deliberately keyed on this joined-ids string, not `requests` itself (a fresh array every render).
+  const requestIdsKey = requests.map((item) => item.id).join(",");
+  useEffect(() => {
+    setSelectedIds(new Set(requests.map((item) => item.id)));
+  }, [requestIdsKey]);
 
   function refreshHistory() {
     fetchUploadedCollectionRuns(uploadedCollection.id).then((result) => {
@@ -310,7 +386,11 @@ export function ExternalCollectionRunPanel({
   async function performStart(confirmed: boolean) {
     setStarting(true);
     setStartError(null);
-    const result = await startUploadedCollectionExecution(uploadedCollection.id, confirmed);
+    // Explicit ids only once the checklist has actually loaded (`requests.length > 0`) — while it
+    // hasn't, omitting the field keeps the pre-AP-028 "run everything" behavior rather than
+    // sending an empty selection that would 400.
+    const selectedRequestIds = requests.length > 0 ? [...selectedIds] : undefined;
+    const result = await startUploadedCollectionExecution(uploadedCollection.id, confirmed, selectedRequestIds);
     setStarting(false);
     if (!result.ok) {
       if (result.error === "unverified_content_confirmation_required") {
@@ -338,6 +418,21 @@ export function ExternalCollectionRunPanel({
     performStart(false);
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(requests.map((item) => item.id)));
+  }
+
+  const runDisabled = starting || run?.status === "in-progress" || (requests.length > 0 && selectedIds.size === 0);
+
   async function handleCancel() {
     setCancelling(true);
     const result = await cancelUploadedCollectionExecution(uploadedCollection.id);
@@ -355,12 +450,22 @@ export function ExternalCollectionRunPanel({
         <button
           type="button"
           onClick={handleRunClick}
-          disabled={starting || run?.status === "in-progress"}
+          disabled={runDisabled}
           className={BUTTON_STYLES.primary}
         >
-          {starting ? "Starting…" : "Run"}
+          {starting ? "Starting…" : "Start run"}
         </button>
       </div>
+
+      {requests.length > 0 && (
+        <RunOrderChecklist
+          requests={requests}
+          selectedIds={selectedIds}
+          onToggle={toggleSelected}
+          onSelectAll={selectAll}
+          disabled={starting || run?.status === "in-progress"}
+        />
+      )}
 
       {showUnverifiedDialog && (
         <UnverifiedContentDialog

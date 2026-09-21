@@ -70,6 +70,39 @@ describe("PUT /api/external-collections/:id/requests/:requestId (AP-028 US4, qui
     });
   }, 60_000);
 
+  it("a saved test script is surfaced by the collection view and actually runs on the next execution", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/widgets/1", { status: 200, body: { id: 1 } });
+
+    const app = createApp();
+    const agent = request.agent(app);
+    const uploadResponse = await agent
+      .post("/api/external-collections")
+      .field("name", "My collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collectionWithOneRequest())), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const id = uploadResponse.body.uploadedCollection.id;
+
+    const collectionView = await agent.get(`/api/external-collections/${id}/collection`);
+    const requestId = collectionView.body.collectionView.items[0].id;
+    expect(collectionView.body.collectionView.items[0].testScript).toBeUndefined();
+
+    const testScript = 'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});';
+    const editResponse = await agent
+      .put(`/api/external-collections/${id}/requests/${requestId}`)
+      .send({ method: "GET", url: "{{baseUrl}}/widgets/1", headers: [], testScript });
+    expect(editResponse.status).toBe(200);
+    expect(editResponse.body.collectionView.items[0].testScript).toBe(testScript);
+
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    const finalResponse = await pollUntilSettled(agent, id, started.body.run.id);
+    expect(finalResponse.body.run.results[0]).toMatchObject({
+      outcome: "passed",
+      testOutcomes: [{ name: "Status code is 200", outcome: "passed" }],
+    });
+  }, 60_000);
+
   it("404s request_not_found for an unknown requestId", async () => {
     const app = createApp();
     const agent = request.agent(app);

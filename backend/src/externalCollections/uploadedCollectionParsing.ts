@@ -143,10 +143,15 @@ export function substituteVariables(text: string, variableValues: Record<string,
  * Every `{{variableName}}` token referenced by any request's URL, headers, or body — not its
  * pre-request/test scripts, which may contain unrelated `{{`-looking text (data-model.md FR-004).
  * Deduplicated, in first-seen order.
+ *
+ * @param selectedItemIds When provided (a selective run — AP-028 follow-up), only items in this
+ * set are scanned — a request excluded from the run shouldn't block starting it over a variable
+ * only *that other, unselected* request needed.
  */
-export function extractReferencedVariables(collection: Collection): string[] {
+export function extractReferencedVariables(collection: Collection, selectedItemIds?: Set<string>): string[] {
   const tokens = new Set<string>();
   collection.forEachItem((item: Item) => {
+    if (selectedItemIds && !selectedItemIds.has(item.id)) return;
     const requestJson = item.request.toJSON();
     collectVariableTokens(requestJson.url, tokens);
     collectVariableTokens(requestJson.header, tokens);

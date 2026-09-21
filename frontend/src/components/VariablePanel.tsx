@@ -7,12 +7,11 @@ interface VariableRow {
   name: string;
   value: string;
   source: VariableBinding["source"] | "new";
-  resolved: boolean;
   referenced: boolean;
 }
 
 function toRows(variables: VariableBinding[]): VariableRow[] {
-  return variables.map((v) => ({ name: v.name, value: v.value ?? "", source: v.source, resolved: v.resolved, referenced: v.referenced }));
+  return variables.map((v) => ({ name: v.name, value: v.value ?? "", source: v.source, referenced: v.referenced }));
 }
 
 const SOURCE_LABEL: Record<VariableRow["source"], string> = {
@@ -68,7 +67,9 @@ export function VariablePanel({
 
   return (
     <div data-testid="variable-panel" className="space-y-3 rounded-md border border-border bg-surface p-4">
-      <h3 className="text-xs font-semibold uppercase text-muted">Variables</h3>
+      <p className="text-xs text-muted">
+        Values used to resolve every <code>{"{{variable}}"}</code> placeholder in this collection's requests.
+      </p>
       {locked && (
         <p role="status" className="rounded-md border border-warning-100 bg-warning-50 px-2 py-1 text-xs text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100">
           This collection is read-only while a run is in progress.
@@ -77,6 +78,12 @@ export function VariablePanel({
       <div className="space-y-2">
         {rows.map((row, index) => {
           const changedThisSession = initialValues.current[row.name] !== undefined && initialValues.current[row.name] !== row.value;
+          // Whether this row currently has a value, computed from the live edit buffer rather
+          // than the `VariableBinding.resolved` snapshot the view loaded with — that snapshot
+          // reflects the server's state as of the last fetch, so it went stale (and kept the
+          // "missing" red styling) the moment a user typed a value into a previously-unresolved
+          // row, before saving.
+          const hasValue = row.value.trim().length > 0;
           return (
             <div key={row.name || index} className="flex items-center gap-2">
               <span className="w-40 truncate font-mono text-sm" title={row.name}>
@@ -85,11 +92,11 @@ export function VariablePanel({
               <input
                 type="text"
                 aria-label={`Value for ${row.name}`}
-                placeholder={row.resolved ? undefined : "missing"}
+                placeholder={hasValue ? undefined : "missing"}
                 value={row.value}
                 disabled={locked}
                 onChange={(event) => updateRow(index, event.target.value)}
-                className={`flex-1 rounded-md border px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${row.resolved ? "border-border bg-surface" : "border-danger-200 bg-danger-50 dark:border-danger-500 dark:bg-danger-500/10"}`}
+                className={`flex-1 rounded-md border px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border bg-surface" : "border-danger-200 bg-danger-50 dark:border-danger-500 dark:bg-danger-500/10"}`}
               />
               <span className="w-32 shrink-0 text-xs text-muted">{SOURCE_LABEL[row.source]}</span>
               {changedThisSession && (
@@ -113,7 +120,7 @@ export function VariablePanel({
         <button
           type="button"
           disabled={locked}
-          onClick={() => setRows((current) => [...current, { name: "", value: "", source: "new", resolved: false, referenced: false }])}
+          onClick={() => setRows((current) => [...current, { name: "", value: "", source: "new", referenced: false }])}
           className={BUTTON_STYLES.ghost}
         >
           + Add variable

@@ -296,6 +296,7 @@ export function createExternalCollectionsRouter(): Router {
         url: body.url,
         headers,
         body: typeof body.body === "string" ? body.body : undefined,
+        testScript: typeof body.testScript === "string" ? body.testScript : undefined,
       });
       updateUploadedCollectionBody(existing.id, updatedCollectionJson);
       respondWithFreshView(res, existing.id);
@@ -401,7 +402,14 @@ export function createExternalCollectionsRouter(): Router {
 
   router.post("/external-collections/:id/execution/start", (req, res) => {
     const startedAt = logRequestReceived(req.method, req.path);
-    const confirmed = (req.body as Record<string, unknown> | undefined)?.confirmed === true;
+    const requestBody = req.body as Record<string, unknown> | undefined;
+    const confirmed = requestBody?.confirmed === true;
+    // AP-028 follow-up (Postman-Runner-style selective run): `undefined` runs every request,
+    // exactly as before this field existed (additive, backward compatible) — an explicit array
+    // narrows the run to that id set, checked against the collection's own item ids below.
+    const selectedItemIds = Array.isArray(requestBody?.selectedRequestIds)
+      ? new Set((requestBody.selectedRequestIds as unknown[]).filter((id): id is string => typeof id === "string"))
+      : undefined;
     try {
       const uploadedCollection = getUploadedCollection(req.params.id);
 
@@ -423,17 +431,24 @@ export function createExternalCollectionsRouter(): Router {
       // check throw uncaught here.
       const collection = parseStoredCollection(uploadedCollection.collection);
       let requestItemCount = 0;
-      collection.forEachItem(() => {
+      let selectedItemCount = 0;
+      collection.forEachItem((item) => {
         requestItemCount += 1;
+        if (!selectedItemIds || selectedItemIds.has(item.id)) selectedItemCount += 1;
       });
       if (requestItemCount === 0) {
         logRequestFailed(req.method, req.path, startedAt, 400, "empty_collection");
         res.status(400).json({ error: "empty_collection", message: "This collection has no requests to run." });
         return;
       }
+      if (selectedItemIds && selectedItemCount === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "no_requests_selected");
+        res.status(400).json({ error: "no_requests_selected", message: "Select at least one request to run." });
+        return;
+      }
 
       const missing = missingUploadedVariableValues(
-        extractReferencedVariables(collection),
+        extractReferencedVariables(collection, selectedItemIds),
         uploadedCollection.variableValues,
       );
       if (missing.length > 0) {
@@ -463,7 +478,7 @@ export function createExternalCollectionsRouter(): Router {
           return;
         }
         markUploadedCollectionConfirmed(uploadedCollection.id);
-        const requirement = buildConfirmationRequirement(collection, uploadedCollection.tier);
+        const requirement = buildConfirmationRequirement(collection, uploadedCollection.tier, selectedItemIds);
         if (requirement) {
           logRequestFailed(req.method, req.path, startedAt, 409, "confirmation_required");
           res.status(409).json({
@@ -476,7 +491,7 @@ export function createExternalCollectionsRouter(): Router {
         }
       } else {
         // Gate 2 (FR-013) — evaluated every run start, exactly like the existing generated-collection behavior.
-        const requirement = buildConfirmationRequirement(collection, uploadedCollection.tier);
+        const requirement = buildConfirmationRequirement(collection, uploadedCollection.tier, selectedItemIds);
         if (requirement && !confirmed) {
           logRequestFailed(req.method, req.path, startedAt, 409, "confirmation_required");
           res.status(409).json({
@@ -497,7 +512,7 @@ export function createExternalCollectionsRouter(): Router {
       // Fire-and-poll (mirrors execution/start's identical rationale): the run continues after
       // this response is sent; runUploadedCollectionExecution() never rejects (it settles the run
       // defensively on any internal failure), so this .catch() is a defensive backstop only.
-      runUploadedCollectionExecution({ runId: run.id, uploadedCollection }).catch((error) => {
+      runUploadedCollectionExecution({ runId: run.id, uploadedCollection, selectedItemIds }).catch((error) => {
         logger.error("uploaded_collection_execution_run_unhandled_error", {
           runId: run.id,
           errorCategory: error instanceof Error ? error.name : "unknown_error",
@@ -570,8 +585,9 @@ export function createExternalCollectionsRouter(): Router {
 function buildConfirmationRequirement(
   collection: ReturnType<typeof parseUploadedCollection>,
   tier: EnvironmentTier,
+  selectedItemIds?: Set<string>,
 ): { environmentTier: EnvironmentTier; destructiveOperations: ReturnType<typeof findDestructiveRequests> } | undefined {
-  const destructive = findDestructiveRequests(collection);
+  const destructive = findDestructiveRequests(collection, selectedItemIds);
   const highRiskTier = tier === "staging" || tier === "production";
   if (!highRiskTier && destructive.length === 0) return undefined;
   return { environmentTier: tier, destructiveOperations: destructive };

@@ -63,6 +63,77 @@ describe("applyRequestOverride", () => {
     expect(parsed.item.find((i) => i.id === "item-2")?._apipilotEdited).toBeUndefined();
   });
 
+  it("sets a request's test script when edit.testScript is provided", () => {
+    const collection = parseUploadedCollection(collectionWithNestedRequest());
+    const updatedJson = applyRequestOverride(collection, "item-1", {
+      method: "GET",
+      url: "https://example.test/widgets",
+      headers: [],
+      testScript: 'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});',
+    });
+    const reparsed = parseUploadedCollection(updatedJson);
+    let found: import("postman-collection").Item | undefined;
+    reparsed.forEachItem((candidate) => {
+      if (candidate.id === "item-1") found = candidate;
+    });
+    const testEvents = found!.events.listeners("test");
+    expect(testEvents).toHaveLength(1);
+    expect(testEvents[0].script.toSource()).toBe('pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});');
+  });
+
+  it("removes every test event when edit.testScript is empty/whitespace-only", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        {
+          id: "item-1",
+          name: "Get widget",
+          request: { method: "GET", url: "https://example.test" },
+          event: [{ listen: "test", script: { type: "text/javascript", exec: ['pm.test("x", function () {});'] } }],
+        },
+      ],
+    });
+    const collection = parseUploadedCollection(raw);
+    const updatedJson = applyRequestOverride(collection, "item-1", {
+      method: "GET",
+      url: "https://example.test",
+      headers: [],
+      testScript: "   ",
+    });
+    const reparsed = parseUploadedCollection(updatedJson);
+    let found: import("postman-collection").Item | undefined;
+    reparsed.forEachItem((candidate) => {
+      if (candidate.id === "item-1") found = candidate;
+    });
+    expect(found!.events.listeners("test")).toHaveLength(0);
+  });
+
+  it("leaves an existing test script untouched when edit.testScript is omitted", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        {
+          id: "item-1",
+          name: "Get widget",
+          request: { method: "GET", url: "https://example.test" },
+          event: [{ listen: "test", script: { type: "text/javascript", exec: ['pm.test("original", function () {});'] } }],
+        },
+      ],
+    });
+    const collection = parseUploadedCollection(raw);
+    const updatedJson = applyRequestOverride(collection, "item-1", {
+      method: "GET",
+      url: "https://example.test/v2",
+      headers: [],
+    });
+    const reparsed = parseUploadedCollection(updatedJson);
+    let found: import("postman-collection").Item | undefined;
+    reparsed.forEachItem((candidate) => {
+      if (candidate.id === "item-1") found = candidate;
+    });
+    expect(found!.events.listeners("test")[0].script.toSource()).toBe('pm.test("original", function () {});');
+  });
+
   it("throws RequestNotFoundError for an unknown request id", () => {
     const collection = parseUploadedCollection(collectionWithNestedRequest());
     expect(() =>

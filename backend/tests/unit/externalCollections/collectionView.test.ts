@@ -74,6 +74,31 @@ describe("buildCollectionView", () => {
     expect(widgetId).toMatchObject({ source: "environment", value: "overridden-widget" });
   });
 
+  it("reads a request's test event script into testScript, and leaves it undefined when absent", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        {
+          id: "item-1",
+          name: "With tests",
+          request: { method: "GET", url: "https://example.test" },
+          event: [
+            {
+              listen: "test",
+              script: { type: "text/javascript", exec: ["pm.test(\"Status code is 200\", function () {", "  pm.response.to.have.status(200);", "});"] },
+            },
+          ],
+        },
+        { id: "item-2", name: "Without tests", request: { method: "GET", url: "https://example.test" } },
+      ],
+    });
+    const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+    expect(view.items.find((i) => i.name === "With tests")?.testScript).toBe(
+      'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});',
+    );
+    expect(view.items.find((i) => i.name === "Without tests")?.testScript).toBeUndefined();
+  });
+
   it("marks a request wasEdited: true only when its id carries the _apipilotEdited marker in the raw stored JSON", () => {
     const raw = JSON.stringify({
       info: { name: "c" },

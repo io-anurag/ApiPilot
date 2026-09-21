@@ -35,6 +35,20 @@ describe("VariablePanel", () => {
     expect(onSave).toHaveBeenCalledWith({ baseUrl: "new-value" });
   });
 
+  it("clears the missing/unresolved styling as soon as a value is typed into a previously-unresolved row", () => {
+    render(
+      <VariablePanel
+        variables={[variable({ name: "token", value: undefined, source: "collection-default", resolved: false })]}
+        locked={false}
+        onSave={vi.fn()}
+      />,
+    );
+    const input = screen.getByLabelText("Value for token");
+    expect(input).toHaveAttribute("placeholder", "missing");
+    fireEvent.change(input, { target: { value: "password123" } });
+    expect(input).not.toHaveAttribute("placeholder");
+  });
+
   it("marks a value changed in this session once edited, and the marker is absent before editing", () => {
     render(<VariablePanel variables={[variable({ value: "old" })]} locked={false} onSave={vi.fn()} />);
     expect(screen.queryByLabelText("Changed in this session")).not.toBeInTheDocument();

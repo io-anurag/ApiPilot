@@ -90,9 +90,15 @@ Applies a direct edit to one request's method, URL, headers, or body (FR-007, FR
   "method": "POST",
   "url": "{{baseUrl}}/widgets",
   "headers": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-  "body": "{\"name\": \"{{widgetName}}\", \"category\": \"tools\"}"
+  "body": "{\"name\": \"{{widgetName}}\", \"category\": \"tools\"}",
+  "testScript": "pm.test(\"Status code is 201\", function () {\n  pm.response.to.have.status(201);\n});"
 }
 ```
+
+`testScript` is optional. Omitting it leaves the request's existing "test" event script(s)
+untouched, mirroring `body`'s own omission rule. Sending an empty/whitespace-only string removes
+every existing "test" event from the request (a cleared Tests field means "no tests", not "leave
+it alone").
 
 **200 OK** — `{ "collectionView": { "...": "..." } }` (full recomputed view; the edited item's
 `wasEdited` is now `true`).

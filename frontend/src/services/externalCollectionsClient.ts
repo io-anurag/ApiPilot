@@ -133,15 +133,21 @@ export async function removeUploadedCollection(id: string): Promise<RemoveResult
 
 export type UploadedRunResult = { ok: true; run: UploadedCollectionExecutionRun } | ErrorResult;
 
-/** Starts a run (FR-005). Two independent confirmation gates apply — see contracts/external-collections-api.md. */
+/**
+ * Starts a run (FR-005). Two independent confirmation gates apply — see
+ * contracts/external-collections-api.md. `selectedRequestIds` is optional (Postman-Runner-style
+ * selective run, AP-028 follow-up) — omitted, every request in the collection runs, unchanged
+ * from before this parameter existed.
+ */
 export async function startUploadedCollectionExecution(
   id: string,
   confirmed = false,
+  selectedRequestIds?: string[],
 ): Promise<UploadedRunResult> {
   const response = await postJson(
     `/api/external-collections/${id}/execution/start`,
     "startUploadedCollectionExecution",
-    { confirmed },
+    { confirmed, ...(selectedRequestIds ? { selectedRequestIds } : {}) },
   );
   if ("networkError" in response) {
     return { ok: false, error: "network_error", message: response.networkError };
@@ -242,6 +248,8 @@ export interface RequestEdit {
   url: string;
   headers: Array<{ key: string; value: string }>;
   body?: string;
+  /** Omitting leaves the request's existing test script untouched; an empty string clears it. */
+  testScript?: string;
 }
 
 /** FR-007/FR-009a — edits an existing request's method/URL/headers/body. */
