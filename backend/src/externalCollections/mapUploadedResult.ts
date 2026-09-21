@@ -13,6 +13,9 @@ import { buildRawCapture, isTimeoutError, redactIfSensitive } from "../execution
  * I/XIV).
  *
  * @param captureRawDetails FR-017a parity: the caller passes `true` only for a `"local"`-tier run.
+ * @param wasEdited AP-028 (research.md D6): `true` only when the executed item carried the
+ * `_apipilotEdited` marker (`editedItems.ts`) — surfaced onto the result so a user can tell an
+ * edited request's outcome apart from the collection's original definition (FR-011).
  */
 export function mapUploadedResult(
   requestName: string,
@@ -20,8 +23,9 @@ export function mapUploadedResult(
   execution: NewmanExecutionResult,
   startedAt: string,
   captureRawDetails = false,
+  wasEdited = false,
 ): UploadedRequestResult {
-  const base = { requestName, requestMethod, startedAt };
+  const base = { requestName, requestMethod, startedAt, ...(wasEdited ? { wasEdited: true } : {}) };
   const rawCapture = captureRawDetails ? buildRawCapture(execution) : undefined;
 
   if (execution.requestError) {

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type {
+  CollectionView,
   PostmanRawEvent,
   PostmanRawItem,
   UploadedCollectionExecutionRun,
   UploadedCollectionSet,
   UploadedRequestResult,
+  VariableBinding,
 } from "../../src/externalCollections";
 
 describe("external collection execution contracts", () => {
@@ -62,5 +64,51 @@ describe("external collection execution contracts", () => {
       event: [prerequest],
     };
     expect(item.event?.[0]?.listen).toBe("prerequest");
+  });
+
+  it("types a minimal CollectionView (AP-028 data-model.md)", () => {
+    const variable: VariableBinding = {
+      name: "token",
+      value: undefined,
+      source: "collection-default",
+      resolved: false,
+      referenced: true,
+    };
+    const view: CollectionView = {
+      id: "uc-1",
+      items: [],
+      folders: [
+        {
+          id: "folder-1",
+          name: "Widgets",
+          folders: [],
+          items: [
+            {
+              id: "item-1",
+              name: "Create widget",
+              wasEdited: false,
+              raw: { method: "POST", url: "{{baseUrl}}/widgets", headers: [], body: undefined },
+              resolved: { method: "POST", url: "https://example.test/widgets", headers: [], body: undefined },
+              unresolvedVariables: [],
+            },
+          ],
+        },
+      ],
+      variables: [variable],
+    };
+    expect(view.folders[0].items[0].wasEdited).toBe(false);
+    expect(view.variables[0].referenced).toBe(true);
+  });
+
+  it("types UploadedRequestResult.wasEdited as an additive, absent-by-default field", () => {
+    const result: UploadedRequestResult = {
+      requestName: "Get widget",
+      requestMethod: "GET",
+      outcome: "passed",
+      startedAt: new Date(0).toISOString(),
+      durationMs: 42,
+      testOutcomes: [],
+    };
+    expect(result.wasEdited).toBeUndefined();
   });
 });

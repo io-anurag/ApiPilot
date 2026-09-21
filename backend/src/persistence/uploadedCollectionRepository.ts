@@ -21,6 +21,10 @@ export interface UploadedCollectionRepository {
   get(sessionId: string, id: string): UploadedCollectionSet | undefined;
   create(sessionId: string, id: string, createdAt: string, input: UploadedCollectionInput): UploadedCollectionSet;
   markConfirmed(sessionId: string, id: string, confirmedAt: string): void;
+  /** AP-028 (research.md D7): replaces `variableValues` wholesale, mirroring `EnvironmentRepository.update`. */
+  updateVariableValues(sessionId: string, id: string, variableValues: Record<string, string>): UploadedCollectionSet;
+  /** AP-028 (research.md D4, D7): replaces the stored `collection` JSON wholesale (field/structural edits). */
+  updateCollectionBody(sessionId: string, id: string, collection: string): UploadedCollectionSet;
   remove(sessionId: string, id: string): void;
   deleteBySession(sessionId: string): void;
 }
@@ -111,6 +115,27 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
     if (result.changes === 0) {
       throw new UploadedCollectionNotFoundError(id);
     }
+  }
+
+  updateVariableValues(sessionId: string, id: string, variableValues: Record<string, string>): UploadedCollectionSet {
+    const existing = this.get(sessionId, id);
+    if (!existing) throw new UploadedCollectionNotFoundError(id);
+    const { ciphertext, iv } = this.connection.cipher.encrypt(JSON.stringify(variableValues));
+    this.connection.db
+      .prepare(
+        "UPDATE uploaded_collections SET variable_values_encrypted = ?, variable_values_iv = ? WHERE session_id = ? AND id = ?",
+      )
+      .run(ciphertext, iv, sessionId, id);
+    return { ...existing, variableValues };
+  }
+
+  updateCollectionBody(sessionId: string, id: string, collection: string): UploadedCollectionSet {
+    const existing = this.get(sessionId, id);
+    if (!existing) throw new UploadedCollectionNotFoundError(id);
+    this.connection.db
+      .prepare("UPDATE uploaded_collections SET collection = ? WHERE session_id = ? AND id = ?")
+      .run(collection, sessionId, id);
+    return { ...existing, collection };
   }
 
   remove(sessionId: string, id: string): void {

@@ -86,4 +86,48 @@ describe("uploadedCollectionRepository", () => {
     repository.markConfirmed(sessionId, created.id, "2026-01-01T00:00:00.000Z");
     expect(repository.get(sessionId, created.id)?.confirmedAt).toBe("2026-01-01T00:00:00.000Z");
   });
+
+  it("updateVariableValues replaces variableValues wholesale, still encrypted at rest (AP-028)", () => {
+    const repository = getUploadedCollectionRepository();
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    const created = repository.create(sessionId, randomUUID(), new Date(0).toISOString(), input);
+
+    const updated = repository.updateVariableValues(sessionId, created.id, { token: "new-secret", extra: "value" });
+    expect(updated.variableValues).toEqual({ token: "new-secret", extra: "value" });
+    expect(repository.get(sessionId, created.id)?.variableValues).toEqual({ token: "new-secret", extra: "value" });
+
+    const row = getSharedConnection()
+      .db.prepare("SELECT variable_values_encrypted FROM uploaded_collections WHERE id = ?")
+      .get(created.id) as { variable_values_encrypted: Buffer };
+    expect(row.variable_values_encrypted.toString("utf-8")).not.toContain("new-secret");
+  });
+
+  it("updateVariableValues throws UploadedCollectionNotFoundError for an unknown id", () => {
+    const repository = getUploadedCollectionRepository();
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    expect(() => repository.updateVariableValues(sessionId, randomUUID(), {})).toThrow(UploadedCollectionNotFoundError);
+  });
+
+  it("updateCollectionBody replaces the stored collection JSON exactly as given (AP-028)", () => {
+    const repository = getUploadedCollectionRepository();
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    const created = repository.create(sessionId, randomUUID(), new Date(0).toISOString(), input);
+
+    const newCollection = '{"info":{"name":"c"},"item":[{"id":"item-1","name":"Edited"}]}';
+    const updated = repository.updateCollectionBody(sessionId, created.id, newCollection);
+    expect(updated.collection).toBe(newCollection);
+    expect(repository.get(sessionId, created.id)?.collection).toBe(newCollection);
+  });
+
+  it("updateCollectionBody throws UploadedCollectionNotFoundError for an unknown id", () => {
+    const repository = getUploadedCollectionRepository();
+    const sessionId = randomUUID();
+    enterTestSession(sessionId);
+    expect(() => repository.updateCollectionBody(sessionId, randomUUID(), "{}")).toThrow(
+      UploadedCollectionNotFoundError,
+    );
+  });
 });

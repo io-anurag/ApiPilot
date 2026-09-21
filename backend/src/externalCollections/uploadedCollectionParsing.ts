@@ -14,11 +14,14 @@ const CollectionCtor = (postmanCollection as unknown as { Collection: new (defin
   .Collection;
 
 /**
- * Constructs a `postman-collection` `Collection` from the uploaded JSON and verifies it contains
- * at least one request item, directly or nested in folders (FR-002). Reuses the real standard
- * implementation (constitution XXVIII) rather than a hand-rolled schema check (research.md D1).
+ * Constructs a `postman-collection` `Collection` from JSON, without the "at least one request"
+ * check `parseUploadedCollection` applies at upload time — used to read back or mutate a
+ * collection *already accepted* into storage (AP-028 specs/028-collection-editor-ui), which may
+ * legitimately have been edited down to zero requests (spec.md Edge Cases: "the collection is
+ * allowed to become empty"; deleting its only request must not make it unreadable). Reuses the
+ * real standard implementation (constitution XXVIII) rather than a hand-rolled schema check.
  */
-export function parseUploadedCollection(raw: string): Collection {
+export function parseStoredCollection(raw: string): Collection {
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(raw);
@@ -29,13 +32,23 @@ export function parseUploadedCollection(raw: string): Collection {
     throw new InvalidCollectionError("the file does not contain a Postman collection object.");
   }
 
-  let collection: Collection;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postman-collection's own constructor accepts any well-formed collection JSON; validity is judged by whether it yields any request items below, not by this constructor call alone.
-    collection = new CollectionCtor(parsedJson as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postman-collection's own constructor accepts any well-formed collection JSON.
+    return new CollectionCtor(parsedJson as any);
   } catch (cause) {
     throw new InvalidCollectionError(cause instanceof Error ? cause.message : "the collection could not be parsed.");
   }
+}
+
+/**
+ * Constructs a `postman-collection` `Collection` from the uploaded JSON and verifies it contains
+ * at least one request item, directly or nested in folders (FR-002) — the upload-time acceptance
+ * gate. Reuses the real standard implementation (constitution XXVIII) rather than a hand-rolled
+ * schema check (research.md D1). Not used to read back an already-stored collection — see
+ * `parseStoredCollection` above.
+ */
+export function parseUploadedCollection(raw: string): Collection {
+  const collection = parseStoredCollection(raw);
 
   let requestItemCount = 0;
   collection.forEachItem(() => {
@@ -102,6 +115,28 @@ function collectVariableTokens(value: unknown, into: Set<string>): void {
   for (const match of text.matchAll(VARIABLE_TOKEN_PATTERN)) {
     into.add(match[1]);
   }
+}
+
+/** Every `{{variableName}}` token found in a single string, deduplicated, in first-seen order. */
+export function findVariableTokens(text: string): string[] {
+  const tokens = new Set<string>();
+  for (const match of text.matchAll(VARIABLE_TOKEN_PATTERN)) {
+    tokens.add(match[1]);
+  }
+  return [...tokens];
+}
+
+/**
+ * Replaces every `{{variableName}}` token in `text` with its value from `variableValues`, when a
+ * non-empty value is available — leaves a token with no value (or an empty-string value, treated
+ * as not meaningfully supplied, mirroring `execution/variableCompleteness.ts`) intact rather than
+ * substituting an empty string, so an unresolved variable stays visibly a placeholder (AP-028
+ * FR-002) rather than silently disappearing.
+ */
+export function substituteVariables(text: string, variableValues: Record<string, string>): string {
+  return text.replace(VARIABLE_TOKEN_PATTERN, (match, name: string) =>
+    variableValues[name] ? variableValues[name] : match,
+  );
 }
 
 /**

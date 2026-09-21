@@ -6,6 +6,8 @@ import {
   listUploadedCollections,
   markUploadedCollectionConfirmed,
   removeUploadedCollection,
+  updateUploadedCollectionBody,
+  updateUploadedCollectionVariables,
   type UploadedCollectionInput,
 } from "../../../src/externalCollections/uploadedCollectionStore";
 import { DuplicateNameError, UploadedCollectionNotFoundError } from "../../../src/externalCollections/errors";
@@ -51,5 +53,28 @@ describe("uploadedCollectionStore", () => {
     expect(created.confirmedAt).toBeUndefined();
     markUploadedCollectionConfirmed(created.id);
     expect(getUploadedCollection(created.id).confirmedAt).toBeDefined();
+  });
+
+  it("updateUploadedCollectionVariables persists and is visible on the next get() (AP-028)", () => {
+    const created = createUploadedCollection(input);
+    const updated = updateUploadedCollectionVariables(created.id, { token: "abc" });
+    expect(updated.variableValues).toEqual({ token: "abc" });
+    expect(getUploadedCollection(created.id).variableValues).toEqual({ token: "abc" });
+  });
+
+  it("updateUploadedCollectionVariables throws UploadedCollectionNotFoundError for an unknown id", () => {
+    expect(() => updateUploadedCollectionVariables(randomUUID(), {})).toThrow(UploadedCollectionNotFoundError);
+  });
+
+  it("updateUploadedCollectionBody persists and is visible on the next get() (AP-028)", () => {
+    const created = createUploadedCollection(input);
+    const newCollection = '{"info":{"name":"c"},"item":[{"id":"item-1","name":"Edited"}]}';
+    const updated = updateUploadedCollectionBody(created.id, newCollection);
+    expect(updated.collection).toBe(newCollection);
+    expect(getUploadedCollection(created.id).collection).toBe(newCollection);
+  });
+
+  it("updateUploadedCollectionBody throws UploadedCollectionNotFoundError for an unknown id", () => {
+    expect(() => updateUploadedCollectionBody(randomUUID(), "{}")).toThrow(UploadedCollectionNotFoundError);
   });
 });

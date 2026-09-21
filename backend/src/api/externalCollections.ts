@@ -6,9 +6,11 @@ import { createLogger } from "../logger";
 import {
   extractReferencedVariables,
   missingUploadedVariableValues,
+  parseStoredCollection,
   parseUploadedCollection,
   parseUploadedEnvironment,
 } from "../externalCollections/uploadedCollectionParsing";
+import { ensureStableIds } from "../externalCollections/itemIdentity";
 import { findDestructiveRequests } from "../externalCollections/destructiveRequests";
 import {
   createUploadedCollection,
@@ -16,6 +18,8 @@ import {
   listUploadedCollections,
   markUploadedCollectionConfirmed,
   removeUploadedCollection,
+  updateUploadedCollectionBody,
+  updateUploadedCollectionVariables,
 } from "../externalCollections/uploadedCollectionStore";
 import {
   createRun as createUploadedRun,
@@ -26,11 +30,20 @@ import {
 } from "../externalCollections/uploadedCollectionExecutionStore";
 import { getInProgressRun as getGeneratedInProgressRun } from "../execution/executionRunStore";
 import { runUploadedCollectionExecution } from "../externalCollections/runUploadedCollectionExecution";
+import { buildCollectionView } from "../externalCollections/collectionView";
+import { applyRequestOverride } from "../externalCollections/requestOverride";
+import { addRequest, deleteItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
+import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import {
+  CollectionLockedError,
   DuplicateNameError,
+  FolderNotFoundError,
   InvalidCollectionError,
   InvalidEnvironmentError,
+  InvalidOrderError,
+  ItemNotFoundError,
   NoRunInProgressError,
+  RequestNotFoundError,
   RunNotFoundError,
   UploadedCollectionNotFoundError,
 } from "../externalCollections/errors";
@@ -98,8 +111,13 @@ export function createExternalCollectionsRouter(): Router {
       const requestDelayMs =
         typeof body.requestDelayMs === "string" ? Number.parseInt(body.requestDelayMs, 10) : 0;
 
+      // Backfills a stable id on every request/folder (AP-028 research.md D2, D9) so every later
+      // collection-editor operation (variable/field/structural edits) has a stable identity to
+      // address from the moment a collection is stored — whether uploaded directly here or handed
+      // off from the guided workflow, which reaches this same endpoint (research.md D1).
+      let collectionWithStableIds: string;
       try {
-        parseUploadedCollection(collectionFile.buffer.toString("utf-8"));
+        collectionWithStableIds = ensureStableIds(parseUploadedCollection(collectionFile.buffer.toString("utf-8")));
       } catch (err) {
         if (err instanceof InvalidCollectionError) {
           logRequestFailed(req.method, req.path, startedAt, 400, "invalid_collection");
@@ -128,7 +146,7 @@ export function createExternalCollectionsRouter(): Router {
         const uploadedCollection = createUploadedCollection({
           name: body.name,
           tier: body.tier,
-          collection: collectionFile.buffer.toString("utf-8"),
+          collection: collectionWithStableIds,
           variableValues,
           requestDelayMs: Number.isFinite(requestDelayMs) && requestDelayMs > 0 ? requestDelayMs : 0,
         });
@@ -167,6 +185,220 @@ export function createExternalCollectionsRouter(): Router {
     }
   });
 
+  router.get("/external-collections/:id/collection", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const uploadedCollection = getUploadedCollection(req.params.id);
+      const collection = parseStoredCollection(uploadedCollection.collection);
+      const collectionView = buildCollectionView(
+        uploadedCollection.id,
+        collection,
+        uploadedCollection.collection,
+        uploadedCollection.variableValues,
+      );
+      res.status(200).json({ collectionView });
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (err instanceof UploadedCollectionNotFoundError) {
+        logRequestFailed(req.method, req.path, startedAt, 404, "uploaded_collection_not_found");
+        res.status(404).json({ error: "uploaded_collection_not_found", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.put("/external-collections/:id/variables", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      const variableValues =
+        typeof body?.variableValues === "object" && body.variableValues !== null
+          ? (body.variableValues as Record<string, string>)
+          : undefined;
+      if (!variableValues) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a 'variableValues' object" });
+        return;
+      }
+      updateUploadedCollectionVariables(existing.id, variableValues);
+      respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  /**
+   * Shared error mapping for every AP-028 collection-mutation route below — each throws one of
+   * this fixed set of errors; returns `true` once a response has been sent.
+   */
+  function handleMutationError(err: unknown, req: import("express").Request, res: import("express").Response, startedAt: number): boolean {
+    if (err instanceof UploadedCollectionNotFoundError) {
+      logRequestFailed(req.method, req.path, startedAt, 404, "uploaded_collection_not_found");
+      res.status(404).json({ error: "uploaded_collection_not_found", message: err.message });
+      return true;
+    }
+    if (err instanceof CollectionLockedError) {
+      logRequestFailed(req.method, req.path, startedAt, 409, "collection_locked");
+      res.status(409).json({ error: "collection_locked", message: err.message });
+      return true;
+    }
+    if (err instanceof RequestNotFoundError) {
+      logRequestFailed(req.method, req.path, startedAt, 404, "request_not_found");
+      res.status(404).json({ error: "request_not_found", message: err.message });
+      return true;
+    }
+    if (err instanceof ItemNotFoundError) {
+      logRequestFailed(req.method, req.path, startedAt, 404, "item_not_found");
+      res.status(404).json({ error: "item_not_found", message: err.message });
+      return true;
+    }
+    if (err instanceof FolderNotFoundError) {
+      logRequestFailed(req.method, req.path, startedAt, 404, "folder_not_found");
+      res.status(404).json({ error: "folder_not_found", message: err.message });
+      return true;
+    }
+    if (err instanceof InvalidOrderError) {
+      logRequestFailed(req.method, req.path, startedAt, 400, "invalid_order");
+      res.status(400).json({ error: "invalid_order", message: err.message });
+      return true;
+    }
+    return false;
+  }
+
+  /** Re-parses and rebuilds the view for a just-mutated collection, for a mutation route's response. */
+  function respondWithFreshView(res: import("express").Response, id: string): void {
+    const updated = getUploadedCollection(id);
+    const collection = parseStoredCollection(updated.collection);
+    const collectionView = buildCollectionView(updated.id, collection, updated.collection, updated.variableValues);
+    res.status(200).json({ collectionView });
+  }
+
+  router.put("/external-collections/:id/requests/:requestId", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      if (typeof body?.method !== "string" || body.method.length === 0 || typeof body?.url !== "string" || body.url.length === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a non-empty 'method' and 'url'" });
+        return;
+      }
+      const headers = Array.isArray(body.headers) ? (body.headers as Array<{ key: string; value: string }>) : [];
+      const collection = parseStoredCollection(existing.collection);
+      const updatedCollectionJson = applyRequestOverride(collection, req.params.requestId, {
+        method: body.method,
+        url: body.url,
+        headers,
+        body: typeof body.body === "string" ? body.body : undefined,
+      });
+      updateUploadedCollectionBody(existing.id, updatedCollectionJson);
+      respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  router.post("/external-collections/:id/items", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      if (typeof body?.name !== "string" || body.name.length === 0 || typeof body?.method !== "string" || body.method.length === 0 || typeof body?.url !== "string") {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a non-empty 'name', 'method', and 'url'" });
+        return;
+      }
+      const parentFolderId = typeof body.parentFolderId === "string" ? body.parentFolderId : null;
+      const headers = Array.isArray(body.headers) ? (body.headers as Array<{ key: string; value: string }>) : [];
+      const collection = parseStoredCollection(existing.collection);
+      const { newItemId } = addRequest(collection, parentFolderId, {
+        name: body.name,
+        method: body.method,
+        url: body.url,
+        headers,
+        body: typeof body.body === "string" ? body.body : undefined,
+      });
+      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      const updated = getUploadedCollection(existing.id);
+      const rebuilt = parseStoredCollection(updated.collection);
+      const collectionView = buildCollectionView(updated.id, rebuilt, updated.collection, updated.variableValues);
+      res.status(201).json({ collectionView, newItemId });
+      logRequestSucceeded(req.method, req.path, startedAt, 201);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  router.delete("/external-collections/:id/items/:itemId", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const collection = parseStoredCollection(existing.collection);
+      deleteItem(collection, req.params.itemId);
+      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  router.put("/external-collections/:id/items/:itemId/rename", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      if (typeof body?.name !== "string" || body.name.length === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a non-empty 'name'" });
+        return;
+      }
+      const collection = parseStoredCollection(existing.collection);
+      renameItem(collection, req.params.itemId, body.name);
+      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  router.put("/external-collections/:id/containers/:containerId/order", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      if (!Array.isArray(body?.orderedIds)) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include an 'orderedIds' array" });
+        return;
+      }
+      const collection = parseStoredCollection(existing.collection);
+      reorderContainer(collection, req.params.containerId, body.orderedIds as string[]);
+      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
   router.post("/external-collections/:id/execution/start", (req, res) => {
     const startedAt = logRequestReceived(req.method, req.path);
     const confirmed = (req.body as Record<string, unknown> | undefined)?.confirmed === true;
@@ -185,7 +417,21 @@ export function createExternalCollectionsRouter(): Router {
         return;
       }
 
-      const collection = parseUploadedCollection(uploadedCollection.collection);
+      // AP-028: a collection can be edited down to zero requests after upload (spec.md Edge
+      // Cases: "the collection is allowed to become empty"), so this reads leniently and refuses
+      // explicitly below rather than letting parseUploadedCollection's upload-time "≥1 request"
+      // check throw uncaught here.
+      const collection = parseStoredCollection(uploadedCollection.collection);
+      let requestItemCount = 0;
+      collection.forEachItem(() => {
+        requestItemCount += 1;
+      });
+      if (requestItemCount === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "empty_collection");
+        res.status(400).json({ error: "empty_collection", message: "This collection has no requests to run." });
+        return;
+      }
+
       const missing = missingUploadedVariableValues(
         extractReferencedVariables(collection),
         uploadedCollection.variableValues,

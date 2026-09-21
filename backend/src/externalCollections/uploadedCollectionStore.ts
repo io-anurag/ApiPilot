@@ -30,7 +30,15 @@ export function getUploadedCollection(id: string): UploadedCollectionSet {
   return uploadedCollection;
 }
 
-/** Creates a new `UploadedCollectionSet` for the calling session (FR-001). Throws `DuplicateNameError` if `name` is taken. */
+/**
+ * Creates a new `UploadedCollectionSet` for the calling session (FR-001). Throws
+ * `DuplicateNameError` if `name` is taken.
+ *
+ * `input.collection` is trusted as-is (already validated and id-backfilled by the caller, AP-028
+ * research.md D2/D9 — see `api/externalCollections.ts`'s upload route) — this store layer does
+ * not itself parse or validate the collection body, matching its existing "trust the input"
+ * contract for every other field.
+ */
 export function createUploadedCollection(input: UploadedCollectionInput): UploadedCollectionSet {
   return getUploadedCollectionRepository().create(getSessionId(), randomUUID(), new Date().toISOString(), input);
 }
@@ -43,4 +51,14 @@ export function removeUploadedCollection(id: string): void {
 /** Records that the FR-007 "unverified content" confirmation has been accepted for this artifact. */
 export function markUploadedCollectionConfirmed(id: string): void {
   getUploadedCollectionRepository().markConfirmed(getSessionId(), id, new Date().toISOString());
+}
+
+/** AP-028 (research.md D7): replaces a collection's variable values wholesale (FR-004, FR-009, FR-018). */
+export function updateUploadedCollectionVariables(id: string, variableValues: Record<string, string>): UploadedCollectionSet {
+  return getUploadedCollectionRepository().updateVariableValues(getSessionId(), id, variableValues);
+}
+
+/** AP-028 (research.md D4, D7): replaces a collection's stored JSON wholesale (field/structural edits). */
+export function updateUploadedCollectionBody(id: string, collection: string): UploadedCollectionSet {
+  return getUploadedCollectionRepository().updateCollectionBody(getSessionId(), id, collection);
 }

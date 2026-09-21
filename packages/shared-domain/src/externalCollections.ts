@@ -77,6 +77,12 @@ export interface UploadedRequestResult {
   testOutcomes: UploadedTestOutcome[];
   /** Present only when the run's `uploadedCollectionSnapshot.tier === "local"` (FR-017a parity). */
   rawCapture?: RawRequestCapture;
+  /**
+   * `true` only when the executed item carried the `_apipilotEdited` marker (AP-028 research.md
+   * D6) — absent, not `false`, for a never-edited item, so a pre-AP-028 stored run's serialized
+   * shape is unaffected.
+   */
+  wasEdited?: boolean;
 }
 
 /**
@@ -141,4 +147,69 @@ export interface PostmanRawItem {
   name: string;
   request: PostmanRawRequest;
   event?: PostmanRawEvent[];
+}
+
+/**
+ * AP-028 (specs/028-collection-editor-ui) — the Postman-style collection browser/editor's read
+ * model, computed on demand from a stored `UploadedCollectionSet` (data-model.md), never itself
+ * persisted.
+ */
+
+/** One request's method/URL/headers/body, either exactly as stored or with variables substituted. */
+export interface CollectionRequestFields {
+  method: string;
+  url: string;
+  headers: Array<{ key: string; value: string }>;
+  body?: string;
+}
+
+/** One request within a `CollectionView` (research.md D2, D9; data-model.md). */
+export interface CollectionRequestView {
+  /** Stable across reads of the same `UploadedCollectionSet` (research.md D2). */
+  id: string;
+  name: string;
+  /** `true` only when this request carries the `_apipilotEdited` marker (research.md D4). */
+  wasEdited: boolean;
+  /** Exactly as stored — `{{variable}}` placeholders intact (FR-002). */
+  raw: CollectionRequestFields;
+  /** `raw` with every resolvable `{{variable}}` substituted (FR-002, research.md D3). */
+  resolved: CollectionRequestFields;
+  /** Variable names referenced by this specific request that remain unresolved. */
+  unresolvedVariables: string[];
+}
+
+/** One folder within a `CollectionView` (research.md D9) — arbitrary nesting depth. */
+export interface CollectionFolderView {
+  /** Stable across reads of the same `UploadedCollectionSet` (research.md D2, D9). */
+  id: string;
+  name: string;
+  items: CollectionRequestView[];
+  folders: CollectionFolderView[];
+}
+
+/**
+ * A variable available to a loaded collection — either discovered by reference or user-defined
+ * ahead of use (FR-018). `source` has exactly two persisted tiers (research.md D8); a
+ * client-side-only "override" label is derived by the frontend, not carried here.
+ */
+export interface VariableBinding {
+  name: string;
+  value?: string;
+  source: "collection-default" | "environment";
+  resolved: boolean;
+  /** `false` for a user-defined variable (FR-018) no request currently references. */
+  referenced: boolean;
+}
+
+/**
+ * The full read model for one loaded collection (data-model.md `CollectionView`). `items`/
+ * `folders` mirror `CollectionFolderView`'s own shape at the collection root — the root itself is
+ * never a folder with its own `id` (it has none in the Postman format), matching the API
+ * contract's `containerId: "root"` literal rather than a synthesized folder id.
+ */
+export interface CollectionView {
+  id: string;
+  items: CollectionRequestView[];
+  folders: CollectionFolderView[];
+  variables: VariableBinding[];
 }

@@ -83,3 +83,43 @@ export class RunNotFoundError extends Error {
     this.name = "RunNotFoundError";
   }
 }
+
+/** AP-028 (specs/028-collection-editor-ui): `PUT .../requests/:requestId` named an id that isn't a request in this collection. */
+export class RequestNotFoundError extends Error {
+  constructor(requestId: string) {
+    super(`No request with id '${requestId}' was found in this collection.`);
+    this.name = "RequestNotFoundError";
+  }
+}
+
+/** AP-028: a structural operation (delete/rename/reorder) named an id that isn't a request or folder in this collection. */
+export class ItemNotFoundError extends Error {
+  constructor(itemId: string) {
+    super(`No request or folder with id '${itemId}' was found in this collection.`);
+    this.name = "ItemNotFoundError";
+  }
+}
+
+/** AP-028: `POST .../items` named a `parentFolderId` that isn't a folder in this collection. */
+export class FolderNotFoundError extends Error {
+  constructor(folderId: string) {
+    super(`No folder with id '${folderId}' was found in this collection.`);
+    this.name = "FolderNotFoundError";
+  }
+}
+
+/** AP-028: `PUT .../containers/:containerId/order`'s `orderedIds` did not exactly match the container's current child ids (data-model.md FR-015 rule). */
+export class InvalidOrderError extends Error {
+  constructor() {
+    super("orderedIds must be exactly the container's current direct-child ids, only reordered.");
+    this.name = "InvalidOrderError";
+  }
+}
+
+/** AP-028 (research.md D11): a mutation was attempted on a collection while a run of it is currently in progress (FR-017). */
+export class CollectionLockedError extends Error {
+  constructor(uploadedCollectionSetId: string) {
+    super(`Collection '${uploadedCollectionSetId}' cannot be edited while a run of it is in progress.`);
+    this.name = "CollectionLockedError";
+  }
+}

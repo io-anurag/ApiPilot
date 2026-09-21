@@ -1,16 +1,64 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { CollectionFolderView, CollectionRequestView, CollectionView } from "@apipilot/shared-domain";
 import {
+  addUploadedCollectionRequest,
+  deleteUploadedCollectionItem,
+  fetchUploadedCollectionRuns,
+  fetchUploadedCollectionView,
   fetchUploadedCollections,
+  renameUploadedCollectionItem,
+  reorderUploadedCollectionContainer,
+  updateUploadedCollectionRequest,
+  updateUploadedCollectionVariables,
   type UploadedCollectionSummary,
 } from "../services/externalCollectionsClient";
 import { ExternalCollectionUpload } from "../components/ExternalCollectionUpload";
 import { ExternalCollectionList } from "../components/ExternalCollectionList";
 import { ExternalCollectionRunPanel } from "../components/ExternalCollectionRunPanel";
+import { CollectionTreeView, type CollectionTreeActions } from "../components/CollectionTreeView";
+import { RequestEditorPanel } from "../components/RequestEditorPanel";
+import { VariablePanel } from "../components/VariablePanel";
+import { ErrorState } from "../components/ErrorState";
 import type { ImportPreload } from "../services/importPreload";
+
+/** Runs a light poll (2s) only to drive the collection editor's read-only lock (FR-017) — the
+ * backend enforces the lock authoritatively regardless of this indicator's freshness; this exists
+ * purely so the UI doesn't invite an edit attempt it already knows will be refused. */
+const LOCK_POLL_INTERVAL_MS = 2000;
+
+function findFolder(folders: CollectionFolderView[], id: string): CollectionFolderView | undefined {
+  for (const folder of folders) {
+    if (folder.id === id) return folder;
+    const nested = findFolder(folder.folders, id);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+function findRequest(view: CollectionView, id: string): CollectionRequestView | undefined {
+  function search(items: CollectionRequestView[], folders: CollectionFolderView[]): CollectionRequestView | undefined {
+    const direct = items.find((item) => item.id === id);
+    if (direct) return direct;
+    for (const folder of folders) {
+      const found = search(folder.items, folder.folders);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  return search(view.items, view.folders);
+}
+
+/** `containerId: "root"` targets `view` itself; otherwise the matching folder. */
+function containerOf(view: CollectionView, containerId: string): { items: CollectionRequestView[]; folders: CollectionFolderView[] } | undefined {
+  if (containerId === "root") return view;
+  return findFolder(view.folders, containerId);
+}
 
 /**
  * Standalone "Import & Run Collection" entry point (FR-011, research.md D9) — reachable with no
- * prior OpenAPI upload and no dependency on `TestGenerationWorkflowPage`'s state.
+ * prior OpenAPI upload and no dependency on `TestGenerationWorkflowPage`'s state. Extended (AP-028
+ * specs/028-collection-editor-ui) with the pre-run collection browser, variable panel, and request
+ * editor above the existing run panel.
  */
 export function ExternalCollectionsPage({
   preload,
@@ -19,6 +67,10 @@ export function ExternalCollectionsPage({
     UploadedCollectionSummary[]
   >([]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [collectionView, setCollectionView] = useState<CollectionView | undefined>(undefined);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | undefined>(undefined);
+  const [locked, setLocked] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +81,42 @@ export function ExternalCollectionsPage({
       cancelled = true;
     };
   }, []);
+
+  const refreshCollectionView = useCallback(async (id: string) => {
+    const result = await fetchUploadedCollectionView(id);
+    if (result.ok) {
+      setCollectionView(result.collectionView);
+      setViewError(null);
+    } else {
+      setViewError(result.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    setCollectionView(undefined);
+    setSelectedRequestId(undefined);
+    setViewError(null);
+    if (selectedId) {
+      refreshCollectionView(selectedId);
+    }
+  }, [selectedId, refreshCollectionView]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    async function poll() {
+      const result = await fetchUploadedCollectionRuns(selectedId!);
+      if (!cancelled && result.ok) {
+        setLocked(result.runs.some((run) => run.status === "in-progress"));
+      }
+    }
+    poll();
+    const interval = setInterval(poll, LOCK_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedId]);
 
   function handleUploaded(uploadedCollection: UploadedCollectionSummary) {
     setUploadedCollections((current) => [uploadedCollection, ...current]);
@@ -41,6 +129,83 @@ export function ExternalCollectionsPage({
   }
 
   const selected = uploadedCollections.find((c) => c.id === selectedId);
+  const selectedRequest = collectionView && selectedRequestId ? findRequest(collectionView, selectedRequestId) : undefined;
+
+  async function handleSaveVariables(variableValues: Record<string, string>) {
+    if (!selectedId) return;
+    const result = await updateUploadedCollectionVariables(selectedId, variableValues);
+    if (!result.ok) throw new Error(result.message);
+    setCollectionView(result.collectionView);
+  }
+
+  async function handleSaveRequest(requestId: string, edit: Parameters<typeof updateUploadedCollectionRequest>[2]) {
+    if (!selectedId) return;
+    const result = await updateUploadedCollectionRequest(selectedId, requestId, edit);
+    if (!result.ok) throw new Error(result.message);
+    setCollectionView(result.collectionView);
+  }
+
+  const treeActions: CollectionTreeActions = {
+    onAddRequest: async (parentFolderId) => {
+      if (!selectedId) return;
+      const name = window.prompt("New request name")?.trim();
+      if (!name) return;
+      const result = await addUploadedCollectionRequest(selectedId, {
+        parentFolderId,
+        name,
+        method: "GET",
+        url: "",
+        headers: [],
+      });
+      if (result.ok) {
+        setCollectionView(result.collectionView);
+        setSelectedRequestId(result.newItemId);
+      } else {
+        setViewError(result.message);
+      }
+    },
+    onDeleteItem: async (itemId) => {
+      if (!selectedId) return;
+      if (!window.confirm("Delete this item? This cannot be undone.")) return;
+      const result = await deleteUploadedCollectionItem(selectedId, itemId);
+      if (result.ok) {
+        setCollectionView(result.collectionView);
+        setSelectedRequestId((current) => (current === itemId ? undefined : current));
+      } else {
+        setViewError(result.message);
+      }
+    },
+    onRenameItem: async (itemId, currentName) => {
+      if (!selectedId) return;
+      const name = window.prompt("New name", currentName)?.trim();
+      if (!name) return;
+      const result = await renameUploadedCollectionItem(selectedId, itemId, name);
+      if (result.ok) setCollectionView(result.collectionView);
+      else setViewError(result.message);
+    },
+    onMoveItem: async (containerId, itemId, direction) => {
+      if (!selectedId || !collectionView) return;
+      const container = containerOf(collectionView, containerId);
+      if (!container) return;
+      const isFolder = container.folders.some((f) => f.id === itemId);
+      const kindIds = (isFolder ? container.folders : container.items).map((entry) => entry.id);
+      const index = kindIds.indexOf(itemId);
+      const swapWith = direction === "up" ? index - 1 : index + 1;
+      if (swapWith < 0 || swapWith >= kindIds.length) return;
+      [kindIds[index], kindIds[swapWith]] = [kindIds[swapWith], kindIds[index]];
+      // Reordering always submits the complete child-id set the backend requires
+      // (data-model.md's InvalidOrderError rule): folders' own new order followed by items' own
+      // new order. Folders are always ordered before a container's requests in this view
+      // (CollectionTreeView's own doc comment), so a collection whose original document
+      // interleaved them differently is normalized to folders-then-requests the first time this
+      // control is used in that container — a deliberate, documented simplification.
+      const otherKindIds = (isFolder ? container.items : container.folders).map((entry) => entry.id);
+      const orderedIds = isFolder ? [...kindIds, ...otherKindIds] : [...otherKindIds, ...kindIds];
+      const result = await reorderUploadedCollectionContainer(selectedId, containerId, orderedIds);
+      if (result.ok) setCollectionView(result.collectionView);
+      else setViewError(result.message);
+    },
+  };
 
   return (
     <div className="space-y-6">
@@ -85,6 +250,32 @@ export function ExternalCollectionsPage({
           </div>
         </div>
       </section>
+
+      {selected && collectionView && (
+        <section className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+          <div className="space-y-4">
+            {viewError && <ErrorState message={viewError} />}
+            <CollectionTreeView
+              items={collectionView.items}
+              folders={collectionView.folders}
+              selectedRequestId={selectedRequestId}
+              onSelectRequest={(item) => setSelectedRequestId(item.id)}
+              locked={locked}
+              actions={treeActions}
+            />
+            <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} />
+          </div>
+          <div>
+            {selectedRequest ? (
+              <RequestEditorPanel request={selectedRequest} locked={locked} onSave={handleSaveRequest} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted">
+                Select a request to view and edit it.
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       {selected && <ExternalCollectionRunPanel uploadedCollection={selected} />}
     </div>

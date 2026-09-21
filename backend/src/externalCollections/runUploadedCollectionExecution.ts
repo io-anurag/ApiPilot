@@ -5,6 +5,7 @@ import { parseUploadedCollection } from "./uploadedCollectionParsing";
 import { mapUploadedResult } from "./mapUploadedResult";
 import { runSingleItem } from "../execution/newmanRunner";
 import { appendResult, isCancelRequested, settleRun } from "./uploadedCollectionExecutionStore";
+import { findEditedItemIds } from "./editedItems";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
 
@@ -59,6 +60,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
     const declaredVariables = Object.keys(uploadedCollection.variableValues).map((key) => ({ key, value: "" }));
     let environmentRecord: Record<string, string> = { ...uploadedCollection.variableValues };
     const captureRawDetails = uploadedCollection.tier === "local";
+    const editedItemIds = findEditedItemIds(uploadedCollection.collection);
 
     for (let index = 0; index < orderedItems.length; index += 1) {
       if (isCancelRequested(runId)) {
@@ -86,7 +88,14 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       environmentRecord = itemOutcome.environment;
       appendResult(
         runId,
-        mapUploadedResult(item.name, item.request.method, itemOutcome.execution, startedAt, captureRawDetails),
+        mapUploadedResult(
+          item.name,
+          item.request.method,
+          itemOutcome.execution,
+          startedAt,
+          captureRawDetails,
+          editedItemIds.has(item.id),
+        ),
       );
       attempted = index + 1;
     }
