@@ -1,7 +1,18 @@
+import type { ApiOperation } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
+
+/** Mirrors `OperationDetail`'s own "Security" section (the one place this is otherwise shown, in
+ * the earlier API Review stage) — `undefined` only when the matching operation could not be
+ * found (defensive; every scenario is generated from an operation that exists in `apiModel`). */
+function securityRequirementLabel(operation: ApiOperation | undefined): string | undefined {
+  if (!operation || operation.security.length === 0) return undefined;
+  return operation.security
+    .map((requirement) => requirement.schemes.map((scheme) => scheme.name).join(" AND "))
+    .join(" OR ");
+}
 
 const STATE_TONES: Record<ReviewScenarioWire["state"], StatusTone> = {
   pending: "neutral",
@@ -32,9 +43,18 @@ function historyEntryLabel(entry: ReviewScenarioWire["history"][number]): string
 /** Shows one review scenario's request, assertions, provenance, and review status (US1, FR-001-FR-005). */
 export function TestScenarioReviewDetail({
   item,
-}: Readonly<{ item: ReviewScenarioWire }>) {
+  operation,
+}: Readonly<{
+  item: ReviewScenarioWire;
+  /** The scenario's operation, for its `security` requirement only (FR: explainability) — the
+   * deterministic `GeneratedRequest` shown below never carries auth itself (it is applied
+   * separately, only when a Postman collection is generated), so without this the request can
+   * look deceptively "complete" for an operation that actually requires authentication. */
+  operation?: ApiOperation;
+}>) {
   const { scenario, state, history } = item;
   const provenance = scenario.provenance;
+  const securityRequirement = securityRequirementLabel(operation);
 
   return (
     <article
@@ -108,6 +128,12 @@ export function TestScenarioReviewDetail({
         >
           {JSON.stringify(scenario.displayRequest, null, 2)}
         </pre>
+        {securityRequirement && (
+          <p data-testid="review-scenario-security" className="mt-2 text-xs text-muted">
+            Requires authentication ({securityRequirement}) — applied automatically when this
+            operation is exported or run, not shown as a literal header above.
+          </p>
+        )}
       </section>
 
       <section>

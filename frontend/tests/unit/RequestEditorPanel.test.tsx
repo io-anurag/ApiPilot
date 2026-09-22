@@ -120,4 +120,35 @@ describe("RequestEditorPanel", () => {
     fireEvent.click(previewTabs.getByRole("tab", { name: "Tests" }));
     expect(screen.getByText(/pm\.test/)).toBeInTheDocument();
   });
+
+  it("shows a request's implied auth header as a read-only note, in both the Headers tab and the resolved preview", () => {
+    render(
+      <RequestEditorPanel
+        request={request({
+          raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
+          resolved: { method: "GET", url: "https://api.example.com/widgets", headers: [] },
+          unresolvedVariables: [],
+          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123" },
+        })}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Headers tab: shown as a note, not as an editable row, with the placeholder still visible.
+    expect(editTabs().getByRole("tab", { name: "Headers" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/This request's own authentication also sends/)).toBeInTheDocument();
+    // Split across sibling nodes by VariableHighlightedText (a "Bearer " text node plus a
+    // separately-highlighted "{{token}}" span), so matched by combined textContent rather than
+    // a single node's own text.
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Bearer {{token}}"),
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("header name")).not.toHaveValue("Authorization");
+
+    // Resolved preview: the substituted value, alongside a "(from auth)" marker.
+    expect(screen.getByText("Bearer abc123")).toBeInTheDocument();
+    expect(screen.getByText("(from auth)")).toBeInTheDocument();
+  });
 });

@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import type { ApiOperation } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire } from "../../src/services/reviewsClient";
 import { TestScenarioReviewDetail } from "../../src/components/TestScenarioReviewDetail";
+
+function operation(overrides: Partial<ApiOperation> = {}): ApiOperation {
+  return {
+    path: "/widgets",
+    method: "POST",
+    operationId: undefined,
+    parameters: [],
+    requestBody: undefined,
+    responses: [],
+    security: [],
+    tags: [],
+    ...overrides,
+  };
+}
 
 const ruleItem: ReviewScenarioWire = {
   scenarioId: "s1",
@@ -123,5 +138,25 @@ describe("TestScenarioReviewDetail", () => {
     render(<TestScenarioReviewDetail item={aiItem} />);
 
     expect(screen.getByText(/No documented response was available/)).toBeInTheDocument();
+  });
+
+  it("shows no security note when the operation is absent or requires no auth", () => {
+    const { rerender } = render(<TestScenarioReviewDetail item={ruleItem} />);
+    expect(screen.queryByTestId("review-scenario-security")).not.toBeInTheDocument();
+
+    rerender(<TestScenarioReviewDetail item={ruleItem} operation={operation({ security: [] })} />);
+    expect(screen.queryByTestId("review-scenario-security")).not.toBeInTheDocument();
+  });
+
+  it("notes the operation's security requirement, explaining why it isn't in the headers above", () => {
+    render(
+      <TestScenarioReviewDetail
+        item={ruleItem}
+        operation={operation({ security: [{ schemes: [{ name: "bearerAuth", scopes: [] }] }] })}
+      />,
+    );
+    expect(screen.getByTestId("review-scenario-security")).toHaveTextContent(
+      "Requires authentication (bearerAuth) — applied automatically when this operation is exported or run, not shown as a literal header above.",
+    );
   });
 });

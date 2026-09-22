@@ -163,6 +163,25 @@ export interface CollectionRequestFields {
   body?: string;
 }
 
+/**
+ * A header this request's (or an inherited folder/collection-level) `auth` block adds
+ * automatically at execution time — computed for display only, never merged into `raw`/`resolved`
+ * headers, since it is not a literal, editable header entry (contradicting it would misrepresent
+ * what an edit actually changes). Present only for the auth types whose header value is a plain,
+ * lossless key/value pair (`bearer`, `apikey` located in a header) — every other type (`basic`,
+ * `digest`, `oauth1`/`oauth2`, `awsv4`, `hawk`, `ntlm`, `edgegrid`) either transforms its
+ * parameters (e.g. base64 encoding) in a way that would obscure unresolved `{{variable}}`
+ * placeholders in `raw`, or is dynamic/signed and cannot be represented as a fixed value ahead of
+ * time without fabricating it (CLAUDE.md §13).
+ */
+export interface ImpliedAuthHeader {
+  key: string;
+  /** Exactly as stored — `{{variable}}` placeholders intact, mirroring `raw`. */
+  rawValue: string;
+  /** `rawValue` with every resolvable `{{variable}}` substituted, mirroring `resolved`. */
+  resolvedValue: string;
+}
+
 /** One request within a `CollectionView` (research.md D2, D9; data-model.md). */
 export interface CollectionRequestView {
   /** Stable across reads of the same `UploadedCollectionSet` (research.md D2). */
@@ -176,6 +195,9 @@ export interface CollectionRequestView {
   resolved: CollectionRequestFields;
   /** Variable names referenced by this specific request that remain unresolved. */
   unresolvedVariables: string[];
+  /** See `ImpliedAuthHeader`. `undefined` when no auth applies to this request, or when its
+   * applicable type's header cannot be represented here. */
+  impliedAuthHeader?: ImpliedAuthHeader;
   /**
    * The request's own Postman "test" event script, exactly as stored (its `pm.test(...)` calls
    * are what `UploadedTestOutcome.name` in a run result is named after). Undefined/empty when the

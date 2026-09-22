@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type {
+  ApiOperation,
   ReviewUpdateRequest,
   TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
@@ -40,6 +41,13 @@ export function ScenarioReviewStage({
   onAdvanced: (result: WorkflowResult) => void;
 }>) {
   const reviewWorkspace = workflow.reviewWorkspace as unknown as ReviewWorkspaceWire;
+  /** For `TestScenarioReviewDetail`'s security note — `undefined` when `apiModel` isn't loaded
+   * (shouldn't happen once scenarios exist, but the prop is optional so this stays defensive). */
+  function operationFor(item: ReviewScenarioWire): ApiOperation | undefined {
+    return workflow.apiModel?.operations.find(
+      (op) => op.path === item.scenario.operationPath && op.method === item.scenario.operationMethod,
+    );
+  }
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [submittingScenarioId, setSubmittingScenarioId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -228,7 +236,7 @@ export function ScenarioReviewStage({
                   Close details
                 </button>
               </div>
-              <TestScenarioReviewDetail item={item} />
+              <TestScenarioReviewDetail item={item} operation={operationFor(item)} />
               <TestScenarioReviewDecision
                 item={item}
                 submitting={submittingScenarioId === item.scenarioId}

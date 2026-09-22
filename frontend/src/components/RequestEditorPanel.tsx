@@ -196,6 +196,15 @@ export function RequestEditorPanel({
             >
               + Add header
             </button>
+            {request.impliedAuthHeader && (
+              <p className="text-xs text-muted">
+                This request&apos;s own authentication also sends{" "}
+                <span className="font-mono">
+                  {request.impliedAuthHeader.key}: <VariableHighlightedText text={request.impliedAuthHeader.rawValue} />
+                </span>{" "}
+                automatically when it runs — not listed above since it isn&apos;t a literal, editable header.
+              </p>
+            )}
           </div>
         )}
 
@@ -260,13 +269,20 @@ export function RequestEditorPanel({
                     <VariableHighlightedText text={request.resolved.url} />
                   </span>
                 </p>
-                {request.resolved.headers.length > 0 ? (
+                {request.resolved.headers.length > 0 || request.impliedAuthHeader ? (
                   <ul className="space-y-0.5 text-xs">
                     {request.resolved.headers.map((header, index) => (
                       <li key={index} className="font-mono">
                         {header.key}: <VariableHighlightedText text={header.value} />
                       </li>
                     ))}
+                    {request.impliedAuthHeader && (
+                      <li className="font-mono text-muted">
+                        {request.impliedAuthHeader.key}:{" "}
+                        <VariableHighlightedText text={request.impliedAuthHeader.resolvedValue} />{" "}
+                        <span className="text-[10px] font-sans uppercase">(from auth)</span>
+                      </li>
+                    )}
                   </ul>
                 ) : (
                   <p className="text-xs text-muted">No headers.</p>

@@ -4,6 +4,7 @@ import type {
   CollectionRequestFields,
   CollectionRequestView,
   CollectionView,
+  ImpliedAuthHeader,
   VariableBinding,
 } from "@apipilot/shared-domain";
 import { extractReferencedVariables, findVariableTokens, substituteVariables } from "./uploadedCollectionParsing";
@@ -56,7 +57,11 @@ function resolvedFields(raw: CollectionRequestFields, variableValues: Record<str
   };
 }
 
-function unresolvedVariablesFor(raw: CollectionRequestFields, variableValues: Record<string, string>): string[] {
+function unresolvedVariablesFor(
+  raw: CollectionRequestFields,
+  variableValues: Record<string, string>,
+  impliedAuthHeader: ImpliedAuthHeader | undefined,
+): string[] {
   const tokens = new Set<string>();
   for (const token of findVariableTokens(raw.url)) tokens.add(token);
   for (const header of raw.headers) {
@@ -65,20 +70,59 @@ function unresolvedVariablesFor(raw: CollectionRequestFields, variableValues: Re
   if (raw.body) {
     for (const token of findVariableTokens(raw.body)) tokens.add(token);
   }
+  if (impliedAuthHeader) {
+    for (const token of findVariableTokens(impliedAuthHeader.rawValue)) tokens.add(token);
+  }
   return [...tokens].filter((name) => !variableValues[name]);
+}
+
+/**
+ * The header this item's effective `auth` (its own, or inherited from a parent folder/the
+ * collection — `Item.getAuth()` walks that chain the same way Newman's own authorizer does)
+ * would add automatically when the request runs. Only `bearer` and header-located `apikey` are
+ * represented (see `ImpliedAuthHeader`'s doc comment for why every other type is left
+ * undefined) — `undefined` whenever no auth applies or the effective type isn't one of these two.
+ */
+function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>): ImpliedAuthHeader | undefined {
+  const auth = item.getAuth();
+  if (!auth) return undefined;
+  const params = auth.parameters();
+
+  if (auth.type === "bearer") {
+    const token = params?.get("token");
+    if (typeof token !== "string" || token.length === 0) return undefined;
+    return {
+      key: "Authorization",
+      rawValue: `Bearer ${token}`,
+      resolvedValue: `Bearer ${substituteVariables(token, variableValues)}`,
+    };
+  }
+
+  if (auth.type === "apikey") {
+    const location = params?.get("in");
+    if (location !== undefined && location !== "header") return undefined; // query-located: already visible in the URL
+    const key = params?.get("key");
+    const value = params?.get("value");
+    if (typeof key !== "string" || key.length === 0 || typeof value !== "string" || value.length === 0) return undefined;
+    return { key, rawValue: value, resolvedValue: substituteVariables(value, variableValues) };
+  }
+
+  return undefined;
 }
 
 function toRequestView(item: Item, variableValues: Record<string, string>, editedItemIds: Set<string>): CollectionRequestView {
   const raw = rawFields(item);
   const testScript = testScriptOf(item);
+  const impliedAuthHeader = impliedAuthHeaderFor(item, variableValues);
   return {
     id: item.id,
     name: item.name,
     wasEdited: editedItemIds.has(item.id),
     raw,
     resolved: resolvedFields(raw, variableValues),
-    unresolvedVariables: unresolvedVariablesFor(raw, variableValues),
+    unresolvedVariables: unresolvedVariablesFor(raw, variableValues, impliedAuthHeader),
     ...(testScript !== undefined ? { testScript } : {}),
+    ...(impliedAuthHeader !== undefined ? { impliedAuthHeader } : {}),
   };
 }
 

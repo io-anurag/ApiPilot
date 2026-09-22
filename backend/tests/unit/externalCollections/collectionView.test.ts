@@ -111,4 +111,84 @@ describe("buildCollectionView", () => {
     expect(view.items.find((i) => i.name === "Edited")?.wasEdited).toBe(true);
     expect(view.items.find((i) => i.name === "Not edited")?.wasEdited).toBe(false);
   });
+
+  describe("impliedAuthHeader (a request's `auth` block, not its literal `header` list)", () => {
+    function collectionWithAuth(auth: unknown): string {
+      return JSON.stringify({
+        info: { name: "c" },
+        item: [{ id: "item-1", name: "Request", request: { method: "GET", url: "https://example.test", auth } }],
+      });
+    }
+
+    it("surfaces a bearer auth as an Authorization header, unresolved in raw and substituted in resolved", () => {
+      const raw = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { token: "abc123" });
+      const request = view.items[0];
+      expect(request.impliedAuthHeader).toEqual({
+        key: "Authorization",
+        rawValue: "Bearer {{token}}",
+        resolvedValue: "Bearer abc123",
+      });
+      // Never merged into the literal, editable header list.
+      expect(request.raw.headers).toEqual([]);
+      expect(request.resolved.headers).toEqual([]);
+    });
+
+    it("surfaces a header-located apikey auth using its own declared key name", () => {
+      const raw = collectionWithAuth({
+        type: "apikey",
+        apikey: [
+          { key: "key", value: "X-API-Key", type: "string" },
+          { key: "value", value: "{{apiKeyValue}}", type: "string" },
+          { key: "in", value: "header", type: "string" },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { apiKeyValue: "secret" });
+      expect(view.items[0].impliedAuthHeader).toEqual({
+        key: "X-API-Key",
+        rawValue: "{{apiKeyValue}}",
+        resolvedValue: "secret",
+      });
+    });
+
+    it("omits a query-located apikey auth — it is already visible in the URL, not a header", () => {
+      const raw = collectionWithAuth({
+        type: "apikey",
+        apikey: [
+          { key: "key", value: "apiKey", type: "string" },
+          { key: "value", value: "{{apiKeyValue}}", type: "string" },
+          { key: "in", value: "query", type: "string" },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.items[0].impliedAuthHeader).toBeUndefined();
+    });
+
+    it("omits an auth type whose header cannot be faithfully computed ahead of time (e.g. basic)", () => {
+      const raw = collectionWithAuth({
+        type: "basic",
+        basic: [
+          { key: "username", value: "{{username}}", type: "string" },
+          { key: "password", value: "{{password}}", type: "string" },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.items[0].impliedAuthHeader).toBeUndefined();
+    });
+
+    it("omits impliedAuthHeader entirely when the request has no auth", () => {
+      const raw = JSON.stringify({
+        info: { name: "c" },
+        item: [{ id: "item-1", name: "Request", request: { method: "GET", url: "https://example.test" } }],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.items[0].impliedAuthHeader).toBeUndefined();
+    });
+
+    it("counts an auth-only variable as unresolved when it has no value", () => {
+      const raw = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.items[0].unresolvedVariables).toEqual(["token"]);
+    });
+  });
 });

@@ -91,6 +91,24 @@ describe("extractReferencedVariables", () => {
     const variables = extractReferencedVariables(collection);
     expect(new Set(variables)).toEqual(new Set(["baseUrl", "widgetId", "token", "ownerId"]));
   });
+
+  it("extracts a variable referenced only inside a request's auth block, with no literal header of its own", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        {
+          name: "req",
+          request: {
+            method: "GET",
+            url: "https://example.test",
+            auth: { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] },
+          },
+        },
+      ],
+    });
+    const collection = parseUploadedCollection(raw);
+    expect(extractReferencedVariables(collection)).toEqual(["token"]);
+  });
 });
 
 describe("missingUploadedVariableValues", () => {

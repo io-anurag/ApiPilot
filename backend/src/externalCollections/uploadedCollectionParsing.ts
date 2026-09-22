@@ -140,7 +140,9 @@ export function substituteVariables(text: string, variableValues: Record<string,
 }
 
 /**
- * Every `{{variableName}}` token referenced by any request's URL, headers, or body — not its
+ * Every `{{variableName}}` token referenced by any request's URL, headers, or body, or its
+ * effective `auth` (the item's own, or inherited from a parent folder/the collection — via
+ * `Item.getAuth()`, the same lookup Newman's own authorizer uses to sign the request) — not its
  * pre-request/test scripts, which may contain unrelated `{{`-looking text (data-model.md FR-004).
  * Deduplicated, in first-seen order.
  *
@@ -156,6 +158,7 @@ export function extractReferencedVariables(collection: Collection, selectedItemI
     collectVariableTokens(requestJson.url, tokens);
     collectVariableTokens(requestJson.header, tokens);
     collectVariableTokens(requestJson.body, tokens);
+    collectVariableTokens(item.getAuth()?.toJSON(), tokens);
   });
   return [...tokens];
 }
