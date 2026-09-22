@@ -27,6 +27,9 @@ export function App() {
   // switching away; "Import & Run Collection" never needs that since it is a self-contained,
   // one-shot action rather than a multi-stage flow.
   const [tabsVisible, setTabsVisible] = useState(false);
+  // Set once the user first reaches the guided workflow, then never reset — see its use below for
+  // why this must survive "Back to start" even though `started` itself does not.
+  const [guidedWorkflowMounted, setGuidedWorkflowMounted] = useState(false);
   const [importPreload, setImportPreload] = useState<ImportPreload | null>(null);
   const importPreloadTokenRef = useRef(0);
 
@@ -48,6 +51,7 @@ export function App() {
     setStarted(true);
     setActiveTab(choice);
     setTabsVisible(choice === "import-collection");
+    if (choice === "guided-workflow") setGuidedWorkflowMounted(true);
   }
 
   /** The guided workflow's "Exit workflow" control (requirement: an escape hatch while the tab
@@ -57,6 +61,11 @@ export function App() {
     setStarted(false);
     setActiveTab("guided-workflow");
     setTabsVisible(false);
+  }
+
+  function handleTabChange(tab: ActiveTab) {
+    setActiveTab(tab);
+    if (tab === "guided-workflow") setGuidedWorkflowMounted(true);
   }
 
   /** Fired once the guided workflow's Postman collection has been generated: the old, duplicate
@@ -79,28 +88,35 @@ export function App() {
       <AppHeader health={health} />
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         {!started && <EntryChooser onSelect={handleSelect} />}
+        {started && tabsVisible && (
+          <Tabs
+            tabs={TABS}
+            activeTab={activeTab}
+            onChange={handleTabChange}
+            label="Top-level views"
+          />
+        )}
+        {/* Deliberately NOT gated on `started`: once the guided workflow has been reached, it
+         * stays mounted for the rest of the session (only `hidden` toggles), even across "Back to
+         * start". Its own resume-on-mount effect re-fetches the current workflow and, if that
+         * workflow already reached the `execution` stage, automatically hands off to "Import & Run
+         * Collection" — guarded by a `useRef` so it fires at most once per *mounted instance*.
+         * Unmounting it on "Back to start" (by gating on `started` the way `ExternalCollectionsPage`
+         * still is below) would reset that guard on every remount, so simply reselecting "Guided
+         * Workflow" would immediately re-trigger the handoff and bounce the user straight back to
+         * "Import & Run Collection" instead of letting them view the guided workflow again. */}
+        {guidedWorkflowMounted && (
+          <div hidden={!started || activeTab !== "guided-workflow"}>
+            <TestGenerationWorkflowPage
+              onExit={handleExitGuided}
+              onHandoffToExecution={handleHandoffToExecution}
+            />
+          </div>
+        )}
         {started && (
-          <>
-            {tabsVisible && (
-              <Tabs
-                tabs={TABS}
-                activeTab={activeTab}
-                onChange={setActiveTab}
-                label="Top-level views"
-              />
-            )}
-            {/* Both views stay mounted so switching tabs never discards either one's in-progress
-             * state (e.g. a partially-filled form) — only visibility toggles. */}
-            <div hidden={activeTab !== "guided-workflow"}>
-              <TestGenerationWorkflowPage
-                onExit={handleExitGuided}
-                onHandoffToExecution={handleHandoffToExecution}
-              />
-            </div>
-            <div hidden={activeTab !== "import-collection"}>
-              <ExternalCollectionsPage preload={importPreload} />
-            </div>
-          </>
+          <div hidden={activeTab !== "import-collection"}>
+            <ExternalCollectionsPage preload={importPreload} />
+          </div>
         )}
       </div>
     </main>

@@ -6,6 +6,7 @@ import { mapUploadedResult } from "./mapUploadedResult";
 import { runSingleItem } from "../execution/newmanRunner";
 import { appendResult, isCancelRequested, settleRun } from "./uploadedCollectionExecutionStore";
 import { findEditedItemIds } from "./editedItems";
+import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
 
@@ -93,6 +94,13 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
         environment: environmentRecord,
       });
       environmentRecord = itemOutcome.environment;
+      // A workflow-chaining test script (e.g. `pm.environment.set(...)` capturing a prior step's
+      // response) mutates the environment Newman actually resolves requests against. Without
+      // writing that mutation back to storage, the collection's persisted `variableValues` — and
+      // therefore the "resolved preview" every request view builds from (`collectionView.ts`) —
+      // would keep showing whatever was last explicitly saved, silently diverging from the value a
+      // later step (in this run or the next one) actually resolves and sends.
+      updateUploadedCollectionVariables(uploadedCollection.id, environmentRecord);
       appendResult(
         runId,
         mapUploadedResult(
