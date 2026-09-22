@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { CollectionRequestView } from "@apipilot/shared-domain";
 import { RequestEditorPanel } from "../../src/components/RequestEditorPanel";
 
@@ -15,9 +15,16 @@ function request(overrides: Partial<CollectionRequestView> = {}): CollectionRequ
   };
 }
 
+/** The edit tabs ("Request editor sections") and the resolved-preview tabs ("Resolved preview
+ * sections") both include a "Headers"/"Body"/"Tests"-named tab, so tests that need one
+ * specifically scope their query to the relevant `tablist` rather than a page-wide `getByRole`. */
+function editTabs() {
+  return within(screen.getByRole("tablist", { name: "Request editor sections" }));
+}
+
 describe("RequestEditorPanel", () => {
   it("pre-fills the raw form from the request and shows the resolved preview", () => {
-    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} />);
+    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByLabelText("URL")).toHaveValue("{{baseUrl}}/widgets");
     expect(screen.getByText("https://api.example.com/widgets")).toBeInTheDocument();
     expect(screen.getByText(/Unresolved: token/)).toBeInTheDocument();
@@ -25,7 +32,7 @@ describe("RequestEditorPanel", () => {
 
   it("editing the URL and saving calls onSave with the edited fields", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} />);
+    render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} onClose={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("URL"), { target: { value: "{{baseUrl}}/widgets?limit=10" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByRole("button", { name: "Save" });
@@ -36,20 +43,27 @@ describe("RequestEditorPanel", () => {
   });
 
   it("disables every editable control while locked", () => {
-    render(<RequestEditorPanel request={request()} locked onSave={vi.fn()} />);
+    render(<RequestEditorPanel request={request()} locked onSave={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByLabelText("URL")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("switches between Headers, Body, and Tests sections without losing edits", () => {
-    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} />);
-    expect(screen.getByRole("tab", { name: /Headers/ })).toHaveAttribute("aria-selected", "true");
+  it("calls onClose when the Close button is clicked", () => {
+    const onClose = vi.fn();
+    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "✕ Close" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Body" }));
+  it("switches between Headers, Body, and Tests sections without losing edits", () => {
+    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
+    expect(editTabs().getByRole("tab", { name: /Headers/ })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(editTabs().getByRole("tab", { name: "Body" }));
     fireEvent.change(screen.getByLabelText("Raw body"), { target: { value: "{\"a\": 1}" } });
 
-    fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
-    expect(screen.getByRole("tab", { name: "Body" })).toHaveAttribute("aria-selected", "false");
+    fireEvent.click(editTabs().getByRole("tab", { name: /Tests/ }));
+    expect(editTabs().getByRole("tab", { name: "Body" })).toHaveAttribute("aria-selected", "false");
     expect(screen.queryByLabelText("Raw body")).not.toBeInTheDocument();
   });
 
@@ -60,9 +74,10 @@ describe("RequestEditorPanel", () => {
         request={request({ testScript: 'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});' })}
         locked={false}
         onSave={onSave}
+        onClose={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
+    fireEvent.click(editTabs().getByRole("tab", { name: /Tests/ }));
     const textarea = screen.getByLabelText(/Test script/) as HTMLTextAreaElement;
     expect(textarea.value).toContain("Status code is 200");
 
@@ -76,12 +91,33 @@ describe("RequestEditorPanel", () => {
   });
 
   it("shows no marker on the Tests tab when the request carries no test script", () => {
-    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} />);
-    expect(screen.getByRole("tab", { name: "Tests" })).toBeInTheDocument();
+    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
+    expect(editTabs().getByRole("tab", { name: "Tests" })).toBeInTheDocument();
   });
 
   it("shows a marker on the Tests tab when the request already carries a test script", () => {
-    render(<RequestEditorPanel request={request({ testScript: 'pm.test("x", function () {});' })} locked={false} onSave={vi.fn()} />);
-    expect(screen.getByRole("tab", { name: /Has tests/ })).toBeInTheDocument();
+    render(<RequestEditorPanel request={request({ testScript: 'pm.test("x", function () {});' })} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
+    expect(editTabs().getByRole("tab", { name: /Has tests/ })).toBeInTheDocument();
+  });
+
+  it("tabs the resolved preview into Request/Body/Tests sections", () => {
+    render(
+      <RequestEditorPanel
+        request={request({ resolved: { method: "GET", url: "https://api.example.com/widgets", headers: [], body: '{"a":1}' }, testScript: "pm.test(\"x\", function(){});" })}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const previewTabs = within(screen.getByRole("tablist", { name: "Resolved preview sections" }));
+    expect(previewTabs.getByRole("tab", { name: "Request" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("https://api.example.com/widgets")).toBeInTheDocument();
+    expect(screen.queryByText('{"a":1}')).not.toBeInTheDocument();
+
+    fireEvent.click(previewTabs.getByRole("tab", { name: "Body" }));
+    expect(screen.getByText('{"a":1}')).toBeInTheDocument();
+
+    fireEvent.click(previewTabs.getByRole("tab", { name: "Tests" }));
+    expect(screen.getByText(/pm\.test/)).toBeInTheDocument();
   });
 });

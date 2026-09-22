@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CollectionFolderView, CollectionRequestView, CollectionView } from "@apipilot/shared-domain";
 import {
+  addUploadedCollectionFolder,
   addUploadedCollectionRequest,
   deleteUploadedCollectionItem,
   fetchUploadedCollectionRuns,
@@ -19,6 +20,8 @@ import { CollectionTreeView, flattenCollectionRequests, type CollectionTreeActio
 import { RequestEditorPanel } from "../components/RequestEditorPanel";
 import { VariablePanel } from "../components/VariablePanel";
 import { ErrorState } from "../components/ErrorState";
+import { PromptDialog } from "../components/PromptDialog";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import type { ImportPreload } from "../services/importPreload";
 
@@ -73,6 +76,10 @@ export function ExternalCollectionsPage({
   const [locked, setLocked] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
   const [mainView, setMainView] = useState<"request" | "variables">("request");
+  const [addRequestDialog, setAddRequestDialog] = useState<{ parentFolderId: string | null } | null>(null);
+  const [addFolderDialog, setAddFolderDialog] = useState<{ parentFolderId: string | null } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ itemId: string; currentName: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ itemId: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +141,15 @@ export function ExternalCollectionsPage({
   const selected = uploadedCollections.find((c) => c.id === selectedId);
   const selectedRequest = collectionView && selectedRequestId ? findRequest(collectionView, selectedRequestId) : undefined;
 
+  // Deselects whichever of RequestEditorPanel/VariablePanel is currently open, returning the main
+  // pane to its empty-selection placeholder — each panel's own close control, rather than a single
+  // button that dismissed the whole tree+editor section (which also hid the tree you'd need to
+  // pick a different request from).
+  function handleClosePanel() {
+    setSelectedRequestId(undefined);
+    setMainView("request");
+  }
+
   async function handleSaveVariables(variableValues: Record<string, string>) {
     if (!selectedId) return;
     const result = await updateUploadedCollectionVariables(selectedId, variableValues);
@@ -148,45 +164,65 @@ export function ExternalCollectionsPage({
     setCollectionView(result.collectionView);
   }
 
+  async function handleConfirmAddRequest(name: string) {
+    if (!selectedId || !addRequestDialog) return;
+    const { parentFolderId } = addRequestDialog;
+    setAddRequestDialog(null);
+    const result = await addUploadedCollectionRequest(selectedId, {
+      parentFolderId,
+      name,
+      method: "GET",
+      url: "",
+      headers: [],
+    });
+    if (result.ok) {
+      setCollectionView(result.collectionView);
+      setSelectedRequestId(result.newItemId);
+      setMainView("request");
+    } else {
+      setViewError(result.message);
+    }
+  }
+
+  async function handleConfirmAddFolder(name: string) {
+    if (!selectedId || !addFolderDialog) return;
+    const { parentFolderId } = addFolderDialog;
+    setAddFolderDialog(null);
+    const result = await addUploadedCollectionFolder(selectedId, { parentFolderId, name });
+    if (result.ok) setCollectionView(result.collectionView);
+    else setViewError(result.message);
+  }
+
+  async function handleConfirmRename(name: string) {
+    if (!selectedId || !renameDialog) return;
+    const { itemId } = renameDialog;
+    setRenameDialog(null);
+    const result = await renameUploadedCollectionItem(selectedId, itemId, name);
+    if (result.ok) setCollectionView(result.collectionView);
+    else setViewError(result.message);
+  }
+
+  async function handleConfirmDelete() {
+    if (!selectedId || !deleteDialog) return;
+    const { itemId } = deleteDialog;
+    setDeleteDialog(null);
+    const result = await deleteUploadedCollectionItem(selectedId, itemId);
+    if (result.ok) {
+      setCollectionView(result.collectionView);
+      setSelectedRequestId((current) => (current === itemId ? undefined : current));
+    } else {
+      setViewError(result.message);
+    }
+  }
+
   const treeActions: CollectionTreeActions = {
-    onAddRequest: async (parentFolderId) => {
-      if (!selectedId) return;
-      const name = window.prompt("New request name")?.trim();
-      if (!name) return;
-      const result = await addUploadedCollectionRequest(selectedId, {
-        parentFolderId,
-        name,
-        method: "GET",
-        url: "",
-        headers: [],
-      });
-      if (result.ok) {
-        setCollectionView(result.collectionView);
-        setSelectedRequestId(result.newItemId);
-        setMainView("request");
-      } else {
-        setViewError(result.message);
-      }
-    },
-    onDeleteItem: async (itemId) => {
-      if (!selectedId) return;
-      if (!window.confirm("Delete this item? This cannot be undone.")) return;
-      const result = await deleteUploadedCollectionItem(selectedId, itemId);
-      if (result.ok) {
-        setCollectionView(result.collectionView);
-        setSelectedRequestId((current) => (current === itemId ? undefined : current));
-      } else {
-        setViewError(result.message);
-      }
-    },
-    onRenameItem: async (itemId, currentName) => {
-      if (!selectedId) return;
-      const name = window.prompt("New name", currentName)?.trim();
-      if (!name) return;
-      const result = await renameUploadedCollectionItem(selectedId, itemId, name);
-      if (result.ok) setCollectionView(result.collectionView);
-      else setViewError(result.message);
-    },
+    // Opens an in-app PromptDialog/ConfirmDialog instead of the native window.prompt/confirm,
+    // which rendered unstyled, ignored dark mode, and looked indistinguishable from a browser
+    // chrome dialog rather than part of the application.
+    onAddRequest: (parentFolderId) => setAddRequestDialog({ parentFolderId }),
+    onAddFolder: (parentFolderId) => setAddFolderDialog({ parentFolderId }),
+    onDeleteItem: (itemId) => setDeleteDialog({ itemId }),
+    onRenameItem: (itemId, currentName) => setRenameDialog({ itemId, currentName }),
     onMoveItem: async (containerId, itemId, direction) => {
       if (!selectedId || !collectionView) return;
       const container = containerOf(collectionView, containerId);
@@ -256,62 +292,74 @@ export function ExternalCollectionsPage({
       </section>
 
       {selected && collectionView && (
-        <section className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          <div className="space-y-3">
-            {viewError && <ErrorState message={viewError} />}
-            {/* The collection tree always stays in the sidebar (it's the primary navigation);
-                variables get the full-width main pane below instead of this ~320px rail — their
-                row layout (name + value + source label) doesn't fit a sidebar this narrow. The
-                "Variables" toggle lives in the tree's own header row, next to "+ Add request". */}
-            <CollectionTreeView
-              items={collectionView.items}
-              folders={collectionView.folders}
-              selectedRequestId={mainView === "request" ? selectedRequestId : undefined}
-              onSelectRequest={(item) => {
-                setSelectedRequestId(item.id);
-                setMainView("request");
-              }}
-              locked={locked}
-              actions={treeActions}
-              headerAction={
-                // Same ghost text-link weight as "+ Add request" right next to it (rather than a
-                // boxed pill), so the two header actions read as one visual family; "selected"
-                // (mainView === "variables") is shown the same way CollectionTreeView already
-                // shows the selected request — an underline plus the brand color, not a filled box.
-                <button
-                  type="button"
-                  aria-pressed={mainView === "variables"}
-                  onClick={() => setMainView("variables")}
-                  className={`flex items-center gap-1.5 ${BUTTON_STYLES.ghost} ${mainView === "variables" ? "underline" : ""}`}
-                >
-                  Variables
-                  {collectionView.variables.some((v) => !v.resolved) && (
-                    <span
-                      aria-label="Some variables are unresolved"
-                      title="Some variables are unresolved"
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-danger-500"
-                    />
-                  )}
-                </button>
-              }
-            />
-          </div>
-          <div>
-            {mainView === "variables" ? (
-              <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} />
-            ) : selectedRequest ? (
-              // `key` forces a fresh mount per request id — RequestEditorPanel's form fields are
-              // local `useState`, initialized once from `request.raw`; without this key, selecting
-              // a different request left the previously selected request's form values on screen
-              // (same component instance, same position in the tree, so React reuses it rather
-              // than reinitializing state) instead of loading the newly selected request's own
-              // method/URL/headers/body/test script.
-              <RequestEditorPanel key={selectedRequest.id} request={selectedRequest} locked={locked} onSave={handleSaveRequest} />
-            ) : (
-              <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
-                Select a request from the collection to view and edit it.
-              </p>
-            )}
+        <section className="space-y-3">
+          {viewError && <ErrorState message={viewError} />}
+          <div className="grid items-stretch gap-4 lg:grid-cols-[320px_1fr]">
+            {/* `items-stretch` (the grid default, made explicit) plus `h-full flex-col` here make
+                this column match the right column's height exactly — whichever side has more
+                natural content sets the row's height, and the shorter side stretches to it rather
+                than leaving empty space or being independently capped. */}
+            <div className="flex h-full flex-col gap-3">
+              {/* The collection tree always stays in the sidebar (it's the primary navigation);
+                  variables get the full-width main pane below instead of this ~320px rail — their
+                  row layout (name + value + source label) doesn't fit a sidebar this narrow. The
+                  "Variables" toggle lives in the tree's own header row, next to "+ Add request". */}
+              <CollectionTreeView
+                items={collectionView.items}
+                folders={collectionView.folders}
+                selectedRequestId={mainView === "request" ? selectedRequestId : undefined}
+                onSelectRequest={(item) => {
+                  setSelectedRequestId(item.id);
+                  setMainView("request");
+                }}
+                locked={locked}
+                actions={treeActions}
+                headerAction={
+                  // Same ghost text-link weight as "+ Add request" right next to it (rather than a
+                  // boxed pill), so the two header actions read as one visual family; "selected"
+                  // (mainView === "variables") is shown the same way CollectionTreeView already
+                  // shows the selected request — an underline plus the brand color, not a filled box.
+                  <button
+                    type="button"
+                    aria-pressed={mainView === "variables"}
+                    onClick={() => setMainView("variables")}
+                    className={`flex items-center gap-1.5 ${BUTTON_STYLES.ghost} ${mainView === "variables" ? "underline" : ""}`}
+                  >
+                    Variables
+                    {collectionView.variables.some((v) => !v.resolved) && (
+                      <span
+                        aria-label="Some variables are unresolved"
+                        title="Some variables are unresolved"
+                        className="inline-block h-1.5 w-1.5 rounded-full bg-danger-500"
+                      />
+                    )}
+                  </button>
+                }
+              />
+            </div>
+            <div>
+              {mainView === "variables" ? (
+                <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} onClose={handleClosePanel} />
+              ) : selectedRequest ? (
+                // `key` forces a fresh mount per request id — RequestEditorPanel's form fields are
+                // local `useState`, initialized once from `request.raw`; without this key, selecting
+                // a different request left the previously selected request's form values on screen
+                // (same component instance, same position in the tree, so React reuses it rather
+                // than reinitializing state) instead of loading the newly selected request's own
+                // method/URL/headers/body/test script.
+                <RequestEditorPanel
+                  key={selectedRequest.id}
+                  request={selectedRequest}
+                  locked={locked}
+                  onSave={handleSaveRequest}
+                  onClose={handleClosePanel}
+                />
+              ) : (
+                <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
+                  Select a request from the collection to view and edit it.
+                </p>
+              )}
+            </div>
           </div>
         </section>
       )}
@@ -320,6 +368,49 @@ export function ExternalCollectionsPage({
         <ExternalCollectionRunPanel
           uploadedCollection={selected}
           requests={collectionView ? flattenCollectionRequests(collectionView.items, collectionView.folders) : []}
+          onConfirmed={() =>
+            setUploadedCollections((current) =>
+              current.map((c) => (c.id === selected.id ? { ...c, confirmedAt: new Date().toISOString() } : c)),
+            )
+          }
+        />
+      )}
+
+      {addRequestDialog && (
+        <PromptDialog
+          title="Add request"
+          label="New request name"
+          confirmLabel="Add"
+          onConfirm={handleConfirmAddRequest}
+          onCancel={() => setAddRequestDialog(null)}
+        />
+      )}
+      {addFolderDialog && (
+        <PromptDialog
+          title="Add folder"
+          label="New folder name"
+          confirmLabel="Add"
+          onConfirm={handleConfirmAddFolder}
+          onCancel={() => setAddFolderDialog(null)}
+        />
+      )}
+      {renameDialog && (
+        <PromptDialog
+          title="Rename"
+          label="New name"
+          initialValue={renameDialog.currentName}
+          confirmLabel="Rename"
+          onConfirm={handleConfirmRename}
+          onCancel={() => setRenameDialog(null)}
+        />
+      )}
+      {deleteDialog && (
+        <ConfirmDialog
+          message="Delete this item? This cannot be undone. Deleting a folder deletes every request nested within it."
+          affectedCount={1}
+          confirmLabel="Delete"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteDialog(null)}
         />
       )}
     </div>

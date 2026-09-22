@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { CollectionFolderView, CollectionRequestView } from "@apipilot/shared-domain";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -22,6 +23,9 @@ export function flattenCollectionRequests(
 export interface CollectionTreeActions {
   /** `parentFolderId: null` targets the collection root. */
   onAddRequest: (parentFolderId: string | null) => void;
+  /** Adds a new, empty folder — nestable, so also offered from within an existing folder's own
+   * actions menu. `parentFolderId: null` targets the collection root. */
+  onAddFolder: (parentFolderId: string | null) => void;
   onDeleteItem: (itemId: string) => void;
   onRenameItem: (itemId: string, currentName: string) => void;
   /**
@@ -48,60 +52,95 @@ interface RowMenuItem {
  */
 function RowActionsMenu({ label, items, disabled }: Readonly<{ label: string; items: RowMenuItem[]; disabled: boolean }>) {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setOpen(false);
+      if (containerRef.current?.contains(event.target as Node)) return;
+      // The menu itself now renders in a portal outside `containerRef` — checked separately so an
+      // in-menu click isn't misread as an outside click.
+      if ((event.target as HTMLElement | null)?.closest('[data-testid="row-actions-menu-portal"]')) return;
+      setOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
+    function handleClose() {
+      setOpen(false);
+    }
+    // The tree's own scroll container doesn't bubble its "scroll" event, but a capturing listener
+    // on window still receives it during the capture phase — closing here avoids a stale-positioned
+    // menu rather than trying to keep it pinned to a button that has scrolled out from under it.
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleClose, true);
+    window.addEventListener("resize", handleClose);
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleClose, true);
+      window.removeEventListener("resize", handleClose);
     };
   }, [open]);
+
+  function toggleOpen() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+    setOpen((current) => !current);
+  }
 
   return (
     <div ref={containerRef} className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={`Actions for ${label}`}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleOpen}
         className="flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
       >
         ⋮
       </button>
-      {open && (
-        <div
-          role="menu"
-          aria-label={`Actions for ${label}`}
-          className="absolute right-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-surface py-1 shadow-md"
-        >
-          {items.map((menuItem) => (
-            <button
-              key={menuItem.label}
-              type="button"
-              role="menuitem"
-              disabled={menuItem.disabled}
-              onClick={() => {
-                setOpen(false);
-                menuItem.onSelect();
-              }}
-              className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 ${menuItem.danger ? "text-danger-700 dark:text-danger-300" : "text-slate-700 dark:text-slate-200"}`}
-            >
-              {menuItem.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Rendered into `document.body` via a portal rather than positioned `absolute` inside the
+          tree's own row — the tree's scrollable container (`overflow-y-auto`, CollectionTreeView's
+          own doc comment) otherwise counts this menu toward its scrollable content and shows a
+          scrollbar for it alone, even when the visible rows don't need one. `position: fixed`
+          with a viewport-relative offset keeps it visually anchored under the button regardless. */}
+      {open &&
+        menuPosition &&
+        createPortal(
+          <div
+            data-testid="row-actions-menu-portal"
+            role="menu"
+            aria-label={`Actions for ${label}`}
+            style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
+            className="z-50 w-36 rounded-md border border-border bg-surface py-1 shadow-md"
+          >
+            {items.map((menuItem) => (
+              <button
+                key={menuItem.label}
+                type="button"
+                role="menuitem"
+                disabled={menuItem.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  menuItem.onSelect();
+                }}
+                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 ${menuItem.danger ? "text-danger-700 dark:text-danger-300" : "text-slate-700 dark:text-slate-200"}`}
+              >
+                {menuItem.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -202,6 +241,7 @@ function FolderRow({
           disabled={locked}
           items={[
             { label: "Add request here", onSelect: () => actions.onAddRequest(folder.id) },
+            { label: "Add folder here", onSelect: () => actions.onAddFolder(folder.id) },
             { label: "Move up", disabled: index === 0, onSelect: () => actions.onMoveItem(containerId, folder.id, "up") },
             {
               label: "Move down",
@@ -280,15 +320,24 @@ export function CollectionTreeView({
   headerAction?: ReactNode;
 }>) {
   return (
-    <div className="space-y-2 rounded-md border border-border bg-surface p-3">
+    // `flex-1 min-h-0` (a flex item inside the page's own `flex h-full flex-col` wrapper) so this
+    // box stretches to match whatever height that wrapper ends up with — which the parent grid's
+    // `items-stretch` sets to match the request editor/variable panel column next to it, however
+    // tall that naturally is — rather than sitting at its own content height with empty space
+    // below it. The scrollable list below then fills whatever of that height remains via its own
+    // `flex-1 min-h-0`, instead of a fixed viewport-relative cap.
+    <div className="flex min-h-0 flex-1 flex-col space-y-2 rounded-md border border-border bg-surface p-3">
       <div className="flex items-center gap-2">
         {headerAction}
         <button
           type="button"
           disabled={locked}
-          onClick={() => actions.onAddRequest(null)}
+          onClick={() => actions.onAddFolder(null)}
           className={`ml-auto ${BUTTON_STYLES.ghost}`}
         >
+          + Add folder
+        </button>
+        <button type="button" disabled={locked} onClick={() => actions.onAddRequest(null)} className={BUTTON_STYLES.ghost}>
           + Add request
         </button>
       </div>
@@ -297,7 +346,7 @@ export function CollectionTreeView({
           This collection is read-only while a run is in progress.
         </p>
       )}
-      <ul className="space-y-0.5">
+      <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
         {folders.map((folder, i) => (
           <FolderRow
             key={folder.id}

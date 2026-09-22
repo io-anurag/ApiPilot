@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseUploadedCollection } from "../../../src/externalCollections/uploadedCollectionParsing";
-import { addRequest, deleteItem, renameItem, reorderContainer } from "../../../src/externalCollections/collectionStructure";
+import { addFolder, addRequest, deleteItem, renameItem, reorderContainer } from "../../../src/externalCollections/collectionStructure";
 import { FolderNotFoundError, InvalidOrderError, ItemNotFoundError } from "../../../src/externalCollections/errors";
 
 function collectionWithFolderAndTwoRequests(): string {
@@ -50,6 +50,30 @@ describe("addRequest", () => {
     expect(() =>
       addRequest(collection, "does-not-exist", { name: "x", method: "GET", url: "https://example.test", headers: [] }),
     ).toThrow(FolderNotFoundError);
+  });
+});
+
+describe("addFolder", () => {
+  it("adds a new, empty folder to the collection root", () => {
+    const collection = parseUploadedCollection(collectionWithFolderAndTwoRequests());
+    const { newItemId } = addFolder(collection, null, "New folder");
+    const json = collection.toJSON() as { item: Array<{ id: string; name: string; item?: unknown[] }> };
+    const added = json.item.find((i) => i.id === newItemId);
+    expect(added?.name).toBe("New folder");
+    expect(added?.item).toEqual([]);
+  });
+
+  it("adds a new folder nested inside an existing folder", () => {
+    const collection = parseUploadedCollection(collectionWithFolderAndTwoRequests());
+    const { newItemId } = addFolder(collection, "folder-1", "Nested folder");
+    const json = collection.toJSON() as { item: Array<{ id: string; item?: Array<{ id: string; name: string }> }> };
+    const folder = json.item.find((i) => i.id === "folder-1");
+    expect(folder?.item?.find((i) => i.id === newItemId)?.name).toBe("Nested folder");
+  });
+
+  it("throws FolderNotFoundError for an unknown parentFolderId", () => {
+    const collection = parseUploadedCollection(collectionWithFolderAndTwoRequests());
+    expect(() => addFolder(collection, "does-not-exist", "x")).toThrow(FolderNotFoundError);
   });
 });
 

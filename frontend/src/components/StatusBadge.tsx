@@ -14,11 +14,22 @@ const TONE_CLASSES: Record<StatusTone, string> = {
  * TestScenarioReviewList/Detail, and WorkflowReviewStage. The label is always rendered as text —
  * `tone` only adds a secondary, non-exclusive visual cue, never the only signal (FR-016).
  */
-export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?: StatusTone }) {
+export function StatusBadge({
+  label,
+  tone = "neutral",
+  title,
+}: Readonly<{
+  label: string;
+  tone?: StatusTone;
+  /** Optional native tooltip for a badge whose meaning isn't self-evident from its label alone
+   * (e.g. "Uploaded" distinguishing an imported-collection run from a generated one). */
+  title?: string;
+}>) {
   return (
     <span
       data-testid="status-badge"
       data-tone={tone}
+      title={title}
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[tone]}`}
     >
       {label}

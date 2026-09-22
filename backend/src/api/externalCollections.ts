@@ -32,7 +32,7 @@ import { getInProgressRun as getGeneratedInProgressRun } from "../execution/exec
 import { runUploadedCollectionExecution } from "../externalCollections/runUploadedCollectionExecution";
 import { buildCollectionView } from "../externalCollections/collectionView";
 import { applyRequestOverride } from "../externalCollections/requestOverride";
-import { addRequest, deleteItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
+import { addFolder, addRequest, deleteItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import {
   CollectionLockedError,
@@ -313,21 +313,31 @@ export function createExternalCollectionsRouter(): Router {
       const existing = getUploadedCollection(req.params.id);
       assertCollectionNotRunning(existing.id);
       const body = req.body as Record<string, unknown> | undefined;
-      if (typeof body?.name !== "string" || body.name.length === 0 || typeof body?.method !== "string" || body.method.length === 0 || typeof body?.url !== "string") {
+      // `kind: "folder"` is additive (default "request" preserves the original contract exactly)
+      // and only ever needs a name — a folder has no method/URL/headers/body of its own.
+      const kind = body?.kind === "folder" ? "folder" : "request";
+      if (typeof body?.name !== "string" || body.name.length === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a non-empty 'name'" });
+        return;
+      }
+      if (kind === "request" && (typeof body?.method !== "string" || body.method.length === 0 || typeof body?.url !== "string")) {
         logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
         res.status(400).json({ error: "invalid_request", message: "Request must include a non-empty 'name', 'method', and 'url'" });
         return;
       }
       const parentFolderId = typeof body.parentFolderId === "string" ? body.parentFolderId : null;
-      const headers = Array.isArray(body.headers) ? (body.headers as Array<{ key: string; value: string }>) : [];
       const collection = parseStoredCollection(existing.collection);
-      const { newItemId } = addRequest(collection, parentFolderId, {
-        name: body.name,
-        method: body.method,
-        url: body.url,
-        headers,
-        body: typeof body.body === "string" ? body.body : undefined,
-      });
+      const { newItemId } =
+        kind === "folder"
+          ? addFolder(collection, parentFolderId, body.name)
+          : addRequest(collection, parentFolderId, {
+              name: body.name,
+              method: body.method as string,
+              url: body.url as string,
+              headers: Array.isArray(body.headers) ? (body.headers as Array<{ key: string; value: string }>) : [],
+              body: typeof body.body === "string" ? body.body : undefined,
+            });
       updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
       const updated = getUploadedCollection(existing.id);
       const rebuilt = parseStoredCollection(updated.collection);

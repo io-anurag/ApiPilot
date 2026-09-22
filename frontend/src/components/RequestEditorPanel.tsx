@@ -10,6 +10,9 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const TABS = ["Headers", "Body", "Tests"] as const;
 type Tab = (typeof TABS)[number];
 
+const PREVIEW_TABS = ["Request", "Body", "Tests"] as const;
+type PreviewTab = (typeof PREVIEW_TABS)[number];
+
 interface HeaderRow {
   key: string;
   value: string;
@@ -38,10 +41,16 @@ export function RequestEditorPanel({
   request,
   locked,
   onSave,
+  onClose,
 }: Readonly<{
   request: CollectionRequestView;
   locked: boolean;
   onSave: (requestId: string, edit: RequestEdit) => Promise<void>;
+  /** Deselects this request (returns the main pane to its empty-selection placeholder) — this
+   * panel's own close control, rather than a single button that dismissed the whole tree+editor
+   * section (which meant closing the currently open request also hid the tree you'd need to pick
+   * a different one). */
+  onClose: () => void;
 }>) {
   const [method, setMethod] = useState(request.raw.method);
   const [url, setUrl] = useState(request.raw.url);
@@ -49,6 +58,7 @@ export function RequestEditorPanel({
   const [body, setBody] = useState(request.raw.body ?? "");
   const [testScript, setTestScript] = useState(request.testScript ?? "");
   const [activeTab, setActiveTab] = useState<Tab>("Headers");
+  const [previewTab, setPreviewTab] = useState<PreviewTab>("Request");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +94,17 @@ export function RequestEditorPanel({
   return (
     <div data-testid="request-editor-panel" className="rounded-md border border-border bg-surface">
       <div className="space-y-3 border-b border-border p-4">
-        <h3 className="text-xs font-semibold uppercase text-muted">{request.name}</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase text-muted">{request.name}</h3>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={handleSave} disabled={locked || saving} className={BUTTON_STYLES.primary}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button type="button" onClick={onClose} className={BUTTON_STYLES.secondary}>
+              ✕ Close
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2">
           <label htmlFor="request-editor-method" className="sr-only">
             Method
@@ -113,9 +133,6 @@ export function RequestEditorPanel({
             onChange={(event) => setUrl(event.target.value)}
             className="flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <button type="button" onClick={handleSave} disabled={locked || saving} className={BUTTON_STYLES.primary}>
-            {saving ? "Saving…" : "Save"}
-          </button>
         </div>
         {error && <ErrorState message={error} />}
       </div>
@@ -218,29 +235,58 @@ export function RequestEditorPanel({
           </div>
         )}
 
-        <div className="mt-4 space-y-2 border-t border-border pt-3">
-          <p className="text-xs font-semibold uppercase text-muted">Resolved preview</p>
-          <p className="text-sm">
-            <span className="font-mono font-semibold">{request.resolved.method}</span>{" "}
-            <span className="font-mono">
-              <VariableHighlightedText text={request.resolved.url} />
-            </span>
-          </p>
-          {request.resolved.headers.length > 0 && (
-            <ul className="space-y-0.5 text-xs">
-              {request.resolved.headers.map((header, index) => (
-                <li key={index} className="font-mono">
-                  {header.key}: <VariableHighlightedText text={header.value} />
-                </li>
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase text-muted">Resolved preview</p>
+          <div role="tablist" aria-label="Resolved preview sections" className="flex border-b border-border">
+            {PREVIEW_TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={previewTab === tab}
+                onClick={() => setPreviewTab(tab)}
+                className={`${TAB_BUTTON} ${previewTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2 pt-3">
+            {previewTab === "Request" && (
+              <>
+                <p className="text-sm">
+                  <span className="font-mono font-semibold">{request.resolved.method}</span>{" "}
+                  <span className="font-mono">
+                    <VariableHighlightedText text={request.resolved.url} />
+                  </span>
+                </p>
+                {request.resolved.headers.length > 0 ? (
+                  <ul className="space-y-0.5 text-xs">
+                    {request.resolved.headers.map((header, index) => (
+                      <li key={index} className="font-mono">
+                        {header.key}: <VariableHighlightedText text={header.value} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted">No headers.</p>
+                )}
+              </>
+            )}
+            {previewTab === "Body" &&
+              (request.resolved.body ? <CodeBlock label="Body" content={request.resolved.body} /> : <p className="text-xs text-muted">No body.</p>)}
+            {previewTab === "Tests" &&
+              (testScript.trim().length > 0 ? (
+                <CodeBlock label="Test script" content={testScript} />
+              ) : (
+                <p className="text-xs text-muted">No test script.</p>
               ))}
-            </ul>
-          )}
-          {request.resolved.body && <CodeBlock label="Body" content={request.resolved.body} />}
-          {request.unresolvedVariables.length > 0 && (
-            <p className="text-xs text-warning-700 dark:text-warning-300">
-              Unresolved: {request.unresolvedVariables.join(", ")}
-            </p>
-          )}
+            {request.unresolvedVariables.length > 0 && (
+              <p className="text-xs text-warning-700 dark:text-warning-300">
+                Unresolved: {request.unresolvedVariables.join(", ")}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

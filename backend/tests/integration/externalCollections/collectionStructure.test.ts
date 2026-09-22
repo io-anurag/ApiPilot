@@ -53,6 +53,41 @@ describe("AP-028 collection structure endpoints (US4, quickstart.md Scenario 5)"
     );
   });
 
+  it("POST .../items with kind: 'folder' adds an empty folder to the root and to a nested folder", async () => {
+    const app = createApp();
+    const agent = request.agent(app);
+    const id = await upload(agent);
+    const view = (await agent.get(`/api/external-collections/${id}/collection`)).body.collectionView;
+    const folderId = view.folders[0].id;
+
+    const toRoot = await agent
+      .post(`/api/external-collections/${id}/items`)
+      .send({ parentFolderId: null, name: "New folder", kind: "folder" });
+    expect(toRoot.status).toBe(201);
+    expect(toRoot.body.collectionView.folders.map((f: { name: string }) => f.name)).toContain("New folder");
+
+    const toFolder = await agent
+      .post(`/api/external-collections/${id}/items`)
+      .send({ parentFolderId: folderId, name: "Nested folder", kind: "folder" });
+    expect(toFolder.status).toBe(201);
+    const updatedRootFolder = toFolder.body.collectionView.folders.find((f: { id: string }) => f.id === folderId);
+    expect(updatedRootFolder.folders.map((f: { name: string }) => f.name)).toContain("Nested folder");
+  });
+
+  it("POST .../items with kind: 'folder' requires only a name, not method/url", async () => {
+    const app = createApp();
+    const agent = request.agent(app);
+    const id = await upload(agent);
+
+    const missingName = await agent.post(`/api/external-collections/${id}/items`).send({ parentFolderId: null, kind: "folder" });
+    expect(missingName.status).toBe(400);
+
+    const noMethodOrUrl = await agent
+      .post(`/api/external-collections/${id}/items`)
+      .send({ parentFolderId: null, name: "Fine without method/url", kind: "folder" });
+    expect(noMethodOrUrl.status).toBe(201);
+  });
+
   it("DELETE .../items/:itemId removes a request, and removes every nested request when the target is a folder", async () => {
     const app = createApp();
     const agent = request.agent(app);

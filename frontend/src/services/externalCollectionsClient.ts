@@ -284,6 +284,28 @@ export async function addUploadedCollectionRequest(
   return { ok: true, collectionView: parsed.collectionView as CollectionView, newItemId: parsed.newItemId as string };
 }
 
+/** Adds a new, empty folder to a chosen folder (or the collection root, `parentFolderId: null`) —
+ * same endpoint as `addUploadedCollectionRequest`, distinguished by `kind: "folder"`. */
+export async function addUploadedCollectionFolder(
+  id: string,
+  input: { parentFolderId: string | null; name: string },
+): Promise<AddCollectionRequestResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/external-collections/${id}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...input, kind: "folder" }),
+    });
+  } catch (err) {
+    logger.error("network_error", { operation: "addUploadedCollectionFolder", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
+  }
+  const parsed = await response.json().catch(() => null);
+  if (!response.ok) return parseError(parsed, response.status, "addUploadedCollectionFolder");
+  return { ok: true, collectionView: parsed.collectionView as CollectionView, newItemId: parsed.newItemId as string };
+}
+
 /** FR-014 — deletes an existing request or folder (and everything nested within it). */
 export async function deleteUploadedCollectionItem(id: string, itemId: string): Promise<CollectionViewResult> {
   let response: Response;
