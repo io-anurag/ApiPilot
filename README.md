@@ -64,6 +64,8 @@ The following capabilities are implemented in the current repository:
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
+- A Postman-style collection and variable editor for an uploaded external collection: a navigable folder/request tree, a resolved-vs-raw request preview, a variable panel showing each variable's value/source/resolved-or-missing status, full method/URL/header/body/test-script editing, add/delete/rename/reorder for requests and folders, and a selective-run checklist to run a chosen subset of requests. Edits are stored as a persisted override layered on the original request rather than a mutation of it, are reflected in the resulting run's own record, and are locked read-only while a run of that collection is in progress. This editor is currently wired up only for uploaded external collections, not yet for ApiPilot-generated collections handed to execution (see [Limitations](#limitations-and-roadmap)).
+- A shared frontend design system and application shell: design tokens for light/dark mode (a manual toggle persisted per browser, defaulting to the OS preference), a reusable component library (buttons, status/decision badges, HTTP method indicators, AI-vs-deterministic provenance indicators, tabs, dialogs, empty/error/loading states), and a workflow stage tracker that explains why a locked stage is unavailable — used consistently across every page.
 - React/Vite frontend with accessible review controls, progress reporting, filtering, bulk actions, loading/error/empty states, and frontend error forwarding to the backend logger.
 
 ## Architecture
@@ -307,7 +309,14 @@ Mounted independently of the guided-workflow routes above — no active workflow
 | `POST` | `/api/external-collections`                               | Multipart `name`, `tier`, `collection` file, `environment` file; returns the created summary. |
 | `GET`  | `/api/external-collections`                               | Lists the session's uploaded collections (never `variableValues` or the raw collection body). |
 | `DELETE` | `/api/external-collections/:id`                         | Removes an uploaded collection; past runs against it are unaffected.                          |
-| `POST` | `/api/external-collections/:id/execution/start`            | Starts a run using `{ confirmed? }`; two independent confirmation gates may apply in sequence. |
+| `GET`  | `/api/external-collections/:id/collection`                 | Returns the collection/variable editor's read model: folder/request tree, per-request raw and resolved form, and variable bindings. |
+| `PUT`  | `/api/external-collections/:id/variables`                  | Saves variable value overrides into the environment's stored values.                                                                |
+| `PUT`  | `/api/external-collections/:id/requests/:requestId`        | Saves a persisted override of one request's method/URL/headers/body/test script.                                                    |
+| `POST` | `/api/external-collections/:id/items`                      | Adds a new request or folder.                                                                                                         |
+| `DELETE` | `/api/external-collections/:id/items/:itemId`            | Deletes a request or folder (and everything nested within a deleted folder).                                                          |
+| `PUT`  | `/api/external-collections/:id/items/:itemId/rename`       | Renames a request or folder.                                                                                                           |
+| `PUT`  | `/api/external-collections/:id/containers/:containerId/order` | Reorders requests/folders within their containing folder or the collection root.                                                  |
+| `POST` | `/api/external-collections/:id/execution/start`            | Starts a run using `{ confirmed?, selectedRequestIds? }`; two independent confirmation gates may apply in sequence, and an optional request-ID subset runs only those requests. |
 | `POST` | `/api/external-collections/:id/execution/cancel`           | Requests cancellation of the active run.                                                       |
 | `GET`  | `/api/external-collections/:id/execution/runs`              | Lists this collection's run summaries.                                                          |
 | `GET`  | `/api/external-collections/:id/execution/runs/:runId`        | Retrieves one run and its per-request results, independent of the collection's own lifecycle.  |
@@ -417,8 +426,9 @@ Current intentional limitations include:
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
 - AP-018, AI-assisted execution failure analysis, is not implemented. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
+- The Postman-style collection/variable editor (AP-028) is wired up only for uploaded external collections. There is no equivalent editing surface yet for an ApiPilot-generated collection handed to execution; extending it there is tracked as follow-up work, not closed.
 
-The implementation status for AP-001 through AP-025 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md). That roadmap identifies implemented features and remaining validation tasks; feature `spec.md` files provide the normative behavior and contracts.
+The implementation status for AP-001 through AP-026 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. AP-027 (frontend design system) and AP-028 (collection/variable editor) are implemented — see their `tasks.md` completion state — but not yet reflected in the roadmap's own status table. Feature `spec.md` files provide the normative behavior and contracts for every feature, including AP-027/AP-028.
 
 ## Documentation
 
@@ -433,6 +443,8 @@ The implementation status for AP-001 through AP-025 is maintained in [specs/ROAD
 - [Execution and results specification](specs/018-test-execution-results/spec.md)
 - [Local persistence specification](specs/025-local-persistence-layer/spec.md)
 - [External collection import & execution specification](specs/026-external-collection-execution/spec.md)
+- [Frontend design system & application shell specification](specs/027-frontend-design-system/spec.md)
+- [Postman-style collection & variable editor specification](specs/028-collection-editor-ui/spec.md)
 
 ## License
 

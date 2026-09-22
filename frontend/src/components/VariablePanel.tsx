@@ -32,10 +32,15 @@ export function VariablePanel({
   variables,
   locked,
   onSave,
+  onClose,
 }: Readonly<{
   variables: VariableBinding[];
   locked: boolean;
   onSave: (variableValues: Record<string, string>) => Promise<void>;
+  /** Deselects this panel (returns the main pane to its empty-selection placeholder) — mirrors
+   * `RequestEditorPanel`'s own close control, rather than a single button that dismissed the
+   * whole tree+editor section. */
+  onClose: () => void;
 }>) {
   const [rows, setRows] = useState<VariableRow[]>(() => toRows(variables));
   const initialValues = useRef<Record<string, string>>(Object.fromEntries(rows.map((r) => [r.name, r.value])));
@@ -80,9 +85,19 @@ export function VariablePanel({
 
   return (
     <div data-testid="variable-panel" className="space-y-3 rounded-md border border-border bg-surface p-4">
-      <p className="text-xs text-muted">
-        Values used to resolve every <code>{"{{variable}}"}</code> placeholder in this collection's requests.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">
+          Values used to resolve every <code>{"{{variable}}"}</code> placeholder in this collection's requests.
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" onClick={handleSave} disabled={locked || saving} className={BUTTON_STYLES.primary}>
+            {saving ? "Saving…" : "Save variables"}
+          </button>
+          <button type="button" onClick={onClose} className={BUTTON_STYLES.secondary}>
+            ✕ Close
+          </button>
+        </div>
+      </div>
       {locked && (
         <p role="status" className="rounded-md border border-warning-100 bg-warning-50 px-2 py-1 text-xs text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100">
           This collection is read-only while a run is in progress.
@@ -153,10 +168,6 @@ export function VariablePanel({
       </div>
 
       {error && <ErrorState message={error} />}
-
-      <button type="button" onClick={handleSave} disabled={locked || saving} className={BUTTON_STYLES.primary}>
-        {saving ? "Saving…" : "Save variables"}
-      </button>
     </div>
   );
 }

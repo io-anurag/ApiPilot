@@ -422,6 +422,66 @@ real API scale through filtering, bulk selection, explicit confirmations, visibl
 per-item decision records. State, severity, provenance, HTTP methods, and errors use consistent
 visual semantics and are never communicated through color alone.
 
+### Design system and application shell
+
+specs/027-frontend-design-system establishes the presentation layer every page builds on, without
+changing any backend contract, workflow rule, or existing page behavior (its own FR-012). Design
+tokens — color, typography, spacing, radius, shadow — live in `frontend/src/index.css` under a
+Tailwind v4 `@theme` block rather than a `tailwind.config.js` (CLAUDE.md §27). Dark mode is not
+purely a media-query default: `useTheme.ts` resolves an explicit, per-browser choice (`localStorage`,
+falling back to the OS preference) and writes it to a `data-theme` attribute on `<html>`; a
+`@custom-variant dark` declaration keys every `dark:` Tailwind utility off that attribute instead of
+`prefers-color-scheme` directly, so an in-app choice that disagrees with the OS preference does not
+leave the page half-switched. `ThemeToggle.tsx` exposes the manual switch; `index.html` sets the same
+attribute synchronously before first paint to avoid a flash of the wrong theme.
+
+A shared component library gives recurring concepts one implementation instead of one per page:
+`StatusBadge`, `HttpMethodBadge`, and `ProvenanceBadge` for decision/status, HTTP method, and
+AI-vs-deterministic provenance indicators; `Dialog`/`ConfirmDialog` and `Tabs` for interaction
+chrome; `EmptyState`, `ErrorState`, and `Skeleton` for the loading/empty/error triad; and
+`controlStyles.ts` for shared button/input variants. `WorkflowStageTracker.tsx` is the one reusable
+workflow-progress indicator, presenting the product's real ten-stage order (Upload through
+Execution) with completed/active/pending/locked status and an explanation for why a locked stage is
+unavailable, rather than each page building its own progress display. Every status/decision
+indicator carries a text label or icon in addition to color, and every interactive element is
+keyboard-operable with a visible focus indicator (constitution/CLAUDE.md §38).
+
+### Collection and variable editor
+
+specs/028-collection-editor-ui adds a Postman-style pre-run editing surface — `CollectionTreeView`,
+`RequestEditorPanel`, and `VariablePanel` — so an operator can see and adjust exactly what a run will
+send before starting it. It is a downstream, execution-time layer: it does not change how a
+collection or its underlying `TestScenario`/`GeneratedRequest` is generated (specs/003, 007, 016),
+and never mutates a generated artifact's provenance in place. Instead, an edit is stored as a
+`RequestOverride` layered on top of the request's original definition; a variable override is
+persisted into the selected `Environment.variableValues`, reusing the same persistence
+`EnvironmentForm` already relies on. Both kinds of override are visibly reflected in the run record
+of anything actually executed with them applied, and a request-scoped override is discarded rather
+than silently reapplied if that request no longer exists in a later re-upload or regeneration.
+
+`CollectionTreeView` reproduces the collection's own folder/request order and supports add, delete,
+rename, and reorder for both requests and folders. `RequestEditorPanel` is a tabbed
+Headers/Body/Tests editor — method, URL, and Save stay visible across tabs, and the resolved
+(variable-substituted) preview is always visible below them — covering full method/URL/header/body
+editing plus the request's own `pm.test(...)` test script, which previously executed on every run
+but was neither shown nor editable pre-run. `VariablePanel` lists every variable the collection
+references (plus any the user defines ahead of a request that will use it), its resolved value, and
+which scope currently wins — collection default, environment, or user override — updating every
+visible request preview live as values change. `execution/variableCompleteness.ts`'s existing
+missing-variable check, not a new one, still gates starting a run. The whole view becomes read-only
+while a run of that collection is in progress (FR-017), enforced with a lightweight poll rather than
+a push channel.
+
+A related addition, layered onto specs/026's execution/start rather than a new endpoint, is
+selective run: an optional `selectedRequestIds` array lets the run panel's Postman-Runner-style
+checklist execute a chosen subset of the collection's requests instead of always all of them.
+
+**Known scope gap, documented rather than silently left implicit**: `CollectionTreeView`,
+`RequestEditorPanel`, and `VariablePanel` are mounted only in `ExternalCollectionsPage.tsx`. Every
+functional requirement in specs/028 is implemented and tested against `UploadedCollectionSet`, but
+there is no equivalent surface yet in the guided-workflow/generated-collection page — extending this
+editor to ApiPilot-generated collections handed to execution remains open follow-up work.
+
 ## Deployment and validation
 
 Vercel deploys `frontend` and `backend` as separate services. [vercel.json](../vercel.json) rewrites
@@ -443,7 +503,8 @@ tests and benchmarks are opt-in because they may provision or load a local model
 ## Normative sources
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
-feature-level behavior, contracts, success criteria, and implementation status live in the
-[roadmap](../specs/ROADMAP.md) and feature directories under `specs/001-*` through `specs/026-*`.
-Where this document and a feature specification differ, the applicable specification and
-constitution take precedence.
+feature-level behavior, contracts, success criteria live in the feature directories under
+`specs/001-*` through `specs/028-*`. [The roadmap](../specs/ROADMAP.md) tracks implementation
+status through AP-026; AP-027 and AP-028 are implemented (see each feature's own `tasks.md`) but
+not yet reflected in the roadmap's status table. Where this document and a feature specification
+differ, the applicable specification and constitution take precedence.

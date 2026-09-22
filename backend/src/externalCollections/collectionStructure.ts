@@ -75,6 +75,27 @@ export function addRequest(collection: Collection, parentFolderId: string | null
 }
 
 /**
+ * Adds a new, empty folder to a chosen parent folder or the collection root — same mechanism as
+ * `addRequest`, via the SDK's own `PropertyList.add()`. The SDK's `_createNewGroupedItem` (see
+ * `item-group.js`) picks `ItemGroup` over `Item` for a plain object based solely on whether it has
+ * a truthy `item` property, so an empty `item: []` array is sufficient to create a folder rather
+ * than a request. Throws `FolderNotFoundError` when `parentFolderId` is given but doesn't resolve.
+ */
+export function addFolder(collection: Collection, parentFolderId: string | null, name: string): { newItemId: string } {
+  const target: Container | undefined = parentFolderId === null ? collection : findFolder(collection, parentFolderId);
+  if (!target) throw new FolderNotFoundError(parentFolderId ?? "");
+
+  // Same pattern as `addRequest` above: the SDK's runtime `PropertyList.add()` happily accepts a
+  // plain object it normalizes itself, but its typings only declare already-constructed
+  // `Item`/`ItemGroup` instances.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see comment above
+  target.items.add({ name, item: [] } as any);
+  const members = target.items.all();
+  const added = members[members.length - 1];
+  return { newItemId: added.id };
+}
+
+/**
  * Deletes a request or folder — and, for a folder, everything nested within it (FR-014) — via the
  * SDK's own `PropertyList.remove()`. Throws `ItemNotFoundError` if `id` doesn't resolve.
  */

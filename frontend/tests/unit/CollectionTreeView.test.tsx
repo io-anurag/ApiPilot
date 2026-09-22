@@ -20,7 +20,7 @@ function folder(overrides: Partial<CollectionFolderView> = {}): CollectionFolder
 }
 
 function actions(): CollectionTreeActions {
-  return { onAddRequest: vi.fn(), onDeleteItem: vi.fn(), onRenameItem: vi.fn(), onMoveItem: vi.fn() };
+  return { onAddRequest: vi.fn(), onAddFolder: vi.fn(), onDeleteItem: vi.fn(), onRenameItem: vi.fn(), onMoveItem: vi.fn() };
 }
 
 describe("CollectionTreeView", () => {
@@ -77,6 +77,9 @@ describe("CollectionTreeView", () => {
     screen.getByRole("button", { name: "+ Add request" }).click();
     expect(treeActions.onAddRequest).toHaveBeenCalledWith(null);
 
+    screen.getByRole("button", { name: "+ Add folder" }).click();
+    expect(treeActions.onAddFolder).toHaveBeenCalledWith(null);
+
     fireEvent.click(screen.getByRole("button", { name: "Actions for Get widget" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(treeActions.onDeleteItem).toHaveBeenCalledWith("item-1");
@@ -88,6 +91,27 @@ describe("CollectionTreeView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions for Second" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
     expect(treeActions.onMoveItem).toHaveBeenCalledWith("root", "item-2", "up");
+  });
+
+  it("a folder's own actions menu can add a nested request or folder inside it", () => {
+    const treeActions = actions();
+    render(
+      <CollectionTreeView
+        items={[]}
+        folders={[folder()]}
+        onSelectRequest={vi.fn()}
+        locked={false}
+        actions={treeActions}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Widgets" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add request here" }));
+    expect(treeActions.onAddRequest).toHaveBeenCalledWith("folder-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Widgets" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add folder here" }));
+    expect(treeActions.onAddFolder).toHaveBeenCalledWith("folder-1");
   });
 
   it("the actions menu closes after selecting an item", () => {

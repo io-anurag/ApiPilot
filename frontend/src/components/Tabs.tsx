@@ -21,7 +21,15 @@ export function Tabs<T extends string>({
 }>) {
   return (
     <nav
-      className="mb-6 flex gap-1 overflow-x-auto border-b border-border"
+      // `overflow-y-hidden` is load-bearing, not decorative: per the CSS overflow spec, a
+      // non-`visible` `overflow-x` with an unset `overflow-y` computes `overflow-y` to `auto` too
+      // (not `visible`), because the two axes can't mix `visible` with a non-`visible` value.
+      // Without this, the browser treats this row as vertically scrollable as well, and a single
+      // pixel of vertical overflow from the focus ring / active-tab border — enough to happen on
+      // an ordinary render, not just under stress — was enough to draw a vertical scrollbar whose
+      // track is nearly the same size as its thumb, rendering as what looks like two touching
+      // up/down arrows with no visible groove between them.
+      className="mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border"
       aria-label={label}
     >
       {tabs.map((tab) => (

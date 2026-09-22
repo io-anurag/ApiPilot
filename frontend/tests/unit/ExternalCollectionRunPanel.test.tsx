@@ -146,10 +146,14 @@ describe("ExternalCollectionRunPanel", () => {
     expect(screen.getByText("Delete widget")).toBeInTheDocument();
     // "Passed" also appears as the overview stat's <dt> label, so assert at least one match rather than a unique one.
     expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
-    expect(screen.getByText("assertion-failed")).toBeInTheDocument();
-    expect(screen.getByText("cancelled")).toBeInTheDocument();
+    // Sentence-case display labels (matching ExecutionResultsPanel's own convention), not the
+    // raw kebab-case enum values ("assertion-failed", "cancelled").
+    expect(screen.getByText("Assertion failed")).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
 
+    // The failed test's own detail lives under the expanded row's "Tests" tab, not shown by default.
     fireEvent.click(screen.getByText("Create widget"));
+    fireEvent.click(await screen.findByRole("button", { name: "Tests" }));
     expect(await screen.findByText("expected 201, got 500")).toBeInTheDocument();
   });
 
