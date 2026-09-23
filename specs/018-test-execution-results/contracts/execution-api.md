@@ -8,6 +8,11 @@ route already returns the workflow). Every endpoint below requires the calling s
 `postmanGeneration` stage to be `complete`; otherwise every one of them responds identically to
 the existing pattern: `409 { error: "stage_not_active", message: "..." }`.
 
+**API-only since 2026-09-23** (spec.md Clarifications): the UI no longer calls these endpoints;
+it runs generated collections through `specs/026-external-collection-execution/contracts/
+external-collections-api.md` after the guided workflow's hand-off. Every endpoint below is
+retained unchanged.
+
 ## Environments
 
 ### `GET /api/test-generation-workflow/environments`

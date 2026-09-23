@@ -51,6 +51,21 @@ preview, the way Postman's collection/environment editor works.
   allow defining new, currently-unreferenced variables (e.g., for a request the user plans to add
   later), stored alongside the referenced ones (FR-018).
 
+### Session 2026-09-23
+
+- Q: FR-008 requires this view for ApiPilot-generated collections handed off to execution as well
+  as uploaded ones, but the view is mounted only in `ExternalCollectionsPage.tsx`. Since the guided
+  workflow's `execution` stage hands a generated collection off to "Import & Run Collection"
+  (specs/009 Clarifications 2026-09-23), does that hand-off satisfy FR-008, or is a separate
+  editor over specs/018's own execution path still required? → A: The hand-off satisfies FR-008.
+  A generated collection reaches this view by being handed off and uploaded, at which point it is
+  an `UploadedCollectionSet` with the same tree, variable resolution, editing, selective run, and
+  run-lock behavior as any other (research.md D1, which already chose this single backing
+  entity). No separate editor over specs/018's endpoints will be built; those endpoints are
+  retained as an API-only path without an editing surface (specs/018 Clarifications 2026-09-23).
+  Edits apply to the uploaded copy only, never to the generated artifact or its `TestScenario`
+  provenance. The previously recorded "known gap" is closed by this decision, not by new code.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Browse the Collection Before Running (Priority: P1)
@@ -247,13 +262,12 @@ items; verify the collection view reflects all three changes immediately.
   headers, and body content, in addition to setting variable values.
 - **FR-008**: This capability MUST be available for both uploaded external collections
   (specs/026-external-collection-execution) and ApiPilot-generated collections handed off to
-  execution (specs/018-test-execution-results, specs/016-workflow-aware-postman). **Known gap,
-  found 2026-09-21 while updating this documentation**: only the uploaded-external-collection half
-  is actually wired up — `CollectionTreeView`/`RequestEditorPanel`/`VariablePanel` are mounted
-  exclusively in `ExternalCollectionsPage.tsx`, with no equivalent surface in the guided-workflow/
-  generated-collection page. Every other FR in this spec (FR-001 through FR-018) is implemented and
-  tested, but only against `UploadedCollectionSet`. Extending this view to ApiPilot-generated
-  collections is unimplemented, tracked as follow-up work rather than closed.
+  execution (specs/018-test-execution-results, specs/016-workflow-aware-postman). A generated
+  collection meets this requirement through the guided workflow's hand-off: once handed off and
+  uploaded it is an `UploadedCollectionSet`, and this view applies to it unchanged (Clarifications
+  2026-09-23, research.md D1). *(Previously recorded, 2026-09-21, as a known gap because the view
+  is mounted only in `ExternalCollectionsPage.tsx`; closed by that clarification rather than by a
+  second editor over specs/018's endpoints.)*
 - **FR-009**: A variable override made in this view MUST be persisted into the selected
   environment's stored values (`Environment.variableValues`), consistent with how
   `EnvironmentForm` already persists variable edits, so it is available and reused across
@@ -340,8 +354,9 @@ items; verify the collection view reflects all three changes immediately.
 - Because request editing now applies to ApiPilot-generated collections handed off to execution
   (FR-008), this feature extends specs/018-test-execution-results' original scope boundary ("does
   not change how the artifact is generated"). That boundary is preserved at the generation layer;
-  this spec adds an execution-time override layer specs/018 did not previously have. Reconciling
-  specs/018's text with this addition is a documentation follow-up, not a behavioral conflict.
+  this spec adds an execution-time override layer specs/018 did not previously have. specs/018's
+  text was reconciled with this addition on 2026-09-23 (its Clarifications): edits apply only to
+  the uploaded copy a generated collection becomes after the hand-off.
 
 ## Post-implementation follow-up (2026-09-21)
 

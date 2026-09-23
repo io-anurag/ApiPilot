@@ -33,7 +33,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-006 — Test Scenario Review | Implemented |
 | AP-007 — Postman Collection Generator | Implemented (1 follow-up task outstanding: the manual Postman-import acceptance step, which needs a real, operator-authorized target this feature deliberately does not provide). Amended 2026-09-23: a path parameter with no approved value is exported as a resource-qualified variable (`/users/{id}` → `{{user_id}}`) so same-named parameters on different resources no longer share one value |
 | AP-008 — API Dependency & Integration Workflow Engine | Implemented |
-| AP-009 — End-to-End Test Generation Workflow | Implemented. Amended 2026-09-20 (`execution` becomes the tenth, optional stage) and 2026-09-23 (API review records an explicit operation selection that scopes deterministic generation and AI enhancement). See Next Actions #20 for the execution-stage handoff to "Import & Run Collection", which is not yet reflected in `specs/009` |
+| AP-009 — End-to-End Test Generation Workflow | Implemented. Amended 2026-09-20 (`execution` becomes the tenth, optional stage) and 2026-09-23 (API review records an explicit operation selection that scopes deterministic generation and AI enhancement). Amended again 2026-09-23 to specify the execution-stage hand-off to "Import & Run Collection" (Next Actions #20, #22) |
 | AP-010 — Presentation System & Review Scalability | Implemented |
 | AP-011 — Bounded AI Prompt Batching | Implemented |
 | AP-012 — AI Enhancement Progress Visibility | Implemented (1 follow-up task outstanding: manual real-model UI validation from quickstart.md, optional) |
@@ -42,7 +42,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
-| AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13 |
+| AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13. Since 2026-09-23 its endpoints are an API-only path; the UI runs generated collections through AP-026 after the guided workflow's hand-off, and removing its now-unrendered frontend components is open follow-up work (Next Actions #22) |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 | AP-019 — Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented — all tasks (T001–T037) complete |
 | AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete |
@@ -53,7 +53,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-025 — Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented — all 34 tasks complete |
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
-| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented for uploaded external collections — 71 of 72 tasks complete (T050, a documentation-only cross-reference to `specs/018`, left open). FR-008's generated-collection half is not wired up as its own surface; see Next Actions #19 |
+| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1454,8 +1454,9 @@ seeing what was sent afterwards in the results.
 ### Dependencies
 
 Requires AP-026 (`UploadedCollectionSet` storage and execution) and AP-027 (shared components).
-FR-008 also names ApiPilot-generated collections handed to execution (AP-017); that half has no
-dedicated surface — see Next Actions #19.
+FR-008 also names ApiPilot-generated collections handed to execution (AP-017); those are covered
+by the guided workflow's hand-off, which makes them uploaded collections (Clarifications
+2026-09-23, research.md D1).
 
 ---
 
@@ -2112,6 +2113,7 @@ Implementation
       The editor is mounted only in `ExternalCollectionsPage.tsx`. Since #20's execution hand-off,
       a generated collection reaches it by being uploaded; the spec should either record that as
       satisfying FR-008 or keep the gap open.
+    Both items were closed on 2026-09-23 (#22).
 20. **Workflow and execution amendments (2026-09-21 to 2026-09-23)**, each with regression tests:
     - AP-009, API review operation selection (spec Clarifications 2026-09-23): the user checks the
       operations to test; `selectedOperationKeys` scopes deterministic generation, AI enhancement,
@@ -2122,8 +2124,8 @@ Implementation
       and environment instead of running it inside the guided workflow. The operator still picks a
       tier and submits. The guided workflow's specs/018 environment and execution routes remain
       mounted but have no UI caller, and `EnvironmentForm.tsx`/`ExecutionResultsPanel.tsx` are no
-      longer rendered by any page. **Not yet reflected in `specs/009` or `specs/018`**; this is
-      governance drift to resolve through a clarification on those specs.
+      longer rendered by any page. This was governance drift until 2026-09-23, when `specs/009`
+      and `specs/018` gained clarifications for it (#22).
     - AP-009, scenario review finalize lock: decisions, edits, and regeneration are refused while
       a finalize's dependency analysis is in flight, and the UI disables review controls for that
       window.
@@ -2143,4 +2145,19 @@ Implementation
     stored uploaded copy in place, with an `_apipilotEdited` marker), described a guided-workflow
     Run & Results panel that the hand-off replaced, and cited a `vercel.json` that no longer
     exists. The full repository suite passed at this point: 1407 tests passed, 2 skipped, across
-    204 test files.
+    204 test files.22. **Spec drift from #19 and #20 resolved through clarifications (2026-09-23).** Documentation
+    and specification only; no code changed.
+    - `specs/009` (Clarifications 2026-09-23, FR-001 note, superseded Assumptions entry): the
+      `execution` stage hands a generated collection off to "Import & Run Collection" with its
+      upload form pre-filled, and never uploads, confirms, or runs anything on the user's behalf.
+    - `specs/018` (Clarifications 2026-09-23, `contracts/execution-api.md` note): its environment
+      and execution endpoints are retained as an API-only path with unchanged contracts. Its
+      second clarification is the cross-reference to `specs/028` (closing `specs/028` T050).
+    - `specs/028` (Clarifications 2026-09-23, FR-008 rewritten): the hand-off satisfies FR-008, as
+      research.md D1 already assumed, so no second editor over `specs/018`'s endpoints is built.
+    - Remaining follow-up: remove `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx` (no page
+      renders them) and their tests. The execution stage's `skip`/`finish` endpoints also have no
+      UI caller and no entry in any contract. `specs/028` FR-009/FR-009a still describe variable
+      edits saved into `Environment.variableValues` and request edits as a layered override,
+      whereas research.md D4 and the code store both on the `UploadedCollectionSet` in place;
+      that wording needs its own clarification.

@@ -238,9 +238,11 @@ environment to the "Import & Run Collection" view (`App.tsx`'s `handleHandoffToE
 `frontend/src/services/importPreload.ts`), pre-filling its upload form; the operator still chooses a
 risk tier and submits, after which the collection is an ordinary `UploadedCollectionSet`. The
 `execution` stage screen only offers a button to repeat the hand-off, for example after a reload.
-The guided workflow's own environment and execution routes (specs/018) remain mounted but have no
-UI caller, and their frontend components, `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx`,
-are no longer rendered by any page. This hand-off is not yet described in specs/009 or specs/018.
+This hand-off is specified in specs/009 Clarifications 2026-09-23. The guided workflow's own
+environment and execution routes (specs/018) are retained as an API-only path with unchanged
+contracts (specs/018 Clarifications 2026-09-23). Their frontend components, `EnvironmentForm.tsx`
+and `ExecutionResultsPanel.tsx`, are no longer rendered by any page; removing them is a separate
+follow-up. The stage's skip/finish endpoints likewise have no UI caller.
 
 Scenario review has one extra guard. `finalizeScenarioReview` marks `scenarioReview` complete and
 activates `dependencyAnalysis` before awaiting the analysis, so a decision, edit, or regeneration
@@ -554,12 +556,11 @@ A related addition, layered onto specs/026's execution/start rather than a new e
 selective run: an optional `selectedRequestIds` array lets the run panel's Postman-Runner-style
 checklist execute a chosen subset of the collection's requests instead of always all of them.
 
-**Known scope gap**: `CollectionTreeView`, `RequestEditorPanel`, and `VariablePanel` are mounted only
-in `ExternalCollectionsPage.tsx` and operate only on `UploadedCollectionSet`. Since the execution
-hand-off, a generated collection reaches them by being uploaded, but specs/028 FR-008's
-generated-collection requirement (an editor over specs/018's own execution path) is still not met
-as specified. Either the hand-off should be recorded as satisfying FR-008 in the spec, or the gap
-stays open follow-up work.
+`CollectionTreeView`, `RequestEditorPanel`, and `VariablePanel` are mounted only in
+`ExternalCollectionsPage.tsx` and operate only on `UploadedCollectionSet`. A generated collection
+reaches them through the execution hand-off, as an uploaded collection; specs/028 records that as
+satisfying FR-008 (Clarifications 2026-09-23, research.md D1), so there is no second editor over
+specs/018's API-only execution path.
 
 ## Deployment and validation
 
@@ -586,5 +587,4 @@ The architecture is governed by [the constitution](../specs/constitution.md). Th
 feature-level behavior, contracts, and success criteria live in the feature directories under
 `specs/001-*` through `specs/028-*`, and [the roadmap](../specs/ROADMAP.md) tracks implementation
 status through AP-028. Where this document and a feature specification differ, the applicable
-specification and constitution take precedence. The execution hand-off described under "Workflow
-orchestration" is the one behavior documented here that no specification yet covers.
+specification and constitution take precedence.

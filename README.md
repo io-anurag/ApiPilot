@@ -314,7 +314,7 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | `GET`          | `/api/test-generation-workflow/execution/runs`              | List session run summaries.                                                                             |
 | `GET`          | `/api/test-generation-workflow/execution/runs/:runId`       | Retrieve one run and its request results.                                                               |
 
-The environment and execution endpoints above are not used by the current UI, which runs generated collections through the external collection endpoints below after the hand-off.
+The environment and execution endpoints above are retained as an API-only path (`specs/018` Clarifications 2026-09-23); the current UI runs generated collections through the external collection endpoints below after the hand-off.
 
 ### External collection endpoints
 
@@ -441,8 +441,8 @@ Current intentional limitations include:
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
 - AP-018, AI-assisted execution failure analysis, is not implemented. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
-- The Postman-style collection/variable editor (AP-028) operates on uploaded collections only. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection. There is no editor over the guided workflow's own execution path, and AP-028 FR-008's generated-collection requirement remains open follow-up work.
-- The hand-off from the guided workflow's `execution` stage to "Import & Run Collection" is implemented but not yet described in `specs/009` or `specs/018`.
+- The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
+- The guided workflow's `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx` components are no longer rendered by any page; removing them is pending follow-up work (`specs/018` Clarifications 2026-09-23).
 
 The implementation status for AP-001 through AP-028 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 
