@@ -164,7 +164,14 @@ is logged (D12).
 **Decision**: A versioned prompt in `backend/src/failureAnalysis/failureAnalysisPrompt.ts`, with
 `FAILURE_ANALYSIS_RESPONSE_VERSION = 1`. As in AP-005/AP-008, the input is one
 `JSON.stringify({responseVersion, task, request, evidence, specificationContextNote, allowedCauses, example})`
-with a worked example of the output. The response shape is:
+with a worked example of the output.
+
+**Revised 2026-09-23 after evaluation (T057)**: the real-model evaluation showed the default model
+copying v1's single example into every answer. Version 2 replaces it with `examples`, three
+contrasting evidence-and-answer pairs (specification mismatch, downstream, insufficient evidence).
+It also turns each allowed-cause description into a short decision guide, and bumps the version
+to 2. Neither version reaches D11's bar with the default model; see
+[evaluation.md](./evaluation.md). The response shape is unchanged:
 
 ```json
 {"responseVersion":1,"cause":"environment-issue","confidence":0.7,

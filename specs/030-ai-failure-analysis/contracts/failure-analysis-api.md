@@ -34,7 +34,7 @@ progress (FR-001, clarification 2026-09-23).
 When every check passes, the response is **200 OK** with a `FailureAnalysisAttempt` body:
 
 ```json
-{ "status": "analyzed", "analysis": { "runId": "…", "resultIndex": 3, "conclusion": { "kind": "likely-cause", "cause": "environment-issue", "confidence": 0.72 }, "summary": "…", "investigationSteps": ["…"], "citedEvidenceIds": ["E1", "E3"], "evidence": [ { "id": "E1", "kind": "failure-category", "source": "run-result", "text": "Request failed: connectivity failure (no response received)" } ], "specificationContext": { "status": "unavailable", "reason": "not-generated-by-current-workflow" }, "provenance": { "source": "AI", "aiModel": "onnx-community/Qwen2.5-0.5B-Instruct", "aiProvider": "local", "responseVersion": 1, "confidenceThreshold": 0.5, "generatedAt": "2026-09-23T10:00:00.000Z" }, "requestName": "…", "requestMethod": "GET" } }
+{ "status": "analyzed", "analysis": { "runId": "…", "resultIndex": 3, "conclusion": { "kind": "likely-cause", "cause": "environment-issue", "confidence": 0.72 }, "summary": "…", "investigationSteps": ["…"], "citedEvidenceIds": ["E1", "E3"], "evidence": [ { "id": "E1", "kind": "failure-category", "source": "run-result", "text": "Request failed: connectivity failure (no response received)" } ], "specificationContext": { "status": "unavailable", "reason": "not-generated-by-current-workflow" }, "provenance": { "source": "AI", "aiModel": "onnx-community/Qwen2.5-0.5B-Instruct", "aiProvider": "local", "responseVersion": 2, "confidenceThreshold": 0.5, "generatedAt": "2026-09-23T10:00:00.000Z" }, "requestName": "…", "requestMethod": "GET" } }
 ```
 
 On `analyzed`, the analysis has been stored, and it replaced any earlier analysis for this
@@ -87,7 +87,7 @@ every "Analyze failure" action and show the phase and elapsed time, including af
 `GET /api/external-collections/:id/execution/runs/:runId` and the run returned by
 `…/execution/start` now carry `itemId` on each result recorded after this feature ships
 (data-model.md). Existing fields and behavior are unchanged. `specs/026-external-collection-execution/contracts/external-collections-api.md`
-and its `data-model.md` are to be updated with a dated amendment note during implementation.
+and its `data-model.md` carry a dated amendment note (2026-09-23).
 
 ## Additive change to the AP-004 provider contract
 
@@ -96,8 +96,8 @@ The provider contract gains two optional, backward-compatible additions:
 - An optional second parameter `hooks?: { onStarted?: () => void }` on `AIProvider.infer` (research D10).
 
 Both are described in data-model.md. Existing callers pass neither, and their behavior is
-byte-identical. `specs/004-ai-provider-local-inference`'s contract is to
-be updated with a dated amendment note during implementation.
+byte-identical. `specs/004-ai-provider-local-inference/data-model.md` carries a dated amendment note
+(2026-09-23).
 
 ## Logging
 

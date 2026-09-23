@@ -70,7 +70,7 @@ It is never re-read from the workflow when the analysis is displayed (FR-018, re
 | `source` | `"AI"` | Constitution XIII. |
 | `aiModel` | string | From `InferenceResponse.modelId`. |
 | `aiProvider` | `AIProviderMode` | From `InferenceResponse.provider`. |
-| `responseVersion` | number | `FAILURE_ANALYSIS_RESPONSE_VERSION` (currently 1). |
+| `responseVersion` | number | `FAILURE_ANALYSIS_RESPONSE_VERSION` (currently 2; v1 → v2 on 2026-09-23, see evaluation.md). |
 | `confidenceThreshold` | number | The threshold applied (0.5), so an old analysis stays interpretable if the constant changes. |
 | `generatedAt` | ISO string | From an injected clock. |
 
