@@ -791,7 +791,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         return;
       }
 
-      const requirement = confirmationRequirement(workflow.apiModel!, environment);
+      const requirement = confirmationRequirement(workflow.apiModel!, workflow.approvedTestModel!, environment);
       if (requirement && !confirmed) {
         logRequestFailed(req, startedAt, 409, "confirmation_required");
         res.status(409).json({

@@ -57,6 +57,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
+| AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1644,6 +1645,48 @@ and AP-027 (shared UI components).
 
 ---
 
+## AP-030 — Test Execution Gap Closure
+
+### Objective
+
+Close the three gaps a 2026-09-23 convergence assessment found between AP-017's specification
+(`specs/018-test-execution-results`) and its shipped generated-collection execution path. The spec
+directory is `specs/029-execution-gap-closure`. Its number (`029`) and this product identifier
+differ because AP-029 was already assigned to k6 Performance Testing, the same divergence
+`specs/017` and `specs/018` record.
+
+### Scope
+
+- **Dependency-aware execution** (`specs/018` FR-018). A request is not sent when an earlier
+  request it takes a data value from has a blocking outcome: not attempted, a connectivity
+  failure, a timeout, an unexpected status, or an assertion that could not be evaluated. This
+  applies to approved-workflow steps (AP-016) and data automatic chains (AP-019). The request is
+  recorded as `not-attempted` / `"dependency-not-met"`, with `unmetDependencies` naming the
+  earlier requests.
+- **Processing stage** (`specs/018` FR-016). Every result records `processingStage`: `not-sent`,
+  `no-response`, or `response-received`.
+- **Confirmation accuracy** (`specs/018` FR-007). The destructive-request confirmation counts and
+  lists only destructive operations that have an approved scenario. Staging and production still
+  always require confirmation.
+
+### Constraints
+
+- A schema mismatch alone is not blocking. This deliberately narrows `specs/018` FR-018's "never
+  sent with a missing value" edge case (`specs/029` Clarifications 2026-09-23).
+- Credential hand-offs (AP-023) and the OAuth2 token request (AP-024) are never enforced, and the
+  token request is never counted as destructive.
+- Additive API changes only. The exported Postman artifact is byte-for-byte unchanged, and results
+  stored before this feature are returned unchanged.
+- No frontend change, and no change to AP-026's uploaded-collection path.
+
+### Dependencies
+
+Hardens AP-017 (`specs/018-test-execution-results`). Reads the data hand-offs AP-016 and AP-019
+already produce, respects AP-023/AP-024's credential behavior, and relies on AP-025's JSON result
+storage needing no migration.
+
+---
+
 # Post-MVP Features
 
 ## AP-017 — Test Execution & Results
@@ -1846,6 +1889,9 @@ AP-029 is also omitted from the main pipeline. It is a second artifact target be
 built from the same approved `TestModel` and workflows, and requires AP-003, AP-008, AP-009,
 AP-016, AP-019, AP-021 through AP-026, and AP-027 (see its Feature Decomposition section).
 
+AP-030 is a hardening feature for AP-017 and is likewise omitted. It requires AP-017, and reads
+the hand-offs produced by AP-016 and AP-019 (see its entry above).
+
 ---
 
 # MVP Boundary
@@ -1880,7 +1926,8 @@ AP-011 through AP-016, and AP-019 through AP-028 (hardening/extension features l
 AP-004/AP-005/AP-007/AP-008/AP-009/AP-017, plus the standalone collection import, design system,
 and collection editor), are also outside the formal MVP boundary above, but — unlike AP-018 — all
 sixteen are already implemented; see the Implementation Status table. AP-029 (k6 performance
-testing) is likewise outside the MVP boundary and not yet started.
+testing) is likewise outside the MVP boundary and not yet started. AP-030 (test execution gap
+closure) is outside the MVP boundary and implemented.
 
 ---
 
@@ -2381,3 +2428,21 @@ Implementation
       prerequisite), then mirror it into `specs/constitution.md`.
     - Run `/speckit-specify` for AP-029, then `/speckit-clarify` on the open decisions listed in
       its Feature Decomposition section, before `/speckit-plan`.
+25. **AP-030 (Test Execution Gap Closure) implemented (2026-09-23).** A `/speckit-converge` pass
+    over `specs/018-test-execution-results` found three gaps.
+    - FR-018 was missing: dependent requests were sent after a failed prerequisite, for example as
+      `GET /orders/null`.
+    - FR-016 was partial: no processing stage was recorded.
+    - FR-007 was partial: the confirmation counted every destructive operation in the
+      specification, not only approved ones.
+
+    They were specified as `specs/029-execution-gap-closure` rather than appended to `specs/018`,
+    and taken through clarify, plan, tasks, analyze, and implement. The clarifications:
+    - Only AP-016/AP-019 data hand-offs are enforced.
+    - A schema mismatch alone is not blocking, which narrows `specs/018` FR-018's edge case,
+      recorded in `specs/018` Clarifications 2026-09-23.
+    - The OAuth2 token request is never counted as destructive.
+
+    Validation after implementation: `npm run lint` and `npm run build` clean; `npm test` 1422
+    passed, 2 skipped, across 203 test files. That is up from 1392/201 at #23 by exactly the 30
+    tests and 2 files added.

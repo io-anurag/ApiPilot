@@ -101,6 +101,25 @@ export interface RawRequestCapture {
   responseBody?: string;
 }
 
+/**
+ * How far one request got (specs/018 FR-016, specs/029-execution-gap-closure FR-008/FR-009):
+ * `"not-sent"` for every `not-attempted` result; `"no-response"` for a `connectivity-failure`/
+ * `timeout`; `"response-received"` for a pass or any other failure category, since assertion
+ * evaluation always follows a received response on this path.
+ */
+export type RequestProcessingStage = "not-sent" | "no-response" | "response-received";
+
+/**
+ * One earlier request in the same run whose blocking outcome left a data dependency unmet
+ * (specs/029-execution-gap-closure FR-002). The same identifiers that request's own
+ * `RequestResult` carries, so the two can be matched — never a value or variable name (FR-017).
+ */
+export interface UnmetDependency {
+  scenarioId: string;
+  operationPath: string;
+  operationMethod: string;
+}
+
 /** One executed (or explicitly not-attempted) request within an `ExecutionRun` (FR-016). */
 export interface RequestResult {
   /** Ties back to the originating `TestScenario.id`. */
@@ -121,6 +140,17 @@ export interface RequestResult {
   assertionOutcomes: AssertionOutcome[];
   /** Present only when the run's `environmentSnapshot.tier === "local"` (see `RawRequestCapture`). */
   rawCapture?: RawRequestCapture;
+  /**
+   * Set on every result produced since specs/029-execution-gap-closure; absent on results stored
+   * before it, which are returned unchanged (FR-015).
+   */
+  processingStage?: RequestProcessingStage;
+  /**
+   * Present if and only if `notAttemptedReason === "dependency-not-met"`: every earlier request
+   * whose blocking outcome left this request's data dependency unmet, in execution order
+   * (specs/029-execution-gap-closure FR-002).
+   */
+  unmetDependencies?: UnmetDependency[];
 }
 
 /** Aggregate counts, recomputed from `ExecutionRun.results` whenever it changes. */

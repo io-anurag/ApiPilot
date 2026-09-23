@@ -35,6 +35,7 @@ describe("mapNewmanResult", () => {
     expect(result.failureCategory).toBeUndefined();
     expect(result.responseStatusCode).toBe(201);
     expect(result.durationMs).toBe(42);
+    expect(result.processingStage).toBe("response-received");
     expect(result.assertionOutcomes).toEqual([
       { assertionIndex: 0, type: "status-code", outcome: "passed" },
       { assertionIndex: 1, type: "schema-conformance", outcome: "passed" },
@@ -58,6 +59,7 @@ describe("mapNewmanResult", () => {
     expect(result.failureCategory).toBe("unexpected-status");
     expect(result.assertionOutcomes[0]).toMatchObject({ outcome: "failed" });
     expect(result.assertionOutcomes[0].detail).toContain("201");
+    expect(result.processingStage).toBe("response-received");
   });
 
   it("maps a failing schema-conformance assertion to assertion-failed", () => {
@@ -79,6 +81,7 @@ describe("mapNewmanResult", () => {
     expect(result.outcome).toBe("failed");
     expect(result.failureCategory).toBe("assertion-failed");
     expect(result.assertionOutcomes[1].detail).toContain("should be string");
+    expect(result.processingStage).toBe("response-received");
   });
 
   it("redacts a schema-failure detail that names a credential-like field, never surfacing it verbatim (FR-017)", () => {
@@ -117,6 +120,7 @@ describe("mapNewmanResult", () => {
     const result = mapNewmanResult(statusAndSchema, execution, startedAt);
     expect(result.outcome).toBe("failed");
     expect(result.failureCategory).toBe("could-not-evaluate");
+    expect(result.processingStage).toBe("response-received");
     // Never echoes the raw response body snippet Newman's own JSONError message carries (FR-017).
     expect(result.assertionOutcomes[1].detail).not.toContain("not json at all");
   });
@@ -131,6 +135,7 @@ describe("mapNewmanResult", () => {
     const result = mapNewmanResult(statusAndSchema, execution, startedAt);
     expect(result.outcome).toBe("failed");
     expect(result.failureCategory).toBe("connectivity-failure");
+    expect(result.processingStage).toBe("no-response");
     expect(result.responseStatusCode).toBeUndefined();
     expect(result.assertionOutcomes).toEqual([]);
   });
@@ -141,6 +146,7 @@ describe("mapNewmanResult", () => {
     };
     const result = mapNewmanResult(statusAndSchema, execution, startedAt);
     expect(result.failureCategory).toBe("timeout");
+    expect(result.processingStage).toBe("no-response");
   });
 
   it("treats a scenario with no expressible assertions as passed", () => {
@@ -148,6 +154,7 @@ describe("mapNewmanResult", () => {
     const execution: NewmanExecutionResult = { response: { code: 200, responseTime: 5 } };
     const result = mapNewmanResult(bare, execution, startedAt);
     expect(result.outcome).toBe("passed");
+    expect(result.processingStage).toBe("response-received");
     expect(result.assertionOutcomes).toEqual([]);
   });
 
@@ -175,6 +182,7 @@ describe("mapNewmanResult", () => {
         responseHeaders: [{ key: "Content-Type", value: "application/json" }],
         responseBody: '{"id":"1"}',
       });
+      expect(result.processingStage).toBe("response-received");
     });
 
     it("never attaches rawCapture when captureRawDetails is false, even if the caller omits the argument", () => {

@@ -6,9 +6,10 @@ import type {
   RequestResult,
   TestModel,
   TestScenario,
+  UnmetDependency,
   WorkflowExportContext,
 } from "@apipilot/shared-domain";
-import { generateCollection } from "../postman/generateCollection";
+import { generateExecutableCollection } from "../postman/generateCollection";
 import { compareCodeUnits } from "../postman/ordering";
 import { createLogger } from "../logger";
 import { mapNewmanResult } from "./mapNewmanResult";
@@ -58,6 +59,38 @@ function executionOrder(items: PostmanRequestItem[]): PostmanRequestItem[] {
   return [...orderedWorkflowItems, ...standaloneItems];
 }
 
+/** A `not-attempted` result for one scenario-backed item (constitution XIX — an explicit outcome). */
+function notAttemptedResult(
+  scenarioId: string,
+  scenario: TestScenario | undefined,
+  reason: NotAttemptedReason,
+  unmetDependencies?: UnmetDependency[],
+): RequestResult {
+  return {
+    scenarioId: scenario?.id ?? scenarioId,
+    operationPath: scenario?.operationPath ?? "",
+    operationMethod: scenario?.operationMethod ?? "",
+    outcome: "not-attempted",
+    notAttemptedReason: reason,
+    ...(unmetDependencies ? { unmetDependencies } : {}),
+    // specs/029-execution-gap-closure FR-009: every not-attempted result was never dispatched.
+    processingStage: "not-sent",
+    startedAt: new Date().toISOString(),
+    durationMs: 0,
+    assertionOutcomes: [],
+  };
+}
+
+/**
+ * A result whose data dependents must be withheld (specs/029-execution-gap-closure FR-001): any
+ * failure except `"assertion-failed"`, which `mapNewmanResult` assigns only when the status check
+ * passed and a schema-conformance check failed — a response that usually still carries the value
+ * the hand-off needs (research.md D3).
+ */
+function isBlocking(result: RequestResult): boolean {
+  return result.outcome === "failed" && result.failureCategory !== "assertion-failed";
+}
+
 /**
  * Appends a `not-attempted` result for every scenario-backed item in `items`, in order
  * (constitution XIX — every request gets an explicit outcome). A synthesized, non-scenario item
@@ -70,28 +103,21 @@ function appendNotAttempted(
   scenarioById: Map<string, TestScenario>,
   reason: NotAttemptedReason,
 ): void {
-  const nowIso = new Date().toISOString();
   for (const item of items) {
-    if (item.provenance?.scenarioId === undefined) continue;
-    const scenario = scenarioById.get(item.provenance?.scenarioId ?? "");
-    const result: RequestResult = {
-      scenarioId: scenario?.id ?? item.provenance?.scenarioId ?? "unknown",
-      operationPath: scenario?.operationPath ?? "",
-      operationMethod: scenario?.operationMethod ?? "",
-      outcome: "not-attempted",
-      notAttemptedReason: reason,
-      startedAt: nowIso,
-      durationMs: 0,
-      assertionOutcomes: [],
-    };
-    appendResult(runId, result);
+    const scenarioId = item.provenance?.scenarioId;
+    if (scenarioId === undefined) continue;
+    appendResult(runId, notAttemptedResult(scenarioId, scenarioById.get(scenarioId), reason));
   }
 }
 
 /**
  * Runs every approved request for one `ExecutionRun`, strictly one at a time, against the
  * selected environment (FR-010), settling the run as `completed` or `cancelled` once every item
- * has an outcome. Never throws: any unexpected failure is caught, every unreached item is
+ * has an outcome. A request whose data dependency (an approved-workflow step or a data automatic
+ * chain) had a blocking outcome is not sent: it is recorded `not-attempted`/`"dependency-not-met"`
+ * naming its unmet producers (FR-018, as specified by specs/029-execution-gap-closure FR-001).
+ * Cancellation is checked first, so a cancelled run never reports a dependency reason (FR-005).
+ * Never throws: any unexpected failure is caught, every unreached item is
  * recorded `not-attempted`/`"run-ended-before-reached"`, and the run still settles (constitution
  * XIX — Fail Safely). Intended to be started without being awaited by its caller
  * (research.md D4) — the caller responds to its HTTP request immediately, before this resolves.
@@ -103,7 +129,7 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
   let attempted = 0;
 
   try {
-    const outcome = generateCollection(
+    const outcome = generateExecutableCollection(
       apiModel,
       approvedTestModel,
       { baseUrl: environment.baseUrl, variableValues: environment.variableValues },
@@ -123,6 +149,14 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
     let environmentRecord: Record<string, string> = Object.fromEntries(
       outcome.result.environment.values.map((value) => [value.key, value.value]),
     );
+    const { dataDependencies } = outcome;
+    const scenarioIdByItemId = new Map(
+      orderedItems.flatMap((item) =>
+        item.provenance?.scenarioId !== undefined ? [[item.id, item.provenance.scenarioId] as const] : [],
+      ),
+    );
+    // Item ids whose data dependents must be withheld: a blocking outcome, or itself withheld.
+    const blocked = new Set<string>();
 
     for (let index = 0; index < orderedItems.length; index += 1) {
       if (isCancelRequested(runId)) {
@@ -171,6 +205,22 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
         throw new Error(`Execution item at position ${index} carries no resolvable scenarioId.`);
       }
 
+      const unmetProducerIds = (dataDependencies.get(item.id) ?? []).filter((producerId) => blocked.has(producerId));
+      if (unmetProducerIds.length > 0) {
+        const unmetDependencies = unmetProducerIds.map((producerId): UnmetDependency => {
+          const producer = scenarioById.get(scenarioIdByItemId.get(producerId) ?? "");
+          return {
+            scenarioId: producer?.id ?? scenarioIdByItemId.get(producerId) ?? "",
+            operationPath: producer?.operationPath ?? "",
+            operationMethod: producer?.operationMethod ?? "",
+          };
+        });
+        appendResult(runId, notAttemptedResult(scenarioId, scenario, "dependency-not-met", unmetDependencies));
+        blocked.add(item.id);
+        attempted = index + 1;
+        continue;
+      }
+
       const startedAt = new Date().toISOString();
       const itemOutcome = await runSingleItem({
         item,
@@ -184,7 +234,9 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
       environmentRecord = itemOutcome.environment;
       // FR-017a: raw request/response capture is gated strictly to "local"-tier runs.
       const captureRawDetails = environment.tier === "local";
-      appendResult(runId, mapNewmanResult(scenario, itemOutcome.execution, startedAt, captureRawDetails));
+      const result = mapNewmanResult(scenario, itemOutcome.execution, startedAt, captureRawDetails);
+      appendResult(runId, result);
+      if (isBlocking(result)) blocked.add(item.id);
       attempted = index + 1;
     }
 

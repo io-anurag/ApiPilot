@@ -3,8 +3,10 @@ import type {
   ApiModel,
   ApiOperation,
   ArtifactVariable,
+  ExportFailure,
   ExportOptions,
   ExportOutcome,
+  ExportResult,
   GenerationLimitation,
   PostmanAuth,
   PostmanCollection,
@@ -16,19 +18,19 @@ import type {
 } from "@apipilot/shared-domain";
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
 import { buildAuthCredentialRelationships } from "./authCredentialRelationships";
-import { planAutomaticChains } from "./automaticChaining";
+import { planAutomaticChains, type AutomaticChain } from "./automaticChaining";
 import { baseUrlVariable } from "./artifactVariables";
 import { mapOperationAuth, planSchemeVariables, type SchemeVariablePlanEntry } from "./authMapping";
 import { findCredentialProducers } from "./credentialProducers";
 import { buildEnvironment } from "./environment";
 import { groupAndName } from "./folders";
 import { buildOAuth2SetupFolders } from "./oauth2TokenFetch";
-import { collectionIdForScenarios } from "./identifiers";
+import { collectionIdForScenarios, itemIdForScenario, itemIdForWorkflowStep } from "./identifiers";
 import { compareCodeUnits } from "./ordering";
 import { renderReadme } from "./readme";
 import { buildRequestItem } from "./requestItem";
 import { validateCollection } from "./validateCollection";
-import { planApprovedWorkflows, workflowVariableName } from "./workflowRendering";
+import { planApprovedWorkflows, workflowVariableName, type WorkflowRenderPlan } from "./workflowRendering";
 import { applyWorkflowSubstitutions } from "./workflowVariables";
 import { createLogger } from "../logger";
 
@@ -277,6 +279,70 @@ function credentialVariableNamesFor(plan: Map<string, SchemeVariablePlanEntry>):
 }
 
 /**
+ * Consuming item id → ids of the items it takes a data value from, in execution order
+ * (specs/029-execution-gap-closure research.md D1). Holds only data hand-offs — approved-workflow
+ * variables and `kind === "data"` automatic chains — never an auth-credential chain (FR-006) or an
+ * OAuth2 token-fetch item (FR-007). Backend-internal: it describes the items of one generated
+ * collection for the execution path and is never part of the exported artifact.
+ */
+export type ExecutionDependencyMap = ReadonlyMap<string, readonly string[]>;
+
+export type ExecutableExportOutcome =
+  | { ok: true; result: ExportResult; dataDependencies: ExecutionDependencyMap }
+  | { ok: false; failure: ExportFailure };
+
+/**
+ * Collects the data hand-offs the generator already decided on while building the items. Each
+ * consumer's producers are ordered by execution order: a workflow's producers by step position,
+ * a chain's producers by their standalone emission rank (chains only ever link standalone items,
+ * and a chain is only applied when its producer comes first — specs/019 FR-015).
+ */
+function buildDataDependencies(
+  plans: WorkflowRenderPlan[],
+  chains: AutomaticChain[],
+  standaloneOrderRank: ReadonlyMap<string, number>,
+): ExecutionDependencyMap {
+  const producersByConsumer = new Map<string, Map<string, number>>();
+  const link = (consumerId: string, producerId: string, orderKey: number) => {
+    const producers = producersByConsumer.get(consumerId) ?? new Map<string, number>();
+    if (!producers.has(producerId)) producers.set(producerId, orderKey);
+    producersByConsumer.set(consumerId, producers);
+  };
+
+  for (const plan of plans) {
+    if (plan.limitation) continue;
+    for (const variable of plan.variables) {
+      const producer = plan.steps.find((step) => step.position === variable.producerStepIndex);
+      const consumer = plan.steps.find((step) => step.position === variable.consumerStepIndex);
+      if (!producer || !consumer) continue;
+      link(
+        itemIdForWorkflowStep(plan.workflowId, consumer.position, consumer.scenario.id),
+        itemIdForWorkflowStep(plan.workflowId, producer.position, producer.scenario.id),
+        producer.position,
+      );
+    }
+  }
+
+  for (const chain of chains) {
+    if (chain.kind !== "data") continue;
+    for (const consumer of chain.consumers) {
+      link(
+        itemIdForScenario(consumer.scenarioId),
+        itemIdForScenario(chain.producer.scenarioId),
+        standaloneOrderRank.get(chain.producer.scenarioId) ?? 0,
+      );
+    }
+  }
+
+  return new Map(
+    [...producersByConsumer].map(([consumerId, producers]) => [
+      consumerId,
+      [...producers].sort((left, right) => left[1] - right[1]).map(([producerId]) => producerId),
+    ]),
+  );
+}
+
+/**
  * Turns an approved TestModel plus its ApiModel into a complete Postman collection artifact
  * (collection, environment, and readme), honoring the caller's `ExportOptions` (base URL,
  * collection name, supplied variable values). Refuses outright — rather than emitting a
@@ -290,6 +356,22 @@ export function generateCollection(
   options: ExportOptions = {},
   workflowContext?: WorkflowExportContext,
 ): ExportOutcome {
+  const outcome = generateExecutableCollection(apiModel, testModel, options, workflowContext);
+  return outcome.ok ? { ok: true, result: outcome.result } : outcome;
+}
+
+/**
+ * `generateCollection()` plus the collection's data hand-offs between items
+ * (`ExecutionDependencyMap`), for the execution path (specs/029-execution-gap-closure research.md
+ * D1). `result` is exactly what `generateCollection()` returns, so the exported artifact is
+ * unaffected (constitution XVI).
+ */
+export function generateExecutableCollection(
+  apiModel: ApiModel,
+  testModel: TestModel,
+  options: ExportOptions = {},
+  workflowContext?: WorkflowExportContext,
+): ExecutableExportOutcome {
   const startedAt = Date.now();
   const workflowKey = workflowIntentKey(testModel);
   if (workflowKey !== undefined) {
@@ -598,5 +680,6 @@ export function generateCollection(
       ...withoutReadme,
       readme: renderReadme(withoutReadme, declaredVariables, automaticChaining.chains),
     },
+    dataDependencies: buildDataDependencies(workflowPlans.plans, automaticChaining.chains, standaloneOrderRank),
   };
 }

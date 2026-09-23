@@ -146,6 +146,12 @@ function positiveProducerScenario(
 /** One relationship promoted to an automatic chain, and every consumer it resolves (FR-009). */
 export interface AutomaticChain {
   chainId: string;
+  /**
+   * `"credential"` for an auth-credential chain (specs/023 — the consumer relationship's location
+   * is `"auth"`), `"data"` otherwise (specs/019). Recorded so execution can enforce only data
+   * hand-offs (specs/029-execution-gap-closure FR-006, research.md D2).
+   */
+  kind: "data" | "credential";
   variableName: string;
   producer: { operationPath: string; operationMethod: string; field: string; scenarioId: string };
   consumers: {
@@ -289,6 +295,7 @@ function applyChainGroup(
   return {
     chain: {
       chainId,
+      kind: isAuthChain ? "credential" : "data",
       variableName,
       producer: {
         operationPath: first.producer.operationPath,
