@@ -110,7 +110,7 @@ out from the combination of outcome and failure category.
 
 **Why this priority**: The information is already derivable, so nothing is wrong or unsafe
 today, but `specs/018` FR-016 names processing stage as a required part of every result.
-Recording it explicitly makes results self-describing for API callers and for AP-018 (AI
+Recording it explicitly makes results self-describing for API callers and for AP-031 (AI
 Failure Analysis), which will consume them.
 
 **Independent Test**: Run a collection against a local target configured to produce one passing
