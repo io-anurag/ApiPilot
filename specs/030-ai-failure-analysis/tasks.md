@@ -384,10 +384,16 @@ analysis is kept. With a tiny time budget, analysis is refused before inference 
   - 4 specification-mismatch cases (a test expecting 201 when the response is 200 and 201 is documented, a response missing a required field, a wrong content type, a 400 on a valid documented request);
   - 2 downstream-service cases (a 503 with an upstream error body, a 500 whose body names a dependency);
   - 2 insufficient-evidence cases (a bare 500 with no body and no tests, an assertion failure with no detail).
+
+  *Completion note (2026-09-23): partially done, left unchecked.* The 12 synthetic cases exist. The
+  TLS case is replaced by a 401 invalid-credentials case, because an `UploadedRequestResult` for a
+  connectivity failure carries no error message to express TLS. The ≥4 `origin: "real"` cases are
+  **not** added: no real recorded run was available, and inventing one is not allowed. Waiting on a
+  redacted real run from the user (see `evaluation.md`).
 - [X] T056 Create `backend/tests/integration/failureAnalysis.real.test.ts`. It is skipped unless `AI_TEST_REAL_MODEL=1`, mirroring `backend/tests/integration/localProvider.real.test.ts`'s gate. It runs the pipeline over the corpus with the real `LocalProvider`, then prints and asserts (soft, logged) structured-output success rate, cause agreement, valid-citation rate, confidence distribution and per-case latency. Add `"test:ai-real:failure-analysis": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/failureAnalysis.real.test.ts"` to `backend/package.json` next to `test:ai-real`. Depends on T053 and T055.
 - [X] T057 Run `npm run test:ai-real:failure-analysis -w backend` on the target machine with the default model, and record the figures, machine, model id, date and a decision in `specs/030-ai-failure-analysis/evaluation.md`. The decision is to keep the model and the 0.5 threshold, or to open a model or threshold decision through AP-004's process if structured-output success is below 80% (D11). If it cannot be run, write that in `evaluation.md` explicitly rather than inventing figures. Depends on T056.
 - [X] T058 [P] Add dated additive amendment notes. In `specs/026-external-collection-execution/data-model.md` (`## UploadedRequestResult`) and `contracts/external-collections-api.md` (the run-detail section), note that `itemId` is added by AP-031. In `specs/004-ai-provider-local-inference/data-model.md`, note `InferenceRequest.systemPrompt` and `AIProvider.infer(request, hooks?)` (`onStarted`). Each note should reference `specs/030-ai-failure-analysis` and state that existing behavior is unchanged.
-- [X] T059 Update `specs/ROADMAP.md` and `README.md:443`. Depends on T057.
+- [X] T059 Update `specs/ROADMAP.md` and `README.md:443`. Depends on T057. *(Completion note: T057 did record figures, but they fail D11's bar, so the "evaluation pending" wording was used, as XXII requires.)*
   - **If T057 recorded real-model figures in `evaluation.md`**, the AP-031 status-table row becomes "Implemented", with the task count and the headline evaluation figures.
   - **If T057 could not be run**, the row reads "Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented", with the reason. Do not use the word "Implemented" alone (constitution XXII, XXXI; D11).
   - Update `README.md:443`'s AP-031 line with one sentence on what the feature does, that it works on Import & Run Collection results, and the same status wording as the roadmap.
@@ -398,7 +404,31 @@ analysis is kept. With a tiny time budget, analysis is refused before inference 
   - confirm no network call exists in `backend/src/failureAnalysis/`.
 
   Record the result in the task's completion note.
+
+  *Completion note (2026-09-23):*
+  - Logging: only `request_*` events (method, path, status, category, duration) and
+    `failure_analysis_settled` (run id, result index, status, error category, conclusion kind,
+    evidence count, duration). No summary, evidence, prompt, content or raw capture. An automated
+    test in `analyzeFailure.test.ts` asserts this.
+  - Raw capture: read only in `buildEvidence.ts`, and every field goes through `redaction.ts`.
+  - 5xx: unexpected errors go to the central handler's `{error: "internal_server_error"}`.
+  - Network: no network or process calls in `backend/src/failureAnalysis/` or the router.
+  - Also fixed during review: a super-linear regex in redaction, which runs on target-controlled
+    bodies, replaced by a linear word scan with a timing test.
+  - Known limitation: prompt injection through target-controlled text, bounded by the closed cause
+    set, validated citations, and display-only output (`evaluation.md`).
 - [ ] T061 Run `npm test`, `npm run lint` and `npm run build` at the repository root, fix everything they report, and then run quickstart.md scenarios 1 to 5 manually with `AI_PROVIDER_MODE=local`. Record which scenarios were run, and state explicitly any that could not be.
+
+  *Completion note (2026-09-23): automated part done, manual part not run, left unchecked.*
+  - `npm test`: 216 files passed and 2 skipped (the opt-in real-model tests); 1,552 tests passed and
+    3 skipped.
+  - `npm run lint`: clean.
+  - `npm run build`: succeeds for backend, frontend and shared-domain.
+  - The real model ran through `npm run test:ai-real:failure-analysis` (T057).
+  - Quickstart scenarios 1 to 5 were **not** walked through in a browser: no browser tool was
+    available in this session. Their behavior is covered by the Supertest integration suites
+    (`backend/tests/integration/failureAnalysis/`) and the React Testing Library suites, which is
+    not a substitute for the manual UI pass.
 
 ---
 
