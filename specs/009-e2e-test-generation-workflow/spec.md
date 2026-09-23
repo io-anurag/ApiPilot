@@ -53,6 +53,26 @@
   existing clients. The stored `apiModel` is never narrowed, so later stages that legitimately
   reference unselected operations (e.g. Postman auth-credential chaining to a token endpoint,
   specs/023) are unaffected. Supersedes research.md D3's confirmation-only gate.
+- Q: Since 2026-09-21 (commit `37d30b3`) the guided workflow no longer runs a generated collection
+  inside its own `execution` screen: continuing from `postmanGeneration` hands the generated
+  collection and environment to the standalone "Import & Run Collection" view
+  (specs/026-external-collection-execution), which duplicated the same run capability. Is that
+  hand-off the intended behavior of the `execution` stage, and what does the stage itself still
+  do? → A: Yes. In the UI, the `execution` stage runs nothing itself; it hands off. The Postman
+  Generation screen's "Continue to Import & Run Collection" action switches to that view with its
+  upload form pre-filled (the specification title as the name, plus the generated collection and
+  environment as files). The hand-off never uploads, confirms, or runs anything on the user's
+  behalf: the user still chooses a risk tier and submits the upload, after which the collection is
+  an ordinary `UploadedCollectionSet` subject to every specs/026 rule, including the one-time
+  unverified-content confirmation and the risk-tier/destructive-request confirmation. The
+  `execution` stage screen offers only a button that repeats the hand-off (for example after a
+  reload), and the hand-off fires at most once per generated artifact per mounted page. The
+  workflow's stage model is unchanged: `execution` is still entered automatically when
+  `postmanGeneration` completes, and its skip/finish outcomes remain available through the API
+  (`POST /api/test-generation-workflow/execution/skip` and `/execution/finish`), although the UI
+  does not currently call them. The specs/018 environment and execution endpoints are retained as
+  an API-only path (see specs/018 Clarifications 2026-09-23). Refines the 2026-09-20 answer above;
+  it does not change which stages exist or their order.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -217,6 +237,8 @@ deterministic TestModel, with the AI-unavailable condition visibly recorded.
   stages of one continuous, ordered workflow. `execution` (2026-09-20 amendment, Clarifications)
   is the only stage that does not require an explicit completing action of its own: it is entered
   automatically once `postmanGeneration` completes, and the user may explicitly skip or finish it.
+  In the UI, the stage hands the generated collection off to "Import & Run Collection" rather than
+  running it itself (2026-09-23 amendment, Clarifications).
 - **FR-002**: The system MUST NOT allow a user to enter a stage whose required input (the
   approved or completed output of a prior stage) does not yet exist, and MUST explain what is
   still required when entry is blocked.
@@ -338,8 +360,11 @@ deterministic TestModel, with the AI-unavailable condition visibly recorded.
   detailed behavior, edge cases, and success criteria in their respective specifications; this
   feature's requirements are scoped to sequencing, progress visibility, staleness handling, and
   the AI-unavailable continuation path across those stages.
-- Producing a downloadable Postman collection is this workflow's terminal state; executing that
-  collection and reporting results is out of scope, per AP-017.
+- ~~Producing a downloadable Postman collection is this workflow's terminal state; executing that
+  collection and reporting results is out of scope, per AP-017.~~ Superseded by the 2026-09-20
+  and 2026-09-23 amendments (Clarifications): `execution` is the tenth, optional stage, and in the
+  UI it hands the generated collection off to "Import & Run Collection" (specs/026), where running
+  it and reporting results are specified. This workflow itself still defines no execution logic.
 
 ## Out of Scope
 

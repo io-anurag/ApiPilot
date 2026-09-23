@@ -4,8 +4,8 @@
  * application). Bounded in both directions so a large payload never dictates the surrounding
  * panel's size: long lines wrap within the panel's width (`whitespace-pre-wrap` keeps the
  * content's own indentation/newlines; `wrap-anywhere` breaks unbroken tokens), and anything taller
- * than `max-h-96` scrolls inside the block. Shared by `ExecutionResultsPanel`'s and
- * `ExternalCollectionRunPanel`'s request/response body panes and `RequestEditorPanel`'s preview.
+ * than `max-h-96` scrolls inside the block. Shared by `ExternalCollectionRunPanel`'s
+ * request/response body panes and `RequestEditorPanel`'s preview.
  */
 export function CodeBlock({ label, content }: Readonly<{ label?: string; content: string }>) {
   return (

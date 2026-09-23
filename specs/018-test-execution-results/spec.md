@@ -23,7 +23,9 @@ boundary (AP-001 through AP-010) was validated end-to-end against two independen
 OpenAPI specifications (2026-09-11). Originally surfaced as a panel bundled into AP-009's
 `postmanGeneration` screen; specs/009's 2026-09-20 amendment splits it into its own, explicitly
 skippable guided-workflow stage (`execution`) — this feature's own endpoints and data model are
-unaffected by that placement change.
+unaffected by that placement change. Since specs/009's 2026-09-23 amendment, that stage hands the
+collection off to "Import & Run Collection" (specs/026) in the UI, and this feature's endpoints
+are retained as an API-only path (Clarifications 2026-09-23).
 
 ## Clarifications
 
@@ -54,6 +56,29 @@ unaffected by that placement change.
   at rest via the same mechanism `Environment.variableValues` already uses, in a column
   physically separate from the rest of `RequestResult`, so a non-local run's stored row can never
   carry it even by accident.
+
+### Session 2026-09-23
+
+- Q: The guided workflow's `execution` stage now hands a generated collection off to "Import & Run
+  Collection" (specs/009 Clarifications 2026-09-23) instead of running it through this feature's
+  endpoints, so no UI calls them any more. Should these endpoints be kept, deprecated, or
+  removed? → A: Kept, as an API-only path. Every endpoint in `contracts/execution-api.md` stays
+  mounted with its contract unchanged, so existing HTTP clients are unaffected; the behavior this
+  spec defines (sequential execution, confirmation gates, `400 missing_variable_values`,
+  failure categorization, persisted run history) still holds for any caller. The UI runs
+  generated collections through specs/026's uploaded-collection path instead, whose rules differ
+  in places (for example, an unresolved variable does not refuse an uploaded-collection run,
+  specs/026 FR-004). This spec's frontend components, `EnvironmentForm.tsx` and
+  `ExecutionResultsPanel.tsx`, are no longer rendered by any page. *(Follow-up done 2026-09-23:
+  both components, their now-unused frontend client `executionClient.ts`, and their tests were
+  removed. No endpoint above changed.)*
+- Q: specs/028-collection-editor-ui (FR-008) adds pre-run editing of requests and variables for
+  generated collections as well as uploaded ones, past this spec's statement that it does not
+  change how the artifact is generated. How do the two relate? → A: specs/028 edits only the
+  uploaded copy a generated collection becomes after the hand-off (specs/028 research.md D1,
+  Clarifications 2026-09-23). Neither the generated artifact nor its `TestScenario` provenance is
+  mutated, and this spec's own endpoints have no editing surface, so this spec's generation
+  boundary is unchanged.
 
 ## User Scenarios & Testing *(mandatory)*
 

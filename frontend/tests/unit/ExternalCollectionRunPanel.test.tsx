@@ -138,16 +138,15 @@ describe("ExternalCollectionRunPanel", () => {
     await screen.findByTestId("external-collection-run-summary");
 
     // US3/FR-010: an uploaded-collection run is always labeled "Uploaded" so it is never mistaken
-    // for a generated run (the two never appear in the same panel — see ExecutionResultsPanel's
-    // own "Generated" label assertion).
+    // for a generated run.
     expect(screen.getByTestId("external-collection-run-summary")).toHaveTextContent("Uploaded");
     expect(screen.getByText("Get widget")).toBeInTheDocument();
     expect(screen.getByText("Create widget")).toBeInTheDocument();
     expect(screen.getByText("Delete widget")).toBeInTheDocument();
     // "Passed" also appears as the overview stat's <dt> label, so assert at least one match rather than a unique one.
     expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
-    // Sentence-case display labels (matching ExecutionResultsPanel's own convention), not the
-    // raw kebab-case enum values ("assertion-failed", "cancelled").
+    // Sentence-case display labels, not the raw kebab-case enum values ("assertion-failed",
+    // "cancelled").
     expect(screen.getByText("Assertion failed")).toBeInTheDocument();
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
 

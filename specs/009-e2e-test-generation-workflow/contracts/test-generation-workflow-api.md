@@ -233,6 +233,33 @@ matching AP-007's existing `ExportResult` shape) is available at `workflow.postm
 Reuses AP-007's existing failure codes/status mapping (`empty_approved_test_model`,
 `collection_validation_failed`, ...) unchanged.
 
+Since the 2026-09-20 amendment (spec.md Clarifications), the first successful generation also
+makes `execution` the active stage.
+
+## `POST /api/test-generation-workflow/execution/skip`
+
+Marks the `execution` stage `skipped` without running anything (spec.md Clarifications
+2026-09-20). No request body. Requires `execution` to be `active`.
+
+## `POST /api/test-generation-workflow/execution/finish`
+
+Marks the `execution` stage `complete`, whether or not any run has happened (spec.md
+Clarifications 2026-09-20). No request body. Requires `execution` to be `active`.
+
+### Success Response (both): `200 OK`
+
+Returns the updated `{ "workflow": {...} }`. Starting a later run through specs/018's
+`POST /api/test-generation-workflow/execution/start` sets `execution` back to `active`.
+
+### Error Response (both): `409 Conflict`
+
+```json
+{ "error": "stage_not_active", "message": "execution is not the active stage." }
+```
+
+Both endpoints are API-only: the current UI hands the generated collection off to "Import & Run
+Collection" and calls neither (spec.md Clarifications 2026-09-23).
+
 ## Guarantees asserted by contract tests
 
 - No stage-transition endpoint succeeds while its stage's `WorkflowStageState.status` is anything

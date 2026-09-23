@@ -5,7 +5,7 @@
 <h1 align="center">ApiPilot</h1>
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
 [![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 [![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
@@ -13,18 +13,20 @@
 [![CI](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml)
 [![GitHub tag](https://img.shields.io/github/tag/io-anurag/ApiPilot?include_prereleases=&sort=semver&color=blue)](https://github.com/io-anurag/ApiPilot/releases/)
 
-ApiPilot is a local-first API test engineering workspace. It turns one OpenAPI 3.x YAML document into a structured API model, deterministic test scenarios, optional locally generated semantic suggestions, reviewed dependency workflows, and validated Postman artifacts. Approved artifacts can be executed explicitly against an environment chosen by the operator and reported as request-level results. A separate, standalone entry point lets an operator instead import an existing, externally-authored Postman collection and environment pair and run it directly, without an OpenAPI specification at all.
+ApiPilot is a local-first API test engineering workspace. It turns one OpenAPI 3.x YAML document into a structured API model, deterministic test scenarios, optional locally generated semantic suggestions, reviewed dependency workflows, and validated Postman artifacts. A generated collection is then handed off to the "Import & Run Collection" view, where the operator can inspect and edit it and execute it explicitly, with results reported per request. The same view also accepts an existing, externally-authored Postman collection and environment pair, so a collection can be run without an OpenAPI specification at all.
 
 The product is deliberately deterministic before it is intelligent:
 
 ```text
 OpenAPI YAML
     -> ApiModel
+    -> operation selection
     -> deterministic TestModel
     -> optional AI enhancement
     -> human scenario review
     -> dependency and workflow review
     -> Postman collection, environment, and README
+    -> hand-off to Import & Run Collection (inspect, edit, select requests)
     -> explicit Newman execution
     -> execution results
 ```
@@ -51,20 +53,21 @@ AI is bounded, validated, and local. It can suggest scenarios and relationships,
 The following capabilities are implemented in the current repository:
 
 - OpenAPI 3.x YAML upload, validation, normalization, internal `$ref` resolution, and API-model construction.
+- Explicit operation selection at API review: only the chosen operations, and the schemas they reference, go to deterministic generation and AI enhancement. The full API model is kept for later stages that need unselected operations, such as auth-credential chaining to a token endpoint.
 - Deterministic positive, required-field, null/empty, invalid-type, invalid-format, invalid-enum, numeric-boundary, string-boundary, and array-boundary scenarios.
 - Specification-grounded response and schema assertions with deterministic per-operation deduplication and provenance.
 - Optional AI scenario enhancement through a provider abstraction, with local Transformers.js inference or a deterministic mock provider.
 - AI readiness reporting, FIFO serial inference, bounded batching, viability checks, cancellation, incremental progress, and one retry for a malformed batch response.
-- Scenario review with accept, reject, edit, regenerate, bulk decisions, validation, rationale, and stale-state handling.
+- Scenario review with accept, reject, edit, regenerate, bulk decisions, validation, rationale, and stale-state handling. The review is locked while it is being finalized, so no decision can land after the approved suite has been projected.
 - Deterministic and optional AI-assisted API dependency analysis with evidence, confidence classes, graph construction, and ordered workflow candidates.
 - Workflow review and workflow-aware Postman rendering.
 - Postman collection, environment, and artifact README generation from approved test intent.
-- OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
-- Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes.
+- OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, resource-qualified path-parameter variables (`/users/{id}` → `{{user_id}}`), automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
+- Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
-- A Postman-style collection and variable editor for an uploaded external collection: a navigable folder/request tree, a resolved-vs-raw request preview, a variable panel showing each variable's value/source/resolved-or-missing status, full method/URL/header/body/test-script editing, add/delete/rename/reorder for requests and folders, and a selective-run checklist to run a chosen subset of requests. Edits are stored as a persisted override layered on the original request rather than a mutation of it, are reflected in the resulting run's own record, and are locked read-only while a run of that collection is in progress. This editor is currently wired up only for uploaded external collections, not yet for ApiPilot-generated collections handed to execution (see [Limitations](#limitations-and-roadmap)).
+- A Postman-style collection and variable editor for an uploaded collection: a navigable folder/request tree, a resolved-vs-raw request preview, a variable panel showing each variable's value/source/resolved-or-missing status, full method/URL/header/body/test-script editing, add/delete/rename/reorder for requests and folders, and a selective-run checklist to run a chosen subset of requests. Headers that a request's `bearer` or header-located `apikey` auth adds at run time are shown as display-only "from auth" entries. Edits are saved into ApiPilot's stored copy of the uploaded collection, with each edited request marked so that run results flag it as edited; the uploaded file itself, and any generated scenarios and provenance behind a handed-off collection, are never modified. The editor is read-only while a run of that collection is in progress. Unresolved variables are marked missing but do not block a run, and values that test scripts capture during a run (`pm.environment.set`) are saved back so the preview and the next run use them. A generated collection reaches this editor through the hand-off, as an uploaded collection (see [Limitations](#limitations-and-roadmap)).
 - A shared frontend design system and application shell: design tokens for light/dark mode (a manual toggle persisted per browser, defaulting to the OS preference), a reusable component library (buttons, status/decision badges, HTTP method indicators, AI-vs-deterministic provenance indicators, tabs, dialogs, empty/error/loading states), and a workflow stage tracker that explains why a locked stage is unavailable — used consistently across every page.
 - React/Vite frontend with accessible review controls, progress reporting, filtering, bulk actions, loading/error/empty states, and frontend error forwarding to the backend logger.
 
@@ -99,7 +102,8 @@ flowchart LR
     Execution --> Newman[Newman runner]
     Execution --> SQLite[(Local SQLite)]
     SQLite --> Execution
-    UI --> ExternalCollections[External collection import & execution]
+    UI --> ExternalCollections[External collection import, editing & execution]
+    Artifacts -->|UI hand-off| ExternalCollections
     ExternalCollections --> Newman
     ExternalCollections --> SQLite
     Shared[packages/shared-domain contracts] -.-> UI
@@ -119,9 +123,9 @@ flowchart LR
 | `backend/src/dependencies/`           | Relationship evidence, deterministic matching, AI-assisted corroboration, graph construction, and workflow assembly.   |
 | `backend/src/ai/`                     | `AIProvider`, local/mock providers, readiness, queueing, batching, viability, model configuration, and benchmarks.     |
 | `backend/src/postman/`                | Collection, environment, workflow, authentication, parameter, assertion, and artifact-document rendering.              |
-| `backend/src/testGenerationWorkflow/` | In-memory stage state machine, gating, invalidation, progress, and review orchestration.                               |
+| `backend/src/testGenerationWorkflow/` | In-memory stage state machine, gating, invalidation, operation selection, progress, and review orchestration.          |
 | `backend/src/execution/`              | Environment handling, run lifecycle, sequencing, cancellation, and Newman integration.                                 |
-| `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection, sibling to `execution/`; reuses Newman for dispatch and its own result mapper for the collection's own named test outcomes.        |
+| `backend/src/externalCollections/`    | Upload/store/edit/execute path for an uploaded Postman collection (externally authored or handed off from the guided workflow), sibling to `execution/`; reuses Newman for dispatch and its own result mapper for the collection's own named test outcomes. |
 | `backend/src/persistence/`            | SQLite connection, repositories, schema initialization, interrupted-run recovery, and credential encryption.           |
 | `packages/shared-domain/`             | Framework-independent contracts for API models, tests, AI, review, dependencies, workflows, artifacts, and execution.  |
 
@@ -135,7 +139,8 @@ flowchart TD
     Parse --> Validate[validateSpec.ts]
     Validate --> Build[buildApiModel.ts]
     Build --> APIModel[ApiModel + AnalysisIssues]
-    APIModel --> Deterministic[generateTestModel.ts]
+    APIModel --> Select[Operation selection at API review]
+    Select --> Deterministic[generateTestModel.ts]
     Deterministic --> Rules[testDesign/rules]
     Rules --> Deduplicate[deduplicate.ts]
     Deduplicate --> Baseline[TestModel]
@@ -153,8 +158,9 @@ flowchart TD
     Approved --> Export[generateCollection.ts]
     ApprovedWorkflows --> Export
     Export --> PostmanArtifacts[Collection + environment + README]
-    PostmanArtifacts --> Environment[Operator environment]
-    Environment --> Run[Explicit execution start]
+    PostmanArtifacts --> Handoff[Hand-off to Import & Run Collection]
+    Handoff --> Edit[Inspect, edit, choose requests]
+    Edit --> Run[Explicit execution start]
     Run --> Newman[Newman, one item at a time]
     Newman --> Results[Categorized request results]
 ```
@@ -165,7 +171,9 @@ flowchart TD
 
 ### 2. Deterministic test design
 
-`generateTestModel.ts` applies pure rule modules to every operation. Positive values respect the specification. Negative values target a particular documented constraint. Assertions use only documented response codes and schemas; ApiPilot does not invent a generic `400`, `401`, `404`, or `500` expectation. Equivalent request/assertion pairs are deduplicated per operation while retaining rule provenance.
+API review records which operations to carry forward (`selectedOperationKeys`, as `"METHOD /path"` keys). `scopeApiModelToSelection()` narrows only the operation list, so deterministic generation, AI enhancement, and single-batch retry see just the selected operations while the stored `ApiModel` stays complete. The selection is not revisable; changing it means starting a new workflow.
+
+`generateTestModel.ts` applies pure rule modules to every selected operation. Positive values respect the specification. Negative values target a particular documented constraint. Assertions use only documented response codes and schemas; ApiPilot does not invent a generic `400`, `401`, `404`, or `500` expectation. Equivalent request/assertion pairs are deduplicated per operation while retaining rule provenance.
 
 ### 3. AI enhancement
 
@@ -179,15 +187,19 @@ Review decisions are explicit: pending, accepted, or rejected. Edits and regener
 
 ### 5. Postman generation
 
-`generateCollection.ts` exports only approved scenarios. It preserves approved negative values and assertions, validates the generated collection, and emits an environment and human-readable artifact README. Unknown values and credentials are variables rather than guesses. Supported authentication and export features include distinct variables for distinct security schemes, automatic response-value chaining, OAuth2 client-credentials token setup, workflow folders, and OpenAPI-conformant parameter serialization. Unsupported styles or content are reported as limitations rather than silently guessed.
+`generateCollection.ts` exports only approved scenarios. It preserves approved negative values and assertions, validates the generated collection, and emits an environment and human-readable artifact README. Unknown values and credentials are variables rather than guesses. A path parameter with no approved value becomes a resource-qualified variable named from the preceding static path segment (`/users/{id}` → `user_id`), unless the parameter already names its resource (`{userId}`) or no static segment precedes it. Supported authentication and export features include distinct variables for distinct security schemes, automatic response-value chaining, OAuth2 client-credentials token setup, workflow folders, and OpenAPI-conformant parameter serialization. Unsupported styles or content are reported as limitations rather than silently guessed.
 
 ### 6. Execution
 
-Execution reuses the same generated collection logic used for export. The operator defines an environment with a base URL and variable/credential values, then explicitly starts a run. The backend uses Newman to execute each approved request serially, carries forward environment variables produced by prior workflow steps, and applies a 30-second per-request timeout. Results distinguish assertion failure, unexpected status, connectivity failure, timeout, assertion-evaluation failure, cancellation, and not-attempted requests. Staging/production environments and destructive operations require confirmation.
+`execution` is the tenth guided-workflow stage and is optional. In the UI, continuing from Postman generation hands the generated collection and environment to the "Import & Run Collection" view with its upload form pre-filled; the operator picks a risk tier and submits it, after which it is an uploaded collection like any other (see the next section). Nothing is uploaded or run on the operator's behalf.
+
+The guided workflow's own execution endpoints (`/api/test-generation-workflow/environments` and `/execution/*`) remain available over HTTP. They reuse the export logic with a session environment's base URL and variable/credential values, execute each approved request serially through Newman, carry forward environment variables produced by prior workflow steps, and apply a 30-second per-request timeout. Results distinguish assertion failure, unexpected status, connectivity failure, timeout, assertion-evaluation failure, cancellation, and not-attempted requests. Staging/production environments and destructive operations require confirmation.
 
 ### External collection import & execution (standalone)
 
 A separate "Import & Run Collection" entry point, independent of the pipeline above, lets an operator upload an existing Postman Collection v2.1 JSON file and a matching Postman Environment JSON file directly — no OpenAPI specification, analysis, or review step at all. The uploaded collection is parsed and validated with the real `postman-collection` SDK rather than a hand-rolled schema check, walked in its own document order (arbitrary folder nesting included) via that SDK's `forEachItem()`, and each request is dispatched through the same Newman integration execution already uses. Because the collection's own pre-request/test scripts were not generated or verified by ApiPilot, a distinct, mandatory confirmation is required before its first-ever run; a second, separate confirmation applies to a Staging/Production-tier environment or a destructive (`POST`/`PUT`/`PATCH`/`DELETE`) request, mirroring the guided workflow's own risk-tier gate. Pass/fail is derived from the collection's own named `pm.test(...)` results — never guessed into a status-code/schema classification the collection did not declare. Multiple named collection/environment pairs can be uploaded, selected, and removed independently; removing one never alters a run already recorded against it. Uploaded-collection runs and guided-workflow runs share the same single "one execution in progress at a time" session-wide slot.
+
+An unresolved variable does not refuse an uploaded-collection run: an earlier request's test script may capture the value (`pm.environment.set`) for a later request, and a request that still sends an unresolved placeholder records its own failed or errored outcome. After each request, the environment as Newman left it is written back to the collection's stored values, so the editor's resolved preview and the next run use what the scripts captured.
 
 ## Quick start
 
@@ -212,15 +224,17 @@ The `.env` file is optional when defaults are acceptable. The default developmen
 
 ### Use the workflow
 
-1. Upload an OpenAPI 3.x YAML document.
-2. Review the extracted API operations and analysis issues.
+1. Choose **Guided Workflow** and upload an OpenAPI 3.x YAML document.
+2. Review the extracted API operations and analysis issues, and select the operations to test.
 3. Generate deterministic scenarios.
 4. Optionally run local AI enhancement and review its suggestions.
 5. Accept, reject, edit, or regenerate scenarios.
 6. Review detected API dependencies and workflows.
 7. Approve workflows and generate the Postman artifacts.
-8. Define an authorized target environment.
-9. Explicitly start execution and inspect the results.
+8. Continue to **Import & Run Collection**, pick a risk tier for the pre-filled upload, and submit it.
+9. Fill in variable values for an authorized target, optionally edit requests or choose a subset, then explicitly start the run and inspect the results.
+
+To run an existing Postman collection instead, choose **Import & Run Collection** on the start screen and upload the collection and environment files.
 
 ## Configuration
 
@@ -281,7 +295,7 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | Method         | Endpoint                                                    | Purpose                                                                                                 |
 | -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `GET` / `POST` | `/api/test-generation-workflow`                             | Read the current session workflow, poll progress with `?progressOnly=true`, or upload/start a workflow. |
-| `POST`         | `/api/test-generation-workflow/api-review/continue`         | Complete API review.                                                                                    |
+| `POST`         | `/api/test-generation-workflow/api-review/continue`         | Complete API review, optionally with `{ selectedOperationKeys }`; absent or empty keeps every operation. |
 | `POST`         | `/api/test-generation-workflow/deterministic-generation`    | Run deterministic scenario generation.                                                                  |
 | `POST`         | `/api/test-generation-workflow/ai-enhancement`              | Start optional AI enhancement.                                                                          |
 | `POST`         | `/api/test-generation-workflow/ai-enhancement/cancel`       | Request cancellation at a batch boundary.                                                               |
@@ -300,6 +314,8 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | `GET`          | `/api/test-generation-workflow/execution/runs`              | List session run summaries.                                                                             |
 | `GET`          | `/api/test-generation-workflow/execution/runs/:runId`       | Retrieve one run and its request results.                                                               |
 
+The environment and execution endpoints above are retained as an API-only path (`specs/018` Clarifications 2026-09-23); the current UI runs generated collections through the external collection endpoints below after the hand-off.
+
 ### External collection endpoints
 
 Mounted independently of the guided-workflow routes above — no active workflow is required for any endpoint below.
@@ -316,7 +332,7 @@ Mounted independently of the guided-workflow routes above — no active workflow
 | `DELETE` | `/api/external-collections/:id/items/:itemId`            | Deletes a request or folder (and everything nested within a deleted folder).                                                          |
 | `PUT`  | `/api/external-collections/:id/items/:itemId/rename`       | Renames a request or folder.                                                                                                           |
 | `PUT`  | `/api/external-collections/:id/containers/:containerId/order` | Reorders requests/folders within their containing folder or the collection root.                                                  |
-| `POST` | `/api/external-collections/:id/execution/start`            | Starts a run using `{ confirmed?, selectedRequestIds? }`; two independent confirmation gates may apply in sequence, and an optional request-ID subset runs only those requests. |
+| `POST` | `/api/external-collections/:id/execution/start`            | Starts a run using `{ confirmed?, selectedRequestIds? }`; two independent confirmation gates may apply in sequence, and an optional request-ID subset runs only those requests. Unresolved variables do not refuse the run. |
 | `POST` | `/api/external-collections/:id/execution/cancel`           | Requests cancellation of the active run.                                                       |
 | `GET`  | `/api/external-collections/:id/execution/runs`              | Lists this collection's run summaries.                                                          |
 | `GET`  | `/api/external-collections/:id/execution/runs/:runId`        | Retrieves one run and its per-request results, independent of the collection's own lifecycle.  |
@@ -420,15 +436,13 @@ The repository has no checked-in Dockerfile, docker-compose file, or deployment 
 Current intentional limitations include:
 
 - The guided workflow's input is one OpenAPI 3.x YAML document. Swagger 2.0, JSON input, and external reference retrieval are unsupported there. An externally-authored Postman collection may instead be imported and executed directly through the separate standalone entry point (with its own mandatory unverified-content confirmation) — this is a deliberate, narrowly-scoped exception, not a general uploaded-content execution capability.
-- A variable that an uploaded collection's own pre-request script sets at runtime (rather than one supplied by the uploaded environment file) is not currently distinguished from a genuinely missing one, if that same variable is also referenced via `{{...}}` in the collection's static request text; such a collection may be refused as "missing" a variable it actually computes for itself.
 - Supported parameter serialization is explicit; unsupported styles such as content-based, matrix, and label forms are reported rather than guessed where the implementation cannot safely render them.
 - Local AI performance depends heavily on the selected model and machine. Large specifications may settle as partial or not completed at the configured run budget while retaining successful units.
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
 - AP-018, AI-assisted execution failure analysis, is not implemented. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
-- The Postman-style collection/variable editor (AP-028) is wired up only for uploaded external collections. There is no equivalent editing surface yet for an ApiPilot-generated collection handed to execution; extending it there is tracked as follow-up work, not closed.
-
-The implementation status for AP-001 through AP-026 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. AP-027 (frontend design system) and AP-028 (collection/variable editor) are implemented — see their `tasks.md` completion state — but not yet reflected in the roadmap's own status table. Feature `spec.md` files provide the normative behavior and contracts for every feature, including AP-027/AP-028.
+- The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
+The implementation status for AP-001 through AP-028 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 
 ## Documentation
 
