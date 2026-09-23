@@ -20,6 +20,7 @@ import {
   BASE_URL_VARIABLE,
   credentialVariable,
   pathParameterVariable,
+  pathParameterVariableName,
 } from "./artifactVariables";
 import {
   appendWorkflowExtractions,
@@ -262,14 +263,17 @@ function buildUrl(
       const approved = scenario.request.pathParameters[name];
       if (approved === undefined) {
         // No approved value: surface it as a variable to supply rather than emit a
-        // malformed address (FR-012, spec edge case).
-        pathVariables.push({ key: name, value: `{{${name}}}` });
-        variables.push(pathParameterVariable(name));
+        // malformed address (FR-012, spec edge case). The `:name` key stays the specification's
+        // own parameter name; only the referenced variable is resource-qualified, so `{id}` on
+        // different resources never shares one value.
+        const variableName = pathParameterVariableName(operation.path, name);
+        pathVariables.push({ key: name, value: `{{${variableName}}}` });
+        variables.push(pathParameterVariable(variableName));
         limitations.push({
           kind: "unresolved-path-parameter",
           scenarioId: scenario.id,
           location,
-          message: `The approved scenario supplied no value for the "${name}" path parameter, so it is exposed as a variable to fill in.`,
+          message: `The approved scenario supplied no value for the "${name}" path parameter, so it is exposed as the "${variableName}" variable to fill in.`,
         });
       } else {
         const declaredParameter = findParameter(operation, "path", name);

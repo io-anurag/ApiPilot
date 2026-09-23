@@ -49,11 +49,65 @@ export function baseUrlVariable(value: string): ArtifactVariable {
   };
 }
 
-/** Declares a placeholder variable for a path parameter the approved scenario left unresolved. */
-export function pathParameterVariable(name: string): ArtifactVariable {
+const PATH_PARAMETER_SEGMENT = /^\{(.+)\}$/;
+
+/**
+ * Deterministic English singular for a collection path segment (`customers` → `customer`,
+ * `categories` → `category`, `addresses` → `address`). Deliberately a small rule set rather
+ * than a dictionary: the result only labels a variable, so an imperfect singular (`statuses` →
+ * `statuse`) is harmless, while any dependency or locale sensitivity here would not be.
+ */
+function singularize(word: string): string {
+  if (/ies$/i.test(word) && word.length > 3) return `${word.slice(0, -3)}y`;
+  if (/(ss|x|z|ch|sh)es$/i.test(word)) return word.slice(0, -2);
+  if (/(ss|us|is)$/i.test(word)) return word;
+  if (/s$/i.test(word) && word.length > 1) return word.slice(0, -1);
+  return word;
+}
+
+/** Letters and digits only, lower-cased — for comparing `userId`, `user_id`, and `user-id` as one stem. */
+function comparableStem(value: string): string {
+  return value.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+}
+
+/**
+ * The collection variable standing in for path parameter `parameterName` of `operationPath`
+ * when no approved value exists (specs/007 Clarifications 2026-09-23).
+ *
+ * A bare parameter name is not an identity: `/customers/{id}`, `/products/{id}` and
+ * `/users/{id}` all declare `id`, and naming the variable after the parameter alone collapsed
+ * three unrelated values into one `{{id}}`. The name is therefore prefixed with the singular of
+ * the static segment immediately before the parameter — `customer_id`, `product_id`, `user_id` —
+ * which the path itself declares, so nothing is inferred beyond the specification.
+ *
+ * Left unprefixed when the parameter already names its resource (`/users/{userId}` stays
+ * `userId`, avoiding `user_userId`), or when no static segment precedes it (`/{id}`,
+ * `/{tenant}/{id}`), since there is then no specification evidence to derive a prefix from.
+ * Operations on the same resource (`GET`/`PUT`/`DELETE /users/{id}`) share one variable, so a
+ * single supplied value serves all of them.
+ */
+export function pathParameterVariableName(operationPath: string, parameterName: string): string {
+  const segments = operationPath.split("/").filter((segment) => segment.length > 0);
+  const index = segments.findIndex(
+    (segment) => PATH_PARAMETER_SEGMENT.exec(segment)?.[1] === parameterName,
+  );
+  const preceding = index > 0 ? segments[index - 1] : undefined;
+  if (preceding === undefined || PATH_PARAMETER_SEGMENT.test(preceding)) return parameterName;
+  const resource = singularize(preceding.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, ""));
+  if (resource.length === 0) return parameterName;
+  if (comparableStem(parameterName).startsWith(comparableStem(resource))) return parameterName;
+  return `${resource}_${parameterName}`;
+}
+
+/**
+ * Declares a placeholder variable for a path parameter the approved scenario left unresolved.
+ * The purpose text depends on `variableName` alone, so every operation that shares the variable
+ * declares it identically and the README never depends on which operation was emitted first.
+ */
+export function pathParameterVariable(variableName: string): ArtifactVariable {
   return {
-    name,
-    purpose: `Value for the "${name}" path parameter, which the approved scenario did not supply.`,
+    name: variableName,
+    purpose: `Path parameter value for "${variableName}", which an approved scenario did not supply.`,
     secret: false,
     value: "",
   };

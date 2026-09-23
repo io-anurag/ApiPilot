@@ -317,11 +317,15 @@ export function TestScenarioReviewList({
         )}
       </div>
 
+      {/* Grouped by scope ("Filtered" / "Selected") so the visible labels can stay short and each
+          accept/reject pair wraps together rather than stranding one button on its own line. The
+          scope word dropped from each visible label is kept as screen-reader text, so accessible
+          names (e.g. "Accept all filtered (76)") are unchanged. */}
       <div
         data-testid="review-bulk-actions"
-        className="order-1 flex flex-wrap items-center gap-2 rounded-md border border-brand-200 bg-brand-50 p-3 dark:border-brand-500 dark:bg-brand-500/10"
+        className="order-1 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500 dark:bg-brand-500/10"
       >
-        <label className="mr-2 flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
           <input
             type="checkbox"
             checked={allFilteredSelected}
@@ -340,7 +344,10 @@ export function TestScenarioReviewList({
           Select all filtered ({filtered.length})
         </label>
         {filtered.length > 0 && (
-          <>
+          <div role="group" aria-label="Filtered scenario actions" className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Filtered
+            </span>
             <button
               type="button"
               onClick={() =>
@@ -348,7 +355,7 @@ export function TestScenarioReviewList({
               }
               className={BUTTON_STYLES.secondary}
             >
-              Accept all filtered ({filtered.length})
+              Accept all<span className="sr-only"> filtered</span> ({filtered.length})
             </button>
             <button
               type="button"
@@ -357,12 +364,19 @@ export function TestScenarioReviewList({
               }
               className={BUTTON_STYLES.secondary}
             >
-              Reject all filtered ({filtered.length})
+              Reject all<span className="sr-only"> filtered</span> ({filtered.length})
             </button>
-          </>
+          </div>
         )}
         {manuallySelected.length > 0 && (
-          <>
+          <div
+            role="group"
+            aria-label="Selected scenario actions"
+            className="flex items-center gap-2 border-l border-brand-200 pl-4 dark:border-brand-500"
+          >
+            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Selected
+            </span>
             <button
               type="button"
               onClick={() =>
@@ -374,7 +388,7 @@ export function TestScenarioReviewList({
               }
               className={BUTTON_STYLES.secondary}
             >
-              Accept selected ({manuallySelected.length})
+              Accept<span className="sr-only"> selected</span> ({manuallySelected.length})
             </button>
             <button
               type="button"
@@ -387,9 +401,9 @@ export function TestScenarioReviewList({
               }
               className={BUTTON_STYLES.secondary}
             >
-              Reject selected ({manuallySelected.length})
+              Reject<span className="sr-only"> selected</span> ({manuallySelected.length})
             </button>
-          </>
+          </div>
         )}
       </div>
 
