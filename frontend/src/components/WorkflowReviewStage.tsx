@@ -103,6 +103,7 @@ export function WorkflowReviewStage({
   const [pendingBulk, setPendingBulk] = useState<PendingBulkDecision | null>(null);
   const bulkDecision = useBulkDecision();
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const allWorkflowIds = dependencyAnalysis.workflows.map((w) => w.id);
   const allSelected =
     allWorkflowIds.length > 0 && manualSelectionIds.size === allWorkflowIds.length;
@@ -114,6 +115,27 @@ export function WorkflowReviewStage({
       selectAllRef.current.indeterminate = !allSelected && manualSelectionIds.size > 0;
     }
   }, [allSelected, manualSelectionIds]);
+
+  // The error renders at the top of the stage, but "Continue" lives in the sticky sidebar and
+  // per-workflow Approve/Reject sit further down a possibly long list, so the message can be
+  // off-screen when it appears. Bring it into view; the JS smooth scroll checks reduced motion
+  // explicitly, as in WorkflowStageTracker.
+  useEffect(() => {
+    if (!error) return;
+    const prefersReducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+    errorRef.current?.scrollIntoView?.({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "nearest",
+    });
+  }, [error]);
+
+  const errorBanner = error && (
+    <div ref={errorRef}>
+      <ErrorState testId="workflow-review-error" message={error} />
+    </div>
+  );
 
   function toggleSelectAll() {
     setManualSelectionIds(allSelected ? new Set() : new Set(allWorkflowIds));
@@ -224,6 +246,7 @@ export function WorkflowReviewStage({
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">
             Review Integration Workflows
           </h2>
+          {errorBanner}
           <p className="text-sm text-muted">
             This analyzes multi-step call chains (e.g. create then reference by ID) across
             the operations you accepted a scenario for in the previous stage — a workflow
@@ -232,7 +255,6 @@ export function WorkflowReviewStage({
           <p data-testid="workflow-review-empty" className="text-sm text-muted">
             No integration workflows were discovered.
           </p>
-          {error && <ErrorState testId="workflow-review-error" message={error} />}
         </div>
         <SummaryPanel
           testId="workflow-review-summary-panel"
@@ -266,6 +288,7 @@ export function WorkflowReviewStage({
         <h2 className="text-base font-semibold text-slate-900 dark:text-white">
           Review Integration Workflows
         </h2>
+        {errorBanner}
         <p className="text-sm text-muted">
           Each item below is a call chain (e.g. create then reference by ID) discovered
           across the operations you accepted a scenario for in the previous stage.
@@ -421,7 +444,6 @@ export function WorkflowReviewStage({
             )}
           </output>
         )}
-        {error && <ErrorState testId="workflow-review-error" message={error} />}
       </div>
       <SummaryPanel
         testId="workflow-review-summary-panel"
