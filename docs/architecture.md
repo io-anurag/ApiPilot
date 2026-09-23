@@ -239,7 +239,8 @@ environment to the "Import & Run Collection" view (`App.tsx`'s `handleHandoffToE
 risk tier and submits, after which the collection is an ordinary `UploadedCollectionSet`. The
 `execution` stage screen only offers a button to repeat the hand-off, for example after a reload.
 The guided workflow's own environment and execution routes (specs/018) remain mounted but have no
-UI caller. This hand-off is not yet described in specs/009 or specs/018.
+UI caller, and their frontend components, `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx`,
+are no longer rendered by any page. This hand-off is not yet described in specs/009 or specs/018.
 
 Scenario review has one extra guard. `finalizeScenarioReview` marks `scenarioReview` complete and
 activates `dependencyAnalysis` before awaiting the analysis, so a decision, edit, or regeneration
