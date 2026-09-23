@@ -57,13 +57,38 @@ pipeline.
 
 ## `POST /api/test-generation-workflow/api-review/continue`
 
-Completes the `apiReview` stage (research.md D3 — a confirmation gate, no request body beyond the
-implicit current workflow). Requires `apiReview` to be `active`.
+Completes the `apiReview` stage, recording which operations to carry forward (research.md D3
+amendment 2026-09-23). Requires `apiReview` to be `active`.
+
+### Request Body (optional)
+
+```json
+{ "selectedOperationKeys": ["GET /api/v1/users", "POST /api/v1/users"] }
+```
+
+Keys are `"METHOD /path"` (shared-domain `toOperationKey()`). Omitted, or an empty array, keeps
+every operation in scope — the pre-amendment behavior, so existing clients are unaffected. Duplicates
+are collapsed and the stored selection is ordered as `apiModel.operations`. The guided-workflow UI
+always sends at least one key (its "Continue" is disabled until an operation is checked).
 
 ### Success Response: `200 OK`
 
 Returns the updated `{ "workflow": {...} }`, with `activeStageId` advanced to
-`deterministicGeneration`.
+`deterministicGeneration` and `selectedOperationKeys` set (absent when no subset was chosen).
+Deterministic generation, AI enhancement, and single-batch retry then run over only the selected
+operations and the schemas they reference; `apiModel` itself is returned unnarrowed.
+
+### Error Response: `400 Bad Request`
+
+```json
+{ "error": "invalid_request", "message": "'selectedOperationKeys', when present, must be an array of strings" }
+```
+
+```json
+{ "error": "unknown_operation_key", "message": "No operation 'DELETE /pets' was found in the analyzed specification." }
+```
+
+Either leaves `apiReview` `active` and nothing recorded.
 
 ### Error Response: `409 Conflict`
 
@@ -76,7 +101,8 @@ targeted stage is not currently enterable (FR-002).
 
 ## `POST /api/test-generation-workflow/deterministic-generation`
 
-Runs `generateTestModel(apiModel)` (unchanged AP-003 function) and stores the result as
+Runs `generateTestModel(apiModel)` (unchanged AP-003 function) — over `apiModel` scoped to
+`selectedOperationKeys` when a subset was chosen — and stores the result as
 `deterministicTestModel`. Requires `deterministicGeneration` to be `active`.
 
 ### Success Response: `200 OK`

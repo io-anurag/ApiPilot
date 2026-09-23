@@ -1,13 +1,35 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ApiModel } from "@apipilot/shared-domain";
 import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReviewStage";
-import { StageNotActiveError } from "../../../src/testGenerationWorkflow/errors";
-import { resetStore, startWorkflow, updateStage } from "../../../src/testGenerationWorkflow/workflowStore";
+import {
+  StageNotActiveError,
+  UnknownOperationKeyError,
+} from "../../../src/testGenerationWorkflow/errors";
+import {
+  getCurrentWorkflow,
+  resetStore,
+  startWorkflow,
+  updateStage,
+} from "../../../src/testGenerationWorkflow/workflowStore";
 
 const apiModel: ApiModel = {
   operations: [],
   securitySchemes: {},
   summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] },
+};
+
+const twoOperationApiModel: ApiModel = {
+  ...apiModel,
+  operations: ["/a", "/b"].map((path) => ({
+    path,
+    method: "get",
+    operationId: undefined,
+    parameters: [],
+    requestBody: undefined,
+    responses: [],
+    security: [],
+    tags: [],
+  })),
 };
 
 describe("apiReviewStage", () => {
@@ -36,5 +58,23 @@ describe("apiReviewStage", () => {
     continueApiReview();
     updateStage("apiReview", "stale");
     expect(() => continueApiReview()).toThrow(StageNotActiveError);
+  });
+
+  it("records no selection when continued without one, keeping every operation in scope", () => {
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel: twoOperationApiModel });
+    expect(continueApiReview([]).selectedOperationKeys).toBeUndefined();
+  });
+
+  it("records the chosen operations", () => {
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel: twoOperationApiModel });
+    expect(continueApiReview(["GET /b"]).selectedOperationKeys).toEqual(["GET /b"]);
+  });
+
+  it("refuses an unknown operation key without completing the stage", () => {
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel: twoOperationApiModel });
+    expect(() => continueApiReview(["GET /missing"])).toThrow(UnknownOperationKeyError);
+    const wf = getCurrentWorkflow()!;
+    expect(wf.stages.apiReview.status).toBe("active");
+    expect(wf.selectedOperationKeys).toBeUndefined();
   });
 });

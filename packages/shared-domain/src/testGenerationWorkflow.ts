@@ -40,6 +40,15 @@ export const WORKFLOW_STAGE_ORDER: readonly WorkflowStageId[] = [
 ];
 
 /**
+ * The `"METHOD /path"` identity used for an operation wherever the workflow records one by key
+ * (`selectedOperationKeys`, `BatchOutcomeRecord.operationKeys`). Shared so the frontend's
+ * selection and the backend's validation of it can never disagree on format.
+ */
+export function toOperationKey(operation: { method: string; path: string }): string {
+  return `${operation.method.toUpperCase()} ${operation.path}`;
+}
+
+/**
  * data-model.md: StageStatus. `partial` applies only to `aiEnhancement`. `skipped` originally
  * applied only to `aiEnhancement` too; the 2026-09-20 amendment extends it to `execution`, which
  * a user may explicitly skip without running anything (specs/009 Clarifications 2026-09-20).
@@ -275,7 +284,20 @@ export interface TestGenerationWorkflow {
   stages: Record<WorkflowStageId, WorkflowStageState>;
 
   specificationFilename: string;
+  /**
+   * Always the complete analyzed specification — never narrowed by `selectedOperationKeys`, since
+   * later stages (e.g. Postman auth-credential chaining, specs/023) legitimately reference
+   * operations the user did not choose to test, such as a token endpoint.
+   */
   apiModel?: ApiModel;
+  /**
+   * The operations chosen at `apiReview` (specs/009 Clarifications 2026-09-23), as
+   * `toOperationKey()` keys in `apiModel.operations` order. Absent means no subset was chosen and
+   * every discovered operation is in scope — it is never an empty array. Scopes deterministic
+   * generation and AI enhancement; each operation already carries its own resolved schemas, so
+   * narrowing operations is also what narrows the schemas sent to the AI provider.
+   */
+  selectedOperationKeys?: string[];
 
   deterministicTestModel?: TestModel;
   aiEnhancement?: EnhancementResult;

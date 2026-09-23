@@ -53,6 +53,7 @@ import {
   PendingWorkflowDecisionsError,
   PostmanGenerationRefusedError,
   StageNotActiveError,
+  UnknownOperationKeyError,
   UnknownWorkflowIdError,
   WorkflowInProgressError,
 } from "../testGenerationWorkflow/errors";
@@ -229,6 +230,10 @@ function toProgressSnapshot(workflow: TestGenerationWorkflow): AiEnhancementProg
   return { aiEnhancement: workflow.stages.aiEnhancement, liveScenarios };
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 function isReviewUpdateRequestArray(value: unknown): value is ReviewUpdateRequest[] {
   return (
     Array.isArray(value) &&
@@ -330,13 +335,30 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
 
   router.post("/test-generation-workflow/api-review/continue", (req, res) => {
     const startedAt = logRequestReceived(req);
+    const selectedOperationKeys = (req.body as Record<string, unknown> | undefined)
+      ?.selectedOperationKeys;
+    if (selectedOperationKeys !== undefined && !isStringArray(selectedOperationKeys)) {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
+      res.status(400).json({
+        error: "invalid_request",
+        message: "'selectedOperationKeys', when present, must be an array of strings",
+      });
+      return;
+    }
     try {
-      res.status(200).json({ workflow: toWorkflowResponse(continueApiReview()) });
+      res
+        .status(200)
+        .json({ workflow: toWorkflowResponse(continueApiReview(selectedOperationKeys)) });
       logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
       if (err instanceof StageNotActiveError) {
         logRequestFailed(req, startedAt, 409, "stage_not_active");
         return stageNotActive(res, err.message);
+      }
+      if (err instanceof UnknownOperationKeyError) {
+        logRequestFailed(req, startedAt, 400, "unknown_operation_key");
+        res.status(400).json({ error: "unknown_operation_key", message: err.message });
+        return;
       }
       // Synchronous throw: Express forwards this to app.ts's centralized error handler,
       // which logs it generically — not duplicated here.

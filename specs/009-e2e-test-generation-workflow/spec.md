@@ -38,6 +38,22 @@
   run against several environments in sequence. Skipping or finishing does not block returning to
   it later: starting a new run reopens it automatically regardless of its current status.
 
+### Session 2026-09-23
+
+- Q: AI enhancement ran over every discovered operation, yet users then kept only a few of them at
+  scenario review — should the operations to test be chosen up front at API review instead, and
+  what is sent to AI enhancement? → A: Yes. API review lets the user check the operations to carry
+  forward; deterministic generation and AI enhancement run only over those, and only the schemas
+  those operations reference are sent to the AI provider (each operation already carries its own
+  resolved schemas, so scoping operations scopes schemas). "Continue" is disabled until at least one
+  operation is checked, so the scope is always an explicit user choice (FR-009); "Select all" is how
+  a user chooses every operation. The recorded selection is shown read-only once the stage is
+  complete and is not revisable — changing it means starting a new workflow. At the API level an
+  absent or empty selection still means every operation, preserving backward compatibility for
+  existing clients. The stored `apiModel` is never narrowed, so later stages that legitimately
+  reference unselected operations (e.g. Postman auth-credential chaining to a token endpoint,
+  specs/023) are unaffected. Supersedes research.md D3's confirmation-only gate.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Go From Specification to Executable Tests in One Guided Flow (Priority: P1)

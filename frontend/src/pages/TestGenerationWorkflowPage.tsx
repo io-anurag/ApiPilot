@@ -571,6 +571,7 @@ export function TestGenerationWorkflowPage({
               apiModel={workflow.apiModel}
               onAdvanced={handleAdvanced}
               readOnly={workflow.activeStageId !== "apiReview"}
+              selectedOperationKeys={workflow.selectedOperationKeys}
             />
           )}
           {(displayStageId === "upload" || displayStageId === "analysis") &&

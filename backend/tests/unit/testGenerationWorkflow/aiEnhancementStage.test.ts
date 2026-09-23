@@ -78,6 +78,24 @@ describe("aiEnhancementStage (happy path)", () => {
   });
 });
 
+describe("aiEnhancementStage (apiReview selection)", () => {
+  beforeEach(() => resetStore());
+
+  it("plans and sends only the operations selected at apiReview", async () => {
+    const apiModel = await validApiModel();
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel });
+    continueApiReview(["GET /pets/{petId}"]);
+    runDeterministicGeneration();
+    const infer = vi.fn(mockProvider.infer);
+    const wf = await runAiEnhancement({ ...mockProvider, infer });
+    expect(wf.stages.aiEnhancement.batchOutcomes?.flatMap((o) => o.operationKeys)).toEqual([
+      "GET /pets/{petId}",
+    ]);
+    expect(infer).toHaveBeenCalledTimes(1);
+    expect(infer.mock.calls[0][0].input).toContain("/pets/{petId}");
+  });
+});
+
 const unavailableProvider: AIProvider = {
   mode: "mock",
   getReadiness: () => ({

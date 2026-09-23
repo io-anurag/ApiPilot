@@ -35,4 +35,19 @@ describe("deterministicGenerationStage", () => {
     expect(wf.activeStageId).toBe("aiEnhancement");
     expect(wf.stages.aiEnhancement.status).toBe("active");
   });
+
+  it("generates scenarios only for the operations selected at apiReview", async () => {
+    const apiModel = await validApiModel();
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel });
+    continueApiReview(["POST /pets"]);
+    const wf = runDeterministicGeneration();
+    const scenarioOperations = new Set(
+      wf.deterministicTestModel!.scenarios.map(
+        (scenario) => `${scenario.operationMethod.toUpperCase()} ${scenario.operationPath}`,
+      ),
+    );
+    expect([...scenarioOperations]).toEqual(["POST /pets"]);
+    // The stored apiModel itself is never narrowed.
+    expect(wf.apiModel!.operations).toHaveLength(apiModel.operations.length);
+  });
 });

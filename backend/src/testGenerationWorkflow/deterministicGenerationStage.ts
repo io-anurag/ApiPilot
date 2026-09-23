@@ -2,11 +2,15 @@ import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { generateTestModel } from "../testDesign/generateTestModel";
 import { createLogger } from "../logger";
 import { StageNotActiveError } from "./errors";
+import { scopeApiModelToSelection } from "./operationSelection";
 import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
 
 const logger = createLogger("testGenerationWorkflow.deterministicGenerationStage");
 
-/** Runs the unmodified AP-003 `generateTestModel` and stores the result (data-model.md). */
+/**
+ * Runs the unmodified AP-003 `generateTestModel` over the operations chosen at apiReview (every
+ * operation when none were chosen) and stores the result (data-model.md).
+ */
 export function runDeterministicGeneration(): TestGenerationWorkflow {
   const startedAt = Date.now();
   try {
@@ -14,7 +18,7 @@ export function runDeterministicGeneration(): TestGenerationWorkflow {
     if (!workflow || workflow.stages.deterministicGeneration.status !== "active") {
       throw new StageNotActiveError("deterministicGeneration is not the active stage.");
     }
-    const deterministicTestModel = generateTestModel(workflow.apiModel!);
+    const deterministicTestModel = generateTestModel(scopeApiModelToSelection(workflow));
     patchWorkflow({ deterministicTestModel });
     updateStage("deterministicGeneration", "complete");
     const result = advanceActiveStage("aiEnhancement");
