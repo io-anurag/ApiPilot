@@ -208,7 +208,9 @@ library exists in any workspace):
    - `summary` must be a non-empty string of at most 400 characters, truncated at a word boundary
      if longer;
    - `steps` must be an array of at most 3 non-empty strings of at most 200 characters each;
-     extras are dropped;
+     extras are dropped. A `cause` other than `insufficient-evidence` needs at least one step,
+     because FR-003 requires suggested investigation steps, so zero steps is `INVALID_RESPONSE`.
+     An `insufficient-evidence` answer may have zero steps;
    - `evidenceIds` must be an array of strings.
 
    A shape failure is `INVALID_RESPONSE`.
@@ -223,6 +225,12 @@ library exists in any workspace):
 
    In the insufficient cases the model's cause is not kept. Summary and steps are kept, and the
    UI labels them as the model's notes.
+
+**Prompt traceability (constitution XXIII)**: a unit test pins a SHA-256 fingerprint of
+`FAILURE_ANALYSIS_SYSTEM_PROMPT`, the worked example and the prompt template, stored next to
+`FAILURE_ANALYSIS_RESPONSE_VERSION`. Changing any of them fails the test until the fingerprint is
+updated, and the test tells whoever updates it to also bump the version. This way the
+`responseVersion` recorded in provenance always identifies the prompt that produced an analysis.
 
 **Threshold**: `FAILURE_ANALYSIS_MIN_CONFIDENCE = 0.5`, a versioned constant recorded in every
 analysis's provenance.
@@ -349,7 +357,13 @@ CREATE TABLE IF NOT EXISTS failure_analyses (
 **Decision**:
 - Add a labelled fixture corpus in `backend/tests/fixtures/failureAnalysis/`. It holds about 12
   cases across the three causes and deliberate low-evidence cases, each with the expected cause or
-  `insufficient-evidence`.
+  `insufficient-evidence`. At least 4 cases are taken from real recorded failures, redacted, rather
+  than synthesized: for example the PayPal Invoicing API walkthrough (`specs/ROADMAP.md` Next
+  Actions #13) and the real-specification runs behind AP-019 to AP-024. This meets XXII's
+  "representative API specifications" requirement. Each real case records where it came from.
+- AP-031 is not reported as "Implemented" until the real-model evaluation has been run and
+  recorded (constitution XXII, XXXI). Until then its status is "Implementation complete — AI
+  evaluation pending (constitution XXII)".
 - Ordinary tests use scripted `AIProvider` literals, which is the existing practice
   (`tests/unit/testDesign/enhanceTestModel.test.ts:19`). `MockProvider` returns only a hash and
   cannot produce realistic content (`mockProvider.ts:70-80`).

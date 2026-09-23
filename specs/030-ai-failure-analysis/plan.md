@@ -154,6 +154,7 @@ backend/src/
 │   ├── parseFailureAnalysisResponse.ts  # parse + shape/semantic validation + conclusion rules (D7)
 │   ├── analyzeFailure.ts          # orchestration: eligibility, viability, infer, store (D8)
 │   ├── inProgressRegistry.ts      # per-session single in-progress entry + phase (D10)
+│   ├── failureAnalysisStore.ts    # session-scoped wrappers over the repository + onExpire cleanup (D9)
 │   └── errors.ts                  # typed errors mapped by the router
 ├── persistence/
 │   ├── connection.ts              # + failure_analyses table (D9)

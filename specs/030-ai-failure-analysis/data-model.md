@@ -83,14 +83,14 @@ It is never re-read from the workflow when the analysis is displayed (FR-018, re
 | `requestName`, `requestMethod` | string | Copied from the result at analysis time. |
 | `conclusion` | `FailureAnalysisConclusion` | |
 | `summary` | string | Model text, at most 400 characters, scanned for sensitive values after inference. Always shown as an inference. |
-| `investigationSteps` | string[] | Model text, 0 to 3 entries of at most 200 characters each, scanned the same way. |
+| `investigationSteps` | string[] | Model text, at most 3 entries of at most 200 characters each, scanned the same way. There is at least 1 entry when `conclusion.kind === "likely-cause"` (FR-003), and 0 to 3 for `insufficient-evidence`. |
 | `citedEvidenceIds` | string[] | Only ids present in `evidence`. It may be empty only when `conclusion.kind === "insufficient-evidence"`. |
 | `evidence` | `FailureEvidence[]` | Every evidence item offered to the model, whether cited or not. |
 | `specificationContext` | `SpecificationContext` | |
 | `provenance` | `FailureAnalysisProvenance` | |
 
 **Validation invariants**:
-- `likely-cause` implies `citedEvidenceIds.length ≥ 1` and `confidence ≥ provenance.confidenceThreshold`.
+- `likely-cause` implies `citedEvidenceIds.length ≥ 1`, `investigationSteps.length ≥ 1` and `confidence ≥ provenance.confidenceThreshold`.
 - Every `citedEvidenceIds` entry is an `evidence[].id`.
 - No field contains a value that redaction replaced (SC-003).
 
