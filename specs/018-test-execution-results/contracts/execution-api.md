@@ -13,6 +13,13 @@ it runs generated collections through `specs/026-external-collection-execution/c
 external-collections-api.md` after the guided workflow's hand-off. Every endpoint below is
 retained unchanged.
 
+**Amended by `specs/029-execution-gap-closure` (AP-030)**: see
+`specs/029-execution-gap-closure/contracts/execution-api-delta.md`. Every `RequestResult` gains
+additive `processingStage` and `unmetDependencies` fields, and `notAttemptedReason` can now be
+`"dependency-not-met"`. `409 confirmation_required` now counts and lists only destructive
+operations that have an approved scenario. Endpoints, status codes, and error codes are
+unchanged, and the examples below remain valid.
+
 ## Environments
 
 ### `GET /api/test-generation-workflow/environments`

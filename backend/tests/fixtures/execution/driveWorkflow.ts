@@ -1,5 +1,5 @@
 import request from "supertest";
-import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
+import type { TestGenerationWorkflow, TestScenario } from "@apipilot/shared-domain";
 import {
   VALID_SPECIFICATION_FILENAME,
   validSpecificationBuffer,
@@ -11,9 +11,14 @@ import {
  * (`workflowFixtures.ts`), accepting every scenario and approving every discovered workflow along
  * the way. Every execution test (Phase 3 onward) needs a `postmanGeneration`-complete workflow as
  * its own precondition — this is shared setup, not the thing under test.
+ *
+ * `options.accept` narrows which scenarios are accepted; every other scenario is rejected
+ * (specs/029-execution-gap-closure T014, e.g. approving only GET scenarios). Omitted, every
+ * scenario is accepted exactly as before.
  */
 export async function driveToPostmanGenerationComplete(
   agent: ReturnType<typeof request.agent>,
+  options: { accept?: (scenario: TestScenario) => boolean } = {},
 ): Promise<TestGenerationWorkflow> {
   await agent
     .post("/api/test-generation-workflow")
@@ -22,16 +27,15 @@ export async function driveToPostmanGenerationComplete(
   await agent.post("/api/test-generation-workflow/deterministic-generation");
   const afterEnhancement = await agent.post("/api/test-generation-workflow/ai-enhancement");
 
-  const scenarios: { scenarioId: string; revision: number }[] =
-    afterEnhancement.body.workflow.reviewWorkspace.scenarios.map(
-      (s: { scenarioId: string; revision: number }) => ({
-        scenarioId: s.scenarioId,
-        revision: s.revision,
-      }),
-    );
-  await agent
-    .post("/api/test-generation-workflow/scenario-review/decisions")
-    .send({ updates: scenarios.map((s) => ({ ...s, action: "accept" })) });
+  const accept = options.accept ?? (() => true);
+  const updates = afterEnhancement.body.workflow.reviewWorkspace.scenarios.map(
+    (s: { scenarioId: string; revision: number; scenario: TestScenario }) => ({
+      scenarioId: s.scenarioId,
+      revision: s.revision,
+      action: accept(s.scenario) ? "accept" : "reject",
+    }),
+  );
+  await agent.post("/api/test-generation-workflow/scenario-review/decisions").send({ updates });
 
   const afterFinalize = await agent.post("/api/test-generation-workflow/scenario-review/finalize");
   let workflow: TestGenerationWorkflow = afterFinalize.body.workflow;

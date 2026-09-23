@@ -79,6 +79,20 @@ are retained as an API-only path (Clarifications 2026-09-23).
   Clarifications 2026-09-23). Neither the generated artifact nor its `TestScenario` provenance is
   mutated, and this spec's own endpoints have no editing surface, so this spec's generation
   boundary is unchanged.
+- Q: A convergence assessment found FR-007, FR-016, and FR-018 only partly or not at all
+  implemented. Where is that closed? → A: In `specs/029-execution-gap-closure` (AP-030), which
+  restates those requirements with two refinements.
+  - **FR-018 refinement**: a dependent request is withheld only when the earlier request it takes
+    a data value from has a blocking outcome: not attempted, a connectivity failure, a timeout,
+    an unexpected status, or an assertion that could not be evaluated. specs/029 FR-001
+    supersedes this spec's FR-018 edge case ("never sent with a missing or empty value") for a
+    producer whose only failure is a schema mismatch. That dependent is sent and fails visibly
+    in its own result. Credential hand-offs (AP-023) and the OAuth2 token request (specs/024) are
+    not enforced.
+  - **FR-007 refinement**: the confirmation counts and lists only destructive operations that have
+    an approved scenario, in `ApiModel` order. The OAuth2 token request is never counted.
+    Staging and production still always require confirmation.
+  - **FR-016**: every result now records its processing stage explicitly.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -274,7 +288,8 @@ retrieved again without re-executing anything.
 - What happens when a request in the collection depends on a value extracted from an earlier
   request in the same run (a workflow data handoff, per AP-016), and that earlier request
   failed? The dependent request MUST be reported as not attempted (with the reason), not
-  silently sent with a missing/empty value.
+  silently sent with a missing/empty value. *(Refined by specs/029-execution-gap-closure FR-001;
+  see Clarifications 2026-09-23.)*
 - What happens when the engineer closes their browser or loses connectivity while a run is in
   progress? The run already in progress on the backend MUST continue or reach an explicit
   terminal state rather than being left ambiguously stuck; reconnecting MUST show its current or
@@ -386,7 +401,8 @@ retrieved again without re-executing anything.
 - **FR-018**: When a request in the run depends on a value produced by an earlier request in
   the same run (a workflow data handoff) and that earlier request did not succeed, the dependent
   request MUST be recorded as not attempted, with the specific unmet dependency identified,
-  rather than sent with a missing or empty value.
+  rather than sent with a missing or empty value. *(Refined by specs/029-execution-gap-closure
+  FR-001: "did not succeed" means a blocking outcome; see Clarifications 2026-09-23.)*
 - **FR-019**: Users MUST be able to retrieve a completed or in-progress run's results and
   summary again later in the same working session without re-executing the collection.
 - **FR-020**: Each run MUST be individually distinguishable by which collection, which

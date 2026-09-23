@@ -1,4 +1,5 @@
 import request from "supertest";
+import type { RequestResult } from "@apipilot/shared-domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../src/app";
 import { resetStore } from "../../../src/testGenerationWorkflow/workflowStore";
@@ -44,6 +45,26 @@ async function pollUntilSettled(
   }
 }
 
+/**
+ * specs/029-execution-gap-closure data-model.md invariants, checked over every result of a
+ * settled run (SC-002, SC-003): a processing stage consistent with outcome and failure category,
+ * and `unmetDependencies` present exactly for `"dependency-not-met"`, naming only earlier results.
+ */
+function expectResultInvariants(results: RequestResult[]): void {
+  results.forEach((result, index) => {
+    expect(result.processingStage).toBeDefined();
+    expect(result.outcome === "not-attempted").toBe(result.processingStage === "not-sent");
+    expect(result.failureCategory === "connectivity-failure" || result.failureCategory === "timeout").toBe(
+      result.processingStage === "no-response",
+    );
+    expect(result.unmetDependencies !== undefined).toBe(result.notAttemptedReason === "dependency-not-met");
+    const earlierScenarioIds = results.slice(0, index).map((earlier) => earlier.scenarioId);
+    for (const dependency of result.unmetDependencies ?? []) {
+      expect(earlierScenarioIds).toContain(dependency.scenarioId);
+    }
+  });
+}
+
 describe("execution routes (US1)", () => {
   let targetServer: TargetServer;
 
@@ -85,6 +106,7 @@ describe("execution routes (US1)", () => {
     const run = finalResponse.body.run;
     expect(run.status).toBe("completed");
     expect(run.results.length).toBeGreaterThan(0);
+    expectResultInvariants(run.results as RequestResult[]);
     expect(run.summary.total).toBe(run.results.length);
     for (const result of run.results as { operationPath: string }[]) {
       expect(typeof result.operationPath).toBe("string");
@@ -124,6 +146,7 @@ describe("execution routes (US1)", () => {
     const run = finalResponse.body.run;
     expect(run.status).toBe("completed");
     expect(run.results.length).toBeGreaterThan(0);
+    expectResultInvariants(run.results as RequestResult[]);
     for (const result of run.results as { outcome: string; failureCategory?: string }[]) {
       expect(result.outcome).toBe("failed");
       expect(result.failureCategory).toBe("connectivity-failure");
@@ -157,6 +180,7 @@ describe("execution routes (US1)", () => {
     const run = finalResponse.body.run;
     expect(run.status).toBe("completed");
     expect(run.results.length).toBeGreaterThan(0);
+    expectResultInvariants(run.results as RequestResult[]);
     for (const result of run.results as Array<{ rawCapture?: unknown }>) {
       expect(result.rawCapture).toBeUndefined();
     }
@@ -360,6 +384,44 @@ describe("execution routes (US1)", () => {
     expect(refused.body.destructiveOperations.length).toBeGreaterThan(0);
   });
 
+  it("bases confirmation on approved scenarios only: GET-only starts on local, and staging lists nothing destructive (specs/029 US3, FR-010–FR-013)", async () => {
+    const baseUrl = await targetServer.start();
+    const app = createApp();
+    const agent = request.agent(app);
+    // valid.yaml documents POST /pets; rejecting every non-GET scenario leaves it with none approved.
+    await driveToPostmanGenerationComplete(agent, {
+      accept: (scenario) => scenario.operationMethod.toUpperCase() === "GET",
+    });
+
+    const staging = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "Staging",
+      tier: "staging",
+      baseUrl,
+      variableValues: { apiKey: "test-key" },
+    });
+    const refused = await agent
+      .post("/api/test-generation-workflow/execution/start")
+      .send({ environmentId: staging.body.environment.id });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toBe("confirmation_required");
+    expect(refused.body.destructiveOperations).toEqual([]);
+
+    const local = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "Local",
+      tier: "local",
+      baseUrl,
+      variableValues: { apiKey: "test-key" },
+    });
+    const started = await agent
+      .post("/api/test-generation-workflow/execution/start")
+      .send({ environmentId: local.body.environment.id });
+    expect(started.status).toBe(200);
+    const settled = await pollUntilSettled(agent, started.body.run.id);
+    expect(settled.body.run.status).toBe("completed");
+    expect(targetServer.requests.every((recorded) => recorded.method === "GET")).toBe(true);
+    expectResultInvariants(settled.body.run.results as RequestResult[]);
+  }, SINGLE_RUN_TEST_TIMEOUT_MS);
+
   it("refuses a second run while one is already in progress (US4, FR-008)", async () => {
     const baseUrl = await targetServer.start();
     targetServer.configure("GET", "/pets", { delayMs: 500 });
@@ -429,6 +491,7 @@ describe("execution routes (US1)", () => {
     }
     // Whatever was already dispatched keeps its own real outcome, never silently dropped.
     expect(run.results.some((r) => r.outcome !== "not-attempted")).toBe(true);
+    expectResultInvariants(run.results as RequestResult[]);
   }, SINGLE_RUN_TEST_TIMEOUT_MS);
 
   it("returns 409 no_run_in_progress when cancelling with nothing running", async () => {
@@ -490,6 +553,7 @@ describe("execution routes (US1)", () => {
       );
       expect(earlierRunDetail.status).toBe(200);
       expect(earlierRunDetail.body.run.results.length).toBeGreaterThan(0);
+      expectResultInvariants(earlierRunDetail.body.run.results);
       expect(earlierRunDetail.body.run.environmentSnapshot.baseUrl).toBe(baseUrlA);
     } finally {
       await serverA.stop();

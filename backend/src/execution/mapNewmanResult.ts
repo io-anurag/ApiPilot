@@ -163,6 +163,8 @@ export function mapNewmanResult(
       ...base,
       outcome: "failed",
       failureCategory: isTimeoutError(execution.requestError) ? "timeout" : "connectivity-failure",
+      // specs/029-execution-gap-closure FR-008/FR-009: dispatched, but no response arrived.
+      processingStage: "no-response",
       durationMs: 0,
       assertionOutcomes: [],
       rawCapture,
@@ -196,12 +198,21 @@ export function mapNewmanResult(
 
   const failing = assertionOutcomes.filter((outcome) => outcome.outcome !== "passed");
   if (failing.length === 0) {
-    return { ...base, outcome: "passed", durationMs, responseStatusCode, assertionOutcomes, rawCapture };
+    return {
+      ...base,
+      outcome: "passed",
+      processingStage: "response-received",
+      durationMs,
+      responseStatusCode,
+      assertionOutcomes,
+      rawCapture,
+    };
   }
   return {
     ...base,
     outcome: "failed",
     failureCategory: categorizeFailure(failing),
+    processingStage: "response-received",
     durationMs,
     responseStatusCode,
     assertionOutcomes,
