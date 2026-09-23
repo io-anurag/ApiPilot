@@ -258,7 +258,11 @@ analysis's provenance.
   mirroring `enhanceTestModel.ts:453-486`.
 - If the prompt exceeds `getInputBudget(256)`, drop the body excerpts first, then header lists,
   and record this in the evidence as "omitted to fit the model's input capacity". If it still does
-  not fit, return `not-viable`.
+  not fit, return `ai-failed` with `INVALID_REQUEST`, as the contract specifies. `not-viable`
+  carries projected versus budgeted *time*, which does not describe a size problem. This was
+  corrected during implementation (2026-09-23); earlier wording here said `not-viable`.
+- Passed tests beyond the first five are summarized by count, so a request with many `pm.test`s
+  cannot force a capacity refusal on its own (analysis finding L3).
 - A parse or validation failure is returned as `ai-failed` with `INVALID_RESPONSE`. There is
   **no automatic corrective retry**. The user can request again explicitly.
 

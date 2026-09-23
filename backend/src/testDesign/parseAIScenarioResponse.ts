@@ -1,67 +1,11 @@
 import type { AIScenarioCandidate, InferenceResponse } from "@apipilot/shared-domain";
 import { AIProviderError } from "../ai/errors";
+import { extractJsonObjects, stripCodeFence } from "../ai/jsonResponseParsing";
 import { AI_SCENARIO_RESPONSE_VERSION } from "./aiScenarioPrompt";
 
 interface ParsedResponse {
   responseVersion: number;
   candidates: unknown[];
-}
-
-/**
- * Strips a markdown code fence around an otherwise-valid JSON document.
- *
- * Instruction-tuned chat models very commonly wrap JSON in ```json fences regardless of being
- * asked not to — measured directly against the default model, which produced a correct document
- * inside a fence. Removing a wrapper is a safe repair in the sense constitution IV intends: it
- * discards no content and changes no value, it only unwraps. Anything beyond this stays a
- * rejection, because guessing at malformed content is how fabricated test data gets in.
- */
-function stripCodeFence(content: string): string {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith("```")) return trimmed;
-  const withoutOpening = trimmed.replace(/^```[a-zA-Z]*\s*\n?/, "");
-  const closingIndex = withoutOpening.lastIndexOf("```");
-  return (
-    closingIndex === -1 ? withoutOpening : withoutOpening.slice(0, closingIndex)
-  ).trim();
-}
-
-/** Returns a balanced JSON object beginning at `start`, if one exists. */
-function balancedObjectAt(content: string, start: number): string | undefined {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let index = start; index < content.length; index += 1) {
-    const character = content[index];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') {
-      inString = true;
-    } else if (character === "{") {
-      depth += 1;
-    } else if (character === "}" && --depth === 0) {
-      return content.slice(start, index + 1);
-    }
-  }
-  return undefined;
-}
-
-/** Extracts every balanced JSON object from a model response with surrounding prose. */
-function extractJsonObjects(content: string): string[] {
-  const objects: string[] = [];
-  for (
-    let start = content.indexOf("{");
-    start >= 0;
-    start = content.indexOf("{", start + 1)
-  ) {
-    const object = balancedObjectAt(content, start);
-    if (object) objects.push(object);
-  }
-  return objects;
 }
 
 /** Parses and structurally validates a raw AIProvider inference response into a candidate list; throws `AIProviderError` for a provider error, empty content, invalid JSON, or an unsupported response shape. */

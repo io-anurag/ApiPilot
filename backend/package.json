@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "test": "vitest run --root .",
     "test:ai-real": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/localProvider.real.test.ts",
+    "test:ai-real:failure-analysis": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/failureAnalysis.real.test.ts",
     "ai:benchmark": "tsx src/ai/benchmark/runBenchmark.ts"
   },
   "dependencies": {

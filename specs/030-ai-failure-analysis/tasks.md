@@ -31,8 +31,8 @@ Within each story, write the tests first and confirm they fail.
 
 **Purpose**: Scaffolding shared by every story.
 
-- [ ] T001 Create the empty module and test directories `backend/src/failureAnalysis/`, `backend/tests/unit/failureAnalysis/`, `backend/tests/integration/failureAnalysis/` and `backend/tests/fixtures/failureAnalysis/`, each with a `.gitkeep` that is removed once the first file lands.
-- [ ] T002 [P] Create `backend/tests/fixtures/failureAnalysis/fixtures.ts` with builders that later tests share:
+- [X] T001 Create the empty module and test directories `backend/src/failureAnalysis/`, `backend/tests/unit/failureAnalysis/`, `backend/tests/integration/failureAnalysis/` and `backend/tests/fixtures/failureAnalysis/`, each with a `.gitkeep` that is removed once the first file lands.
+- [X] T002 [P] Create `backend/tests/fixtures/failureAnalysis/fixtures.ts` with builders that later tests share:
   - `failedResult(overrides)` returns an `UploadedRequestResult` (outcome `failed`, `assertion-failed`, one failed `testOutcomes` entry, status 500).
   - `connectivityFailure()` returns a `connectivity-failure` with no response and no test outcomes.
   - `withRawCapture(result, capture)` returns the result with a `RawRequestCapture` whose request carries `Authorization: Bearer abc.def.ghi`, a URL `?api_key=SECRET1&page=2`, a JSON body `{"user":"u","password":"SECRET2"}` and a JSON response body.
@@ -50,7 +50,7 @@ story's analysis payload depends on these.
 
 ### Shared contracts
 
-- [ ] T003 Create `packages/shared-domain/src/failureAnalysis.ts` with every type in data-model.md, and nothing else:
+- [X] T003 Create `packages/shared-domain/src/failureAnalysis.ts` with every type in data-model.md, and nothing else:
   - `FailureCause`, `InsufficientEvidenceReason`, `FailureAnalysisConclusion` (discriminated on `kind`)
   - `FailureEvidenceKind` (the 14 kinds, in data-model order), `FailureEvidence`
   - `SpecificationContextUnavailableReason`, `UpstreamContext`, `SpecificationContext` (discriminated on `status`)
@@ -59,49 +59,49 @@ story's analysis payload depends on these.
   - `FailureAnalysisAttempt` (discriminated on `status`: `analyzed | ai-failed | not-viable`)
 
   Add a file header naming AP-031 and `specs/030-ai-failure-analysis`. The file must not import Express, React or Node APIs.
-- [ ] T004 Export the new module from `packages/shared-domain/src/index.ts` (`export * from "./failureAnalysis";`) after the `externalCollections` export.
-- [ ] T005 [P] Add optional `itemId?: string` to `UploadedRequestResult` in `packages/shared-domain/src/externalCollections.ts`. Its doc comment should explain that it is the executed Postman item's `id`, that it is absent on results stored before AP-031, and that it links a result to its generated item (FR-017, D2).
-- [ ] T006 [P] Make two additive changes in `packages/shared-domain/src/aiProvider.ts` (D6, D10):
+- [X] T004 Export the new module from `packages/shared-domain/src/index.ts` (`export * from "./failureAnalysis";`) after the `externalCollections` export.
+- [X] T005 [P] Add optional `itemId?: string` to `UploadedRequestResult` in `packages/shared-domain/src/externalCollections.ts`. Its doc comment should explain that it is the executed Postman item's `id`, that it is absent on results stored before AP-031, and that it links a result to its generated item (FR-017, D2).
+- [X] T006 [P] Make two additive changes in `packages/shared-domain/src/aiProvider.ts` (D6, D10):
   - Add `systemPrompt?: string` to `InferenceRequest`. Its doc comment should say that a present value replaces the provider's default chat system message, and that `contractVersion` stays `1`.
   - Add `export interface InferenceHooks { onStarted?: () => void }` and change `AIProvider.infer` to `infer(request: InferenceRequest, hooks?: InferenceHooks): Promise<InferenceResponse>`. Its doc comment should say that `onStarted` fires once when the provider begins work on this request, which is the point its timeout starts.
 
 ### Provider support
 
-- [ ] T007 [P] Add a unit test in `backend/tests/unit/ai/localProvider.textGeneration.test.ts`, following that file's existing fake-engine setup:
+- [X] T007 [P] Add a unit test in `backend/tests/unit/ai/localProvider.textGeneration.test.ts`, following that file's existing fake-engine setup:
   - With `systemPrompt` set, the chat template receives it as the `system` message.
   - Without it, the system message is exactly `SYSTEM_PROMPTS.json` or `SYSTEM_PROMPTS.text` (unchanged behavior).
-- [ ] T008 [P] Add a unit test in `backend/tests/unit/ai/localProvider.timeout.test.ts`:
+- [X] T008 [P] Add a unit test in `backend/tests/unit/ai/localProvider.timeout.test.ts`:
   - `hooks.onStarted` is called once, after the engine is ready and before generation.
   - It is not called when readiness is `unavailable` (the `NOT_READY` path) or for empty input.
   - A second queued request's `onStarted` fires only after the first request settles.
-- [ ] T009 In `backend/src/ai/localProvider.ts`:
+- [X] T009 In `backend/src/ai/localProvider.ts`:
   - Accept `hooks?: InferenceHooks` in `infer()` and pass it to `runInference()`.
   - Call `hooks?.onStarted?.()` right after `ensureEngine()` succeeds, before `timeoutMs` is computed.
   - In the text-generation engine's chat framing, use `request.systemPrompt ?? SYSTEM_PROMPTS[expectedOutputFormat]`. Thread `systemPrompt` through the existing engine `options` argument.
   - Make no other behavior change.
 
   Depends on T006, and makes T007 and T008 pass.
-- [ ] T010 [P] In `backend/src/ai/mockProvider.ts`, accept `hooks?: InferenceHooks` and call `hooks?.onStarted?.()` before building a successful response. Update `backend/tests/unit/ai/mockProvider.test.ts` to cover it, and to show that `systemPrompt` does not change the returned content. Depends on T006.
-- [ ] T011 [P] Move the private `stripCodeFence`, `balancedObjectAt` and `extractJsonObjects` helpers into a new `backend/src/ai/jsonResponseParsing.ts`, exporting `stripCodeFence` and `extractJsonObjects`. The same helpers are duplicated in `backend/src/testDesign/parseAIScenarioResponse.ts:19-65` and `backend/src/dependencies/parseAIDependencyResponse.ts:16-60`. Import the new module in both files instead of their local copies. Compare the two copies first. If they differ in any behavior, keep each caller's behavior and extract only the identical part. Existing tests under `backend/tests/unit/testDesign/` and `backend/tests/unit/dependencies/` must pass unchanged. Add `backend/tests/unit/ai/jsonResponseParsing.test.ts` covering fenced JSON, prose around JSON, and nested braces inside strings.
+- [X] T010 [P] In `backend/src/ai/mockProvider.ts`, accept `hooks?: InferenceHooks` and call `hooks?.onStarted?.()` before building a successful response. Update `backend/tests/unit/ai/mockProvider.test.ts` to cover it, and to show that `systemPrompt` does not change the returned content. Depends on T006.
+- [X] T011 [P] Move the private `stripCodeFence`, `balancedObjectAt` and `extractJsonObjects` helpers into a new `backend/src/ai/jsonResponseParsing.ts`, exporting `stripCodeFence` and `extractJsonObjects`. The same helpers are duplicated in `backend/src/testDesign/parseAIScenarioResponse.ts:19-65` and `backend/src/dependencies/parseAIDependencyResponse.ts:16-60`. Import the new module in both files instead of their local copies. Compare the two copies first. If they differ in any behavior, keep each caller's behavior and extract only the identical part. Existing tests under `backend/tests/unit/testDesign/` and `backend/tests/unit/dependencies/` must pass unchanged. Add `backend/tests/unit/ai/jsonResponseParsing.test.ts` covering fenced JSON, prose around JSON, and nested braces inside strings.
 
 ### Recording the executed request's identity (FR-017, D2)
 
-- [ ] T012 [P] Extend `backend/tests/unit/externalCollections/mapUploadedResult.test.ts`:
+- [X] T012 [P] Extend `backend/tests/unit/externalCollections/mapUploadedResult.test.ts`:
   - Passing an item id sets `result.itemId` on passed, failed (assertion, connectivity and timeout) results.
   - Omitting it leaves the field absent, not `undefined`-valued, so the serialized shape is unchanged.
-- [ ] T013 Add an `itemId?: string` parameter (after `wasEdited`) to `mapUploadedResult` in `backend/src/externalCollections/mapUploadedResult.ts`, and add `...(itemId ? { itemId } : {})` to `base`. In `backend/src/externalCollections/runUploadedCollectionExecution.ts`, pass `item.id` at the `mapUploadedResult(...)` call (`:106-112`). Also set `itemId: item.id` on every `not-attempted` result that function builds. Extend `backend/tests/integration/externalCollections/uploadAndRun.test.ts`: every result of a new run carries the item's id from the stored collection. Depends on T005 and T012.
+- [X] T013 Add an `itemId?: string` parameter (after `wasEdited`) to `mapUploadedResult` in `backend/src/externalCollections/mapUploadedResult.ts`, and add `...(itemId ? { itemId } : {})` to `base`. In `backend/src/externalCollections/runUploadedCollectionExecution.ts`, pass `item.id` at the `mapUploadedResult(...)` call (`:106-112`). Also set `itemId: item.id` on every `not-attempted` result that function builds. Extend `backend/tests/integration/externalCollections/uploadAndRun.test.ts`: every result of a new run carries the item's id from the stored collection. Depends on T005 and T012.
 
 ### Persistence (FR-013, FR-015, D9)
 
-- [ ] T014 [P] Create `backend/tests/unit/persistence/failureAnalysisRepository.test.ts`:
+- [X] T014 [P] Create `backend/tests/unit/persistence/failureAnalysisRepository.test.ts`:
   - `upsert` then `get` round-trips a `FailureAnalysis`.
   - A second `upsert` for the same `(session, runId, resultIndex)` replaces it completely.
   - `listByRun` returns analyses ordered by `resultIndex` and scoped to the session (another session's rows are invisible).
   - `deleteBySession` removes only that session's rows.
   - Session idle-eviction deletes that session's rows (FR-013). Import `backend/src/failureAnalysis/failureAnalysisStore.ts` (T016), trigger the registered `onExpire` callbacks the way `backend/tests/unit/externalCollections/uploadedCollectionExecutionStore.test.ts` does, and check `listByRun` is empty for that session and unchanged for another.
   - The stored `analysis_encrypted` bytes do not contain the analysis summary text in plaintext.
-- [ ] T015 In `backend/src/persistence/connection.ts` `initializeSchema()`, add the `failure_analyses` table exactly as in research D9, with `PRIMARY KEY (session_id, run_id, result_index)`. Use a separate `CREATE TABLE IF NOT EXISTS` block placed after `benchmark_runs`, leaving `PRAGMA user_version` at 1. Extend `backend/tests/unit/persistence/connection.test.ts`: opening an existing database created without the table adds it, and reopening is idempotent.
-- [ ] T016 Create `backend/src/persistence/failureAnalysisRepository.ts`, mirroring `uploadedCollectionRunRepository.ts`'s structure:
+- [X] T015 In `backend/src/persistence/connection.ts` `initializeSchema()`, add the `failure_analyses` table exactly as in research D9, with `PRIMARY KEY (session_id, run_id, result_index)`. Use a separate `CREATE TABLE IF NOT EXISTS` block placed after `benchmark_runs`, leaving `PRAGMA user_version` at 1. Extend `backend/tests/unit/persistence/connection.test.ts`: opening an existing database created without the table adds it, and reopening is idempotent.
+- [X] T016 Create `backend/src/persistence/failureAnalysisRepository.ts`, mirroring `uploadedCollectionRunRepository.ts`'s structure:
   - Define an interface `FailureAnalysisRepository { upsert(sessionId, analysis): void; get(sessionId, runId, resultIndex): FailureAnalysis | undefined; listByRun(sessionId, runId): FailureAnalysis[]; deleteBySession(sessionId): void }`.
   - Implement `SqliteFailureAnalysisRepository`. It encrypts the whole `FailureAnalysis` JSON with `connection.cipher`. `upsert` is a single `INSERT … ON CONFLICT(session_id, run_id, result_index) DO UPDATE SET generated_at=excluded.generated_at, analysis_encrypted=excluded.analysis_encrypted, analysis_iv=excluded.analysis_iv`.
   - Export `getFailureAnalysisRepository()` using `getSharedConnection()`, following the existing getters.
@@ -111,24 +111,24 @@ story's analysis payload depends on these.
 
 ### Specification-context matching (FR-018, D3)
 
-- [ ] T017 [P] Create `backend/tests/fixtures/failureAnalysis/workflowFixtures.ts`. It builds a completed `TestGenerationWorkflow` (from `@apipilot/shared-domain`) with:
+- [X] T017 [P] Create `backend/tests/fixtures/failureAnalysis/workflowFixtures.ts`. It builds a completed `TestGenerationWorkflow` (from `@apipilot/shared-domain`) with:
   - an `apiModel` containing `POST /users` (responses 201, 400) and `GET /users/{id}` (responses 200, 404);
   - an `approvedTestModel` with one positive scenario per operation;
   - a `dependencyAnalysis` with one CONFIRMED relationship and one approved `IntegrationWorkflow` (step 0 `POST /users` produces `user_id`, step 1 `GET /users/{id}` consumes it);
   - a `postmanArtifact` whose collection has a `Workflow: <id>` folder holding the two step items, plus one standalone item. Item ids are generated with `itemIdForScenario` or `itemIdForWorkflowStep` from `backend/src/postman/identifiers.ts`, and each item carries the `provenance` the generator writes.
 
   Reuse existing builders from `backend/tests/fixtures/postman/` or `backend/tests/fixtures/testGenerationWorkflow/` where they exist, rather than hand-writing duplicates.
-- [ ] T018 [P] Create `backend/tests/unit/failureAnalysis/matchSpecificationContext.test.ts` covering:
+- [X] T018 [P] Create `backend/tests/unit/failureAnalysis/matchSpecificationContext.test.ts` covering:
   - each unavailable reason: `no-request-identity` (no `itemId`), `no-generated-collection` (no workflow, or no `postmanArtifact`), `not-generated-by-current-workflow` (unknown id), and `no-originating-scenario` (an item without `provenance.scenarioId`, such as an OAuth2 token-fetch item);
   - a matched standalone item, returning `workflowId`, `scenarioId`, scenario name and category, `operationPath`, `operationMethod`, `documentedStatusCodes` in `ApiModel` order, and `upstream: []`;
   - `requestEditedAfterGeneration` mirroring `result.wasEdited === true`;
   - that no match is ever made by `requestName`, even when the names are identical.
-- [ ] T019 Create `backend/src/failureAnalysis/matchSpecificationContext.ts`, exporting a pure `matchSpecificationContext(result: UploadedRequestResult, workflow: TestGenerationWorkflow | undefined): SpecificationContext`. It walks `workflow.postmanArtifact.collection` items recursively through folders, matches on `id === result.itemId`, and resolves the scenario from `approvedTestModel` and the operation from `apiModel`. It leaves `upstream` as `[]`, because upstream resolution is added in T036. It has no I/O and does not read the clock. Makes T018 pass. Depends on T003 and T017.
+- [X] T019 Create `backend/src/failureAnalysis/matchSpecificationContext.ts`, exporting a pure `matchSpecificationContext(result: UploadedRequestResult, workflow: TestGenerationWorkflow | undefined): SpecificationContext`. It walks `workflow.postmanArtifact.collection` items recursively through folders, matches on `id === result.itemId`, and resolves the scenario from `approvedTestModel` and the operation from `apiModel`. It leaves `upstream` as `[]`, because upstream resolution is added in T036. It has no I/O and does not read the clock. Makes T018 pass. Depends on T003 and T017.
 
 ### Router skeleton
 
-- [ ] T020 Create `backend/src/failureAnalysis/errors.ts` with typed errors: `InvalidResultIndexError`, `ResultNotFoundError`, `ResultNotFailedError` (carrying `outcome`) and `FailureAnalysisInProgressError` (carrying `runId` and `resultIndex`). Reuse the existing `RunNotFoundError` from `backend/src/externalCollections/errors.ts` rather than adding a new one.
-- [ ] T021 Create `backend/src/api/failureAnalysis.ts` exporting `createFailureAnalysisRouter(provider: AIProvider)` and a default `failureAnalysisRouter`, following `createEnhancedTestModelsRouter`'s pattern. Mount it in `backend/src/app.ts` under `/api`, next to the other injected-provider routers (`app.ts:97-106`), so `createApp({ provider })` wires it for tests. Log the route with `createLogger("api.failureAnalysis")`, using the existing `logRequestReceived`/`logRequestSucceeded`/`logRequestFailed` helpers if they are exported, or the same pattern if not. Handlers are added per story. Depends on T020.
+- [X] T020 Create `backend/src/failureAnalysis/errors.ts` with typed errors: `InvalidResultIndexError`, `ResultNotFoundError`, `ResultNotFailedError` (carrying `outcome`) and `FailureAnalysisInProgressError` (carrying `runId` and `resultIndex`). Reuse the existing `RunNotFoundError` from `backend/src/externalCollections/errors.ts` rather than adding a new one.
+- [X] T021 Create `backend/src/api/failureAnalysis.ts` exporting `createFailureAnalysisRouter(provider: AIProvider)` and a default `failureAnalysisRouter`, following `createEnhancedTestModelsRouter`'s pattern. Mount it in `backend/src/app.ts` under `/api`, next to the other injected-provider routers (`app.ts:97-106`), so `createApp({ provider })` wires it for tests. Log the route with `createLogger("api.failureAnalysis")`, using the existing `logRequestReceived`/`logRequestSucceeded`/`logRequestFailed` helpers if they are exported, or the same pattern if not. Handlers are added per story. Depends on T020.
 
 **Checkpoint**: The contracts compile, the provider supports `systemPrompt` and `onStarted`, results record `itemId`, the repository persists, and context matching works. `npm test`, `npm run lint` and `npm run build` pass.
 
@@ -148,7 +148,7 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
 
 ### Tests for User Story 1 ⚠️ (write first, confirm they fail)
 
-- [ ] T022 [P] [US1] Create `backend/tests/unit/failureAnalysis/redaction.test.ts`. Using the `withRawCapture` fixture, verify:
+- [X] T022 [P] [US1] Create `backend/tests/unit/failureAnalysis/redaction.test.ts`. Using the `withRawCapture` fixture, verify:
   - The `Authorization`, `Cookie` and `X-Api-Key` header values become `[redacted]`, and so does any header whose value is a bearer token.
   - `api_key` is redacted in the URL query while `page=2` is kept.
   - The JSON body's `password` is redacted recursively, including inside nested objects and arrays.
@@ -157,7 +157,7 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - `collectRedactedValues()` returns every replaced value.
   - `scanOutput(text, sensitiveValues)` replaces each occurrence with `[redacted]`.
   - No input value `SECRET1`, `SECRET2` or `abc.def.ghi` survives in any output.
-- [ ] T023 [P] [US1] Create `backend/tests/unit/failureAnalysis/buildEvidence.test.ts`, verifying:
+- [X] T023 [P] [US1] Create `backend/tests/unit/failureAnalysis/buildEvidence.test.ts`, verifying:
   - kinds appear in data-model order with ids `E1…En`;
   - one `test-outcome` per test, including passed tests;
   - the raw-capture kinds are present only with a `rawCapture`;
@@ -165,13 +165,13 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - `source` is `run-result` for these kinds;
   - identical input gives identical output (a deep-equal on two calls);
   - a connectivity failure gives only `failure-category` (plus `response-time` when the duration is above 0).
-- [ ] T024 [P] [US1] Create `backend/tests/unit/failureAnalysis/failureAnalysisPrompt.test.ts`, verifying:
+- [X] T024 [P] [US1] Create `backend/tests/unit/failureAnalysis/failureAnalysisPrompt.test.ts`, verifying:
   - `buildFailureAnalysisRequest(...)` returns an `InferenceRequest` with `expectedOutputFormat: "json"`, `maxOutputTokens: 256`, the feature `systemPrompt`, and no `timeoutMs`;
   - the `input` JSON contains `responseVersion: 1`, the evidence ids and texts, the allowed causes and one worked example;
   - `requestId` is `failure-` followed by 24 hex characters, stable for the same input;
   - the prompt contains no value from `collectRedactedValues()`;
   - `FAILURE_ANALYSIS_PROMPT_FINGERPRINT` equals the SHA-256 of the system prompt, the worked example and the template (D7, constitution XXIII). The assertion message must say "prompt changed: bump FAILURE_ANALYSIS_RESPONSE_VERSION and update the fingerprint".
-- [ ] T025 [P] [US1] Create `backend/tests/unit/failureAnalysis/parseFailureAnalysisResponse.test.ts`, covering:
+- [X] T025 [P] [US1] Create `backend/tests/unit/failureAnalysis/parseFailureAnalysisResponse.test.ts`, covering:
   - valid likely-cause output;
   - fenced or prose-wrapped JSON;
   - a missing `responseVersion` treated as current;
@@ -181,13 +181,13 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - unknown cited ids dropped;
   - the conclusion rules: `insufficient-evidence` gives `model-reported`, confidence 0.49 gives `below-confidence-threshold`, confidence 0.5 with a valid citation gives `likely-cause`, and no valid citation gives `no-valid-evidence-cited`;
   - the rejected cause never appearing in the insufficient conclusion.
-- [ ] T026 [P] [US1] Create `backend/tests/unit/failureAnalysis/inProgressRegistry.test.ts`, verifying:
+- [X] T026 [P] [US1] Create `backend/tests/unit/failureAnalysis/inProgressRegistry.test.ts`, verifying:
   - `tryBegin(sessionId, entry)` returns `false` while an entry exists for that session, whatever its result;
   - different sessions are independent;
   - `markGenerating` switches the phase and resets `phaseStartedAt` from the injected clock;
   - `end` clears the entry;
   - `get` returns the entry or `undefined`.
-- [ ] T027 [P] [US1] Create `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts` with a scripted provider and an in-memory fake of the `failureAnalysisStore.ts` interface, verifying:
+- [X] T027 [P] [US1] Create `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts` with a scripted provider and an in-memory fake of the `failureAnalysisStore.ts` interface, verifying:
   - a failed result gives `status: "analyzed"`, stored via `saveAnalysis`, with provenance holding the model id, `local`, `responseVersion: 1`, `confidenceThreshold: 0.5`, and the injected clock's `generatedAt`;
   - the analysis carries `specificationContext` from `matchSpecificationContext`;
   - `onStarted` moves the in-progress phase to `generating`;
@@ -197,7 +197,7 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - no `infer` call happens for an ineligible result;
   - `infer` is called exactly once for an invalid response (`INVALID_RESPONSE`), a provider error (`TIMEOUT`) and a success, so there is no hidden retry (FR-012, D8);
   - for a `withRawCapture` input, the captured log output (spy on the `createLogger("failureAnalysis")` instance, or the logger's sink as `backend/tests/unit/logger.test.ts` does) contains none of `SECRET1`, `SECRET2`, `abc.def.ghi`, the summary text or any evidence text (SC-003, constitution XX).
-- [ ] T028 [P] [US1] Create `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts` using Supertest with `createApp({ provider: scriptedProvider(...) })`. Create runs through the real AP-026 upload and start routes against a local target (mirror `backend/tests/integration/externalCollections/uploadAndRun.test.ts`'s target setup). Cover every contract row:
+- [X] T028 [P] [US1] Create `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts` using Supertest with `createApp({ provider: scriptedProvider(...) })`. Create runs through the real AP-026 upload and start routes against a local target (mirror `backend/tests/integration/externalCollections/uploadAndRun.test.ts`'s target setup). Cover every contract row:
   - 400 `invalid_result_index` for `-1` or `abc`;
   - 404 `run_not_found`, including another session's run;
   - 404 `result_not_found`;
@@ -209,16 +209,16 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - a re-POST replacing the stored analysis;
   - analysis of a failed result while its run is still `in-progress` succeeding (FR-001);
   - analysis still working after the uploaded collection is deleted.
-- [ ] T029 [P] [US1] Create `frontend/tests/unit/FailureAnalysisPanel.test.tsx` with React Testing Library, verifying:
+- [X] T029 [P] [US1] Create `frontend/tests/unit/FailureAnalysisPanel.test.tsx` with React Testing Library, verifying:
   - idle shows an "Analyze failure" button with an accessible name including the request name;
   - clicking it shows "Waiting for the local AI", then "Generating", each with an elapsed timer (use fake timers for the 1 s in-progress polling);
   - the analyzed state shows the "AI inference, not a confirmed root cause" label, the cause label ("Potential environment issue"), the confidence as "Moderate (0.62)" or "High (0.80)", cited evidence as a list, a collapsed "Other evidence considered" disclosure containing the uncited items, investigation steps, and "Specification context unavailable" with the reason text;
   - the button is disabled with a message naming the other request while another analysis is in progress.
-- [ ] T030 [P] [US1] Create `frontend/tests/unit/confidenceLabel.test.ts`, verifying 0.5 and 0.74 give "Moderate", and 0.75 and 1 give "High".
+- [X] T030 [P] [US1] Create `frontend/tests/unit/confidenceLabel.test.ts`, verifying 0.5 and 0.74 give "Moderate", and 0.75 and 1 give "High".
 
 ### Implementation for User Story 1
 
-- [ ] T031 [P] [US1] Create `backend/src/failureAnalysis/redaction.ts` (D5). It exports pure functions:
+- [X] T031 [P] [US1] Create `backend/src/failureAnalysis/redaction.ts` (D5). It exports pure functions:
   - `redactHeaders`
   - `redactUrl`
   - `redactBody(body, limit)`, which parses JSON and redacts values under sensitive field names recursively, or otherwise redacts bearer tokens and sensitive `key=value` pairs, then truncates with a note
@@ -226,8 +226,8 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - `scanOutput(text, sensitiveValues)`
 
   Reuse `isSensitiveHeaderName`, `isBearerTokenValue` and `isSensitiveFieldName` from `backend/src/testDesign/sensitiveValueDetection.ts`, and do not add new denylists. Makes T022 pass.
-- [ ] T032 [US1] Create `backend/src/failureAnalysis/buildEvidence.ts` (D4). It exports `buildEvidence(result: UploadedRequestResult, context: SpecificationContext): { evidence: FailureEvidence[]; sensitiveValues: string[] }`. It emits the `run-result` kinds in data-model order, using `redaction.ts` for every raw-capture kind, with fixed English templates for each kind's `text`. It ignores `context` for now; the specification kinds are added in T037. Makes T023 pass. Depends on T031.
-- [ ] T033 [P] [US1] Create `backend/src/failureAnalysis/failureAnalysisPrompt.ts` (D6, D8), containing:
+- [X] T032 [US1] Create `backend/src/failureAnalysis/buildEvidence.ts` (D4). It exports `buildEvidence(result: UploadedRequestResult, context: SpecificationContext): { evidence: FailureEvidence[]; sensitiveValues: string[] }`. It emits the `run-result` kinds in data-model order, using `redaction.ts` for every raw-capture kind, with fixed English templates for each kind's `text`. It ignores `context` for now; the specification kinds are added in T037. Makes T023 pass. Depends on T031.
+- [X] T033 [P] [US1] Create `backend/src/failureAnalysis/failureAnalysisPrompt.ts` (D6, D8), containing:
   - the constants `FAILURE_ANALYSIS_RESPONSE_VERSION = 1`, `FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS = 256` and `FAILURE_ANALYSIS_MIN_CONFIDENCE = 0.5`, each with a one-line reason referencing research.md;
   - `FAILURE_ANALYSIS_SYSTEM_PROMPT`: a failure-analysis assistant that answers with exactly one JSON object and never invents evidence ids;
   - a `WORKED_EXAMPLE`, which includes at least one step;
@@ -236,9 +236,9 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   - `buildFailureAnalysisRequest(prompt)`, which returns the `InferenceRequest` with `requestId = "failure-" + sha256(prompt).slice(0, 24)`.
 
   Makes T024 pass.
-- [ ] T034 [P] [US1] Create `backend/src/failureAnalysis/parseFailureAnalysisResponse.ts` (D7). It exports `parseFailureAnalysisResponse(response: InferenceResponse, evidenceIds: ReadonlySet<string>)`, which returns `{ conclusion, summary, investigationSteps, citedEvidenceIds }` or throws `AIProviderError("INVALID_RESPONSE", <fixed message>)` from `backend/src/ai/errors.ts`. It uses `stripCodeFence` and `extractJsonObjects` from `backend/src/ai/jsonResponseParsing.ts` and applies the shape rules (including at least one step for a cause other than `insufficient-evidence`) and the conclusion rules exactly as in research D7. Makes T025 pass. Depends on T011.
-- [ ] T035 [P] [US1] Create `backend/src/failureAnalysis/inProgressRegistry.ts` (D10): an in-memory `Map<sessionId, FailureAnalysisInProgress>` with `tryBegin` (a synchronous check-and-set), `markGenerating`, `end` and `get`, and a `now` clock injected through a factory `createInProgressRegistry(now = () => new Date())`. It exports a default instance, and registers `onExpire` from `backend/src/session/sessionRegistry.ts` to drop an evicted session's entry. Makes T026 pass.
-- [ ] T036 [US1] Create `backend/src/failureAnalysis/analyzeFailure.ts`. It exports `analyzeFailure(deps, input)`, where `deps = { provider, store, registry, now, getWorkflow, getCollectionVariableValues }` and `input = { sessionId, run, resultIndex }`. `store` has the `failureAnalysisStore.ts` (T016) interface. The router passes the real store, and unit tests pass an in-memory fake. The steps, in order:
+- [X] T034 [P] [US1] Create `backend/src/failureAnalysis/parseFailureAnalysisResponse.ts` (D7). It exports `parseFailureAnalysisResponse(response: InferenceResponse, evidenceIds: ReadonlySet<string>)`, which returns `{ conclusion, summary, investigationSteps, citedEvidenceIds }` or throws `AIProviderError("INVALID_RESPONSE", <fixed message>)` from `backend/src/ai/errors.ts`. It uses `stripCodeFence` and `extractJsonObjects` from `backend/src/ai/jsonResponseParsing.ts` and applies the shape rules (including at least one step for a cause other than `insufficient-evidence`) and the conclusion rules exactly as in research D7. Makes T025 pass. Depends on T011.
+- [X] T035 [P] [US1] Create `backend/src/failureAnalysis/inProgressRegistry.ts` (D10): an in-memory `Map<sessionId, FailureAnalysisInProgress>` with `tryBegin` (a synchronous check-and-set), `markGenerating`, `end` and `get`, and a `now` clock injected through a factory `createInProgressRegistry(now = () => new Date())`. It exports a default instance, and registers `onExpire` from `backend/src/session/sessionRegistry.ts` to drop an evicted session's entry. Makes T026 pass.
+- [X] T036 [US1] Create `backend/src/failureAnalysis/analyzeFailure.ts`. It exports `analyzeFailure(deps, input)`, where `deps = { provider, store, registry, now, getWorkflow, getCollectionVariableValues }` and `input = { sessionId, run, resultIndex }`. `store` has the `failureAnalysisStore.ts` (T016) interface. The router passes the real store, and unit tests pass an in-memory fake. The steps, in order:
   1. Validate eligibility (throwing the T020 errors).
   2. Call `registry.tryBegin` synchronously before any `await`, throwing `FailureAnalysisInProgressError` on `false`.
   3. `matchSpecificationContext`.
@@ -250,27 +250,27 @@ session is refused while the first runs (quickstart scenarios 1, 3 and 4).
   9. Assemble a `FailureAnalysis` with provenance, `store.saveAnalysis`, and return `{status: "analyzed", analysis}`.
 
   A provider `status: "error"`, or a thrown `AIProviderError`, returns `{status: "ai-failed", aiErrorCategory, message}`, using a category-to-plain-message function modelled on `enhanceTestModel.ts:685`. Nothing is written in that case. `registry.end` runs in `finally`. It logs only `runId`, `resultIndex`, status, category, evidence count and `durationMs`. Makes T027 pass. Depends on T016, T019, T032, T033, T034 and T035.
-- [ ] T037 [US1] Add three handlers to `backend/src/api/failureAnalysis.ts`:
+- [X] T037 [US1] Add three handlers to `backend/src/api/failureAnalysis.ts`:
   - `POST /external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` parses `resultIndex` strictly (digits only), loads the run with `getRun` from `backend/src/externalCollections/uploadedCollectionExecutionStore.ts`, calls `analyzeFailure`, and returns 200 with the attempt. It maps `InvalidResultIndexError` to 400, `RunNotFoundError`/`ResultNotFoundError` to 404, and `ResultNotFailedError`/`FailureAnalysisInProgressError` to 409, with the bodies from the contract. The collection may be missing: look up variable values with `getUploadedCollection` inside a try/catch for `UploadedCollectionNotFoundError`, and use none if it is missing.
   - `GET …/failure-analyses` checks the run exists (404 otherwise) and returns `listAnalyses(runId)` from `failureAnalysisStore.ts`.
   - `GET /failure-analysis/in-progress` returns 200 `{inProgress}` or 204.
 
   Makes T028 pass. Depends on T021 and T036.
-- [ ] T038 [P] [US1] In `frontend/src/services/externalCollectionsClient.ts`, add typed functions following the file's existing error-handling pattern and logging each caught error through `frontend/src/logger.ts`, as the other functions do:
+- [X] T038 [P] [US1] In `frontend/src/services/externalCollectionsClient.ts`, add typed functions following the file's existing error-handling pattern and logging each caught error through `frontend/src/logger.ts`, as the other functions do:
   - `requestFailureAnalysis(collectionId, runId, resultIndex): Promise<FailureAnalysisAttempt>`
   - `listFailureAnalyses(collectionId, runId): Promise<FailureAnalysis[]>`
   - `getFailureAnalysisInProgress(): Promise<FailureAnalysisInProgress | null>`
 
   Map 409 bodies to a typed client error that carries the `error` code, `runId` and `resultIndex`. Add `frontend/tests/unit/externalCollectionsClient.failureAnalysis.test.ts`, stubbing `fetch`, to cover the 200, 204 and 409 mappings.
-- [ ] T039 [P] [US1] Create `frontend/src/utils/confidenceLabel.ts`, exporting `confidenceLabel(confidence: number): "Moderate" | "High"` (below 0.75 is Moderate, otherwise High) and `formatConfidence(confidence)`, which returns `` `${label} (${confidence.toFixed(2)})` ``. Makes T030 pass.
-- [ ] T040 [US1] Create `frontend/src/components/FailureAnalysisPanel.tsx`. Its props are `{ collectionId, runId, resultIndex, requestName, analysis?, inProgress?, onAnalysisChange, onInProgressChange }`. It renders:
+- [X] T039 [P] [US1] Create `frontend/src/utils/confidenceLabel.ts`, exporting `confidenceLabel(confidence: number): "Moderate" | "High"` (below 0.75 is Moderate, otherwise High) and `formatConfidence(confidence)`, which returns `` `${label} (${confidence.toFixed(2)})` ``. Makes T030 pass.
+- [X] T040 [US1] Create `frontend/src/components/FailureAnalysisPanel.tsx`. Its props are `{ collectionId, runId, resultIndex, requestName, analysis?, inProgress?, onAnalysisChange, onInProgressChange }`. It renders:
   - idle, with a primary "Analyze failure" `<button>` whose accessible name includes the request;
   - `waiting-for-ai` and `generating`, each with a live elapsed timer in an `aria-live="polite"` region;
   - analyzed, with a `ProvenanceBadge` or text label "AI inference, not a confirmed root cause", the cause as "Potential …" text (not only colour), `formatConfidence`, the summary, cited evidence as a `<ul>` of deterministic evidence texts, a native `<details>` "Other evidence considered" section with the uncited evidence, investigation steps as an `<ol>`, the specification-context section (unavailable reason in plain words for now), and provenance (model and time);
   - `ai-failed`, as an `ErrorState` with the message and a "Try again" button.
 
   While a POST is pending, it polls `getFailureAnalysisInProgress` every 1 s and stops when it settles. Style it with Tailwind v4 tokens only (the existing `controlStyles.ts` and `StatusBadge` patterns), with dark-mode variants, no inline styles and no arbitrary values. Business mapping (cause to label, reason to text) goes in small pure functions in the same file or `frontend/src/utils/`, not in `className` expressions. Makes the US1 parts of T029 pass. Depends on T038 and T039.
-- [ ] T041 [US1] In `frontend/src/components/ExternalCollectionRunPanel.tsx`:
+- [X] T041 [US1] In `frontend/src/components/ExternalCollectionRunPanel.tsx`:
   - When a run's detail loads (`ResultDetail`, `:131`, and its parent that fetches the run), call `listFailureAnalyses` once and keep a map from `resultIndex` to analysis.
   - Call `getFailureAnalysisInProgress` on mount. While it returns an entry that this tab did not start, for example after a page reload or from another tab in the same session, poll it every 1 s. When it returns `null`, stop polling, re-fetch `listFailureAnalyses` for the open run, and re-enable the buttons (FR-016, SC-005). Stop polling on unmount.
   - Render `FailureAnalysisPanel` inside `ResultDetail` for results with `outcome === "failed"` only.
@@ -301,28 +301,28 @@ collection ApiPilot did not generate shows the unavailable reason (quickstart sc
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T042 [P] [US2] Extend `backend/tests/unit/failureAnalysis/matchSpecificationContext.test.ts` for upstream context, using the T017 fixtures and a `run.results` array whose `itemId`s match the artifact:
+- [X] T042 [P] [US2] Extend `backend/tests/unit/failureAnalysis/matchSpecificationContext.test.ts` for upstream context, using the T017 fixtures and a `run.results` array whose `itemId`s match the artifact:
   - The workflow step 1 item yields one `UpstreamContext` with `via: "integration-workflow"`, `stepPosition: 0`, `POST /users`, `suppliedFields: ["user_id"]`, and `outcomeInRun` set to `failed`, `passed` or `not-attempted` according to step 0's result, or `not-in-run` when step 0 is absent.
   - An item with `provenance.relationshipIds` yields `via: "dependency-relationship"` entries for each relationship's producer operation, with the nearest preceding matched result's outcome for that operation.
   - Upstream steps that do not supply a consumed value are excluded.
   - The output is deterministic.
-- [ ] T043 [P] [US2] Extend `backend/tests/unit/failureAnalysis/buildEvidence.test.ts`. A matched context adds, after the run-result kinds, `documented-responses`, `scenario-expectation` and one `upstream-step-outcome` per upstream entry, each with `source: "specification-context"`. An unavailable context adds none.
-- [ ] T044 [P] [US2] Extend `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`. Drive a real guided workflow in the test session to `postmanGeneration` using the existing workflow integration test helpers (`backend/tests/integration/testGenerationWorkflow.test.ts` setup), upload its `postmanArtifact` through `POST /api/external-collections`, run it against a target where the create step fails, and analyze the dependent step. Assert that the stored analysis's `specificationContext` is `matched` with the upstream `failed`. Then start a new workflow in the same session and re-read the stored analysis: the context is unchanged. A fresh analysis of the old run is `not-generated-by-current-workflow`.
-- [ ] T045 [P] [US2] Extend `frontend/tests/unit/FailureAnalysisPanel.test.tsx`, verifying:
+- [X] T043 [P] [US2] Extend `backend/tests/unit/failureAnalysis/buildEvidence.test.ts`. A matched context adds, after the run-result kinds, `documented-responses`, `scenario-expectation` and one `upstream-step-outcome` per upstream entry, each with `source: "specification-context"`. An unavailable context adds none.
+- [X] T044 [P] [US2] Extend `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`. Drive a real guided workflow in the test session to `postmanGeneration` using the existing workflow integration test helpers (`backend/tests/integration/testGenerationWorkflow.test.ts` setup), upload its `postmanArtifact` through `POST /api/external-collections`, run it against a target where the create step fails, and analyze the dependent step. Assert that the stored analysis's `specificationContext` is `matched` with the upstream `failed`. Then start a new workflow in the same session and re-read the stored analysis: the context is unchanged. A fresh analysis of the old run is `not-generated-by-current-workflow`.
+- [X] T045 [P] [US2] Extend `frontend/tests/unit/FailureAnalysisPanel.test.tsx`, verifying:
   - a matched context shows the operation (method badge plus monospace path), the scenario name, the documented status codes, and an upstream list whose items state their outcome in text ("Step 1: POST /users — failed");
   - `requestEditedAfterGeneration` shows the "edited after generation" note;
   - each unavailable reason renders its plain-language text.
 
 ### Implementation for User Story 2
 
-- [ ] T046 [US2] Extend `backend/src/failureAnalysis/matchSpecificationContext.ts` to fill `upstream` (D3). Change the signature to `matchSpecificationContext(result, workflow, runResults: readonly UploadedRequestResult[], resultIndex: number)`, and update the T036 call site. It uses:
+- [X] T046 [US2] Extend `backend/src/failureAnalysis/matchSpecificationContext.ts` to fill `upstream` (D3). Change the signature to `matchSpecificationContext(result, workflow, runResults: readonly UploadedRequestResult[], resultIndex: number)`, and update the T036 call site. It uses:
   - for workflow steps, the matching `IntegrationWorkflow` in `dependencyAnalysis.workflows` and its `variables`, where `consumerStepIndex` is this step and the producer step is earlier;
   - for `relationshipIds`, the `ApiDependencyGraph` relationships' producers.
 
   Each upstream request's outcome comes from the run results before `resultIndex`, matched by `itemId` through the same artifact walk. The artifact walk goes into an internal helper that returns `Map<itemId, provenance>`, built once per call. Makes T042 pass. Depends on T019 and T036.
-- [ ] T047 [US2] Extend `backend/src/failureAnalysis/buildEvidence.ts` to emit the `specification-context` kinds with fixed templates, for example "Operation documents responses: 201, 400", "Scenario ‘…’ (positive) expects status 201", and "Upstream step 0 POST /users (supplies user_id): failed in this run". Makes T043 pass. Depends on T032 and T046.
-- [ ] T048 [US2] In `backend/src/failureAnalysis/failureAnalysisPrompt.ts`, set `specificationContextNote` to a one-line summary of the matched operation and scenario, or of the unavailable reason, so the model knows whether specification evidence exists. Bump nothing: the response shape is unchanged. Extend T024's test for both notes. Makes T044 pass together with T046 and T047.
-- [ ] T049 [US2] Extend `frontend/src/components/FailureAnalysisPanel.tsx`'s specification-context section to render the matched context. Reuse `HttpMethodBadge`, monospace only for the path, and a semantic `<ul>` for upstream steps with the outcome as text plus a `StatusBadge`. Show the edited note. Map each unavailable reason to plain-language text through a pure function, for example "not generated by the current workflow: start from the guided workflow's hand-off to see specification context". Makes T045 pass. Depends on T040.
+- [X] T047 [US2] Extend `backend/src/failureAnalysis/buildEvidence.ts` to emit the `specification-context` kinds with fixed templates, for example "Operation documents responses: 201, 400", "Scenario ‘…’ (positive) expects status 201", and "Upstream step 0 POST /users (supplies user_id): failed in this run". Makes T043 pass. Depends on T032 and T046.
+- [X] T048 [US2] In `backend/src/failureAnalysis/failureAnalysisPrompt.ts`, set `specificationContextNote` to a one-line summary of the matched operation and scenario, or of the unavailable reason, so the model knows whether specification evidence exists. Bump nothing: the response shape is unchanged. Extend T024's test for both notes. Makes T044 pass together with T046 and T047.
+- [X] T049 [US2] Extend `frontend/src/components/FailureAnalysisPanel.tsx`'s specification-context section to render the matched context. Reuse `HttpMethodBadge`, monospace only for the path, and a semantic `<ul>` for upstream steps with the outcome as text plus a `StatusBadge`. Show the edited note. Map each unavailable reason to plain-language text through a pure function, for example "not generated by the current workflow: start from the guided workflow's hand-off to see specification context". Makes T045 pass. Depends on T040.
 
 **Checkpoint**: User Stories 1 and 2 both work. Run quickstart scenario 2.
 
@@ -341,30 +341,30 @@ analysis is kept. With a tiny time budget, analysis is refused before inference 
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T050 [P] [US3] Extend `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts` to cover:
+- [X] T050 [P] [US3] Extend `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts` to cover:
   - `not-viable` returned without calling `infer`, via a scripted `getInputBudget` plus planning rates making `estimateViability` fail;
-  - over-capacity input dropping body excerpts first, then header lists, and adding an `omitted-for-capacity` evidence item, then `not-viable` if the input still does not fit;
+  - over-capacity input dropping body excerpts first, then header lists, and adding an `omitted-for-capacity` evidence item, then `ai-failed` with `INVALID_REQUEST` if the input still does not fit (contract; corrected during implementation);
   - `ai-failed` and `not-viable` carrying `previousAnalysis` equal to the stored analysis, with the store unchanged;
   - an `insufficient-evidence` conclusion stored as a normal analysis;
   - each `AIErrorCategory` mapping to a distinct plain-language message containing no model id, file path or stack.
-- [ ] T051 [P] [US3] Extend `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`:
+- [X] T051 [P] [US3] Extend `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`:
   - A scripted 0.3-confidence answer gives an analysis with `conclusion.kind: "insufficient-evidence"` and `reason: "below-confidence-threshold"`, and the GET list returns it.
   - A `failingProvider("TIMEOUT")` after a stored analysis gives 200 `ai-failed` with `previousAnalysis`, and the GET list still returns the original.
-- [ ] T052 [P] [US3] Extend `frontend/tests/unit/FailureAnalysisPanel.test.tsx`:
+- [X] T052 [P] [US3] Extend `frontend/tests/unit/FailureAnalysisPanel.test.tsx`:
   - insufficient evidence shows "Not enough evidence to name a likely cause" with the reason in plain words, shows no cause or confidence label, and shows the summary and steps under "Model notes (inference)";
   - `ai-failed` and `not-viable` show their message and a "Try again" action, with the previous analysis still visible below;
   - focus moves to the outcome heading when an attempt settles.
 
 ### Implementation for User Story 3
 
-- [ ] T053 [US3] In `backend/src/failureAnalysis/analyzeFailure.ts`, add the D8 pre-flight between building the prompt and inferring:
+- [X] T053 [US3] In `backend/src/failureAnalysis/analyzeFailure.ts`, add the D8 pre-flight between building the prompt and inferring:
   1. `const budgetChars = await provider.getInputBudget(FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS)`.
   2. If the prompt exceeds `budgetChars`, rebuild evidence without the body excerpts, then without the header lists, adding one `omitted-for-capacity` item.
-  3. If it still does not fit, return `not-viable`.
+  3. If it still does not fit, return `ai-failed` with `INVALID_REQUEST` (contract; corrected during implementation, see research D8).
   4. Otherwise run `estimateViability` from `backend/src/ai/viability.ts`, with prompt tokens estimated using `CHARS_PER_TOKEN_ESTIMATE` and `loadAIConfig().planning`, and a budget of `loadAIConfig()`'s inference timeout. A non-viable result returns `{status: "not-viable", notViable, message: "… about <formatDuration(projectedMs)> …"}`.
 
   Also load `previousAnalysis = store.getAnalysis(runId, resultIndex)` before inferring, and attach it to every `ai-failed` and `not-viable` return. Makes T050 and T051 pass. Depends on T036.
-- [ ] T054 [US3] Extend `frontend/src/components/FailureAnalysisPanel.tsx`:
+- [X] T054 [US3] Extend `frontend/src/components/FailureAnalysisPanel.tsx`:
   - The insufficient-evidence rendering shows a heading, the reason in plain words via a pure mapping, and "Model notes (inference)" for the summary and steps, with no cause or confidence.
   - `ai-failed` and `not-viable` states show the message and "Try again", and keep the previous analysis rendered.
   - Focus moves to the outcome heading when an attempt settles, for accessibility.

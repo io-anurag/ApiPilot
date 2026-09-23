@@ -43,6 +43,7 @@ D6/D8).
 | `responseStatusCode` | `number?` | Same semantics as `RequestResult.responseStatusCode`. |
 | `testOutcomes` | `Array<{ name: string; outcome: "passed" \| "failed"; detail?: string }>` | One entry per test Newman actually ran for this request, named exactly as the collection's own script named it. `detail` is the test's failure message, redacted by the same `redactIfSensitive()` helper `mapNewmanResult.ts` already uses (research.md D6) — never a raw response body. Empty for `not-attempted`. |
 | `rawCapture` | `RawRequestCapture?` (reused, unchanged) | Same FR-017a gating: present only when the run's tier is `"local"`. Uploaded runs get identical treatment to generated ones — no special-casing needed since the type and its encryption-at-rest handling are source-agnostic. |
+| `itemId` | `string?` | Added 2026-09-23 by AP-031 (`specs/030-ai-failure-analysis` FR-017, research D2): the executed Postman item's own `id`, set on every result recorded from then on, including `not-attempted` ones. Absent on results stored earlier, which stay valid. Lets AI failure analysis link a result to the generated item that produced it. Execution behavior is unchanged. |
 
 ## `UploadedCollectionExecutionRun`
 

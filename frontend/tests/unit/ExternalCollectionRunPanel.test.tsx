@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { CollectionRequestView, UploadedCollectionExecutionRun } from "@apipilot/shared-domain";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type {
+  CollectionRequestView,
+  FailureAnalysis,
+  FailureAnalysisInProgress,
+  UploadedCollectionExecutionRun,
+} from "@apipilot/shared-domain";
 import type { UploadedCollectionSummary } from "../../src/services/externalCollectionsClient";
 import { ExternalCollectionRunPanel } from "../../src/components/ExternalCollectionRunPanel";
 
@@ -206,5 +211,94 @@ describe("ExternalCollectionRunPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.getByText("1 of 1 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start run" })).not.toBeDisabled();
+  });
+});
+
+describe("ExternalCollectionRunPanel — AI failure analysis (AP-031)", () => {
+  const storedAnalysis: FailureAnalysis = {
+    runId: "run-1",
+    resultIndex: 1,
+    requestName: "Create widget",
+    requestMethod: "POST",
+    conclusion: { kind: "likely-cause", cause: "downstream-service-issue", confidence: 0.9 },
+    summary: "A dependency failed.",
+    investigationSteps: ["Check the dependency."],
+    citedEvidenceIds: ["E1"],
+    evidence: [{ id: "E1", kind: "response-status", source: "run-result", text: "Response status 500" }],
+    specificationContext: { status: "unavailable", reason: "no-request-identity" },
+    provenance: {
+      source: "AI",
+      aiModel: "test-model",
+      aiProvider: "local",
+      responseVersion: 1,
+      confidenceThreshold: 0.5,
+      generatedAt: "2026-09-23T10:00:00.000Z",
+    },
+  };
+
+  /** History with one run; its detail; its stored analyses; and a scripted in-progress sequence. */
+  function stubAnalysisFetch(options: { analyses: () => FailureAnalysis[]; inProgress: () => FailureAnalysisInProgress | null }) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const json = (status: number, body: unknown) => ({ ok: status < 400, status, json: () => Promise.resolve(body) });
+        if (url.endsWith("/failure-analysis/in-progress")) {
+          const entry = options.inProgress();
+          return entry ? json(200, { inProgress: entry }) : json(204, null);
+        }
+        if (url.endsWith("/failure-analyses")) return json(200, { analyses: options.analyses() });
+        if (url.endsWith("/execution/runs")) return json(200, { runs: [{ ...completedRun(), results: undefined }] });
+        if (url.endsWith("/execution/runs/run-1")) return json(200, { run: completedRun() });
+        return json(200, {});
+      }),
+    );
+  }
+
+  async function openRun() {
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} />);
+    fireEvent.click(await screen.findByRole("button", { name: /1 passed · 1 failed/ }));
+    await screen.findByTestId("external-collection-run-summary");
+  }
+
+  it("offers analysis only on failed results and shows a stored analysis on load", async () => {
+    stubAnalysisFetch({ analyses: () => [storedAnalysis], inProgress: () => null });
+    await openRun();
+
+    fireEvent.click(screen.getByText("Get widget"));
+    expect(screen.queryByTestId("failure-analysis-panel")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Create widget"));
+    expect(await screen.findByText("Potential downstream-service issue")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze again: Create widget" })).toBeEnabled();
+  });
+
+  it("keeps Analyze disabled while an analysis this tab did not start is in progress, then shows its result", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let running = true;
+    stubAnalysisFetch({
+      analyses: () => (running ? [] : [storedAnalysis]),
+      inProgress: () =>
+        running
+          ? { runId: "run-1", resultIndex: 1, requestName: "Create widget", phase: "generating", phaseStartedAt: new Date().toISOString() }
+          : null,
+    });
+    try {
+      await openRun();
+      fireEvent.click(screen.getByText("Create widget"));
+
+      expect(await screen.findByText("Generating")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Analyze failure: Create widget" })).toBeDisabled();
+
+      running = false;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_100);
+      });
+
+      expect(await screen.findByText("Potential downstream-service issue")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Analyze again: Create widget" })).toBeEnabled());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

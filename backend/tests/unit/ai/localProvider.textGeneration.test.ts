@@ -88,6 +88,36 @@ describe("loadTransformersEngine", () => {
     ]);
   });
 
+  it("uses a caller-supplied systemPrompt as the system message instead of the default", async () => {
+    mockTokenizer.chat_template = "test-template";
+    mockGenerator.mockResolvedValue([{ generated_text: "{}" }]);
+
+    const engine = await loadTransformersEngine(
+      {
+        modelId: "fake-model",
+        cacheDir: "/tmp/fake-cache",
+        useAccelerator: false,
+        inferenceTimeoutMs: 5000,
+      },
+      "cpu",
+    );
+    await engine.generate("json prompt", {
+      expectedOutputFormat: "json",
+      systemPrompt: "You are a failure analysis assistant.",
+    });
+    await engine.generate("json prompt", { expectedOutputFormat: "json" });
+
+    const calls = mockTokenizer.apply_chat_template.mock.calls;
+    expect(calls[0][0]).toEqual([
+      { role: "system", content: "You are a failure analysis assistant." },
+      { role: "user", content: "json prompt" },
+    ]);
+    expect(calls[1][0]).toEqual([
+      { role: "system", content: expect.stringContaining("API test design assistant") },
+      { role: "user", content: "json prompt" },
+    ]);
+  });
+
   it("passes return_full_text: false, so a plain-string (non-chat) prompt's generated_text is only the completion, not prompt+completion concatenated", async () => {
     mockTokenizer.chat_template = undefined;
     mockGenerator.mockResolvedValue([
