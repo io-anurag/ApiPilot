@@ -35,6 +35,8 @@ preview, the way Postman's collection/environment editor works.
   runs — variable overrides are saved into the selected environment's stored values
   (`Environment.variableValues`), and request edits are saved as a persistent override layered on
   the request's original definition (FR-009a), not a one-time or session-only application.
+  *(Storage location refined 2026-09-23: both are saved on the `UploadedCollectionSet` in place;
+  see that session below.)*
 
 ### Session 2026-09-21 (clarify pass)
 
@@ -65,6 +67,20 @@ preview, the way Postman's collection/environment editor works.
   retained as an API-only path without an editing surface (specs/018 Clarifications 2026-09-23).
   Edits apply to the uploaded copy only, never to the generated artifact or its `TestScenario`
   provenance. The previously recorded "known gap" is closed by this decision, not by new code.
+- Q: FR-009 says variable edits are saved into `Environment.variableValues` (as `EnvironmentForm`
+  does), and FR-009a says request edits are an override layered on the original request rather
+  than an in-place mutation. research.md D4 and the implementation instead store both on the
+  `UploadedCollectionSet` in place. Which is the requirement? → A: The in-place design. Every
+  collection this view edits is an `UploadedCollectionSet`, a downstream copy that is structurally
+  disconnected from any generated `TestModel` (research.md D1), so editing that copy in place
+  already meets FR-009a's actual concern: the generated `TestScenario`/`GeneratedRequest` and its
+  provenance are never altered. Variable edits replace the collection's own encrypted
+  `variableValues`; request edits replace the matching item in the stored collection JSON and mark
+  it (`_apipilotEdited`) so a run can report it as edited (FR-011). ApiPilot does not keep the
+  pre-edit version of an edited request; re-uploading the original file creates a fresh record.
+  `Environment.variableValues` and `EnvironmentForm` (specs/018) are not involved. FR-009 and
+  FR-009a are reworded to match; the 2026-09-21 answer about persistence above is refined, not
+  reversed — edits still persist across runs.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -172,8 +188,8 @@ items; verify the collection view reflects all three changes immediately.
    **Then** the change is reflected immediately in the request preview.
 2. **Given** the edited request belongs to an ApiPilot-generated collection, **When** the edit is
    saved, **Then** the original generated `TestScenario`/`GeneratedRequest` and its provenance
-   remain unchanged and inspectable — the edit is stored as an override layered on top, never an
-   in-place mutation of the generated artifact.
+   remain unchanged and inspectable — the edit is saved to the uploaded copy the collection became
+   at hand-off, never to the generated artifact (FR-009a, reworded 2026-09-23).
 3. **Given** an edited request is later run, **When** the user views that run's results, **Then**
    the actually-sent (edited) request is shown, visibly distinguished from the collection's
    original definition.
@@ -268,17 +284,19 @@ items; verify the collection view reflects all three changes immediately.
   2026-09-23, research.md D1). *(Previously recorded, 2026-09-21, as a known gap because the view
   is mounted only in `ExternalCollectionsPage.tsx`; closed by that clarification rather than by a
   second editor over specs/018's endpoints.)*
-- **FR-009**: A variable override made in this view MUST be persisted into the selected
-  environment's stored values (`Environment.variableValues`), consistent with how
-  `EnvironmentForm` already persists variable edits, so it is available and reused across
-  subsequent runs rather than discarded when the view closes.
-- **FR-009a**: A direct request edit (FR-007) MUST be persisted as an override layered on top of
-  the request's original definition, not an in-place mutation of it: for an uploaded collection,
-  the override applies to that collection's own stored definition; for an ApiPilot-generated
-  request, the override is stored separately from, and MUST NOT alter, the original generated
-  `TestScenario`/`GeneratedRequest` or its provenance (constitution: deterministic generation,
-  explainable provenance). The override persists for reuse across subsequent runs of that same
-  request, mirroring FR-009's persistence for variable overrides.
+- **FR-009**: A variable value set in this view MUST be persisted into the collection's own stored
+  variable values (`UploadedCollectionSet.variableValues`, encrypted at rest), so it is available
+  and reused across subsequent runs rather than discarded when the view closes. *(Reworded
+  2026-09-23, Clarifications: originally named `Environment.variableValues`/`EnvironmentForm`,
+  which this view never uses.)*
+- **FR-009a**: A direct request edit (FR-007) MUST be persisted into the collection's own stored
+  definition (`UploadedCollectionSet.collection`) and MUST mark the edited request so that runs can
+  report it (FR-011). It MUST NOT alter any generated `TestScenario`/`GeneratedRequest` or its
+  provenance (constitution: deterministic generation, explainable provenance), which holds because
+  the edited collection is a separate downstream copy (research.md D1, D4). The edit persists for
+  reuse across subsequent runs, mirroring FR-009. *(Reworded 2026-09-23, Clarifications:
+  originally "an override layered on top of the request's original definition, not an in-place
+  mutation of it".)*
 - **FR-010**: The system MUST NOT dispatch any request as a result of navigating, previewing, or
   editing in this view — starting a run remains a separate, explicit user action.
 - **FR-011**: Any request or variable value that was overridden in this view and is subsequently
@@ -344,17 +362,19 @@ items; verify the collection view reflects all three changes immediately.
   variable or collection model.
 - This is a pre-run visibility and configuration surface. It does not change how a collection or
   its underlying test scenarios are *generated* (specs/003, 007, 016) — the deterministic
-  generation pipeline's output is never mutated in place. What this feature adds is a downstream,
-  explicitly-tracked override layer (FR-009a) that sits between "generated" and "executed," with
-  every override visibly reflected in the resulting run record (FR-011) so generated-test
+  generation pipeline's output is never mutated in place. What this feature edits is a downstream
+  copy (the `UploadedCollectionSet`, FR-009a) that sits between "generated" and "executed," with
+  every edited request visibly reflected in the resulting run record (FR-011) so generated-test
   provenance stays intact and inspectable even when a user chooses to run an edited request.
-- Variable value entry follows the same interaction pattern already established by
-  `EnvironmentForm` (key/value rows), extended with a live substitution preview rather than a
-  newly invented editing pattern.
+- Variable value entry follows the key/value-row pattern specs/018's `EnvironmentForm`
+  established, extended with a live substitution preview rather than a newly invented editing
+  pattern. (`EnvironmentForm` itself was removed on 2026-09-23 once no page rendered it; the
+  pattern lives on in `VariablePanel`.)
 - Because request editing now applies to ApiPilot-generated collections handed off to execution
   (FR-008), this feature extends specs/018-test-execution-results' original scope boundary ("does
   not change how the artifact is generated"). That boundary is preserved at the generation layer;
-  this spec adds an execution-time override layer specs/018 did not previously have. specs/018's
+  this spec adds execution-time editing of a downstream copy, which specs/018 did not previously
+  have. specs/018's
   text was reconciled with this addition on 2026-09-23 (its Clarifications): edits apply only to
   the uploaded copy a generated collection becomes after the hand-off.
 

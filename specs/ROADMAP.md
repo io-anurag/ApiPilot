@@ -42,7 +42,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
-| AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13. Since 2026-09-23 its endpoints are an API-only path; the UI runs generated collections through AP-026 after the guided workflow's hand-off, and removing its now-unrendered frontend components is open follow-up work (Next Actions #22) |
+| AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13. Since 2026-09-23 its endpoints are an API-only path; the UI runs generated collections through AP-026 after the guided workflow's hand-off, and its unrendered frontend components were removed (Next Actions #22, #23) |
 | AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 | AP-019 — Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented — all tasks (T001–T037) complete |
 | AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete |
@@ -2155,9 +2155,24 @@ Implementation
       second clarification is the cross-reference to `specs/028` (closing `specs/028` T050).
     - `specs/028` (Clarifications 2026-09-23, FR-008 rewritten): the hand-off satisfies FR-008, as
       research.md D1 already assumed, so no second editor over `specs/018`'s endpoints is built.
-    - Remaining follow-up: remove `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx` (no page
-      renders them) and their tests. The execution stage's `skip`/`finish` endpoints also have no
-      UI caller and no entry in any contract. `specs/028` FR-009/FR-009a still describe variable
-      edits saved into `Environment.variableValues` and request edits as a layered override,
-      whereas research.md D4 and the code store both on the `UploadedCollectionSet` in place;
-      that wording needs its own clarification.
+    - Remaining follow-up at that point: remove `EnvironmentForm.tsx` and
+      `ExecutionResultsPanel.tsx` (no page renders them) and their tests. The execution stage's
+      `skip`/`finish` endpoints also had no UI caller and no entry in any contract. `specs/028`
+      FR-009/FR-009a still described variable edits saved into `Environment.variableValues` and
+      request edits as a layered override, whereas research.md D4 and the code store both on the
+      `UploadedCollectionSet` in place. All three were closed by #23.
+23. **Follow-ups from #22 closed (2026-09-23).**
+    - Removed the unrendered specs/018 frontend: `EnvironmentForm.tsx`, `ExecutionResultsPanel.tsx`,
+      the frontend `executionClient.ts` that only they used, the three matching unit-test files,
+      and the unused `skipExecutionStage`/`finishExecutionStage` client functions. Every backend
+      endpoint is unchanged and still covered by backend tests (`specs/018` Clarifications
+      2026-09-23 updated).
+    - Documented `POST /execution/skip` and `/execution/finish` in `specs/009`'s
+      `contracts/test-generation-workflow-api.md`, as API-only endpoints matching the existing
+      implementation and its integration tests.
+    - `specs/028` Clarifications 2026-09-23 (second entry): FR-009/FR-009a reworded to the in-place
+      design research.md D4 chose. Edits are saved on the `UploadedCollectionSet` and marked for
+      FR-011, and generated `TestScenario` provenance is untouched because the edited collection
+      is a downstream copy.
+    - Validation after the removal: `npm run lint` and `npm run build` clean; `npm test` 1392
+      passed, 2 skipped, across 201 test files (down from 1407/204 by exactly the removed files).

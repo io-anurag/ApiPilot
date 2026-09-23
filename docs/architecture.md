@@ -240,9 +240,10 @@ risk tier and submits, after which the collection is an ordinary `UploadedCollec
 `execution` stage screen only offers a button to repeat the hand-off, for example after a reload.
 This hand-off is specified in specs/009 Clarifications 2026-09-23. The guided workflow's own
 environment and execution routes (specs/018) are retained as an API-only path with unchanged
-contracts (specs/018 Clarifications 2026-09-23). Their frontend components, `EnvironmentForm.tsx`
-and `ExecutionResultsPanel.tsx`, are no longer rendered by any page; removing them is a separate
-follow-up. The stage's skip/finish endpoints likewise have no UI caller.
+contracts (specs/018 Clarifications 2026-09-23); the frontend has no client or component for them.
+Their former components, `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx`, were removed once
+no page rendered them. The stage's skip/finish endpoints are likewise API-only (specs/009
+contract).
 
 Scenario review has one extra guard. `finalizeScenarioReview` marks `scenarioReview` complete and
 activates `dependencyAnalysis` before awaiting the analysis, so a decision, edit, or regeneration

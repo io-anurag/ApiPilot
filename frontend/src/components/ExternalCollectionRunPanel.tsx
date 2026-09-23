@@ -23,9 +23,8 @@ import { BUTTON_STYLES } from "./controlStyles";
 
 const POLL_INTERVAL_MS = 750;
 
-/** Sentence-case display labels for the run/outcome enums, mirroring the same convention already
- * established in `ExecutionResultsPanel.tsx` for generated-collection runs — this panel previously
- * rendered the raw kebab-case enum value (e.g. "assertion-failed", "in-progress") directly. */
+/** Sentence-case display labels for the run/outcome enums — this panel previously rendered the raw
+ * kebab-case enum value (e.g. "assertion-failed", "in-progress") directly. */
 const RUN_STATUS_LABEL: Record<UploadedCollectionExecutionRun["status"], string> = {
   "in-progress": "In progress",
   completed: "Completed",
@@ -69,7 +68,7 @@ function runStatusTone(status: UploadedCollectionExecutionRun["status"]): Status
   return "success";
 }
 
-/** One labeled number in the run overview stat row (mirrors ExecutionResultsPanel's `OverviewStat`). */
+/** One labeled number in the run overview stat row. */
 function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
   const toneClass: Record<StatusTone, string> = {
     neutral: "text-slate-900 dark:text-white",
@@ -238,8 +237,8 @@ function UnverifiedContentDialog({
   );
 }
 
-/** Risk-tier / destructive-request gate (FR-013) — identical concern to `ExecutionResultsPanel`'s
- * own confirmation banner, evaluated every run start rather than once per artifact. */
+/** Risk-tier / destructive-request gate (FR-013) — the same concern as specs/018's generated-run
+ * confirmation, evaluated every run start rather than once per artifact. */
 function RiskTierConfirmationBanner({
   requirement,
   onConfirm,

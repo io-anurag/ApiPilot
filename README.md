@@ -442,8 +442,6 @@ Current intentional limitations include:
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
 - AP-018, AI-assisted execution failure analysis, is not implemented. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
-- The guided workflow's `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx` components are no longer rendered by any page; removing them is pending follow-up work (`specs/018` Clarifications 2026-09-23).
-
 The implementation status for AP-001 through AP-028 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 
 ## Documentation

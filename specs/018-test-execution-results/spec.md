@@ -69,8 +69,9 @@ are retained as an API-only path (Clarifications 2026-09-23).
   generated collections through specs/026's uploaded-collection path instead, whose rules differ
   in places (for example, an unresolved variable does not refuse an uploaded-collection run,
   specs/026 FR-004). This spec's frontend components, `EnvironmentForm.tsx` and
-  `ExecutionResultsPanel.tsx`, are no longer rendered by any page; removing them is a separate
-  follow-up, not part of this amendment, and their removal would not change any endpoint above.
+  `ExecutionResultsPanel.tsx`, are no longer rendered by any page. *(Follow-up done 2026-09-23:
+  both components, their now-unused frontend client `executionClient.ts`, and their tests were
+  removed. No endpoint above changed.)*
 - Q: specs/028-collection-editor-ui (FR-008) adds pre-run editing of requests and variables for
   generated collections as well as uploaded ones, past this spec's statement that it does not
   change how the artifact is generated. How do the two relate? → A: specs/028 edits only the
