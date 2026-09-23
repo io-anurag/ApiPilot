@@ -58,3 +58,16 @@ export function markItemEdited(collectionJsonObject: unknown, itemId: string): u
   });
   return collectionJsonObject;
 }
+
+/**
+ * Serializes an SDK-parsed collection back to the stored JSON string, re-applying the
+ * `_apipilotEdited` marker to every id in `editedItemIds`. Every collection mutation re-parses the
+ * stored body through the SDK — which drops the marker (see this file's header) — so each caller
+ * passes `findEditedItemIds()` of the body it parsed from; otherwise every save would keep only the
+ * most recently edited request's marker. Ids no longer in the tree (a deleted item) are ignored.
+ */
+export function serializeWithEditMarkers(collection: { toJSON(): unknown }, editedItemIds: Iterable<string>): string {
+  const json = collection.toJSON();
+  for (const id of editedItemIds) markItemEdited(json, id);
+  return JSON.stringify(json);
+}

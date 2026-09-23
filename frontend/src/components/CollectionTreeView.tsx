@@ -320,12 +320,9 @@ export function CollectionTreeView({
   headerAction?: ReactNode;
 }>) {
   return (
-    // `flex-1 min-h-0` (a flex item inside the page's own `flex h-full flex-col` wrapper) so this
-    // box stretches to match whatever height that wrapper ends up with — which the parent grid's
-    // `items-stretch` sets to match the request editor/variable panel column next to it, however
-    // tall that naturally is — rather than sitting at its own content height with empty space
-    // below it. The scrollable list below then fills whatever of that height remains via its own
-    // `flex-1 min-h-0`, instead of a fixed viewport-relative cap.
+    // `flex-1 min-h-0` (a flex item inside the page's own fixed-height `flex-col` wrapper) so this
+    // box fills that height; the list below then takes whatever remains via its own
+    // `flex-1 min-h-0` and scrolls once the tree outgrows it.
     <div className="flex min-h-0 flex-1 flex-col space-y-2 rounded-md border border-border bg-surface p-3">
       <div className="flex items-center gap-2">
         {headerAction}

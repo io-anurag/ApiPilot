@@ -45,23 +45,6 @@ describe("PUT /api/external-collections/:id/variables (AP-028 US2, quickstart.md
     expect(updated.body.collectionView.items[0].unresolvedVariables).toEqual([]);
   });
 
-  it("missing_variable_values still blocks execution/start after only a partial variable update", async () => {
-    const app = createApp();
-    const agent = request.agent(app);
-    const uploadResponse = await agent
-      .post("/api/external-collections")
-      .field("name", "My collection")
-      .field("tier", "local")
-      .attach("collection", Buffer.from(JSON.stringify(collectionReferencingToken())), "collection.json")
-      .attach("environment", Buffer.from(JSON.stringify(environmentWithBaseUrlOnly())), "environment.json");
-    const id = uploadResponse.body.uploadedCollection.id;
-
-    const startResponse = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
-    expect(startResponse.status).toBe(400);
-    expect(startResponse.body.error).toBe("missing_variable_values");
-    expect(startResponse.body.missing).toContain("token");
-  });
-
   it("404s uploaded_collection_not_found for an unknown id", async () => {
     const app = createApp();
     const agent = request.agent(app);

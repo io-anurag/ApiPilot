@@ -103,6 +103,36 @@ describe("PUT /api/external-collections/:id/requests/:requestId (AP-028 US4, qui
     });
   }, 60_000);
 
+  it("keeps every edited request marked across later edits and structural changes, not just the last one", async () => {
+    const app = createApp();
+    const agent = request.agent(app);
+    const twoRequests = {
+      info: { name: "c" },
+      item: [
+        { name: "First", request: { method: "GET", url: "{{baseUrl}}/widgets/1" } },
+        { name: "Second", request: { method: "GET", url: "{{baseUrl}}/widgets/2" } },
+      ],
+    };
+    const uploadResponse = await agent
+      .post("/api/external-collections")
+      .field("name", "My collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(twoRequests)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment("http://localhost"))), "environment.json");
+    const id = uploadResponse.body.uploadedCollection.id;
+    const view = await agent.get(`/api/external-collections/${id}/collection`);
+    const [first, second] = view.body.collectionView.items as Array<{ id: string }>;
+
+    await agent.put(`/api/external-collections/${id}/requests/${first.id}`).send({ method: "GET", url: "{{baseUrl}}/a", headers: [] });
+    const afterSecondEdit = await agent
+      .put(`/api/external-collections/${id}/requests/${second.id}`)
+      .send({ method: "GET", url: "{{baseUrl}}/b", headers: [] });
+    expect(afterSecondEdit.body.collectionView.items.map((i: { wasEdited: boolean }) => i.wasEdited)).toEqual([true, true]);
+
+    const afterRename = await agent.put(`/api/external-collections/${id}/items/${first.id}/rename`).send({ name: "Renamed" });
+    expect(afterRename.body.collectionView.items.map((i: { wasEdited: boolean }) => i.wasEdited)).toEqual([true, true]);
+  });
+
   it("404s request_not_found for an unknown requestId", async () => {
     const app = createApp();
     const agent = request.agent(app);

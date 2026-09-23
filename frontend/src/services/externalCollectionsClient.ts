@@ -18,8 +18,6 @@ export interface ErrorResult {
   ok: false;
   error: string;
   message: string;
-  /** Present only for `400 missing_variable_values`. */
-  missing?: string[];
   /** Present only for `409 confirmation_required` (gate 2, FR-013). */
   confirmation?: ExecutionConfirmationRequirement;
   /** Present only for `409 execution_in_progress`. */
@@ -39,7 +37,6 @@ function parseError(parsedBody: unknown, status: number, operation: string): Err
     ok: false,
     error: (parsed?.error as string) ?? "unknown_error",
     message: (parsed?.message as string) ?? `Request failed with status ${status}`,
-    ...(Array.isArray(parsed?.missing) ? { missing: parsed.missing as string[] } : {}),
     ...(parsed?.environmentTier
       ? {
           confirmation: {

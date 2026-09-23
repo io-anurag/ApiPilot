@@ -145,15 +145,10 @@ export function substituteVariables(text: string, variableValues: Record<string,
  * `Item.getAuth()`, the same lookup Newman's own authorizer uses to sign the request) — not its
  * pre-request/test scripts, which may contain unrelated `{{`-looking text (data-model.md FR-004).
  * Deduplicated, in first-seen order.
- *
- * @param selectedItemIds When provided (a selective run — AP-028 follow-up), only items in this
- * set are scanned — a request excluded from the run shouldn't block starting it over a variable
- * only *that other, unselected* request needed.
  */
-export function extractReferencedVariables(collection: Collection, selectedItemIds?: Set<string>): string[] {
+export function extractReferencedVariables(collection: Collection): string[] {
   const tokens = new Set<string>();
   collection.forEachItem((item: Item) => {
-    if (selectedItemIds && !selectedItemIds.has(item.id)) return;
     const requestJson = item.request.toJSON();
     collectVariableTokens(requestJson.url, tokens);
     collectVariableTokens(requestJson.header, tokens);
@@ -161,18 +156,4 @@ export function extractReferencedVariables(collection: Collection, selectedItemI
     collectVariableTokens(item.getAuth()?.toJSON(), tokens);
   });
   return [...tokens];
-}
-
-/**
- * Every referenced variable (FR-004) the given `variableValues` does not supply a non-empty
- * value for. Deliberately **not** `execution/variableCompleteness.ts`'s `missingVariableValues()`
- * — that function hardcodes excluding `"baseUrl"` because the generated-collection flow supplies
- * it via `Environment.baseUrl`, a separate field `UploadedCollectionSet` has no equivalent of; an
- * uploaded collection's own `{{baseUrl}}` reference is validated like any other variable here.
- */
-export function missingUploadedVariableValues(
-  referencedVariables: string[],
-  variableValues: Record<string, string>,
-): string[] {
-  return referencedVariables.filter((name) => !variableValues[name]);
 }

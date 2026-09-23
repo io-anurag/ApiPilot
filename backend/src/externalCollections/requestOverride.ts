@@ -1,6 +1,6 @@
 import type { Collection, Item, ItemGroup } from "postman-collection";
 import { RequestNotFoundError } from "./errors";
-import { markItemEdited } from "./editedItems";
+import { serializeWithEditMarkers } from "./editedItems";
 
 type Folder = ItemGroup<Item>;
 
@@ -62,7 +62,14 @@ function applyTestScript(item: Item, script: string | undefined): void {
  * — `Request.update()` only ever merges a *defined* `body` (never treats "absent" as "clear this
  * field"). Clearing a body entirely isn't exposed by this endpoint; only setting/replacing one is.
  */
-export function applyRequestOverride(collection: Collection, requestId: string, edit: RequestEditInput): string {
+export function applyRequestOverride(
+  collection: Collection,
+  requestId: string,
+  edit: RequestEditInput,
+  /** `findEditedItemIds()` of the stored body `collection` was parsed from — carried over, since
+   * parsing drops every existing marker (`serializeWithEditMarkers`). */
+  previouslyEditedIds: ReadonlySet<string>,
+): string {
   const item = findItem(collection, requestId);
   if (!item) throw new RequestNotFoundError(requestId);
 
@@ -74,7 +81,5 @@ export function applyRequestOverride(collection: Collection, requestId: string, 
   });
   applyTestScript(item, edit.testScript);
 
-  const json = collection.toJSON();
-  markItemEdited(json, requestId);
-  return JSON.stringify(json);
+  return serializeWithEditMarkers(collection, [...previouslyEditedIds, requestId]);
 }

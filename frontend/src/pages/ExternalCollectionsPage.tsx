@@ -294,12 +294,11 @@ export function ExternalCollectionsPage({
       {selected && collectionView && (
         <section className="space-y-3">
           {viewError && <ErrorState message={viewError} />}
-          <div className="grid items-stretch gap-4 lg:grid-cols-[320px_1fr]">
-            {/* `items-stretch` (the grid default, made explicit) plus `h-full flex-col` here make
-                this column match the right column's height exactly — whichever side has more
-                natural content sets the row's height, and the shorter side stretches to it rather
-                than leaving empty space or being independently capped. */}
-            <div className="flex h-full flex-col gap-3">
+          <div className="grid items-start gap-4 lg:grid-cols-[320px_1fr]">
+            {/* A fixed height rather than stretching to the right column: a large collection then
+                scrolls inside the tree (CollectionTreeView's own `overflow-y-auto` list) instead of
+                growing the whole page. */}
+            <div className="flex h-128 flex-col gap-3">
               {/* The collection tree always stays in the sidebar (it's the primary navigation);
                   variables get the full-width main pane below instead of this ~320px rail — their
                   row layout (name + value + source label) doesn't fit a sidebar this narrow. The
@@ -337,7 +336,10 @@ export function ExternalCollectionsPage({
                 }
               />
             </div>
-            <div>
+            {/* `min-w-0` lets this `1fr` grid track shrink below its content's width, so a long
+                unbroken value (e.g. a bearer token in the resolved preview) wraps inside the panel
+                instead of stretching it past the viewport. */}
+            <div className="min-w-0">
               {mainView === "variables" ? (
                 <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} onClose={handleClosePanel} />
               ) : selectedRequest ? (

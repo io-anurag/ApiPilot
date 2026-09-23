@@ -4,8 +4,6 @@ import { upload } from "../uploadMiddleware";
 import { reaffirmSession } from "../session/sessionMiddleware";
 import { createLogger } from "../logger";
 import {
-  extractReferencedVariables,
-  missingUploadedVariableValues,
   parseStoredCollection,
   parseUploadedCollection,
   parseUploadedEnvironment,
@@ -32,6 +30,7 @@ import { getInProgressRun as getGeneratedInProgressRun } from "../execution/exec
 import { runUploadedCollectionExecution } from "../externalCollections/runUploadedCollectionExecution";
 import { buildCollectionView } from "../externalCollections/collectionView";
 import { applyRequestOverride } from "../externalCollections/requestOverride";
+import { findEditedItemIds, serializeWithEditMarkers } from "../externalCollections/editedItems";
 import { addFolder, addRequest, deleteItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import {
@@ -297,7 +296,7 @@ export function createExternalCollectionsRouter(): Router {
         headers,
         body: typeof body.body === "string" ? body.body : undefined,
         testScript: typeof body.testScript === "string" ? body.testScript : undefined,
-      });
+      }, findEditedItemIds(existing.collection));
       updateUploadedCollectionBody(existing.id, updatedCollectionJson);
       respondWithFreshView(res, existing.id);
       logRequestSucceeded(req.method, req.path, startedAt, 200);
@@ -338,7 +337,7 @@ export function createExternalCollectionsRouter(): Router {
               headers: Array.isArray(body.headers) ? (body.headers as Array<{ key: string; value: string }>) : [],
               body: typeof body.body === "string" ? body.body : undefined,
             });
-      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, findEditedItemIds(existing.collection)));
       const updated = getUploadedCollection(existing.id);
       const rebuilt = parseStoredCollection(updated.collection);
       const collectionView = buildCollectionView(updated.id, rebuilt, updated.collection, updated.variableValues);
@@ -357,7 +356,7 @@ export function createExternalCollectionsRouter(): Router {
       assertCollectionNotRunning(existing.id);
       const collection = parseStoredCollection(existing.collection);
       deleteItem(collection, req.params.itemId);
-      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, findEditedItemIds(existing.collection)));
       respondWithFreshView(res, existing.id);
       logRequestSucceeded(req.method, req.path, startedAt, 200);
     } catch (err) {
@@ -379,7 +378,7 @@ export function createExternalCollectionsRouter(): Router {
       }
       const collection = parseStoredCollection(existing.collection);
       renameItem(collection, req.params.itemId, body.name);
-      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, findEditedItemIds(existing.collection)));
       respondWithFreshView(res, existing.id);
       logRequestSucceeded(req.method, req.path, startedAt, 200);
     } catch (err) {
@@ -401,7 +400,7 @@ export function createExternalCollectionsRouter(): Router {
       }
       const collection = parseStoredCollection(existing.collection);
       reorderContainer(collection, req.params.containerId, body.orderedIds as string[]);
-      updateUploadedCollectionBody(existing.id, JSON.stringify(collection.toJSON()));
+      updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, findEditedItemIds(existing.collection)));
       respondWithFreshView(res, existing.id);
       logRequestSucceeded(req.method, req.path, startedAt, 200);
     } catch (err) {
@@ -457,19 +456,10 @@ export function createExternalCollectionsRouter(): Router {
         return;
       }
 
-      const missing = missingUploadedVariableValues(
-        extractReferencedVariables(collection, selectedItemIds),
-        uploadedCollection.variableValues,
-      );
-      if (missing.length > 0) {
-        logRequestFailed(req.method, req.path, startedAt, 400, "missing_variable_values");
-        res.status(400).json({
-          error: "missing_variable_values",
-          message: `The uploaded environment does not supply a value for: ${missing.join(", ")}.`,
-          missing,
-        });
-        return;
-      }
+      // An unset variable deliberately does NOT refuse the run: an earlier request's test script
+      // may capture it (`pm.environment.set`) for a later one, and a request that still sends an
+      // unresolved `{{token}}` simply records its own failed/errored outcome. Unresolved variables
+      // stay visible before running (CollectionView.unresolvedVariables, the Variables panel).
 
       // Gate 1 (FR-007) — evaluated only while never-before confirmed; permanently satisfied once
       // accepted. Deliberately does NOT let this same `confirmed:true` also satisfy gate 2 below

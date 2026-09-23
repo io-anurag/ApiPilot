@@ -86,9 +86,11 @@ pass/fail outcome consistent with the collection's own defined assertions.
    environment supplies a value for every one of them, **Then** the run proceeds without the user
    having to re-enter any value by hand.
 3. **Given** the uploaded environment is missing a value a request in the collection needs,
-   **When** the user starts the run, **Then** the system refuses before dispatching any request
-   and names the specific missing variable(s), consistent with how a generated collection's
-   missing variable values are already reported (specs/018 FR-005-adjacent behavior).
+   **When** the user starts the run, **Then** the run starts anyway; the variable stays visibly
+   unresolved in the collection view beforehand, and a request that still sends it unresolved
+   records its own failed/errored outcome. *(Superseded: this originally refused the run with
+   `400 missing_variable_values`. Changed so an earlier request's test script can capture a value
+   (`pm.environment.set`) that a later request uses — see FR-004.)*
 4. **Given** the uploaded collection.json is not valid Postman Collection JSON, **When** the user
    uploads it, **Then** the system refuses with a specific, actionable parsing error and does not
    attempt to repair or guess at the intended structure.
@@ -178,9 +180,12 @@ that neither can be mistaken for the other.
   malformed documents" principle already applied to OpenAPI YAML).
 - **FR-003**: The system MUST validate that the uploaded environment file is well-formed Postman
   Environment JSON and refuse with a specific, actionable error otherwise.
-- **FR-004**: The system MUST identify every variable the uploaded collection references and,
-  before starting a run, refuse with a clear message naming any variable the uploaded environment
-  does not supply a value for.
+- **FR-004**: The system MUST identify every variable the uploaded collection references and show,
+  before a run, which ones have no value (the collection view's `unresolvedVariables` and the
+  variable panel's missing indicator). A missing value MUST NOT refuse the run.
+  *(Superseded: originally "refuse with a clear message naming any variable the uploaded
+  environment does not supply a value for". Refusing prevented collections whose later requests
+  depend on a value an earlier request's test script captures at run time.)*
 - **FR-005**: The system MUST execute every request in the uploaded collection strictly one at a
   time, in the collection's own request/folder order, mirroring the existing sequential execution
   model (specs/018 FR-010) rather than introducing a second, concurrent execution path.
@@ -241,9 +246,9 @@ requests to run" screen, which FR-005 as originally written did not support.
   "execute every request" behavior remains the default when no subset is chosen). A request
   excluded from the run MUST be skipped entirely — it MUST NOT appear in that run's `results`, not
   even as `"not-attempted"` (research.md/data-model.md for the exact request/response shape). Both
-  confirmation gates (FR-007, FR-013) and the missing-variable-values check (FR-004) MUST be
-  evaluated against only the chosen subset, not the whole collection, so an unselected request's
-  destructive method or unresolved variable never blocks a run that never included it.
+  confirmation gates (FR-007, FR-013) MUST be evaluated against only the chosen subset, not the
+  whole collection, so an unselected request's destructive method never blocks a run that never
+  included it.
 
 ### Key Entities *(include if feature involves data)*
 

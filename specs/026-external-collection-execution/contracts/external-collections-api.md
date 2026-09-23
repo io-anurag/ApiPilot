@@ -62,8 +62,8 @@ requiring its own `confirmed: true` resubmission — mirrors `execution/start`'s
 `selectedRequestIds` is optional (AP-028 follow-up, Postman-Runner-style selective run). Omitting
 it runs every request in the collection, exactly as before this field existed. When present, only
 items whose id is in the array actually dispatch — everything else is skipped entirely (it never
-appears in `results`, not even as `"not-attempted"`), and both confirmation gates plus the
-`missing_variable_values` check are evaluated against only the selected subset.
+appears in `results`, not even as `"not-attempted"`), and both confirmation gates are evaluated
+against only the selected subset.
 
 **200 OK** — `{ "run": { "...": "...", "source": "uploaded", "results": [] } }`
 
@@ -81,8 +81,10 @@ error shape.
 `contracts/execution-api.md`'s existing entry: `environmentTier`, `destructiveOperations`, but
 `destructiveOperations` here is derived from the collection's own requests).
 
-**400 `missing_variable_values`** — identical shape to the existing entry, naming which
-variable(s) the uploaded environment does not supply (FR-004).
+~~**400 `missing_variable_values`**~~ — removed for this endpoint (FR-004, superseded): a run now
+starts even when a referenced variable has no value, and an affected request records its own
+failed/errored outcome. The generated-collection `execution/start` (`contracts/execution-api.md`)
+is unchanged and still returns this error.
 
 **404 `uploaded_collection_not_found`**
 

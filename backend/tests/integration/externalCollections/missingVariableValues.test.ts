@@ -3,7 +3,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../src/app";
 import { TargetServer } from "../../fixtures/execution/targetServer";
 
-describe("external collections: missing variable value refuses the run (US1 Scenario 3, FR-004)", () => {
+const POLL_TIMEOUT_MS = 30_000;
+
+async function pollUntilSettled(agent: ReturnType<typeof request.agent>, id: string, runId: string) {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  for (;;) {
+    const response = await agent.get(`/api/external-collections/${id}/execution/runs/${runId}`);
+    if (response.body.run.status !== "in-progress") return response;
+    if (Date.now() > deadline) throw new Error(`Run ${runId} never settled.`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+describe("external collections: a missing variable value does not refuse the run", () => {
   let targetServer: TargetServer;
 
   beforeEach(() => {
@@ -14,9 +26,8 @@ describe("external collections: missing variable value refuses the run (US1 Scen
     await targetServer.stop();
   });
 
-  it("refuses to start, naming the missing variable, and dispatches no request", async () => {
+  it("starts the run anyway and dispatches the request with the variable left unresolved", async () => {
     const baseUrl = await targetServer.start();
-    targetServer.configure("GET", "/widgets/1", { status: 200, body: {} });
 
     const collection = {
       info: { name: "c" },
@@ -35,14 +46,18 @@ describe("external collections: missing variable value refuses the run (US1 Scen
       .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
       .attach("environment", Buffer.from(JSON.stringify(environment)), "environment.json");
     expect(uploadResponse.status).toBe(201);
+    const id = uploadResponse.body.uploadedCollection.id;
 
-    const started = await agent
-      .post(`/api/external-collections/${uploadResponse.body.uploadedCollection.id}/execution/start`)
-      .send({ confirmed: true });
-    expect(started.status).toBe(400);
-    expect(started.body.error).toBe("missing_variable_values");
-    expect(started.body.missing).toEqual(["widgetId"]);
+    const view = await agent.get(`/api/external-collections/${id}/collection`);
+    expect(view.body.collectionView.items[0].unresolvedVariables).toEqual(["widgetId"]);
 
-    expect(targetServer.requests).toHaveLength(0);
-  });
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    expect(started.status).toBe(200);
+
+    const finalResponse = await pollUntilSettled(agent, id, started.body.run.id);
+    expect(finalResponse.body.run.status).toBe("completed");
+    expect(finalResponse.body.run.results).toHaveLength(1);
+    expect(finalResponse.body.run.results[0].outcome).not.toBe("not-attempted");
+    expect(targetServer.requests).toHaveLength(1);
+  }, 60_000);
 });

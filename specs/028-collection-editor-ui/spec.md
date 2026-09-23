@@ -105,8 +105,9 @@ with the specific missing variable(s) named.
    every visible request preview referencing that variable updates immediately to show the
    substituted value, without a page reload or a run.
 3. **Given** one or more variables a request depends on remain unresolved, **When** the user
-   attempts to start a run, **Then** the system blocks the run and names the specific missing
-   variable(s), reusing the platform's existing variable-completeness check rather than a new one.
+   attempts to start a run, **Then** the run starts; the unresolved variables stay marked missing
+   (the Variables toggle's red dot, each request's "Unresolved" list) and an affected request
+   records its own outcome. *(Superseded: originally blocked the run — see FR-006.)*
 
 ---
 
@@ -237,9 +238,11 @@ items; verify the collection view reflects all three changes immediately.
 - **FR-005**: When the user sets or changes a variable's value, the system MUST immediately
   update every visible request preview that references that variable to show the substituted
   value, without requiring a page reload or a run.
-- **FR-006**: The system MUST block starting a run while any variable a target request depends on
-  remains unresolved, reusing the existing variable-completeness check
-  (`backend/src/execution/variableCompleteness.ts`) and naming the specific missing variable(s).
+- **FR-006**: The system MUST keep every unresolved variable visibly marked missing, and MUST NOT
+  block starting a run because of one. *(Superseded: originally "MUST block starting a run while
+  any variable a target request depends on remains unresolved". Changed so a value captured by an
+  earlier request's test script (`pm.environment.set`) can feed a later request in the same run;
+  specs/026 FR-004 changed with it.)*
 - **FR-007**: The system MUST allow the user to directly edit a selected request's method, URL,
   headers, and body content, in addition to setting variable values.
 - **FR-008**: This capability MUST be available for both uploaded external collections
@@ -314,8 +317,8 @@ items; verify the collection view reflects all three changes immediately.
   without running it, within seconds of opening the collection view.
 - **SC-002**: 100% of variables referenced by a loaded collection are visible in the variable
   panel with an accurate resolved-or-missing status.
-- **SC-003**: 100% of attempts to start a run while any required variable remains unresolved are
-  blocked, with the specific missing variable(s) named.
+- **SC-003**: 100% of unresolved variables are visibly marked missing before a run starts
+  (superseded: originally "100% of such run attempts are blocked" — see FR-006).
 - **SC-004**: In usability review, at least 90% of users report they know exactly what will be
   sent before starting a run, compared to the prior results-only view.
 
