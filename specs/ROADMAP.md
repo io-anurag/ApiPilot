@@ -1,6 +1,6 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. AP-001 through AP-026 have each been run through
+**Status**: Reference document. AP-001 through AP-028 have each been run through
 `/speckit-specify` individually, in dependency order. See the Implementation Status table below
 for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
 `analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
@@ -9,7 +9,9 @@ AP-019 through AP-025 are further hardening/extension features layered on top of
 and AP-017, mirroring how AP-011 through AP-016 relate to their own prerequisites (see their own
 Feature Decomposition sections below). AP-026 is a standalone capability layered on top of AP-017
 (it reuses, but does not extend, AP-017's execution engine) rather than a hardening fix to an
-existing defect.
+existing defect. AP-027 (frontend design system and application shell) is a presentation-layer
+feature that changes no backend contract or workflow rule, and AP-028 (Postman-style collection
+and variable editor) is a pre-run editing surface layered on top of AP-026.
 
 AP-011 through AP-016 were originally tracked as unnumbered "hardening" specs to avoid a
 numbering collision with the post-MVP features, which were numbered AP-011/AP-012 at the time.
@@ -29,9 +31,9 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-004 — AI Provider & Local Inference Foundation | Implemented (1 follow-up task outstanding: full manual quickstart validation pass) |
 | AP-005 — AI Test Scenario Designer | Implemented (3 follow-up tasks outstanding: broader semantic validation coverage, candidate-ID/low-confidence policy enforcement, all-or-nothing degradation coverage for partial/mixed-invalid provider responses — all marked partial in tasks.md) |
 | AP-006 — Test Scenario Review | Implemented |
-| AP-007 — Postman Collection Generator | Implemented (1 follow-up task outstanding: the manual Postman-import acceptance step, which needs a real, operator-authorized target this feature deliberately does not provide) |
+| AP-007 — Postman Collection Generator | Implemented (1 follow-up task outstanding: the manual Postman-import acceptance step, which needs a real, operator-authorized target this feature deliberately does not provide). Amended 2026-09-23: a path parameter with no approved value is exported as a resource-qualified variable (`/users/{id}` → `{{user_id}}`) so same-named parameters on different resources no longer share one value |
 | AP-008 — API Dependency & Integration Workflow Engine | Implemented |
-| AP-009 — End-to-End Test Generation Workflow | Implemented |
+| AP-009 — End-to-End Test Generation Workflow | Implemented. Amended 2026-09-20 (`execution` becomes the tenth, optional stage) and 2026-09-23 (API review records an explicit operation selection that scopes deterministic generation and AI enhancement). See Next Actions #20 for the execution-stage handoff to "Import & Run Collection", which is not yet reflected in `specs/009` |
 | AP-010 — Presentation System & Review Scalability | Implemented |
 | AP-011 — Bounded AI Prompt Batching | Implemented |
 | AP-012 — AI Enhancement Progress Visibility | Implemented (1 follow-up task outstanding: manual real-model UI validation from quickstart.md, optional) |
@@ -49,7 +51,9 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-023 — Automatic Auth-Credential Chaining (`specs/023-auto-auth-credential-chaining`) | Implemented — all 23 tasks complete |
 | AP-024 — OAuth2 Client-Credentials Auth Support (`specs/024-oauth2-client-credentials-auth`) | Implemented — all 30 tasks complete, re-validated against the PayPal Invoicing API fixture (0/22 operations unsupported, down from 22/22) |
 | AP-025 — Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented — all 34 tasks complete |
-| AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario) |
+| AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here |
+| AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
+| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented for uploaded external collections — 71 of 72 tasks complete (T050, a documentation-only cross-reference to `specs/018`, left open). FR-008's generated-collection half is not wired up as its own surface; see Next Actions #19 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1362,16 +1366,96 @@ specification and no active guided workflow.
   feature.
 - No additional request-count or run-duration limit beyond the existing per-request timeout and
   upload file-size cap.
-- Known, documented limitation: a variable an uploaded collection's own pre-request script sets at
-  runtime, if also referenced via `{{...}}` in a static request URL/header/body, is not currently
-  distinguished from a genuinely missing one (script content is out of scope for the variable-
-  reference extraction that backs the missing-variable check).
+- ~~Known, documented limitation: a variable an uploaded collection's own pre-request script sets
+  at runtime, if also referenced via `{{...}}` in a static request URL/header/body, is not
+  currently distinguished from a genuinely missing one.~~ Retired 2026-09-23 when FR-004 was
+  superseded: unresolved variables are shown before a run (the collection view's
+  `unresolvedVariables` and the variable panel's missing indicator) but no longer refuse it, so a
+  value an earlier request's script captures (`pm.environment.set`) can feed a later request in
+  the same run. A request that still sends an unresolved variable records its own failed/errored
+  outcome. The generated-collection `execution/start` (AP-017) still refuses with
+  `400 missing_variable_values`.
 
 ### Dependencies
 
 Reuses AP-017's (`specs/018-test-execution-results`) execution engine (`newmanRunner.ts`) and
 session/store patterns, and AP-025's (`specs/025-local-persistence-layer`) encrypted-at-rest
 persistence pattern for the uploaded environment's credential-like values.
+
+---
+
+## AP-027 — Frontend Design System & Application Shell
+
+### Objective
+
+Give every ApiPilot page one coherent presentation layer — design tokens, a reusable component
+library, and a workflow-aware application shell — without changing backend contracts, workflow
+rules, or existing component behavior.
+
+### Scope
+
+- Design tokens (color, typography, spacing, radius, shadow) for light and dark mode, defined in a
+  Tailwind v4 `@theme` block.
+- A manual light/dark theme toggle, persisted per browser and defaulting to the operating
+  system's preference.
+- Shared components for recurring concepts: buttons and inputs, status/decision badges, HTTP
+  method indicators, AI-vs-deterministic provenance indicators, tabs, dialogs, and
+  empty/error/loading states.
+- One reusable workflow-progress indicator showing the product's real ten stages with
+  completed/active/pending/locked status and an explanation for why a locked stage is unavailable.
+
+### Constraints
+
+- No backend API contract, workflow/business rule, or existing component behavior changes
+  (FR-012).
+- Status and decision indicators carry a text label or icon in addition to color; every
+  interactive element is keyboard-operable with a visible focus indicator.
+- The navigation shows only stages that exist in the product today; no "History" entry until a
+  History page exists (Clarifications 2026-09-20).
+
+### Dependencies
+
+Presentation-only; builds on AP-010's accessibility and review-scalability conventions and applies
+across AP-009's guided workflow and AP-026's standalone page.
+
+---
+
+## AP-028 — Postman-Style Collection & Variable Editor
+
+### Objective
+
+Let an operator see and adjust exactly what a collection run will send — every request's method,
+URL, headers, body, test script, and variable values — before starting the run, instead of only
+seeing what was sent afterwards in the results.
+
+### Scope
+
+- A navigable folder/request tree in the collection's own order, with add, delete, rename, and
+  reorder for requests and folders.
+- A tabbed request editor (Headers/Body/Tests) with a resolved-vs-raw preview in which unresolved
+  `{{variable}}` placeholders stay visibly marked.
+- A variable panel listing every referenced variable, its value, its resolved-or-missing status,
+  and which scope wins (collection default, environment, or user override), with live preview
+  updates as values change.
+- Edits persisted as an override layered on the original request, reflected in the record of any
+  run made with them, and discarded rather than reapplied when the request no longer exists.
+- A selective-run checklist (an optional `selectedRequestIds` on AP-026's `execution/start`).
+- The whole editor read-only while a run of that collection is in progress (FR-017).
+- Display-only "implied" authentication headers for `bearer` and header-located `apikey` auth, so
+  a request does not look unauthenticated when its auth block adds a header at run time.
+
+### Constraints
+
+- Does not change how a collection or its `TestScenario`/`GeneratedRequest` is generated, and never
+  mutates generated provenance in place.
+- FR-006 superseded 2026-09-23 alongside AP-026 FR-004: unresolved variables are marked missing
+  but do not block a run.
+
+### Dependencies
+
+Requires AP-026 (`UploadedCollectionSet` storage and execution) and AP-027 (shared components).
+FR-008 also names ApiPilot-generated collections handed to execution (AP-017); that half has no
+dedicated surface — see Next Actions #19.
 
 ---
 
@@ -1569,6 +1653,10 @@ AP-023 requires AP-021 and AP-008/AP-019; AP-024 requires AP-019, AP-021, and AP
 requires AP-017 (`specs/018-test-execution-results`), `specs/017-session-workflow-isolation`, and
 AP-004. See each feature's own Feature Decomposition section above for detail.
 
+AP-026 through AP-028 are likewise omitted from the main pipeline. AP-026 requires AP-017 and
+AP-025; AP-027 is presentation-only and depends on no backend feature; AP-028 requires AP-026 and
+AP-027.
+
 ---
 
 # MVP Boundary
@@ -1599,9 +1687,10 @@ AP-017  Test Execution & Results
 AP-018  AI Failure Analysis
 ```
 
-AP-011 through AP-016, and AP-019 through AP-025 (hardening/extension features layered onto
-AP-004/AP-005/AP-007/AP-008/AP-009/AP-017), are also outside the formal MVP boundary above, but —
-unlike AP-018 — all thirteen are already implemented; see the Implementation Status table.
+AP-011 through AP-016, and AP-019 through AP-028 (hardening/extension features layered onto
+AP-004/AP-005/AP-007/AP-008/AP-009/AP-017, plus the standalone collection import, design system,
+and collection editor), are also outside the formal MVP boundary above, but — unlike AP-018 — all
+sixteen are already implemented; see the Implementation Status table.
 
 ---
 
@@ -2007,3 +2096,51 @@ Implementation
     (2026-09-20)**, adding the standalone import/execution capability, its API routes, its module
     boundary, and its one documented limitation to each document's capability/feature listings —
     mirroring how Next Action #15 synced the same three documents for AP-019 through AP-025.
+18. **AP-027 (Frontend Design System & Application Shell) implemented (2026-09-21)**, all 57 tasks
+    complete. Adds Tailwind v4 `@theme` design tokens for light and dark mode, a persisted manual
+    theme toggle keyed off a `data-theme` attribute, a shared component library (status,
+    HTTP-method, and provenance badges; dialogs; tabs; empty/error/loading states), and one
+    reusable workflow stage tracker, with no backend contract or workflow-rule change (FR-012).
+19. **AP-028 (Postman-Style Collection & Variable Editor) implemented for uploaded collections
+    (2026-09-21 to 2026-09-22)**, 71 of 72 tasks complete. A post-implementation addendum added
+    request test-script editing, selective run (`selectedRequestIds` on AP-026's
+    `execution/start`), a tabbed editor layout, and folder creation. Of the 14 usability issues in
+    `specs/028-collection-editor-ui/ui-bugfix-tracker.md`, 13 are recorded as resolved and #6
+    (run summary readability) as partially resolved. Open items:
+    - T050, a documentation-only cross-reference from `specs/018` to this feature.
+    - FR-008 names ApiPilot-generated collections handed to execution as well as uploaded ones.
+      The editor is mounted only in `ExternalCollectionsPage.tsx`. Since #20's execution hand-off,
+      a generated collection reaches it by being uploaded; the spec should either record that as
+      satisfying FR-008 or keep the gap open.
+20. **Workflow and execution amendments (2026-09-21 to 2026-09-23)**, each with regression tests:
+    - AP-009, API review operation selection (spec Clarifications 2026-09-23): the user checks the
+      operations to test; `selectedOperationKeys` scopes deterministic generation, AI enhancement,
+      and single-batch retry, while the stored `apiModel` stays unnarrowed. Absent or empty keeps
+      every operation for existing API clients; unknown keys return `400 unknown_operation_key`.
+    - AP-009, execution hand-off (commit `37d30b3`, 2026-09-21): continuing from Postman
+      generation pre-fills the "Import & Run Collection" upload form with the generated collection
+      and environment instead of running it inside the guided workflow. The operator still picks a
+      tier and submits. The guided workflow's specs/018 environment and execution routes remain
+      mounted but have no UI caller, and `EnvironmentForm.tsx`/`ExecutionResultsPanel.tsx` are no
+      longer rendered by any page. **Not yet reflected in `specs/009` or `specs/018`**; this is
+      governance drift to resolve through a clarification on those specs.
+    - AP-009, scenario review finalize lock: decisions, edits, and regeneration are refused while
+      a finalize's dependency analysis is in flight, and the UI disables review controls for that
+      window.
+    - AP-007, resource-qualified path-parameter variables (spec Clarifications 2026-09-23):
+      `/users/{id}` → `{{user_id}}`.
+    - AP-026/AP-028, FR-004/FR-006 superseded: an unresolved variable no longer refuses an
+      uploaded-collection run, and the environment Newman returns after each request is written
+      back to the collection's stored values. This retires the script-set-variable limitation
+      recorded in #16.
+    - AP-028, display-only implied auth headers (`ImpliedAuthHeader`) for `bearer` and
+      header-located `apikey`, and a security-requirement note in scenario review detail.
+    - Guided workflow resume: after "Back to start", reselecting "Guided Workflow" shows the
+      workflow instead of immediately repeating the hand-off.
+21. **README.md, docs/architecture.md, and docs/USER_MANUAL.md brought into sync with AP-027,
+    AP-028, and #20 (2026-09-23).** Also corrected earlier inaccuracies: the documents described
+    AP-028 edits as an override layered on the original request (research.md D4 mutates the
+    stored uploaded copy in place, with an `_apipilotEdited` marker), described a guided-workflow
+    Run & Results panel that the hand-off replaced, and cited a `vercel.json` that no longer
+    exists. The full repository suite passed at this point: 1407 tests passed, 2 skipped, across
+    204 test files.

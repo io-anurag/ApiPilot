@@ -34,12 +34,13 @@ flowchart LR
   APPROVED --> PM["Postman generator"]
   PM --> ART["Collection + environment + README"]
   ART --> EXEC["Execution (Newman)"]
+  ART -->|"UI hand-off"| EXTC
   EXEC --> RESULTS["Execution results"]
   AI --> PROVIDER["AIProvider"]
   DEP --> PROVIDER
   PROVIDER --> LOCAL["Local model or deterministic mock"]
   EXEC --> DB[("SQLite: environments, run history, AI diagnostics")]
-  UI --> EXTC["External collection import & execution (standalone)"]
+  UI --> EXTC["Collection import, editing & execution"]
   EXTC -->|"shares Newman dispatch"| EXEC
   EXTC --> DB
 ```
@@ -65,7 +66,7 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
 | `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection/environment pair, sibling to `execution/` rather than an extension of it (specs/026-external-collection-execution). Reuses `execution/newmanRunner.ts`'s dispatch unchanged; maps results through its own, narrower mapper rather than `execution/mapNewmanResult.ts`, since an uploaded collection's arbitrary named tests have no `TestScenario` to interpret them against. |
 | `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, and AI readiness/benchmark diagnostics; at-rest credential encryption (specs/025-local-persistence-layer, specs/026-external-collection-execution). |
-| `frontend/src/pages/`                 | The guided workflow composition root.                                                                                                          |
+| `frontend/src/pages/`                 | Composition roots for the guided workflow and the collection import/editing/execution view.                                                    |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
 | `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, and Postman artifact concepts.              |
@@ -78,7 +79,8 @@ flowchart TD
   P --> V["Validate OpenAPI 3.x"]
   V --> N["Normalize and analyze"]
   N --> A["ApiModel plus AnalysisIssues"]
-  A --> G["Deterministic generation"]
+  A --> SEL["Operation selection (API review)"]
+  SEL --> G["Deterministic generation"]
   G --> T["TestModel"]
   T --> E["Optional AI enhancement"]
   E --> ET["Enhanced TestModel"]
@@ -99,6 +101,22 @@ example into `ApiModel`. Same-document `$ref` values may be resolved; external f
 never fetched. Invalid YAML/version, oversized input, unresolved references, circular references,
 unsupported constructs, and ambiguity yield typed errors or visible `AnalysisIssue`s. The module
 does not use AI, execute specification content, or invent missing contract information.
+
+### Operation selection
+
+API review records the operations the user chooses to test as
+`TestGenerationWorkflow.selectedOperationKeys` — `"METHOD /path"` keys produced by shared-domain
+`toOperationKey()`, normalized to `apiModel.operations` order (specs/009 Clarifications
+2026-09-23). The selection lives on the workflow rather than on `ApiModel`/`ApiOperation`, so the
+AP-002 contract and the OpenAPI engine are unchanged. `scopeApiModelToSelection()`
+(`backend/src/testGenerationWorkflow/operationSelection.ts`) narrows only `operations`, and is
+applied by deterministic generation, AI enhancement, and single-batch retry. Because each operation
+already carries its resolved schemas, narrowing operations also narrows what reaches the AI
+provider. The stored `apiModel` is never narrowed, so later stages that legitimately reference
+unselected operations (for example auth-credential chaining to a token endpoint, specs/023) are
+unaffected. Unknown keys are refused with `unknown_operation_key` rather than dropped, an absent or
+empty selection means every operation (the pre-amendment behavior), and the selection cannot be
+revised within a workflow.
 
 ### `ApiModel` to deterministic `TestModel`
 
@@ -144,7 +162,12 @@ identify the producer response field and consumer request location.
 The Postman generator accepts only approved scenarios. It produces a collection, environment, and
 human-readable artifact document in one action, validates the collection before delivery, and is
 fully deterministic for identical input. Every request uses variables for base URL, credentials,
-and unknown values. No real credential belongs in the collection or diagnostics; supplied values can
+and unknown values. A path parameter with no approved value is exposed as a resource-qualified
+variable — the singular of the static segment before it plus the parameter name, so
+`/users/{id}` references `{{user_id}}` — unless the parameter already names its resource or no
+static segment precedes it (`pathParameterVariableName` in
+`backend/src/postman/artifactVariables.ts`, specs/007 Clarifications 2026-09-23). The request's
+Postman `:name` path key keeps the specification's own parameter name. No real credential belongs in the collection or diagnostics; supplied values can
 appear only in the marked-sensitive environment artifact.
 
 The generator preserves an approved negative payload as-is and translates only approved assertions.
@@ -201,11 +224,30 @@ stateDiagram-v2
   ScenarioReview --> DependencyAnalysis
   DependencyAnalysis --> WorkflowReview
   WorkflowReview --> PostmanGeneration
-  PostmanGeneration --> Complete
+  PostmanGeneration --> Execution: entered automatically
+  Execution --> Complete: skipped or finished
   AiEnhancement --> AiEnhancement: retry before scenario review finalizes
   Analysis --> Upload: invalid document
   Complete --> Upload: explicit replacement confirmation
 ```
+
+`execution` (specs/009 Clarifications 2026-09-20) is the tenth stage and the only optional one
+after AI enhancement: it may be skipped or finished after zero or more runs. In the current UI it
+runs nothing itself. Continuing from Postman generation hands the generated collection and
+environment to the "Import & Run Collection" view (`App.tsx`'s `handleHandoffToExecution`,
+`frontend/src/services/importPreload.ts`), pre-filling its upload form; the operator still chooses a
+risk tier and submits, after which the collection is an ordinary `UploadedCollectionSet`. The
+`execution` stage screen only offers a button to repeat the hand-off, for example after a reload.
+The guided workflow's own environment and execution routes (specs/018) remain mounted but have no
+UI caller. This hand-off is not yet described in specs/009 or specs/018.
+
+Scenario review has one extra guard. `finalizeScenarioReview` marks `scenarioReview` complete and
+activates `dependencyAnalysis` before awaiting the analysis, so a decision, edit, or regeneration
+arriving in that window would land after the approved suite was already projected.
+`scenarioReviewStage.ts` refuses such requests with `stage_not_active` while
+`scenarioReview` is complete and `dependencyAnalysis` is still active, and re-checks after an AI
+regeneration returns. The frontend disables the review controls for the same window and holds
+"Finalize Review" while any decision is still in flight.
 
 Every stage is guarded by its required output. Stage state is visible as not-yet-reached, active,
 complete, stale, or skipped; skipped AI enhancement may become active again before scenario review
@@ -323,7 +365,8 @@ running instance uses.
 "bring your own artifact" capability rather than an extension of the OpenAPI-driven pipeline above
 — it deliberately does not flow through `ApiModel`/`TestModel`, and requires no active
 `TestGenerationWorkflow`. An operator uploads a Postman Collection v2.1 JSON file and a Postman
-Environment JSON file directly; both are validated with the real `postman-collection` SDK
+Environment JSON file directly (or submits the pair pre-filled by the guided workflow's hand-off,
+which the backend treats identically); both are validated with the real `postman-collection` SDK
 (constitution XXVIII — reuse the standard implementation rather than a custom schema check) instead
 of a hand-rolled check.
 
@@ -359,6 +402,16 @@ than one submission silently satisfying both. Uploaded-collection runs and guide
 share the same single session-wide "one execution in progress at a time" slot, enforced by a
 small cross-check in each path's own route rather than merging their two separate stores/tables.
 
+An unresolved variable does not gate a run (specs/026 FR-004, superseded 2026-09-23). The original
+`400 missing_variable_values` refusal prevented collections whose later requests depend on a value
+an earlier request's test script captures with `pm.environment.set`, and it could not see
+variables set by scripts at all. Unresolved variables are instead surfaced before the run
+(`CollectionView.unresolvedVariables` and the variable panel), and a request that still sends one
+records its own outcome. The generated-collection `execution/start` keeps its refusal. During a run,
+`runUploadedCollectionExecution.ts` writes the environment Newman returns after each item back to
+the collection's stored `variableValues` (`updateUploadedCollectionVariables`), so the resolved
+preview and later runs reflect captured values rather than silently diverging from what was sent.
+
 Executing the collection's own pre-request/test scripts inside Newman's existing sandboxed script
 engine — the same engine `newmanRunner.ts` already invokes for every generated request — required
 a narrow, explicit amendment to constitution XVII ("avoid executing uploaded specifications or
@@ -366,11 +419,16 @@ generated scripts on the server"), gated behind the FR-007 confirmation above an
 this feature; it does not apply to ApiPilot-generated artifacts, AI output, or uploaded OpenAPI
 specifications, and no new sandboxing layer was introduced.
 
-The frontend's "Import & Run Collection" tab (`frontend/src/pages/ExternalCollectionsPage.tsx`) is
-a sibling top-level view to the guided workflow, switched via a two-tab header in `App.tsx` — both
-views stay mounted (visibility toggling, not conditional unmount) so switching tabs never discards
-either one's in-progress state. No routing library was introduced, mirroring the guided workflow's
-own original decision against one for stage navigation.
+The frontend's "Import & Run Collection" view (`frontend/src/pages/ExternalCollectionsPage.tsx`) is
+a sibling top-level view to the guided workflow. `App.tsx` starts on an entry chooser; the tab bar
+between the two views is hidden while the guided workflow is in progress and shown for "Import &
+Run Collection" and after the hand-off. Visibility is toggled rather than unmounting, so switching
+views keeps each one's in-progress state. The guided workflow page stays mounted for the rest of
+the session once first reached, even across "Back to start": its resume-on-mount effect repeats
+the hand-off for a workflow already at `execution`, guarded by a per-instance `useRef`, and
+remounting would reset that guard and bounce the user straight back to "Import & Run Collection".
+The external collections page is unmounted on "Back to start". No routing library was introduced,
+mirroring the guided workflow's own original decision against one for stage navigation.
 
 ## Security, privacy, and operational constraints
 
@@ -409,9 +467,10 @@ own original decision against one for stage navigation.
 ## Frontend architecture
 
 The frontend is a React/Vite technical workspace, not a set of independent stage pages. `App.tsx`
-switches between two top-level views — the guided workflow and the standalone external-collection
-import/execution page (specs/026-external-collection-execution) — both kept mounted so neither
-loses state when the other is active. Within the guided workflow, the page composition root
+switches between two top-level views — the guided workflow and the collection import/editing/
+execution page (specs/026, specs/028) — without discarding either one's state when the other is
+active (see "External collection import & execution" above for the mounting rules). Within the
+guided workflow, the page composition root
 renders the active guided stage and its shared progress/state. Components own
 presentation, interaction, local UI state, accessible names, keyboard behavior, and visible focus.
 Service modules own HTTP transport. Shared domain types preserve a type-safe boundary instead of
@@ -452,12 +511,19 @@ specs/028-collection-editor-ui adds a Postman-style pre-run editing surface — 
 `RequestEditorPanel`, and `VariablePanel` — so an operator can see and adjust exactly what a run will
 send before starting it. It is a downstream, execution-time layer: it does not change how a
 collection or its underlying `TestScenario`/`GeneratedRequest` is generated (specs/003, 007, 016),
-and never mutates a generated artifact's provenance in place. Instead, an edit is stored as a
-`RequestOverride` layered on top of the request's original definition; a variable override is
-persisted into the selected `Environment.variableValues`, reusing the same persistence
-`EnvironmentForm` already relies on. Both kinds of override are visibly reflected in the run record
-of anything actually executed with them applied, and a request-scoped override is discarded rather
-than silently reapplied if that request no longer exists in a later re-upload or regeneration.
+and never mutates generated provenance. Edits mutate the `UploadedCollectionSet` record in place,
+with no separate override entity (specs/028 research.md D4): a variable edit replaces its
+encrypted `variableValues`, and a request edit replaces the matching item in the stored collection
+JSON and marks it `_apipilotEdited: true`. `mapUploadedResult.ts` copies that marker onto
+`UploadedRequestResult.wasEdited`, so a run shows which requests were edited. The uploaded file
+and any generated `TestScenario` behind a handed-off collection are separate and untouched, and a
+re-upload creates a new record, so an edit is never silently reapplied to a different request.
+
+Structural mutations (add, delete, rename, reorder, field edits) go through the real
+`postman-collection` SDK (research.md D10). The SDK drops unrecognized properties when it parses,
+so every mutation re-applies all existing edit markers when it serializes
+(`serializeWithEditMarkers` in `editedItems.ts`); without that, each save would keep only the most
+recently edited request's marker.
 
 `CollectionTreeView` reproduces the collection's own folder/request order and supports add, delete,
 rename, and reorder for both requests and folders. `RequestEditorPanel` is a tabbed
@@ -467,26 +533,39 @@ editing plus the request's own `pm.test(...)` test script, which previously exec
 but was neither shown nor editable pre-run. `VariablePanel` lists every variable the collection
 references (plus any the user defines ahead of a request that will use it), its resolved value, and
 which scope currently wins — collection default, environment, or user override — updating every
-visible request preview live as values change. `execution/variableCompleteness.ts`'s existing
-missing-variable check, not a new one, still gates starting a run. The whole view becomes read-only
-while a run of that collection is in progress (FR-017), enforced with a lightweight poll rather than
-a push channel.
+visible request preview live as values change. Unresolved variables are marked missing (a dot on
+the Variables toggle and each request's "Unresolved" list) but do not block a run (FR-006,
+superseded 2026-09-23 together with specs/026 FR-004). The whole view becomes read-only while a run
+of that collection is in progress (FR-017), enforced with a lightweight poll rather than a push
+channel.
+
+`CollectionRequestView.impliedAuthHeader` (shared-domain `ImpliedAuthHeader`) reports the header a
+request's own or inherited `auth` block adds at execution time, in raw and resolved form. It is
+display-only and never merged into the editable headers, since it is not a literal header entry.
+It is computed only for `bearer` and header-located `apikey`, whose header value is a lossless
+key/value pair; `basic` would obscure `{{variable}}` placeholders through base64 encoding, and
+signed or dynamic schemes (`digest`, `oauth1`, `oauth2`, `awsv4`, `hawk`, `ntlm`, `edgegrid`)
+cannot be shown as a fixed value without fabricating one. The guided workflow's scenario review
+detail applies the same explainability rule: it states an operation's security requirement, since
+the deterministic `GeneratedRequest` never carries auth itself.
 
 A related addition, layered onto specs/026's execution/start rather than a new endpoint, is
 selective run: an optional `selectedRequestIds` array lets the run panel's Postman-Runner-style
 checklist execute a chosen subset of the collection's requests instead of always all of them.
 
-**Known scope gap, documented rather than silently left implicit**: `CollectionTreeView`,
-`RequestEditorPanel`, and `VariablePanel` are mounted only in `ExternalCollectionsPage.tsx`. Every
-functional requirement in specs/028 is implemented and tested against `UploadedCollectionSet`, but
-there is no equivalent surface yet in the guided-workflow/generated-collection page — extending this
-editor to ApiPilot-generated collections handed to execution remains open follow-up work.
+**Known scope gap**: `CollectionTreeView`, `RequestEditorPanel`, and `VariablePanel` are mounted only
+in `ExternalCollectionsPage.tsx` and operate only on `UploadedCollectionSet`. Since the execution
+hand-off, a generated collection reaches them by being uploaded, but specs/028 FR-008's
+generated-collection requirement (an editor over specs/018's own execution path) is still not met
+as specified. Either the hand-off should be recorded as satisfying FR-008 in the spec, or the gap
+stays open follow-up work.
 
 ## Deployment and validation
 
-Vercel deploys `frontend` and `backend` as separate services. [vercel.json](../vercel.json) rewrites
-`/api/*` to the backend and other paths to the frontend. Locally, `npm run dev` starts both services
-and the Vite development proxy keeps browser API calls same-origin.
+The repository has no checked-in deployment manifest (the former `vercel.json` was removed). The
+backend compiles to `backend/dist` and the frontend builds a Vite distribution under
+`frontend/dist`. Locally, `npm run dev` starts both services and the Vite development proxy keeps
+browser API calls same-origin.
 
 Primary verification commands run from repository root:
 
@@ -503,8 +582,8 @@ tests and benchmarks are opt-in because they may provision or load a local model
 ## Normative sources
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
-feature-level behavior, contracts, success criteria live in the feature directories under
-`specs/001-*` through `specs/028-*`. [The roadmap](../specs/ROADMAP.md) tracks implementation
-status through AP-026; AP-027 and AP-028 are implemented (see each feature's own `tasks.md`) but
-not yet reflected in the roadmap's status table. Where this document and a feature specification
-differ, the applicable specification and constitution take precedence.
+feature-level behavior, contracts, and success criteria live in the feature directories under
+`specs/001-*` through `specs/028-*`, and [the roadmap](../specs/ROADMAP.md) tracks implementation
+status through AP-028. Where this document and a feature specification differ, the applicable
+specification and constitution take precedence. The execution hand-off described under "Workflow
+orchestration" is the one behavior documented here that no specification yet covers.

@@ -8,12 +8,13 @@ covers what you see and do on screen.
 
 ## 1. What ApiPilot does
 
-You upload one OpenAPI 3.x YAML file. ApiPilot analyzes it, generates a baseline set of
-test scenarios deterministically (the same input always produces the same scenarios),
-optionally proposes additional scenarios using a locally running AI model, and lets you
-review and approve everything before anything is exported or executed. Approved scenarios
-become a Postman collection, which you can then run yourself against an environment you
-define, with results reported back in the same screen.
+You upload one OpenAPI 3.x YAML file and choose which of its operations to test. ApiPilot
+analyzes it, generates a baseline set of test scenarios deterministically (the same input
+always produces the same scenarios), optionally proposes additional scenarios using a
+locally running AI model, and lets you review and approve everything before anything is
+exported or executed. Approved scenarios become a Postman collection, which ApiPilot then
+hands to its **Import & Run Collection** view, where you can inspect and edit it and run it
+against a target you choose.
 
 If you already have a Postman collection and environment of your own — exported from
 Postman, received from a teammate, or hand-authored — you can instead import and run it
@@ -40,17 +41,22 @@ explicitly, ApiPilot follows your operating system's light/dark preference.
 
 ## 3. The guided workflow
 
-The header has two tabs: **Guided Workflow** (the default, described in this section) and
+The start screen offers two paths: **Guided Workflow** (described in this section) and
 **Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)).
-Switching tabs never discards either one's state. Within the guided workflow, every step
-below is reached in this fixed order, and a completed step can be revisited read-only (or,
-for the two review stages, reopened) by clicking its chip in the stage tracker at the top
-of the page.
+While the guided workflow is in progress the tab bar is hidden so you can finish it; use
+**← Back to start** to return to the start screen at any time. Nothing is discarded —
+choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
+are in **Import & Run Collection**, and switching between the two views never discards
+either one's state.
+
+Within the guided workflow, every step below is reached in this fixed order, and a
+completed step can be revisited read-only (or, for the two review stages, reopened) by
+clicking its chip in the stage tracker at the top of the page.
 
 ```text
 Upload → Analysis → API Review → Deterministic Generation → AI Enhancement
   → Scenario Review → Dependency Analysis → Workflow Review → Postman Generation
-  → Run & Results
+  → Execution (hand-off to Import & Run Collection)
 ```
 
 Each stage chip shows one of: **Not yet reached**, **Active**, **Complete**, **Needs to
@@ -85,12 +91,22 @@ them over the network.
 A table of every operation (method + path). Click one to see its parameters, request
 body content types, responses, and security requirements as ApiPilot understood them
 from the spec. This is your chance to confirm the analysis matches your expectations
-before test generation runs. Click **Continue** to proceed.
+before test generation runs.
+
+Check the operations you want to test. Only the checked operations, and the schemas they
+use, go on to Deterministic Generation and AI Enhancement, so leaving out operations you
+don't care about also makes AI enhancement faster. Use **Select all** to include every
+operation. **Continue** stays disabled until at least one operation is checked.
+
+Your selection is fixed once you continue: revisiting this stage shows it read-only. To
+test a different set of operations, start a new workflow. Operations you left out are
+still known to ApiPilot — for example, a token endpoint you didn't select can still be
+used to fetch credentials for the operations you did.
 
 ### 3.4 Deterministic Generation
 
-Click **Generate Baseline Test Suite**. ApiPilot produces, for every operation, one or
-two positive scenarios and a set of rule-based negative/boundary scenarios. These never
+Click **Generate Baseline Test Suite**. ApiPilot produces, for every operation you
+selected, one or two positive scenarios and a set of rule-based negative/boundary scenarios. These never
 depend on AI and are fully reproducible from the same spec. The categories are:
 
 | Category | What it tests |
@@ -154,13 +170,17 @@ This is where you decide what actually ships. You'll see:
   three dropdown filters. The list loads 50 rows at a time via **Load more**.
 - Per-scenario detail: the exact request JSON, the expected assertions, its provenance
   (which rule or AI rationale/confidence/assumptions produced it), and its review
-  history.
+  history. If the operation requires authentication, a note names the required scheme(s).
+  Authentication is added automatically when the collection is exported or run, so it is
+  not shown as a header in the request JSON.
+- A side panel counting how many of the scenarios are currently accepted, broken down by
+  category. Only accepted scenarios carry forward; pending and rejected ones are excluded.
 
 Actions available:
 
 | Action | Where | Notes |
 |---|---|---|
-| Accept | Per-scenario or bulk | Bulk actions apply to all filtered rows or your manual selection, with a confirmation dialog showing the affected count |
+| Accept | Per-scenario or bulk | Bulk actions are grouped as **Filtered** (all rows matching the current filters) and **Selected** (your checked rows), each with a confirmation dialog showing the affected count |
 | Reject | Per-scenario or bulk | Requires a free-text reason; bulk reject requires one shared justification |
 | Edit | Per-scenario | Edits the request body JSON directly; invalid JSON is rejected inline and the last valid version is kept; an edited scenario is marked "User-modified" |
 | Regenerate with AI | Per-scenario, AI-derived only | Replaces the scenario with a new AI candidate, or reports a failure — it never silently approves anything |
@@ -168,10 +188,13 @@ Actions available:
 When you're done, click **Finalize Review**:
 
 - If any scenarios are still pending, you'll be warned they'll be excluded from
-  everything downstream.
+  everything downstream, and told how many accepted scenarios will be finalized.
 - If zero scenarios are accepted, finalizing is blocked — you must accept at least one.
+- **Finalize Review** is unavailable while a decision you just made is still being saved.
 - Finalizing triggers dependency analysis automatically (this can take a couple of
-  minutes on larger specs).
+  minutes on larger specs). While it runs, the review is locked — the list, filters, bulk
+  actions, and decision controls are disabled and a "locked while it is being finalized"
+  message is shown — so nothing can change the review after it has been committed.
 
 ### 3.7 Dependency Analysis
 
@@ -197,7 +220,8 @@ Approve or reject each workflow individually, or select several and use **Approv
 selected / Reject selected** with confirmation. If no workflows were discovered, you'll
 see an empty state and can simply continue. Approving a workflow here determines whether
 it will be rendered as an ordered request sequence in the Postman export (see 3.9);
-rejecting it means only the individual scenarios (if separately accepted) are exported.
+rejecting it means only the individual scenarios (if separately accepted) are exported. If
+an action fails, the error appears at the top of the stage and the page scrolls to it.
 
 ### 3.9 Postman Generation
 
@@ -212,7 +236,10 @@ you get:
   response value where one exists, so fewer requests need manual variable entry.
 - **An environment file** listing every variable the collection references (base URL,
   credentials/identifiers), left empty for you to fill in — no real secrets are ever
-  written into the collection. If the spec declares more than one distinct authentication
+  written into the collection. A path parameter with no known value gets a variable named
+  after its resource, so `/users/{id}` uses `{{user_id}}` and `/products/{id}` uses
+  `{{product_id}}` — you can fill each one independently. A parameter that already names
+  its resource (`/users/{userId}`) keeps its own name. If the spec declares more than one distinct authentication
   scheme, each gets its own named variable rather than sharing one. If a scheme uses
   OAuth2 client-credentials, the collection also includes a prepended "OAuth2 Token
   Setup" folder with one request that fetches an access token before the rest run, plus
@@ -226,51 +253,32 @@ you get:
 
 All three files are downloadable from this screen. If generation fails validation, you
 get an explicit error and a list of the specific problems — never a silently broken
-file.
+file. You can come back to this screen later and regenerate with different options.
 
-### 3.10 Run & Results
+### 3.10 Execution: handing off to Import & Run Collection
 
-Once a Postman collection exists, a **Run & Results** panel appears below the stage
-tracker (this isn't a numbered stage — it stays available for the rest of the session).
+The guided workflow does not run collections itself. When you're done with the
+downloads, click **Continue to Import & Run Collection**. ApiPilot switches to the
+**Import & Run Collection** view with its upload form already filled in: the name (from
+your specification's title) and the generated collection and environment files.
 
-**Define an environment** the first time you use it: name, risk tier (Local / Dev / QA /
-Staging / Production), base URL, an optional delay between requests in milliseconds, and
-any variables the collection needs (e.g., an auth token). If you have more than one
-environment, pick one explicitly from the dropdown — none is pre-selected. Environments
-you define, and every run's results, are saved so they're still there if the backend
-restarts while your session is active (see [Sessions](#5-sessions)).
+Nothing is uploaded or run for you. Pick a risk tier (Local / Dev / QA / Staging /
+Production), submit the upload, and from there the generated collection is handled
+exactly like any collection you import yourself — fill in its variables, optionally edit
+requests or pick a subset, and run it, as described in
+[section 4](#4-importing-and-running-your-own-postman-collection). That includes the
+one-time uploaded-content confirmation before its first run.
 
-Click **Run**. If the selected environment is tagged Staging or Production, or the
-collection includes any destructive request (POST/PUT/PATCH/DELETE), you'll see a
-confirmation banner naming the tier and every destructive request involved — you must
-confirm before it proceeds. Requests then run one at a time (respecting your configured
-delay), never in parallel.
-
-While running, you see a live summary (status, tier, passed/failed/not-attempted
-counts) and a **Cancel run** button. Each request's row shows an outcome:
-
-| Outcome | Meaning |
-|---|---|
-| Passed | Every assertion for this request succeeded |
-| Assertion failed | The request completed but one or more assertions didn't match |
-| Unexpected status code | The response status wasn't one ApiPilot expected |
-| Connectivity failure | The request could not reach the target at all |
-| Timed out | No response within the allotted time |
-| Could not be evaluated | An assertion couldn't be checked (e.g., malformed response) |
-| Cancelled / Dependency not met / Run ended before this request | The run was stopped, or an earlier required step in a workflow didn't succeed |
-
-Expand a row to see duration, the response status code, and each assertion's individual
-result. Raw request/response bodies and credential values are never shown. Use **Show
-failures only** to filter the list. Past runs from this session are listed below and can
-be reopened for review without re-running them, even after a backend restart. If a run
-was in progress when the backend was restarted, it's recorded as cancelled with a reason
-that distinguishes it from a run you cancelled yourself.
+The **Execution** chip in the stage tracker shows a short notice with a **Go to Import &
+Run Collection** button, in case you reload the page or navigate away before the
+hand-off.
 
 ## 4. Importing and running your own Postman collection
 
-Click the **Import & Run Collection** tab in the header. This is a separate, standalone
-area — it never requires an OpenAPI upload or a guided workflow, and nothing you do in
-the guided workflow tab affects it.
+Choose **Import & Run Collection** on the start screen (or its tab, once the tab bar is
+visible). This area never requires an OpenAPI upload or a guided workflow. It is also
+where a collection generated by the guided workflow is run (section 3.10); apart from
+that hand-off, nothing you do in the guided workflow affects it.
 
 ### 4.1 Upload
 
@@ -302,15 +310,22 @@ what will be sent, before anything runs.
   it), its current value, whether it's resolved or missing, and which scope currently
   wins — the collection's own default, the selected environment, or your own override.
   Typing a value updates every visible request preview immediately, with no reload or
-  run required. Values you set here are saved into the selected environment, so they're
-  still there next time.
+  run required. Values you set here are saved with the collection, so they're still there
+  next time. If any variable is still missing a value, the **Variables** button shows a
+  red dot.
 - **Request editor**: method, URL, and **Save** stay visible while you switch between
   three tabs — **Headers**, **Body**, and **Tests** (the request's own `pm.test(...)`
-  script, previously invisible pre-run). The resolved (variable-substituted) preview
-  stays visible below the tabs as you edit. Your edit is saved as an override layered on
-  top of the request's original definition — the original is never overwritten — and any
-  run made with the edit applied shows the edited request, not the original, in its
-  results.
+  script, previously invisible pre-run). A tabbed resolved (variable-substituted) preview
+  — **Request**, **Body**, **Tests** — stays visible below as you edit, and lists any
+  variables that request still leaves unresolved. Saving an edit updates ApiPilot's
+  stored copy of the collection (the file you uploaded is not changed), and any run made
+  with the edit applied marks that request as edited in its results.
+- **Headers added by authentication**: if a request's authentication (its own, or
+  inherited from its folder or the collection) is a bearer token or an API key sent in a
+  header, the editor notes the header it will add, and the preview lists it marked
+  "(from auth)". It isn't an editable header entry — change the auth variable instead.
+  Other authentication types (basic, digest, OAuth, AWS signature, and so on) are not
+  previewed, because their header can't be shown ahead of time without guessing.
 - **Adding, deleting, renaming, and reordering**: use the actions menu on a request or
   folder row to rename, delete, or move it, or **+ Add request** to add a new one to a
   folder or the collection root. Deleting a folder deletes everything nested inside it.
@@ -319,27 +334,46 @@ what will be sent, before anything runs.
   until the run finishes — you'll see this indicated rather than being allowed to make a
   change that might not apply.
 
-This editing surface is currently available only here, for an uploaded external
-collection — there is no equivalent editor yet for a collection generated by the guided
-workflow.
+A collection generated by the guided workflow gets this same editor once you've submitted
+it through the hand-off (section 3.10).
 
 ### 4.4 Running it
 
-Before clicking **Run**, you can optionally use the run panel's checklist to select which
-requests actually run this time — leave everything checked to run the whole collection,
-or narrow it to a subset the way Postman's own collection runner lets you.
+Before clicking **Start run**, you can optionally use the run panel's checklist to select
+which requests actually run this time — leave everything checked to run the whole
+collection, or narrow it to a subset the way Postman's own collection runner lets you.
 
-Click **Run**. Exactly as in the guided workflow, a Staging/Production tier or a
-destructive request (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the
-collection's own requests) triggers a second, separate confirmation naming the tier and
-the specific requests involved. Requests then run one at a time, in the collection's own
-order — including everything inside nested folders.
+A variable that's still missing a value does not stop the run. That's deliberate: an
+earlier request's test script may capture a value (for example a token, with
+`pm.environment.set`) that a later request uses. A request that still sends an unresolved
+`{{variable}}` simply records its own failure. Values captured by scripts during a run are
+saved back to the collection, so the preview shows them afterwards and the next run starts
+with them.
 
-Results are reported the same way as the guided workflow's Run & Results panel: a
-summary row, an expandable list of per-request outcomes, and each request's own named
-test results (exactly as your collection's `pm.test(...)` scripts named them — ApiPilot
-never invents a status-code or schema expectation your collection didn't declare). Runs
-are always labeled **Uploaded** so you never mistake one for a guided-workflow run.
+Click **Start run**. A Staging/Production tier or a destructive request
+(`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own requests)
+triggers a second, separate confirmation naming the tier and the specific requests
+involved. Requests then run one at a time, in the collection's own order — including
+everything inside nested folders.
+
+While running, you see a live summary and a **Cancel run** button. Each request's row
+shows an outcome:
+
+| Outcome | Meaning |
+|---|---|
+| Passed | The request completed and none of its tests failed |
+| Assertion failed | The request completed but one or more of its tests failed |
+| Connectivity failure | The request could not reach the target at all |
+| Timed out | No response within the allotted time |
+| Cancelled / Dependency not met / Run ended before this request | The run was stopped, or an earlier required request didn't succeed |
+
+Expand a row to see its details in tabs — **Request**, **Response**, and **Tests** —
+including each test's individual result, named exactly as your collection's `pm.test(...)`
+scripts named it. ApiPilot never invents a status-code or schema expectation your
+collection didn't declare. Runs are always labeled **Uploaded**; past runs are listed and
+can be reopened without re-running, even after a backend restart. A run that was in
+progress when the backend restarted is recorded as cancelled with a reason that
+distinguishes it from one you cancelled yourself.
 
 You can upload and keep multiple named collection/environment pairs at once, switch
 between them, and remove one you no longer need — removing a collection never changes
@@ -350,11 +384,6 @@ the results of a run you already completed against it.
 - An uploaded-collection run and a guided-workflow run share the same single "one run at
   a time" slot for your session — starting either kind is refused while the other is
   still in progress.
-- A variable your collection's own pre-request script computes at runtime, rather than
-  one your environment file supplies, is not currently distinguished from a genuinely
-  missing one if that same variable name is also referenced directly in a request's URL,
-  header, or body text. If your run is refused as missing a variable your script actually
-  provides, that is a known limitation, not a sign your collection is broken.
 - If you edit a request and later re-upload a new version of the same collection, or the
   request no longer exists, your edit is discarded rather than silently reapplied to a
   different request.
@@ -369,13 +398,12 @@ than 60 minutes, its workflow is discarded and the next visit shows an explicit
 "session expired" notice rather than silently starting over.
 
 Your in-progress guided workflow itself lives in memory only and is lost if the backend
-restarts. Environments you've defined and your execution run history are saved to a
-local database on disk, so they survive a backend restart for as long as your session
-stays active — you won't need to re-enter credentials or lose past results just because
-the server restarted. That saved data is still tied to your session: if your session
-times out from inactivity, its environments and run history are removed along with it,
-the same as before. Credential values you enter into an environment are encrypted before
-being stored.
+restarts. Uploaded collections (including their variable values and your edits) and your
+run history are saved to a local database on disk, so they survive a backend restart for
+as long as your session stays active — you won't need to re-enter credentials or lose
+past results just because the server restarted. That saved data is still tied to your
+session: if your session times out from inactivity, it is removed along with it.
+Variable and credential values are encrypted before being stored.
 
 ## 6. AI behavior you should know about
 
@@ -397,8 +425,10 @@ being stored.
   and JSON OpenAPI input are not supported.
 - Only same-document `$ref`s are resolved; external references are reported as
   unresolved analysis issues, never fetched.
-- Execution always requires you to explicitly click Run — there is no scheduled,
+- Execution always requires you to explicitly click **Start run** — there is no scheduled,
   unattended, or CI-triggered execution mode.
+- The operations you select at API Review can't be changed later in the same workflow;
+  start a new workflow to test a different set.
 - "Destructive" request warnings are based on HTTP method only (POST/PUT/PATCH/DELETE),
   not per-operation semantics — review the confirmation banner's request list yourself
   before confirming a Staging/Production run.
@@ -417,12 +447,11 @@ being stored.
 - An imported collection's scripts execute with real effect, including any additional
   network calls a script itself makes — you are trusting the collection's author (or
   yourself) exactly as you would running it in Postman directly.
-- A collection variable set only by a pre-request script, then also referenced via
-  `{{...}}` in a static request URL/header/body, may be wrongly refused as "missing"
-  (see section 4.5).
-- The collection/variable editor (browsing, editing, and selective run) is available only
-  for an uploaded external collection. There is no equivalent editor yet for a collection
-  the guided workflow generates.
+- The collection/variable editor (browsing, editing, and selective run) works on uploaded
+  collections. A collection the guided workflow generates can use it only after you submit
+  it through the hand-off (section 3.10).
+- Headers added by authentication are previewed only for bearer tokens and API keys sent
+  in a header (section 4.3).
 
 ## 8. Troubleshooting
 
@@ -433,14 +462,15 @@ being stored.
 | Analysis issues listed after upload | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs | Review the listed locations; generation still proceeds but treat affected operations' tests with caution |
 | "Enhance with AI" stays on "Preparing the local model" a long time | First run needs to download/load the model | Wait for first-run provisioning to finish (see README AI setup); subsequent runs are faster |
 | AI Enhancement ends "Partially completed" | Spec has more operations than fit the run's time budget | Use the per-batch **Retry batch N** buttons, or **Retry AI enhancement** if retryable |
-| "Finalize Review" is blocked | No scenarios have been accepted yet | Accept at least one scenario before finalizing |
+| **Continue** on API Review is disabled | No operation is checked | Check at least one operation, or use **Select all** |
+| "Finalize Review" is blocked | No scenarios have been accepted yet, or a decision is still being saved | Accept at least one scenario; wait a moment for pending decisions to finish |
+| Scenario Review controls are greyed out | The review is being finalized and dependency analysis is running | Wait for finalizing to finish; the workflow moves on to Workflow Review automatically |
 | Postman generation fails | Approved scenarios/workflows contain unresolved data ApiPilot cannot faithfully render | Read the listed validation problems and address them in Scenario/Workflow Review, then regenerate |
-| Confirmation banner appears before Run | Target environment is Staging/Production, or the collection includes destructive requests | Review the named requests, then confirm explicitly if intended |
+| Confirmation appears after **Start run** | Target environment is Staging/Production, or the collection includes destructive requests | Review the named requests, then confirm explicitly if intended |
 | "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
-| Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your environments and past execution run history are unaffected and still there |
+| Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your uploaded collections and past run history are unaffected and still there |
 | "Import & Run Collection" tab refuses my collection/environment file | File isn't valid JSON, or the collection has no requests at all | Fix the file locally; ApiPilot never attempts to repair a malformed upload |
-| Uploaded-collection run refused as "missing" a variable my script sets | The variable is only ever produced by a pre-request script, not supplied by the environment file | Known limitation (section 4.5/7) — no workaround in the current product beyond removing the static `{{...}}` reference to that variable |
-| Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
+| A request fails with an unresolved `{{variable}}` in what it sent | No value was supplied, and no earlier request's script captured one | Set the value in the **Variables** panel (the red dot shows which are missing), or check the script that should capture it || Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
 
 ## 9. Where to look next
 
