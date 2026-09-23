@@ -42,7 +42,9 @@ One named placeholder the collection references.
 
 Standard variables: `baseUrl` (always declared), plus `token`, `username`, `password`, `apiKey` as
 the mapped security schemes require, plus one variable per path parameter that has no approved
-value.
+value, named `<singular preceding segment>_<parameter>` (e.g. `user_id` for `/users/{id}`) unless
+the parameter already names its resource or no static segment precedes it (spec.md Clarifications
+2026-09-23; `pathParameterVariableName` in `backend/src/postman/artifactVariables.ts`).
 
 ## PostmanCollection
 

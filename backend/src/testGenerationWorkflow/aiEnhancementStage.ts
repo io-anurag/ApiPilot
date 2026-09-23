@@ -23,6 +23,7 @@ import {
   StageNotActiveError,
 } from "./errors";
 import { explainFailure, type FailureCause } from "./failureExplanation";
+import { scopeApiModelToSelection } from "./operationSelection";
 import {
   advanceActiveStage,
   getCurrentWorkflow,
@@ -248,8 +249,10 @@ export async function runAiEnhancement(
       });
     }
 
+    // Scoped to the apiReview selection, so only the chosen operations — and the schemas they
+    // carry — are planned into batches and sent to the provider (specs/009 2026-09-23).
     const result = await enhanceTestModel(
-      workflow.apiModel!,
+      scopeApiModelToSelection(workflow),
       workflow.deterministicTestModel!,
       provider,
       {
@@ -654,7 +657,7 @@ export async function retryAiEnhancementBatch(
     const requestId = `retry-batch${batchIndex}-${Date.now()}`;
     const result = await retryOneBatch(
       operations,
-      workflow.apiModel!,
+      scopeApiModelToSelection(workflow),
       workflow.deterministicTestModel!,
       provider,
       requestId,

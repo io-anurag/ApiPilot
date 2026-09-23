@@ -197,7 +197,7 @@ export function RequestEditorPanel({
               + Add header
             </button>
             {request.impliedAuthHeader && (
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted wrap-anywhere">
                 This request&apos;s own authentication also sends{" "}
                 <span className="font-mono">
                   {request.impliedAuthHeader.key}: <VariableHighlightedText text={request.impliedAuthHeader.rawValue} />
@@ -263,14 +263,14 @@ export function RequestEditorPanel({
           <div className="space-y-2 pt-3">
             {previewTab === "Request" && (
               <>
-                <p className="text-sm">
+                <p className="text-sm wrap-anywhere">
                   <span className="font-mono font-semibold">{request.resolved.method}</span>{" "}
                   <span className="font-mono">
                     <VariableHighlightedText text={request.resolved.url} />
                   </span>
                 </p>
                 {request.resolved.headers.length > 0 || request.impliedAuthHeader ? (
-                  <ul className="space-y-0.5 text-xs">
+                  <ul className="space-y-0.5 text-xs wrap-anywhere">
                     {request.resolved.headers.map((header, index) => (
                       <li key={index} className="font-mono">
                         {header.key}: <VariableHighlightedText text={header.value} />
@@ -298,7 +298,7 @@ export function RequestEditorPanel({
                 <p className="text-xs text-muted">No test script.</p>
               ))}
             {request.unresolvedVariables.length > 0 && (
-              <p className="text-xs text-warning-700 dark:text-warning-300">
+              <p className="text-xs text-warning-700 wrap-anywhere dark:text-warning-300">
                 Unresolved: {request.unresolvedVariables.join(", ")}
               </p>
             )}

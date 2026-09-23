@@ -96,6 +96,18 @@ one is opened this way instead of its normal interactive screen. `upload`/`analy
 non-viewable (their only output, the ApiModel, is what apiReview's own display already shows) and
 so does `postmanGeneration` (the last stage, never complete without also being active).
 
+**Amendment (2026-09-23, spec.md Clarifications)**: The confirmation-only decision above is
+superseded — apiReview now records an operation selection. It is stored as
+`TestGenerationWorkflow.selectedOperationKeys` (`"METHOD /path"` keys via shared-domain
+`toOperationKey()`, normalized to `apiModel.operations` order) rather than as a field on
+`ApiModel`/`ApiOperation`, so the AP-002 contract and the OpenAPI engine are unchanged and the full
+`apiModel` stays available to stages that need unselected operations. `scopeApiModelToSelection()`
+(`backend/src/testGenerationWorkflow/operationSelection.ts`) narrows only `operations`, mirroring
+`dependencyAnalysisStage`'s approved-operation scoping, and is applied by deterministic generation,
+AI enhancement, and single-batch retry. Unknown keys are refused (`unknown_operation_key`) rather
+than dropped. The selection is not revisable, so the no-staleness-cascade reasoning above still
+holds.
+
 ## D4. Are "upload" and "analysis" one stage or two?
 
 **Decision**: Modeled as two distinct `WorkflowStageId` values (matching spec.md's FR-001 and Key

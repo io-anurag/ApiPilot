@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   extractReferencedVariables,
-  missingUploadedVariableValues,
   parseUploadedCollection,
   parseUploadedEnvironment,
 } from "../../../src/externalCollections/uploadedCollectionParsing";
@@ -108,12 +107,5 @@ describe("extractReferencedVariables", () => {
     });
     const collection = parseUploadedCollection(raw);
     expect(extractReferencedVariables(collection)).toEqual(["token"]);
-  });
-});
-
-describe("missingUploadedVariableValues", () => {
-  it("flags baseUrl as missing when the collection references it but the environment does not supply it", () => {
-    const missing = missingUploadedVariableValues(["baseUrl", "token"], { token: "abc" });
-    expect(missing).toEqual(["baseUrl"]);
   });
 });

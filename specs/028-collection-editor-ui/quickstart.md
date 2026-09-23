@@ -38,9 +38,10 @@ value, and that variable no longer appears in `unresolvedVariables` for that req
 
 4. Leave at least one other required variable unset and attempt to start a run.
 
-**Expected**: `POST /api/external-collections/:id/execution/start` still returns
-`400 missing_variable_values` naming the specific remaining variable(s) — unchanged from
-specs/026, now exercised against values partly supplied through this new view.
+**Expected**: the Variables toggle still shows its red "unresolved" dot, but
+`POST /api/external-collections/:id/execution/start` returns `200` and the run proceeds; a
+request that still sends the unset variable records its own failed/errored outcome (spec.md
+FR-006, superseded from the original `400 missing_variable_values` refusal).
 
 ## Scenario 3 — Variable source labeling (User Story 3)
 

@@ -98,6 +98,58 @@ describe("test generation workflow orchestration", () => {
     expect(response.body.progress.liveScenarios).toEqual([]);
   });
 
+  describe("api-review selection (specs/009 2026-09-23)", () => {
+    async function startedAgent() {
+      const agent = request.agent(createApp(fixedProvider(emptyCandidates)));
+      await agent
+        .post("/api/test-generation-workflow")
+        .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+      return agent;
+    }
+
+    it("records the selection and scopes deterministic generation to it", async () => {
+      const agent = await startedAgent();
+      const afterReview = await agent
+        .post("/api/test-generation-workflow/api-review/continue")
+        .send({ selectedOperationKeys: ["POST /pets"] });
+      expect(afterReview.status).toBe(200);
+      expect(afterReview.body.workflow.selectedOperationKeys).toEqual(["POST /pets"]);
+      expect(afterReview.body.workflow.apiModel.operations.length).toBeGreaterThan(1);
+
+      const afterGeneration = await agent.post(
+        "/api/test-generation-workflow/deterministic-generation",
+      );
+      const scenarios = afterGeneration.body.workflow.deterministicTestModel.scenarios as {
+        operationMethod: string;
+        operationPath: string;
+      }[];
+      expect(scenarios.length).toBeGreaterThan(0);
+      expect(
+        scenarios.every((s) => s.operationMethod.toUpperCase() === "POST" && s.operationPath === "/pets"),
+      ).toBe(true);
+    });
+
+    it("rejects a malformed selection with 400 invalid_request and leaves apiReview active", async () => {
+      const agent = await startedAgent();
+      const response = await agent
+        .post("/api/test-generation-workflow/api-review/continue")
+        .send({ selectedOperationKeys: "POST /pets" });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("invalid_request");
+      const current = await agent.get("/api/test-generation-workflow");
+      expect(current.body.workflow.activeStageId).toBe("apiReview");
+    });
+
+    it("rejects an unknown operation key with 400 unknown_operation_key", async () => {
+      const agent = await startedAgent();
+      const response = await agent
+        .post("/api/test-generation-workflow/api-review/continue")
+        .send({ selectedOperationKeys: ["DELETE /nope"] });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("unknown_operation_key");
+    });
+  });
+
   it("walks the full sequence from upload to a downloadable Postman collection (US1)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
     const agent = request.agent(app);

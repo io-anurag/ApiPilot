@@ -33,6 +33,20 @@
   single-export-action requirement, nor the collection/environment/readme content contract — only
   the three downloaded file names.
 
+### Session 2026-09-23
+
+- Q: A path parameter with no approved value was exposed as a variable named after the parameter
+  alone, so `/api/v1/customers/{id}`, `/api/v1/products/{id}` and `/api/v1/users/{id}` all
+  referenced one `{{id}}` — three unrelated values an engineer could not fill independently. How
+  should the variable be named? → A: Qualify it with the resource the path declares: the singular
+  of the static segment immediately before the parameter, as a prefix (`customer_id`,
+  `product_id`, `user_id`). A parameter that already names its resource (`/users/{userId}`) keeps
+  its name, and one with no static segment before it (`/{id}`) is left unprefixed, since there is
+  no specification evidence to derive a prefix from. Operations on the same resource
+  (`GET`/`PUT`/`DELETE /users/{id}`) share the variable. The request's Postman `:name` path key
+  stays the specification's own parameter name; only the referenced `{{variable}}` changes.
+  Automatic-chaining and approved-workflow variables keep their existing, already-distinct names.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Export an Executable Collection (Priority: P1)
@@ -192,7 +206,9 @@ that the difference between the two artifacts is limited to the affected scenari
   still generated, the gap is reported as a known limitation, and no substitute credential
   mechanism is invented.
 - A path parameter has no approved value: the export surfaces the missing value as a variable to be
-  supplied rather than emitting a malformed address.
+  supplied rather than emitting a malformed address. The variable is resource-qualified
+  (`/users/{id}` → `user_id`, Clarifications 2026-09-23) so same-named parameters on different
+  resources never share a value.
 - The approved test set is very large: the export completes within the stated performance target or
   fails explicitly, rather than producing a partial artifact presented as complete.
 - The export is requested twice concurrently for the same approved test set: both requests produce

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { DependencyAnalysisResult } from "@apipilot/shared-domain";
 import { WorkflowReviewStage } from "../../src/components/WorkflowReviewStage";
@@ -181,6 +181,38 @@ describe("WorkflowReviewStage bulk actions", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+  });
+
+  it("shows a Continue failure at the top of the stage, before the workflow list, and scrolls it into view", async () => {
+    vi.spyOn(client, "continueWorkflowReview").mockResolvedValue({
+      ok: false,
+      error: "workflow_decisions_pending",
+      message: "1 discovered workflow(s) still need an approve/reject decision.",
+    });
+    // jsdom doesn't implement scrollIntoView; stub it for this test only.
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    });
+    render(
+      <WorkflowReviewStage
+        dependencyAnalysis={makeDependencyAnalysis(["w1"])}
+        decisions={undefined}
+        onAdvanced={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("still need an approve/reject decision");
+    expect(
+      alert.compareDocumentPosition(screen.getByTestId("workflow-review-item-w1")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 
   it("bulk-approves only the selected workflows after confirmation", async () => {

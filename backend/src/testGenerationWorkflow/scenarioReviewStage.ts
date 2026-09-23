@@ -22,11 +22,35 @@ import { runDependencyAnalysis } from "./dependencyAnalysisStage";
 
 const logger = createLogger("testGenerationWorkflow.scenarioReviewStage");
 
-/** Allows a revision (FR-006): decisions/edit/regenerate may reopen an already-finalized review. */
+/**
+ * True while a finalize is in flight. `finalizeScenarioReview` marks this stage `complete` and
+ * activates `dependencyAnalysis` *before* awaiting the (potentially minutes-long) analysis; the
+ * analysis then either completes and advances to `workflowReview`, or fails and the finalize
+ * rolls this stage back to `active`. So "complete here, dependencyAnalysis still active" occurs
+ * only inside that window.
+ */
+function isFinalizeInProgress(workflow: TestGenerationWorkflow): boolean {
+  return (
+    workflow.stages.scenarioReview.status === "complete" &&
+    workflow.stages.dependencyAnalysis.status === "active"
+  );
+}
+
+/**
+ * Allows a revision (FR-006): decisions/edit/regenerate may reopen an already-finalized review —
+ * but not while a finalize is still running. Reopening then would let a decision land that the
+ * in-flight finalize's already-projected `approvedTestModel` never sees, after which the analysis
+ * completes on top of a reopened review, leaving the workflow internally inconsistent.
+ */
 function requireReviewable(workflow: TestGenerationWorkflow | undefined): TestGenerationWorkflow {
   const status = workflow?.stages.scenarioReview.status;
   if (!workflow || (status !== "active" && status !== "complete")) {
     throw new StageNotActiveError("scenarioReview is not the active stage.");
+  }
+  if (isFinalizeInProgress(workflow)) {
+    throw new StageNotActiveError(
+      "Scenario review is being finalized; decisions are locked until it finishes.",
+    );
   }
   return workflow;
 }
@@ -97,6 +121,8 @@ export async function regenerateScenario(
   if (!result.ok) {
     return { workflow, outcome: regenerationFailureOutcome(started.existing, result.message) };
   }
+  // Re-checked after the AI call: a finalize may have started while it was awaited.
+  requireReviewable(getCurrentWorkflow());
   reopenIfComplete();
   const { workspace, outcome } = applyRegeneratedScenario(
     getCurrentWorkflow()!.reviewWorkspace!,

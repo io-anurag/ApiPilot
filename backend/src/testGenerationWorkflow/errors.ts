@@ -96,3 +96,15 @@ export class BatchNotRetryableError extends Error {
     this.name = "BatchNotRetryableError";
   }
 }
+
+/**
+ * An apiReview continue named an operation key that the workflow's `apiModel` does not contain
+ * (specs/009 Clarifications 2026-09-23). Refused rather than silently dropped, so a stale or
+ * mistyped selection can never quietly narrow the run to fewer operations than the user chose.
+ */
+export class UnknownOperationKeyError extends Error {
+  constructor(operationKey: string) {
+    super(`No operation '${operationKey}' was found in the analyzed specification.`);
+    this.name = "UnknownOperationKeyError";
+  }
+}

@@ -144,8 +144,17 @@ export async function startWorkflow(file: File, discardExisting = false): Promis
   }
 }
 
-export function continueApiReview(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/api-review/continue", "continueApiReview");
+/**
+ * Completes API review. `selectedOperationKeys` (`toOperationKey()` keys) narrows deterministic
+ * generation and AI enhancement to those operations; omitted or empty keeps every operation in
+ * scope (specs/009 Clarifications 2026-09-23), so no key list is sent in that case.
+ */
+export function continueApiReview(selectedOperationKeys: readonly string[] = []): Promise<WorkflowResult> {
+  return postJson(
+    "/api/test-generation-workflow/api-review/continue",
+    "continueApiReview",
+    selectedOperationKeys.length > 0 ? { selectedOperationKeys } : undefined,
+  );
 }
 
 export function runDeterministicGeneration(): Promise<WorkflowResult> {

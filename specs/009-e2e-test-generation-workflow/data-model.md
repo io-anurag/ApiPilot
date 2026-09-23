@@ -83,7 +83,8 @@ export interface TestGenerationWorkflow {
   stages: Record<WorkflowStageId, WorkflowStageState>;
 
   specificationFilename: string;
-  apiModel?: ApiModel;                       // set once "analysis" completes
+  apiModel?: ApiModel;                       // set once "analysis" completes; never narrowed
+  selectedOperationKeys?: string[];          // set at "apiReview" (2026-09-23); absent = all operations
 
   deterministicTestModel?: TestModel;        // set once "deterministicGeneration" completes
   aiEnhancement?: EnhancementResult;         // set once "aiEnhancement" completes or is skipped
@@ -127,8 +128,8 @@ workflows have nothing analogous to hand-edit).
 |---|---|---|---|
 | `upload` | uploaded `.yaml`/`.yml` file | validated raw document | file selection + submit |
 | `analysis` | `upload` complete | `apiModel` (with `summary.issues`) | none — atomic with upload (D4) |
-| `apiReview` | `analysis` complete | — (no new data) | "Continue" click (D3) |
-| `deterministicGeneration` | `apiReview` complete | `deterministicTestModel` | "Generate Baseline Test Suite" click |
+| `apiReview` | `analysis` complete | `selectedOperationKeys` (absent = all) | check ≥ 1 operation, then "Continue" click (D3 amendment 2026-09-23) |
+| `deterministicGeneration` | `apiReview` complete | `deterministicTestModel` — generated from `apiModel` scoped to `selectedOperationKeys` | "Generate Baseline Test Suite" click |
 | `aiEnhancement` | `deterministicGeneration` complete | `aiEnhancement` (`EnhancementResult`) | "Enhance with AI" click; retry while `skipped` and `scenarioReview` ≠ `complete` |
 | `scenarioReview` | `aiEnhancement` `complete` or `skipped` | `reviewWorkspace` (live), `approvedTestModel` (on finalize) | per-scenario accept/reject/edit/regenerate, then "Finalize Review" (D6) |
 | `dependencyAnalysis` | `scenarioReview` complete | `dependencyAnalysis` (`DependencyAnalysisResult`) — computed from `apiModel` scoped to the operations touched by `approvedTestModel` (an operation with no approved scenario is excluded before AP-008's `analyzeDependencies` runs, since any workflow touching it would be discarded anyway at Postman-generation time via `workflow-missing-scenario`; `analyzeDependencies` itself and its standalone AP-008 endpoint remain unscoped, full-ApiModel analysis) | automatic on stage entry (no separate trigger button; matches AP-008's single stateless call) |

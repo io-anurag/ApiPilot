@@ -190,8 +190,13 @@ export function ScenarioReviewStage({
   // would otherwise fail with `stage_not_active` the instant it's clicked.
   const isActiveStage = workflow.activeStageId === "scenarioReview";
   const total = reviewWorkspace.scenarios.length;
+  // The summary describes what "Finalize Review" carries forward — only accepted scenarios
+  // (projectApprovedTestModel); pending and rejected ones are excluded — so its count and
+  // breakdown follow each decision rather than restating the generated total.
+  const acceptedScenarios = reviewWorkspace.scenarios.filter((item) => item.state === "accepted");
+  const acceptedCount = acceptedScenarios.length;
   const categorySegments = groupScenarioCategories(
-    reviewWorkspace.scenarios.map((item) => item.scenario.category),
+    acceptedScenarios.map((item) => item.scenario.category),
   );
 
   return (
@@ -205,6 +210,21 @@ export function ScenarioReviewStage({
         </h2>
         <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
         <AiEnhancementOutcomeSummary workflow={workflow} />
+        {/* A disabled fieldset natively disables every control inside it — row selection,
+            filters, bulk actions, and the selected scenario's decision/edit/regenerate panel —
+            so nothing can change the review while finalize is committing it. The backend
+            refuses such requests during finalize too; this keeps the UI from offering them. */}
+        <fieldset
+          disabled={finalizing}
+          aria-busy={finalizing}
+          aria-describedby={finalizing ? "scenario-review-locked" : undefined}
+          className={`m-0 min-w-0 border-0 p-0 ${finalizing ? "cursor-not-allowed opacity-60" : ""}`}
+        >
+        {finalizing && (
+          <p id="scenario-review-locked" className="mb-3 text-sm font-medium text-muted">
+            Review is locked while it is being finalized.
+          </p>
+        )}
         <TestScenarioReviewList
           scenarios={reviewWorkspace.scenarios}
           selectedScenarioId={selectedScenarioId}
@@ -254,6 +274,7 @@ export function ScenarioReviewStage({
             </div>
           )}
         />
+        </fieldset>
         {bulkDecision.status === "running" && (
           <output
             data-testid="scenario-bulk-progress"
@@ -322,24 +343,33 @@ export function ScenarioReviewStage({
       </div>
       <SummaryPanel
         testId="scenario-review-summary-panel"
-        statValue={total}
-        statLabel={`scenario${total === 1 ? "" : "s"} generated`}
+        statValue={acceptedCount}
+        statLabel={`of ${total} scenario${total === 1 ? "" : "s"} accepted`}
         segments={categorySegments}
-        description="Each scenario keeps its generating rule and category for review — nothing here is unexplained."
+        description={
+          acceptedCount === 0
+            ? "Accept at least one scenario to finalize. Pending and rejected scenarios are excluded from the approved suite."
+            : "Only accepted scenarios go on to dependency analysis and the Postman collection; pending and rejected ones are excluded."
+        }
         action={
           isActiveStage
             ? {
                 label: finalizing ? "Finalizing…" : "Finalize Review",
                 onClick: handleFinalizeClick,
-                disabled: finalizing,
+                // Also held while a decision is still in flight, so finalize never projects the
+                // approved suite from a workspace that is about to change.
+                disabled:
+                  finalizing || submittingScenarioId !== null || bulkDecision.status === "running",
               }
             : undefined
         }
       />
       {confirmingFinalize && (
+        // `affectedCount` is what finalizing carries forward — the accepted scenarios, matching the
+        // summary panel — not the pending ones it drops, which the message states separately.
         <ConfirmDialog
-          message={`${reviewWorkspace.summary.pending} scenario${reviewWorkspace.summary.pending === 1 ? " has" : "s have"} no decision and will be excluded — finalize anyway?`}
-          affectedCount={reviewWorkspace.summary.pending}
+          message={`${reviewWorkspace.summary.pending} scenario${reviewWorkspace.summary.pending === 1 ? " has" : "s have"} no decision and will be excluded. Finalize with the ${acceptedCount} accepted scenario${acceptedCount === 1 ? "" : "s"}?`}
+          affectedCount={acceptedCount}
           confirmLabel="Finalize anyway"
           errorOnlyMessage={
             noAcceptedScenarios

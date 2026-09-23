@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseUploadedCollection } from "../../../src/externalCollections/uploadedCollectionParsing";
 import { applyRequestOverride } from "../../../src/externalCollections/requestOverride";
 import { RequestNotFoundError } from "../../../src/externalCollections/errors";
+import { findEditedItemIds } from "../../../src/externalCollections/editedItems";
 
 function collectionWithNestedRequest(): string {
   return JSON.stringify({
@@ -23,7 +24,7 @@ describe("applyRequestOverride", () => {
       url: "https://example.test/widgets?limit=10",
       headers: [{ key: "Authorization", value: "Bearer abc" }],
       body: '{"name":"widget"}',
-    });
+    }, new Set());
 
     // `.url` in the SDK's own `toJSON()` output is a structured object (`{protocol, host, path,
     // query, variable}`), not a raw string (`Url#getRaw` was discontinued in favor of
@@ -58,7 +59,7 @@ describe("applyRequestOverride", () => {
       method: "GET",
       url: "https://example.test/edited",
       headers: [],
-    });
+    }, new Set());
     const parsed = JSON.parse(updatedJson) as { item: Array<{ id: string; _apipilotEdited?: boolean }> };
     expect(parsed.item.find((i) => i.id === "item-2")?._apipilotEdited).toBeUndefined();
   });
@@ -70,7 +71,7 @@ describe("applyRequestOverride", () => {
       url: "https://example.test/widgets",
       headers: [],
       testScript: 'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});',
-    });
+    }, new Set());
     const reparsed = parseUploadedCollection(updatedJson);
     let found: import("postman-collection").Item | undefined;
     reparsed.forEachItem((candidate) => {
@@ -99,7 +100,7 @@ describe("applyRequestOverride", () => {
       url: "https://example.test",
       headers: [],
       testScript: "   ",
-    });
+    }, new Set());
     const reparsed = parseUploadedCollection(updatedJson);
     let found: import("postman-collection").Item | undefined;
     reparsed.forEachItem((candidate) => {
@@ -125,7 +126,7 @@ describe("applyRequestOverride", () => {
       method: "GET",
       url: "https://example.test/v2",
       headers: [],
-    });
+    }, new Set());
     const reparsed = parseUploadedCollection(updatedJson);
     let found: import("postman-collection").Item | undefined;
     reparsed.forEachItem((candidate) => {
@@ -134,10 +135,34 @@ describe("applyRequestOverride", () => {
     expect(found!.events.listeners("test")[0].script.toSource()).toBe('pm.test("original", function () {});');
   });
 
+  it("keeps every previously edited request's marker when a different request is edited", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        { id: "item-1", name: "First", request: { method: "GET", url: "https://example.test/1" } },
+        { id: "item-2", name: "Second", request: { method: "GET", url: "https://example.test/2" } },
+      ],
+    });
+    const afterFirstEdit = applyRequestOverride(
+      parseUploadedCollection(raw),
+      "item-1",
+      { method: "GET", url: "https://example.test/1?edited", headers: [] },
+      new Set(),
+    );
+    const afterSecondEdit = applyRequestOverride(
+      parseUploadedCollection(afterFirstEdit),
+      "item-2",
+      { method: "GET", url: "https://example.test/2?edited", headers: [] },
+      findEditedItemIds(afterFirstEdit),
+    );
+
+    expect(findEditedItemIds(afterSecondEdit)).toEqual(new Set(["item-1", "item-2"]));
+  });
+
   it("throws RequestNotFoundError for an unknown request id", () => {
     const collection = parseUploadedCollection(collectionWithNestedRequest());
     expect(() =>
-      applyRequestOverride(collection, "does-not-exist", { method: "GET", url: "https://example.test", headers: [] }),
+      applyRequestOverride(collection, "does-not-exist", { method: "GET", url: "https://example.test", headers: [] }, new Set()),
     ).toThrow(RequestNotFoundError);
   });
 
@@ -157,7 +182,7 @@ describe("applyRequestOverride", () => {
       method: "POST",
       url: "https://example.test/v2",
       headers: [],
-    });
+    }, new Set());
     const parsed = JSON.parse(updatedJson) as { item: Array<{ request: { body?: { raw?: string } } }> };
     expect(parsed.item[0].request.body?.raw).toBe("original body");
   });

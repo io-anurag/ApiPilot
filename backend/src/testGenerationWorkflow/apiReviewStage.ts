@@ -1,26 +1,37 @@
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 import { StageNotActiveError } from "./errors";
-import { advanceActiveStage, getCurrentWorkflow, updateStage } from "./workflowStore";
+import { normalizeOperationSelection } from "./operationSelection";
+import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "./workflowStore";
 
 const logger = createLogger("testGenerationWorkflow.apiReviewStage");
 
 /**
- * Completes the confirmation-gate `apiReview` stage (research.md D3 — there is no selectable
- * data here, only an explicit "I've reviewed the discovered APIs" action, FR-009).
+ * Completes the `apiReview` stage on an explicit "Continue" action (FR-009), recording which
+ * operations the user chose to carry forward (specs/009 Clarifications 2026-09-23, superseding
+ * research.md D3's confirmation-only gate). An absent or empty `selectedOperationKeys` keeps every
+ * discovered operation in scope. Unknown keys are refused with `UnknownOperationKeyError` before
+ * any state changes, so a rejected request leaves the stage active and retryable.
  */
-export function continueApiReview(): TestGenerationWorkflow {
+export function continueApiReview(
+  selectedOperationKeys?: readonly string[],
+): TestGenerationWorkflow {
   const startedAt = Date.now();
   try {
     const workflow = getCurrentWorkflow();
     if (!workflow || workflow.stages.apiReview.status !== "active") {
       throw new StageNotActiveError("apiReview is not the active stage.");
     }
+    const selection = normalizeOperationSelection(workflow.apiModel!, selectedOperationKeys);
+    patchWorkflow({ selectedOperationKeys: selection });
     updateStage("apiReview", "complete");
     const result = advanceActiveStage("deterministicGeneration");
     logger.info("stage_complete", {
       stage: "apiReview",
       workflowId: result.id,
+      // Counts only — operation paths can be sensitive and are not needed to diagnose anything.
+      selectedOperationCount: selection?.length ?? workflow.apiModel!.operations.length,
+      selectionScoped: selection !== undefined,
       durationMs: Date.now() - startedAt,
     });
     return result;

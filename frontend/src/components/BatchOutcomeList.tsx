@@ -17,12 +17,15 @@ export function BatchOutcomeList({
   if (!batchOutcomes || batchOutcomes.length === 0) return null;
 
   return (
-    <ul
-      aria-label="Batch outcomes"
-      className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
-    >
+    // A wrapping row rather than a fixed-column grid: fixed columns squeezed each badge narrower
+    // than its own label, wrapping "Batch 1: Succeeded" onto two lines. A batch carrying a failure
+    // explanation takes a full line of its own so that sentence stays readable beside its badge.
+    <ul aria-label="Batch outcomes" className="mt-2 flex flex-wrap gap-1.5">
       {batchOutcomes.map((batch) => (
-        <li key={batch.index} className="flex flex-wrap items-baseline gap-2">
+        <li
+          key={batch.index}
+          className={`flex items-baseline gap-2 ${batch.failureExplanation ? "basis-full flex-wrap" : "whitespace-nowrap"}`}
+        >
           <StatusBadge
             label={`Batch ${batch.index + 1}: ${batch.status === "succeeded" ? "Succeeded" : batch.status === "not-attempted" ? "Not attempted" : "Failed"}`}
             tone={
