@@ -11,7 +11,9 @@ Feature Decomposition sections below). AP-026 is a standalone capability layered
 (it reuses, but does not extend, AP-017's execution engine) rather than a hardening fix to an
 existing defect. AP-027 (frontend design system and application shell) is a presentation-layer
 feature that changes no backend contract or workflow rule, and AP-028 (Postman-style collection
-and variable editor) is a pre-run editing surface layered on top of AP-026.
+and variable editor) is a pre-run editing surface layered on top of AP-026. AP-029 (k6
+performance testing) is a roadmap entry only: `/speckit-specify` has not yet been run for it, and
+its run path has a constitution prerequisite (see its Feature Decomposition section).
 
 AP-011 through AP-016 were originally tracked as unnumbered "hardening" specs to avoid a
 numbering collision with the post-MVP features, which were numbered AP-011/AP-012 at the time.
@@ -54,6 +56,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
+| AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -146,6 +149,7 @@ TestModel
  ├── Playwright
  ├── Serenity/JS
  ├── Newman
+ ├── k6 (performance, AP-029)
  └── Future test frameworks
 ```
 
@@ -1460,6 +1464,186 @@ by the guided workflow's hand-off, which makes them uploaded collections (Clarif
 
 ---
 
+## AP-029 — k6 Performance Testing
+
+### Objective
+
+Let a QA engineer performance-test the selected operations, or all analyzed operations, of a
+specification with k6. ApiPilot builds the test from the same approved `TestModel` and workflows
+the functional tests use and generates a k6 script. The script then waits until the user triggers
+it from within ApiPilot. ApiPilot runs it, shows progress until it finishes, and presents an
+explainable, self-contained HTML report.
+
+### Input
+
+```text
+Approved TestModel (positive scenarios only)
++
+Approved integration workflows (AP-008 / AP-019)
++
+Auth / credential producers (AP-021 / AP-023 / AP-024)
++
+User-supplied data and load profile
++
+Target environment
+```
+
+### Output
+
+```text
+Performance Plan
+   ↓
+k6 script + environment template   (generated; waits for the user)
+   ↓  user triggers the run in ApiPilot
+Performance Run                    (progress shown until complete)
+   ↓
+HTML report                        (presented in ApiPilot; downloadable)
+```
+
+### Scope
+
+**Scenario selection**
+
+- The operations in scope are the API review's explicit selection (AP-009 amendment 2026-09-23),
+  or every analyzed operation when the user chooses "all".
+- Each operation contributes exactly one `positive` scenario. Negative categories (missing
+  required fields, invalid types/formats/enums, boundaries) are never included.
+- When an operation has more than one positive scenario, one is chosen by a fixed, documented rule
+  (for example, rule-generated before AI-enhanced, then lowest scenario id). The choice and its
+  reason are recorded.
+
+**Execution sequence**
+
+- The system proposes an order: approved workflows become multi-step journeys in dependency order,
+  and operations with no dependency become single-step journeys.
+- The user can reorder steps within a journey and reorder journeys. A reorder that places a
+  consumer before the step that produces its variable is rejected with the name of the variable it
+  breaks, never silently accepted or silently corrected.
+- Optional user-set think time between steps.
+
+**Tokens and variables**
+
+- Authentication reuses the existing credential producers: OAuth2 client-credentials (AP-024), a
+  chained login operation (AP-023), and distinct per-role credentials (AP-021). Tokens are
+  acquired once in the k6 setup phase and shared with virtual users, not fetched per request.
+- Each `WorkflowVariable` becomes an extraction from the producer's response, plus a check. When
+  an extraction fails, the rest of that iteration's journey is not attempted and is recorded as
+  such, rather than sending an unresolved value to the next step.
+- Request construction follows AP-022's parameter serialization, so a k6 request matches its
+  Postman equivalent.
+
+**User-supplied data**
+
+- Any value the specification cannot produce (a path parameter with no producing operation,
+  credentials, tenant ids) is supplied by the user. The plan lists every such value, which step
+  needs it, and whether it is present, before the script is generated or run.
+- A missing value never blocks generation or a run (decision 2026-09-23). Each step that needs a
+  missing value is reported as failed, with the reason "missing data" and the name of the
+  variable. It is not sent to the target. Steps that consume that step's output are reported as
+  not attempted because their dependency failed. Every other step runs normally.
+- Body values that must be unique across iterations (for example, a unique email on a create
+  operation) are derived from the virtual-user number and iteration number, so they are unique
+  within a run and identical across re-runs.
+
+**Load profile and thresholds**
+
+- The user picks a load profile (for example smoke, load, stress, spike, soak) whose stages
+  (virtual users, ramp, duration) are shown as numbers and are editable.
+- Pass/fail thresholds (latency percentiles, error rate) are set by the user only. OpenAPI carries
+  no performance targets, so ApiPilot does not invent them.
+- Functional checks use only status codes documented in the specification, as for functional
+  tests (constitution XIV).
+
+**Script generation**
+
+- The k6 script and an environment template are downloadable artifacts. Secrets are passed at run
+  time through the environment, never written into the script (constitution XVIII).
+
+**Execution**
+
+- Generating the script does not run it. A run starts only when the user triggers it from within
+  ApiPilot; ApiPilot never starts one automatically (decision 2026-09-23).
+- The user can run against any environment tier, including production, with no extra
+  confirmation step (decision 2026-09-23). This is a deliberate, AP-029-specific departure from
+  AP-017 FR-007's staging/production and destructive-request confirmation, which remains in force
+  for functional runs. It does not depart from AP-017's rule that execution is never silent: every
+  run is an explicit user action.
+- Environments are told apart by the existing classification, not by a confirmation step. Each
+  environment has a unique name, a tier (`local`, `dev`, `qa`, `staging`, `production`, per
+  `EnvironmentTier`), and a base URL. The environment's name, tier, and base URL are shown next to
+  the trigger action and throughout the run, with the tier as a text label, not color alone
+  (AP-017 FR-002, AP-027). The trigger action names its target, for example "Run on payments-prod
+  (production)". The run history and report record the same three values.
+- ApiPilot runs a locally installed k6 binary. Whether k6 is available is shown as an explicit
+  readiness state, with a reason when it is not.
+- While a run is in progress, ApiPilot shows its progress (elapsed time against planned duration,
+  current virtual users, requests so far). When the run ends, the report is presented in ApiPilot
+  automatically and can be downloaded.
+- One run at a time, sharing the existing session-wide execution slot. A running test can be
+  cancelled.
+- Run results are persisted through AP-025.
+
+**Explainable HTML report**
+
+- A self-contained, downloadable HTML report, with no external assets or services.
+- Per journey and per step: p50/p90/p95/p99 latency, throughput, error rate by status and failure
+  category, and check pass rate, plus a timeline of virtual users against latency and errors.
+- Plain-language findings produced by deterministic rules from the measured data (for example,
+  the slowest step, the step where failures start, the number of iterations cut short by a failed
+  extraction).
+- Provenance for every step: why it is in the journey (dependency relationship and confidence),
+  which scenario was used and why, where each variable came from, and which auth method was used.
+  The report also records the load profile, thresholds, environment name and tier, and k6 version.
+- No credentials, tokens, or request/response bodies in the report.
+
+### Constraints
+
+- k6 is a standalone binary, not an npm package. ApiPilot does not bundle, download, or install
+  it.
+- Script generation is deterministic: the same plan produces a byte-identical script
+  (constitution XVI, XXIV).
+- The Performance Plan and run-result contracts live in `packages/shared-domain` and are
+  framework-agnostic. k6-specific concepts stay inside the k6 generation and execution boundary,
+  as Postman concepts stay inside the Postman boundary (constitution VIII).
+- No AI in the generation, run, or report path. An AI-written narrative, if added later, goes
+  through `AIProvider`, is labelled as AI output, and belongs with AP-018.
+- No k6 Cloud, Grafana Cloud, or other remote output. Results stay on the local machine.
+- Load is generated from the machine running the ApiPilot backend, and the UI says so.
+
+### Governance prerequisite
+
+Constitution XVII (v2.2.0) forbids executing generated scripts on the server, and its 2026-09-20
+exception is limited to AP-026 and "MUST NOT be cited" for other content. Running an
+ApiPilot-generated k6 script therefore needs its own explicit, narrowly scoped XVII amendment,
+adopted through the constitution's amendment procedure before `/speckit-plan`. Script generation
+alone does not need the amendment, but triggering the run from within ApiPilot is a confirmed
+requirement (decision 2026-09-23). Relying on the user to run k6 outside ApiPilot is therefore
+not an accepted alternative.
+
+### Open decisions for `/speckit-clarify`
+
+- Whether write operations (POST/PUT/PATCH/DELETE) are included by default or only when the user
+  opts in.
+- How long-running tests (soak) handle token expiry.
+- Maximum virtual users and duration, if any.
+
+### Out of scope
+
+- Negative scenarios under load.
+- Distributed or cloud load generation.
+- k6 browser testing.
+- Baseline comparison and trends across runs (candidate follow-up).
+- AI-generated analysis of results (AP-018).
+
+### Dependencies
+
+Requires AP-003 (positive scenarios), AP-008/AP-016/AP-019 (workflows, ordering, and chaining),
+AP-009 (operation selection), AP-021/AP-023/AP-024 (auth), AP-022 (parameter serialization),
+AP-017/AP-026 (environment tiers, confirmations, and the execution slot), AP-025 (persistence),
+and AP-027 (shared UI components).
+
+---
+
 # Post-MVP Features
 
 ## AP-017 — Test Execution & Results
@@ -1658,6 +1842,10 @@ AP-026 through AP-028 are likewise omitted from the main pipeline. AP-026 requir
 AP-025; AP-027 is presentation-only and depends on no backend feature; AP-028 requires AP-026 and
 AP-027.
 
+AP-029 is also omitted from the main pipeline. It is a second artifact target beside Postman,
+built from the same approved `TestModel` and workflows, and requires AP-003, AP-008, AP-009,
+AP-016, AP-019, AP-021 through AP-026, and AP-027 (see its Feature Decomposition section).
+
 ---
 
 # MVP Boundary
@@ -1691,7 +1879,8 @@ AP-018  AI Failure Analysis
 AP-011 through AP-016, and AP-019 through AP-028 (hardening/extension features layered onto
 AP-004/AP-005/AP-007/AP-008/AP-009/AP-017, plus the standalone collection import, design system,
 and collection editor), are also outside the formal MVP boundary above, but — unlike AP-018 — all
-sixteen are already implemented; see the Implementation Status table.
+sixteen are already implemented; see the Implementation Status table. AP-029 (k6 performance
+testing) is likewise outside the MVP boundary and not yet started.
 
 ---
 
@@ -2176,3 +2365,19 @@ Implementation
       is a downstream copy.
     - Validation after the removal: `npm run lint` and `npm run build` clean; `npm test` 1392
       passed, 2 skipped, across 201 test files (down from 1407/204 by exactly the removed files).
+24. **AP-029 (k6 Performance Testing) added to the roadmap (2026-09-23).** Decisions recorded so
+    far:
+    - Runs are allowed on every environment tier with no extra confirmation. Environments are
+      told apart by name, tier label, and base URL.
+    - Data the specification cannot produce is supplied by the user. A missing value never blocks
+      a run; the steps that need it are reported as failed.
+    - The script is generated first and waits. The user triggers the run from within ApiPilot,
+      and ApiPilot presents the report when the run ends.
+    - The report is a self-contained HTML file.
+
+    Next steps, in order:
+    - Propose and adopt a narrow constitution XVII amendment that permits running an
+      ApiPilot-generated k6 script on the user's explicit action (see AP-029's Governance
+      prerequisite), then mirror it into `specs/constitution.md`.
+    - Run `/speckit-specify` for AP-029, then `/speckit-clarify` on the open decisions listed in
+      its Feature Decomposition section, before `/speckit-plan`.
