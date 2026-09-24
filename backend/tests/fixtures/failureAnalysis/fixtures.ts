@@ -131,13 +131,14 @@ export function failingProvider(category: AIErrorCategory): ScriptedProvider {
   };
 }
 
-/** A valid model answer citing the given evidence ids. */
+/**
+ * A valid v4 explanation answer (research D16) citing the given evidence ids. Its text names no
+ * cause, so it passes the contradiction check whatever the rules decided.
+ */
 export function modelAnswer(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     responseVersion: FAILURE_ANALYSIS_RESPONSE_VERSION,
-    cause: "environment-issue",
-    confidence: 0.72,
-    summary: "The service returned 500 because a dependency was unavailable.",
+    summary: "The request failed and the recorded evidence points at where to look next.",
     evidenceIds: ["E1", "E2"],
     steps: ["Check the database connection used by the service."],
     ...overrides,
@@ -146,24 +147,40 @@ export function modelAnswer(overrides: Record<string, unknown> = {}): string {
 
 export function sampleAnalysis(overrides: Partial<FailureAnalysis> = {}): FailureAnalysis {
   return {
+    analysisVersion: 2,
     runId: "run-1",
     resultIndex: 0,
     requestName: "Create user",
     requestMethod: "POST",
-    conclusion: { kind: "likely-cause", cause: "environment-issue", confidence: 0.72 },
-    summary: "A summary that must stay encrypted at rest.",
-    investigationSteps: ["Check the database."],
-    citedEvidenceIds: ["E1"],
-    evidence: [{ id: "E1", kind: "failure-category", source: "run-result", text: "Request failed: assertion failed" }],
-    specificationContext: { status: "unavailable", reason: "no-request-identity" },
-    provenance: {
-      source: "AI",
-      aiModel: "test-model",
-      aiProvider: "local",
-      responseVersion: 1,
-      confidenceThreshold: 0.5,
-      generatedAt: new Date(0).toISOString(),
+    conclusion: {
+      kind: "likely-cause",
+      cause: "environment-issue",
+      strength: "high",
+      ruleId: "no-response",
+      decidingEvidenceIds: ["E1"],
     },
+    classificationProvenance: { source: "RULE", ruleSetVersion: 1 },
+    explanation: {
+      status: "available",
+      summary: "A summary that must stay encrypted at rest.",
+      investigationSteps: ["Check the database."],
+      citedEvidenceIds: ["E1"],
+      provenance: { source: "AI", aiModel: "test-model", aiProvider: "local", responseVersion: FAILURE_ANALYSIS_RESPONSE_VERSION },
+    },
+    evidence: [
+      { id: "E1", kind: "failure-category", source: "run-result", text: "Request failed: connectivity failure, no response was received" },
+    ],
+    specificationContext: { status: "unavailable", reason: "no-request-identity" },
+    analyzedAt: new Date(0).toISOString(),
     ...overrides,
+  };
+}
+
+/** An explanation that could not be produced (FR-006). */
+export function unavailableExplanation(): FailureAnalysis["explanation"] {
+  return {
+    status: "unavailable",
+    reason: { kind: "ai-error", aiErrorCategory: "TIMEOUT" },
+    message: "The local AI model did not finish in time.",
   };
 }

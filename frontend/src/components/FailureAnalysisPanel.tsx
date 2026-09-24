@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState, type Ref } from "react";
-import type {
-  FailureAnalysis,
-  FailureAnalysisInProgress,
-  FailureCause,
-  FailureEvidence,
-  InsufficientEvidenceReason,
-  SpecificationContext,
-  SpecificationContextUnavailableReason,
-  UpstreamContext,
+import {
+  FAILURE_RULE_DESCRIPTIONS,
+  type FailureAnalysis,
+  type FailureAnalysisExplanation,
+  type FailureAnalysisInProgress,
+  type FailureCause,
+  type FailureEvidence,
+  type SpecificationContext,
+  type SpecificationContextUnavailableReason,
+  type UpstreamContext,
 } from "@apipilot/shared-domain";
 import {
   getFailureAnalysisInProgress,
   requestFailureAnalysis,
 } from "../services/externalCollectionsClient";
-import { formatConfidence } from "../utils/confidenceLabel";
+import { strengthLabel } from "../utils/strengthLabel";
 import { ErrorState } from "./ErrorState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
@@ -29,11 +30,6 @@ const CAUSE_LABEL: Record<FailureCause, string> = {
   "downstream-service-issue": "Potential downstream-service issue",
 };
 
-const INSUFFICIENT_REASON_TEXT: Record<InsufficientEvidenceReason, string> = {
-  "model-reported": "The AI reported that the evidence does not support a specific cause.",
-  "below-confidence-threshold": "The AI's confidence in any single cause was too low to name one.",
-  "no-valid-evidence-cited": "The AI did not point to any of the recorded evidence, so its answer was not used.",
-};
 
 export function unavailableContextText(reason: SpecificationContextUnavailableReason): string {
   switch (reason) {
@@ -140,50 +136,87 @@ function SpecificationContextSection({ context }: Readonly<{ context: Specificat
   );
 }
 
-function AnalysisView({
-  analysis,
-  headingRef,
-}: Readonly<{ analysis: FailureAnalysis; headingRef: Ref<HTMLHeadingElement> }>) {
-  const cited = analysis.evidence.filter((item) => analysis.citedEvidenceIds.includes(item.id));
-  const other = analysis.evidence.filter((item) => !analysis.citedEvidenceIds.includes(item.id));
-  const { conclusion } = analysis;
-  const insufficient = conclusion.kind === "insufficient-evidence";
-
+/**
+ * The AI-written part (FR-007): the only part labelled as an AI inference. When it could not be
+ * written, the reason is shown instead, and the rule-decided cause above still stands (FR-006).
+ */
+function ExplanationSection({ explanation }: Readonly<{ explanation: FailureAnalysisExplanation }>) {
   return (
-    <div className="space-y-3" data-testid="failure-analysis-result">
+    <section aria-label="AI explanation" className="space-y-2 rounded border border-border p-2">
       <div className="flex flex-wrap items-center gap-2">
         <ProvenanceBadge source="AI" />
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
           AI inference, not a confirmed root cause
         </span>
       </div>
+      {explanation.status === "available" ? (
+        <>
+          <p className="text-slate-700 dark:text-slate-300">{explanation.summary}</p>
+          <section aria-label="Suggested next steps" className="space-y-1">
+            <h5 className="text-xs font-semibold uppercase text-muted">Suggested next steps</h5>
+            <ol className="list-decimal space-y-1 pl-5">
+              {explanation.investigationSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </section>
+        </>
+      ) : (
+        <p>
+          <span className="font-semibold">AI explanation unavailable:</span> {explanation.message}
+        </p>
+      )}
+    </section>
+  );
+}
 
-      <div className="space-y-1">
+function AnalysisView({
+  analysis,
+  headingRef,
+}: Readonly<{ analysis: FailureAnalysis; headingRef: Ref<HTMLHeadingElement> }>) {
+  const { conclusion, explanation } = analysis;
+  const insufficient = conclusion.kind === "insufficient-evidence";
+  // The evidence that decided the cause; for insufficient evidence, what the AI cited instead (FR-003).
+  let shownIds: readonly string[] = [];
+  if (conclusion.kind === "likely-cause") shownIds = conclusion.decidingEvidenceIds;
+  else if (explanation.status === "available") shownIds = explanation.citedEvidenceIds;
+  const shown = analysis.evidence.filter((item) => shownIds.includes(item.id));
+  const other = analysis.evidence.filter((item) => !shownIds.includes(item.id));
+
+  return (
+    <div className="space-y-3" data-testid="failure-analysis-result">
+      <section aria-label="Likely cause" className="space-y-1">
         <h4 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-slate-900 focus:outline-none dark:text-white">
           {insufficient ? "Not enough evidence to name a likely cause" : CAUSE_LABEL[conclusion.cause]}
         </h4>
         {conclusion.kind === "likely-cause" ? (
-          <p>Confidence: {formatConfidence(conclusion.confidence)}</p>
+          <>
+            <p className="flex flex-wrap items-center gap-2">
+              <ProvenanceBadge source="RULE" />
+              <span>Strength: {strengthLabel(conclusion.strength)}</span>
+            </p>
+            <p>{FAILURE_RULE_DESCRIPTIONS[conclusion.ruleId]}</p>
+            <p className="text-xs text-muted">Decided by a fixed rule: a likely cause, not a confirmed root cause.</p>
+          </>
         ) : (
-          <p>{INSUFFICIENT_REASON_TEXT[conclusion.reason]}</p>
+          <p>No rule matched the recorded evidence.</p>
         )}
-      </div>
+      </section>
 
-      <div className="space-y-1">
-        {insufficient && <h5 className="text-xs font-semibold uppercase text-muted">Model notes (inference)</h5>}
-        <p className="text-slate-700 dark:text-slate-300">{analysis.summary}</p>
-      </div>
-
-      {cited.length > 0 && (
-        <section aria-label="Evidence cited" className="space-y-1">
-          <h5 className="text-xs font-semibold uppercase text-muted">Evidence cited</h5>
+      {shown.length > 0 && (
+        <section aria-label={insufficient ? "Evidence cited" : "Evidence for this cause"} className="space-y-1">
+          <h5 className="text-xs font-semibold uppercase text-muted">
+            {insufficient ? "Evidence cited" : "Evidence for this cause"}
+          </h5>
           <ul className="space-y-1">
-            {cited.map((item) => (
+            {shown.map((item) => (
               <EvidenceItem key={item.id} item={item} />
             ))}
           </ul>
         </section>
       )}
+
+      <ExplanationSection explanation={explanation} />
 
       {other.length > 0 && (
         <details className="rounded border border-border p-2">
@@ -198,22 +231,14 @@ function AnalysisView({
         </details>
       )}
 
-      {analysis.investigationSteps.length > 0 && (
-        <section aria-label="Suggested next steps" className="space-y-1">
-          <h5 className="text-xs font-semibold uppercase text-muted">Suggested next steps</h5>
-          <ol className="list-decimal space-y-1 pl-5">
-            {analysis.investigationSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        </section>
-      )}
-
       <SpecificationContextSection context={analysis.specificationContext} />
 
       <p className="text-xs text-muted">
-        Generated by {analysis.provenance.aiModel} ({analysis.provenance.aiProvider}) at{" "}
-        {new Date(analysis.provenance.generatedAt).toLocaleString()}
+        Cause decided by rule set v{analysis.classificationProvenance.ruleSetVersion}
+        {explanation.status === "available"
+          ? `; explanation by ${explanation.provenance.aiModel} (${explanation.provenance.aiProvider})`
+          : ""}
+        , {new Date(analysis.analyzedAt).toLocaleString()}
       </p>
     </div>
   );
@@ -292,8 +317,13 @@ export function FailureAnalysisPanel({
       return;
     }
     onInProgressChange(null, true);
-    if (result.attempt.status === "analyzed") onAnalysisChange(result.attempt.analysis);
-    else setError({ kind: "failed", message: result.attempt.message });
+    if (result.attempt.status === "analyzed") {
+      onAnalysisChange(result.attempt.analysis);
+    } else {
+      // kept-previous: the stored explanation stands; say why the new one could not be written.
+      onAnalysisChange(result.attempt.previousAnalysis);
+      setError({ kind: "failed", message: result.attempt.message });
+    }
     setSettledCount((count) => count + 1);
   }
 

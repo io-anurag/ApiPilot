@@ -14,8 +14,9 @@ always produces the same scenarios), optionally proposes additional scenarios us
 locally running AI model, and lets you review and approve everything before anything is
 exported or executed. Approved scenarios become a Postman collection, which ApiPilot then
 hands to its **Import & Run Collection** view, where you can inspect and edit it and run it
-against a target you choose. For any request that fails, you can ask the local AI for a
-labelled, evidence-backed explanation of the likely cause (section 4.5).
+against a target you choose. For any request that fails, ApiPilot can name the likely cause
+using fixed rules and show the evidence behind it, and the local AI can explain it
+(section 4.5).
 
 If you already have a Postman collection and environment of your own — exported from
 Postman, received from a teammate, or hand-authored — you can instead import and run it
@@ -383,10 +384,11 @@ You can upload and keep multiple named collection/environment pairs at once, swi
 between them, and remove one you no longer need — removing a collection never changes
 the results of a run you already completed against it.
 
-### 4.5 Asking the AI why a request failed
+### 4.5 Asking why a request failed
 
-Expand a failed request's row and choose **Analyze failure** to have the local AI suggest
-why it most likely failed. Nothing is analyzed automatically. You can analyze a failure
+Expand a failed request's row and choose **Analyze failure**. ApiPilot names the most likely
+cause using fixed, documented rules, and the local AI writes a short explanation and next
+steps. Nothing is analyzed automatically. You can analyze a failure
 while the rest of the run is still in progress, and in any earlier run still listed in the
 run history. Analysis never sends a request to your target API; it works only from what
 the run already recorded.
@@ -396,19 +398,26 @@ AI work is ahead of yours) and then **Generating**, each with an elapsed timer. 
 analysis runs at a time in your session. Every **Analyze failure** button stays disabled
 until it finishes, including after a page reload.
 
-The result is always labelled **AI inference, not a confirmed root cause**. It contains:
+The result contains:
 
-- **A likely cause**: a potential specification mismatch, environment issue, or
-  downstream-service issue, with a confidence such as "Moderate (0.62)" (Moderate is 0.5 to
-  below 0.75, High is 0.75 and above). If the model cannot support a cause, you see
-  **Not enough evidence to name a likely cause** instead, with the reason. The reasons
-  are that the model said so, its confidence was below 0.5, or it cited none of the
-  recorded evidence.
-- **A short summary** and up to three **Suggested next steps**.
-- **Evidence cited**: the recorded facts the answer relies on, such as the failure
-  category, status code, test results, and (for a Local-tier run) the request and response
-  excerpts. ApiPilot writes this text from the recorded result; the AI only points to it.
-  The rest is under a collapsed **Other evidence considered** section.
+- **A likely cause**, decided by a rule and marked with a **Rule** badge: a potential
+  specification mismatch, environment issue, or downstream-service issue. It carries a
+  **Strength** of High or Moderate, with no number. High is used only where the signal has
+  one reading: no response at all, or a status the specification does not document. Below it
+  is the rule in plain words, for example "No response was received: the connection failed
+  or timed out." It is a likely cause, not a confirmed one.
+
+  When no rule fits, you see **Not enough evidence to name a likely cause** and "No rule
+  matched the recorded evidence." ApiPilot deliberately doesn't guess on ambiguous signals,
+  such as a 404 (wrong address, or a route that differs from the specification) or a bare 500.
+- **Evidence for this cause**: the recorded facts that triggered the rule, such as the
+  status code, a failed test's message, or, for a Local-tier run, the response body. Facts
+  from the specification are marked "from the specification". Everything else is under a
+  collapsed **Other evidence considered** section.
+- **An AI explanation**, marked with an **AI** badge and labelled **AI inference, not a
+  confirmed root cause**: a short summary and up to three **Suggested next steps**. The AI
+  cannot change the cause. An answer that names a different cause, or that points at no
+  recorded evidence, is not shown.
 - **Specification context**, when the collection came from your current guided workflow:
   the operation, the scenario, the documented response codes, and any earlier workflow
   step this request depends on, with that step's outcome in the same run. For a
@@ -417,14 +426,14 @@ The result is always labelled **AI inference, not a confirmed root cause**. It c
 
 Credentials, tokens, and sensitive body fields are replaced with `[redacted]` before the AI
 sees them, and again in anything it writes back. Analyses are saved with the run, so they
-are still there after a reload or backend restart. **Analyze again** replaces the stored
-analysis with a new one. If the new attempt fails, the previous analysis is kept and a
-plain-language message explains what went wrong, for example that the model did not finish
-within the time limit or that the analysis would take longer than the limit allows. Nothing
-retries automatically.
+are still there after a reload or backend restart. If the AI is unavailable, slow, or its
+answer can't be used, you still get the cause and the evidence, with **AI explanation
+unavailable** and the reason in place of the summary. **Analyze again** replaces the stored
+analysis with a new one. The exception is when the new explanation fails and the stored
+one had an explanation: the earlier explanation is kept, and a notice says why the new one
+couldn't be written. Nothing retries automatically.
 
-Treat the result as a starting point for your own investigation. The default local model
-did not yet meet ApiPilot's accuracy bar for this feature (see section 7).
+Treat the result as a starting point for your own investigation.
 
 ### 4.6 Things to know
 
@@ -467,8 +476,9 @@ Variable and credential values are encrypted before being stored.
   marked "not attempted" rather than silently dropped, and you can retry them in
   smaller batches.
 - AI failure analysis (section 4.5) runs only when you ask for it, shares the same local
-  model and queue as AI enhancement, and waits behind any AI work already running. Its
-  conclusions are labelled as inferences and never change a run's recorded results.
+  model and queue as AI enhancement, and waits behind any AI work already running. The
+  likely cause comes from fixed rules, not the AI; only the explanation is AI output, and it
+  is labelled as an inference. Neither ever changes a run's recorded results.
 
 ## 7. Limitations to keep in mind
 
@@ -483,10 +493,12 @@ Variable and credential values are encrypted before being stored.
 - "Destructive" request warnings are based on HTTP method only (POST/PUT/PATCH/DELETE),
   not per-operation semantics — review the confirmation banner's request list yourself
   before confirming a Staging/Production run.
-- AI failure analysis (section 4.5) is complete but still awaiting its model evaluation:
-  the default local model often misclassifies causes or returns an answer ApiPilot has to
-  reject. Verify any suggested cause yourself. It explains one failed request at a time,
-  and only in Import & Run Collection runs.
+- AI failure analysis (section 4.5) is complete but not yet signed off: it has been tested
+  only on made-up failures, not yet on failures recorded from real runs. The likely cause
+  comes from fixed rules, so it is consistent, but it is still a likely cause, not a
+  confirmed one; failures the rules do not cover show "insufficient evidence". Verify the
+  cause yourself before acting on it. It explains one failed request at a time, and only in
+  Import & Run Collection runs.
 - Automatic chaining of an unresolved path parameter or auth credential to another
   operation's response is single-hop only (one producer, one consumer) and only applies
   to confirmed/likely relationships — it does not assemble multi-step chains on its own;
@@ -527,8 +539,8 @@ Variable and credential values are encrypted before being stored.
 | Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
 | **Analyze failure** is disabled on every request | Another failure analysis is already running in your session | Wait for it to finish; the buttons re-enable automatically |
 | Failure analysis stays on "Waiting for the local AI" | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins |
-| Failure analysis reports the model did not finish, or the analysis would take too long | The local model is slower than the configured AI time limit on this machine | Try again, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` setting (README Configuration); any earlier analysis is kept |
-| Failure analysis says "Not enough evidence to name a likely cause" | The recorded result had too little detail, or the model's answer could not be supported by it | Check the evidence shown yourself; a Local-tier run records request/response excerpts that give the AI more to work with |
+| Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` (README Configuration). An earlier explanation is kept |
+| Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |
 
 ## 9. Where to look next
 

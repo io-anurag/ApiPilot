@@ -19,12 +19,16 @@ export const RESPONSE_BODY_EXCERPT_LIMIT = 1_000;
 /** Beyond this many passed tests, the rest are summarized by count so one request cannot crowd out the prompt. */
 const MAX_PASSED_TEST_OUTCOMES = 5;
 
-export interface EvidenceOptions {
-  /** Drop body excerpts to fit the model's input capacity (research D8). */
+/** How much to drop from the *prompt copy* of the evidence to fit the input budget (research D8). */
+export interface PromptTrimOptions {
+  /** Drop body excerpts. */
   omitBodies?: boolean;
   /** Also drop header lists. */
   omitHeaders?: boolean;
 }
+
+const BODY_KINDS: ReadonlySet<FailureEvidenceKind> = new Set(["request-body-excerpt", "response-body-excerpt"]);
+const HEADER_KINDS: ReadonlySet<FailureEvidenceKind> = new Set(["request-headers", "response-headers"]);
 
 export interface EvidenceBuild {
   evidence: FailureEvidence[];
@@ -68,14 +72,13 @@ function upstreamText(entry: UpstreamContext): string {
   return `${where} ${entry.operationMethod.toUpperCase()} ${entry.operationPath} (supplies ${entry.suppliedFields.join(", ")}): ${OUTCOME_IN_RUN_TEXT[entry.outcomeInRun]}`;
 }
 
-export function buildEvidence(
-  result: UploadedRequestResult,
-  context: SpecificationContext,
-  options: EvidenceOptions = {},
-): EvidenceBuild {
+/**
+ * Always the full list: it is what the classification rules read and what is stored, so the cause
+ * never depends on the model's input budget (research D15, D8 revision).
+ */
+export function buildEvidence(result: UploadedRequestResult, context: SpecificationContext): EvidenceBuild {
   const drafts: Draft[] = [];
   const sensitiveValues: string[] = [];
-  const omitted: string[] = [];
   const add = (kind: FailureEvidenceKind, text: string, source: Draft["source"] = "run-result") =>
     drafts.push({ kind, source, text });
 
@@ -112,17 +115,12 @@ export function buildEvidence(
       : undefined;
     sensitiveValues.push(...(requestBody?.redacted ?? []), ...(responseBody?.redacted ?? []));
 
-    if (options.omitHeaders) omitted.push("header lists");
-    else add("request-headers", headerText("Request headers", requestHeaders.value));
-
-    if (options.omitBodies) {
-      if (requestBody || responseBody) omitted.push("body excerpts");
-    } else if (requestBody && requestBody.text.length > 0) {
+    add("request-headers", headerText("Request headers", requestHeaders.value));
+    if (requestBody && requestBody.text.length > 0) {
       add("request-body-excerpt", excerptText("Request body", requestBody));
     }
-
-    if (!options.omitHeaders) add("response-headers", headerText("Response headers", responseHeaders.value));
-    if (!options.omitBodies && responseBody && responseBody.text.length > 0) {
+    add("response-headers", headerText("Response headers", responseHeaders.value));
+    if (responseBody && responseBody.text.length > 0) {
       add("response-body-excerpt", excerptText("Response body", responseBody));
     }
   }
@@ -148,12 +146,30 @@ export function buildEvidence(
     for (const entry of context.upstream) add("upstream-step-outcome", upstreamText(entry), "specification-context");
   }
 
-  if (omitted.length > 0) {
-    add("omitted-for-capacity", `Some evidence (${omitted.join(" and ")}) was omitted to fit the model's input capacity`);
-  }
-
   return {
     evidence: drafts.map((draft, index) => ({ id: `E${index + 1}`, ...draft })),
     sensitiveValues,
+  };
+}
+
+/**
+ * The prompt copy of the evidence for one budget step (research D8 revision; `/speckit-analyze`
+ * C1). Items keep their original ids, so the AI's citations refer to the stored list, and the
+ * omission is stated as a prompt `note`, never stored as evidence.
+ */
+export function trimEvidenceForPrompt(
+  evidence: readonly FailureEvidence[],
+  options: PromptTrimOptions,
+): { evidence: FailureEvidence[]; note?: string } {
+  const omitted: string[] = [];
+  if (options.omitBodies && evidence.some((item) => BODY_KINDS.has(item.kind))) omitted.push("body excerpts");
+  if (options.omitHeaders && evidence.some((item) => HEADER_KINDS.has(item.kind))) omitted.push("header lists");
+  const kept = evidence.filter(
+    (item) => !(options.omitBodies && BODY_KINDS.has(item.kind)) && !(options.omitHeaders && HEADER_KINDS.has(item.kind)),
+  );
+  if (omitted.length === 0) return { evidence: kept };
+  return {
+    evidence: kept,
+    note: `Some evidence (${omitted.join(" and ")}) was omitted to fit the model's input capacity.`,
   };
 }

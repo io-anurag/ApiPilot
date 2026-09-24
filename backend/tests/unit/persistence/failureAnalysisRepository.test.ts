@@ -4,7 +4,7 @@ import { getSharedConnection } from "../../../src/persistence/connection";
 import { getFailureAnalysisRepository } from "../../../src/persistence/failureAnalysisRepository";
 import { forceExpireForTest } from "../../../src/session/sessionRegistry";
 import "../../../src/failureAnalysis/failureAnalysisStore";
-import { sampleAnalysis } from "../../fixtures/failureAnalysis/fixtures";
+import { sampleAnalysis, unavailableExplanation } from "../../fixtures/failureAnalysis/fixtures";
 
 describe("failureAnalysisRepository", () => {
   it("round-trips an analysis through upsert and get", () => {
@@ -22,9 +22,8 @@ describe("failureAnalysisRepository", () => {
     const sessionId = randomUUID();
     repository.upsert(sessionId, sampleAnalysis());
     const replacement = sampleAnalysis({
-      summary: "Second attempt",
-      conclusion: { kind: "insufficient-evidence", reason: "model-reported" },
-      investigationSteps: [],
+      conclusion: { kind: "insufficient-evidence", reason: "no-rule-matched" },
+      explanation: unavailableExplanation(),
     });
 
     repository.upsert(sessionId, replacement);
@@ -82,5 +81,17 @@ describe("failureAnalysisRepository", () => {
       .get(sessionId) as { analysis_encrypted: Buffer };
 
     expect(row.analysis_encrypted.toString("utf-8")).not.toContain("encrypted at rest");
+  });
+
+  it("writes analysis_version 2, so startup cleanup keeps the row (research D19)", () => {
+    const repository = getFailureAnalysisRepository();
+    const sessionId = randomUUID();
+    repository.upsert(sessionId, sampleAnalysis());
+
+    const row = getSharedConnection()
+      .db.prepare("SELECT analysis_version FROM failure_analyses WHERE session_id = ?")
+      .get(sessionId) as { analysis_version: number | null };
+
+    expect(row.analysis_version).toBe(2);
   });
 });

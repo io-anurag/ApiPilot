@@ -99,7 +99,7 @@ It is never re-read from the workflow when the analysis is displayed (FR-018, re
 
 `FailureAnalysisProvenance` and its `confidenceThreshold` are removed.
 
-## FailureExplanation (discriminated on `status`)
+## FailureAnalysisExplanation (discriminated on `status`)
 
 | status | Fields | When |
 |---|---|---|
@@ -123,14 +123,14 @@ Validation for `available`:
 | `requestName`, `requestMethod` | string | Copied from the result at analysis time. |
 | `conclusion` | `FailureAnalysisConclusion` | Decided by rules. |
 | `classificationProvenance` | `ClassificationProvenance` | |
-| `explanation` | `FailureExplanation` | AI text, or the reason it is unavailable. |
+| `explanation` | `FailureAnalysisExplanation` | AI text, or the reason it is unavailable. |
 | `evidence` | `FailureEvidence[]` | The full, untrimmed list: every evidence item, whether it decided the cause, was cited, or neither. |
 | `specificationContext` | `SpecificationContext` | |
 | `analyzedAt` | ISO string | From the injected clock. |
 
 **Validation invariants**:
 - `likely-cause` implies `decidingEvidenceIds.length ≥ 1`, every entry an `evidence[].id`.
-- `explanation.status === "available"` implies the FailureExplanation rules above.
+- `explanation.status === "available"` implies the FailureAnalysisExplanation rules above.
 - No field contains a value that redaction replaced (SC-003).
 
 ### Strength presentation (UI only)

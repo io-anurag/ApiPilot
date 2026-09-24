@@ -21,6 +21,13 @@ prompt v3. D11's bar was also tightened. No candidate is adequate; the closest, 
 The default model and prompt v2 are unchanged, and the next options need a product decision (see
 "Decision after runs 1 to 3").
 
+**Update 2026-09-24, run 5:** the product decision was to decide the cause by fixed rules and use
+the AI only to explain it (spec Clarifications 2026-09-24; research D15 to D20; prompt v4). On the
+same 12 cases the rules match every label, and the default model now writes a usable explanation for
+12 of 12, with no contradictions, at an 11.2 s median. The default model is unchanged. AP-031 stays
+*implementation complete, AI evaluation pending*, only because SC-006 also needs at least 4 real,
+redacted failures in the corpus (T055), and every case so far is synthetic.
+
 ## Setup
 
 | Item | Value |
@@ -278,12 +285,59 @@ Options for the next decision, to be chosen by the product owner:
   evidence above suggests limited headroom.
 - The D11 adoption bar gap described in run 2.
 
+The first option was chosen and is evaluated in run 5.
+
+## Model decision, run 5: rule-decided cause, AI explanation only (2026-09-24)
+
+**What changed.** The cause is now decided by seven ordered rules over the full recorded evidence
+(`backend/src/failureAnalysis/classifyFailure.ts`, rule set version 1; research D15). The model
+receives the decided cause and the deciding rule, and writes only a summary, cited evidence ids and
+one to three next steps (prompt v4, response version 4; research D16). An answer is usable only if it
+is structured, cites at least one real evidence id, and does not name a cause other than the decided
+one (research D20). D11 is replaced for this purpose by SC-006's explanation bar: at least 80% usable,
+at most 10% rejected for contradicting the rule.
+
+**Setup.** The same 12 synthetic cases as runs 1 to 4, CPU only, fp32, prompt v4,
+`npm run test:ai-real:failure-analysis -w backend`. Both models were already cached, so nothing was
+downloaded.
+
+| Metric | Qwen2.5-0.5B (default) | Qwen3-1.7B, thinking off | SC-006 bar |
+|---|---|---|---|
+| Rule agreement with the label | 12/12 (100%) | 12/12 (100%) | 100%, met |
+| Usable explanations | **12/12 (100%)** | 11/12 (92%) | ≥ 80%, met by both |
+| Rejected for contradicting the rule | **0/12 (0%)** | 0/12 (0%) | ≤ 10%, met by both |
+| Median / max latency | **11.2 s / 13.7 s** | 29.4 s / 49.0 s | |
+
+Rule agreement is the same for both models by construction, because the model no longer decides the
+cause. The same 12 of 12 result is also checked in `npm test` (`classifyFailure.test.ts`), with no
+model. Qwen3's one unusable answer (`env-connection-refused`) failed validation for its shape or
+citations, not for naming another cause, and was shown as "AI explanation unavailable" with the
+rule's cause and evidence intact.
+
+**Caveat.** The rules were written with these 12 cases in view, so 12 of 12 shows that the rules
+implement their labels, not that they generalise. That is what SC-006's real-case requirement is
+for.
+
+**Decision.**
+1. **The default model stays** `onnx-community/Qwen2.5-0.5B-Instruct`. It meets the explanation
+   bar outright and is about 2.6 times faster than Qwen3-1.7B, which does not do better. No AP-004
+   default-model proposal is needed, and `specs/004-ai-provider-local-inference/benchmark-results.json`
+   is not changed.
+2. **Prompt v4 is the prompt in the code.** Prompts v2 and v3 are superseded, because they asked the
+   model for the cause.
+3. **SC-006 is not yet fully met.** Its rule, usable-rate and contradiction conditions are met. Its
+   requirement for at least 4 real, redacted recorded failures is not, because T055 is open. AP-031
+   therefore stays *implementation complete, AI evaluation pending* (constitution XXII). Once real
+   cases are added, rerun both `npm test` and this evaluation.
+
 ## Security note from this work
 
 Response bodies and test names from the target API reach the prompt after redaction. A hostile
 target could try to steer the model through them, which is prompt injection. The effect is
 bounded:
-- the cause must be one of three values, or insufficient evidence;
+- since run 5 the cause is decided by fixed rules, so the model cannot change it, and an answer
+  naming a different cause is rejected. Response text still reaches rule 4, whose service-name token
+  can turn a 500 or 503 into a downstream-service issue, and nothing more;
 - citations must be real evidence ids;
 - the output is only displayed, labelled as an AI inference, and never executed.
 

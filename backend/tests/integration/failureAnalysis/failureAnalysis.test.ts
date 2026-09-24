@@ -117,7 +117,8 @@ describe("failure analysis API (contracts/failure-analysis-api.md)", () => {
   beforeEach(async () => {
     target = new TargetServer();
     baseUrl = await target.start();
-    target.configure("POST", "/users", { status: 500, body: { error: "db unavailable" } });
+    // Names another service, so the rules decide a downstream-service issue (research D15 rule 4).
+    target.configure("POST", "/users", { status: 500, body: { error: "payment-service did not respond" } });
     target.configure("GET", "/users", { status: 200, body: [] });
     target.configure("GET", "/slow", { status: 200, body: {}, delayMs: 1_500 });
   });
@@ -165,21 +166,30 @@ describe("failure analysis API (contracts/failure-analysis-api.md)", () => {
     expect(first.status).toBe(200);
     expect(first.body.status).toBe("analyzed");
     expect(first.body.analysis).toMatchObject({
+      analysisVersion: 2,
       runId,
       resultIndex: 0,
       requestName: "Create user",
-      conclusion: { kind: "likely-cause", cause: "environment-issue" },
+      conclusion: {
+        kind: "likely-cause",
+        cause: "downstream-service-issue",
+        strength: "moderate",
+        ruleId: "dependency-named-in-server-error",
+      },
+      classificationProvenance: { source: "RULE", ruleSetVersion: 1 },
+      explanation: { status: "available", provenance: { source: "AI", responseVersion: 4 } },
       specificationContext: { status: "unavailable", reason: "no-generated-collection" },
     });
+    expect(first.body.analysis.conclusion.decidingEvidenceIds.length).toBeGreaterThanOrEqual(1);
 
-    state.content = modelAnswer({ cause: "downstream-service-issue", summary: "Second attempt" });
+    state.content = modelAnswer({ summary: "Second attempt" });
     const second = await agent.post(analysisUrl(collectionId, runId, 0));
-    expect(second.body.analysis.summary).toBe("Second attempt");
+    expect(second.body.analysis.explanation.summary).toBe("Second attempt");
 
     const list = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}/failure-analyses`);
     expect(list.status).toBe(200);
     expect(list.body.analyses).toHaveLength(1);
-    expect(list.body.analyses[0].summary).toBe("Second attempt");
+    expect(list.body.analyses[0].explanation.summary).toBe("Second attempt");
 
     const runAfter = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}`);
     expect(runAfter.body.run).toEqual(runBefore);
@@ -246,24 +256,41 @@ describe("failure analysis API (contracts/failure-analysis-api.md)", () => {
     expect(response.body.status).toBe("analyzed");
   }, 60_000);
 
-  it("stores a low-confidence answer as insufficient evidence (US3)", async () => {
+  it("stores insufficient evidence when no rule matches (US3, FR-008)", async () => {
+    target.configure("POST", "/users", { status: 500, body: { error: "db unavailable" } });
+    const { provider } = controllableProvider();
+    const agent = request.agent(createApp(provider));
+    const { collectionId, runId } = await uploadAndRun(agent, baseUrl);
+    await pollRun(agent, collectionId, runId, (run) => run.status === "completed");
+
+    const response = await agent.post(analysisUrl(collectionId, runId, 0));
+    expect(response.body.analysis.conclusion).toEqual({ kind: "insufficient-evidence", reason: "no-rule-matched" });
+    const list = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}/failure-analyses`);
+    expect(list.body.analyses[0].conclusion.kind).toBe("insufficient-evidence");
+  }, 60_000);
+
+  it("stores the rule result with an unavailable explanation when the AI fails first time (US3, FR-006)", async () => {
     const { provider, state } = controllableProvider();
     const agent = request.agent(createApp(provider));
     const { collectionId, runId } = await uploadAndRun(agent, baseUrl);
     await pollRun(agent, collectionId, runId, (run) => run.status === "completed");
 
-    state.content = modelAnswer({ confidence: 0.3 });
+    state.error = "NOT_READY";
     const response = await agent.post(analysisUrl(collectionId, runId, 0));
-    expect(response.body.analysis.conclusion).toEqual({
-      kind: "insufficient-evidence",
-      reason: "below-confidence-threshold",
-      confidence: 0.3,
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("analyzed");
+    expect(response.body.analysis.conclusion).toMatchObject({ ruleId: "dependency-named-in-server-error" });
+    expect(response.body.analysis.explanation).toMatchObject({
+      status: "unavailable",
+      reason: { kind: "ai-error", aiErrorCategory: "NOT_READY" },
     });
+    expect(response.body.analysis.explanation.message).not.toContain("internal detail");
     const list = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}/failure-analyses`);
-    expect(list.body.analyses[0].conclusion.kind).toBe("insufficient-evidence");
+    expect(list.body.analyses).toEqual([response.body.analysis]);
   }, 60_000);
 
-  it("keeps the stored analysis when a later attempt times out (US3, FR-015)", async () => {
+  it("keeps the stored explanation when a later attempt times out (US3, FR-015)", async () => {
     const { provider, state } = controllableProvider();
     const agent = request.agent(createApp(provider));
     const { collectionId, runId } = await uploadAndRun(agent, baseUrl);
@@ -274,7 +301,8 @@ describe("failure analysis API (contracts/failure-analysis-api.md)", () => {
     const failed = await agent.post(analysisUrl(collectionId, runId, 0));
 
     expect(failed.status).toBe(200);
-    expect(failed.body).toMatchObject({ status: "ai-failed", aiErrorCategory: "TIMEOUT", previousAnalysis: stored });
+    expect(failed.body).toMatchObject({ status: "kept-previous", previousAnalysis: stored });
+    expect(failed.body.analysis.explanation).toMatchObject({ status: "unavailable", reason: { aiErrorCategory: "TIMEOUT" } });
     expect(failed.body.message).not.toContain("internal detail");
     const list = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}/failure-analyses`);
     expect(list.body.analyses).toEqual([stored]);

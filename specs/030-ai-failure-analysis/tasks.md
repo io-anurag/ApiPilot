@@ -541,7 +541,7 @@ first, and use scripted providers.
   - The Qwen2.5-0.5B and Qwen2.5-1.5B templates were verified to render byte-identically (specs/013 research Decision 1, addendum 2026-09-24).
   - `backend/tests/integration/failureAnalysis.real.test.ts` gained an interim `confidentlyWrongRate` bar, which T085 supersedes.
 
-- [ ] T062 Update `packages/shared-domain/src/failureAnalysis.ts` to the amended data-model.md:
+- [X] T062 Update `packages/shared-domain/src/failureAnalysis.ts` to the amended data-model.md:
   - Add `FailureRuleId`, the 7 ids from research D15.
   - Add `FAILURE_RULE_DESCRIPTIONS: Record<FailureRuleId, string>`, one plain sentence per rule, for example `"no-response": "No response was received: the connection failed or timed out."`. The prompt and the UI share it.
   - Add `FailureStrength = "high" | "moderate"`.
@@ -549,15 +549,15 @@ first, and use scripted providers.
   - Remove `InsufficientEvidenceReason`'s model reasons and `FailureAnalysisProvenance`.
   - Add `ClassificationProvenance {source:"RULE"; ruleSetVersion:number}`.
   - Add `ExplanationProvenance {source:"AI"; aiModel; aiProvider; responseVersion}`.
-  - Add `FailureExplanation` (`available` with `summary`, `investigationSteps`, `citedEvidenceIds` and `provenance`; or `unavailable` with `reason` of kind `ai-error` or `not-viable`, and `message`).
+  - Add `FailureAnalysisExplanation` (`available` with `summary`, `investigationSteps`, `citedEvidenceIds` and `provenance`; or `unavailable` with `reason` of kind `ai-error` or `not-viable`, and `message`).
   - Reshape `FailureAnalysis`: add `analysisVersion: 2`, `conclusion`, `classificationProvenance`, `explanation` and `analyzedAt`. Remove `summary`, `investigationSteps`, `citedEvidenceIds` and `provenance` from the top level.
   - Replace `FailureAnalysisAttempt` with `{status:"analyzed"; analysis} | {status:"kept-previous"; analysis; previousAnalysis; message}`.
   - Remove `"omitted-for-capacity"` from `FailureEvidenceKind`. The capacity notice becomes a prompt-only `note` (research D8 revision), so it is never stored as evidence.
   - Keep `FailureEvidence`, `SpecificationContext`, `UpstreamContext` and `FailureAnalysisInProgress` otherwise unchanged, and check the export in `packages/shared-domain/src/index.ts`.
-- [ ] T063 [P] Write failing tests for legacy-row removal (research D19):
+- [X] T063 [P] Write failing tests for legacy-row removal (research D19):
   - In `backend/tests/unit/persistence/connection.test.ts`, a database whose `failure_analyses` has rows and no `analysis_version` column gets the column on initialization. Rows with `NULL` are deleted, and one `failure_analyses_legacy_removed` log entry carries the count. Initializing a second time deletes nothing.
   - In `backend/tests/unit/persistence/failureAnalysisRepository.test.ts`, `upsert` writes `analysis_version = 2`.
-- [ ] T064 Implement T063. In `backend/src/persistence/connection.ts`, call `ensureColumn("failure_analyses", "analysis_version", "INTEGER")` after the table is created, then `DELETE FROM failure_analyses WHERE analysis_version IS NULL`, and log the changed-row count with `logger.info("failure_analyses_legacy_removed", {count})` only when it is above 0. In `backend/src/persistence/failureAnalysisRepository.ts`, write `analysis_version` from `analysis.analysisVersion` in `upsert`. Makes T063 pass. Depends on T062.
+- [X] T064 Implement T063. In `backend/src/persistence/connection.ts`, call `ensureColumn("failure_analyses", "analysis_version", "INTEGER")` after the table is created, then `DELETE FROM failure_analyses WHERE analysis_version IS NULL`, and log the changed-row count with `logger.info("failure_analyses_legacy_removed", {count})` only when it is above 0. In `backend/src/persistence/failureAnalysisRepository.ts`, write `analysis_version` from `analysis.analysisVersion` in `upsert`. Makes T063 pass. Depends on T062.
 
 **Checkpoint**: the shared types compile. Backend and frontend compile errors that remain are expected until the story phases land.
 
@@ -569,7 +569,7 @@ first, and use scripted providers.
 
 ### Tests for User Story 1 (amended) ⚠️ write first, confirm they fail
 
-- [ ] T065 [P] [US1] Create `backend/tests/unit/failureAnalysis/classifyFailure.test.ts` (research D15):
+- [X] T065 [P] [US1] Create `backend/tests/unit/failureAnalysis/classifyFailure.test.ts` (research D15):
   - For each of the 7 rules, one case that matches and one near-miss that does not. Examples: a 404 matches no rule; a bare 500 without a body matches no rule; a 503 whose body says `upstream connect error` does not match rule 4; a status test on a 401 is decided by rule 3, not rule 6.
   - Precedence: a 200 with context documenting only 201 and a failing status test is decided by rule 5, not rule 6.
   - Rule 5 treats `2XX`-style ranges as documented and does not apply when `default` is documented.
@@ -577,20 +577,20 @@ first, and use scripted providers.
   - `decidingEvidenceIds` point at the right kinds for each rule: `failure-category`, or `response-status` plus `response-body-excerpt`, `documented-responses` or the failed `test-outcome`. They always include at least one kind that trimming never drops.
   - **Corpus**: `classifyFailure` over every case in `backend/tests/fixtures/failureAnalysis/evaluationCorpus.ts` equals its `expected` label, 12 of 12 (SC-006).
   - **Budget independence** (constitution XXIV; `/speckit-analyze` C1): in `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts`, the `downstream-500-dependency` case analyzed with a scripted provider whose `getInputBudget` forces body trimming gets the same conclusion, strength and `decidingEvidenceIds`, including the `response-body-excerpt` id, as with an unlimited budget.
-- [ ] T066 [P] [US1] Rewrite `backend/tests/unit/failureAnalysis/failureAnalysisPrompt.test.ts` for v4 (research D16):
+- [X] T066 [P] [US1] Rewrite `backend/tests/unit/failureAnalysis/failureAnalysisPrompt.test.ts` for v4 (research D16):
   - `FAILURE_ANALYSIS_RESPONSE_VERSION === 4`.
   - The prompt JSON carries `classification`: the cause label and `FAILURE_RULE_DESCRIPTIONS[ruleId]`, or the no-rule text.
   - It has an `answerFormat` with placeholder strings only, and no `cause` or `confidence` field in it.
   - It has no `examples` key and no `allowedCauses` key.
   - The fingerprint test stays and pins the new text.
   - Keep the request-shape, specification-note and redaction tests.
-- [ ] T067 [P] [US1] Rewrite `backend/tests/unit/failureAnalysis/parseFailureAnalysisResponse.test.ts` for v4:
+- [X] T067 [P] [US1] Rewrite `backend/tests/unit/failureAnalysis/parseFailureAnalysisResponse.test.ts` for v4:
   - A valid `{responseVersion:4, summary, evidenceIds, steps}` parses to `{summary, investigationSteps, citedEvidenceIds}`.
   - Zero steps, a missing summary, or non-string steps are `INVALID_RESPONSE`, including steps written as objects (evaluation.md run 1).
   - No valid cited id is `INVALID_RESPONSE`, and unknown ids are dropped.
   - Contradiction: for a decided `environment-issue`, a summary containing "specification mismatch" or `downstream-service-issue` is `INVALID_RESPONSE`, while "environment issue" is accepted. For `insufficient-evidence`, any cause phrase is rejected. A negated mention ("not an environment issue") under a different decided cause is rejected, as D16 intends.
   - The limits (400 and 200 characters, 3 steps) and the code-fence and balanced-object parsing are kept from the existing tests.
-- [ ] T068 [P] [US1] Update the success-path tests in `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts`:
+- [X] T068 [P] [US1] Update the success-path tests in `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts`:
   - A scripted valid v4 answer gives `status: "analyzed"`, with the rule conclusion, `explanation.status: "available"`, `classificationProvenance.ruleSetVersion: 1`, `analysisVersion: 2` and `analyzedAt` from the injected clock. The analysis is stored.
   - Two different scripted answers give the same `conclusion`: the AI cannot change the cause.
   - The prompt the provider receives contains the rule-decided cause.
@@ -600,17 +600,17 @@ first, and use scripted providers.
     - under a small budget, the prompt's `evidence` omits body excerpts, then header lists, but keeps the original ids (for example `E1`, `E2`, `E5`), and carries a `note` naming what was omitted;
     - an AI citation of a kept id validates.
   - Update `backend/tests/unit/failureAnalysis/buildEvidence.test.ts` so `buildEvidence` no longer takes trim options, and no longer emits `omitted-for-capacity`.
-- [ ] T069 [P] [US1] Update `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`: the POST success body matches the amended contract (`analyzed`, the conclusion with `strength`, `ruleId` and `decidingEvidenceIds`, and `explanation.available`). The GET list returns the reshaped analyses. Every eligibility row (400, 404, 409) is unchanged.
+- [X] T069 [P] [US1] Update `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`: the POST success body matches the amended contract (`analyzed`, the conclusion with `strength`, `ruleId` and `decidingEvidenceIds`, and `explanation.available`). The GET list returns the reshaped analyses. Every eligibility row (400, 404, 409) is unchanged.
 
 ### Implementation for User Story 1 (amended)
 
-- [ ] T070 [US1] Create `backend/src/failureAnalysis/classifyFailure.ts`:
+- [X] T070 [US1] Create `backend/src/failureAnalysis/classifyFailure.ts`:
   - Export `FAILURE_CLASSIFICATION_RULESET_VERSION = 1`, `classifyFailure(result, context, evidence): FailureAnalysisConclusion` and a pure `namesAnotherService(text)` token scan (research D15).
   - Rules run in the D15 order. The status-assertion message is parsed with a bounded, linear pattern.
   - `evidence` is always the **full, untrimmed** list (research D15; `/speckit-analyze` C1). `decidingEvidenceIds` are looked up by kind in it, and include `failure-category` or `response-status` for every rule.
   - Rule 4 reads the **redacted** response body, taken from `evidence`, not raw capture text.
   - Makes T065 pass. Depends on T062.
-- [ ] T071 [US1] Rewrite `backend/src/failureAnalysis/failureAnalysisPrompt.ts` to v4 (research D16):
+- [X] T071 [US1] Rewrite `backend/src/failureAnalysis/failureAnalysisPrompt.ts` to v4 (research D16):
   - A system prompt with the JSON-only instruction and no cause selection.
   - A `TASK` that explains the given classification.
   - `buildFailureAnalysisPrompt({…, conclusion})` emitting `classification`.
@@ -618,11 +618,11 @@ first, and use scripted providers.
   - Remove `ALLOWED_CAUSES`, the worked examples and `FAILURE_ANALYSIS_MIN_CONFIDENCE`.
   - Recompute and set `FAILURE_ANALYSIS_PROMPT_FINGERPRINT`.
   - Makes T066 pass. Depends on T062.
-- [ ] T072 [US1] Rewrite `backend/src/failureAnalysis/parseFailureAnalysisResponse.ts` to v4:
+- [X] T072 [US1] Rewrite `backend/src/failureAnalysis/parseFailureAnalysisResponse.ts` to v4:
   - `parseFailureAnalysisResponse(response, evidenceIds, conclusion)` returns `{summary, investigationSteps, citedEvidenceIds}` or throws `INVALID_RESPONSE`.
   - It applies the D16 shape rules, the at-least-one-valid-citation rule, and the contradiction check, using fixed phrase lists derived from the cause labels and enum keys.
   - Makes T067 pass. Depends on T062.
-- [ ] T073 [US1] Update `backend/src/failureAnalysis/analyzeFailure.ts` and `backend/src/failureAnalysis/buildEvidence.ts` for the success path:
+- [X] T073 [US1] Update `backend/src/failureAnalysis/analyzeFailure.ts` and `backend/src/failureAnalysis/buildEvidence.ts` for the success path:
   - Build evidence **once, in full**, with `buildEvidence(result, specificationContext)`. The trim options are removed from `buildEvidence`.
   - Call `classifyFailure(result, specificationContext, built.evidence)` on that full list, and store the full list.
   - For the input budget, iterate the D8 trim steps over a **prompt-only** filtered copy (drop `request-body-excerpt` and `response-body-excerpt`, then `request-headers` and `response-headers`), keeping each item's original id, with a prompt `note` naming what was omitted. The rule result never depends on this step.
@@ -632,13 +632,13 @@ first, and use scripted providers.
   - Extend the settled log with `ruleId` and `explanationStatus`.
   - Adjust `backend/src/api/failureAnalysis.ts` only if types require it; its routes and checks are unchanged.
   - Makes T068 and T069 pass. Depends on T064, T070, T071 and T072.
-- [ ] T074 [P] [US1] Update `frontend/tests/unit/FailureAnalysisPanel.test.tsx`:
+- [X] T074 [P] [US1] Update `frontend/tests/unit/FailureAnalysisPanel.test.tsx`:
   - An analyzed likely cause shows the cause label, a `RULE` provenance badge, the strength "High" or "Moderate" with no digits, and the rule description from `FAILURE_RULE_DESCRIPTIONS`.
   - It shows the deciding evidence under the cause, and everything else in the collapsed "Other evidence considered" `<details>`.
   - The summary and steps show an `AI` badge and the "AI inference, not a confirmed root cause" label.
   - Replace `frontend/tests/unit/confidenceLabel.test.ts` with `frontend/tests/unit/strengthLabel.test.ts`, covering `high` → "High" and `moderate` → "Moderate".
-- [ ] T075 [US1] Replace `frontend/src/utils/confidenceLabel.ts` with `frontend/src/utils/strengthLabel.ts`, which exports `strengthLabel(strength)`. Delete the old file and its test, and update the imports. Depends on T062.
-- [ ] T076 [US1] Update `frontend/src/components/FailureAnalysisPanel.tsx` `AnalysisView` to render the amended analysis:
+- [X] T075 [US1] Replace `frontend/src/utils/confidenceLabel.ts` with `frontend/src/utils/strengthLabel.ts`, which exports `strengthLabel(strength)`. Delete the old file and its test, and update the imports. Depends on T062.
+- [X] T076 [US1] Update `frontend/src/components/FailureAnalysisPanel.tsx` `AnalysisView` to render the amended analysis:
   - Cause, `ProvenanceBadge source="RULE"`, strength label and rule description.
   - The deciding evidence list.
   - The `ProvenanceBadge source="AI"` explanation section with the inference label.
@@ -646,7 +646,7 @@ first, and use scripted providers.
   - Remove the confidence number and `INSUFFICIENT_REASON_TEXT`'s model reasons.
   - Tailwind v4 tokens only, dark mode, and text labels beside colour (CLAUDE.md §26 to §43).
   - Makes T074 pass. Depends on T075.
-- [ ] T077 [US1] Update `frontend/src/services/externalCollectionsClient.ts`, mainly the doc comment at line 203 and the types that flow through from shared-domain, and `frontend/tests/unit/externalCollectionsClient.failureAnalysis.test.ts` for the `analyzed | kept-previous` attempt statuses. Depends on T062.
+- [X] T077 [US1] Update `frontend/src/services/externalCollectionsClient.ts`, mainly the doc comment at line 203 and the types that flow through from shared-domain, and `frontend/tests/unit/externalCollectionsClient.failureAnalysis.test.ts` for the `analyzed | kept-previous` attempt statuses. Depends on T062.
 
 **Checkpoint**: User Story 1 works on its own. `npm test -w backend` and `npm test -w frontend` pass for the failure-analysis suites.
 
@@ -656,8 +656,8 @@ first, and use scripted providers.
 
 **Independent test**: analyze the generated create step that returned 200 where only 201 and 400 are documented. The cause is specification mismatch, strength High, rule `undocumented-status`, and the deciding evidence includes the `specification-context` "documents responses" item.
 
-- [ ] T078 [P] [US2] In `backend/tests/integration/failureAnalysis/specificationContext.test.ts`, add the independent test above. Also add a case where the same failure from a collection ApiPilot did not generate falls back to rule 6 (`status-assertion-mismatch`, Moderate). Update its scripted provider to answer in the v4 shape (`summary`, `evidenceIds`, `steps`).
-- [ ] T079 [US2] In `frontend/tests/unit/FailureAnalysisPanel.test.tsx` and `frontend/src/components/FailureAnalysisPanel.tsx`, mark deciding evidence whose `source` is `specification-context` with a text marker ("from the specification") next to the item, not by colour alone. Depends on T076.
+- [X] T078 [P] [US2] In `backend/tests/integration/failureAnalysis/specificationContext.test.ts`, add the independent test above. Also add a case where the same failure from a collection ApiPilot did not generate falls back to rule 6 (`status-assertion-mismatch`, Moderate). Update its scripted provider to answer in the v4 shape (`summary`, `evidenceIds`, `steps`).
+- [X] T079 [US2] In `frontend/tests/unit/FailureAnalysisPanel.test.tsx` and `frontend/src/components/FailureAnalysisPanel.tsx`, mark deciding evidence whose `source` is `specification-context` with a text marker ("from the specification") next to the item, not by colour alone. Depends on T076.
 
 **Checkpoint**: US1 and US2 both pass.
 
@@ -667,7 +667,7 @@ first, and use scripted providers.
 
 **Independent test**: with a provider that fails, analyze a connectivity failure that has no stored analysis. The cause is shown and stored, with "AI explanation unavailable" and the reason. Then analyze a result whose stored analysis has an explanation, with a failing provider: the response is `kept-previous`, and the stored row is unchanged.
 
-- [ ] T080 [P] [US3] In `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts`, add:
+- [X] T080 [P] [US3] In `backend/tests/unit/failureAnalysis/analyzeFailure.test.ts`, add:
   - No rule matched gives `insufficient-evidence` / `no-rule-matched`, and the prompt says no rule matched.
   - `failingProvider("NOT_READY")` gives `analyzed` with `explanation.unavailable` (`ai-error`, `NOT_READY`), and the analysis is stored.
   - A not-viable projection gives `explanation.unavailable` (`not-viable`) without calling `infer`.
@@ -675,18 +675,18 @@ first, and use scripted providers.
   - The stored analysis has an available explanation and the new AI part fails: `kept-previous`, the store is unchanged, and `previousAnalysis` is returned.
   - The stored analysis has an unavailable explanation and the new one fails: `analyzed`, and the row is replaced.
   - The stored analysis has an available explanation and the new one succeeds: `analyzed`, and the row is replaced.
-- [ ] T081 [P] [US3] In `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`, cover `kept-previous` and `explanation.unavailable` over HTTP, including after the GET list: the stored row is unchanged in the kept-previous case.
-- [ ] T082 [US3] Implement T080 and T081 in `backend/src/failureAnalysis/analyzeFailure.ts`:
+- [X] T081 [P] [US3] In `backend/tests/integration/failureAnalysis/failureAnalysis.test.ts`, cover `kept-previous` and `explanation.unavailable` over HTTP, including after the GET list: the stored row is unchanged in the kept-previous case.
+- [X] T082 [US3] Implement T080 and T081 in `backend/src/failureAnalysis/analyzeFailure.ts`:
   - Map `AIProviderError` and the viability refusal to `explanation.unavailable`, with the existing `plainMessage` and viability wording.
   - Apply the FR-015 and D18 replacement rule before saving.
   - Return `kept-previous` without writing when it applies.
   - Remove the old `ai-failed` and `not-viable` outcomes.
   - Depends on T073.
-- [ ] T083 [P] [US3] In `frontend/tests/unit/FailureAnalysisPanel.test.tsx`, add:
+- [X] T083 [P] [US3] In `frontend/tests/unit/FailureAnalysisPanel.test.tsx`, add:
   - Insufficient evidence shows "Not enough evidence to name a likely cause", "No rule matched the recorded evidence", no strength label, and the AI's cited evidence as the shown evidence.
   - An unavailable explanation shows the cause and evidence, plus "AI explanation unavailable" with the reason text and an "Analyze again" action.
   - `kept-previous` shows the previous analysis and a notice that the new explanation failed, with its reason.
-- [ ] T084 [US3] Implement T083 in `frontend/src/components/FailureAnalysisPanel.tsx`:
+- [X] T084 [US3] Implement T083 in `frontend/src/components/FailureAnalysisPanel.tsx`:
   - Remove the `ai-failed` and `not-viable` branches in `handleAnalyze`.
   - On `kept-previous`, call `onAnalysisChange(previousAnalysis)` and show the notice.
   - Move focus to the outcome heading when an attempt settles, as before.
@@ -696,7 +696,7 @@ first, and use scripted providers.
 
 ## Phase 11: Polish (amendment)
 
-- [ ] T085 Update `backend/tests/integration/failureAnalysis.real.test.ts` to research D20:
+- [X] T085 Update `backend/tests/integration/failureAnalysis.real.test.ts` to research D20:
   - Classify with `classifyFailure`, and report per case the rule, the explanation status, whether it is usable and latency. Usable means it passed D16 validation: structured, at least one valid citation, no contradiction.
   - The summary reports:
     - `usableRate`, the share passing validation;
@@ -706,24 +706,43 @@ first, and use scripted providers.
     It drops `causeAgreementRate` and `confidentlyWrongRate`.
   - Soft-assert `usableRate ≥ 0.8` and `contradictionRate ≤ 0.1`.
   - Keep the git-ignored report file.
-- [ ] T086 Run `npm run test:ai-real:failure-analysis -w backend` with the default model, and with `AI_MODEL_ID=onnx-community/Qwen3-1.7B-ONNX`. Both run on CPU, with `AI_USE_ACCELERATOR=false`.
+- [X] T086 Run `npm run test:ai-real:failure-analysis -w backend` with the default model, and with `AI_MODEL_ID=onnx-community/Qwen3-1.7B-ONNX`. Both run on CPU, with `AI_USE_ACCELERATOR=false`.
   - Record both as run 5 in `specs/030-ai-failure-analysis/evaluation.md`, with the corpus rule result (12 of 12 from T065) and the SC-006 verdict.
   - If only Qwen3 passes, write a default-model proposal for the user through AP-004, covering latency and viability-rate recalibration. Do **not** change the default without approval.
   - Depends on T085.
-- [ ] T087 Update the documentation to the rule-decided design:
+
+  *Completion note (2026-09-24):* recorded as run 5. Rules 12 of 12 for both. `Qwen2.5-0.5B-Instruct`: 12 of 12 usable, 0 contradictions, 11.2 s median, 13.7 s max. `Qwen3-1.7B-ONNX`: 11 of 12 usable, 0 contradictions, 29.4 s median, 49.0 s max. Both meet the explanation bar, so no default-model proposal is needed and the default is unchanged. SC-006 is not fully met while T055 is open.
+- [X] T087 Update the documentation to the rule-decided design:
   - `specs/ROADMAP.md`: the AP-031 row and Next Actions #26.
   - `README.md`: the AI failure analysis subsection, capabilities and limitations.
   - `docs/architecture.md`: the "AI failure analysis" section, including the rules table in short form, the provenance split and D19.
   - `docs/USER_MANUAL.md`: section 4.5 on rule-decided cause and strength, the AI explanation and the unavailable state, plus the troubleshooting rows.
   - Keep the status as *implementation complete, AI evaluation pending* unless SC-006 is fully met, and it is not while T055 is open.
-- [ ] T088 Run a security review of the amendment:
+- [X] T088 Run a security review of the amendment:
   - `classifyFailure.ts` and the contradiction check use linear scans only.
   - Rule 4 reads redacted text only.
   - No new log field carries summary, evidence or body text.
   - The legacy-row deletion logs a count only.
   - The 5xx path is unchanged.
   - Record the result in this task's completion note.
-- [ ] T089 Run `npm test`, `npm run lint` and `npm run build` at the repository root and fix everything they report. Then run the amended quickstart.md scenarios 1 to 5 manually, if a browser is available; otherwise state explicitly that they were not run (this carries T061 forward). Depends on every task above.
+
+  *Completion note (2026-09-24):*
+  - **Logging**:
+    - `failure_analysis_settled` carries run id, result index, status, rule id, explanation status, error category, evidence count and duration.
+    - `failure_analyses_legacy_removed` carries a count only.
+    - No summary, evidence, prompt, body or raw-capture text is logged.
+    - The router logs are unchanged.
+  - **Linear scans**:
+    - `namesAnotherService` is one character pass.
+    - The status-assertion pattern has fixed `\d{3}` captures and no nested quantifier.
+    - The `2XX` check is anchored and bounded.
+    - The contradiction check is literal `includes` over a fixed phrase list.
+    - A timing test covers a 1,000,000-character body (T065).
+  - **Redacted input only**: rule 4 reads the `response-body-excerpt` evidence text, which `buildEvidence` produces through `redaction.ts`. It never reads `rawCapture`.
+  - **5xx path and network**: the 5xx path is unchanged, since the router was not modified. There are no network or process calls in `backend/src/failureAnalysis/`; the `exec(` hits are `RegExp.exec`.
+- [X] T089 Run `npm test`, `npm run lint` and `npm run build` at the repository root and fix everything they report. Then run the amended quickstart.md scenarios 1 to 5 manually, if a browser is available; otherwise state explicitly that they were not run (this carries T061 forward). Depends on every task above.
+
+  *Completion note (2026-09-24):* `npm test` 1,611 passed, 3 skipped, across 217 test files (plus 2 skipped opt-in real-model files); `npm run lint` and `npm run build` clean, with nothing to fix. The quickstart scenarios were **not** run in a browser (no browser was available in this session), so T061's manual pass stays open.
 
 ## Dependencies (amendment)
 

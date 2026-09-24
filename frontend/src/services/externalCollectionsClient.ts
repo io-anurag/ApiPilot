@@ -199,9 +199,10 @@ export async function fetchUploadedCollectionRuns(id: string): Promise<UploadedR
 }
 
 /**
- * AP-031 failure analysis (specs/030-ai-failure-analysis contracts/failure-analysis-api.md). An AI
- * outcome (`ai-failed`, `not-viable`) is a 200 `FailureAnalysisAttempt`, not an `ErrorResult`;
- * `ErrorResult` covers eligibility/state refusals and network failures only.
+ * AP-031 failure analysis (specs/030-ai-failure-analysis contracts/failure-analysis-api.md). Every
+ * rule and AI outcome (`analyzed`, including an unavailable explanation, and `kept-previous`) is a
+ * 200 `FailureAnalysisAttempt`, not an `ErrorResult`; `ErrorResult` covers eligibility/state
+ * refusals and network failures only.
  */
 
 export type FailureAnalysisErrorResult = ErrorResult & {

@@ -7,7 +7,15 @@
 // LISTENING on each configured port and kills it directly, sidestepping signal delivery
 // entirely. Run via `npm run stop`.
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { platform } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Read the ports from the repository-root `.env`, the same file the backend loads, so this stops
+// the ports actually in use. Variables already set in the shell are not overwritten.
+const rootEnvFile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env");
+if (existsSync(rootEnvFile)) process.loadEnvFile(rootEnvFile);
 
 const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 4000;
 const FRONTEND_DEV_PORT = Number(process.env.FRONTEND_DEV_PORT) || 5173;

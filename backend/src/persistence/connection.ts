@@ -4,6 +4,9 @@ import path from "node:path";
 import { resolveDbPath, resolveKeyPath } from "./config";
 import { createCredentialCipher, createEphemeralCredentialCipher, type CredentialCipher } from "./credentialCipher";
 import { PersistenceInitializationError } from "./errors";
+import { createLogger } from "../logger";
+
+const logger = createLogger("persistence");
 
 /**
  * Owns the single `better-sqlite3` handle for the process (or for one test), plus the
@@ -163,6 +166,14 @@ export class SqliteConnection {
         PRIMARY KEY (session_id, run_id, result_index)
       );
     `);
+
+    // AP-031 amendment 2026-09-24 (research D19): rows written by the AI-decided version carry an
+    // AI-chosen cause, which the clarified FR-003 forbids showing as the cause. They have no
+    // `analysis_version`, so they are removed explicitly here, with a logged count, rather than
+    // converted: a conversion would fabricate a rule provenance they never had.
+    this.ensureColumn("failure_analyses", "analysis_version", "INTEGER");
+    const removed = this.db.prepare("DELETE FROM failure_analyses WHERE analysis_version IS NULL").run().changes;
+    if (removed > 0) logger.info("failure_analyses_legacy_removed", { count: removed });
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

@@ -1,35 +1,51 @@
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { FailureAnalysis, FailureAnalysisInProgress, SpecificationContext } from "@apipilot/shared-domain";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  FAILURE_RULE_DESCRIPTIONS,
+  type FailureAnalysis,
+  type FailureAnalysisInProgress,
+  type SpecificationContext,
+} from "@apipilot/shared-domain";
 import { FailureAnalysisPanel } from "../../src/components/FailureAnalysisPanel";
 
 function analysis(overrides: Partial<FailureAnalysis> = {}): FailureAnalysis {
   return {
+    analysisVersion: 2,
     runId: "run-1",
     resultIndex: 1,
     requestName: "Create widget",
     requestMethod: "POST",
-    conclusion: { kind: "likely-cause", cause: "environment-issue", confidence: 0.62 },
-    summary: "The service could not reach its database.",
-    investigationSteps: ["Check the database connection."],
-    citedEvidenceIds: ["E1"],
+    conclusion: {
+      kind: "likely-cause",
+      cause: "environment-issue",
+      strength: "moderate",
+      ruleId: "gateway-error",
+      decidingEvidenceIds: ["E1"],
+    },
+    classificationProvenance: { source: "RULE", ruleSetVersion: 1 },
+    explanation: {
+      status: "available",
+      summary: "A gateway answered instead of the service.",
+      investigationSteps: ["Check the gateway's upstream configuration."],
+      citedEvidenceIds: ["E1"],
+      provenance: { source: "AI", aiModel: "test-model", aiProvider: "local", responseVersion: 4 },
+    },
     evidence: [
-      { id: "E1", kind: "response-status", source: "run-result", text: "Response status 500" },
+      { id: "E1", kind: "response-status", source: "run-result", text: "Response status 502" },
       { id: "E2", kind: "response-time", source: "run-result", text: "Response time 15 ms" },
     ],
     specificationContext: { status: "unavailable", reason: "not-generated-by-current-workflow" },
-    provenance: {
-      source: "AI",
-      aiModel: "test-model",
-      aiProvider: "local",
-      responseVersion: 1,
-      confidenceThreshold: 0.5,
-      generatedAt: "2026-09-23T10:00:00.000Z",
-    },
+    analyzedAt: "2026-09-24T10:00:00.000Z",
     ...overrides,
   };
 }
+
+const unavailableExplanation: FailureAnalysis["explanation"] = {
+  status: "unavailable",
+  reason: { kind: "ai-error", aiErrorCategory: "TIMEOUT" },
+  message: "The local AI model did not finish within 2 min, so no explanation was written.",
+};
 
 /** Holds the parent-owned state the real run panel would hold, so the panel can be exercised alone. */
 function Harness({
@@ -124,28 +140,54 @@ describe("FailureAnalysisPanel — US1", () => {
     expect(screen.queryByTestId("failure-analysis-progress")).not.toBeInTheDocument();
   });
 
-  it("renders an analysis as a labelled inference with confidence, cited and other evidence, and steps", () => {
+  it("shows a rule-decided cause with a RULE badge, a strength label with no number, and the rule", () => {
     stubFetch({});
     render(<Harness initialAnalysis={analysis()} />);
 
-    expect(screen.getByText("AI inference, not a confirmed root cause")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Potential environment issue" })).toBeInTheDocument();
-    expect(screen.getByText("Confidence: Moderate (0.62)")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Evidence cited" })).toHaveTextContent("Response status 500");
+    const cause = screen.getByRole("region", { name: "Likely cause" });
+    expect(within(cause).getByRole("heading", { name: "Potential environment issue" })).toBeInTheDocument();
+    expect(cause.querySelector('[data-source="RULE"]')).not.toBeNull();
+    expect(cause).toHaveTextContent("Strength: Moderate");
+    expect(cause).not.toHaveTextContent(/\d\.\d/);
+    expect(cause).toHaveTextContent(FAILURE_RULE_DESCRIPTIONS["gateway-error"]);
+    expect(cause).toHaveTextContent("not a confirmed root cause");
+    expect(screen.getByRole("region", { name: "Evidence for this cause" })).toHaveTextContent("Response status 502");
+  });
+
+  it("labels only the AI explanation as an inference, and puts everything else in Other evidence considered", () => {
+    stubFetch({});
+    render(<Harness initialAnalysis={analysis()} />);
+
+    const explanation = screen.getByRole("region", { name: "AI explanation" });
+    expect(explanation.querySelector('[data-source="AI"]')).not.toBeNull();
+    expect(explanation).toHaveTextContent("AI inference, not a confirmed root cause");
+    expect(explanation).toHaveTextContent("A gateway answered instead of the service.");
+    expect(within(explanation).getByRole("region", { name: "Suggested next steps" })).toHaveTextContent(
+      "Check the gateway's upstream configuration.",
+    );
     const other = screen.getByText("Other evidence considered (1)").closest("details");
     expect(other).not.toHaveAttribute("open");
     expect(other).toHaveTextContent("Response time 15 ms");
-    expect(screen.getByRole("region", { name: "Suggested next steps" })).toHaveTextContent("Check the database connection.");
     expect(screen.getByText(/Specification context unavailable/)).toHaveTextContent("not generated by the current guided workflow");
     expect(screen.getByRole("button", { name: "Analyze again: Create widget" })).toBeInTheDocument();
   });
 
-  it("shows High for confidence of 0.75 and above", () => {
+  it("shows High for a high-strength rule", () => {
     stubFetch({});
     render(
-      <Harness initialAnalysis={analysis({ conclusion: { kind: "likely-cause", cause: "specification-mismatch", confidence: 0.8 } })} />,
+      <Harness
+        initialAnalysis={analysis({
+          conclusion: {
+            kind: "likely-cause",
+            cause: "specification-mismatch",
+            strength: "high",
+            ruleId: "undocumented-status",
+            decidingEvidenceIds: ["E1"],
+          },
+        })}
+      />,
     );
-    expect(screen.getByText("Confidence: High (0.80)")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Likely cause" })).toHaveTextContent("Strength: High");
     expect(screen.getByText("Potential specification mismatch")).toBeInTheDocument();
   });
 
@@ -203,6 +245,36 @@ describe("FailureAnalysisPanel — US2", () => {
     expect(section).toHaveTextContent("Step 1: POST /users (user_id) — failed");
   });
 
+  it("marks deciding evidence from the specification in text, not by colour alone", () => {
+    stubFetch({});
+    render(
+      <Harness
+        initialAnalysis={analysis({
+          conclusion: {
+            kind: "likely-cause",
+            cause: "specification-mismatch",
+            strength: "high",
+            ruleId: "undocumented-status",
+            decidingEvidenceIds: ["E1", "E3"],
+          },
+          evidence: [
+            { id: "E1", kind: "response-status", source: "run-result", text: "Response status 200" },
+            {
+              id: "E3",
+              kind: "documented-responses",
+              source: "specification-context",
+              text: "Operation GET /users/{id} documents responses: 201",
+            },
+          ],
+          specificationContext: matched,
+        })}
+      />,
+    );
+    const deciding = screen.getByRole("region", { name: "Evidence for this cause" });
+    const item = within(deciding).getByText("Operation GET /users/{id} documents responses: 201").closest("li");
+    expect(item).toHaveTextContent("from the specification");
+  });
+
   it.each([
     ["no-request-identity", "recorded before ApiPilot tracked"],
     ["no-generated-collection", "no generated collection"],
@@ -216,39 +288,51 @@ describe("FailureAnalysisPanel — US2", () => {
 });
 
 describe("FailureAnalysisPanel — US3", () => {
-  it("shows insufficient evidence plainly, with model notes and no cause or confidence", () => {
+  it("shows insufficient evidence plainly: no rule matched, no strength, and the AI's cited evidence", () => {
     stubFetch({});
-    render(
-      <Harness
-        initialAnalysis={analysis({
-          conclusion: { kind: "insufficient-evidence", reason: "below-confidence-threshold", confidence: 0.3 },
-        })}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Not enough evidence to name a likely cause" })).toBeInTheDocument();
-    expect(screen.getByText(/confidence in any single cause was too low/)).toBeInTheDocument();
-    expect(screen.getByText("Model notes (inference)")).toBeInTheDocument();
-    expect(screen.queryByText(/Confidence:/)).not.toBeInTheDocument();
+    render(<Harness initialAnalysis={analysis({ conclusion: { kind: "insufficient-evidence", reason: "no-rule-matched" } })} />);
+
+    const cause = screen.getByRole("region", { name: "Likely cause" });
+    expect(within(cause).getByRole("heading", { name: "Not enough evidence to name a likely cause" })).toBeInTheDocument();
+    expect(cause).toHaveTextContent("No rule matched the recorded evidence.");
+    expect(cause).not.toHaveTextContent("Strength");
+    expect(screen.getByRole("region", { name: "Evidence cited" })).toHaveTextContent("Response status 502");
     expect(screen.queryByText("Potential environment issue")).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["ai-failed", { status: "ai-failed", aiErrorCategory: "TIMEOUT", message: "The local AI model did not finish in time." }],
-    [
-      "not-viable",
-      { status: "not-viable", notViable: { projectedMs: 200_000, budgetMs: 120_000 }, message: "This analysis would take too long." },
-    ],
-  ] as const)("shows the %s message with Try again, keeps the previous analysis, and moves focus to it", async (_label, body) => {
-    stubFetch({ post: { status: 200, body } });
-    render(<Harness initialAnalysis={analysis()} />);
+  it("shows the cause and evidence with AI explanation unavailable and its reason", () => {
+    stubFetch({});
+    render(<Harness initialAnalysis={analysis({ explanation: unavailableExplanation })} />);
+
+    expect(screen.getByRole("heading", { name: "Potential environment issue" })).toBeInTheDocument();
+    const explanation = screen.getByRole("region", { name: "AI explanation" });
+    expect(explanation).toHaveTextContent("AI explanation unavailable");
+    expect(explanation).toHaveTextContent("did not finish within 2 min");
+    expect(within(explanation).queryByRole("region", { name: "Suggested next steps" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze again: Create widget" })).toBeEnabled();
+  });
+
+  it("on kept-previous, keeps showing the previous analysis with a notice that the new explanation failed", async () => {
+    const previous = analysis();
+    stubFetch({
+      post: {
+        status: 200,
+        body: {
+          status: "kept-previous",
+          analysis: analysis({ explanation: unavailableExplanation }),
+          previousAnalysis: previous,
+          message: "The local AI model did not finish within 2 min, so no explanation was written. The earlier explanation was kept.",
+        },
+      },
+    });
+    render(<Harness initialAnalysis={previous} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Analyze again: Create widget" }));
-    const error = await screen.findByTestId("failure-analysis-error");
+    const notice = await screen.findByTestId("failure-analysis-error");
 
-    expect(error).toHaveTextContent(body.message);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-    expect(screen.getByText("Potential environment issue")).toBeInTheDocument();
-    await waitFor(() => expect(error.parentElement).toHaveFocus());
+    expect(notice).toHaveTextContent("The earlier explanation was kept.");
+    expect(screen.getByRole("region", { name: "AI explanation" })).toHaveTextContent("A gateway answered instead of the service.");
+    await waitFor(() => expect(notice.parentElement).toHaveFocus());
   });
 
   it("moves focus to the outcome heading when an analysis arrives", async () => {

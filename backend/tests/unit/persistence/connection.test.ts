@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SqliteConnection } from "../../../src/persistence/connection";
 import { PersistenceInitializationError } from "../../../src/persistence/errors";
 
@@ -80,6 +80,64 @@ describe("SqliteConnection", () => {
     } finally {
       rmSyncRetrying(dir);
     }
+  });
+
+  describe("legacy failure analyses (specs/030-ai-failure-analysis research D19)", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    function captureLogs(): string[] {
+      const lines: string[] = [];
+      vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+        lines.push(String(line));
+      });
+      return lines;
+    }
+
+    const insertRow = (connection: SqliteConnection, resultIndex: number, version?: number) =>
+      connection.db
+        .prepare(
+          version === undefined
+            ? `INSERT INTO failure_analyses (session_id, run_id, result_index, generated_at, analysis_encrypted, analysis_iv)
+               VALUES ('s1', 'r1', ?, '2026-09-23T00:00:00.000Z', x'00', x'00')`
+            : `INSERT INTO failure_analyses (session_id, run_id, result_index, generated_at, analysis_encrypted, analysis_iv, analysis_version)
+               VALUES ('s1', 'r1', ?, '2026-09-24T00:00:00.000Z', x'00', x'00', ${version})`,
+        )
+        .run(resultIndex);
+
+    it("adds analysis_version and removes rows written by the AI-decided version, logging the count once", () => {
+      const dir = mkdtempSync(path.join(os.tmpdir(), "apipilot-test-"));
+      const dbPath = path.join(dir, "apipilot.db");
+      try {
+        // Recreate the table as it was before the amendment, with two legacy rows.
+        const first = new SqliteConnection(dbPath);
+        first.db.exec(`DROP TABLE failure_analyses;
+          CREATE TABLE failure_analyses (session_id TEXT NOT NULL, run_id TEXT NOT NULL, result_index INTEGER NOT NULL,
+            generated_at TEXT NOT NULL, analysis_encrypted BLOB NOT NULL, analysis_iv BLOB NOT NULL,
+            PRIMARY KEY (session_id, run_id, result_index));`);
+        insertRow(first, 0);
+        insertRow(first, 1);
+        first.close();
+
+        const lines = captureLogs();
+        const migrated = new SqliteConnection(dbPath);
+        const columns = migrated.db.prepare("PRAGMA table_info(failure_analyses)").all() as Array<{ name: string }>;
+        expect(columns.map((column) => column.name)).toContain("analysis_version");
+        expect(migrated.db.prepare("SELECT COUNT(*) AS n FROM failure_analyses").get()).toEqual({ n: 0 });
+        const removals = lines.filter((line) => line.includes("failure_analyses_legacy_removed"));
+        expect(removals).toHaveLength(1);
+        expect(JSON.parse(removals[0]).count).toBe(2);
+
+        insertRow(migrated, 2, 2);
+        migrated.close();
+
+        const again = new SqliteConnection(dbPath);
+        expect(again.db.prepare("SELECT COUNT(*) AS n FROM failure_analyses").get()).toEqual({ n: 1 });
+        expect(lines.filter((line) => line.includes("failure_analyses_legacy_removed"))).toHaveLength(1);
+        again.close();
+      } finally {
+        rmSyncRetrying(dir);
+      }
+    });
   });
 
   it("creates missing parent directories on first run, matching a fresh install with no ~/.apipilot yet (FR-005)", () => {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { SpecificationContext } from "@apipilot/shared-domain";
+import {
+  FAILURE_RULE_DESCRIPTIONS,
+  type FailureAnalysisConclusion,
+  type SpecificationContext,
+} from "@apipilot/shared-domain";
 import {
   FAILURE_ANALYSIS_PROMPT_FINGERPRINT,
   FAILURE_ANALYSIS_RESPONSE_VERSION,
@@ -13,8 +17,16 @@ import { collectRedactedValues } from "../../../src/failureAnalysis/redaction";
 import { failedResult, rawCaptureWithSecrets, withRawCapture } from "../../fixtures/failureAnalysis/fixtures";
 
 const unavailable: SpecificationContext = { status: "unavailable", reason: "not-generated-by-current-workflow" };
+const downstream: FailureAnalysisConclusion = {
+  kind: "likely-cause",
+  cause: "downstream-service-issue",
+  strength: "moderate",
+  ruleId: "dependency-named-in-server-error",
+  decidingEvidenceIds: ["E1", "E5"],
+};
+const insufficient: FailureAnalysisConclusion = { kind: "insufficient-evidence", reason: "no-rule-matched" };
 
-function promptFor(context: SpecificationContext = unavailable) {
+function promptFor(context: SpecificationContext = unavailable, conclusion: FailureAnalysisConclusion = downstream, note?: string) {
   const result = withRawCapture(failedResult());
   const { evidence } = buildEvidence(result, context);
   return buildFailureAnalysisPrompt({
@@ -22,10 +34,12 @@ function promptFor(context: SpecificationContext = unavailable) {
     requestName: result.requestName,
     evidence,
     specificationContext: context,
+    conclusion,
+    ...(note ? { note } : {}),
   });
 }
 
-describe("failureAnalysisPrompt (research D6, D8)", () => {
+describe("failureAnalysisPrompt v4 (research D8, D16)", () => {
   it("builds a JSON inference request with the feature's own system prompt and no timeout override", () => {
     const request = buildFailureAnalysisRequest(promptFor());
 
@@ -40,25 +54,41 @@ describe("failureAnalysisPrompt (research D6, D8)", () => {
     expect(buildFailureAnalysisRequest(promptFor()).requestId).toBe(request.requestId);
   });
 
-  it("carries the response version, the evidence, the allowed causes and contrasting worked examples", () => {
+  it("is response version 4 (v3 was evaluated but never shipped)", () => {
+    expect(FAILURE_ANALYSIS_RESPONSE_VERSION).toBe(4);
+  });
+
+  it("gives the model the rule-decided cause to explain, never a choice of causes", () => {
     const parsed = JSON.parse(promptFor()) as Record<string, unknown>;
 
-    expect(parsed.responseVersion).toBe(FAILURE_ANALYSIS_RESPONSE_VERSION);
+    expect(parsed.responseVersion).toBe(4);
+    expect(parsed.classification).toEqual({
+      cause: "Potential downstream-service issue",
+      rule: FAILURE_RULE_DESCRIPTIONS["dependency-named-in-server-error"],
+    });
     expect(parsed.evidence).toEqual(expect.arrayContaining([expect.objectContaining({ id: "E1" })]));
-    expect(Object.keys(parsed.allowedCauses as object)).toEqual([
-      "specification-mismatch",
-      "environment-issue",
-      "downstream-service-issue",
-      "insufficient-evidence",
-    ]);
-    const examples = parsed.examples as Array<{ answer: { cause: string; steps: string[] } }>;
-    // v1's single example was copied verbatim by the default model (evaluation.md), so the
-    // examples must disagree with each other on cause.
-    expect(new Set(examples.map((example) => example.answer.cause)).size).toBe(examples.length);
-    expect(examples.some((example) => example.answer.cause === "insufficient-evidence")).toBe(true);
-    for (const example of examples) {
-      if (example.answer.cause !== "insufficient-evidence") expect(example.answer.steps.length).toBeGreaterThanOrEqual(1);
-    }
+    expect(parsed.allowedCauses).toBeUndefined();
+    expect(parsed.examples).toBeUndefined();
+  });
+
+  it("states that no rule matched for insufficient evidence", () => {
+    const parsed = JSON.parse(promptFor(unavailable, insufficient)) as { classification: Record<string, unknown> };
+    expect(parsed.classification).toEqual({ cause: "none", rule: "No rule matched the recorded evidence." });
+  });
+
+  it("carries a placeholder answer format with no cause or confidence to copy", () => {
+    const format = (JSON.parse(promptFor()) as { answerFormat: Record<string, unknown> }).answerFormat;
+
+    expect(Object.keys(format).sort()).toEqual(["evidenceIds", "responseVersion", "steps", "summary"]);
+    expect(format.responseVersion).toBe(4);
+    expect(format.steps).toEqual([expect.any(String)]);
+    expect(format).not.toHaveProperty("cause");
+    expect(format).not.toHaveProperty("confidence");
+  });
+
+  it("passes a capacity note only when evidence was omitted for the prompt", () => {
+    expect(JSON.parse(promptFor()).note).toBeUndefined();
+    expect(JSON.parse(promptFor(unavailable, downstream, "Body excerpts were omitted.")).note).toBe("Body excerpts were omitted.");
   });
 
   it("states whether specification context exists", () => {

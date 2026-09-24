@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpecificationContext } from "@apipilot/shared-domain";
-import { buildEvidence } from "../../../src/failureAnalysis/buildEvidence";
+import { buildEvidence, trimEvidenceForPrompt } from "../../../src/failureAnalysis/buildEvidence";
 import {
   SECRET_VALUES,
   connectivityFailure,
@@ -133,16 +133,30 @@ describe("buildEvidence (research D4)", () => {
     ).toBe(false);
   });
 
-  it("drops bodies, then headers, and records the omission when trimming for capacity", () => {
-    const result = withRawCapture(failedResult());
-    const withoutBodies = buildEvidence(result, unavailable, { omitBodies: true }).evidence;
-    expect(withoutBodies.map((item) => item.kind)).not.toContain("request-body-excerpt");
-    expect(withoutBodies.at(-1)?.text).toBe(
-      "Some evidence (body excerpts) was omitted to fit the model's input capacity",
-    );
+  it("always builds the full list: trimming is never applied to stored evidence (research D8 revision)", () => {
+    const kinds = buildEvidence(withRawCapture(failedResult()), unavailable).evidence.map((item) => item.kind);
+    expect(kinds).toEqual(expect.arrayContaining(["request-body-excerpt", "response-body-excerpt", "request-headers"]));
+  });
+});
 
-    const minimal = buildEvidence(result, unavailable, { omitBodies: true, omitHeaders: true }).evidence;
-    expect(minimal.map((item) => item.kind)).not.toContain("request-headers");
-    expect(minimal.at(-1)?.kind).toBe("omitted-for-capacity");
+describe("trimEvidenceForPrompt (research D8 revision; /speckit-analyze C1)", () => {
+  const full = () => buildEvidence(withRawCapture(failedResult()), unavailable).evidence;
+
+  it("returns the evidence unchanged, with no note, when nothing is omitted", () => {
+    expect(trimEvidenceForPrompt(full(), {})).toEqual({ evidence: full() });
+  });
+
+  it("drops body excerpts, then headers, keeping every remaining item's original id", () => {
+    const evidence = full();
+    const withoutBodies = trimEvidenceForPrompt(evidence, { omitBodies: true });
+    expect(withoutBodies.evidence.map((item) => item.kind)).not.toContain("request-body-excerpt");
+    expect(withoutBodies.evidence.map((item) => item.id)).toEqual(
+      evidence.filter((item) => !item.kind.endsWith("-body-excerpt")).map((item) => item.id),
+    );
+    expect(withoutBodies.note).toBe("Some evidence (body excerpts) was omitted to fit the model's input capacity.");
+
+    const minimal = trimEvidenceForPrompt(evidence, { omitBodies: true, omitHeaders: true });
+    expect(minimal.evidence.map((item) => item.kind)).not.toContain("request-headers");
+    expect(minimal.note).toBe("Some evidence (body excerpts and header lists) was omitted to fit the model's input capacity.");
   });
 });

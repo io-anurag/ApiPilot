@@ -193,4 +193,45 @@ describe("failure analysis — specification context from the guided workflow (U
       reason: "no-generated-collection",
     });
   }, 120_000);
+
+  it("lets the documented responses decide the cause, and falls back to the test's own status when context is gone (research D15 rules 5 and 6)", async () => {
+    // POST /users documents only 201, so a 200 is undocumented.
+    target.configure("POST", "/users", { status: 200, body: { id: "u-1" } });
+    const agent = request.agent(createApp(workflowAwareProvider()));
+    const artifact = await generateCollection(agent);
+
+    const createStep = allItems(artifact).find(
+      (item) => item.request.method === "POST" && item.provenance?.scenarioId !== undefined,
+    );
+    expect(createStep).toBeDefined();
+    if (!createStep) return;
+
+    const { collectionId, run } = await uploadAndRun(agent, artifact, baseUrl);
+    const resultIndex = (run.results as Array<{ itemId?: string }>).findIndex((result) => result.itemId === createStep.id);
+    expect(run.results[resultIndex].outcome).toBe("failed");
+    const url = `/api/external-collections/${collectionId}/execution/runs/${run.id}/results/${resultIndex}/failure-analysis`;
+
+    const analyzed = (await agent.post(url)).body.analysis;
+    expect(analyzed.conclusion).toMatchObject({
+      kind: "likely-cause",
+      cause: "specification-mismatch",
+      strength: "high",
+      ruleId: "undocumented-status",
+    });
+    const deciding = (analyzed.evidence as Array<{ id: string; kind: string; source: string }>).filter((item) =>
+      (analyzed.conclusion.decidingEvidenceIds as string[]).includes(item.id),
+    );
+    expect(deciding).toContainEqual(expect.objectContaining({ kind: "documented-responses", source: "specification-context" }));
+
+    // Without the workflow the same failure is still a specification mismatch, from the test's own
+    // status assertion, with moderate strength.
+    const spec = readFileSync(path.join(__dirname, "..", "..", "fixtures", "failureAnalysis", "users-api.yaml"));
+    await agent.post("/api/test-generation-workflow?discardExisting=true").attach("file", spec, "users-api.yaml");
+    const withoutContext = (await agent.post(url)).body.analysis;
+    expect(withoutContext.conclusion).toMatchObject({
+      cause: "specification-mismatch",
+      strength: "moderate",
+      ruleId: "status-assertion-mismatch",
+    });
+  }, 120_000);
 });

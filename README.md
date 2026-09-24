@@ -65,7 +65,7 @@ The following capabilities are implemented in the current repository:
 - Postman collection, environment, and artifact README generation from approved test intent.
 - OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, resource-qualified path-parameter variables (`/users/{id}` → `{{user_id}}`), automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
 - Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP, where a request whose data prerequisite failed is held back as "dependency not met" and every result records its processing stage.
-- On-demand AI failure analysis of one failed request in an Import & Run Collection run (*implementation complete, AI evaluation pending*; see [Limitations](#limitations-and-roadmap)). The analysis is a labelled inference: a likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", a confidence, a plain-language summary, suggested next steps, and the deterministically extracted, redacted evidence it cites. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
+- On-demand AI failure analysis of one failed request in an Import & Run Collection run (*implementation complete, AI evaluation pending*; see [Limitations](#limitations-and-roadmap)). Deterministic rules decide the likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", with a fixed High or Moderate strength and the rule that decided it. The local AI adds only a plain-language summary and suggested next steps, labelled as an inference. The redacted evidence behind the cause is shown, and if the AI is unavailable the cause and evidence are still shown and stored. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
@@ -210,7 +210,20 @@ An unresolved variable does not refuse an uploaded-collection run: an earlier re
 
 ### AI failure analysis (on demand)
 
-For any failed request in an uploaded-collection run, including one still in progress, the operator can choose **Analyze failure** (`specs/030-ai-failure-analysis`). `buildEvidence.ts` extracts an ordered, redacted evidence list (`E1..En`) from the recorded result: failure category, status, timing, test outcomes and, for a `local`-tier run, redacted request/response excerpts. It adds the matched specification context when there is one. The prompt goes through `AIProvider` like every other AI call. The model must answer with one of three causes or `insufficient-evidence`, a confidence, a summary, up to three steps, and the ids of the evidence it relies on. Unknown ids are dropped. No valid citation, or a confidence below 0.5, turns the answer into "insufficient evidence". Unparseable output is reported as an `ai-failed` outcome, and there is no automatic retry. A pre-flight viability check refuses analyses that would exceed the inference timeout. Only one analysis runs at a time per session; the UI shows "Waiting for the local AI" separately from "Generating".
+For any failed request in an uploaded-collection run, including one still in progress, the operator can choose **Analyze failure** (`specs/030-ai-failure-analysis`). `buildEvidence.ts` extracts an ordered, redacted evidence list (`E1..En`) from the recorded result: failure category, status, timing, test outcomes and, for a `local`-tier run, redacted request/response excerpts. It adds the matched specification context when there is one.
+
+`classifyFailure.ts` then decides the cause from that full evidence with seven ordered rules (research D15 in the spec folder). The first rule that matches decides, and a failure that matches no rule is reported as "insufficient evidence":
+- no response: environment issue, High;
+- a 502 or 504 gateway error: environment, Moderate;
+- 401, 403, 407, 408 or 429: environment, Moderate;
+- a 500 or 503 whose body names another service: downstream, Moderate;
+- a status the specification does not document: specification mismatch, High;
+- a status test mismatch: specification, Moderate;
+- a failed content test: specification, Moderate.
+
+Ambiguous signals, such as a 404 or a bare 500, deliberately match nothing. The rules read the full evidence, so the cause never depends on the configured model.
+
+The AI is then asked, through `AIProvider`, only to explain that cause: a summary, one to three steps, and the evidence ids it relies on (prompt v4). Only a copy of the evidence sent to the model is trimmed to fit its input limit. An answer that cites no valid evidence, or that names a different cause, is rejected. When the AI fails, times out, is not viable within the inference timeout, or is rejected, the explanation is marked unavailable with the reason, and the rule result is still stored. A failed re-explanation never overwrites a stored one. There is no automatic retry. Only one analysis runs at a time per session; the UI shows "Waiting for the local AI" separately from "Generating".
 
 Specification context is attached only when the failed request's Postman item id matches an item in the session's current guided-workflow collection. It is snapshotted into the stored analysis, so starting a new workflow does not change an earlier analysis. A collection ApiPilot did not generate is still analyzed, with context shown as unavailable and the reason given.
 
@@ -251,7 +264,9 @@ To run an existing Postman collection instead, choose **Import & Run Collection*
 
 ## Configuration
 
-Copy `.env.example` to `.env` to override defaults. Configuration is loaded by `backend/src/loadEnv.ts`; backend startup validates the enhancement run budget and initializes persistence before accepting requests.
+Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by `backend/src/loadEnv.ts`; the Vite dev server and `npm run stop` read the two ports from the same file, and a variable already set in the shell takes precedence everywhere. Backend startup validates the enhancement run budget and initializes persistence before accepting requests.
+
+`.env.example` leaves the tuning variables (timeouts, batch sizes, run budgets, throughput estimates) empty or commented out, so the defaults in `backend/src/ai/modelConfig.ts` apply; set one only to override it. Relative paths in `AI_MODEL_CACHE_DIR` and `APIPILOT_DB_PATH` resolve from the backend's working directory, which is `backend/` under the npm scripts; the example's `models` and `db/apipilot.db` therefore land in the git-ignored `backend/models/` and `backend/db/`.
 
 | Variable                             | Purpose                                                             | Default                                 |
 | ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------- |
@@ -263,11 +278,11 @@ Copy `.env.example` to `.env` to override defaults. Configuration is loaded by `
 | `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                       | `onnx-community/Qwen2.5-0.5B-Instruct`  |
 | `AI_MODEL_CACHE_DIR`                 | Local model cache directory                                         | `~/.apipilot/models`                    |
 | `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                | Unset; fp32 is the measured CPU default |
-| `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout                                 | `120000`                                |
+| `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                    |
 | `AI_MODEL_CONTEXT_FLOOR_TOKENS`      | Conservative context estimate when a model reports none             | `2048`                                  |
 | `AI_USE_ACCELERATOR`                 | Attempt hardware acceleration                                       | `false`                                 |
 | `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Operations per scenario-enhancement batch                           | `1`                                     |
-| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                            | `2700000`                               |
+| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                            | `300000` (5 minutes)                    |
 | `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Operations per AI dependency batch                                  | `3`                                     |
 | `AI_DEPENDENCY_RUN_BUDGET_MS`        | Whole AI dependency pass ceiling                                    | `120000`                                |
 | `AI_PREFILL_MS_PER_TOKEN`            | Optional viability estimate override                                | Code default                            |
@@ -349,7 +364,7 @@ Mounted independently of the guided-workflow routes above — no active workflow
 | `POST` | `/api/external-collections/:id/execution/cancel`           | Requests cancellation of the active run.                                                       |
 | `GET`  | `/api/external-collections/:id/execution/runs`              | Lists this collection's run summaries.                                                          |
 | `GET`  | `/api/external-collections/:id/execution/runs/:runId`        | Retrieves one run and its per-request results, independent of the collection's own lifecycle.  |
-| `POST` | `/api/external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` | Analyzes one failed result with the configured AI provider. AI outcomes (`analyzed`, `ai-failed`, `not-viable`) are returned in a `200`; a result that did not fail, or an analysis already in progress in the session, returns `409`. |
+| `POST` | `/api/external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` | Classifies one failed result by rule and asks the configured AI provider to explain it. Returns `200` with `analyzed` (stored; its explanation may be unavailable) or `kept-previous` (the new explanation failed, so the stored one was kept); a result that did not fail, or an analysis already in progress in the session, returns `409`. |
 | `GET`  | `/api/external-collections/:id/execution/runs/:runId/failure-analyses` | Lists the run's stored analyses, ordered by result index.                                     |
 | `GET`  | `/api/failure-analysis/in-progress`                          | Returns the session's analysis in progress and its phase, or `204` when there is none.          |
 
@@ -368,7 +383,7 @@ There is no login or account system. Each browser receives an unguessable UUID i
 `better-sqlite3` creates the configured database and schema on first use. The persisted categories are:
 
 - Session-owned environments and their execution run history.
-- Session-owned uploaded collections, their runs, and AI failure analyses (one encrypted analysis per failed result, replaced atomically when the result is analyzed again).
+- Session-owned uploaded collections, their runs, and AI failure analyses (one encrypted analysis per failed result, replaced atomically when the result is analyzed again). Analyses stored by the earlier AI-decided version are removed at startup, with the count logged, because their cause was chosen by the AI.
 - AI readiness history and benchmark diagnostics, which are process-wide rather than session-owned.
 
 Environment variable and credential-like values are encrypted with AES-256-GCM. The key is stored in a sibling `${APIPILOT_DB_PATH}.key` file, so the database and key must be backed up together. A corrupted or unreadable database fails startup explicitly. Runs left in progress during a backend restart are recorded as cancelled with a backend-restart reason.
@@ -381,7 +396,7 @@ Environment variable and credential-like values are encrypted with AES-256-GCM. 
 - Real API traffic occurs only after an explicit execution action against an operator-defined environment.
 - Destructive requests and production-tier environments require an additional confirmation.
 - Logs exclude specifications, credentials, raw prompts, raw model responses, and complete request/response bodies.
-- AI failure analysis redacts sensitive headers, query parameters, and body fields before evidence reaches the prompt or storage, replaces any sensitive value or bearer token the model's summary or steps still contain, and never sends a request to the target API. Its output is labelled as an AI inference, not a confirmed root cause.
+- AI failure analysis redacts sensitive headers, query parameters, and body fields before evidence reaches the prompt or storage, replaces any sensitive value or bearer token the model's summary or steps still contain, and never sends a request to the target API. The cause is rule-derived and labelled as a likely, not confirmed, cause; only the summary and steps are AI output, labelled as an inference.
 - Frontend error forwarding is best-effort, size-limited, and filtered for credential-shaped fields.
 
 ## Repository structure
@@ -460,7 +475,7 @@ Current intentional limitations include:
 - Local AI performance depends heavily on the selected model and machine. Large specifications may settle as partial or not completed at the configured run budget while retaining successful units.
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
-- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), lets you ask the local AI to explain one failed request in an Import & Run Collection run: a labelled inference with confidence, cited evidence and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*: the default `Qwen2.5-0.5B-Instruct` model did not reach the evaluation bar (50% structured output with the current prompt, against an 80% bar; `specs/030-ai-failure-analysis/evaluation.md`), and a model decision is open. Treat its conclusions with caution until that decision is made. It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
+- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), explains one failed request in an Import & Run Collection run: fixed rules decide the likely cause from the recorded evidence, and the local AI adds a labelled summary and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*. On the 12-case synthetic evaluation corpus the rules match every label, and the default `Qwen2.5-0.5B-Instruct` wrote a usable explanation for all 12 with no contradictions (`specs/030-ai-failure-analysis/evaluation.md`, run 5). It is not recorded as Implemented until the corpus also contains at least 4 real, redacted recorded failures. The cause is a likely cause, not a confirmed root cause; a failure no rule covers is reported as "insufficient evidence". It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
 - Dependency-aware holding of requests (`specs/029-execution-gap-closure`) applies to the guided workflow's API-only execution path. Uploaded-collection runs execute every selected request in collection order, and a request that depends on a failed one records its own outcome.
 - AP-029, k6 performance testing, is a roadmap entry only and is not started.

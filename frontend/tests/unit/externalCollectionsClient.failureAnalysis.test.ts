@@ -16,12 +16,13 @@ afterEach(() => {
 });
 
 describe("failure analysis client (contracts/failure-analysis-api.md)", () => {
-  it("returns a 200 attempt as ok, including AI failures", async () => {
-    const fetchMock = stub(200, { status: "ai-failed", aiErrorCategory: "TIMEOUT", message: "Too slow." });
+  it("returns a 200 attempt as ok, including a kept-previous outcome after an AI failure (research D18)", async () => {
+    const body = { status: "kept-previous", analysis: { runId: "run-1" }, previousAnalysis: { runId: "run-1" }, message: "Too slow." };
+    const fetchMock = stub(200, body);
 
     const result = await requestFailureAnalysis("uc-1", "run-1", 2);
 
-    expect(result).toEqual({ ok: true, attempt: { status: "ai-failed", aiErrorCategory: "TIMEOUT", message: "Too slow." } });
+    expect(result).toEqual({ ok: true, attempt: body });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/external-collections/uc-1/execution/runs/run-1/results/2/failure-analysis",
       expect.objectContaining({ method: "POST" }),

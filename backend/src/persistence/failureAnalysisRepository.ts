@@ -31,20 +31,22 @@ export class SqliteFailureAnalysisRepository implements FailureAnalysisRepositor
     this.connection.db
       .prepare(
         `INSERT INTO failure_analyses
-           (session_id, run_id, result_index, generated_at, analysis_encrypted, analysis_iv)
-         VALUES (?, ?, ?, ?, ?, ?)
+           (session_id, run_id, result_index, generated_at, analysis_encrypted, analysis_iv, analysis_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session_id, run_id, result_index) DO UPDATE SET
            generated_at = excluded.generated_at,
            analysis_encrypted = excluded.analysis_encrypted,
-           analysis_iv = excluded.analysis_iv`,
+           analysis_iv = excluded.analysis_iv,
+           analysis_version = excluded.analysis_version`,
       )
       .run(
         sessionId,
         analysis.runId,
         analysis.resultIndex,
-        analysis.provenance.generatedAt,
+        analysis.analyzedAt,
         encrypted.ciphertext,
         encrypted.iv,
+        analysis.analysisVersion,
       );
   }
 

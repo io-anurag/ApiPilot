@@ -216,24 +216,29 @@ describe("ExternalCollectionRunPanel", () => {
 
 describe("ExternalCollectionRunPanel — AI failure analysis (AP-031)", () => {
   const storedAnalysis: FailureAnalysis = {
+    analysisVersion: 2,
     runId: "run-1",
     resultIndex: 1,
     requestName: "Create widget",
     requestMethod: "POST",
-    conclusion: { kind: "likely-cause", cause: "downstream-service-issue", confidence: 0.9 },
-    summary: "A dependency failed.",
-    investigationSteps: ["Check the dependency."],
-    citedEvidenceIds: ["E1"],
+    conclusion: {
+      kind: "likely-cause",
+      cause: "downstream-service-issue",
+      strength: "moderate",
+      ruleId: "dependency-named-in-server-error",
+      decidingEvidenceIds: ["E1"],
+    },
+    classificationProvenance: { source: "RULE", ruleSetVersion: 1 },
+    explanation: {
+      status: "available",
+      summary: "A dependency failed.",
+      investigationSteps: ["Check the dependency."],
+      citedEvidenceIds: ["E1"],
+      provenance: { source: "AI", aiModel: "test-model", aiProvider: "local", responseVersion: 4 },
+    },
     evidence: [{ id: "E1", kind: "response-status", source: "run-result", text: "Response status 500" }],
     specificationContext: { status: "unavailable", reason: "no-request-identity" },
-    provenance: {
-      source: "AI",
-      aiModel: "test-model",
-      aiProvider: "local",
-      responseVersion: 1,
-      confidenceThreshold: 0.5,
-      generatedAt: "2026-09-23T10:00:00.000Z",
-    },
+    analyzedAt: "2026-09-24T10:00:00.000Z",
   };
 
   /** History with one run; its detail; its stored analyses; and a scripted in-progress sequence. */

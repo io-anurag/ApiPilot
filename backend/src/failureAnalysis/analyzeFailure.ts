@@ -3,18 +3,22 @@ import type {
   AIProvider,
   FailureAnalysis,
   FailureAnalysisAttempt,
+  FailureAnalysisConclusion,
+  FailureAnalysisExplanation,
+  SpecificationContext,
   UploadedCollectionExecutionRun,
+  UploadedRequestResult,
 } from "@apipilot/shared-domain";
 import { AIProviderError } from "../ai/errors";
 import { CHARS_PER_TOKEN_ESTIMATE } from "../ai/modelConfig";
 import { estimateViability, formatDuration, type ViabilityRates } from "../ai/viability";
 import { createLogger } from "../logger";
-import { buildEvidence, type EvidenceBuild, type EvidenceOptions } from "./buildEvidence";
+import { buildEvidence, trimEvidenceForPrompt, type EvidenceBuild, type PromptTrimOptions } from "./buildEvidence";
+import { FAILURE_CLASSIFICATION_RULESET_VERSION, classifyFailure } from "./classifyFailure";
 import { FailureAnalysisInProgressError, ResultNotFailedError, ResultNotFoundError } from "./errors";
 import type { FailureAnalysisStore } from "./failureAnalysisStore";
 import {
   FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS,
-  FAILURE_ANALYSIS_MIN_CONFIDENCE,
   FAILURE_ANALYSIS_RESPONSE_VERSION,
   FAILURE_ANALYSIS_SYSTEM_PROMPT,
   buildFailureAnalysisPrompt,
@@ -26,8 +30,10 @@ import { parseFailureAnalysisResponse } from "./parseFailureAnalysisResponse";
 import { scanOutput, sensitiveVariableValues } from "./redaction";
 
 /**
- * Orchestrates one on-demand failure analysis (specs/030-ai-failure-analysis FR-001..FR-016).
- * Reads an already-recorded result and never sends a request to the target API (FR-009). Logs
+ * Orchestrates one on-demand failure analysis (specs/030-ai-failure-analysis FR-001..FR-018).
+ * Reads an already-recorded result and never sends a request to the target API (FR-009). The
+ * cause is decided by rules on the full evidence (research D15); the AI only writes the
+ * explanation, and an AI failure never blocks the rule result (FR-006, research D17, D18). Logs
  * carry identifiers, counts and categories only — never evidence, prompt, answer or summary text
  * (constitution XX).
  */
@@ -61,21 +67,108 @@ export interface AnalyzeFailureInput {
 function plainMessage(category: AIErrorCategory, budgetMs: number): string {
   switch (category) {
     case "NOT_READY":
-      return "The local AI model is not available right now. Check the AI status and try again.";
+      return "The local AI model is not available right now, so no explanation was written. Check the AI status and try again.";
     case "LOAD_FAILED":
-      return "The local AI model could not be loaded, so no analysis was produced.";
+      return "The local AI model could not be loaded, so no explanation was written.";
     case "TIMEOUT":
-      return `The local AI model did not finish within ${formatDuration(budgetMs)}. You can try again.`;
+      return `The local AI model did not finish within ${formatDuration(budgetMs)}, so no explanation was written. You can try again.`;
     case "INVALID_REQUEST":
-      return "This failure's evidence is too large for the local AI model, even after trimming.";
+      return "This failure's evidence is too large for the local AI model, even after trimming, so no explanation was written.";
     case "INVALID_RESPONSE":
-      return "The local AI model's answer could not be understood, so nothing was stored. You can try again.";
+      return "The local AI model's answer could not be used, so no explanation was written. You can try again.";
     case "PROVIDER_UNAVAILABLE":
-      return "The local AI provider is unavailable, so no analysis was produced.";
+      return "The local AI provider is unavailable, so no explanation was written.";
   }
 }
 
-const TRIM_STEPS: readonly EvidenceOptions[] = [{}, { omitBodies: true }, { omitBodies: true, omitHeaders: true }];
+/** Prompt-only trim steps (research D8 revision): bodies first, then header lists. */
+const TRIM_STEPS: readonly PromptTrimOptions[] = [{}, { omitBodies: true }, { omitBodies: true, omitHeaders: true }];
+
+function unavailableFromError(category: AIErrorCategory, budgetMs: number): FailureAnalysisExplanation {
+  return {
+    status: "unavailable",
+    reason: { kind: "ai-error", aiErrorCategory: category },
+    message: plainMessage(category, budgetMs),
+  };
+}
+
+interface ExplainInput {
+  sessionId: string;
+  result: UploadedRequestResult;
+  specificationContext: SpecificationContext;
+  built: EvidenceBuild;
+  conclusion: FailureAnalysisConclusion;
+}
+
+/** Asks the AI to explain the rule-decided conclusion. Never throws for an AI outcome. */
+async function explain(deps: AnalyzeFailureDeps, input: ExplainInput): Promise<FailureAnalysisExplanation> {
+  const { result, specificationContext, built, conclusion } = input;
+  try {
+    const budgetChars = await deps.provider.getInputBudget(FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS);
+    let prompt: string | undefined;
+    let promptEvidenceIds: ReadonlySet<string> = new Set();
+    for (const options of TRIM_STEPS) {
+      const trimmed = trimEvidenceForPrompt(built.evidence, options);
+      const candidate = buildFailureAnalysisPrompt({
+        requestMethod: result.requestMethod,
+        requestName: result.requestName,
+        evidence: trimmed.evidence,
+        specificationContext,
+        conclusion,
+        ...(trimmed.note ? { note: trimmed.note } : {}),
+      });
+      if (budgetChars === undefined || candidate.length <= budgetChars) {
+        prompt = candidate;
+        promptEvidenceIds = new Set(trimmed.evidence.map((item) => item.id));
+        break;
+      }
+    }
+    if (prompt === undefined) return unavailableFromError("INVALID_REQUEST", deps.viability.budgetMs);
+
+    const estimate = estimateViability({
+      promptTokens: Math.ceil((prompt.length + FAILURE_ANALYSIS_SYSTEM_PROMPT.length) / CHARS_PER_TOKEN_ESTIMATE),
+      maxOutputTokens: FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS,
+      rates: deps.viability.rates,
+      budgetMs: deps.viability.budgetMs,
+      safetyFactor: deps.viability.safetyFactor,
+    });
+    if (!estimate.viable) {
+      return {
+        status: "unavailable",
+        reason: { kind: "not-viable", projectedMs: estimate.projectedMs, budgetMs: estimate.budgetMs },
+        message:
+          `This explanation is projected to take ${formatDuration(estimate.projectedMs)}, but one local AI ` +
+          `request is limited to ${formatDuration(estimate.budgetMs)}, so it was not attempted.`,
+      };
+    }
+
+    const response = await deps.provider.infer(buildFailureAnalysisRequest(prompt), {
+      onStarted: () => deps.registry.markGenerating(input.sessionId),
+    });
+    const parsed = parseFailureAnalysisResponse(response, promptEvidenceIds, conclusion);
+    const sensitiveValues = [...built.sensitiveValues, ...sensitiveVariableValues(deps.getCollectionVariableValues())];
+    return {
+      status: "available",
+      summary: scanOutput(parsed.summary, sensitiveValues),
+      investigationSteps: parsed.investigationSteps.map((step) => scanOutput(step, sensitiveValues)),
+      citedEvidenceIds: parsed.citedEvidenceIds,
+      provenance: {
+        source: "AI",
+        aiModel: response.modelId,
+        aiProvider: response.provider,
+        responseVersion: FAILURE_ANALYSIS_RESPONSE_VERSION,
+      },
+    };
+  } catch (error) {
+    if (!(error instanceof AIProviderError)) throw error;
+    return unavailableFromError(error.category, deps.viability.budgetMs);
+  }
+}
+
+/** The deciding rule id, or `no-rule-matched`, for the settled log line. */
+function ruleLabel(conclusion: FailureAnalysisConclusion): string {
+  return conclusion.kind === "likely-cause" ? conclusion.ruleId : conclusion.reason;
+}
 
 export async function analyzeFailure(
   deps: AnalyzeFailureDeps,
@@ -97,102 +190,53 @@ export async function analyzeFailure(
   let outcome: FailureAnalysisAttempt | undefined;
   try {
     const previousAnalysis = deps.store.getAnalysis(run.id, resultIndex);
-    const withPrevious = previousAnalysis ? { previousAnalysis } : {};
     const specificationContext = matchSpecificationContext(result, deps.getWorkflow(), run.results, resultIndex);
-    const budgetChars = await deps.provider.getInputBudget(FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS);
-
-    let built: EvidenceBuild | undefined;
-    let prompt = "";
-    for (const options of TRIM_STEPS) {
-      built = buildEvidence(result, specificationContext, options);
-      prompt = buildFailureAnalysisPrompt({
-        requestMethod: result.requestMethod,
-        requestName: result.requestName,
-        evidence: built.evidence,
-        specificationContext,
-      });
-      if (budgetChars === undefined || prompt.length <= budgetChars) break;
-    }
-    if (!built || (budgetChars !== undefined && prompt.length > budgetChars)) {
-      outcome = {
-        status: "ai-failed",
-        aiErrorCategory: "INVALID_REQUEST",
-        message: plainMessage("INVALID_REQUEST", deps.viability.budgetMs),
-        ...withPrevious,
-      };
-      return outcome;
-    }
+    // Built once, in full: the rules read it and it is stored, whatever the input budget (C1).
+    const built = buildEvidence(result, specificationContext);
     evidenceCount = built.evidence.length;
+    const conclusion = classifyFailure(result, specificationContext, built.evidence);
+    const explanation = await explain(deps, { sessionId, result, specificationContext, built, conclusion });
 
-    const estimate = estimateViability({
-      promptTokens: Math.ceil((prompt.length + FAILURE_ANALYSIS_SYSTEM_PROMPT.length) / CHARS_PER_TOKEN_ESTIMATE),
-      maxOutputTokens: FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS,
-      rates: deps.viability.rates,
-      budgetMs: deps.viability.budgetMs,
-      safetyFactor: deps.viability.safetyFactor,
-    });
-    if (!estimate.viable) {
-      outcome = {
-        status: "not-viable",
-        notViable: { projectedMs: estimate.projectedMs, budgetMs: estimate.budgetMs },
-        message:
-          `This analysis is projected to take ${formatDuration(estimate.projectedMs)}, but one local AI ` +
-          `request is limited to ${formatDuration(estimate.budgetMs)}.`,
-        ...withPrevious,
-      };
-      return outcome;
-    }
-
-    const response = await deps.provider.infer(buildFailureAnalysisRequest(prompt), {
-      onStarted: () => deps.registry.markGenerating(sessionId),
-    });
-    const parsed = parseFailureAnalysisResponse(response, new Set(built.evidence.map((item) => item.id)));
-
-    const sensitiveValues = [
-      ...built.sensitiveValues,
-      ...sensitiveVariableValues(deps.getCollectionVariableValues()),
-    ];
     const analysis: FailureAnalysis = {
+      analysisVersion: 2,
       runId: run.id,
       resultIndex,
       requestName: result.requestName,
       requestMethod: result.requestMethod,
-      conclusion: parsed.conclusion,
-      summary: scanOutput(parsed.summary, sensitiveValues),
-      investigationSteps: parsed.investigationSteps.map((step) => scanOutput(step, sensitiveValues)),
-      citedEvidenceIds: parsed.citedEvidenceIds,
+      conclusion,
+      classificationProvenance: { source: "RULE", ruleSetVersion: FAILURE_CLASSIFICATION_RULESET_VERSION },
+      explanation,
       evidence: built.evidence,
       specificationContext,
-      provenance: {
-        source: "AI",
-        aiModel: response.modelId,
-        aiProvider: response.provider,
-        responseVersion: FAILURE_ANALYSIS_RESPONSE_VERSION,
-        confidenceThreshold: FAILURE_ANALYSIS_MIN_CONFIDENCE,
-        generatedAt: deps.now().toISOString(),
-      },
+      analyzedAt: deps.now().toISOString(),
     };
+
+    // A failed re-explanation never overwrites a stored explanation (FR-015, research D18).
+    if (explanation.status === "unavailable" && previousAnalysis?.explanation.status === "available") {
+      outcome = {
+        status: "kept-previous",
+        analysis,
+        previousAnalysis,
+        message: `${explanation.message} The earlier explanation was kept.`,
+      };
+      return outcome;
+    }
     deps.store.saveAnalysis(analysis);
     outcome = { status: "analyzed", analysis };
     return outcome;
-  } catch (error) {
-    if (!(error instanceof AIProviderError)) throw error;
-    const previousAnalysis = deps.store.getAnalysis(run.id, resultIndex);
-    outcome = {
-      status: "ai-failed",
-      aiErrorCategory: error.category,
-      message: plainMessage(error.category, deps.viability.budgetMs),
-      ...(previousAnalysis ? { previousAnalysis } : {}),
-    };
-    return outcome;
   } finally {
     deps.registry.end(sessionId);
+    const settled = outcome?.analysis;
     logger.info("failure_analysis_settled", {
       runId: run.id,
       resultIndex,
       status: outcome?.status ?? "error",
-      errorCategory: outcome?.status === "ai-failed" ? outcome.aiErrorCategory : undefined,
-      conclusion: outcome?.status === "analyzed" ? outcome.analysis.conclusion.kind : undefined,
+      ruleId: settled ? ruleLabel(settled.conclusion) : undefined,
+      explanationStatus: settled?.explanation.status,
+      errorCategory:
+        settled?.explanation.status === "unavailable" && settled.explanation.reason.kind === "ai-error"
+          ? settled.explanation.reason.aiErrorCategory
+          : undefined,
       evidenceCount,
       durationMs: Date.now() - startedAt,
     });

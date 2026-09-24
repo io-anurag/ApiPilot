@@ -63,7 +63,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
-| AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 59 of 61 tasks done: backend, API, persistence, UI and tests are in place and passing. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Outstanding: (1) the real-model evaluation (`evaluation.md`, 2026-09-23) found the default `Qwen2.5-0.5B-Instruct` not adequate (prompt v2: 50% structured output, 17% cause agreement), so research D11 opens a model decision through AP-004; (2) T055's 4 real, redacted evaluation cases need a real recorded run; (3) T061's manual browser walkthrough of quickstart scenarios 1 to 5 was not performed (automated suites cover the same behavior). See Next Actions #26 |
+| AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1788,10 +1788,13 @@ ApiModel and workflow context are used only when a failed request matches the se
 guided workflow by exact item id. AP-017's API-only runs are out of scope. See the spec's
 Clarifications.
 
-Status note (2026-09-23): implementation complete, AI evaluation pending. The pipeline, API,
-persistence and UI are in place. The default local model did not reach the evaluation bar, so a
-model decision is open (`specs/030-ai-failure-analysis/evaluation.md`; Next Actions #26). The
-Objective and Scope below are the original roadmap entry; the spec is normative.
+Status note (2026-09-23, updated 2026-09-24): implementation complete, AI evaluation pending. The
+pipeline, API, persistence and UI are in place. No local model up to 1.7B could reliably decide the
+cause, so the spec was amended: fixed rules decide the likely cause from the recorded evidence and
+the local AI only explains it. With that change the default model meets the explanation bar
+(`specs/030-ai-failure-analysis/evaluation.md`, run 5). What remains is SC-006's requirement for
+real, redacted recorded failures in the evaluation corpus (Next Actions #26). The Objective and
+Scope below are the original roadmap entry; the spec is normative.
 
 ### Objective
 
@@ -2498,6 +2501,17 @@ Implementation
       The default model and prompt v2 are unchanged. The local provider now renders chat
       templates with `enable_thinking: false` (specs/013 research Decision 1 addendum). The next
       step needs a product decision among the options in `evaluation.md`.
+      *Resolved 2026-09-24:* the product decision was a rule-decided cause with the AI limited to
+      the explanation (spec Clarifications 2026-09-24; research D15 to D20; amendment tasks T062
+      to T090). Seven ordered rules over the full (untrimmed, redacted) evidence decide the cause, a
+      High or Moderate strength and the deciding rule, or "insufficient evidence" when none
+      matches. The AI answer (prompt v4) carries only a summary, cited evidence ids and one to
+      three steps, and is rejected if it names another cause; if it is unavailable, the cause and
+      evidence are still stored and shown, and an earlier explanation is kept. Analyses stored by
+      the AI-decided version are removed at startup with a logged count. Evaluation run 5: rules
+      12 of 12; `Qwen2.5-0.5B-Instruct` 12 of 12 usable explanations, 0 contradictions, 11.2 s
+      median; `Qwen3-1.7B` 11 of 12, 0 contradictions, 29.4 s median. The default model is
+      unchanged and no AP-004 proposal is needed.
     - **Real evaluation cases (T055).** At least 4 cases from a real, redacted recorded run are
       required and none exist yet. They need a redacted uploaded-collection run, or approval to
       record one against an authorized target such as the PayPal Invoicing API v2 walkthrough
@@ -2522,3 +2536,19 @@ Implementation
       outstanding manual UI pass is listed, and entries #21 and #22 were split onto separate lines.
     - Validation at this point: `npm test` 1,552 passed, 3 skipped, across 216 test files (plus 2
       skipped opt-in real-model files), unchanged from #26.
+28. **AP-031 rule-decided amendment implemented, and `.env.example` cleaned up (2026-09-24).**
+    - AP-031: see #26's resolved note. Documentation brought to the rule-decided design in
+      README.md, docs/architecture.md, docs/USER_MANUAL.md and `evaluation.md` (run 5). Status
+      stays *implementation complete, AI evaluation pending* until T055's real cases exist.
+    - `.env.example`: tuning variables whose value equalled the code default are now empty or
+      commented out, so `backend/src/ai/modelConfig.ts` is the single source of truth. The
+      enhancement run budget is left at its 5-minute default instead of 45 minutes. Comments now
+      say that relative paths resolve from `backend/`, that the key file is `<db path>.key`, and
+      that `AI_DEPENDENCY_TIMEOUT_MS` is a code constant.
+    - Bug fixed: `frontend/vite.config.ts` and `scripts/dev-stop.mjs` now read `BACKEND_PORT` and
+      `FRONTEND_DEV_PORT` from the root `.env`; before, only the backend did, so a changed port
+      broke the dev proxy and `npm run stop`. `.gitignore` now also ignores root `/models/` and
+      `/db/`. The README configuration table's run-budget default was corrected to `300000`.
+    - Validation: `npm test` 1,611 passed, 3 skipped, across 217 test files (plus 2 skipped
+      opt-in real-model files); `npm run lint` and `npm run build` clean. The quickstart browser
+      walkthrough (T061) was not performed.

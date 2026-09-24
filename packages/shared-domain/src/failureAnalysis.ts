@@ -5,7 +5,8 @@ import type { AIErrorCategory, AIProviderMode } from "./aiProvider";
  *
  * Framework-agnostic per constitution VIII/X. An analysis explains one failed
  * `UploadedRequestResult`, addressed by `(runId, resultIndex)`. Evidence is extracted
- * deterministically and only cited by the AI; the AI never writes evidence text (research D4).
+ * deterministically (research D4). Since 2026-09-24 the cause is decided by deterministic rules
+ * (research D15) and the AI writes only the explanation (research D16, D17).
  */
 
 export type FailureCause =
@@ -13,14 +14,44 @@ export type FailureCause =
   | "environment-issue"
   | "downstream-service-issue";
 
-export type InsufficientEvidenceReason =
-  | "model-reported"
-  | "below-confidence-threshold"
-  | "no-valid-evidence-cited";
+/** The classification rules, in the order they are checked (research D15). */
+export type FailureRuleId =
+  | "no-response"
+  | "gateway-error"
+  | "environment-rejected-request"
+  | "dependency-named-in-server-error"
+  | "undocumented-status"
+  | "status-assertion-mismatch"
+  | "response-content-assertion";
 
+/** One plain sentence per rule, shared by the prompt and the UI (data-model.md). */
+export const FAILURE_RULE_DESCRIPTIONS: Readonly<Record<FailureRuleId, string>> = {
+  "no-response": "No response was received: the connection failed or timed out.",
+  "gateway-error": "A gateway in front of the API returned 502 or 504, so the API itself was not reached.",
+  "environment-rejected-request":
+    "The environment rejected the request (401, 403, 407, 408 or 429): credentials, access, a proxy, a timeout or a rate limit.",
+  "dependency-named-in-server-error":
+    "The API returned 500 or 503 and its response names another service it depends on.",
+  "undocumented-status": "The response status is not one the specification documents for this operation.",
+  "status-assertion-mismatch": "A test expected a different response status than the one received.",
+  "response-content-assertion":
+    "The response status was successful, but a test on the response's content failed with a reason.",
+};
+
+/** A rule's fixed, documented strength; shown as a label with no number (clarification 2026-09-24). */
+export type FailureStrength = "high" | "moderate";
+
+/** Decided by rules, never by the AI (FR-003, FR-008). */
 export type FailureAnalysisConclusion =
-  | { kind: "likely-cause"; cause: FailureCause; confidence: number }
-  | { kind: "insufficient-evidence"; reason: InsufficientEvidenceReason; confidence?: number };
+  | {
+      kind: "likely-cause";
+      cause: FailureCause;
+      strength: FailureStrength;
+      ruleId: FailureRuleId;
+      /** Ids of the evidence that triggered the rule; always at least one. */
+      decidingEvidenceIds: string[];
+    }
+  | { kind: "insufficient-evidence"; reason: "no-rule-matched" };
 
 /** Fixed emission order (research D4); `id`s `E1..En` follow it. */
 export type FailureEvidenceKind =
@@ -36,8 +67,7 @@ export type FailureEvidenceKind =
   | "request-edited"
   | "documented-responses"
   | "scenario-expectation"
-  | "upstream-step-outcome"
-  | "omitted-for-capacity";
+  | "upstream-step-outcome";
 
 /** One deterministic, already-redacted fact offered to the model. */
 export interface FailureEvidence {
@@ -80,32 +110,53 @@ export type SpecificationContext =
     }
   | { status: "unavailable"; reason: SpecificationContextUnavailableReason };
 
-export interface FailureAnalysisProvenance {
+/** Provenance of the cause (FR-010): the rule itself is `conclusion.ruleId`. */
+export interface ClassificationProvenance {
+  source: "RULE";
+  ruleSetVersion: number;
+}
+
+/** Provenance of an available AI explanation (FR-010). */
+export interface ExplanationProvenance {
   source: "AI";
   aiModel: string;
   aiProvider: AIProviderMode;
   responseVersion: number;
-  /** The threshold applied, so an older analysis stays interpretable if the constant changes. */
-  confidenceThreshold: number;
-  generatedAt: string;
 }
 
-/** The AI-generated explanation for one failed uploaded-collection result (FR-003, FR-010). */
+export type ExplanationUnavailableReason =
+  | { kind: "ai-error"; aiErrorCategory: AIErrorCategory }
+  | { kind: "not-viable"; projectedMs: number; budgetMs: number };
+
+/** The AI-written part of an analysis, or why it is missing (FR-006, research D17). */
+export type FailureAnalysisExplanation =
+  | {
+      status: "available";
+      /** Model text; always presented as an inference (FR-007). */
+      summary: string;
+      /** One to three entries. */
+      investigationSteps: string[];
+      /** At least one entry; every entry is an `evidence[].id`. */
+      citedEvidenceIds: string[];
+      provenance: ExplanationProvenance;
+    }
+  | { status: "unavailable"; reason: ExplanationUnavailableReason; message: string };
+
+/** One failed uploaded-collection result explained: a rule-decided cause plus an AI explanation. */
 export interface FailureAnalysis {
+  /** Marks the rule-decided design; rows without it are removed on startup (research D19). */
+  analysisVersion: 2;
   runId: string;
   resultIndex: number;
   requestName: string;
   requestMethod: string;
   conclusion: FailureAnalysisConclusion;
-  /** Model text; always presented as an inference (FR-007). */
-  summary: string;
-  /** At least one entry when `conclusion.kind === "likely-cause"`. */
-  investigationSteps: string[];
-  /** Every entry is an `evidence[].id`. */
-  citedEvidenceIds: string[];
+  classificationProvenance: ClassificationProvenance;
+  explanation: FailureAnalysisExplanation;
+  /** The full, untrimmed evidence list the rules read (research D15). */
   evidence: FailureEvidence[];
   specificationContext: SpecificationContext;
-  provenance: FailureAnalysisProvenance;
+  analyzedAt: string;
 }
 
 /** The session's single analysis in progress (FR-016). In memory only. */
@@ -117,18 +168,12 @@ export interface FailureAnalysisInProgress {
   phaseStartedAt: string;
 }
 
-/** The POST response body (contracts/failure-analysis-api.md). */
+/** The POST response body (contracts/failure-analysis-api.md, research D18). */
 export type FailureAnalysisAttempt =
+  /** Stored, replacing any earlier analysis; its explanation may be unavailable. */
   | { status: "analyzed"; analysis: FailureAnalysis }
-  | {
-      status: "ai-failed";
-      aiErrorCategory: AIErrorCategory;
-      message: string;
-      previousAnalysis?: FailureAnalysis;
-    }
-  | {
-      status: "not-viable";
-      notViable: { projectedMs: number; budgetMs: number };
-      message: string;
-      previousAnalysis?: FailureAnalysis;
-    };
+  /**
+   * The new explanation is unavailable and the stored analysis has an available one, so the stored
+   * analysis was kept unchanged (FR-015). `analysis` is the new, unstored attempt.
+   */
+  | { status: "kept-previous"; analysis: FailureAnalysis; previousAnalysis: FailureAnalysis; message: string };

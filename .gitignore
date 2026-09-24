@@ -40,3 +40,6 @@ Thumbs.db
 .playwright-mcp/
 backend/models/**
 backend/db/**
+# Where AI_MODEL_CACHE_DIR / APIPILOT_DB_PATH land if the backend is started from the repo root.
+/models/
+/db/

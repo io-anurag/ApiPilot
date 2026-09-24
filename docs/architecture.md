@@ -475,13 +475,33 @@ and `FailureAnalysisPanel.tsx` renders inside the run panel's expanded result de
 
 ```text
 recorded failed result (+ matched specification context)
-  -> deterministic, redacted evidence E1..En
-  -> viability pre-flight -> AIProvider.infer (versioned prompt)
-  -> parse and validate -> conclusion rules -> output scan
-  -> encrypted upsert (failure_analyses) -> FailureAnalysisAttempt
+  -> deterministic, redacted evidence E1..En (always the full list)
+  -> classifyFailure: ordered rules -> cause, strength, rule id, deciding evidence   [no AI]
+  -> prompt copy trimmed to the input budget (original ids kept) -> viability pre-flight
+  -> AIProvider.infer (prompt v4: explain the given cause) -> validate -> output scan
+  -> explanation available, or unavailable with its reason
+  -> encrypted upsert (failure_analyses), or kept-previous -> FailureAnalysisAttempt
 ```
 
-The design keeps the AI's contribution narrow and checkable:
+Since 2026-09-24 the cause is decided by rules, not the AI (spec Clarifications 2026-09-24, research
+D15 to D19). `evaluation.md` runs 1 to 4 showed that no local model up to 1.7B could judge the
+cause reliably. The design keeps the AI's contribution narrow and checkable:
+
+- **Rules decide the cause** (D15). `classifyFailure.ts` checks seven rules in a fixed order, and
+  the first match gives the cause, a fixed strength and the deciding evidence ids:
+  - no response: environment, High;
+  - a 502 or 504 gateway error: environment, Moderate;
+  - 401, 403, 407, 408 or 429: environment, Moderate;
+  - a 500 or 503 whose redacted body names a `*-service` or `*-svc`: downstream, Moderate;
+  - a status the matched operation does not document: specification mismatch, High;
+  - a status-test mismatch: specification, Moderate;
+  - a failed content test with a reason: specification, Moderate.
+
+  A 404 or a bare 5xx matches nothing and becomes insufficient evidence. The service-name scan is
+  linear, because response bodies come from the target. Rules read the **full** evidence list,
+  which is also what is stored, so the cause never depends on the model's input budget
+  (constitution XXIV). The rule set is versioned (`FAILURE_CLASSIFICATION_RULESET_VERSION`), and
+  every labelled corpus case is checked in `npm test`.
 
 - **Evidence is deterministic** (research D4). `buildEvidence.ts` emits a fixed-order list:
   failure category, status, response time, one entry per test outcome, then the request line,
@@ -493,16 +513,22 @@ The design keeps the AI's contribution narrow and checkable:
   `testDesign/sensitiveValueDetection.ts` to redact sensitive headers, bearer tokens, sensitive
   query parameters, and JSON or `key=value` body fields, then truncates bodies. After inference it
   replaces any known sensitive value or bearer token in the model's summary and steps.
-- **Closed answer shape** (D6, D7). The model must return one of `specification-mismatch`,
-  `environment-issue`, `downstream-service-issue`, or `insufficient-evidence`. It also returns a
-  confidence in [0, 1], a summary of at most 400 characters, at most three steps, and cited ids.
-  Unknown ids are dropped. A self-reported insufficient answer, a confidence below 0.5, or no valid
-  citation becomes `insufficient-evidence` with that reason. A shape or parse failure is
-  `ai-failed`/`INVALID_RESPONSE`, with no automatic retry.
-- **Bounded time** (D8). `ai/viability.ts` refuses an analysis projected past the inference
-  timeout (`not-viable`) before calling the model. Oversized evidence is trimmed (body excerpts,
-  then headers) and the trim is recorded; if it still does not fit, the outcome is
-  `ai-failed`/`INVALID_REQUEST`. AI outcomes return in a `200` body, like the other AI endpoints.
+- **The AI only explains** (D16). Prompt v4 gives the model the rule-decided cause, the rule's
+  description, and a placeholder answer format with no cause or confidence to copy. The answer is
+  a summary, one to three plain-text steps, and cited ids. It is rejected (`INVALID_RESPONSE`) when
+  it:
+  - is malformed;
+  - cites no valid evidence;
+  - or names a cause other than the rule-decided one, a literal phrase check that also rejects
+    negated mentions.
+- **An unavailable AI never blocks the rule result** (D8, D17, D18). The prompt copy of the
+  evidence is trimmed to the input budget (body excerpts first, then headers) with a `note`. Past
+  that, the explanation is unavailable with `INVALID_REQUEST`. `ai/viability.ts` marks an
+  explanation projected past the inference timeout as unavailable (`not-viable`) before calling the
+  model. A provider error or rejection also makes the explanation unavailable, with its category.
+  The analysis, meaning the rule conclusion and the evidence, is stored either way. The one
+  exception is a failed re-explanation when a stored explanation already exists: the POST then
+  returns `kept-previous` and writes nothing (FR-015). There is no automatic retry.
 - **One at a time per session** (D10). `inProgressRegistry.ts` claims the session's slot
   synchronously before the first `await` and releases it in `finally`. A second request gets
   `409 failure_analysis_in_progress`. The provider's `onStarted` hook moves the entry from
@@ -518,16 +544,26 @@ into the stored analysis. Without a match, the context is `unavailable`, with on
 no request identity, no generated collection, not generated by the current workflow, or no
 originating scenario. AP-017's API-only runs are out of scope.
 
-Logs carry run id, result index, outcome, error category, conclusion kind, evidence count, and
-duration only. Prompts, model output, evidence, and summaries are never logged (constitution XX).
-Every analysis carries AI provenance (provider, model, response version, threshold, timestamp), and
-the UI labels it "AI inference, not a confirmed root cause".
+Logs carry run id, result index, status, rule id, explanation status, error category, evidence
+count, and duration only. Prompts, model output, evidence, and summaries are never logged
+(constitution XX). Provenance is split:
+- the cause carries `RULE` provenance: the rule id and the rule-set version;
+- an available explanation carries `AI` provenance: provider, model and response version.
+
+The UI shows the cause with a `RULE` badge and its strength label ("High" or "Moderate", no
+number), and labels only the summary and steps "AI inference, not a confirmed root cause".
+Analyses stored by the earlier AI-decided version have no `analysis_version`, and are removed at
+startup with a logged count (D19).
 
 Status: implementation complete, AI evaluation pending. `npm run test:ai-real:failure-analysis -w
-backend` runs a 12-case synthetic corpus against the real local provider. The default
-`Qwen2.5-0.5B-Instruct` did not meet research D11's 80% structured-output bar
-(`specs/030-ai-failure-analysis/evaluation.md`), so a model decision through AP-004's benchmark
-process is open. The pipeline around the model is model-agnostic and does not change with it.
+backend` runs a 12-case synthetic corpus against the real local provider and reports the share of
+usable explanations and of answers rejected for contradicting the rule (research D20). In run 5
+(`specs/030-ai-failure-analysis/evaluation.md`) the default `Qwen2.5-0.5B-Instruct` produced 12 of
+12 usable explanations with no contradictions, at an 11.2 s median on CPU, so the default model is
+unchanged. The rules match all 12 labels, which `npm test` also checks without a model. SC-006
+additionally requires at least 4 real, redacted recorded failures in the corpus, which do not exist
+yet, so the feature is not recorded as Implemented (constitution XXII). The pipeline around the
+model is model-agnostic and does not change with it.
 
 ## Security, privacy, and operational constraints
 
