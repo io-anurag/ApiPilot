@@ -107,6 +107,10 @@ describe.runIf(REAL_MODEL_ENABLED)("AI failure analysis — real-model evaluatio
         cases: total,
         structuredOutputSuccessRate: sum("structured") / total,
         causeAgreementRate: sum("agrees") / total,
+        // A likely cause (so confidence at or above the threshold) that disagrees with the label.
+        confidentlyWrongRate:
+          rows.filter((row) => row.structured === 1 && row.agrees === 0 && row.predicted !== "insufficient-evidence")
+            .length / total,
         validCitationRateOfStructured: structured.length ? sum("citedValid") / structured.length : 0,
         meanConfidenceOfStructured: structured.length
           ? structured.reduce((acc, row) => acc + Number(row.confidence), 0) / structured.length
@@ -123,7 +127,10 @@ describe.runIf(REAL_MODEL_ENABLED)("AI failure analysis — real-model evaluatio
       process.stdout.write(`FAILURE_ANALYSIS_EVALUATION ${report}\n`);
 
       expect(rows).toHaveLength(EVALUATION_CORPUS.length);
+      // Research D11's adoption bar (tightened 2026-09-24): all three must hold.
       expect.soft(summary.structuredOutputSuccessRate).toBeGreaterThanOrEqual(0.8);
+      expect.soft(summary.causeAgreementRate).toBeGreaterThanOrEqual(0.75);
+      expect.soft(summary.confidentlyWrongRate).toBeLessThanOrEqual(0.1);
     },
     60 * 60 * 1000,
   );

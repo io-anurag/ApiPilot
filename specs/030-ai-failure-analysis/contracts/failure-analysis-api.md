@@ -31,35 +31,50 @@ Checks run in this order. The first failing check determines the response:
 The run's own status is not checked, so a failed result can be analyzed while its run is still in
 progress (FR-001, clarification 2026-09-23).
 
-When every check passes, the response is **200 OK** with a `FailureAnalysisAttempt` body:
+When every check passes, the response is **200 OK** with a `FailureAnalysisAttempt` body.
+
+*Amended 2026-09-24* (spec Clarifications 2026-09-24; research D15 to D18): the cause is decided by
+rules before any inference, so an eligible request always produces an analysis. The `ai-failed`
+and `not-viable` statuses are replaced by `explanation.status: "unavailable"` and a
+`kept-previous` status.
 
 ```json
-{ "status": "analyzed", "analysis": { "runId": "…", "resultIndex": 3, "conclusion": { "kind": "likely-cause", "cause": "environment-issue", "confidence": 0.72 }, "summary": "…", "investigationSteps": ["…"], "citedEvidenceIds": ["E1", "E3"], "evidence": [ { "id": "E1", "kind": "failure-category", "source": "run-result", "text": "Request failed: connectivity failure (no response received)" } ], "specificationContext": { "status": "unavailable", "reason": "not-generated-by-current-workflow" }, "provenance": { "source": "AI", "aiModel": "onnx-community/Qwen2.5-0.5B-Instruct", "aiProvider": "local", "responseVersion": 2, "confidenceThreshold": 0.5, "generatedAt": "2026-09-23T10:00:00.000Z" }, "requestName": "…", "requestMethod": "GET" } }
+{ "status": "analyzed", "analysis": { "analysisVersion": 2, "runId": "…", "resultIndex": 3, "requestName": "…", "requestMethod": "GET",
+  "conclusion": { "kind": "likely-cause", "cause": "environment-issue", "strength": "high", "ruleId": "no-response", "decidingEvidenceIds": ["E1"] },
+  "classificationProvenance": { "source": "RULE", "ruleSetVersion": 1 },
+  "explanation": { "status": "available", "summary": "…", "investigationSteps": ["…"], "citedEvidenceIds": ["E1"],
+    "provenance": { "source": "AI", "aiModel": "onnx-community/Qwen2.5-0.5B-Instruct", "aiProvider": "local", "responseVersion": 4 } },
+  "evidence": [ { "id": "E1", "kind": "failure-category", "source": "run-result", "text": "Request failed: connectivity failure, no response was received" } ],
+  "specificationContext": { "status": "unavailable", "reason": "not-generated-by-current-workflow" },
+  "analyzedAt": "2026-09-24T10:00:00.000Z" } }
 ```
 
-On `analyzed`, the analysis has been stored, and it replaced any earlier analysis for this
-result atomically (FR-013, FR-015).
+On `analyzed`, the analysis has been stored. It replaced any earlier analysis for this result
+atomically (FR-013, FR-015). Its `explanation` may be unavailable:
 
 ```json
-{ "status": "ai-failed", "aiErrorCategory": "TIMEOUT", "message": "The local AI model did not finish within 2 minutes.", "previousAnalysis": { "…": "…" } }
+"explanation": { "status": "unavailable", "reason": { "kind": "ai-error", "aiErrorCategory": "TIMEOUT" }, "message": "The local AI model did not finish within 2 minutes." }
 ```
 
-On `ai-failed`:
-- `aiErrorCategory` is an `AIErrorCategory`:
+`reason` is one of:
+- `{ "kind": "ai-error", "aiErrorCategory": … }`, where the category is one of:
   - `NOT_READY`, `LOAD_FAILED` or `PROVIDER_UNAVAILABLE` for provider problems (FR-006);
   - `TIMEOUT`;
   - `INVALID_REQUEST` for input over the model's capacity after trimming;
-  - `INVALID_RESPONSE` for unparseable or invalid model output.
-- Nothing is written.
-- `previousAnalysis` is present only if one was already stored, and it is unchanged.
+  - `INVALID_RESPONSE` for an unparseable answer, an answer citing no valid evidence, or an answer
+    that names a cause other than the rule-decided one (FR-008).
+- `{ "kind": "not-viable", "projectedMs": 142000, "budgetMs": 120000 }` when the request was
+  refused before inference (research D8).
 
 ```json
-{ "status": "not-viable", "notViable": { "projectedMs": 142000, "budgetMs": 120000 }, "message": "This analysis would take about 2 min 22 s, longer than the 2 min limit.", "previousAnalysis": { "…": "…" } }
+{ "status": "kept-previous", "analysis": { "…": "the new analysis, not stored, explanation unavailable" }, "previousAnalysis": { "…": "the stored analysis, unchanged, explanation available" }, "message": "The local AI model did not finish within 2 minutes, so the earlier explanation was kept." }
 ```
 
-On `not-viable`, the request was refused before inference (research D8), and nothing is written.
+On `kept-previous`:
+- the new explanation is unavailable;
+- the stored analysis has an available one, so nothing is written (FR-015).
 
-AI outcomes are reported inside a 200 response, matching the existing AI endpoints
+Rule and AI outcomes are reported inside a 200 response, matching the existing AI endpoints
 (`aiProviderOutcome` in `enhancedTestModels`). A 5xx status means an unexpected server error only,
 with the standard safe body `{ "error": "internal_server_error" }`.
 
@@ -101,6 +116,6 @@ byte-identical. `specs/004-ai-provider-local-inference/data-model.md` carries a 
 
 ## Logging
 
-Each request logs `runId`, `resultIndex`, outcome `status`, `aiErrorCategory` when present,
-evidence count and duration. It never logs the prompt, the model response, evidence text, the
+Each request logs `runId`, `resultIndex`, outcome `status`, `ruleId` (or `no-rule-matched`), the
+explanation status, `aiErrorCategory` when present, evidence count and duration. It never logs the prompt, the model response, evidence text, the
 summary, or raw capture content (constitution XX).

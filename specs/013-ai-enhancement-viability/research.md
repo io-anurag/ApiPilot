@@ -59,6 +59,12 @@ loaded tokenizer declares a `chat_template`. Models without one receive the raw 
 today. The system message is selected from the existing `InferenceRequest.expectedOutputFormat`
 field (`"json"` vs `"text"`); no field is added to the contract.
 
+*Addendum 2026-09-24 (specs/030-ai-failure-analysis evaluation.md, run 4):* the template is
+also rendered with `enable_thinking: false`. Templates with a reasoning mode, such as Qwen3's,
+otherwise open the answer with a `<think>` block that spends the bounded output budget before
+any JSON. Templates that do not reference the variable ignore it. This was checked against the
+cached Qwen2.5-0.5B and Qwen2.5-1.5B tokenizers, whose rendered prompts are byte-identical.
+
 **Rationale**: The defect is that an instruction-tuned model is addressed as a text-completion
 model. `pipeline("text-generation")` applies a chat template only for a messages array, never for
 a plain string, so the framing must be applied by whoever knows a chat template exists. That is

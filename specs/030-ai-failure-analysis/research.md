@@ -96,6 +96,9 @@ matched `workflowId` so the user can see which workflow it came from.
 
 ## D4 — Evidence is extracted deterministically, and the AI only cites it (constitution II, IV, XIX)
 
+*Revised 2026-09-24: evidence extraction is unchanged, and the same list now also feeds the
+classification rules, which cite it as `decidingEvidenceIds` (D15, D17).*
+
 **Decision**: Build an ordered, redacted list of `FailureEvidence` items with ids `E1..En`
 deterministically from the result and the matched context. The AI must answer with the ids it
 relies on. Unknown ids are discarded, and if no valid id remains the answer becomes
@@ -161,6 +164,9 @@ is logged (D12).
 
 ## D6 — Prompt and response contract, and the system instruction (constitution XXIII)
 
+*Superseded 2026-09-24 for the prompt and response shape by D16 (v4: explanation only). The
+`systemPrompt` field and the reasoning for it below still stand.*
+
 **Decision**: A versioned prompt in `backend/src/failureAnalysis/failureAnalysisPrompt.ts`, with
 `FAILURE_ANALYSIS_RESPONSE_VERSION = 1`. As in AP-005/AP-008, the input is one
 `JSON.stringify({responseVersion, task, request, evidence, specificationContextNote, allowedCauses, example})`
@@ -203,6 +209,10 @@ provider stays free of feature rules (AP-004 constraint).
   `candidates` object.
 
 ## D7 — Parsing, validation, and the insufficient-evidence rules (FR-008)
+
+*Superseded 2026-09-24: the conclusion now comes from rules (D15). The parsing approach and the
+shape limits below still apply to the v4 explanation answer (D16), and the confidence threshold
+and model-derived insufficient-evidence reasons are retired.*
 
 **Decision**: Parsing and validation are hand-written, like the rest of the codebase (no schema
 library exists in any workspace):
@@ -254,6 +264,16 @@ analysis's provenance.
   can be revisited after D11.
 
 ## D8 — Budget, viability, and no automatic retry (FR-006, FR-012, SC-005)
+
+*Revised 2026-09-24 (D15; `/speckit-analyze` C1): evidence is built once, in full, and that full
+list is classified and stored. Trimming for the input budget (body excerpts first, then header
+lists) now filters only the prompt's copy:*
+- *it keeps the original `E#` ids, which are no longer renumbered, so the AI's citations and the
+  rule's deciding evidence refer to the same stored list;*
+- *the capacity notice becomes a plain `note` field in the prompt rather than an
+  `omitted-for-capacity` evidence item;*
+- *if the prompt still does not fit, the explanation is unavailable (`INVALID_REQUEST`), and the
+  rule result is unaffected.*
 
 **Decision**:
 - `FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS = 256`.
@@ -385,6 +405,18 @@ CREATE TABLE IF NOT EXISTS failure_analyses (
   implementation.
 - The default model is not changed. If the success rate is below 80%, a model decision goes back
   through AP-004's benchmark process as a separate decision.
+- **Adoption bar, tightened 2026-09-24** (product decision after `evaluation.md` run 2 showed a
+  model passing the 80% structured-output bar while being confidently wrong on 8 of 12 cases). A
+  model and prompt pair is adequate only when, on the corpus, all three of these hold:
+  - structured-output success is at least 80%;
+  - cause agreement with the label is at least 75% (9 of 12);
+  - confidently wrong answers are at most 10% (at most 1 of 12). A confidently wrong answer is a
+    likely cause, so at or above the confidence threshold, that disagrees with the label.
+
+  The opt-in evaluation test reports `confidentlyWrongRate` and soft-asserts all three.
+- **Superseded for the rule-decided design** (spec Clarifications 2026-09-24): the cause is now
+  decided by deterministic rules, so readiness is judged by spec SC-006 instead of the bar above.
+  This decision and D4 and D7 are to be revised at the next `/speckit-plan`.
 - The shared benchmark harness (`backend/src/ai/benchmark/`) is unchanged, because its scoring is
   plain `JSON.parse` success and cannot measure this task.
 
@@ -395,6 +427,9 @@ citation measures that the generic harness lacks.
 `ap004-representative-v1` and still would not score cause agreement.
 
 ## D12 — HTTP shape, determinism, logging (FR-006, FR-010; constitution XX, XXIV)
+
+*Revised 2026-09-24: the POST statuses become `analyzed | kept-previous` (D18). Logs also record
+`ruleId` and the explanation status.*
 
 **Decision**:
 
@@ -431,6 +466,15 @@ They never record prompt, response, evidence text or summary.
 - Mapping AI errors to 5xx: inconsistent with every existing AI endpoint.
 
 ## D13 — Frontend placement
+
+*Revised 2026-09-24:*
+- *The cause is shown with a `RULE` `ProvenanceBadge`, its strength label ("High" or "Moderate",
+  with no number) and the rule's description.*
+- *Only the summary and steps carry the `AI` badge and the "AI inference" label.*
+- *The evidence for the cause is the rule's deciding evidence (D17).*
+- *An "AI explanation unavailable" state replaces the AI-failed and not-viable states, and the
+  kept-previous outcome shows the stored analysis with the new failure reason (D18).*
+- *`frontend/src/utils/confidenceLabel.ts` is replaced by a strength-label mapping.*
 
 **Decision**:
 - Extend `ExternalCollectionRunPanel.tsx`'s `ResultDetail` (`:131`). For a failed result it shows
@@ -473,3 +517,194 @@ No constitution amendment is needed:
 **Drift noted for the user**: `specs/constitution.md` differs from the authoritative
 `.specify/memory/constitution.md` (v2.2.0). The authoritative file's own Sync Impact Report already
 flags that copy. It is not modified here.
+
+---
+
+# Amendment 2026-09-24: the cause is decided by rules
+
+Source: spec Clarifications 2026-09-24 (five answers). The reason is [evaluation.md](./evaluation.md)
+runs 1 to 4: no local model up to 1.7B could judge the cause reliably. The best, Qwen3-1.7B, gave
+100% structured output but was confidently wrong on 5 of 12 cases. Every run did produce usable
+prose, so the AI keeps the part it does well. D15 to D20 below replace or narrow D4, D6, D7, D11,
+D12 and D13 where each says so. D1 to D3, D5, D8 to D10 and D14 are unchanged.
+
+## D15 — Classification rules (FR-003, FR-008; constitution II, XV)
+
+**Decision**: A new pure module, `backend/src/failureAnalysis/classifyFailure.ts`. It takes the
+`UploadedRequestResult` and the `SpecificationContext` and returns a `FailureClassification`. The
+rules are checked in the fixed order below, and the first one that matches decides. Each rule
+records the evidence ids that triggered it, taken from the D4 evidence list, so the display cites
+deterministic evidence. The rule set is versioned as `FAILURE_CLASSIFICATION_RULESET_VERSION = 1`.
+
+**Classification never sees trimmed evidence** (constitution XXIV; `/speckit-analyze` finding C1):
+- Rules run on the **full, untrimmed** evidence list, which is also the list that is stored and
+  displayed.
+- Trimming to fit the model's input budget (D8) applies only to the copy of the evidence sent in
+  the prompt, and that copy keeps the original ids.
+- So the same failure gets the same cause, strength and deciding evidence whatever model or budget
+  is configured.
+
+| # | Rule id | Matches when | Cause | Strength |
+|---|---|---|---|---|
+| 1 | `no-response` | `failureCategory` is `connectivity-failure` or `timeout` | environment issue | High |
+| 2 | `gateway-error` | status is 502 or 504 | environment issue | Moderate |
+| 3 | `environment-rejected-request` | status is 401, 403, 407, 408 or 429 | environment issue | Moderate |
+| 4 | `dependency-named-in-server-error` | status is 500 or 503, and the redacted response body names another service (see below) | downstream-service issue | Moderate |
+| 5 | `undocumented-status` | specification context is matched, the operation documents at least one status and no `default`, the status is below 500 and not 404, and it is not among the documented codes (`2XX`-style ranges count as documented) | specification mismatch | High |
+| 6 | `status-assertion-mismatch` | the status is 2xx or 4xx, but not 404 and not one of rule 3's codes, and a failed test reports an expected status that differs from the received one (`expected response to have status code N but got M`, the standard Postman `pm.response.to.have.status` message) | specification mismatch | Moderate |
+| 7 | `response-content-assertion` | the status is 2xx, at least one test failed, every failed test carries a detail message, and none is a status assertion | specification mismatch | Moderate |
+| — | none | none of the above | insufficient evidence, reason `no-rule-matched` | — |
+
+**Deliberately unclassified** (they fall through to insufficient evidence):
+- A 404 with no other signal. It can mean a wrong base URL or path (environment) or a route that
+  differs from the specification (specification mismatch), and the recorded data cannot tell
+  these apart.
+- A 500 or 503 with no response body naming a dependency. This includes every non-local run,
+  which records no body.
+- A 2xx response whose failed tests carry no detail.
+
+**"Names another service"** (rule 4): the redacted response body excerpt is split into tokens on
+characters other than letters, digits, `-` and `_`. The rule matches when a token ends in
+`-service`, `_service`, `-svc` or `_svc` and has at least one character before that suffix. The
+scan is linear, with no backtracking regular expression, because the body is controlled by the
+target (see the T060 redaction fix). Tokens like `upstream` are deliberately not signals: Envoy's
+`503 upstream connect error` means the gateway could not reach the API itself, which is an
+environment issue, not a downstream one.
+
+**Strength**: High only where the signal has one reading: no response at all (rule 1), or a status
+the operation does not document (rule 5). Every rule whose signal is plausibly read another way is
+Moderate (clarification 2026-09-24, question 2).
+
+**Corpus check**, which SC-006 requires to reach 100% in a unit test:
+- rule 1: `env-connection-refused`, `env-timeout`
+- rule 2: `env-gateway-502`
+- rule 3: `env-bad-credentials-401`
+- rule 5: `spec-200-instead-of-documented-201` (200 is not among the documented 201 and 400)
+- rule 6: `spec-400-on-documented-request` (400 is documented, but the scenario's test expected 201)
+- rule 7: `spec-missing-required-field`, `spec-wrong-content-type`
+- rule 4: `downstream-503` (`payment-service`), `downstream-500-dependency` (`inventory-service`)
+- no rule: `insufficient-bare-500`, `insufficient-bare-assertion`
+
+The corpus was labelled on 2026-09-23, before these rules existed, against the allowed-cause
+decision guide in the v2 prompt, and these rules encode that guide. Real cases (T055) must still
+be added. If a real case disagrees with the rules, the rules are revised as a new rule-set
+version, and the case is never relabelled to fit.
+
+**Rationale**: Constitution II says deterministic evidence must always be preferred over
+probabilistic inference. Constitution XV applies the same conservatism to inference. Every rule
+reads fields ApiPilot already records, and the ambiguous cases say so instead of guessing.
+
+**Alternatives considered**:
+- A scoring model or weighted rules: harder to explain and test, and it would reintroduce a
+  numeric confidence that measures nothing (clarification question 2).
+- Letting the AI classify when no rule matches: rejected in clarification question 3.
+- Using the scenario's expected status as a separate rule: rule 6 already reaches the same answer
+  from the recorded test message, with no new context field (constitution XXVII).
+
+## D16 — The AI explanation contract, prompt v4 (FR-003, FR-008; constitution IV, XXIII)
+
+**Decision**: `FAILURE_ANALYSIS_RESPONSE_VERSION = 4`. Version 3 was evaluated but never shipped,
+so the number is not reused (evaluation.md run 2). The prompt input is:
+
+`{responseVersion, task, request, classification, evidence, specificationContextNote, answerFormat}`
+
+- `classification` is the rule-decided outcome as text: the cause label and the rule's plain
+  description, or "no rule matched".
+- `answerFormat` holds placeholders only, as in v3, because concrete examples were copied by every
+  evaluated model.
+- The task says to explain the given cause, not choose one. For insufficient evidence, it says to
+  suggest what evidence to gather.
+
+The answer is `{"responseVersion":4,"summary":"…","evidenceIds":["E1"],"steps":["…"]}`, with no
+`cause` or `confidence`. Validation:
+- The shape rules follow D7: summary 1 to 400 characters, 1 to 3 steps of up to 200 characters,
+  and ids must exist. One step is required for every outcome.
+- **At least one valid cited id** is required (FR-008), or the answer is `INVALID_RESPONSE`.
+- **Contradiction check** (FR-008): the answer is rejected as `INVALID_RESPONSE` when the summary
+  or a step contains the label or enum key of a cause other than the rule-decided one. For
+  insufficient evidence, any cause label counts.
+  - The phrases are fixed: `specification mismatch`, `environment issue`, `downstream service`,
+    `downstream-service`, and the three enum keys.
+  - It is a conservative, deliberately literal check. A negated mention ("not an environment
+    issue") is also rejected. That costs an explanation, never correctness.
+- The output scan (D5) still applies.
+
+The system prompt keeps the JSON-only instruction and drops the cause-selection sentence. The
+fingerprint test pins v4 (constitution XXIII).
+
+## D17 — Result shape: rule conclusion plus AI explanation (FR-003, FR-006, FR-007, FR-010)
+
+**Decision**: `FailureAnalysis` becomes:
+- `conclusion`:
+  - `{kind: "likely-cause", cause, strength: "high" | "moderate", ruleId, decidingEvidenceIds}`, or
+  - `{kind: "insufficient-evidence", reason: "no-rule-matched"}`.
+- `explanation`:
+  - `{status: "available", summary, investigationSteps, citedEvidenceIds, provenance: {source: "AI", aiModel, aiProvider, responseVersion, generatedAt}}`, or
+  - `{status: "unavailable", reason: {kind: "ai-error", aiErrorCategory} | {kind: "not-viable", projectedMs, budgetMs}, message}`.
+- `classificationProvenance`: `{source: "RULE", ruleSetVersion}`.
+- `analysisVersion: 2`, the marker for D19.
+- Unchanged fields: `evidence`, `specificationContext`, `requestName`, `requestMethod`, `runId`,
+  `resultIndex`, and `analyzedAt`, taken from the injected clock and replacing
+  `provenance.generatedAt`.
+
+The UI shows the rule's `decidingEvidenceIds` as the evidence for the cause. For insufficient
+evidence, it shows the AI's cited evidence, when there is an explanation. Everything else goes in
+"Other evidence considered". This supersedes FR-003's "evidence the AI cited is shown by default"
+for the likely-cause case, and spec FR-003 is reworded to match.
+
+The in-progress record and the phases (D10) are unchanged. The AI call is still the only slow step.
+
+## D18 — Attempts, replacement, and the POST response (FR-006, FR-015, SC-002)
+
+**Decision**: Classification never fails for an eligible result, so every accepted POST produces a
+new analysis:
+- `{status: "analyzed", analysis}`: it was stored, replacing any earlier one atomically. Its
+  `explanation` may be `unavailable` when no stored analysis with an explanation existed, or when
+  none existed at all.
+- `{status: "kept-previous", analysis: <new, unstored>, previousAnalysis, message}`: the new
+  explanation is unavailable, and the stored analysis has an available one, so the stored analysis
+  is kept (FR-015). The UI shows the previous analysis, and the reason the new explanation failed.
+
+The `ai-failed` and `not-viable` statuses are removed, because those outcomes now live inside
+`explanation.reason`. Eligibility errors (400, 404, 409) are unchanged. This is a breaking change to
+this feature's own contract, whose only consumer is the frontend in the same repository, and both
+sides change together.
+
+## D19 — Analyses stored by the AI-decided version (FR-003, FR-013)
+
+**Decision**: On startup, `connection.ts` adds a nullable `analysis_version INTEGER` column to
+`failure_analyses` (the existing `ensureColumn` helper). It then deletes rows where the column is
+`NULL`: these are analyses written by the AI-decided design (response version 2), and it logs the
+count (`failure_analyses_legacy_removed`). New rows are written with `analysis_version = 2`.
+
+**Rationale**: A legacy row's cause was decided by the AI, which the clarified FR-003 forbids
+showing as the cause. Converting it would fabricate a rule provenance it never had. Deleting it is
+explicit, logged and documented, and the user can analyze again. These rows exist only where
+AP-031 has been run since 2026-09-23, and the feature is not yet recorded as Implemented.
+
+**Alternatives considered**: keeping legacy rows behind an "earlier version" notice. That keeps a
+second rendering path and type for analyses the spec no longer allows (constitution XXVII).
+
+## D20 — Evaluation and the model decision (SC-006; replaces D11's bar)
+
+**Decision**:
+- **Rules**: a unit test runs `classifyFailure` over `EVALUATION_CORPUS` and requires every case to
+  match its label. It is part of `npm test`, with no model.
+- **AI explanation**: `failureAnalysis.real.test.ts` reports:
+  - the **usable rate**: the share of answers that pass D16's validation, meaning structured, at
+    least one valid citation, and no contradiction;
+  - the **contradiction rate**: the share of all answers rejected because they name a cause other
+    than the rule-decided one. A contradicting answer therefore counts against both measures,
+    which is deliberate;
+  - latency.
+
+  It soft-asserts usable at 80% or more and contradiction at 10% or less (SC-006).
+- **Real cases**: at least 4 real, redacted cases are still required (T055).
+- **Model**: the evaluation is run with the current default (Qwen2.5-0.5B) and with Qwen3-1.7B,
+  with thinking disabled (specs/013 addendum). If only Qwen3 passes, switching the default goes
+  through AP-004's benchmark process with the user's approval, as D11 required. Its CPU latency is
+  a 35 to 52 s median (evaluation.md run 4), and the viability planning rates, calibrated for
+  0.5B, would need recalibrating in the same change.
+
+D11's structured, agreement and confidently-wrong bar applied to an AI-decided cause, and it is
+retired for this design. The `confidentlyWrongRate` metric is replaced by the contradiction rate.

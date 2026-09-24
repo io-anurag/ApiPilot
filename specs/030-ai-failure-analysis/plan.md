@@ -1,8 +1,34 @@
 # Implementation Plan: AI Failure Analysis (AP-031)
 
-**Branch**: `030-ai-failure-analysis` | **Date**: 2026-09-23 | **Spec**: [spec.md](./spec.md)
+**Branch**: `030-ai-failure-analysis` | **Date**: 2026-09-23, amended 2026-09-24 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/030-ai-failure-analysis/spec.md`
+
+## Amendment 2026-09-24: the cause is decided by rules
+
+The spec's Clarifications 2026-09-24 move the cause decision from the AI to deterministic rules,
+after [evaluation.md](./evaluation.md) runs 1 to 4 showed that no local model up to 1.7B could make
+it reliably. The AI now writes only the summary and the investigation steps. What changes:
+- **Classification**: a new pure module, `classifyFailure.ts`, applies seven ordered rules to the
+  recorded result and matched context (research D15). Each gives a cause, a fixed strength
+  ("High" or "Moderate", with no number), a rule id and the evidence that triggered it. When no
+  rule matches, the result is "insufficient evidence".
+- **Explanation**: prompt v4 gives the model the decided cause and asks only for a summary, steps
+  and cited evidence ids. Answers that cite nothing valid, or that name a different cause, are
+  rejected (research D16).
+- **Result and contract**: an analysis is a rule conclusion plus an explanation that is either
+  available or unavailable with a reason. The POST returns `analyzed` or `kept-previous`, and
+  `ai-failed` and `not-viable` are removed (research D17, D18).
+- **Resilience**: an unavailable AI no longer blocks the analysis. The rule result and evidence are
+  always stored (FR-006). A failed re-explanation never overwrites a stored one (FR-015).
+- **Legacy rows**: analyses stored by the AI-decided version are deleted on startup, and the count
+  is logged (research D19).
+- **Evaluation**: rules must reproduce the whole corpus in `npm test`. The AI explanation is judged
+  in the opt-in evaluation on usable rate and contradiction rate, with the default model and with
+  Qwen3-1.7B (research D20, SC-006).
+
+The original summary below describes the 2026-09-23 design. Where it conflicts with this section,
+this section and research D15 to D20 apply.
 
 ## Summary
 
@@ -88,24 +114,24 @@ Checked against `.specify/memory/constitution.md` v2.2.0, the authoritative copy
 | Principle | Status | How the design complies |
 |---|---|---|
 | I. Specification is the source of truth | Pass | Operation, scenario and documented responses come only from the matched `ApiModel`/`TestModel`. Nothing is inferred by name or path (FR-018, D3). |
-| II. Deterministic before AI | Pass | Evidence extraction, redaction, context matching, upstream outcomes and eligibility are deterministic. Only cause, confidence, summary and steps come from the AI (D4). |
-| III. AI is an assistant | Pass | Every analysis is labelled as an inference and carries source, confidence, rationale (the summary) and cited evidence (FR-007). |
-| IV. Structured and validated | Pass | Versioned JSON, then shape validation, then semantic validation (cited ids must exist), then conclusion rules. Invalid output is `INVALID_RESPONSE` (D7). |
+| II. Deterministic before AI | Pass (strengthened 2026-09-24) | Evidence extraction, redaction, context matching, upstream outcomes, eligibility **and the cause and its strength** are deterministic (D4, D15). Only the summary and steps come from the AI. |
+| III. AI is an assistant | Pass | The cause carries `RULE` provenance with its rule id and rule-set version. The explanation carries `AI` provenance and the inference label (FR-007, D17). |
+| IV. Structured and validated | Pass | The v4 answer is versioned JSON. It goes through shape validation, then cited-id validation, then the contradiction check against the rule-decided cause. Invalid output makes the explanation unavailable with `INVALID_RESPONSE` (D16). |
 | V. Local-first, and XXIX. No silent switch | Pass | Uses `AIProvider` only. No cloud path is added (FR-005). |
 | VI. Provider independence | Pass | The feature depends on `AIProvider`. The provider changes are an optional generic field and an optional lifecycle hook, with no feature rules in the provider (D6, D10). |
-| VII. Model selection, and XXII. AI evaluation | Pass | The default model is kept. A labelled corpus and an opt-in real-model evaluation are added before the model is trusted, and a model change goes back through AP-004 (D11). |
+| VII. Model selection, and XXII. AI evaluation | Pass | Rules are verified against the whole labelled corpus in `npm test`. The explanation is evaluated opt-in against SC-006, with the default model and Qwen3-1.7B, and a default-model change goes through AP-004 with approval (D20). |
 | IX. Separation of concerns | Pass | A new `backend/src/failureAnalysis/` module and router. The AP-026 execution change is limited to recording `itemId`. |
 | X. Domain model first | Pass | The new types are in `shared-domain` and are framework-agnostic. |
-| XIII. Provenance | Pass | `FailureAnalysisProvenance` records model, provider, response version, threshold and timestamp. Evidence is marked `run-result` or `specification-context`. |
-| XIV. No silent assumptions, and XIX. Fail safely | Pass | Missing context is shown with a reason. Low confidence or no citations gives insufficient evidence. Provider failures return a categorized error (FR-006, FR-008). |
-| XV. Conservative dependency inference | Pass | Upstream context uses only approved workflows and recorded relationships as they are. No new inference. |
+| XIII. Provenance | Pass | Split provenance (D17). The cause records its rule id and rule-set version. The explanation records model, provider and response version. Evidence is marked `run-result` or `specification-context`, and deciding evidence is recorded by id. |
+| XIV. No silent assumptions, and XIX. Fail safely | Pass | Missing context is shown with a reason. Ambiguous signals (404, a bare 5xx) deliberately fall through to insufficient evidence (D15). An unavailable AI leaves the rule result intact, with a categorized reason (FR-006). Legacy rows are removed explicitly and logged, never silently converted (D19). |
+| XV. Conservative inference | Pass | Upstream context uses only approved workflows and recorded relationships as they are. The rules classify only unambiguous signals, and each ambiguous one is documented as unclassified (D15). |
 | XVI. Deterministic artifacts | N/A | No artifact generation is involved. |
 | XVII. Security, XVIII. Secrets, and XX. Sensitive logging | Pass | Input is redacted and output is scanned. The payload is encrypted at rest, and logs carry metadata only. Nothing is executed (D5, D9, D12). |
 | XXI. Testability | Pass | Pure modules for evidence, redaction, prompt, validation and matching. A scripted provider. An in-memory database. |
-| XXIII. Versioned AI contracts | Pass | `FAILURE_ANALYSIS_RESPONSE_VERSION = 1`. The system instruction is versioned with the prompt, and the threshold is recorded per analysis. |
+| XXIII. Versioned AI contracts | Pass | `FAILURE_ANALYSIS_RESPONSE_VERSION = 4`; v3 was evaluated but never shipped. The system instruction is versioned with the prompt and pinned by the fingerprint test. The rule set is versioned separately (`FAILURE_CLASSIFICATION_RULESET_VERSION = 1`, D15, D16). |
 | XXIV. Reproducibility | Pass | Content-derived `requestId`, greedy decoding, an injected clock, and a fixed evidence order. |
 | XXVII. Simple architecture | Pass | A synchronous request, an in-memory in-flight set, and one table. No job system or new dependency. |
-| XXX. Explicit trade-offs | Pass | These are documented in research D7 (threshold), D8 (no retry), D9 (encryption) and D12 (synchronous). |
+| XXX. Explicit trade-offs | Pass | These are documented in research D8 (no retry), D9 (encryption) and D12 (synchronous). The 2026-09-24 amendment adds D15 (which signals are left unclassified), D16 (a literal contradiction check that also rejects negations), D18 (a breaking change to this feature's own contract) and D19 (deleting legacy rows rather than converting them). |
 | XXXII. Review at scale | N/A | Nothing is reviewed or approved. The analysis is advisory. |
 | XXXIII. Presentation | Pass | Tailwind v4 tokens, the existing `ProvenanceBadge` and state patterns, dark mode, and accessible names (D13). |
 
@@ -113,6 +139,11 @@ Checked against `.specify/memory/constitution.md` v2.2.0, the authoritative copy
 
 **Re-check after Phase 1 design: PASS.** The data model, contract and quickstart introduce nothing
 beyond the table above.
+
+**Re-check after the 2026-09-24 amendment: PASS.** The rule-decided design strengthens II, XIII
+and XV. No principle is newly strained, and no amendment is needed. The one breaking change is to
+this feature's own POST response, whose only consumer is the frontend in this repository. Both
+sides change together, and the change is recorded in the contract (D18, CLAUDE.md §23).
 
 **Governance drift (reported, not fixed here)**: `specs/constitution.md` differs from the
 authoritative `.specify/memory/constitution.md`. The authoritative file's Sync Impact Report
@@ -150,14 +181,15 @@ backend/src/
 │   ├── buildEvidence.ts           # result + context → ordered, redacted FailureEvidence[] (D4)
 │   ├── redaction.ts               # header/URL/JSON/text redaction + output scan (D5)
 │   ├── matchSpecificationContext.ts  # itemId → current workflow's postmanArtifact → context + upstream outcomes (D3)
-│   ├── failureAnalysisPrompt.ts   # versioned prompt, system instruction, constants (D6, D8)
-│   ├── parseFailureAnalysisResponse.ts  # parse + shape/semantic validation + conclusion rules (D7)
+│   ├── classifyFailure.ts         # AMENDED 2026-09-24, NEW: ordered rules → conclusion, strength, ruleId, decidingEvidenceIds (D15)
+│   ├── failureAnalysisPrompt.ts   # versioned prompt, system instruction, constants (D6, D8); v4 explanation-only (D16)
+│   ├── parseFailureAnalysisResponse.ts  # parse + shape/semantic validation (D7); v4: citations + contradiction check, no conclusion (D16)
 │   ├── analyzeFailure.ts          # orchestration: eligibility, viability, infer, store (D8)
 │   ├── inProgressRegistry.ts      # per-session single in-progress entry + phase (D10)
 │   ├── failureAnalysisStore.ts    # session-scoped wrappers over the repository + onExpire cleanup (D9)
 │   └── errors.ts                  # typed errors mapped by the router
 ├── persistence/
-│   ├── connection.ts              # + failure_analyses table (D9)
+│   ├── connection.ts              # + failure_analyses table (D9); + analysis_version column and legacy-row removal (D19)
 │   └── failureAnalysisRepository.ts  # NEW: upsert/get/listByRun/deleteBySession + onExpire
 ├── externalCollections/
 │   ├── mapUploadedResult.ts       # + itemId parameter (D2)
@@ -168,7 +200,7 @@ backend/src/
 └── app.ts                         # mount router under /api
 
 backend/tests/
-├── unit/failureAnalysis/          # evidence, redaction, matching, prompt, parsing/conclusion, orchestration
+├── unit/failureAnalysis/          # evidence, redaction, matching, prompt, parsing/conclusion, orchestration; + classifyFailure.test.ts (every rule, precedence, the corpus at 100%, D15/D20)
 ├── unit/persistence/failureAnalysisRepository.test.ts
 ├── unit/ai/localProvider*.test.ts # systemPrompt used / default unchanged
 ├── integration/failureAnalysis/failureAnalysis.test.ts  # every contract row, persistence across reads, replacement
@@ -176,9 +208,9 @@ backend/tests/
 └── fixtures/failureAnalysis/      # labelled corpus + scripted provider responses
 
 frontend/src/
-├── components/FailureAnalysisPanel.tsx      # NEW: idle/waiting-for-ai/generating/analyzed/insufficient/ai-failed/not-viable
+├── components/FailureAnalysisPanel.tsx      # idle/waiting-for-ai/generating/analyzed/insufficient; AMENDED: RULE cause + strength + rule text, AI explanation or "AI explanation unavailable", kept-previous (D13, D17, D18)
 ├── components/ExternalCollectionRunPanel.tsx  # ResultDetail: "Analyze failure" + panel; load stored analyses per run; disable while any in progress
-├── utils/confidenceLabel.ts                 # NEW: 0.5–<0.75 → Moderate, ≥0.75 → High
+├── utils/confidenceLabel.ts                 # AMENDED: replaced by a strength-label and rule-description mapping (D13)
 └── services/externalCollectionsClient.ts    # + requestFailureAnalysis, listFailureAnalyses, getFailureAnalysisInProgress
 
 frontend/tests/unit/

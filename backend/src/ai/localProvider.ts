@@ -228,11 +228,16 @@ export async function loadTransformersEngine(
       // to `max_new_tokens` (specs/013-ai-enhancement-viability research.md Decision 1).
       //
       // Models with no chat template keep receiving the raw string unchanged (FR-004).
+      //
+      // `enable_thinking: false` is passed to every template. Templates with a reasoning mode
+      // (Qwen3) otherwise emit a `<think>` block first, which spends the bounded output budget
+      // before any JSON (specs/030-ai-failure-analysis evaluation.md, run 4). Templates that do
+      // not reference the variable, such as Qwen2.5's, render byte-identically.
       const tokenizer = generator.tokenizer as {
         chat_template?: unknown;
         apply_chat_template?: (
           messages: { role: string; content: string }[],
-          options: { tokenize: false; add_generation_prompt: boolean },
+          options: { tokenize: false; add_generation_prompt: boolean; enable_thinking: boolean },
         ) => string;
       };
       let prompt = input;
@@ -249,7 +254,7 @@ export async function loadTransformersEngine(
             },
             { role: "user", content: input },
           ],
-          { tokenize: false, add_generation_prompt: true },
+          { tokenize: false, add_generation_prompt: true, enable_thinking: false },
         );
       }
 

@@ -2490,6 +2490,14 @@ Implementation
       output but copied the example's cause into every answer (33% cause agreement); prompt v2 fell
       to 50% structured output, below the 80% bar. Evaluating larger models through AP-004's
       benchmark process needs the user's go-ahead because it downloads models.
+      *2026-09-24:* run for `Qwen2.5-1.5B-Instruct`, `SmolLM2-1.7B-Instruct` and `Qwen3-1.7B`
+      (thinking disabled), on CPU at fp32, with prompt v2 and an example-free v3. Research D11's
+      bar was tightened: at least 80% structured output, at least 75% cause agreement, and at
+      most 10% confidently wrong answers. No candidate meets it. The closest, Qwen3-1.7B, gave
+      100% structured output and 58% agreement, but 42% of its answers were confidently wrong.
+      The default model and prompt v2 are unchanged. The local provider now renders chat
+      templates with `enable_thinking: false` (specs/013 research Decision 1 addendum). The next
+      step needs a product decision among the options in `evaluation.md`.
     - **Real evaluation cases (T055).** At least 4 cases from a real, redacted recorded run are
       required and none exist yet. They need a redacted uploaded-collection run, or approval to
       record one against an authorized target such as the PayPal Invoicing API v2 walkthrough

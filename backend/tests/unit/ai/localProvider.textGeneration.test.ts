@@ -52,7 +52,8 @@ describe("loadTransformersEngine", () => {
         { role: "system", content: expect.stringContaining("valid JSON") },
         { role: "user", content: "some prompt" },
       ],
-      { tokenize: false, add_generation_prompt: true },
+      // Reasoning-mode templates (Qwen3) must not spend the output budget on a <think> block.
+      { tokenize: false, add_generation_prompt: true, enable_thinking: false },
     );
     expect(mockGenerator).toHaveBeenCalledWith(
       expect.stringContaining('"role":"user"'),

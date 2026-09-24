@@ -6,6 +6,11 @@ New shared contracts live in `packages/shared-domain/src/failureAnalysis.ts` and
 `packages/shared-domain/src/index.ts`. They are framework-agnostic (constitution VIII, X). Two
 existing contracts gain one optional field each.
 
+**Amended 2026-09-24** (spec Clarifications 2026-09-24; research D15 to D19): rules now decide the
+cause, and the AI writes only the explanation. The changed sections are FailureAnalysisConclusion,
+FailureAnalysis, FailureAnalysisProvenance, which is split, the strength presentation,
+FailureAnalysisAttempt, the lifecycle and persistence.
+
 ## Changes to existing contracts (additive)
 
 | Contract | Field | Rule |
@@ -21,12 +26,23 @@ existing contracts gain one optional field each.
 These are shown in the UI as "Potential specification mismatch", "Potential environment issue" and
 "Potential downstream-service issue". The "Potential" prefix is part of FR-007's inference labelling.
 
-## FailureAnalysisConclusion (discriminated on `kind`)
+## FailureAnalysisConclusion (discriminated on `kind`, decided by rules)
 
 | kind | Fields | When |
 |---|---|---|
-| `likely-cause` | `cause: FailureCause`, `confidence: number` (0–1) | The model named a cause, the confidence is at least `FAILURE_ANALYSIS_MIN_CONFIDENCE` (0.5), and at least one valid evidence id was cited. |
-| `insufficient-evidence` | `reason: "model-reported" \| "below-confidence-threshold" \| "no-valid-evidence-cited"`, `confidence?: number` | Every other valid answer (research D7). A cause rejected by the threshold is not stored. |
+| `likely-cause` | `cause: FailureCause`, `strength: "high" \| "moderate"`, `ruleId: FailureRuleId`, `decidingEvidenceIds: string[]` (at least 1) | The first classification rule that matches (research D15). `strength` is the rule's fixed, documented strength. |
+| `insufficient-evidence` | `reason: "no-rule-matched"` | No rule matches. |
+
+`FailureRuleId` is `"no-response" | "gateway-error" | "environment-rejected-request" |
+"dependency-named-in-server-error" | "undocumented-status" | "status-assertion-mismatch" |
+"response-content-assertion"`. Each rule's condition, cause and strength are in research D15. The
+conclusion is computed by `classifyFailure` from the result, the specification context and the full
+evidence list only. The AI never sets or changes it.
+
+`FAILURE_RULE_DESCRIPTIONS: Record<FailureRuleId, string>` is exported from shared-domain. It holds
+one plain sentence per rule, for example `"no-response"` → "No response was received: the
+connection failed or timed out." The prompt (`classification`) and the UI (next to the strength
+label) use the same text.
 
 ## FailureEvidence
 
@@ -35,9 +51,13 @@ One deterministic, redacted fact. The AI cites evidence but never writes it (res
 | Field | Type | Rule |
 |---|---|---|
 | `id` | string | `E1`, `E2`, … assigned in the fixed kind order below. The same input always gives the same ids. |
-| `kind` | `FailureEvidenceKind` | One of: `failure-category`, `response-status`, `response-time`, `test-outcome`, `request-line`, `request-headers`, `request-body-excerpt`, `response-headers`, `response-body-excerpt`, `request-edited`, `documented-responses`, `scenario-expectation`, `upstream-step-outcome`, `omitted-for-capacity`. |
+| `kind` | `FailureEvidenceKind` | One of: `failure-category`, `response-status`, `response-time`, `test-outcome`, `request-line`, `request-headers`, `request-body-excerpt`, `response-headers`, `response-body-excerpt`, `request-edited`, `documented-responses`, `scenario-expectation`, `upstream-step-outcome`. *(Amended 2026-09-24: `omitted-for-capacity` is removed; the capacity notice is a prompt-only `note`, research D8.)* |
 | `source` | `"run-result" \| "specification-context"` | Keeps runtime observations separate from specification-derived facts (constitution preamble items 1 and 5). |
 | `text` | string | A human-readable statement that has already been redacted (research D5), for example `Test "Status code is 201" failed: expected 201 but got 500`. Excerpts note when they are truncated. |
+
+*Amended 2026-09-24 (research D15, D8):* the stored `evidence` list is always the full, untrimmed
+list, and the classification rules read it. Trimming for the model's input budget affects only the
+prompt copy, which keeps each item's original `id`.
 
 Kinds `request-line` through `response-body-excerpt` exist only when the result has a `rawCapture`
 (`"local"` tier). Kinds `documented-responses`, `scenario-expectation` and `upstream-step-outcome`
@@ -63,48 +83,61 @@ It is never re-read from the workflow when the analysis is displayed (FR-018, re
 | `suppliedFields` | string[] | Variable names (for a workflow) or producer fields (for a relationship) that this request consumes. These are names only, never values. |
 | `outcomeInRun` | `"passed" \| "failed" \| "not-attempted" \| "not-in-run"` | Found by matching the other results' `itemId`s in the same run (research D3). |
 
-## FailureAnalysisProvenance
+## Provenance (split: rule for the cause, AI for the explanation)
+
+`ClassificationProvenance`: `source: "RULE"`, `ruleSetVersion: number`
+(`FAILURE_CLASSIFICATION_RULESET_VERSION`, currently 1). The rule itself is `conclusion.ruleId`.
+
+`ExplanationProvenance`, present only on an available explanation:
 
 | Field | Type | Rule |
 |---|---|---|
 | `source` | `"AI"` | Constitution XIII. |
 | `aiModel` | string | From `InferenceResponse.modelId`. |
 | `aiProvider` | `AIProviderMode` | From `InferenceResponse.provider`. |
-| `responseVersion` | number | `FAILURE_ANALYSIS_RESPONSE_VERSION` (currently 2; v1 → v2 on 2026-09-23, see evaluation.md). |
-| `confidenceThreshold` | number | The threshold applied (0.5), so an old analysis stays interpretable if the constant changes. |
-| `generatedAt` | ISO string | From an injected clock. |
+| `responseVersion` | number | `FAILURE_ANALYSIS_RESPONSE_VERSION`, currently 4 (research D16; 3 was evaluated but never shipped). |
+
+`FailureAnalysisProvenance` and its `confidenceThreshold` are removed.
+
+## FailureExplanation (discriminated on `status`)
+
+| status | Fields | When |
+|---|---|---|
+| `available` | `summary: string`, `investigationSteps: string[]`, `citedEvidenceIds: string[]`, `provenance: ExplanationProvenance` | The AI answer passed D16's validation. |
+| `unavailable` | `reason: {kind: "ai-error", aiErrorCategory: AIErrorCategory} \| {kind: "not-viable", projectedMs: number, budgetMs: number}`, `message: string` (plain language) | The provider was not ready or failed, the request was not viable, or the answer was rejected (`INVALID_RESPONSE`: shape, no valid citation, or a contradiction of the rule-decided cause). |
+
+Validation for `available`:
+- `summary` is 1 to 400 characters.
+- `investigationSteps` has 1 to 3 entries of up to 200 characters each.
+- `citedEvidenceIds` has at least 1 entry, and every entry is an `evidence[].id`.
+- No text names a cause other than `conclusion.cause`, or any cause when the conclusion is insufficient evidence (D16).
+- Every text field is scanned for sensitive values (D5).
 
 ## FailureAnalysis
 
 | Field | Type | Rule |
 |---|---|---|
+| `analysisVersion` | `2` | The marker for the rule-decided design. Rows without it are legacy and removed on startup (research D19). |
 | `runId` | string | The `UploadedCollectionExecutionRun.id`. |
 | `resultIndex` | number | The position in `run.results`. Together with `runId` it forms the identity, and at most one analysis exists per `(session, runId, resultIndex)`. |
 | `requestName`, `requestMethod` | string | Copied from the result at analysis time. |
-| `conclusion` | `FailureAnalysisConclusion` | |
-| `summary` | string | Model text, at most 400 characters, scanned for sensitive values after inference. Always shown as an inference. |
-| `investigationSteps` | string[] | Model text, at most 3 entries of at most 200 characters each, scanned the same way. There is at least 1 entry when `conclusion.kind === "likely-cause"` (FR-003), and 0 to 3 for `insufficient-evidence`. |
-| `citedEvidenceIds` | string[] | Only ids present in `evidence`. It may be empty only when `conclusion.kind === "insufficient-evidence"`. |
-| `evidence` | `FailureEvidence[]` | Every evidence item offered to the model, whether cited or not. |
+| `conclusion` | `FailureAnalysisConclusion` | Decided by rules. |
+| `classificationProvenance` | `ClassificationProvenance` | |
+| `explanation` | `FailureExplanation` | AI text, or the reason it is unavailable. |
+| `evidence` | `FailureEvidence[]` | The full, untrimmed list: every evidence item, whether it decided the cause, was cited, or neither. |
 | `specificationContext` | `SpecificationContext` | |
-| `provenance` | `FailureAnalysisProvenance` | |
+| `analyzedAt` | ISO string | From the injected clock. |
 
 **Validation invariants**:
-- `likely-cause` implies `citedEvidenceIds.length ≥ 1`, `investigationSteps.length ≥ 1` and `confidence ≥ provenance.confidenceThreshold`.
-- Every `citedEvidenceIds` entry is an `evidence[].id`.
+- `likely-cause` implies `decidingEvidenceIds.length ≥ 1`, every entry an `evidence[].id`.
+- `explanation.status === "available"` implies the FailureExplanation rules above.
 - No field contains a value that redaction replaced (SC-003).
 
-### Confidence presentation (UI only, not stored)
+### Strength presentation (UI only)
 
-`confidence` is stored as a number. The UI shows it with a label (clarification 2026-09-23):
-
-| Label | Range |
-|---|---|
-| Moderate | 0.5 to below 0.75 |
-| High | 0.75 and above |
-
-The exact value appears next to the label, for example "Moderate (0.62)". An
-`insufficient-evidence` conclusion never shows a cause confidence label.
+The UI shows `conclusion.strength` as the label "High" or "Moderate", with no numeric value
+(clarification 2026-09-24). It appears next to a `RULE` provenance badge and the rule's
+description. An `insufficient-evidence` conclusion shows no strength label.
 
 ## FailureAnalysisInProgress (in memory only, one per session at most)
 
@@ -120,24 +153,31 @@ on restart.
 
 ## FailureAnalysisAttempt (the POST response body, discriminated on `status`)
 
+Amended 2026-09-24 (research D18):
+
 | status | Fields |
 |---|---|
-| `analyzed` | `analysis: FailureAnalysis` (the stored result, which replaced any earlier one) |
-| `ai-failed` | `aiErrorCategory: AIErrorCategory`, `message: string` (plain language, with no internal identifiers), `previousAnalysis?: FailureAnalysis` (unchanged, FR-015) |
-| `not-viable` | `notViable: { projectedMs: number; budgetMs: number }`, `message: string`, `previousAnalysis?: FailureAnalysis` |
+| `analyzed` | `analysis: FailureAnalysis`: the new analysis, stored, which replaced any earlier one. Its explanation may be unavailable. |
+| `kept-previous` | `analysis: FailureAnalysis`: the new one, not stored, with an unavailable explanation. Also `previousAnalysis: FailureAnalysis`: the stored one, unchanged, which has an available explanation. And `message: string`. |
+
+`ai-failed` and `not-viable` are removed: they are now `explanation.reason` values.
 
 ## Lifecycle and state
 
 ```text
-(no analysis) ── POST ──► waiting-for-ai ── onStarted ──► generating ──► analyzed ──► stored row written
-                               │                              │
-                               └──────────────┬───────────────┘
-                                              └── ai-failed / not-viable ──► nothing written; any stored row kept
+(no analysis) ── POST ──► classify (rules, synchronous) ──► waiting-for-ai ── onStarted ──► generating
+                                                                 │                             │
+                                                                 └──────────────┬──────────────┘
+                                                                                ▼
+                                                       explanation available or unavailable
+                                                                                │
+   stored row has an available explanation AND the new one is unavailable ──► kept-previous (nothing written)
+   otherwise ──────────────────────────────────────────────────────────────► analyzed (row upserted)
 
 any POST in the session while one is waiting-for-ai/generating ──► 409 failure_analysis_in_progress
-stored row ── POST again ──► … ──► analyzed ──► row replaced atomically (upsert)
 stored row ── session idle-evicted ──► row deleted (onExpire listener)
 waiting-for-ai/generating ── backend restart ──► in-progress entry lost; nothing stored; user may request again
+startup ──► rows with analysis_version NULL (the AI-decided design) deleted and counted in the log (research D19)
 ```
 
 ## Persistence (AP-025 extension)
@@ -146,4 +186,9 @@ A new table, `failure_analyses`, is described in research D9. The primary key is
 `(session_id, run_id, result_index)`. The `FailureAnalysis` JSON is encrypted in
 `analysis_encrypted`/`analysis_iv` with the existing cipher, and `generated_at` is stored in
 plaintext for ordering. Rows are deleted by session eviction together with the run they belong to.
-There is no other deletion path, because runs themselves are only removed by eviction.
+
+Amended 2026-09-24:
+- A nullable `analysis_version INTEGER` column is added idempotently by `ensureColumn`.
+- New rows store `2`.
+- On startup, rows with `NULL` are deleted, which is the one other deletion path. The count is
+  logged as `failure_analyses_legacy_removed` (research D19).

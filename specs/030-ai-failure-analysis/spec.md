@@ -64,10 +64,43 @@ scope (Clarifications 2026-09-23).
   Yes. Any failed result already recorded can be analyzed while the run continues (FR-001).
 - Q: How should the analysis show its confidence to the user? → A: As a plain label, "Moderate"
   (0.5 to below 0.75) or "High" (0.75 and above), with the exact value next to it in smaller text,
-  for example "Moderate (0.62)" (FR-003).
+  for example "Moderate (0.62)" (FR-003). *Superseded 2026-09-24: the confidence is now the
+  deciding rule's fixed "High" or "Moderate" label, with no value.*
 - Q: Should the analysis show only the evidence the AI cited, or also the rest of the evidence it
   was given? → A: Cited evidence is shown by default. The rest is shown in a collapsed "Other
   evidence considered" section (FR-003).
+
+### Session 2026-09-24
+
+Context: `evaluation.md` runs 1 to 4 showed that no local model up to 1.7B meets research D11's
+tightened bar. The best, Qwen3-1.7B, gave 100% structured output but was confidently wrong on 42%
+of cases.
+
+- Q: Who should decide the likely cause of a failed request? → A: Deterministic rules decide it
+  from the recorded evidence (failure category, status code against documented responses,
+  response-body signals), and the rule that fired is recorded as its provenance. The local AI
+  writes only the plain-language summary and the investigation steps, for the cause the rules
+  chose (FR-003, FR-007, FR-010; constitution II).
+- Q: Now that rules decide the cause, how should its confidence be shown? → A: Each rule declares
+  a fixed, documented strength, "High" or "Moderate", based on how unambiguous its signal is.
+  Only the label is shown, with no decimal value, because a rule has no measured probability
+  (FR-003). This supersedes the 2026-09-23 "Moderate (0.62)" presentation.
+- Q: When no rule matches the evidence, what should the analysis return? → A: An "insufficient
+  evidence" outcome, decided by the rules and stating that no rule matched. The AI is still asked
+  for a summary and next steps, focused on what evidence to gather. The AI never decides a cause,
+  including as a fallback (FR-008, User Story 3).
+- Q: If the AI is unavailable, times out, or gives an unusable answer, should the analysis still
+  show the rule-decided cause and the evidence? → A: Yes. The rule-decided cause, its strength and
+  the evidence are stored and shown, with "AI explanation unavailable" and the categorized reason
+  in place of the summary and steps. The user can request again to add the explanation. A later
+  attempt whose AI part fails never replaces a stored analysis that already has an explanation
+  (FR-006, FR-015, SC-002).
+- Q: How should AP-031 be judged ready to be marked Implemented now that the cause comes from
+  rules? → A: The rules must reproduce every labelled case in the evaluation corpus, checked by
+  ordinary unit tests. The AI text is judged by the opt-in real-model evaluation: at least 80% of
+  answers usable, and at most 10% of summaries naming a cause other than the rule-decided one. The
+  requirement for at least 4 real, redacted cases still applies (SC-006; replaces research D11's
+  bar for this design).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -88,7 +121,7 @@ recorded data. This works for a collection ApiPilot did not generate.
 
 1. **Given** a run, completed or still in progress, containing a recorded failed request with a
    failure category and test outcomes, **When** the user requests failure analysis for that request, **Then** the system
-   returns a plain-language summary, a likely-cause classification, a confidence level, and
+   returns a plain-language summary, a likely-cause classification, a strength level, and
    supporting evidence drawn from that request's own status code, failure category and test
    outcomes.
 2. **Given** a failed request whose run targeted a `"local"` tier and therefore has a recorded raw
@@ -139,18 +172,17 @@ verify that the analysis says specification context is unavailable and invents n
 
 ---
 
-### User Story 3 - Be told plainly when the AI cannot confidently explain a failure (Priority: P3)
+### User Story 3 - Be told plainly when a failure cannot be explained confidently (Priority: P3)
 
 A QA engineer requests analysis for a failure with little distinguishing evidence. They need to be
-told that the AI could not determine a likely cause, rather than receive a confident-sounding
-guess.
+told that no likely cause could be determined, rather than receive a confident-sounding guess.
 
 **Why this priority**: It protects trust in the other two stories. Without it, users cannot tell a
 well-evidenced explanation from a fabricated one.
 
-**Independent Test**: Request analysis where the model reports confidence below the planned
-threshold, or cites no valid evidence, and verify that the result is an explicit "insufficient
-evidence" outcome, never a specific cause.
+**Independent Test**: Request analysis for a failure whose evidence matches no classification rule
+and verify that the result is an explicit "insufficient evidence" outcome that states no rule
+matched, never a specific cause, even when the AI's text suggests one.
 
 **Acceptance Scenarios**:
 
@@ -158,18 +190,25 @@ evidence" outcome, never a specific cause.
    **When** the user requests failure analysis, **Then** the system returns an explicit
    "insufficient evidence" outcome rather than a low-quality guess presented as a normal result.
 2. **Given** the AI provider is unavailable or returns an error, **When** the user requests
-   failure analysis, **Then** the system returns a structured, categorized error (matching the
-   existing `AIErrorCategory` conventions) rather than nothing or a fabricated analysis.
+   failure analysis, **Then** the system returns the rule-decided cause and the evidence, with "AI
+   explanation unavailable" and a categorized reason (matching the existing `AIErrorCategory`
+   conventions) in place of the summary and steps, rather than nothing or a fabricated
+   explanation.
 
 ---
 
 ### Edge Cases
 
-- The configured `AIProvider` is not ready when analysis is requested. The request fails with a
-  structured, categorized error, never a silent empty result.
+- The configured `AIProvider` is not ready when analysis is requested. The rule-decided cause and
+  the evidence are still returned and stored, with "AI explanation unavailable" and the
+  categorized reason, never a silent empty result (FR-006).
 - A failed request has no test outcomes and no response (for example a connectivity failure on a
-  non-local tier). The analysis works from the little evidence there is, and this may lead to an
-  "insufficient evidence" outcome (User Story 3).
+  non-local tier). The rules still decide the cause, a potential environment issue with strength
+  High, because no response was received. The AI explanation works from the little evidence there
+  is.
+- A failed request with a response but too little distinguishing evidence, for example a bare
+  500 with no recorded body, matches no rule and gets an "insufficient evidence" outcome (User
+  Story 3).
 - The referenced run or result no longer exists, for example because its session was
   idle-evicted. The request fails with an explicit not-found error.
 - The result was stored before this feature existed and has no recorded request identity. It is
@@ -198,26 +237,30 @@ evidence" outcome, never a specific cause.
 
 ### Functional Requirements
 
-- **FR-001**: System MUST let a user request an AI-generated failure analysis for a single
-  request result, in an AP-026 uploaded-collection run, whose outcome is `"failed"`. This applies
+- **FR-001**: System MUST let a user request a failure analysis (rule-decided cause, AI-written
+  explanation) for a single request result, in an AP-026 uploaded-collection run, whose outcome
+  is `"failed"`. This applies
   to any recorded result, whatever the run's status: in progress, completed or cancelled. A
   recorded result never changes afterwards.
 - **FR-002**: System MUST reject an analysis request for a result whose outcome is `"passed"` or
   `"not-attempted"`, with an explicit, typed reason distinct from an AI provider error.
 - **FR-003**: Each failure analysis MUST include:
-  - a plain-language failure summary;
+  - a plain-language failure summary, written by the AI;
   - a likely-cause classification: "potential specification mismatch", "potential environment
-    issue", "potential downstream-service issue", or an explicit "insufficient evidence" outcome;
+    issue", "potential downstream-service issue", or an explicit "insufficient evidence" outcome.
+    The classification is decided by deterministic rules over the recorded evidence, never by the
+    AI, and names the rule that decided it (Clarifications 2026-09-24);
   - the affected request (method and name, plus the operation path when specification context is
     matched);
-  - a confidence level, shown as "Moderate" (0.5 to below 0.75) or "High" (0.75 and above)
-    together with the exact value, for example "Moderate (0.62)". An "insufficient evidence"
-    outcome shows no cause confidence label;
+  - a strength (confidence) level: the deciding rule's fixed, documented strength, shown as the
+    label "High" or "Moderate" with no numeric value. The strength reflects how unambiguous the rule's signal
+    is. An "insufficient evidence" outcome shows no confidence label;
   - supporting evidence drawn only from that request's own recorded data (status code, failure
     category, test outcomes, and the redacted raw capture when present) and from matched
-    specification context. The evidence the AI cited is shown by default. The rest of the evidence
-    it was given is shown in a collapsed "Other evidence considered" section;
-  - suggested next investigation steps.
+    specification context. The evidence that decided the cause is shown by default. For an
+    "insufficient evidence" outcome, the evidence the AI's explanation cited is shown instead. The
+    rest is shown in a collapsed "Other evidence considered" section;
+  - suggested next investigation steps, written by the AI for the rule-decided cause.
 - **FR-004**: When a failed request is matched to the session's current guided workflow (FR-018)
   and participates in an approved integration workflow or a recorded dependency relationship, the
   analysis MUST include that context: the upstream operation that supplies a consumed value, and
@@ -226,20 +269,28 @@ evidence" outcome, never a specific cause.
 - **FR-005**: System MUST perform every AI inference for failure analysis through the existing
   `AIProvider` abstraction only (local or mock provider). It MUST NOT call a model or library
   directly, and MUST NOT use a cloud provider.
-- **FR-006**: When the `AIProvider` is not ready, or inference fails or cannot fit its time budget,
-  the system MUST return a structured, categorized error consistent with the existing AI-assisted
-  features, rather than omitting the analysis or fabricating one.
-- **FR-007**: Every AI-produced explanation MUST be visibly labeled as an inference, never
-  presented as a confirmed root cause.
-- **FR-008**: When the AI's reported confidence is below the threshold defined in `plan.md`, or the
-  answer cites no valid evidence, the system MUST return an explicit "insufficient evidence"
-  outcome rather than a specific cause.
+- **FR-006**: When the `AIProvider` is not ready, inference fails or cannot fit its time budget,
+  or the AI answer is unusable (FR-008), the system MUST still return and store the rule-decided
+  cause, its strength and the evidence. In place of the summary and steps, it MUST state "AI
+  explanation unavailable" with the reason, categorized consistently with the existing AI-assisted
+  features (`AIErrorCategory`, or not viable). It MUST NOT omit the analysis or fabricate an
+  explanation.
+- **FR-007**: Every AI-produced explanation (summary and steps) MUST be visibly labeled as an
+  inference, never presented as a confirmed root cause. The rule-decided cause MUST be visibly
+  labeled as rule-derived, with the rule that decided it, and is likewise a likely cause, not a
+  confirmed one.
+- **FR-008**: When no classification rule matches the recorded evidence, the system MUST return an
+  explicit "insufficient evidence" outcome that states no rule matched, rather than a specific
+  cause. The AI MUST NOT decide a cause, including as a fallback. It still writes a summary and
+  next steps for this outcome, focused on what evidence to gather. An AI answer that names a cause
+  other than the rule-decided one, or that cites no valid evidence, MUST NOT be shown as the
+  summary (Clarifications 2026-09-24).
 - **FR-009**: Failure analysis MUST NOT execute any API request, modify test execution, or alter
   any run or result record other than the additive request identity recorded at execution time
   (FR-017).
 - **FR-010**: Every failure analysis MUST record its provenance: the run and result it was
-  generated from, the model and provider identity, the prompt/response version, and a generation
-  timestamp. This keeps it distinguishable from specification-derived, rule-derived and
+  generated from, the classification rule that decided the cause and the rule-set version, the
+  model and provider identity, the prompt/response version, and a generation timestamp. This keeps it distinguishable from specification-derived, rule-derived and
   user-defined information.
 - **FR-011**: Failure analysis input and output MUST NOT include any credential value, secret, or
   raw environment variable value, whether sourced from the raw capture or elsewhere.
@@ -248,13 +299,17 @@ evidence" outcome, never a specific cause.
   the background, or by hidden retry.
 - **FR-013**: A generated failure analysis MUST be durably persisted alongside its run in the
   existing local persistence layer (AP-025), so it survives a backend restart. It shares that
-  run's session-scoped lifetime and is removed when the owning session is idle-evicted.
+  run's session-scoped lifetime and is removed when the owning session is idle-evicted. The one
+  exception is on upgrade: analyses stored by the earlier AI-decided version, whose cause the AI
+  chose, are removed at startup. The removal is logged with a count, and the user can analyze
+  those failures again (Clarifications 2026-09-24; research D19).
 - **FR-014**: A user MUST be able to request failure analysis for a failed request in any run
   still present in the session's persisted run history, not only the most recent run.
 - **FR-015**: Requesting analysis again for a request that already has a stored analysis MUST
   replace it as one complete unit. Earlier attempts are not kept, and a reader MUST never observe
   a mix of the old and new analysis. When the new attempt fails, the stored analysis MUST remain
-  unchanged.
+  unchanged. A new attempt whose AI explanation is unavailable (FR-006) MUST NOT replace a stored
+  analysis that has an AI explanation. It does replace one that has none.
 - **FR-016**: At most one failure analysis MUST be generating per session at any time. While one
   is generating, the system MUST reject any further analysis request in that session, whether for
   the same request or a different one, with an explicit, typed reason, rather than queueing it.
@@ -272,10 +327,11 @@ evidence" outcome, never a specific cause.
 
 ### Key Entities *(include if feature involves data)*
 
-- **FailureAnalysis**: The AI-generated explanation for one failed uploaded-collection request
-  result. It carries:
+- **FailureAnalysis**: The explanation for one failed uploaded-collection request result: a
+  rule-decided cause with an AI-written summary and steps. It carries:
   - the run and result position it explains;
-  - a conclusion: a likely cause with confidence, or insufficient evidence;
+  - a conclusion, decided by rules: a likely cause, or insufficient evidence, with the rule that
+    decided it;
   - a plain-language summary, the evidence items it cites, and suggested investigation steps;
   - the specification context used, or the reason it was unavailable;
   - provenance.
@@ -298,19 +354,29 @@ evidence" outcome, never a specific cause.
 - **SC-001**: A QA engineer investigating a failed request receives a plain-language likely-cause
   explanation with cited supporting evidence, without reading raw logs or cross-referencing the
   specification by hand.
-- **SC-002**: 100% of analysis requests for an eligible failed request resolve to a specific
-  likely cause with a confidence level, an explicit "insufficient evidence" outcome, or a
-  structured error. None is blank or silently dropped.
+- **SC-002**: 100% of analysis requests for an eligible failed request resolve to a rule-decided
+  specific likely cause with a strength label, or an explicit "insufficient evidence" outcome.
+  Each has either an AI summary and steps or an "AI explanation unavailable" reason. None is blank
+  or silently dropped, including when the AI provider is unavailable.
 - **SC-003**: No failure analysis, prompt or log entry contains a credential value, secret or raw
   environment variable value. This is verified by tests over inputs with and without a raw
   capture.
 - **SC-004**: When a failed request matches the current workflow and has upstream context, 100% of
   its analyses show that context. When it does not match, 0% contain operation, scenario or
   dependency claims.
-- **SC-005**: Once the local model starts on an analysis, the request resolves (analysis,
-  insufficient evidence, or structured error) within the per-inference timeout already configured
-  for local AI. The user can always tell from the UI whether the analysis is waiting for the local
+- **SC-005**: Once the local model starts on an analysis, the request resolves within the
+  per-inference timeout already configured for local AI. It resolves to a rule-decided analysis
+  whose AI explanation is either available or unavailable with its reason. The user can always tell from the UI whether the analysis is waiting for the local
   AI or is being generated.
+- **SC-006**: The feature is ready to be recorded as Implemented only when all of these hold:
+  - the classification rules reproduce 100% of the labelled cases in the evaluation corpus,
+    verified by ordinary unit tests;
+  - the corpus includes at least 4 real, redacted recorded failures;
+  - in the opt-in real-model evaluation with the configured model, at least 80% of AI answers are
+    usable, meaning they pass validation: structured, citing at least one valid evidence item, and
+    not naming a cause other than the rule-decided one;
+  - at most 10% of AI answers are rejected for naming a cause other than the rule-decided one. A
+    contradicting answer counts against both measures.
 
 ## Assumptions
 
@@ -320,8 +386,9 @@ evidence" outcome, never a specific cause.
 - Analysis covers one request at a time. Bulk analysis of every failure in a run is out of scope,
   consistent with the project's caution about multi-request AI work on local CPU inference
   (AP-011 through AP-015).
-- The confidence threshold for "insufficient evidence" (FR-008) is set and justified in
-  `plan.md`.
+- The classification rules, each rule's signal and fixed strength, and the rule-set version
+  (FR-003, FR-008, FR-010) are defined and justified in `plan.md` and `research.md`. They replace
+  the AI confidence threshold (Clarifications 2026-09-24).
 - The guided workflow's `ApiModel`, `TestModel` and dependency data remain in memory only. This
   feature does not persist them. It stores only the context it used, inside each analysis.
 - AP-017's API-only run endpoints are not supported. Adding them later would reuse the same
