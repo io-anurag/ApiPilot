@@ -107,6 +107,11 @@ Lists this uploaded collection's run history (summaries only, no `results`), new
 
 Full run detail, including every `UploadedRequestResult` (FR-006).
 
+**Amendment 2026-09-23 (AP-031, `specs/030-ai-failure-analysis`)**: each result recorded from this
+date on also carries `itemId`, the executed Postman item's `id`. It is additive, older results omit
+it, and no other field or behavior changes. AI failure analysis of a result is served by the separate
+routes in `specs/030-ai-failure-analysis/contracts/failure-analysis-api.md`.
+
 **200 OK** — `{ "run": { "...": "...", "results": [ { "requestName": "...", "requestMethod": "GET", "outcome": "failed", "failureCategory": "assertion-failed", "durationMs": 214, "responseStatusCode": 500, "testOutcomes": [ { "name": "Status code is 200", "outcome": "failed", "detail": "expected 200, got 500" } ] } ] } }`
 
 **404 `run_not_found`**

@@ -83,6 +83,12 @@ export interface UploadedRequestResult {
    * shape is unaffected.
    */
   wasEdited?: boolean;
+  /**
+   * The executed Postman item's own `id` (AP-031, specs/030-ai-failure-analysis FR-017). Links a
+   * result back to the item that produced it, including a generated item's content-derived id.
+   * Absent on results stored before AP-031, which remain valid.
+   */
+  itemId?: string;
 }
 
 /**

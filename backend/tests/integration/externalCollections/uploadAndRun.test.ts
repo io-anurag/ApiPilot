@@ -10,6 +10,7 @@ function validCollection() {
     info: { name: "My collection", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
     item: [
       {
+        id: "0b8f4f7e-2a4c-5d1e-9f3a-7c6b5a4d3e2f",
         name: "Get widget",
         request: { method: "GET", url: "{{baseUrl}}/widgets/1" },
         event: [
@@ -109,6 +110,8 @@ describe("external collections: upload, confirm, and run (US1, US2)", () => {
       outcome: "passed",
       responseStatusCode: 200,
       testOutcomes: [{ name: "Status code is 200", outcome: "passed" }],
+      // AP-031 FR-017: the stored collection's own item id is recorded on the result.
+      itemId: "0b8f4f7e-2a4c-5d1e-9f3a-7c6b5a4d3e2f",
     });
   }, 60_000);
 });

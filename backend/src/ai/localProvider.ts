@@ -7,6 +7,7 @@
 import type {
   AIProvider,
   AIProviderMode,
+  InferenceHooks,
   InferenceRequest,
   InferenceResponse,
   ModelConfig,
@@ -69,7 +70,12 @@ export interface ModelCapacity {
 export interface TextGenerationEngine {
   generate(
     input: string,
-    options: { maxNewTokens?: number; expectedOutputFormat?: "text" | "json" },
+    options: {
+      maxNewTokens?: number;
+      expectedOutputFormat?: "text" | "json";
+      /** Replaces the default system message for chat-capable models when present. */
+      systemPrompt?: string;
+    },
   ): Promise<string>;
   /**
    * The model's resolved usable context window. Used both for batch planning and for the
@@ -238,7 +244,8 @@ export async function loadTransformersEngine(
           [
             {
               role: "system",
-              content: SYSTEM_PROMPTS[options.expectedOutputFormat ?? "text"],
+              content:
+                options.systemPrompt ?? SYSTEM_PROMPTS[options.expectedOutputFormat ?? "text"],
             },
             { role: "user", content: input },
           ],
@@ -400,7 +407,7 @@ export class LocalProvider implements AIProvider {
     this.readiness.reset();
   }
 
-  async infer(request: InferenceRequest): Promise<InferenceResponse> {
+  async infer(request: InferenceRequest, hooks?: InferenceHooks): Promise<InferenceResponse> {
     const startedAt = Date.now();
 
     if (!request.input || request.input.trim().length === 0) {
@@ -429,12 +436,13 @@ export class LocalProvider implements AIProvider {
     }
 
     // Queue and process serially rather than rejecting or running in parallel (FR-018).
-    return this.queue.enqueue(() => this.runInference(request, startedAt));
+    return this.queue.enqueue(() => this.runInference(request, startedAt, hooks));
   }
 
   private async runInference(
     request: InferenceRequest,
     startedAt: number,
+    hooks?: InferenceHooks,
   ): Promise<InferenceResponse> {
     logger.info("inference_start", {
       requestId: request.requestId,
@@ -467,6 +475,9 @@ export class LocalProvider implements AIProvider {
       });
     }
 
+    // Signalled at the same point the timeout starts, so a caller's "generating" phase and the
+    // time budget begin together (specs/030-ai-failure-analysis research D10).
+    hooks?.onStarted?.();
     const timeoutMs = request.timeoutMs ?? this.config.inferenceTimeoutMs;
     const generationStartedAt = Date.now();
     try {
@@ -474,6 +485,7 @@ export class LocalProvider implements AIProvider {
         engine.generate(request.input, {
           maxNewTokens: request.maxOutputTokens,
           expectedOutputFormat: request.expectedOutputFormat,
+          ...(request.systemPrompt !== undefined ? { systemPrompt: request.systemPrompt } : {}),
         }),
         timeoutMs,
       );

@@ -39,6 +39,7 @@ function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedRe
       startedAt: nowIso,
       durationMs: 0,
       testOutcomes: [],
+      ...(item.id ? { itemId: item.id } : {}),
     });
   }
 }
@@ -110,6 +111,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
           startedAt,
           captureRawDetails,
           editedItemIds.has(item.id),
+          item.id,
         ),
       );
       attempted = index + 1;

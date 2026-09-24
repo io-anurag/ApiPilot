@@ -2,6 +2,9 @@ import type {
   CollectionView,
   EnvironmentTier,
   ExecutionConfirmationRequirement,
+  FailureAnalysis,
+  FailureAnalysisAttempt,
+  FailureAnalysisInProgress,
   UploadedCollectionExecutionRun,
   UploadedCollectionSet,
 } from "@apipilot/shared-domain";
@@ -191,6 +194,75 @@ export async function fetchUploadedCollectionRuns(id: string): Promise<UploadedR
     return { ok: true, runs: (parsed?.runs ?? []) as Omit<UploadedCollectionExecutionRun, "results">[] };
   } catch (err) {
     logger.error("network_error", { operation: "fetchUploadedCollectionRuns", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
+/**
+ * AP-031 failure analysis (specs/030-ai-failure-analysis contracts/failure-analysis-api.md). An AI
+ * outcome (`ai-failed`, `not-viable`) is a 200 `FailureAnalysisAttempt`, not an `ErrorResult`;
+ * `ErrorResult` covers eligibility/state refusals and network failures only.
+ */
+
+export type FailureAnalysisErrorResult = ErrorResult & {
+  /** Present for `409 failure_analysis_in_progress`: which result is being analyzed. */
+  inProgressResultIndex?: number;
+  /** Present for `409 result_not_failed`. */
+  outcome?: string;
+};
+
+export type FailureAnalysisAttemptResult = { ok: true; attempt: FailureAnalysisAttempt } | FailureAnalysisErrorResult;
+
+export async function requestFailureAnalysis(
+  collectionId: string,
+  runId: string,
+  resultIndex: number,
+): Promise<FailureAnalysisAttemptResult> {
+  const response = await postJson(
+    `/api/external-collections/${collectionId}/execution/runs/${runId}/results/${resultIndex}/failure-analysis`,
+    "requestFailureAnalysis",
+  );
+  if ("networkError" in response) {
+    return { ok: false, error: "network_error", message: response.networkError };
+  }
+  const parsed = await response.json().catch(() => null);
+  if (!response.ok) {
+    const base = parseError(parsed, response.status, "requestFailureAnalysis");
+    return {
+      ...base,
+      ...(typeof parsed?.resultIndex === "number" ? { inProgressResultIndex: parsed.resultIndex as number } : {}),
+      ...(typeof parsed?.outcome === "string" ? { outcome: parsed.outcome as string } : {}),
+    };
+  }
+  return { ok: true, attempt: parsed as FailureAnalysisAttempt };
+}
+
+export type FailureAnalysisListResult = { ok: true; analyses: FailureAnalysis[] } | ErrorResult;
+
+export async function listFailureAnalyses(collectionId: string, runId: string): Promise<FailureAnalysisListResult> {
+  try {
+    const response = await fetch(`/api/external-collections/${collectionId}/execution/runs/${runId}/failure-analyses`);
+    const parsed = await response.json().catch(() => null);
+    if (!response.ok) return parseError(parsed, response.status, "listFailureAnalyses");
+    return { ok: true, analyses: (parsed?.analyses ?? []) as FailureAnalysis[] };
+  } catch (err) {
+    logger.error("network_error", { operation: "listFailureAnalyses", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
+export type FailureAnalysisInProgressResult = { ok: true; inProgress: FailureAnalysisInProgress | null } | ErrorResult;
+
+/** `204` means nothing is in progress in this session. */
+export async function getFailureAnalysisInProgress(): Promise<FailureAnalysisInProgressResult> {
+  try {
+    const response = await fetch("/api/failure-analysis/in-progress");
+    if (response.status === 204) return { ok: true, inProgress: null };
+    const parsed = await response.json().catch(() => null);
+    if (!response.ok) return parseError(parsed, response.status, "getFailureAnalysisInProgress");
+    return { ok: true, inProgress: (parsed?.inProgress ?? null) as FailureAnalysisInProgress | null };
+  } catch (err) {
+    logger.error("network_error", { operation: "getFailureAnalysisInProgress", errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
 }

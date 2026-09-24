@@ -4,7 +4,8 @@
 `/speckit-specify` individually, in dependency order. See the Implementation Status table below
 for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
 `analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
-(Test Execution & Results) is implemented; AP-018 (AI Failure Analysis) has not been started.
+(Test Execution & Results) is implemented; AI Failure Analysis, renumbered from AP-018 to AP-031
+on 2026-09-23, is specified (`specs/030-ai-failure-analysis`) and awaiting planning.
 AP-019 through AP-025 are further hardening/extension features layered on top of the shipped MVP
 and AP-017, mirroring how AP-011 through AP-016 relate to their own prerequisites (see their own
 Feature Decomposition sections below). AP-026 is a standalone capability layered on top of AP-017
@@ -22,6 +23,9 @@ folding the hardening specs into the main AP-numbering sequence, matching each o
 `specs/0NN-...` directory number. Directory and git-branch names are unchanged
 (`011-ai-prompt-batching` through `016-workflow-aware-postman`); `AP-0NN` is the canonical
 feature identifier used everywhere else (this document, README.md, cross-spec references).
+On 2026-09-23 AI Failure Analysis was renumbered again, from AP-018 to AP-031 (the next free
+identifier, since AP-030 was already taken). AP-018 is retired and not reused. Its spec directory
+is `specs/030-ai-failure-analysis`.
 
 ## Implementation Status
 
@@ -45,7 +49,6 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
 | AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13. Since 2026-09-23 its endpoints are an API-only path; the UI runs generated collections through AP-026 after the guided workflow's hand-off, and its unrendered frontend components were removed (Next Actions #22, #23) |
-| AP-018 — AI Failure Analysis *(post-MVP)* | Not started |
 | AP-019 — Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented — all tasks (T001–T037) complete |
 | AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete |
 | AP-021 — Distinct-Credential Token Provisioning (`specs/021-multi-credential-token-provisioning`) | Implemented — all 22 tasks complete |
@@ -58,6 +61,7 @@ feature identifier used everywhere else (this document, README.md, cross-spec re
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
+| AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 59 of 61 tasks done: backend, API, persistence, UI and tests are in place and passing. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Outstanding: (1) the real-model evaluation (`evaluation.md`, 2026-09-23) found the default `Qwen2.5-0.5B-Instruct` not adequate (prompt v2: 50% structured output, 17% cause agreement), so research D11 opens a model decision through AP-004; (2) T055's 4 real, redacted evaluation cases need a real recorded run |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1607,7 +1611,7 @@ HTML report                        (presented in ApiPilot; downloadable)
   framework-agnostic. k6-specific concepts stay inside the k6 generation and execution boundary,
   as Postman concepts stay inside the Postman boundary (constitution VIII).
 - No AI in the generation, run, or report path. An AI-written narrative, if added later, goes
-  through `AIProvider`, is labelled as AI output, and belongs with AP-018.
+  through `AIProvider`, is labelled as AI output, and belongs with AP-031.
 - No k6 Cloud, Grafana Cloud, or other remote output. Results stay on the local machine.
 - Load is generated from the machine running the ApiPilot backend, and the UI says so.
 
@@ -1634,7 +1638,7 @@ not an accepted alternative.
 - Distributed or cloud load generation.
 - k6 browser testing.
 - Baseline comparison and trends across runs (candidate follow-up).
-- AI-generated analysis of results (AP-018).
+- AI-generated analysis of results (AP-031).
 
 ### Dependencies
 
@@ -1771,7 +1775,16 @@ Sensitive payload logging must remain disabled by default.
 
 ---
 
-## AP-018 — AI Failure Analysis
+## AP-031 — AI Failure Analysis
+
+Specification: `specs/030-ai-failure-analysis/spec.md`. Formerly AP-018 (renumbered 2026-09-23).
+The directory number is independent of the `AP-###` identifier, as with AP-017 and `specs/018`.
+
+Scope note (2026-09-23, found during `/speckit-plan`): the "Execution Results" input below is
+AP-026's uploaded-collection runs, because the UI now runs every collection through them. TestModel,
+ApiModel and workflow context are used only when a failed request matches the session's current
+guided workflow by exact item id. AP-017's API-only runs are out of scope. See the spec's
+Clarifications.
 
 ### Objective
 
@@ -1861,7 +1874,7 @@ AI failure analysis must be evaluated using the same evidence-driven evaluation 
                          AP-017
                             │
                             ▼
-                         AP-018
+                         AP-031
 ```
 
 AP-007 and AP-008 may be developed in parallel after their prerequisites are satisfied, provided their shared domain contracts are stable.
@@ -1919,12 +1932,12 @@ The following are explicitly outside the first MVP:
 
 ```text
 AP-017  Test Execution & Results
-AP-018  AI Failure Analysis
+AP-031  AI Failure Analysis (formerly AP-018)
 ```
 
 AP-011 through AP-016, and AP-019 through AP-028 (hardening/extension features layered onto
 AP-004/AP-005/AP-007/AP-008/AP-009/AP-017, plus the standalone collection import, design system,
-and collection editor), are also outside the formal MVP boundary above, but — unlike AP-018 — all
+and collection editor), are also outside the formal MVP boundary above, but — unlike AP-031 — all
 sixteen are already implemented; see the Implementation Status table. AP-029 (k6 performance
 testing) is likewise outside the MVP boundary and not yet started. AP-030 (test execution gap
 closure) is outside the MVP boundary and implemented.
@@ -2144,7 +2157,7 @@ Implementation
 8. Address the outstanding follow-up tasks noted in the Implementation Status table above
    (AP-001, AP-004, AP-005, AP-007, AP-012, AP-013, AP-014) where practical, or explicitly defer
    them with a documented reason if they remain out of scope.
-9. Do not begin AP-017 (Test Execution & Results) or AP-018 (AI Failure Analysis) — both
+9. Do not begin AP-017 (Test Execution & Results) or AP-031 (AI Failure Analysis, then AP-018) — both
    post-MVP — until the full MVP boundary (AP-001 through AP-010) has been validated
    end-to-end against a real specification, per the MVP Boundary section above.
    **2026-09-11: CLOSED for the PayPal Invoicing API v2 spec** — see Next Actions #10 (the

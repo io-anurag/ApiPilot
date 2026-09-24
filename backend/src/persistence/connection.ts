@@ -147,6 +147,22 @@ export class SqliteConnection {
 
       PRAGMA user_version = 1;
     `);
+
+    // AP-031 (specs/030-ai-failure-analysis research D9): one encrypted analysis per failed
+    // uploaded-collection result. `CREATE TABLE IF NOT EXISTS` also adds it to a database created
+    // before this table existed, so `user_version` stays 1. Replacement is a single upsert on the
+    // primary key, so a reader never observes a half-written analysis (FR-015).
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS failure_analyses (
+        session_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        result_index INTEGER NOT NULL,
+        generated_at TEXT NOT NULL,
+        analysis_encrypted BLOB NOT NULL,
+        analysis_iv BLOB NOT NULL,
+        PRIMARY KEY (session_id, run_id, result_index)
+      );
+    `);
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

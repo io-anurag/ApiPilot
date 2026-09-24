@@ -3,6 +3,8 @@ import type {
   CollectionRequestView,
   EnvironmentTier,
   ExecutionConfirmationRequirement,
+  FailureAnalysis,
+  FailureAnalysisInProgress,
   RawHeader,
   UploadedCollectionExecutionRun,
   UploadedRequestResult,
@@ -11,11 +13,14 @@ import {
   cancelUploadedCollectionExecution,
   fetchUploadedCollectionRun,
   fetchUploadedCollectionRuns,
+  getFailureAnalysisInProgress,
+  listFailureAnalyses,
   startUploadedCollectionExecution,
   type UploadedCollectionSummary,
 } from "../services/externalCollectionsClient";
 import { CodeBlock } from "./CodeBlock";
 import { ErrorState } from "./ErrorState";
+import { FailureAnalysisPanel, IN_PROGRESS_POLL_MS } from "./FailureAnalysisPanel";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
@@ -117,6 +122,17 @@ function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
   );
 }
 
+/** What a failed result's row needs to offer AI failure analysis (specs/030-ai-failure-analysis). */
+interface FailureAnalysisBinding {
+  collectionId: string;
+  runId: string;
+  resultIndex: number;
+  analysis?: FailureAnalysis;
+  inProgress: FailureAnalysisInProgress | null;
+  onAnalysisChange: (analysis: FailureAnalysis) => void;
+  onInProgressChange: (inProgress: FailureAnalysisInProgress | null, startedHere: boolean) => void;
+}
+
 type ResultDetailTab = "request" | "response" | "tests";
 
 const RESULT_DETAIL_TABS: ReadonlyArray<TabItem<ResultDetailTab>> = [
@@ -128,7 +144,11 @@ const RESULT_DETAIL_TABS: ReadonlyArray<TabItem<ResultDetailTab>> = [
 /** Per-request diagnostic detail, tabbed (Request/Response/Tests) rather than shown all at once —
  * each named test outcome, duration, response status, and — for a `"local"`-tier run only — the
  * full raw request/response headers/bodies (FR-017a parity). */
-function ResultDetail({ result, collectionTier }: Readonly<{ result: UploadedRequestResult; collectionTier: EnvironmentTier }>) {
+function ResultDetail({
+  result,
+  collectionTier,
+  failureAnalysis,
+}: Readonly<{ result: UploadedRequestResult; collectionTier: EnvironmentTier; failureAnalysis: FailureAnalysisBinding }>) {
   const [tab, setTab] = useState<ResultDetailTab>("request");
   const noRawCaptureNotice = collectionTier !== "local" && (
     <p className="text-slate-500 dark:text-slate-400">
@@ -178,6 +198,9 @@ function ResultDetail({ result, collectionTier }: Readonly<{ result: UploadedReq
         ) : (
           <p className="text-slate-500 dark:text-slate-400">This request has no named tests.</p>
         ))}
+      {result.outcome === "failed" && (
+        <FailureAnalysisPanel {...failureAnalysis} requestName={result.requestName} />
+      )}
     </div>
   );
 }
@@ -185,7 +208,8 @@ function ResultDetail({ result, collectionTier }: Readonly<{ result: UploadedReq
 function ExternalCollectionResultRow({
   result,
   collectionTier,
-}: Readonly<{ result: UploadedRequestResult; collectionTier: EnvironmentTier }>) {
+  failureAnalysis,
+}: Readonly<{ result: UploadedRequestResult; collectionTier: EnvironmentTier; failureAnalysis: FailureAnalysisBinding }>) {
   const [expanded, setExpanded] = useState(false);
   return (
     <li className="py-2 text-sm">
@@ -203,7 +227,7 @@ function ExternalCollectionResultRow({
         </div>
         <StatusBadge label={outcomeLabel(result)} tone={outcomeTone(result)} />
       </button>
-      {expanded && <ResultDetail result={result} collectionTier={collectionTier} />}
+      {expanded && <ResultDetail result={result} collectionTier={collectionTier} failureAnalysis={failureAnalysis} />}
     </li>
   );
 }
@@ -411,6 +435,60 @@ export function ExternalCollectionRunPanel({
     useState<ExecutionConfirmationRequirement | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(requests.map((item) => item.id)));
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // AP-031: stored analyses for the open run, and the session's one analysis in progress.
+  const [analyses, setAnalyses] = useState<Record<number, FailureAnalysis>>({});
+  const [analysisInProgress, setAnalysisInProgress] = useState<FailureAnalysisInProgress | null>(null);
+  const [analysisStartedHere, setAnalysisStartedHere] = useState(false);
+  const runId = run?.id;
+
+  function refreshAnalyses(forRunId: string) {
+    listFailureAnalyses(uploadedCollection.id, forRunId).then((result) => {
+      if (!result.ok) return;
+      setAnalyses(Object.fromEntries(result.analyses.map((analysis) => [analysis.resultIndex, analysis])));
+    });
+  }
+
+  useEffect(() => {
+    getFailureAnalysisInProgress().then((result) => {
+      if (result.ok) {
+        setAnalysisInProgress(result.inProgress);
+        setAnalysisStartedHere(false);
+      }
+    });
+  }, [uploadedCollection.id]);
+
+  useEffect(() => {
+    setAnalyses({});
+    if (runId) refreshAnalyses(runId);
+  }, [runId, uploadedCollection.id]);
+
+  // An analysis this tab did not start (a page reload, or another tab in the same session): keep
+  // polling until it settles, then pick up its stored result (FR-016, SC-005).
+  useEffect(() => {
+    if (!analysisInProgress || analysisStartedHere) return;
+    const timer = setTimeout(async () => {
+      const result = await getFailureAnalysisInProgress();
+      if (!result.ok) return;
+      setAnalysisInProgress(result.inProgress);
+      if (!result.inProgress && runId) refreshAnalyses(runId);
+    }, IN_PROGRESS_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [analysisInProgress, analysisStartedHere, runId]);
+
+  function failureAnalysisBinding(resultIndex: number): FailureAnalysisBinding {
+    return {
+      collectionId: uploadedCollection.id,
+      runId: runId ?? "",
+      resultIndex,
+      analysis: analyses[resultIndex],
+      inProgress: analysisInProgress,
+      onAnalysisChange: (analysis) => setAnalyses((current) => ({ ...current, [analysis.resultIndex]: analysis })),
+      onInProgressChange: (inProgress, startedHere) => {
+        setAnalysisInProgress(inProgress);
+        setAnalysisStartedHere(startedHere);
+      },
+    };
+  }
 
   // Re-selects everything whenever the *set* of runnable request ids changes (switching
   // collections, or adding/deleting a request while the editor is open) rather than trying to
@@ -601,6 +679,7 @@ export function ExternalCollectionRunPanel({
                 key={`${result.requestName}-${index}`}
                 result={result}
                 collectionTier={uploadedCollection.tier}
+                failureAnalysis={failureAnalysisBinding(index)}
               />
             ))}
           </ul>

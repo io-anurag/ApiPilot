@@ -23,7 +23,14 @@ The single abstraction every AI-powered feature depends on (FR-001).
 |--------|------|-------|
 | `mode` | `AIProviderMode` | Identifies which implementation is active |
 | `getReadiness()` | `() => ReadinessState` | Synchronous snapshot of current lifecycle state (FR-004) |
-| `infer(request)` | `(request: InferenceRequest) => Promise<InferenceResponse>` | Enqueues/serializes and completes a single inference request (FR-002, FR-018) |
+| `infer(request, hooks?)` | `(request: InferenceRequest, hooks?: InferenceHooks) => Promise<InferenceResponse>` | Enqueues/serializes and completes a single inference request (FR-002, FR-018). `hooks` added by the 2026-09-23 amendment below. |
+
+**Amendment 2026-09-23 (AP-031, `specs/030-ai-failure-analysis` research D10)**: `infer` takes an
+optional second argument, `hooks?: InferenceHooks` (`{ onStarted?: () => void }`). `LocalProvider`
+calls `onStarted` once, after the request leaves the queue and the engine is loaded, at the same
+point its timeout starts. `MockProvider` calls it immediately. It never fires for a request
+rejected earlier (empty input, `NOT_READY`, `LOAD_FAILED`). Existing callers pass nothing, and their
+behavior is unchanged.
 
 ## InferenceRequest
 
@@ -37,6 +44,7 @@ Structured input for a single inference call (FR-009).
 | `expectedOutputFormat` | `"text" \| "json"` | What shape the caller expects back |
 | `maxOutputTokens` | `number \| undefined` | Optional generation bound |
 | `timeoutMs` | `number \| undefined` | Overrides the configured default timeout for this request only (FR-017) |
+| `systemPrompt` | `string \| undefined` | Added 2026-09-23 (AP-031, `specs/030-ai-failure-analysis` research D6). When present, `LocalProvider` uses it as the chat system message instead of its built-in, test-design-specific default; `MockProvider` ignores it. Optional and backward compatible, so `contractVersion` stays `1`; callers that omit it get byte-identical behavior. |
 
 ## InferenceResponse
 

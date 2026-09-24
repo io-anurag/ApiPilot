@@ -56,6 +56,65 @@ describe("mapUploadedResult", () => {
     expect(result.failureCategory).toBe("timeout");
   });
 
+  it("records the executed item's id on passed and every kind of failed result (AP-031 FR-017)", () => {
+    const passed = mapUploadedResult(
+      "Get widget",
+      "GET",
+      { response: { code: 200, responseTime: 1 }, assertions: [] },
+      startedAt,
+      false,
+      false,
+      "item-1",
+    );
+    const assertionFailed = mapUploadedResult(
+      "Get widget",
+      "GET",
+      {
+        response: { code: 500, responseTime: 1 },
+        assertions: [{ assertion: "ok", skipped: false, error: { name: "AssertionError", message: "no" } }],
+      },
+      startedAt,
+      false,
+      false,
+      "item-2",
+    );
+    const connectivity = mapUploadedResult(
+      "Get widget",
+      "GET",
+      { requestError: { code: "ECONNREFUSED", message: "refused" } },
+      startedAt,
+      false,
+      false,
+      "item-3",
+    );
+    const timeout = mapUploadedResult(
+      "Get widget",
+      "GET",
+      { requestError: { code: "ESOCKETTIMEDOUT", message: "timed out" } },
+      startedAt,
+      false,
+      false,
+      "item-4",
+    );
+
+    expect([passed, assertionFailed, connectivity, timeout].map((r) => r.itemId)).toEqual([
+      "item-1",
+      "item-2",
+      "item-3",
+      "item-4",
+    ]);
+  });
+
+  it("omits itemId entirely when none is given, so the serialized shape is unchanged", () => {
+    const result = mapUploadedResult(
+      "Get widget",
+      "GET",
+      { response: { code: 200, responseTime: 1 }, assertions: [] },
+      startedAt,
+    );
+    expect("itemId" in result).toBe(false);
+  });
+
   it("attaches rawCapture only when captureRawDetails is true", () => {
     const execution: NewmanExecutionResult = {
       request: { url: { toString: () => "http://localhost/widgets" }, headers: { all: () => [] } },

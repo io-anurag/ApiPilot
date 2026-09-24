@@ -19,6 +19,21 @@ export interface InferenceRequest {
   maxOutputTokens?: number;
   /** Overrides the configured default timeout for this request only (FR-017). */
   timeoutMs?: number;
+  /**
+   * Replaces the provider's default chat system message for this request only (AP-031,
+   * specs/030-ai-failure-analysis research D6). Optional and backward compatible, so
+   * `contractVersion` stays `1`; callers that omit it get unchanged behavior.
+   */
+  systemPrompt?: string;
+}
+
+/** Optional lifecycle callbacks for one `infer()` call (specs/030-ai-failure-analysis research D10). */
+export interface InferenceHooks {
+  /**
+   * Fires once when the provider begins work on this request — after any queue wait and model
+   * load — which is the point its timeout starts. Never fires for a request rejected earlier.
+   */
+  onStarted?: () => void;
 }
 
 /** Structured, validated output of a single inference call (FR-009, FR-010). */
@@ -69,7 +84,7 @@ export interface ModelConfig {
 export interface AIProvider {
   mode: AIProviderMode;
   getReadiness(): ReadinessState;
-  infer(request: InferenceRequest): Promise<InferenceResponse>;
+  infer(request: InferenceRequest, hooks?: InferenceHooks): Promise<InferenceResponse>;
   /**
    * Maximum number of characters of serialized InferenceRequest.input this provider can
    * safely accept for the given output budget, or undefined if it has no meaningful limit

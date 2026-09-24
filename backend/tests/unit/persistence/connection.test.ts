@@ -50,11 +50,33 @@ describe("SqliteConnection", () => {
         "benchmark_runs",
         "environments",
         "execution_runs",
+        "failure_analyses",
         "sqlite_sequence",
         "uploaded_collection_runs",
         "uploaded_collections",
       ]);
       connection.close();
+    } finally {
+      rmSyncRetrying(dir);
+    }
+  });
+
+  it("adds the failure_analyses table to a database created before it existed, idempotently (AP-031)", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "apipilot-test-"));
+    const dbPath = path.join(dir, "apipilot.db");
+    try {
+      const first = new SqliteConnection(dbPath);
+      first.db.exec("DROP TABLE failure_analyses");
+      first.close();
+
+      const reopened = new SqliteConnection(dbPath);
+      reopened.close();
+      const again = new SqliteConnection(dbPath);
+      const tables = again.db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'failure_analyses'")
+        .all();
+      expect(tables).toHaveLength(1);
+      again.close();
     } finally {
       rmSyncRetrying(dir);
     }

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   AIProvider,
   AIProviderMode,
+  InferenceHooks,
   InferenceRequest,
   InferenceResponse,
   MockProviderConfig,
@@ -40,7 +41,7 @@ export class MockProvider implements AIProvider {
     return this.inputBudgetCharsOverride;
   }
 
-  async infer(request: InferenceRequest): Promise<InferenceResponse> {
+  async infer(request: InferenceRequest, hooks?: InferenceHooks): Promise<InferenceResponse> {
     const startedAt = Date.now();
 
     if (!request.input || request.input.trim().length === 0) {
@@ -54,6 +55,7 @@ export class MockProvider implements AIProvider {
       });
     }
 
+    hooks?.onStarted?.();
     return {
       contractVersion: 1,
       requestId: request.requestId,

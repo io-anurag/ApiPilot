@@ -16,6 +16,7 @@ import { buildRawCapture, isTimeoutError, redactIfSensitive } from "../execution
  * @param wasEdited AP-028 (research.md D6): `true` only when the executed item carried the
  * `_apipilotEdited` marker (`editedItems.ts`) — surfaced onto the result so a user can tell an
  * edited request's outcome apart from the collection's original definition (FR-011).
+ * @param itemId AP-031 (specs/030-ai-failure-analysis FR-017): the executed item's own `id`.
  */
 export function mapUploadedResult(
   requestName: string,
@@ -24,8 +25,15 @@ export function mapUploadedResult(
   startedAt: string,
   captureRawDetails = false,
   wasEdited = false,
+  itemId?: string,
 ): UploadedRequestResult {
-  const base = { requestName, requestMethod, startedAt, ...(wasEdited ? { wasEdited: true } : {}) };
+  const base = {
+    requestName,
+    requestMethod,
+    startedAt,
+    ...(wasEdited ? { wasEdited: true } : {}),
+    ...(itemId ? { itemId } : {}),
+  };
   const rawCapture = captureRawDetails ? buildRawCapture(execution) : undefined;
 
   if (execution.requestError) {
