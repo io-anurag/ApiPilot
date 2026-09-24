@@ -29,6 +29,7 @@ OpenAPI YAML
     -> hand-off to Import & Run Collection (inspect, edit, select requests)
     -> explicit Newman execution
     -> execution results
+    -> optional, on-demand AI failure analysis of a failed request
 ```
 
 AI is bounded, validated, and local. It can suggest scenarios and relationships, but it cannot add undocumented endpoints, methods, fields, authentication schemes, response codes, or assertions to the executable model.
@@ -63,7 +64,8 @@ The following capabilities are implemented in the current repository:
 - Workflow review and workflow-aware Postman rendering.
 - Postman collection, environment, and artifact README generation from approved test intent.
 - OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, resource-qualified path-parameter variables (`/users/{id}` → `{{user_id}}`), automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
-- Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP.
+- Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP, where a request whose data prerequisite failed is held back as "dependency not met" and every result records its processing stage.
+- On-demand AI failure analysis of one failed request in an Import & Run Collection run (*implementation complete, AI evaluation pending*; see [Limitations](#limitations-and-roadmap)). The analysis is a labelled inference: a likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", a confidence, a plain-language summary, suggested next steps, and the deterministically extracted, redacted evidence it cites. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
@@ -106,6 +108,10 @@ flowchart LR
     Artifacts -->|UI hand-off| ExternalCollections
     ExternalCollections --> Newman
     ExternalCollections --> SQLite
+    ExternalCollections -->|failed result, on request| FailureAnalysis[AI failure analysis]
+    FailureAnalysis --> Provider
+    FailureAnalysis -.->|read-only context| Workflow
+    FailureAnalysis --> SQLite
     Shared[packages/shared-domain contracts] -.-> UI
     Shared -.-> Routes
     Shared -.-> Workflow
@@ -126,8 +132,9 @@ flowchart LR
 | `backend/src/testGenerationWorkflow/` | In-memory stage state machine, gating, invalidation, operation selection, progress, and review orchestration.          |
 | `backend/src/execution/`              | Environment handling, run lifecycle, sequencing, cancellation, and Newman integration.                                 |
 | `backend/src/externalCollections/`    | Upload/store/edit/execute path for an uploaded Postman collection (externally authored or handed off from the guided workflow), sibling to `execution/`; reuses Newman for dispatch and its own result mapper for the collection's own named test outcomes. |
+| `backend/src/failureAnalysis/`        | On-demand AI failure analysis of an uploaded-collection result: deterministic evidence, redaction, specification-context matching, prompt, response validation, and the per-session in-progress guard. |
 | `backend/src/persistence/`            | SQLite connection, repositories, schema initialization, interrupted-run recovery, and credential encryption.           |
-| `packages/shared-domain/`             | Framework-independent contracts for API models, tests, AI, review, dependencies, workflows, artifacts, and execution.  |
+| `packages/shared-domain/`             | Framework-independent contracts for API models, tests, AI, review, dependencies, workflows, artifacts, execution, and failure analysis. |
 
 The shared-domain package contains no Express, React, browser, or Node-specific implementation. Postman is an output target, not the internal test model.
 
@@ -200,6 +207,12 @@ The guided workflow's own execution endpoints (`/api/test-generation-workflow/en
 A separate "Import & Run Collection" entry point, independent of the pipeline above, lets an operator upload an existing Postman Collection v2.1 JSON file and a matching Postman Environment JSON file directly — no OpenAPI specification, analysis, or review step at all. The uploaded collection is parsed and validated with the real `postman-collection` SDK rather than a hand-rolled schema check, walked in its own document order (arbitrary folder nesting included) via that SDK's `forEachItem()`, and each request is dispatched through the same Newman integration execution already uses. Because the collection's own pre-request/test scripts were not generated or verified by ApiPilot, a distinct, mandatory confirmation is required before its first-ever run; a second, separate confirmation applies to a Staging/Production-tier environment or a destructive (`POST`/`PUT`/`PATCH`/`DELETE`) request, mirroring the guided workflow's own risk-tier gate. Pass/fail is derived from the collection's own named `pm.test(...)` results — never guessed into a status-code/schema classification the collection did not declare. Multiple named collection/environment pairs can be uploaded, selected, and removed independently; removing one never alters a run already recorded against it. Uploaded-collection runs and guided-workflow runs share the same single "one execution in progress at a time" session-wide slot.
 
 An unresolved variable does not refuse an uploaded-collection run: an earlier request's test script may capture the value (`pm.environment.set`) for a later request, and a request that still sends an unresolved placeholder records its own failed or errored outcome. After each request, the environment as Newman left it is written back to the collection's stored values, so the editor's resolved preview and the next run use what the scripts captured.
+
+### AI failure analysis (on demand)
+
+For any failed request in an uploaded-collection run, including one still in progress, the operator can choose **Analyze failure** (`specs/030-ai-failure-analysis`). `buildEvidence.ts` extracts an ordered, redacted evidence list (`E1..En`) from the recorded result: failure category, status, timing, test outcomes and, for a `local`-tier run, redacted request/response excerpts. It adds the matched specification context when there is one. The prompt goes through `AIProvider` like every other AI call. The model must answer with one of three causes or `insufficient-evidence`, a confidence, a summary, up to three steps, and the ids of the evidence it relies on. Unknown ids are dropped. No valid citation, or a confidence below 0.5, turns the answer into "insufficient evidence". Unparseable output is reported as an `ai-failed` outcome, and there is no automatic retry. A pre-flight viability check refuses analyses that would exceed the inference timeout. Only one analysis runs at a time per session; the UI shows "Waiting for the local AI" separately from "Generating".
+
+Specification context is attached only when the failed request's Postman item id matches an item in the session's current guided-workflow collection. It is snapshotted into the stored analysis, so starting a new workflow does not change an earlier analysis. A collection ApiPilot did not generate is still analyzed, with context shown as unavailable and the reason given.
 
 ## Quick start
 
@@ -336,6 +349,9 @@ Mounted independently of the guided-workflow routes above — no active workflow
 | `POST` | `/api/external-collections/:id/execution/cancel`           | Requests cancellation of the active run.                                                       |
 | `GET`  | `/api/external-collections/:id/execution/runs`              | Lists this collection's run summaries.                                                          |
 | `GET`  | `/api/external-collections/:id/execution/runs/:runId`        | Retrieves one run and its per-request results, independent of the collection's own lifecycle.  |
+| `POST` | `/api/external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` | Analyzes one failed result with the configured AI provider. AI outcomes (`analyzed`, `ai-failed`, `not-viable`) are returned in a `200`; a result that did not fail, or an analysis already in progress in the session, returns `409`. |
+| `GET`  | `/api/external-collections/:id/execution/runs/:runId/failure-analyses` | Lists the run's stored analyses, ordered by result index.                                     |
+| `GET`  | `/api/failure-analysis/in-progress`                          | Returns the session's analysis in progress and its phase, or `204` when there is none.          |
 
 Common contract failures use JSON such as `{ error, message }`. Invalid uploads return `400`; oversized uploads return `413`; stage conflicts, confirmation requirements, duplicate resources, and active-run conflicts return `409`; missing resources return `404`; unexpected failures return a safe `500` without stack traces or raw internal details.
 
@@ -352,6 +368,7 @@ There is no login or account system. Each browser receives an unguessable UUID i
 `better-sqlite3` creates the configured database and schema on first use. The persisted categories are:
 
 - Session-owned environments and their execution run history.
+- Session-owned uploaded collections, their runs, and AI failure analyses (one encrypted analysis per failed result, replaced atomically when the result is analyzed again).
 - AI readiness history and benchmark diagnostics, which are process-wide rather than session-owned.
 
 Environment variable and credential-like values are encrypted with AES-256-GCM. The key is stored in a sibling `${APIPILOT_DB_PATH}.key` file, so the database and key must be backed up together. A corrupted or unreadable database fails startup explicitly. Runs left in progress during a backend restart are recorded as cancelled with a backend-restart reason.
@@ -364,6 +381,7 @@ Environment variable and credential-like values are encrypted with AES-256-GCM. 
 - Real API traffic occurs only after an explicit execution action against an operator-defined environment.
 - Destructive requests and production-tier environments require an additional confirmation.
 - Logs exclude specifications, credentials, raw prompts, raw model responses, and complete request/response bodies.
+- AI failure analysis redacts sensitive headers, query parameters, and body fields before evidence reaches the prompt or storage, replaces any sensitive value or bearer token the model's summary or steps still contain, and never sends a request to the target API. Its output is labelled as an AI inference, not a confirmed root cause.
 - Frontend error forwarding is best-effort, size-limited, and filtered for credential-shaped fields.
 
 ## Repository structure
@@ -379,6 +397,7 @@ ApiPilot/
 │   ├── src/testGenerationWorkflow/ # stage orchestration
 │   ├── src/execution/              # Newman execution lifecycle
 │   ├── src/externalCollections/    # standalone uploaded-collection import & execution
+│   ├── src/failureAnalysis/        # on-demand AI failure analysis
 │   ├── src/persistence/            # SQLite repositories and encryption
 │   ├── src/ai/                     # provider, batching, readiness, benchmarks
 │   └── tests/                      # unit and Supertest integration tests
@@ -419,6 +438,7 @@ npm run build -w backend
 npm start -w backend
 npm run test -w backend
 npm run test:ai-real -w backend
+npm run test:ai-real:failure-analysis -w backend
 npm run ai:benchmark -w backend
 
 npm run dev -w frontend
@@ -427,7 +447,7 @@ npm run preview -w frontend
 npm run test -w frontend
 ```
 
-`npm test` runs Vitest across the workspace, including backend unit/integration tests, frontend jsdom/React tests, and shared-domain tests. Ordinary tests use mock or scripted providers and do not download a model. `test:ai-real` and `ai:benchmark` are opt-in and may load or download local models.
+`npm test` runs Vitest across the workspace, including backend unit/integration tests, frontend jsdom/React tests, and shared-domain tests. Ordinary tests use mock or scripted providers and do not download a model. `test:ai-real`, `test:ai-real:failure-analysis` (the AP-031 evaluation corpus, recorded in `specs/030-ai-failure-analysis/evaluation.md`), and `ai:benchmark` are opt-in and may load or download local models.
 
 The repository has no checked-in Dockerfile, docker-compose file, or deployment manifest. The backend and frontend do have independent production build scripts: the backend compiles to `backend/dist`, and the frontend builds a Vite distribution under `frontend/dist`.
 
@@ -440,9 +460,12 @@ Current intentional limitations include:
 - Local AI performance depends heavily on the selected model and machine. Large specifications may settle as partial or not completed at the configured run budget while retaining successful units.
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
-- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), lets you ask the local AI to explain one failed request in an Import & Run Collection run: a labelled inference with confidence, cited evidence and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*: the default `Qwen2.5-0.5B-Instruct` model did not reach the evaluation bar (`specs/030-ai-failure-analysis/evaluation.md`), and a model decision is open. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
+- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), lets you ask the local AI to explain one failed request in an Import & Run Collection run: a labelled inference with confidence, cited evidence and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*: the default `Qwen2.5-0.5B-Instruct` model did not reach the evaluation bar (50% structured output with the current prompt, against an 80% bar; `specs/030-ai-failure-analysis/evaluation.md`), and a model decision is open. Treat its conclusions with caution until that decision is made. It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
-The implementation status for AP-001 through AP-028 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
+- Dependency-aware holding of requests (`specs/029-execution-gap-closure`) applies to the guided workflow's API-only execution path. Uploaded-collection runs execute every selected request in collection order, and a request that depends on a failed one records its own outcome.
+- AP-029, k6 performance testing, is a roadmap entry only and is not started.
+
+The implementation status for AP-001 through AP-031 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 
 ## Documentation
 
@@ -459,6 +482,8 @@ The implementation status for AP-001 through AP-028 is maintained in [specs/ROAD
 - [External collection import & execution specification](specs/026-external-collection-execution/spec.md)
 - [Frontend design system & application shell specification](specs/027-frontend-design-system/spec.md)
 - [Postman-style collection & variable editor specification](specs/028-collection-editor-ui/spec.md)
+- [Test execution gap closure specification](specs/029-execution-gap-closure/spec.md)
+- [AI failure analysis specification](specs/030-ai-failure-analysis/spec.md) and [evaluation](specs/030-ai-failure-analysis/evaluation.md)
 
 ## License
 

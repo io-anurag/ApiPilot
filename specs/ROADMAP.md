@@ -1,11 +1,13 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. AP-001 through AP-028 have each been run through
-`/speckit-specify` individually, in dependency order. See the Implementation Status table below
-for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
+**Status**: Reference document. AP-001 through AP-028, AP-030, and AP-031 have each been run
+through `/speckit-specify` individually, in dependency order. See the Implementation Status table
+below for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
 `analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
-(Test Execution & Results) is implemented; AI Failure Analysis, renumbered from AP-018 to AP-031
-on 2026-09-23, is specified (`specs/030-ai-failure-analysis`) and awaiting planning.
+(Test Execution & Results) is implemented. AI Failure Analysis, renumbered from AP-018 to AP-031
+on 2026-09-23 (`specs/030-ai-failure-analysis`), is implementation complete with its AI
+evaluation pending, so it is not yet recorded as Implemented (constitution XXII; Next Actions #26).
+AP-030 (Test Execution Gap Closure) is a hardening feature for AP-017 and is implemented.
 AP-019 through AP-025 are further hardening/extension features layered on top of the shipped MVP
 and AP-017, mirroring how AP-011 through AP-016 relate to their own prerequisites (see their own
 Feature Decomposition sections below). AP-026 is a standalone capability layered on top of AP-017
@@ -61,7 +63,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
-| AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 59 of 61 tasks done: backend, API, persistence, UI and tests are in place and passing. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Outstanding: (1) the real-model evaluation (`evaluation.md`, 2026-09-23) found the default `Qwen2.5-0.5B-Instruct` not adequate (prompt v2: 50% structured output, 17% cause agreement), so research D11 opens a model decision through AP-004; (2) T055's 4 real, redacted evaluation cases need a real recorded run |
+| AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 59 of 61 tasks done: backend, API, persistence, UI and tests are in place and passing. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Outstanding: (1) the real-model evaluation (`evaluation.md`, 2026-09-23) found the default `Qwen2.5-0.5B-Instruct` not adequate (prompt v2: 50% structured output, 17% cause agreement), so research D11 opens a model decision through AP-004; (2) T055's 4 real, redacted evaluation cases need a real recorded run; (3) T061's manual browser walkthrough of quickstart scenarios 1 to 5 was not performed (automated suites cover the same behavior). See Next Actions #26 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -1786,6 +1788,11 @@ ApiModel and workflow context are used only when a failed request matches the se
 guided workflow by exact item id. AP-017's API-only runs are out of scope. See the spec's
 Clarifications.
 
+Status note (2026-09-23): implementation complete, AI evaluation pending. The pipeline, API,
+persistence and UI are in place. The default local model did not reach the evaluation bar, so a
+model decision is open (`specs/030-ai-failure-analysis/evaluation.md`; Next Actions #26). The
+Objective and Scope below are the original roadmap entry; the spec is normative.
+
 ### Objective
 
 Analyze API test failures using AI without allowing AI to execute APIs or alter test execution autonomously.
@@ -2394,7 +2401,8 @@ Implementation
     stored uploaded copy in place, with an `_apipilotEdited` marker), described a guided-workflow
     Run & Results panel that the hand-off replaced, and cited a `vercel.json` that no longer
     exists. The full repository suite passed at this point: 1407 tests passed, 2 skipped, across
-    204 test files.22. **Spec drift from #19 and #20 resolved through clarifications (2026-09-23).** Documentation
+    204 test files.
+22. **Spec drift from #19 and #20 resolved through clarifications (2026-09-23).** Documentation
     and specification only; no code changed.
     - `specs/009` (Clarifications 2026-09-23, FR-001 note, superseded Assumptions entry): the
       `execution` stage hands a generated collection off to "Import & Run Collection" with its
@@ -2459,3 +2467,50 @@ Implementation
     Validation after implementation: `npm run lint` and `npm run build` clean; `npm test` 1422
     passed, 2 skipped, across 203 test files. That is up from 1392/201 at #23 by exactly the 30
     tests and 2 files added.
+26. **AP-031 (AI Failure Analysis) implementation complete, AI evaluation pending (2026-09-23).**
+    Taken through clarify, plan, tasks, analyze, and implement as `specs/030-ai-failure-analysis`;
+    59 of 61 tasks are done.
+    - What shipped: on-demand analysis of one failed request in an AP-026 uploaded-collection run
+      (`backend/src/failureAnalysis/`, `backend/src/api/failureAnalysis.ts`,
+      `frontend/src/components/FailureAnalysisPanel.tsx`). Evidence is extracted and redacted
+      deterministically; the model only cites it by id, picks one of three causes or
+      "insufficient evidence", and is held to a 0.5 confidence threshold. Specification context is
+      attached by exact Postman item-id match to the session's current guided workflow. One
+      encrypted analysis per result is persisted through AP-025, and one analysis runs at a time
+      per session.
+    - Additive contract changes: `UploadedRequestResult.itemId` (AP-026), and
+      `InferenceRequest.systemPrompt` plus `AIProvider.infer(request, hooks?)` with `onStarted`
+      (AP-004). Existing callers are unchanged.
+    - Validation recorded in T061: `npm run lint` and `npm run build` clean; `npm test` 1,552
+      passed, 3 skipped, across 216 test files (plus 2 skipped opt-in real-model files).
+
+    Outstanding, in order:
+    - **Model decision (research D11).** The real-model evaluation (`evaluation.md`) found the
+      default `onnx-community/Qwen2.5-0.5B-Instruct` not adequate: prompt v1 gave 100% structured
+      output but copied the example's cause into every answer (33% cause agreement); prompt v2 fell
+      to 50% structured output, below the 80% bar. Evaluating larger models through AP-004's
+      benchmark process needs the user's go-ahead because it downloads models.
+    - **Real evaluation cases (T055).** At least 4 cases from a real, redacted recorded run are
+      required and none exist yet. They need a redacted uploaded-collection run, or approval to
+      record one against an authorized target such as the PayPal Invoicing API v2 walkthrough
+      (#13).
+    - **Manual UI pass (T061).** Quickstart scenarios 1 to 5 were not walked through in a browser.
+27. **README.md, docs/architecture.md, and docs/USER_MANUAL.md brought into sync with AP-030 and
+    AP-031 (2026-09-24).** Documentation only; no code changed.
+    - README: AI failure analysis added to capabilities, the architecture diagram, component
+      boundaries, the pipeline description, the endpoint table (three routes), persistence,
+      security, repository structure, and commands (`test:ai-real:failure-analysis`). A limitation
+      notes that AP-030's dependency holding applies only to the API-only path.
+    - Architecture: new "AI failure analysis" section (evidence, redaction, answer rules,
+      viability, concurrency, context matching, evaluation status). Also added the `AIProvider`
+      `systemPrompt`/`onStarted` additions, the `failure_analyses` table, the AP-030
+      dependency-aware execution paragraph, a prompt-injection note, and normative sources through
+      AP-031.
+    - User manual: new section 4.5 (asking the AI why a request failed), plus limitations,
+      troubleshooting rows, and AI-behavior notes. Two earlier errors fixed: the uploaded-run
+      outcome table listed "Dependency not met", which uploaded runs cannot produce, and two
+      troubleshooting rows had been merged onto one line.
+    - This roadmap: the header status no longer calls AP-031 "awaiting planning", AP-031's
+      outstanding manual UI pass is listed, and entries #21 and #22 were split onto separate lines.
+    - Validation at this point: `npm test` 1,552 passed, 3 skipped, across 216 test files (plus 2
+      skipped opt-in real-model files), unchanged from #26.

@@ -14,7 +14,8 @@ always produces the same scenarios), optionally proposes additional scenarios us
 locally running AI model, and lets you review and approve everything before anything is
 exported or executed. Approved scenarios become a Postman collection, which ApiPilot then
 hands to its **Import & Run Collection** view, where you can inspect and edit it and run it
-against a target you choose.
+against a target you choose. For any request that fails, you can ask the local AI for a
+labelled, evidence-backed explanation of the likely cause (section 4.5).
 
 If you already have a Postman collection and environment of your own — exported from
 Postman, received from a teammate, or hand-authored — you can instead import and run it
@@ -365,7 +366,10 @@ shows an outcome:
 | Assertion failed | The request completed but one or more of its tests failed |
 | Connectivity failure | The request could not reach the target at all |
 | Timed out | No response within the allotted time |
-| Cancelled / Dependency not met / Run ended before this request | The run was stopped, or an earlier required request didn't succeed |
+| Cancelled / Run ended before this request | The run was stopped before this request was sent |
+
+An uploaded-collection run sends every selected request in order. A request that needs a value
+an earlier request failed to produce is still sent, and records its own outcome.
 
 Expand a row to see its details in tabs — **Request**, **Response**, and **Tests** —
 including each test's individual result, named exactly as your collection's `pm.test(...)`
@@ -379,11 +383,55 @@ You can upload and keep multiple named collection/environment pairs at once, swi
 between them, and remove one you no longer need — removing a collection never changes
 the results of a run you already completed against it.
 
-### 4.5 Things to know
+### 4.5 Asking the AI why a request failed
+
+Expand a failed request's row and choose **Analyze failure** to have the local AI suggest
+why it most likely failed. Nothing is analyzed automatically. You can analyze a failure
+while the rest of the run is still in progress, and in any earlier run still listed in the
+run history. Analysis never sends a request to your target API; it works only from what
+the run already recorded.
+
+While it works, the panel shows **Waiting for the local AI** (the model is loading, or other
+AI work is ahead of yours) and then **Generating**, each with an elapsed timer. Only one
+analysis runs at a time in your session. Every **Analyze failure** button stays disabled
+until it finishes, including after a page reload.
+
+The result is always labelled **AI inference, not a confirmed root cause**. It contains:
+
+- **A likely cause**: a potential specification mismatch, environment issue, or
+  downstream-service issue, with a confidence such as "Moderate (0.62)" (Moderate is 0.5 to
+  below 0.75, High is 0.75 and above). If the model cannot support a cause, you see
+  **Not enough evidence to name a likely cause** instead, with the reason. The reasons
+  are that the model said so, its confidence was below 0.5, or it cited none of the
+  recorded evidence.
+- **A short summary** and up to three **Suggested next steps**.
+- **Evidence cited**: the recorded facts the answer relies on, such as the failure
+  category, status code, test results, and (for a Local-tier run) the request and response
+  excerpts. ApiPilot writes this text from the recorded result; the AI only points to it.
+  The rest is under a collapsed **Other evidence considered** section.
+- **Specification context**, when the collection came from your current guided workflow:
+  the operation, the scenario, the documented response codes, and any earlier workflow
+  step this request depends on, with that step's outcome in the same run. For a
+  collection ApiPilot did not generate, or one from an earlier workflow, the panel says
+  context is unavailable and why. It never guesses one.
+
+Credentials, tokens, and sensitive body fields are replaced with `[redacted]` before the AI
+sees them, and again in anything it writes back. Analyses are saved with the run, so they
+are still there after a reload or backend restart. **Analyze again** replaces the stored
+analysis with a new one. If the new attempt fails, the previous analysis is kept and a
+plain-language message explains what went wrong, for example that the model did not finish
+within the time limit or that the analysis would take longer than the limit allows. Nothing
+retries automatically.
+
+Treat the result as a starting point for your own investigation. The default local model
+did not yet meet ApiPilot's accuracy bar for this feature (see section 7).
+
+### 4.6 Things to know
 
 - An uploaded-collection run and a guided-workflow run share the same single "one run at
   a time" slot for your session — starting either kind is refused while the other is
-  still in progress.
+  still in progress. (Guided-workflow runs are started only through the HTTP API; the
+  screens always use Import & Run Collection.)
 - If you edit a request and later re-upload a new version of the same collection, or the
   request no longer exists, your edit is discarded rather than silently reapplied to a
   different request.
@@ -418,6 +466,9 @@ Variable and credential values are encrypted before being stored.
   one run's time budget (roughly 5–10 operations on typical hardware); the rest are
   marked "not attempted" rather than silently dropped, and you can retry them in
   smaller batches.
+- AI failure analysis (section 4.5) runs only when you ask for it, shares the same local
+  model and queue as AI enhancement, and waits behind any AI work already running. Its
+  conclusions are labelled as inferences and never change a run's recorded results.
 
 ## 7. Limitations to keep in mind
 
@@ -432,8 +483,10 @@ Variable and credential values are encrypted before being stored.
 - "Destructive" request warnings are based on HTTP method only (POST/PUT/PATCH/DELETE),
   not per-operation semantics — review the confirmation banner's request list yourself
   before confirming a Staging/Production run.
-- AI-assisted analysis of *why* an execution failed (as opposed to reporting that it
-  failed) is not part of the current product.
+- AI failure analysis (section 4.5) is complete but still awaiting its model evaluation:
+  the default local model often misclassifies causes or returns an answer ApiPilot has to
+  reject. Verify any suggested cause yourself. It explains one failed request at a time,
+  and only in Import & Run Collection runs.
 - Automatic chaining of an unresolved path parameter or auth credential to another
   operation's response is single-hop only (one producer, one consumer) and only applies
   to confirmed/likely relationships — it does not assemble multi-step chains on its own;
@@ -470,7 +523,12 @@ Variable and credential values are encrypted before being stored.
 | "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
 | Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your uploaded collections and past run history are unaffected and still there |
 | "Import & Run Collection" tab refuses my collection/environment file | File isn't valid JSON, or the collection has no requests at all | Fix the file locally; ApiPilot never attempts to repair a malformed upload |
-| A request fails with an unresolved `{{variable}}` in what it sent | No value was supplied, and no earlier request's script captured one | Set the value in the **Variables** panel (the red dot shows which are missing), or check the script that should capture it || Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
+| A request fails with an unresolved `{{variable}}` in what it sent | No value was supplied, and no earlier request's script captured one | Set the value in the **Variables** panel (the red dot shows which are missing), or check the script that should capture it |
+| Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
+| **Analyze failure** is disabled on every request | Another failure analysis is already running in your session | Wait for it to finish; the buttons re-enable automatically |
+| Failure analysis stays on "Waiting for the local AI" | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins |
+| Failure analysis reports the model did not finish, or the analysis would take too long | The local model is slower than the configured AI time limit on this machine | Try again, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` setting (README Configuration); any earlier analysis is kept |
+| Failure analysis says "Not enough evidence to name a likely cause" | The recorded result had too little detail, or the model's answer could not be supported by it | Check the evidence shown yourself; a Local-tier run records request/response excerpts that give the AI more to work with |
 
 ## 9. Where to look next
 
@@ -483,4 +541,6 @@ Variable and credential values are encrypted before being stored.
   [specs/027-frontend-design-system](../specs/027-frontend-design-system/spec.md) (the shared
   shell, theme, and component library) and
   [specs/028-collection-editor-ui](../specs/028-collection-editor-ui/spec.md) (the collection/
-  variable editor described in section 4.3).
+  variable editor described in section 4.3) and
+  [specs/030-ai-failure-analysis](../specs/030-ai-failure-analysis/spec.md) (the AI failure
+  analysis described in section 4.5).

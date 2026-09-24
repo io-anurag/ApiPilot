@@ -43,6 +43,10 @@ flowchart LR
   UI --> EXTC["Collection import, editing & execution"]
   EXTC -->|"shares Newman dispatch"| EXEC
   EXTC --> DB
+  EXTC -->|"failed result, on request"| FA["AI failure analysis"]
+  FA --> PROVIDER
+  FA -.->|"read-only specification context"| APPROVED
+  FA --> DB
 ```
 
 The frontend and backend consume the same contracts from `packages/shared-domain`. The browser
@@ -65,11 +69,12 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation). |
 | `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
 | `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection/environment pair, sibling to `execution/` rather than an extension of it (specs/026-external-collection-execution). Reuses `execution/newmanRunner.ts`'s dispatch unchanged; maps results through its own, narrower mapper rather than `execution/mapNewmanResult.ts`, since an uploaded collection's arbitrary named tests have no `TestScenario` to interpret them against. |
-| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, and AI readiness/benchmark diagnostics; at-rest credential encryption (specs/025-local-persistence-layer, specs/026-external-collection-execution). |
+| `backend/src/failureAnalysis/`        | On-demand AI analysis of one failed uploaded-collection result (specs/030-ai-failure-analysis): deterministic evidence extraction, redaction, specification-context matching against the current guided workflow, versioned prompt, response parsing/validation, and the per-session in-progress registry. Reaches the model only through `AIProvider` and never calls the target API. |
+| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, failure analyses, and AI readiness/benchmark diagnostics; at-rest encryption of credential values and analyses (specs/025-local-persistence-layer, specs/026-external-collection-execution, specs/030-ai-failure-analysis). |
 | `frontend/src/pages/`                 | Composition roots for the guided workflow and the collection import/editing/execution view.                                                    |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
-| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, and Postman artifact concepts.              |
+| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, Postman artifact, execution, uploaded-collection, and failure-analysis concepts. |
 
 ## Domain pipeline
 
@@ -245,6 +250,19 @@ Their former components, `EnvironmentForm.tsx` and `ExecutionResultsPanel.tsx`, 
 no page rendered them. The stage's skip/finish endpoints are likewise API-only (specs/009
 contract).
 
+That API-only path is dependency-aware (specs/029-execution-gap-closure, closing specs/018
+FR-007, FR-016, and FR-018). Before sending a request, `runExecution.ts` checks the data hand-offs
+it consumes, both approved-workflow steps (specs/016) and automatic chains (specs/019). If the
+producing request was not attempted, could not connect, timed out, returned an unexpected status,
+or could not be evaluated, the consumer is not sent. It is recorded as `not-attempted` with reason
+`dependency-not-met`, and `unmetDependencies` names the producers. A schema mismatch alone is not
+blocking. Credential hand-offs (specs/023) and the OAuth2 token request (specs/024) are never
+enforced, and the token request never counts as destructive. Every `RequestResult` records a
+`processingStage` (`not-sent`, `no-response`, `response-received`). The destructive-request
+confirmation counts only destructive operations that have an approved scenario. These are additive
+contract changes. The exported Postman artifact is unchanged, and results stored before them read
+back unchanged. The uploaded-collection path (specs/026) is not affected.
+
 Scenario review has one extra guard. `finalizeScenarioReview` marks `scenarioReview` complete and
 activates `dependencyAnalysis` before awaiting the analysis, so a decision, edit, or regeneration
 arriving in that window would land after the approved suite was already projected.
@@ -270,6 +288,12 @@ states are explicit: `not-loaded`, `loading`, `ready`, and `unavailable`. Reques
 run serially. Load failures are surfaced, require explicit retry, and never trigger a cloud
 fallback. CPU is the guaranteed mode; an explicitly enabled unavailable accelerator falls back to
 CPU with a notice.
+
+AP-031 added two optional, backward-compatible members to the contract (specs/004 data-model
+amendment 2026-09-23). `InferenceRequest.systemPrompt` lets a feature supply its own system
+instruction. `infer(request, hooks?)` takes an `onStarted` hook that fires when the provider
+dequeues the request and begins work, so a caller can tell a wait in the FIFO queue or model load
+apart from generation. Existing callers pass neither and behave identically.
 
 The accelerator device string is platform-specific rather than one generic value: on Windows, the
 local provider requests DirectML (`dml`) directly rather than Transformers.js's generic `"gpu"`
@@ -363,6 +387,13 @@ The database location is configurable via `APIPILOT_DB_PATH` (default
 `~/.apipilot/apipilot.db`); automated tests use an isolated location, never the location a real
 running instance uses.
 
+Later features added session-owned tables to the same database and the same eviction rule:
+`uploaded_collections` and `uploaded_collection_runs` (specs/026), and `failure_analyses`
+(specs/030). The last holds one row per analyzed result, keyed by session, run, and result index,
+with the whole analysis encrypted by the same cipher. Re-analysis is a single upsert on that key,
+so a reader never sees a half-replaced analysis. `CREATE TABLE IF NOT EXISTS` adds each table to an
+existing database without a schema-version change.
+
 ## External collection import & execution
 
 `backend/src/externalCollections/` (specs/026-external-collection-execution) is a parallel,
@@ -434,6 +465,70 @@ remounting would reset that guard and bounce the user straight back to "Import &
 The external collections page is unmounted on "Back to start". No routing library was introduced,
 mirroring the guided workflow's own original decision against one for stage navigation.
 
+## AI failure analysis
+
+`backend/src/failureAnalysis/` (specs/030-ai-failure-analysis, AP-031) explains one failed
+`UploadedRequestResult` on explicit user request. Nothing runs automatically when a run completes.
+It reads recorded data only, never sends a request to the target API, and does not change how
+AP-026 executes. `backend/src/api/failureAnalysis.ts` is a thin router over `analyzeFailure.ts`,
+and `FailureAnalysisPanel.tsx` renders inside the run panel's expanded result detail.
+
+```text
+recorded failed result (+ matched specification context)
+  -> deterministic, redacted evidence E1..En
+  -> viability pre-flight -> AIProvider.infer (versioned prompt)
+  -> parse and validate -> conclusion rules -> output scan
+  -> encrypted upsert (failure_analyses) -> FailureAnalysisAttempt
+```
+
+The design keeps the AI's contribution narrow and checkable:
+
+- **Evidence is deterministic** (research D4). `buildEvidence.ts` emits a fixed-order list:
+  failure category, status, response time, one entry per test outcome, then the request line,
+  headers, and body excerpts when a `local`-tier raw capture exists, then an edited-request marker,
+  documented responses, scenario expectation, and upstream step outcomes when context matched. The
+  model cites evidence by id. It never writes the evidence text the user sees, so it cannot invent
+  evidence.
+- **Redaction on the way in, scan on the way out** (D5). `redaction.ts` reuses
+  `testDesign/sensitiveValueDetection.ts` to redact sensitive headers, bearer tokens, sensitive
+  query parameters, and JSON or `key=value` body fields, then truncates bodies. After inference it
+  replaces any known sensitive value or bearer token in the model's summary and steps.
+- **Closed answer shape** (D6, D7). The model must return one of `specification-mismatch`,
+  `environment-issue`, `downstream-service-issue`, or `insufficient-evidence`. It also returns a
+  confidence in [0, 1], a summary of at most 400 characters, at most three steps, and cited ids.
+  Unknown ids are dropped. A self-reported insufficient answer, a confidence below 0.5, or no valid
+  citation becomes `insufficient-evidence` with that reason. A shape or parse failure is
+  `ai-failed`/`INVALID_RESPONSE`, with no automatic retry.
+- **Bounded time** (D8). `ai/viability.ts` refuses an analysis projected past the inference
+  timeout (`not-viable`) before calling the model. Oversized evidence is trimmed (body excerpts,
+  then headers) and the trim is recorded; if it still does not fit, the outcome is
+  `ai-failed`/`INVALID_REQUEST`. AI outcomes return in a `200` body, like the other AI endpoints.
+- **One at a time per session** (D10). `inProgressRegistry.ts` claims the session's slot
+  synchronously before the first `await` and releases it in `finally`. A second request gets
+  `409 failure_analysis_in_progress`. The provider's `onStarted` hook moves the entry from
+  `waiting-for-ai` to `generating`, and `GET /api/failure-analysis/in-progress` lets the UI show
+  that phase and disable every "Analyze failure" action, including after a reload.
+
+Specification context comes from exact identity, not inference (D2, D3). Since AP-031, each new
+`UploadedRequestResult` records the Postman `itemId` it executed. `matchSpecificationContext.ts`
+looks that id up in the session's current guided-workflow collection. On a match, it resolves the
+item's provenance to the scenario, the operation and its documented status codes, and the upstream
+workflow steps or chain producers with their outcomes in the same run. The context is snapshotted
+into the stored analysis. Without a match, the context is `unavailable`, with one of four reasons:
+no request identity, no generated collection, not generated by the current workflow, or no
+originating scenario. AP-017's API-only runs are out of scope.
+
+Logs carry run id, result index, outcome, error category, conclusion kind, evidence count, and
+duration only. Prompts, model output, evidence, and summaries are never logged (constitution XX).
+Every analysis carries AI provenance (provider, model, response version, threshold, timestamp), and
+the UI labels it "AI inference, not a confirmed root cause".
+
+Status: implementation complete, AI evaluation pending. `npm run test:ai-real:failure-analysis -w
+backend` runs a 12-case synthetic corpus against the real local provider. The default
+`Qwen2.5-0.5B-Instruct` did not meet research D11's 80% structured-output bar
+(`specs/030-ai-failure-analysis/evaluation.md`), so a model decision through AP-004's benchmark
+process is open. The pipeline around the model is model-agnostic and does not change with it.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -452,14 +547,18 @@ mirroring the guided workflow's own original decision against one for stage navi
   on behind a real reverse proxy without also restricting `trust proxy` to that proxy's actual
   address, or a client could spoof its own logged IP.
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
-  review, dependency detection, or export. Generating a collection is not authorization to execute
-  it.
+  review, dependency detection, export, or AI failure analysis. Generating a collection is not
+  authorization to execute it.
+- AI failure analysis redacts captured request/response content before it reaches the prompt or
+  storage and stores analyses encrypted. Target-controlled response text still reaches the model,
+  so prompt injection is a known, bounded risk: the answer is limited to a closed cause set,
+  citations are validated, and the output is display-only (specs/030 evaluation.md).
 - Local-only operation never silently transfers inference inputs externally. The current provider
   modes are local and mock.
 - The product isolates concurrent browser sessions (an unguessable cookie identity, evicted after
   60 minutes idle) but has no login/account system, and guided-workflow generation state remains
-  in-memory and non-persistent. Environments, execution run history, and AI diagnostics are
-  persisted to a local, embedded SQLite database (see "Local persistence" above) — not an external
+  in-memory and non-persistent. Environments, execution run history, uploaded collections and
+  their runs, failure analyses, and AI diagnostics are persisted to a local, embedded SQLite database (see "Local persistence" above) — not an external
   or shared one. No external queue, networked database, authentication system, or cloud AI
   provider is part of the core architecture.
 - Frontend runtime errors are captured by global `window` handlers and forwarded, best-effort, to
@@ -586,6 +685,7 @@ tests and benchmarks are opt-in because they may provision or load a local model
 
 The architecture is governed by [the constitution](../specs/constitution.md). The complete
 feature-level behavior, contracts, and success criteria live in the feature directories under
-`specs/001-*` through `specs/028-*`, and [the roadmap](../specs/ROADMAP.md) tracks implementation
-status through AP-028. Where this document and a feature specification differ, the applicable
+`specs/001-*` through `specs/030-*`, and [the roadmap](../specs/ROADMAP.md) tracks implementation
+status through AP-031. Directory numbers and `AP-###` identifiers do not always match: AP-017 is
+`specs/018-*`, AP-030 is `specs/029-*`, and AP-031 is `specs/030-*`. Where this document and a feature specification differ, the applicable
 specification and constitution take precedence.
