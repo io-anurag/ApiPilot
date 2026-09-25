@@ -15,8 +15,9 @@ Feature Decomposition sections below). AP-026 is a standalone capability layered
 existing defect. AP-027 (frontend design system and application shell) is a presentation-layer
 feature that changes no backend contract or workflow rule, and AP-028 (Postman-style collection
 and variable editor) is a pre-run editing surface layered on top of AP-026. AP-029 (k6
-performance testing) is a roadmap entry only: `/speckit-specify` has not yet been run for it, and
-its run path has a constitution prerequisite (see its Feature Decomposition section).
+performance testing) was specified on 2026-09-24 as `specs/031-k6-performance-testing`, and is
+awaiting `/speckit-plan`. Its run path's constitution prerequisite was met by v2.3.0 the same day
+(see its Feature Decomposition section).
 
 AP-011 through AP-016 were originally tracked as unnumbered "hardening" specs to avoid a
 numbering collision with the post-MVP features, which were numbered AP-011/AP-012 at the time.
@@ -61,7 +62,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
-| AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
+| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Specified and planned (2026-09-24); `/speckit-tasks` not yet run. Its three open decisions are answered in the spec's Clarifications: write operations included by default, tokens with a stated lifetime refreshed before expiry, and no virtual-user or duration limit. The plan's two open questions were resolved on 2026-09-25: FR-015 amended to per-virtual-user token refresh, and FR-003's rule-first scenario choice kept, with Postman alignment as a follow-up. Governance prerequisite met by constitution v2.3.0 (Next Actions #24, #29, #30) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 
@@ -1627,7 +1628,31 @@ alone does not need the amendment, but triggering the run from within ApiPilot i
 requirement (decision 2026-09-23). Relying on the user to run k6 outside ApiPilot is therefore
 not an accepted alternative.
 
+*Met 2026-09-24:* constitution v2.3.0 adds a second XVII exception for exactly this. ApiPilot may
+run a k6 script it generated deterministically from a user-approved Performance Plan, when all of
+these hold:
+- the user triggers each run within ApiPilot, and the trigger names the target environment by
+  name, tier label and base URL;
+- ApiPilot never starts or repeats a run automatically, on a schedule, or as a retry;
+- only the unmodified generated script runs. An uploaded, imported, pasted or user-edited script,
+  or AI output, never does;
+- k6 is user-installed, and a missing binary is an explicit failure;
+- the script contains no secrets (XVIII);
+- results stay local, with no AI in the path, and the UI states where the load comes from.
+
+These conditions are requirements the AP-029 spec must carry. In particular, letting a user edit
+the k6 script and then run it would need a further amendment.
+
 ### Open decisions for `/speckit-clarify`
+
+*Answered 2026-09-24 during `/speckit-specify`* (`specs/031-k6-performance-testing/spec.md`,
+Clarifications):
+- Write operations are included by default.
+- A token whose lifetime the producer states is refreshed through the same producer before it
+  expires. Otherwise, failures after expiry are reported as authentication errors.
+- There is no limit or warning on virtual users or duration.
+
+The original questions:
 
 - Whether write operations (POST/PUT/PATCH/DELETE) are included by default or only when the user
   opts in.
@@ -2148,7 +2173,7 @@ Implementation
 # Next Actions
 
 1. ~~Ratify the ApiPilot constitution as the authoritative project governance document.~~ Done
-   — see `.specify/memory/constitution.md` (currently v2.1.1).
+   — see `.specify/memory/constitution.md` (currently v2.3.0; mirrored in `specs/constitution.md`).
 2. Keep `.specify/memory/constitution.md` as the single authoritative constitution source.
 3. ~~Commit this roadmap as the reference Spec-of-Specs document.~~ Done.
 4. ~~Start with AP-001 — Application Foundation~~ Done, along with AP-002 through AP-010 and
@@ -2447,9 +2472,10 @@ Implementation
     - The report is a self-contained HTML file.
 
     Next steps, in order:
-    - Propose and adopt a narrow constitution XVII amendment that permits running an
+    - ~~Propose and adopt a narrow constitution XVII amendment that permits running an
       ApiPilot-generated k6 script on the user's explicit action (see AP-029's Governance
-      prerequisite), then mirror it into `specs/constitution.md`.
+      prerequisite), then mirror it into `specs/constitution.md`.~~ Done 2026-09-24:
+      constitution v2.3.0, mirrored (#29).
     - Run `/speckit-specify` for AP-029, then `/speckit-clarify` on the open decisions listed in
       its Feature Decomposition section, before `/speckit-plan`.
 25. **AP-030 (Test Execution Gap Closure) implemented (2026-09-23).** A `/speckit-converge` pass
@@ -2552,3 +2578,35 @@ Implementation
     - Validation: `npm test` 1,611 passed, 3 skipped, across 217 test files (plus 2 skipped
       opt-in real-model files); `npm run lint` and `npm run build` clean. The quickstart browser
       walkthrough (T061) was not performed.
+29. **Constitution amended to v2.3.0 for AP-029, and `specs/constitution.md` resynced
+    (2026-09-24).** Governance only; no code changed.
+    - XVII gains a second narrow exception: running an ApiPilot-generated k6 script on the user's
+      explicit per-run action, under the conditions listed in AP-029's Governance prerequisite.
+      The 2026-09-20 AP-026 exception is unchanged. Minor version bump, as for 2.2.0.
+    - `specs/constitution.md` had been left at 2.1.1, without the 2.2.0 amendment. It now matches
+      the authoritative `.specify/memory/constitution.md` exactly.
+    - Found while doing this: `.gitignore`'s `.specify/*` rule means the authoritative file has
+      never been tracked in git, which is how the mirror drifted. The amendment procedure's pull
+      request to that file therefore cannot happen as written. Resolved the same day: `.gitignore`
+      now re-includes `.specify/memory/constitution.md` alone, so the authoritative file is
+      versioned and the procedure works as written. The rest of `.specify/` stays ignored, and
+      `specs/constitution.md` remains a mirror to keep in sync.
+    - AP-029 is unblocked for `/speckit-specify` and then `/speckit-clarify` (#24).
+
+30. **AP-029 plan questions resolved, and a Postman scenario-selection follow-up opened
+    (2026-09-25).** Specification only; no code changed.
+    - FR-015 amended. k6 virtual users share no memory, so a refreshed token cannot be shared by
+      all of them. The first token is still acquired once and shared. Each virtual user then
+      refreshes its own copy between 70% and 80% of the stated lifetime, at a fixed point set by
+      its virtual-user number. Refresh requests are kept out of step metrics. Cost and producer
+      risks are in the spec's Assumptions (`specs/031-k6-performance-testing` research D12).
+    - FR-003 kept: k6 prefers a rule-generated positive scenario, then the lowest id. FR-011 now
+      says the match with Postman holds for the same scenario (research D4).
+    - **Follow-up (open):** Postman's `selectScenario` (`backend/src/postman/workflowRendering.ts`)
+      prefers positive, then the lowest id, and ignores whether a scenario is rule-generated or
+      AI-enhanced. Ids are random UUIDs, so for an operation with both, Postman's choice is
+      arbitrary and can differ from k6's. Proposed: adopt FR-003's rule for Postman and share one
+      selection function with AP-029. This changes
+      `specs/016-workflow-aware-postman/contracts/workflow-aware-postman-api.md`, the producer
+      choice in `automaticChaining.ts`, and the collections regenerated for existing users, so it
+      needs its own specification amendment and is not part of AP-029.
