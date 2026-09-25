@@ -80,13 +80,41 @@ view reflecting the change; `DELETE .../items/:itemId` returns a view with the i
 run's history that referenced the deleted item (if any) is unaffected when re-fetched via
 `GET .../execution/runs/:runId`.
 
+## Scenario 5a — Move between folders, and reorder from the run-order list (FR-015, FR-015a, FR-015b; amended 2026-09-25)
+
+Use a collection with a folder that has Bearer `{{token}}` auth and a pre-request script, holding
+a request set to inherit its auth.
+
+1. Select that request and open its **Auth** tab. **Expect** "Bearer Token", "Inherited from
+   folder …", and the token field shown as `{{token}}`. Open **Used variables**. **Expect**
+   `token` listed as used in Auth, with Set or Missing as text.
+2. From the request's actions menu, choose **Move to…**. **Expect** the root and every other folder
+   listed by path, the request's current folder not offered, and a note that it keeps its
+   inherited auth and scripts. Choose a folder that has its own scripts. **Expect** the dialog to
+   list those scripts as also running there.
+3. Move it to the collection root. **Expect** a notice naming the copied Bearer auth and
+   pre-request script, the request marked Edited, and its Auth tab now saying "Set on this
+   request."
+4. Run the collection. **Expect** the moved request still sends the token and its pre-request
+   script's effect.
+5. In the run panel's run-order list, **expect** each row to show the request's folder path,
+   method, name and endpoint path (for example `Orders  GET  Get order  /orders/{{id}}`), with ↑
+   and ↓ but no **Move to…**. Uncheck one request, then use ↓ on another. **Expect** the order to
+   change in both the list and the tree, and the unchecked request to stay unchecked.
+5b. Open a request that inherits Bearer `{{token}}` from a folder, on its **Headers** tab.
+   **Expect** a note "Auth adds: Authorization: Bearer {{token}}" with `{{token}}` highlighted and
+   "Inherited from folder …". On its **Tests** tab, **expect** only the request's own test script,
+   never its folder's.
+6. Try to move a folder into one of its own subfolders through the API. **Expect**
+   `400 invalid_move` and no change.
+
 ## Scenario 6 — Collection is locked while a run is in progress (FR-017)
 
 1. Start a run of the collection.
 2. While it is still `"in-progress"`, attempt any mutation (variable update, request edit, add,
-   delete, rename, or reorder).
+   delete, rename, reorder, or move).
 
-**Expected**: every one of the six mutating endpoints returns `409 collection_locked` while the
+**Expected**: every one of the seven mutating endpoints returns `409 collection_locked` while the
 run is in progress, and succeeds again once the run reaches a terminal status
 (`"completed"`/`"cancelled"`).
 

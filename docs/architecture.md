@@ -418,6 +418,14 @@ stretching the generator's own type past its documented purpose. `execution/newm
 modified) to accept either item type, since `newman.run()` already accepts either shape as plain
 JSON.
 
+Each request still runs in its own one-item Newman collection, which keeps per-request
+cancellation, pacing and environment write-back. Since 2026-09-25 that item is nested inside its
+ancestor folders (each reduced to its `name`, `id`, `auth`, `event` and
+`protocolProfileBehavior`, without its other children), and the collection's own `event` array is
+passed alongside its `auth`. Before this, the bare item ran with only the collection-level auth, so
+folder auth, folder scripts and collection scripts were silently skipped, contrary to specs/026
+FR-008. ApiPilot's own generated items pass no folder chain, so that path is unchanged.
+
 Result *interpretation* is not shared with the generated-collection path: `mapUploadedResult.ts`
 reads `testOutcomes` directly off Newman's own `execution.assertions[]`, naming each test exactly
 as the collection's own `pm.test(...)` script named it, rather than forcing it through
@@ -665,7 +673,15 @@ so every mutation re-applies all existing edit markers when it serializes
 recently edited request's marker.
 
 `CollectionTreeView` reproduces the collection's own folder/request order and supports add, delete,
-rename, and reorder for both requests and folders. `RequestEditorPanel` is a tabbed
+rename, reorder, and move for both requests and folders. A move (`moveItem` in
+`collectionStructure.ts`, amended 2026-09-25) is separate from reorder, which stays a pure
+permutation. It keeps the item behaving as before: inherited auth the move would change is written
+onto the item, and the scripts of the folders it leaves are copied onto it as separate events whose
+first line names the source folder. Only a folder's own events are copied (`listenersOwn`), since
+`EventList.listeners()` also returns every ancestor's. Each request view also carries its effective
+auth and source and its variable references; secret literals in auth fields are blanked on the
+server so they never reach the browser. The run panel's run-order list reorders (move up/down only) through
+the same endpoints. `RequestEditorPanel` is a tabbed
 Headers/Body/Tests editor — method, URL, and Save stay visible across tabs, and the resolved
 (variable-substituted) preview is always visible below them — covering full method/URL/header/body
 editing plus the request's own `pm.test(...)` test script, which previously executed on every run

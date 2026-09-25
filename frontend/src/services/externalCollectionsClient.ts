@@ -5,6 +5,7 @@ import type {
   FailureAnalysis,
   FailureAnalysisAttempt,
   FailureAnalysisInProgress,
+  MoveCarried,
   UploadedCollectionExecutionRun,
   UploadedCollectionSet,
 } from "@apipilot/shared-domain";
@@ -400,6 +401,22 @@ export async function renameUploadedCollectionItem(
 }
 
 /** FR-015 — reorders a container's ("root" or a folder id) direct children to match `orderedIds`. */
+export type MoveCollectionItemResult = { ok: true; collectionView: CollectionView; carried: MoveCarried } | ErrorResult;
+
+/** FR-015a/FR-015b — moves a request or folder into another folder (or `"root"`), carrying its auth and scripts. */
+export async function moveUploadedCollectionItem(
+  id: string,
+  itemId: string,
+  targetContainerId: string,
+): Promise<MoveCollectionItemResult> {
+  const operation = "moveUploadedCollectionItem";
+  const response = await postJson(`/api/external-collections/${id}/items/${itemId}/move`, operation, { targetContainerId });
+  if ("networkError" in response) return { ok: false, error: "network_error", message: response.networkError };
+  const parsed = await response.json().catch(() => null);
+  if (!response.ok) return parseError(parsed, response.status, operation);
+  return { ok: true, collectionView: parsed.collectionView as CollectionView, carried: parsed.carried as MoveCarried };
+}
+
 export async function reorderUploadedCollectionContainer(
   id: string,
   containerId: string,

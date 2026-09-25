@@ -324,14 +324,31 @@ what will be sent, before anything runs.
   with the edit applied marks that request as edited in its results.
 - **Headers added by authentication**: if a request's authentication (its own, or
   inherited from its folder or the collection) is a bearer token or an API key sent in a
-  header, the editor notes the header it will add, and the preview lists it marked
-  "(from auth)". It isn't an editable header entry — change the auth variable instead.
+  header, the Headers tab shows an "Auth adds" note with the header, its `{{variable}}`
+  highlighted, and where the auth comes from; the preview lists it marked "(from auth)". It
+  isn't an editable header entry — change the auth variable instead.
+- **Tests**: the Tests tab shows and saves only the request's own test script. Test scripts
+  on its folders or on the collection also run, as they do in Postman, but they are not
+  shown or saved there.
   Other authentication types (basic, digest, OAuth, AWS signature, and so on) are not
   previewed, because their header can't be shown ahead of time without guessing.
+- **Auth and used variables**: a request's **Auth** tab shows the auth it actually uses,
+  whether that is set on the request or inherited from a folder or the collection, with
+  its fields and `{{variable}}` references. A secret typed directly into the collection
+  (for example a literal password) is shown as hidden, never as its value. The **Used
+  variables** tab lists every variable the request uses, where, and whether it is set.
+  Both are read-only.
 - **Adding, deleting, renaming, and reordering**: use the actions menu on a request or
-  folder row to rename, delete, or move it, or **+ Add request** to add a new one to a
-  folder or the collection root. Deleting a folder deletes everything nested inside it.
-  None of this affects a run you already completed.
+  folder row to rename, delete, or move it up or down, or **+ Add request** to add a new
+  one to a folder or the collection root. Deleting a folder deletes everything nested
+  inside it. None of this affects a run you already completed.
+- **Moving to another folder**: choose **Move to…** in the request's or folder's actions
+  menu. The item lands last in its new folder. It keeps working as it
+  did: auth it inherited from the folder it leaves is written onto it, and that folder's
+  pre-request and test scripts are copied onto it, each marked as copied. ApiPilot then
+  tells you what it copied and marks the item edited. The new folder's own scripts also
+  run for it, because a folder's scripts run for everything inside it; the dialog lists
+  them before you confirm, and warns if a folder's scripts would run twice.
 - While a run of this collection is in progress, the entire editor becomes read-only
   until the run finishes — you'll see this indicated rather than being allowed to make a
   change that might not apply.
@@ -343,7 +360,13 @@ it through the hand-off (section 3.10).
 
 Before clicking **Start run**, you can optionally use the run panel's checklist to select
 which requests actually run this time — leave everything checked to run the whole
-collection, or narrow it to a subset the way Postman's own collection runner lets you.
+collection, or narrow it to a subset the way Postman's own collection runner lets you. Each
+row shows the request's folder, method, name and endpoint path, and ↑ and ↓ change its
+order within its folder; the run follows that order. Unchecked requests stay unchecked when
+you reorder. To move a request to another folder, use **Move to…** in the collection tree.
+
+Each request runs with its collection's and folders' auth and pre-request/test scripts
+applied, exactly as Postman runs it.
 
 A variable that's still missing a value does not stop the run. That's deliberate: an
 earlier request's test script may capture a value (for example a token, with

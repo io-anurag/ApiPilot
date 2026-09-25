@@ -31,7 +31,7 @@ import { runUploadedCollectionExecution } from "../externalCollections/runUpload
 import { buildCollectionView } from "../externalCollections/collectionView";
 import { applyRequestOverride } from "../externalCollections/requestOverride";
 import { findEditedItemIds, serializeWithEditMarkers } from "../externalCollections/editedItems";
-import { addFolder, addRequest, deleteItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
+import { addFolder, addRequest, deleteItem, moveItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import {
   CollectionLockedError,
@@ -39,6 +39,7 @@ import {
   FolderNotFoundError,
   InvalidCollectionError,
   InvalidEnvironmentError,
+  InvalidMoveError,
   InvalidOrderError,
   ItemNotFoundError,
   NoRunInProgressError,
@@ -266,6 +267,11 @@ export function createExternalCollectionsRouter(): Router {
       res.status(400).json({ error: "invalid_order", message: err.message });
       return true;
     }
+    if (err instanceof InvalidMoveError) {
+      logRequestFailed(req.method, req.path, startedAt, 400, "invalid_move");
+      res.status(400).json({ error: "invalid_move", message: err.message });
+      return true;
+    }
     return false;
   }
 
@@ -402,6 +408,34 @@ export function createExternalCollectionsRouter(): Router {
       reorderContainer(collection, req.params.containerId, body.orderedIds as string[]);
       updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, findEditedItemIds(existing.collection)));
       respondWithFreshView(res, existing.id);
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (handleMutationError(err, req, res, startedAt)) return;
+      throw err;
+    }
+  });
+
+  // FR-015a/FR-015b (amended 2026-09-25): a move that carried auth or scripts changed the item,
+  // so it gains the edited marker (FR-011); `carried` lets the UI say what was copied.
+  router.post("/external-collections/:id/items/:itemId/move", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const existing = getUploadedCollection(req.params.id);
+      assertCollectionNotRunning(existing.id);
+      const body = req.body as Record<string, unknown> | undefined;
+      if (typeof body?.targetContainerId !== "string" || body.targetContainerId.length === 0) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "Request must include a 'targetContainerId' string" });
+        return;
+      }
+      const collection = parseStoredCollection(existing.collection);
+      const carried = moveItem(collection, req.params.itemId, body.targetContainerId);
+      const editedItemIds = findEditedItemIds(existing.collection);
+      if (carried.auth !== null || carried.scriptsFromFolders.length > 0) editedItemIds.add(req.params.itemId);
+      updateUploadedCollectionBody(existing.id, serializeWithEditMarkers(collection, editedItemIds));
+      const updated = getUploadedCollection(existing.id);
+      const collectionView = buildCollectionView(updated.id, parseStoredCollection(updated.collection), updated.collection, updated.variableValues);
+      res.status(200).json({ collectionView, carried });
       logRequestSucceeded(req.method, req.path, startedAt, 200);
     } catch (err) {
       if (handleMutationError(err, req, res, startedAt)) return;

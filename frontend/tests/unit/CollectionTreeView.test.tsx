@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { CollectionFolderView, CollectionRequestView } from "@apipilot/shared-domain";
-import { CollectionTreeView, type CollectionTreeActions } from "../../src/components/CollectionTreeView";
+import {
+  CollectionTreeView,
+  flattenCollectionRequestPlacements,
+  type CollectionTreeActions,
+} from "../../src/components/CollectionTreeView";
 
 function request(overrides: Partial<CollectionRequestView> = {}): CollectionRequestView {
   return {
@@ -11,16 +15,18 @@ function request(overrides: Partial<CollectionRequestView> = {}): CollectionRequ
     raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
     resolved: { method: "GET", url: "https://api.example.com/widgets", headers: [] },
     unresolvedVariables: [],
+    variableReferences: [],
+    copiedScriptFolderIds: [],
     ...overrides,
   };
 }
 
 function folder(overrides: Partial<CollectionFolderView> = {}): CollectionFolderView {
-  return { id: "folder-1", name: "Widgets", items: [], folders: [], ...overrides };
+  return { id: "folder-1", name: "Widgets", items: [], folders: [], scriptEvents: [], copiedScriptFolderIds: [], ...overrides };
 }
 
 function actions(): CollectionTreeActions {
-  return { onAddRequest: vi.fn(), onAddFolder: vi.fn(), onDeleteItem: vi.fn(), onRenameItem: vi.fn(), onMoveItem: vi.fn() };
+  return { onAddRequest: vi.fn(), onAddFolder: vi.fn(), onDeleteItem: vi.fn(), onRenameItem: vi.fn(), onMoveItem: vi.fn(), onMoveItemTo: vi.fn() };
 }
 
 describe("CollectionTreeView", () => {
@@ -91,6 +97,18 @@ describe("CollectionTreeView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions for Second" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
     expect(treeActions.onMoveItem).toHaveBeenCalledWith("root", "item-2", "up");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Second" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to…" }));
+    expect(treeActions.onMoveItemTo).toHaveBeenCalledWith("item-2");
+  });
+
+  it("offers Move to… on a folder too (FR-015a)", () => {
+    const treeActions = actions();
+    render(<CollectionTreeView items={[]} folders={[folder()]} onSelectRequest={vi.fn()} locked={false} actions={treeActions} />);
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Widgets" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to…" }));
+    expect(treeActions.onMoveItemTo).toHaveBeenCalledWith("folder-1");
   });
 
   it("a folder's own actions menu can add a nested request or folder inside it", () => {
@@ -179,5 +197,19 @@ describe("CollectionTreeView", () => {
     const variablesButton = screen.getByRole("button", { name: "Variables" });
     const addRequestButton = screen.getByRole("button", { name: "+ Add request" });
     expect(variablesButton.parentElement).toBe(addRequestButton.parentElement);
+  });
+});
+
+describe("flattenCollectionRequestPlacements", () => {
+  it("lists requests folders-first, each with its folder path, container and position among its sibling requests", () => {
+    const placements = flattenCollectionRequestPlacements(
+      [request({ id: "root-1" }), request({ id: "root-2" })],
+      [folder({ id: "folder-1", items: [request({ id: "nested-1" })] })],
+    );
+    expect(placements.map(({ request: item, ...rest }) => ({ id: item.id, ...rest }))).toEqual([
+      { id: "nested-1", containerId: "folder-1", folderPath: ["Widgets"], index: 0, siblingCount: 1 },
+      { id: "root-1", containerId: "root", folderPath: [], index: 0, siblingCount: 2 },
+      { id: "root-2", containerId: "root", folderPath: [], index: 1, siblingCount: 2 },
+    ]);
   });
 });

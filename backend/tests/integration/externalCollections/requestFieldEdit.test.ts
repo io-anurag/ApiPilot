@@ -133,6 +133,51 @@ describe("PUT /api/external-collections/:id/requests/:requestId (AP-028 US4, qui
     expect(afterRename.body.collectionView.items.map((i: { wasEdited: boolean }) => i.wasEdited)).toEqual([true, true]);
   });
 
+  it("saving the Tests tab as shown never copies a folder's test script onto the request, so it runs once", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/widgets/1", { status: 200, body: { id: 1 } });
+    const collection = {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Widgets",
+          event: [{ listen: "test", script: { type: "text/javascript", exec: ['pm.test("folder test", function () {});'] } }],
+          item: [
+            {
+              name: "Get widget",
+              request: { method: "GET", url: "{{baseUrl}}/widgets/1" },
+              event: [{ listen: "test", script: { type: "text/javascript", exec: ['pm.test("own test", function () {});'] } }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const app = createApp();
+    const agent = request.agent(app);
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "Folder tests")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const id = uploaded.body.uploadedCollection.id as string;
+    const shown = (await agent.get(`/api/external-collections/${id}/collection`)).body.collectionView.folders[0].items[0];
+    expect(shown.testScript).toBe('pm.test("own test", function () {});');
+
+    const saved = await agent
+      .put(`/api/external-collections/${id}/requests/${shown.id}`)
+      .send({ method: "GET", url: "{{baseUrl}}/widgets/1", headers: [], testScript: shown.testScript });
+    expect(saved.status).toBe(200);
+
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    const settled = await pollUntilSettled(agent, id, started.body.run.id);
+    expect(settled.body.run.results[0].testOutcomes.map((outcome: { name: string }) => outcome.name)).toEqual([
+      "folder test",
+      "own test",
+    ]);
+  }, 60_000);
+
   it("404s request_not_found for an unknown requestId", async () => {
     const app = createApp();
     const agent = request.agent(app);

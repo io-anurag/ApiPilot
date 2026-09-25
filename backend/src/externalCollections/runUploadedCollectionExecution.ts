@@ -1,5 +1,5 @@
 import type { NotAttemptedReason, PostmanRawItem, UploadedCollectionSet } from "@apipilot/shared-domain";
-import type { Item } from "postman-collection";
+import type { Collection, Item } from "postman-collection";
 import { createLogger } from "../logger";
 import { parseUploadedCollection } from "./uploadedCollectionParsing";
 import { mapUploadedResult } from "./mapUploadedResult";
@@ -26,6 +26,29 @@ function delay(ms: number): Promise<void> {
 /** `item.toJSON()`'s runtime shape matches `PostmanRawItem` (research.md D6) — verified against the installed `postman-collection` at design time; this is the one, isolated boundary cast (CLAUDE.md §44). */
 function toRawItem(item: Item): PostmanRawItem {
   return item.toJSON() as unknown as PostmanRawItem;
+}
+
+/**
+ * The item's ancestor folders, root first, as childless Postman folder definitions: only what a
+ * folder contributes to its requests (auth, pre-request/test events, protocol profile behavior).
+ * Running the item nested inside them is what makes Newman apply folder auth and folder scripts
+ * as Postman does (specs/026 FR-008, fixed 2026-09-25); running the bare item skipped them.
+ */
+function folderChainOf(item: Item, collection: Collection): Array<Record<string, unknown>> {
+  const chain: Array<Record<string, unknown>> = [];
+  let parent = item.parent();
+  while (parent && parent !== collection) {
+    const json = parent.toJSON() as Record<string, unknown>;
+    chain.unshift({
+      name: json.name,
+      id: json.id,
+      ...(json.auth ? { auth: json.auth } : {}),
+      ...(json.event ? { event: json.event } : {}),
+      ...(json.protocolProfileBehavior ? { protocolProfileBehavior: json.protocolProfileBehavior } : {}),
+    });
+    parent = parent.parent();
+  }
+  return chain;
 }
 
 function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedReason): void {
@@ -65,7 +88,9 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       orderedItems.push(item);
     });
 
-    const collectionAuth = collection.toJSON().auth;
+    const collectionJson = collection.toJSON();
+    const collectionAuth = collectionJson.auth;
+    const collectionEvents = collectionJson.event;
     const declaredVariables = Object.keys(uploadedCollection.variableValues).map((key) => ({ key, value: "" }));
     let environmentRecord: Record<string, string> = { ...uploadedCollection.variableValues };
     const captureRawDetails = uploadedCollection.tier === "local";
@@ -91,6 +116,8 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       const itemOutcome = await runSingleItem({
         item: toRawItem(item),
         collectionAuth,
+        collectionEvents,
+        folderChain: folderChainOf(item, collection),
         declaredVariables,
         environment: environmentRecord,
       });

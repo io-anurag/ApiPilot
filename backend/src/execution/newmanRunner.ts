@@ -3,6 +3,7 @@ import type {
   PostmanRawItem,
   PostmanRequestItem,
 } from "@apipilot/shared-domain";
+import type { EventDefinition, ItemDefinition, ItemGroupDefinition } from "postman-collection";
 import type { NewmanExecutionResult } from "./mapNewmanResult";
 
 /**
@@ -48,6 +49,15 @@ export interface NewmanItemRunInput {
    * research.md D2 addendum) — `{}` for the first item.
    */
   environment: Record<string, string>;
+  /**
+   * The item's ancestor folders, root first, each as its own Postman folder definition without
+   * children (`name`, `id`, `auth`, `event`). The item runs nested inside them, so Newman applies
+   * folder auth and folder scripts exactly as Postman does (specs/026 FR-008, fixed 2026-09-25).
+   * Omitted for ApiPilot's own generated items, which carry everything on the item itself.
+   */
+  folderChain?: ReadonlyArray<Record<string, unknown>>;
+  /** The collection's own `event` array (collection-level pre-request/test scripts), passed as is. */
+  collectionEvents?: EventDefinition[];
 }
 
 export interface NewmanItemRunOutput {
@@ -65,6 +75,20 @@ export interface NewmanItemRunOutput {
  */
 const newmanModule = import("newman");
 
+/**
+ * Wraps `item` in its folder chain (root first), innermost folder closest to the item. The result
+ * is plain Postman JSON that Newman parses itself, hence the one boundary cast to its definition
+ * types (CLAUDE.md §44).
+ */
+function nestInFolders(
+  item: PostmanRequestItem | PostmanRawItem,
+  folderChain: ReadonlyArray<Record<string, unknown>>,
+): ItemDefinition | ItemGroupDefinition {
+  return folderChain.reduceRight<unknown>((child, folder) => ({ ...folder, item: [child] }), item) as
+    | ItemDefinition
+    | ItemGroupDefinition;
+}
+
 /** Runs one Postman request item in isolation and reports its outcome plus updated environment state. */
 export async function runSingleItem(
   input: NewmanItemRunInput,
@@ -76,8 +100,9 @@ export async function runSingleItem(
         collection: {
           info: { name: "apipilot-execution-item" },
           ...(input.collectionAuth ? { auth: input.collectionAuth } : {}),
+          ...(input.collectionEvents ? { event: input.collectionEvents } : {}),
           variable: input.declaredVariables,
-          item: [input.item],
+          item: [nestInFolders(input.item, input.folderChain ?? [])],
         },
         environment: {
           values: Object.entries(input.environment).map(([key, value]) => ({

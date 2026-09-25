@@ -126,6 +126,11 @@ export function findVariableTokens(text: string): string[] {
   return [...tokens];
 }
 
+/** `text` with every `{{variable}}` reference removed — whatever remains is literal text. */
+export function removeVariableTokens(text: string): string {
+  return text.replace(VARIABLE_TOKEN_PATTERN, "");
+}
+
 /**
  * Replaces every `{{variableName}}` token in `text` with its value from `variableValues`, when a
  * non-empty value is available — leaves a token with no value (or an empty-string value, treated

@@ -7,6 +7,7 @@ import {
   fetchUploadedCollectionRuns,
   fetchUploadedCollectionView,
   fetchUploadedCollections,
+  moveUploadedCollectionItem,
   renameUploadedCollectionItem,
   reorderUploadedCollectionContainer,
   updateUploadedCollectionRequest,
@@ -15,8 +16,13 @@ import {
 } from "../services/externalCollectionsClient";
 import { ExternalCollectionUpload } from "../components/ExternalCollectionUpload";
 import { ExternalCollectionList } from "../components/ExternalCollectionList";
-import { ExternalCollectionRunPanel } from "../components/ExternalCollectionRunPanel";
-import { CollectionTreeView, flattenCollectionRequests, type CollectionTreeActions } from "../components/CollectionTreeView";
+import { ExternalCollectionRunPanel, type RunOrderReorder } from "../components/ExternalCollectionRunPanel";
+import {
+  CollectionTreeView,
+  flattenCollectionRequestPlacements,
+  type CollectionTreeActions,
+} from "../components/CollectionTreeView";
+import { MoveItemDialog, describeMoveResult } from "../components/MoveItemDialog";
 import { RequestEditorPanel } from "../components/RequestEditorPanel";
 import { VariablePanel } from "../components/VariablePanel";
 import { ErrorState } from "../components/ErrorState";
@@ -80,6 +86,8 @@ export function ExternalCollectionsPage({
   const [addFolderDialog, setAddFolderDialog] = useState<{ parentFolderId: string | null } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ itemId: string; currentName: string } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ itemId: string } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<{ itemId: string; itemName: string } | null>(null);
+  const [moveNotice, setMoveNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,6 +223,26 @@ export function ExternalCollectionsPage({
     }
   }
 
+  async function handleConfirmMove(targetContainerId: string) {
+    if (!selectedId || !moveDialog) return;
+    const { itemId, itemName } = moveDialog;
+    setMoveDialog(null);
+    const result = await moveUploadedCollectionItem(selectedId, itemId, targetContainerId);
+    if (result.ok) {
+      setCollectionView(result.collectionView);
+      setMoveNotice(describeMoveResult(itemName, result.carried));
+    } else {
+      setViewError(result.message);
+    }
+  }
+
+  function openMoveDialog(itemId: string) {
+    if (!collectionView) return;
+    const name = findRequest(collectionView, itemId)?.name ?? findFolder(collectionView.folders, itemId)?.name ?? "item";
+    setMoveNotice(null);
+    setMoveDialog({ itemId, itemName: name });
+  }
+
   const treeActions: CollectionTreeActions = {
     // Opens an in-app PromptDialog/ConfirmDialog instead of the native window.prompt/confirm,
     // which rendered unstyled, ignored dark mode, and looked indistinguishable from a browser
@@ -245,7 +273,12 @@ export function ExternalCollectionsPage({
       if (result.ok) setCollectionView(result.collectionView);
       else setViewError(result.message);
     },
+    onMoveItemTo: openMoveDialog,
   };
+
+  const requestPlacements = collectionView ? flattenCollectionRequestPlacements(collectionView.items, collectionView.folders) : [];
+  const runOrderPlacements = new Map(requestPlacements.map(({ request, ...placement }) => [request.id, placement]));
+  const runOrderReorder: RunOrderReorder = { onMove: treeActions.onMoveItem, locked };
 
   return (
     <div className="space-y-6">
@@ -294,6 +327,17 @@ export function ExternalCollectionsPage({
       {selected && collectionView && (
         <section className="space-y-3">
           {viewError && <ErrorState message={viewError} />}
+          {moveNotice && (
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-md bg-info-50 px-3 py-2 text-sm text-info-700 dark:bg-info-500/15 dark:text-info-100"
+            >
+              <p>{moveNotice}</p>
+              <button type="button" onClick={() => setMoveNotice(null)} className={BUTTON_STYLES.ghost}>
+                Dismiss
+              </button>
+            </div>
+          )}
           <div className="grid items-start gap-4 lg:grid-cols-[320px_1fr]">
             {/* A fixed height rather than stretching to the right column: a large collection then
                 scrolls inside the tree (CollectionTreeView's own `overflow-y-auto` list) instead of
@@ -369,7 +413,9 @@ export function ExternalCollectionsPage({
       {selected && (
         <ExternalCollectionRunPanel
           uploadedCollection={selected}
-          requests={collectionView ? flattenCollectionRequests(collectionView.items, collectionView.folders) : []}
+          requests={requestPlacements.map((placement) => placement.request)}
+          placements={collectionView ? runOrderPlacements : undefined}
+          reorder={collectionView ? runOrderReorder : undefined}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) => (c.id === selected.id ? { ...c, confirmedAt: new Date().toISOString() } : c)),
@@ -404,6 +450,14 @@ export function ExternalCollectionsPage({
           confirmLabel="Rename"
           onConfirm={handleConfirmRename}
           onCancel={() => setRenameDialog(null)}
+        />
+      )}
+      {moveDialog && collectionView && (
+        <MoveItemDialog
+          view={collectionView}
+          itemId={moveDialog.itemId}
+          onConfirm={handleConfirmMove}
+          onCancel={() => setMoveDialog(null)}
         />
       )}
       {deleteDialog && (

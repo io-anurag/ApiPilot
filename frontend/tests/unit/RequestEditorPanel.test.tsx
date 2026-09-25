@@ -11,6 +11,8 @@ function request(overrides: Partial<CollectionRequestView> = {}): CollectionRequ
     raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [{ key: "Authorization", value: "Bearer {{token}}" }] },
     resolved: { method: "GET", url: "https://api.example.com/widgets", headers: [{ key: "Authorization", value: "Bearer {{token}}" }] },
     unresolvedVariables: ["token"],
+    variableReferences: [],
+    copiedScriptFolderIds: [],
     ...overrides,
   };
 }
@@ -128,6 +130,8 @@ describe("RequestEditorPanel", () => {
           raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
           resolved: { method: "GET", url: "https://api.example.com/widgets", headers: [] },
           unresolvedVariables: [],
+          variableReferences: [],
+          copiedScriptFolderIds: [],
           impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123" },
         })}
         locked={false}
@@ -138,7 +142,8 @@ describe("RequestEditorPanel", () => {
 
     // Headers tab: shown as a note, not as an editable row, with the placeholder still visible.
     expect(editTabs().getByRole("tab", { name: "Headers" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/This request's own authentication also sends/)).toBeInTheDocument();
+    expect(screen.getByText("Auth adds:")).toBeInTheDocument();
+    expect(screen.getByText(/Added by its auth when it runs\./)).toBeInTheDocument();
     // Split across sibling nodes by VariableHighlightedText (a "Bearer " text node plus a
     // separately-highlighted "{{token}}" span), so matched by combined textContent rather than
     // a single node's own text.
@@ -150,5 +155,82 @@ describe("RequestEditorPanel", () => {
     // Resolved preview: the substituted value, alongside a "(from auth)" marker.
     expect(screen.getByText("Bearer abc123")).toBeInTheDocument();
     expect(screen.getByText("(from auth)")).toBeInTheDocument();
+  });
+});
+
+describe("RequestEditorPanel — effective auth and used variables (FR-002a, FR-002b)", () => {
+  it("shows inherited folder auth with its source and {{variable}} fields, and a hidden secret literal as hidden", () => {
+    render(
+      <RequestEditorPanel
+        request={request({
+          auth: {
+            type: "bearer",
+            source: { kind: "folder", folderId: "orders", folderName: "Orders" },
+            fields: [
+              { key: "token", value: "{{token}}", hiddenLiteral: false },
+              { key: "password", value: "", hiddenLiteral: true },
+            ],
+          },
+        })}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    expect(screen.getByText("Bearer Token")).toBeInTheDocument();
+    expect(screen.getByText("Inherited from folder “Orders”.")).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("{{token}}")).toBeInTheDocument();
+    expect(within(table).getByText("Hidden literal value")).toBeInTheDocument();
+  });
+
+  it("says when no auth applies", () => {
+    render(<RequestEditorPanel request={request()} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    expect(screen.getByText(/No auth applies/)).toBeInTheDocument();
+  });
+
+  it("lists each used variable with where it is used, a text status, and its value source", () => {
+    render(
+      <RequestEditorPanel
+        request={request({
+          variableReferences: [
+            { name: "baseUrl", usedIn: ["url"], resolved: true, source: "environment" },
+            { name: "token", usedIn: ["headers", "auth"], resolved: false },
+          ],
+        })}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(editTabs().getByRole("tab", { name: /Used variables/ }));
+    const rows = within(screen.getByRole("table")).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("{{baseUrl}}URLSetEnvironment value");
+    expect(rows[2]).toHaveTextContent("{{token}}Headers, AuthMissing—");
+  });
+});
+
+describe("RequestEditorPanel — the Headers tab auth note", () => {
+  it("names where inherited auth comes from, with the {{variable}} highlighted", () => {
+    render(
+      <RequestEditorPanel
+        request={request({
+          raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
+          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123" },
+          auth: {
+            type: "bearer",
+            source: { kind: "folder", folderId: "orders", folderName: "Orders" },
+            fields: [{ key: "token", value: "{{token}}", hiddenLiteral: false }],
+          },
+        })}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Inherited from folder “Orders”\./)).toBeInTheDocument();
+    expect(screen.getAllByText("{{token}}")[0]).toHaveClass("font-mono");
   });
 });

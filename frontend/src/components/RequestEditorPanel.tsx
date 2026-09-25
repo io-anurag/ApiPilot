@@ -5,9 +5,10 @@ import { BUTTON_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 import { CodeBlock } from "./CodeBlock";
 import { VariableHighlightedText } from "./VariableHighlightedText";
+import { RequestAuthSection, RequestVariablesSection } from "./RequestAuthSections";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
-const TABS = ["Headers", "Body", "Tests"] as const;
+const TABS = ["Headers", "Auth", "Body", "Tests", "Used variables"] as const;
 type Tab = (typeof TABS)[number];
 
 const PREVIEW_TABS = ["Request", "Body", "Tests"] as const;
@@ -22,12 +23,22 @@ function toHeaderRows(headers: Array<{ key: string; value: string }>): HeaderRow
   return headers.length > 0 ? headers.map((h) => ({ ...h })) : [{ key: "", value: "" }];
 }
 
+/** Where the auth behind `impliedAuthHeader` is defined, for the Headers tab note (FR-002a). */
+function impliedAuthSourceText(request: CollectionRequestView): string {
+  const source = request.auth?.source;
+  if (!source) return "Added by its auth when it runs.";
+  if (source.kind === "request") return "From this request's own auth.";
+  if (source.kind === "collection") return "Inherited from the collection's auth.";
+  return `Inherited from folder “${source.folderName}”.`;
+}
+
 const TAB_BUTTON =
   "border-b-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 /**
- * Selected-request detail: an editable raw form (method/URL/headers/body/tests — FR-007) plus a
- * read-only resolved preview (FR-002, FR-005) that updates immediately whenever the collection's
+ * Selected-request detail: an editable raw form (method/URL/headers/body/tests — FR-007), the
+ * read-only effective auth and used variables (FR-002a, FR-002b), plus a read-only resolved
+ * preview (FR-002, FR-005) that updates immediately whenever the collection's
  * variable values change (via `request` being a freshly re-fetched `CollectionRequestView`).
  * Disabled entirely while `locked` (FR-017).
  *
@@ -149,6 +160,9 @@ export function RequestEditorPanel({
           >
             {tab}
             {tab === "Headers" && activeHeaderCount > 0 && <span className="ml-1 text-[10px] text-muted">({activeHeaderCount})</span>}
+            {tab === "Used variables" && request.variableReferences.length > 0 && (
+              <span className="ml-1 text-[10px] text-muted">({request.variableReferences.length})</span>
+            )}
             {tab === "Tests" && testScript.trim().length > 0 && (
               <span aria-label="Has tests" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-brand-500 align-middle" />
             )}
@@ -197,16 +211,24 @@ export function RequestEditorPanel({
               + Add header
             </button>
             {request.impliedAuthHeader && (
-              <p className="text-xs text-muted wrap-anywhere">
-                This request&apos;s own authentication also sends{" "}
-                <span className="font-mono">
-                  {request.impliedAuthHeader.key}: <VariableHighlightedText text={request.impliedAuthHeader.rawValue} />
-                </span>{" "}
-                automatically when it runs — not listed above since it isn&apos;t a literal, editable header.
-              </p>
+              <div className="space-y-1 rounded-md border border-border bg-slate-50 px-3 py-2 dark:bg-white/5">
+                <p className="text-sm wrap-anywhere">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">Auth adds:</span>{" "}
+                  <span className="font-mono">
+                    {request.impliedAuthHeader.key}: <VariableHighlightedText text={request.impliedAuthHeader.rawValue} />
+                  </span>
+                </p>
+                <p className="text-xs text-muted">
+                  {impliedAuthSourceText(request)} Edit the auth or the variable, not here: it isn&apos;t an editable header.
+                </p>
+              </div>
             )}
           </div>
         )}
+
+        {activeTab === "Auth" && <RequestAuthSection auth={request.auth} />}
+
+        {activeTab === "Used variables" && <RequestVariablesSection references={request.variableReferences} />}
 
         {activeTab === "Body" && (
           <div className="flex flex-col gap-1">
@@ -240,6 +262,7 @@ export function RequestEditorPanel({
             />
             <p className="text-xs text-muted">
               This is what a run's pass/fail results are checked against. Clearing it removes every test from this request.
+              Test scripts on its folders or on the collection also run, but they are not shown or saved here.
             </p>
           </div>
         )}
