@@ -15,7 +15,8 @@ fake runner, is part of `npm test`.
   `http://localhost:4600` (added by the tasks; built on `backend/tests/fixtures/execution/targetServer.ts`).
   Never point these scenarios at a system you are not authorized to load.
 - **A specification:** `backend/tests/fixtures/openapi/` contains one with at least one dependency
-  workflow and one write operation (the tasks name the file). Take it through the guided workflow
+  workflow, one write operation, and one operation that documents no 2xx response (the tasks name
+  the file). Take it through the guided workflow
   up to and including **Workflow Review**, approving at least one workflow.
 - **An environment** named `perf-local`, tier `local`, base URL `http://localhost:4600`, created in
   the existing environments panel.
@@ -29,8 +30,14 @@ fake runner, is part of `npm test`.
    - Every step shows its method, its scenario, and why that scenario was chosen.
    - Write operations are included.
    - No thresholds are set.
-3. Generate the script twice. **Expect** the same `scriptSha256` both times.
-4. Download the script and the environment template, and search both for a credential value you
+   - Each step shows its expected status codes, marked as from the specification, for example
+     `201` on a documented create operation.
+   - A step whose operation documents no 2xx response is listed as needing an expected status, and
+     **Generate** is unavailable with that reason.
+3. Set the missing expected status (for example `200`). **Expect** it to be marked as set by you,
+   and **Generate** to become available.
+4. Generate the script twice. **Expect** the same `scriptSha256` both times.
+5. Download the script and the environment template, and search both for a credential value you
    set in `perf-local`. **Expect** no match: only variable names appear.
 
 ## 2. k6 readiness (FR-027; SC-012)
@@ -67,7 +74,7 @@ to show the partial results.
 3. Download it, disconnect from the network, and open the file. **Expect** it to render completely.
 4. Search it for a credential value. **Expect** no match.
 
-## 6. Missing data (FR-014; SC-005)
+## 6. Missing data, journey isolation and unexpected statuses (FR-006a, FR-010, FR-012a, FR-014; SC-005, SC-015)
 
 1. Remove one required value from `perf-local`, for example a path parameter the specification
    cannot produce.
@@ -75,6 +82,14 @@ to show the partial results.
 3. Run anyway. **Expect** the run to complete. The step that needs the value is reported as "missing
    data" with the variable's name, and its dependants as not attempted. The stub received no
    request for that step.
+4. **Expect** the other journeys to have run on every iteration: their steps' request counts are
+   not reduced by the missing value.
+5. Restore the value. Change one step's expected status to a code the stub does not return for it
+   (for example `204` on an operation that returns `200`), regenerate, and run the **smoke**
+   profile.
+6. **Expect** every request of that step to be counted as a failure in the `unexpected-status`
+   category, with `200` under its errors by status, and the step's provenance to show `204` as set
+   by you.
 
 ## 7. Restart and the execution slot (FR-029, FR-032; SC-006)
 

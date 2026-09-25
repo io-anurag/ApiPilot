@@ -1,6 +1,6 @@
 # Research: k6 Performance Testing (AP-029)
 
-**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-09-24
+**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-09-24 (D14, D16, D25, D26 revised or added 2026-09-25)
 
 This records each design decision with its rationale and the alternatives rejected. Facts about
 the existing code were taken from the repository on 2026-09-24. Facts about k6 are k6's documented
@@ -54,7 +54,9 @@ repository is testable with no binary and no database (XXI).
   - `postman/parameterSerialization.ts`, already documented as pure functions only (FR-011);
   - the AP-021/023/024 auth planning: `planSchemeVariables`, `findCredentialProducers`,
     `buildAuthCredentialRelationships` and `mapOperationAuth`;
-  - the scenario's own status assertions from `testDesign/assertions.ts` (FR-012);
+  - the operation's documented responses (`ApiOperation.responses`), for the expected-status
+    pre-fill (FR-012, D26). The scenario's own status assertion from `testDesign/assertions.ts` is
+    not used, because it falls back to a non-success status when no 2xx is documented;
   - `IntegrationWorkflow` step positions and variables, for journey order;
   - `identifiers.ts`'s content-derived ids.
 - **Not reused:** the Postman renderers (`requestItem`, `oauth2TokenFetch`,
@@ -288,22 +290,35 @@ adds infrastructure.
 **Rationale**: OpenAPI has no uniqueness keyword. These two formats are the common cases, and
 guessing further, for example from field names, would be a silent assumption (XIV).
 
-## D14. Checks and failure categories (FR-010, FR-012)
+## D14. Checks and failure categories (FR-010, FR-012, FR-012a; revised 2026-09-25)
 
 **Decision**:
-- **Status check:** the scenario's documented status assertion only. Schema-conformance
-  assertions are not run under load, because validating schemas in every virtual user distorts the
-  latency being measured; the plan says so.
+- **Status check:** the step's expected status codes (D26). A response passes when its status
+  matches one of them, where an exact code matches itself and a range such as `2XX` matches any
+  status with that first digit. Schema-conformance assertions are not run under load, because
+  validating schemas in every virtual user distorts the latency being measured; the plan says so.
 - **Extraction check:** each extraction is checked as present and non-empty.
-- **Failure categories** in the result (data-model.md):
-  - `unexpected-status`
-  - `connection-error` (status 0 with a k6 error code)
-  - `timeout`
-  - `extraction-failed`
-  - `missing-data`
-  - `dependency-not-attempted`
-  - `authentication` (401 or 403)
-  - `rate-limited` (429)
+- **What is a failure (FR-012a):** a response whose status is not among its step's expected codes,
+  or a request with no response. A status the user listed as expected is never a failure, even
+  401, 403 or 429.
+- **Classification is ApiPilot's, not k6's:** the aggregate classifies each `http_reqs` point from
+  its `status` and `step` tags against the step's expected codes in the run's `planSnapshot`. k6's
+  `http_req_failed` metric and `http.setResponseCallback` are not used, so there is one definition
+  of failure, and the report's error rate, error-rate thresholds (D15) and findings (D16) all use
+  it.
+- **Failure categories** in the result (data-model.md). Each failure gets exactly one category,
+  checked in this order:
+  - `connection-error` (status 0 with a k6 connection error code)
+  - `timeout` (status 0 with k6's request-timeout error code)
+  - `authentication` (401 or 403, when not expected)
+  - `rate-limited` (429, when not expected)
+  - `unexpected-status` (any other status not expected)
+  - Non-request outcomes, counted separately and not as responses: `extraction-failed`,
+    `missing-data` and `dependency-not-attempted`.
+
+**Alternatives rejected**: counting a failure only when the specification documents a success
+status, leaving other steps unchecked. A step returning only 500s would then show a 0% error rate
+(clarification 2026-09-25).
 
 ## D15. Thresholds are evaluated by ApiPilot, not by k6 (FR-018, FR-037)
 
@@ -322,7 +337,8 @@ pure over the aggregate and applied in this fixed order:
 2. `slowest-step`: the step with the highest p95, with its value.
 3. `failures-start`: the earliest timeline bucket with a non-zero error rate, and the step with
    the most errors in it.
-4. `cut-short-iterations`: the count of iterations cut short by a failed extraction, and the step.
+4. `cut-short-journeys`: the count of journey runs cut short by a failed extraction, and the step
+   where the extraction failed (D25).
 5. `missing-data`: the steps skipped for missing data, with the variable names.
 6. `rate-limited`: when there are any 429 responses, with the count and the first bucket.
 7. `authentication-after-expiry`: authentication errors after the first token's lifetime passed,
@@ -433,6 +449,10 @@ counted and summarized by category, never logged verbatim.
 **Decision**:
 - **Unit:**
   - plan building, selection, reorder validation, value listing and unique-value rules;
+  - the expected-status pre-fill, source marking, validation and generation block (D26);
+  - failure classification against expected codes, including ranges and an expected 401 (D14);
+  - the rendered iteration: every journey in order, and a cut-short journey followed by the next
+    journey in the same iteration (D25);
   - script rendering: golden file, byte-identical twice, a secret scan with seeded values, an
     import allow-list, and `systemTags`;
   - NDJSON parsing and aggregation from recorded fixture streams;
@@ -447,3 +467,75 @@ counted and summarized by category, never logged verbatim.
 - **Opt-in:** `npm run test:k6-real -w backend` (`K6_TEST_REAL=1`) runs the real binary against a
   local stub server, and checks the version gate, the no-usage-report flag, the JSON stream shape,
   graceful cancel, and per-virtual-user token refresh. It is never part of `npm test`.
+
+## D25. What one iteration runs (FR-006a, FR-008, FR-010; clarification 2026-09-25)
+
+**Decision**:
+- **One iteration runs every journey once,** in the plan's journey order, with each journey's
+  steps in their order. The script's default function is one fixed sequence of journey blocks,
+  rendered from the plan. There is no k6 `scenarios` split and no per-journey virtual-user share,
+  so every step is attempted the same number of times, and journey order (FR-007) is the order the
+  requests are sent in.
+- **A cut-short journey:** when an extraction fails, the rest of that journey's steps are skipped
+  for this iteration, `apipilot_cut_short` is incremented once with the journey's and the failed
+  step's tags, and the virtual user continues with the next journey. The same applies to missing
+  data (FR-014): the step that needs the value and its dependants in that journey are skipped, and
+  the next journey runs.
+- **Variables are per journey run:** values extracted in one journey are cleared before the next
+  journey starts. Journeys are independent (D5), so no journey can consume another's output.
+- **Think time (FR-008):** a pause of `thinkTimeMs` after each step that sent a request, except the
+  last request of the iteration. Across a journey boundary it counts as "between steps", because
+  the virtual user sees one sequence. A skipped step adds no pause.
+- **Counting:** `totals.iterations` is k6's completed iterations. `totals.journeysCutShort` counts
+  journey runs cut short, and each `JourneyResult` carries its own count (data-model.md).
+
+**Rationale**: It follows the spec's existing wording (a journey is "run by each virtual user",
+and journeys can be reordered) and gives predictable, equal traffic per step. A failure in one
+journey never holds back unrelated journeys.
+
+**Trade-off (XXX)**: a slow journey lowers the request rate of every journey, because each virtual
+user works through them one after another. The report's per-step throughput shows this.
+
+**Alternatives rejected**: ending the whole iteration when a journey is cut short (it starves the
+later journeys); splitting virtual users across journeys, evenly or by user weights (journey order
+then has no effect, and weights would add a new plan input the spec does not ask for).
+
+## D26. Expected status codes per step (FR-012, FR-012a, FR-039; clarification 2026-09-25)
+
+**Decision**:
+- **Pre-fill:** each step starts with every success status the specification documents for its
+  operation. That is each entry of `ApiOperation.responses` whose `statusCode` is an exact 2xx code
+  (`^2\d\d$`) or the range `2XX`, in code-unit order. `default` and non-2xx responses are never
+  pre-filled. An operation with none starts with an empty list.
+  - This is deliberately wider than the Postman assertion, which checks only the lowest documented
+    2xx. If an API documents both 200 and 201, a 201 is not a failure under load. The Postman
+    generator is unchanged.
+- **Allowed values:** an exact code `^[1-5]\d\d$` or a range `^[1-5]XX$` (OpenAPI's range form).
+  The server removes duplicates and sorts in code-unit order. A list the user sends must not be
+  empty. Anything else is `400 invalid_expected_status`.
+- **Source per code (FR-039):** `specification` when the code is in the step's pre-fill set,
+  `user` otherwise. The server recomputes it on every change and never accepts it from the client,
+  so it cannot be misreported.
+- **Missing expected status (FR-012a):** the plan's derived `stepsNeedingExpectedStatus` lists
+  every step with an empty list, in plan order. `POST /script` refuses with `422
+  expected_status_missing {stepIds}` until the list is empty. Missing user-supplied values still do
+  not block anything (FR-014).
+- **Rebuilds:** when the plan is rebuilt (`POST /plan/reset`, or after upstream approvals change),
+  a step whose content-derived id still exists keeps its current list, with sources recomputed
+  against the new pre-fill set. New steps get the pre-fill.
+- **Out of date (FR-023):** the lists are part of the plan, so the fingerprint covers them, and
+  editing one marks a generated script out of date.
+- **In the script:** each step's list is a constant in the rendered script, used by the status
+  check (D14). There is no runtime lookup or randomness, so the byte-identical guarantee holds
+  (SC-001).
+- **Not a performance target (FR-018):** pre-filled codes come from the documented contract, and
+  every other code comes from the user (constitution I: "supported by the specification or
+  explicit user configuration").
+
+**Rationale**: every step gets a status check (SC-015), without inventing one. Pre-filling from the
+specification keeps a 50-operation plan within SC-002's 5 minutes. Blocking generation for an empty
+list follows XIX: a step never runs unchecked.
+
+**Alternatives rejected**: no pre-fill (every code typed by hand, conflicting with SC-002);
+treating every response of an empty step as a failure (produces a report that is 100% errors by
+construction); pre-filling from the scenario's assertion (it can be a 4xx or `default`, see D3).

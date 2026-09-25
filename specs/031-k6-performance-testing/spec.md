@@ -78,6 +78,16 @@ Generating the script alone does not depend on the exception.
   operation. Which rule applies? → A: FR-003 is kept. Aligning Postman's selection with it is a
   separate follow-up outside this feature. Until then, FR-011's match with Postman holds for the
   same scenario, not necessarily the same choice (FR-011, Assumptions).
+- Q: When a plan has several journeys, does each virtual user run all of them in plan order on
+  every iteration, or are the virtual users divided among the journeys? → A: On each iteration,
+  every virtual user runs every journey in plan order. A journey that is cut short skips only its
+  own remaining steps, and the virtual user moves on to the next journey (FR-006a, FR-010).
+- Q: Which responses count as failures for a step, including a step whose specification documents
+  no success status? → A: Each step has one or more expected status codes, and any other response
+  is a failure. The expected codes start as the success statuses the specification documents, and
+  the user can change them. A step with no documented success status starts empty and must be set
+  by the user before the script can be generated; the plan lists the steps that still need one
+  (FR-012, FR-012a).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,6 +129,10 @@ no secrets in them.
 5. **Given** the engineer picks the "load" profile, **When** the profile is shown, **Then** its
    stages (virtual users, ramp time, duration) are shown as editable numbers, and no pass/fail
    threshold is set until the engineer sets one.
+6. **Given** a step whose specification documents 201 and another whose specification documents no
+   success status, **When** the plan is shown, **Then** the first step's expected status is 201 and
+   can be changed, the second is listed as needing an expected status, and the script cannot be
+   generated until the engineer sets it.
 
 ---
 
@@ -221,21 +235,26 @@ verify the new order is kept in the regenerated script.
 
 - **Operation with no positive scenario**: it is left out of the plan and listed with the reason
   "no positive scenario", never replaced by a negative one.
-- **Operation with no documented success status**: its step runs, but it has no status check. The
-  plan and report say so, rather than assuming a status (constitution XIV).
+- **Operation with no documented success status**: its step starts with no expected status, and the
+  plan lists it as needing one. The script cannot be generated until the user sets one, so no step
+  ever runs unchecked and nothing is assumed (FR-012, FR-012a; constitution I, XIX).
+- **Response with a status the user did not expect**: it counts as a failure, even if the
+  specification documents that status for the operation (FR-012a).
 - **Missing user-supplied value at run time**: the run still starts. Each step that needs the value
   is reported as failed with the reason "missing data" and the variable's name, and nothing is sent
   for it. Steps that depend on it are reported as not attempted. Every other step runs normally.
 - **Switching the target environment**: the list of user-supplied values is re-checked against the
   new environment. A value present in one environment and missing in another is shown as missing,
   and FR-014 applies if the run is triggered anyway.
-- **Failed extraction during an iteration**: the rest of that iteration's journey is not attempted
-  and is counted as cut short, rather than sending an unresolved value to the next step.
+- **Failed extraction during an iteration**: the rest of that journey is not attempted in that
+  iteration and is counted as cut short, rather than sending an unresolved value to the next step.
+  The virtual user continues with the next journey, so a failure in one journey does not stop the
+  others (FR-010).
 - **Values that must be unique across iterations** (for example, an email on a create operation):
   they are derived from the virtual-user and iteration numbers, so they are unique within a run and
   identical across re-runs of the same plan.
 - **Plan inputs change after generation** (scenarios or workflows re-approved, or the selection,
-  profile, thresholds, order or data changed): the script is marked out of date, and it cannot be
+  profile, thresholds, expected statuses, order or data changed): the script is marked out of date, and it cannot be
   run until it is regenerated.
 - **k6 found but unusable** (it fails to start, or reports a version ApiPilot does not support):
   readiness shows the specific reason, and the trigger stays unavailable.
@@ -289,6 +308,9 @@ verify the new order is kept in the regenerated script.
 
 - **FR-006**: The system MUST propose an order in which each approved workflow is a multi-step
   journey in dependency order, and each operation in no workflow is a single-step journey.
+- **FR-006a**: On each iteration, every virtual user MUST run every journey in the plan's journey
+  order, and the steps of each journey in their order. Virtual users MUST NOT be divided among
+  journeys.
 - **FR-007**: The user MUST be able to reorder steps within a journey and reorder journeys. A
   reorder that places a consumer before the step that produces one of its variables MUST be
   rejected with the name of that variable, and never silently accepted or corrected.
@@ -300,12 +322,19 @@ verify the new order is kept in the regenerated script.
   credentials, chained login, and distinct per-role credentials). Tokens MUST be acquired once
   before load starts and shared by the virtual users, not fetched per request.
 - **FR-010**: Each workflow variable MUST be extracted from its producer's response and checked.
-  When an extraction fails, the rest of that iteration's journey MUST NOT be attempted, and it MUST
-  be recorded as cut short.
+  When an extraction fails, the rest of that journey MUST NOT be attempted in that iteration, and it
+  MUST be recorded as cut short. The virtual user MUST then continue with the next journey in the
+  same iteration.
 - **FR-011**: Requests MUST be built with the same parameter serialization as the functional
   tests, so that a performance request matches its Postman equivalent for the same scenario.
-- **FR-012**: Functional checks MUST use only status codes documented in the specification. A step
-  with no documented success status MUST have no status check, and the plan and report MUST say so.
+- **FR-012**: Every step MUST have one or more expected status codes. They MUST start as the success
+  statuses the specification documents for the step's scenario, and the user MUST be able to change
+  them. The system MUST NOT pre-fill a status the specification does not document. A step with no
+  documented success status MUST start with no expected status, and the user MUST set one.
+- **FR-012a**: Unlike a missing user-supplied value (FR-014), a step with no expected status MUST
+  block script generation. The plan MUST list every step that still needs an expected status. During
+  a run, any response whose status is not among its step's expected codes MUST be counted as a
+  failure, as MUST a request that gets no response (connection error or timeout).
 
 **User-supplied data**
 
@@ -400,10 +429,11 @@ verify the new order is kept in the regenerated script.
   value. With no thresholds, it MUST say none were set and give no pass/fail verdict.
 - **FR-038**: The report MUST include plain-language findings produced by fixed rules from the
   measured data, such as the slowest step, the step where failures start, and the number of
-  iterations cut short by a failed extraction. The same data MUST give the same findings.
+  journeys cut short by a failed extraction. The same data MUST give the same findings.
 - **FR-039**: Every step in the report MUST carry its provenance: why it is in the journey (the
   dependency relationship and its confidence), which scenario was used and why, where each variable
-  came from, and which authentication method was used. The report MUST also record the load
+  came from, which authentication method was used, and its expected status codes and whether each
+  came from the specification or was set by the user. The report MUST also record the load
   profile, thresholds, environment name, tier and base URL, and k6 version.
 - **FR-040**: The report MUST NOT contain credentials, tokens, request bodies or response bodies,
   and MUST identify steps by method and path template, never by resolved URL.
@@ -417,12 +447,14 @@ verify the new order is kept in the regenerated script.
 
 - **Performance Plan**: what will be tested and how. It holds the operations in scope, one chosen
   scenario per operation with the reason, the ordered journeys and steps, think time, the load
-  profile and its stages, the user-set thresholds, and the list of user-supplied values with their
-  status. It belongs to the session's guided workflow.
+  profile and its stages, the user-set thresholds, each step's expected status codes, and the list
+  of user-supplied values with their status. It belongs to the session's guided workflow.
 - **Journey**: an ordered sequence of steps run by each virtual user. It comes either from an
-  approved workflow (multi-step) or from a single operation.
+  approved workflow (multi-step) or from a single operation. One iteration of a virtual user runs
+  every journey once, in the plan's journey order.
 - **Step**: one request in a journey. It records its operation, chosen scenario, the variables it
-  consumes and produces, its checks, and its provenance.
+  consumes and produces, its expected status codes (each marked as from the specification or set by
+  the user), its checks, and its provenance.
 - **User-Supplied Value**: a value the specification cannot produce. The plan records its name, the
   steps that need it, and whether it is secret. The value itself is a variable value of the target
   environment, stored encrypted like any other, so each environment has its own. Whether it is
@@ -468,6 +500,8 @@ verify the new order is kept in the regenerated script.
 - **SC-014**: A run lasting longer than the session idle timeout (for example 2 hours), with no
   browser open, completes, and its report is available when the user returns within the idle
   timeout after it ends.
+- **SC-015**: 100% of steps in every generated script have at least one expected status code, and
+  100% of responses outside a step's expected codes are counted as failures.
 
 ## Assumptions
 

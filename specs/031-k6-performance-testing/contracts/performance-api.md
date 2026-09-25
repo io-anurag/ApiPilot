@@ -39,11 +39,16 @@ The body holds any subset of the following fields; the fields not sent are uncha
   "stepOrder": { "<journeyId>": ["<stepId>", "..."] },
   "thinkTimeMs": 2000,
   "loadProfile": { "kind": "load", "stages": [{ "durationMs": 120000, "targetVirtualUsers": 10 }] },
-  "thresholds": [{ "scope": { "kind": "run" }, "metric": "p95", "comparator": "<=", "limit": 500 }]
+  "thresholds": [{ "scope": { "kind": "run" }, "metric": "p95", "comparator": "<=", "limit": 500 }],
+  "expectedStatuses": { "<stepId>": ["200", "201"] }
 }
 ```
 
+`expectedStatuses` replaces the lists of the steps it names. Other steps keep theirs. The client
+sends codes only. The server computes each code's `source` (FR-012, FR-039, research D26).
+
 **Success:** `200 {plan, script}`. When the fingerprint changed, `script.outOfDate` is `true`.
+`plan.stepsNeedingExpectedStatus` lists the steps that still need an expected status (FR-012a).
 
 **Errors:**
 - `400 dependency_order_violation {variable, producerStepId, consumerStepId}`. The plan is
@@ -51,13 +56,15 @@ The body holds any subset of the following fields; the fields not sent are uncha
 - `400 invalid_order`
 - `400 invalid_load_profile`
 - `400 invalid_threshold`
+- `400 invalid_expected_status {stepId}`: an unknown step, an empty list, or a code that is not
+  `^[1-5]\d\d$` or `^[1-5]XX$`. The plan is unchanged.
 - `400 unknown_operation`
 - `409 workflow_review_incomplete`
 
 ### `POST /plan/reset`
 
 `200 {plan, script}`. It rebuilds the proposed plan from the current approvals, keeping the load
-profile and thresholds.
+profile, the thresholds, and the expected statuses of steps that still exist (research D26).
 
 ### `GET /plan/values?environmentId=<id>`
 
@@ -84,6 +91,9 @@ Generates the script and environment template from the current plan (FR-020).
 **Errors:**
 - `409 workflow_review_incomplete`
 - `422 nothing_to_test`, when the plan has no steps.
+- `422 expected_status_missing {stepIds}`, when any step has no expected status. `stepIds` is in
+  plan order. Nothing is generated (FR-012a). A missing user-supplied value does not cause this
+  error (FR-014).
 
 ### `GET /script/download?file=script|environment-template`
 

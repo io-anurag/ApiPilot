@@ -1,6 +1,6 @@
 # Implementation Plan: k6 Performance Testing
 
-**Branch**: `031-k6-performance-testing` | **Date**: 2026-09-24 | **Spec**: [spec.md](./spec.md)
+**Branch**: `031-k6-performance-testing` | **Date**: 2026-09-24, revised 2026-09-25 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/031-k6-performance-testing/spec.md` (AP-029)
 
@@ -10,7 +10,9 @@ A new optional last stage of the guided workflow, **Performance Testing**, build
 Plan from the session's approved test model and approved workflows:
 - one positive scenario per operation in scope;
 - approved workflows as multi-step journeys in dependency order, and every other operation as a
-  single-step journey;
+  single-step journey, all run in order by every virtual user on each iteration;
+- one or more expected status codes per step, pre-filled from the specification's documented 2xx
+  responses and editable, with any other response counted as a failure;
 - a load profile and user-set thresholds.
 
 From the plan it renders a byte-identical k6 script and an environment template with no secret
@@ -23,11 +25,11 @@ report with per-step percentiles, a timeline, rule-based findings and provenance
 Runs are persisted in a new session-owned table, and share the session-wide execution slot. A
 run keeps its session alive while it is in progress. The design reuses the Postman generator's
 parameter serialization and auth planning, so k6 requests match their Postman equivalents. It
-adds no dependency and no AI. The details are in [research.md](./research.md) D1 to D24.
+adds no dependency and no AI. The details are in [research.md](./research.md) D1 to D26.
 
 ## Resolved questions (2026-09-25)
 
-Both were answered and recorded in the spec's Clarifications (Session 2026-09-25):
+All four were answered and recorded in the spec's Clarifications (Session 2026-09-25):
 
 1. **FR-015 amended** (research D12). k6 virtual users do not share memory, so a refreshed token
    cannot be shared by all of them as the first one is.
@@ -41,6 +43,14 @@ Both were answered and recorded in the spec's Clarifications (Session 2026-09-25
 2. **FR-003 kept** (research D4). k6 prefers a rule-generated positive scenario. Postman's
    selection, which ignores origin, is unchanged here. Aligning it is a separate follow-up
    (ROADMAP Next Actions #30). FR-011 now says the match with Postman holds for the same scenario.
+3. **One iteration runs every journey in order** (FR-006a, research D25). A journey cut short by a
+   failed extraction or missing data skips only its own remaining steps, and the virtual user
+   continues with the next journey. FR-038 now counts journeys, not iterations, cut short.
+4. **Every step has user-editable expected status codes** (FR-012, FR-012a, research D26). They are
+   pre-filled with the operation's documented 2xx codes. Any other response, and any request with no
+   response, is a failure. A step with none documented must be set before generation
+   (`422 expected_status_missing`). This replaces the earlier design, in which such a step had no
+   status check.
 
 ## Technical Context
 
@@ -110,7 +120,7 @@ Checked against `.specify/memory/constitution.md` v2.3.0.
 
 | Principle | Status | How the design complies |
 |---|---|---|
-| I. Specification is the source of truth | Pass | Requests come from approved scenarios. Status checks come only from documented statuses (FR-012). Unique values are applied only for `email`/`uuid` formats (D13). |
+| I. Specification is the source of truth | Pass | Requests come from approved scenarios. Expected statuses are pre-filled only from documented 2xx responses, and every other code is explicit user configuration, which principle I permits (FR-012, D26). Unique values are applied only for `email`/`uuid` formats (D13). |
 | II. Deterministic before AI; III. AI is an assistant | Pass | No AI anywhere in the plan, script, run or report (FR-041). |
 | IV. Structured and validated | N/A | No AI output. k6's metrics lines are parsed defensively, and an unreadable stream fails the run with `metrics-unreadable` (D11). |
 | V, VI, VII, XXII, XXIII, XXIX. AI-related principles | N/A | No AI. |
@@ -119,8 +129,8 @@ Checked against `.specify/memory/constitution.md` v2.3.0.
 | X. Domain model first | Pass | `performance.ts` in `shared-domain` (data-model.md). |
 | XI. Human in the loop | Pass | Every run is a user trigger. The plan is reviewed and editable before generation (FR-007, FR-024). |
 | XII. Quality over quantity | Pass | One positive scenario per operation, and no negative scenarios under load (FR-002). |
-| XIII. Provenance | Pass | Every step records its scenario choice, dependency and confidence, variable sources and auth method, and the report shows them (FR-039). Runs record the script hash and k6 version. |
-| XIV. No silent assumptions; XIX. Fail safely | Pass | A missing value is reported, never guessed (FR-014). A step without a documented status is shown as having no check (FR-012). Unsupported k6, integrity mismatch and unreadable output are explicit failures (D8, D9). A token with no stated lifetime is reported as such (D12). |
+| XIII. Provenance | Pass | Every step records its scenario choice, dependency and confidence, variable sources, auth method, and expected statuses with each code's source (specification or user, computed by the server), and the report shows them (FR-039, D26). Runs record the script hash and k6 version. |
+| XIV. No silent assumptions; XIX. Fail safely | Pass | A missing value is reported, never guessed (FR-014). A step with no documented success status gets no assumed status: generation is refused until the user sets one, so no step runs unchecked (FR-012a, D26). Unsupported k6, integrity mismatch and unreadable output are explicit failures (D8, D9). A token with no stated lifetime is reported as such (D12). |
 | XV. Conservative inference | Pass | Journeys use only approved workflows (CONFIRMED and LIKELY relationships), unchanged (D5). |
 | XVI. Deterministic artifacts | Pass | The script and template are byte-identical for the same plan, with content-derived ids, code-unit ordering, and no timestamps in the script (D4, D5, SC-001). |
 | XVII. Security and privacy (v2.3.0 exception) | Pass | Each condition of the 2026-09-24 exception maps to a check (D7 to D10, D18, FR-024 to FR-028, FR-033). There is no shell, no remote imports, no values in argv or the script, a minimal child environment, and `--no-usage-report`. No endpoint accepts script content. |
@@ -132,7 +142,7 @@ Checked against `.specify/memory/constitution.md` v2.3.0.
 | XXVI. Traceability | Pass | FR and SC references carried into the contract, data model and quickstart. |
 | XXVII. Simple architecture | Pass | No job queue or worker: one child process per run, fire-and-poll like the existing runs. |
 | XXVIII. Technology is replaceable | Pass | k6 is behind the `k6/` boundary. A different load tool would replace that folder, not the plan or the result. |
-| XXX. Explicit trade-offs | Pass | Recorded in research: per-virtual-user refresh (D12), 1% percentile precision (D11), no schema checks under load (D14), the report styling (D17), a possible orphaned k6 after a crash (D18), the child-environment visibility (D7), and no SSRF guard, which is consistent with the existing runs. |
+| XXX. Explicit trade-offs | Pass | Recorded in research: per-virtual-user refresh (D12), 1% percentile precision (D11), no schema checks under load (D14), a slow journey lowering every journey's request rate (D25), a wider status pre-fill than Postman's single assertion (D26), the report styling (D17), a possible orphaned k6 after a crash (D18), the child-environment visibility (D7), and no SSRF guard, which is consistent with the existing runs. |
 | XXXI. Definition of done | Pass, planned | Includes the opt-in real-k6 run and quickstart 1 to 8 before "Implemented". |
 | XXXII. Review at scale | Pass | Removal and reorder are per operation and per journey. Nothing requires reviewing per request. |
 | XXXIII. Presentation | Pass | Stage UI built with AP-027 components (`StatusBadge` tier labels, `HttpMethodBadge`, `EmptyState`/`ErrorState`/`Skeleton`, and "Move up"/"Move down" menus like AP-028). The report's own styling is justified in D17. |
@@ -143,6 +153,11 @@ whose conditions are all designed in.
 **Re-check after Phase 1 design: PASS.** The data model, contract and quickstart add no new
 execution path, stored secret, or network destination.
 
+**Re-check after the 2026-09-25 revision: PASS.** The expected statuses and the iteration model
+add plan fields, one validation error and one generation refusal. They add no execution path,
+stored secret, network destination or AI. The user-set codes are explicit configuration under
+principle I, and the generation block strengthens XIX.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -150,7 +165,7 @@ execution path, stored secret, or network destination.
 ```text
 specs/031-k6-performance-testing/
 ├── plan.md              # This file
-├── research.md          # Phase 0: decisions D1 to D24
+├── research.md          # Phase 0: decisions D1 to D26
 ├── data-model.md        # Phase 1: shared types, the run table, state transitions
 ├── quickstart.md        # Phase 1: validation scenarios 1 to 9
 ├── contracts/
@@ -176,15 +191,16 @@ backend/src/
 │   │   ├── validateOrder.ts           # D5, FR-007
 │   │   ├── userSuppliedValues.ts      # D6
 │   │   ├── uniqueValueFields.ts       # D13
+│   │   ├── expectedStatuses.ts        # pre-fill, validation, source marking (D26)
 │   │   ├── loadProfiles.ts            # starting stages
 │   │   └── buildPlan.ts               # plan and fingerprint
 │   ├── k6/
-│   │   ├── renderScript.ts            # script and template (D7, D8, D10 to D14)
+│   │   ├── renderScript.ts            # script and template (D7, D8, D10 to D14, D25)
 │   │   ├── readiness.ts               # D9
 │   │   ├── runner.ts                  # spawn, integrity check, cancel (D8, D10, D19)
 │   │   └── metricsStream.ts           # NDJSON parsing (D11)
 │   ├── report/
-│   │   ├── aggregate.ts               # histogram, timeline, categories (D11, D14)
+│   │   ├── aggregate.ts               # histograms, timeline, failure classification (D11, D14, D25)
 │   │   ├── thresholds.ts              # D15
 │   │   ├── findings.ts                # D16
 │   │   └── renderHtmlReport.ts        # D17
@@ -211,7 +227,8 @@ backend/tests/
 
 frontend/src/
 ├── components/performance/            # NEW: PlanEditor, JourneyList, LoadProfileEditor,
-│                                      #   ThresholdEditor, ValuesChecklist, RunPanel, ReportFrame
+│                                      #   ThresholdEditor, ExpectedStatusEditor, ValuesChecklist,
+│                                      #   RunPanel, ReportFrame
 ├── pages/TestGenerationWorkflowPage.tsx   # + stage block
 ├── components/workflowStageViewModel.ts   # + label and lock reason
 └── services/performanceTestingClient.ts   # NEW (contract client, {ok} result union)
