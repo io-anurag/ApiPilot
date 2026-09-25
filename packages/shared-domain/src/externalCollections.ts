@@ -182,10 +182,12 @@ export interface CollectionRequestFields {
  */
 export interface ImpliedAuthHeader {
   key: string;
-  /** Exactly as stored — `{{variable}}` placeholders intact, mirroring `raw`. */
+  /** Exactly as stored — `{{variable}}` placeholders intact, mirroring `raw`. Empty when `hiddenLiteral`. */
   rawValue: string;
-  /** `rawValue` with every resolvable `{{variable}}` substituted, mirroring `resolved`. */
+  /** `rawValue` with every resolvable `{{variable}}` substituted, mirroring `resolved`. Empty when `hiddenLiteral`. */
   resolvedValue: string;
+  /** The token or API key value is a secret literal, which is never sent to the browser (FR-002a). */
+  hiddenLiteral: boolean;
 }
 
 /** One request within a `CollectionView` (research.md D2, D9; data-model.md). */
@@ -238,6 +240,26 @@ export interface RequestAuthView {
   source: RequestAuthSource;
   fields: Array<{ key: string; value: string; hiddenLiteral: boolean }>;
 }
+
+/**
+ * A secret auth field in a `RequestAuthEdit`: keep the value stored in the request's own auth of
+ * the same type (a hidden literal the browser never received), or replace it.
+ */
+export type SecretAuthFieldEdit = { kind: "keep" } | { kind: "set"; value: string };
+
+/** The auth types a request's own auth can be edited to (FR-002c). */
+export const EDITABLE_REQUEST_AUTH_TYPES = ["inherit", "noauth", "bearer", "basic", "apikey"] as const;
+
+/**
+ * An edit to a request's own auth (FR-002c). `inherit` removes it, so the request's folder's or the
+ * collection's auth applies. Any field may hold `{{variable}}` references.
+ */
+export type RequestAuthEdit =
+  | { type: "inherit" }
+  | { type: "noauth" }
+  | { type: "bearer"; token: SecretAuthFieldEdit }
+  | { type: "basic"; username: string; password: SecretAuthFieldEdit }
+  | { type: "apikey"; key: string; value: SecretAuthFieldEdit; in: "header" | "query" };
 
 /** One variable a request uses (FR-002b). `resolved` and `source` follow the collection's `VariableBinding`. */
 export interface RequestVariableReference {

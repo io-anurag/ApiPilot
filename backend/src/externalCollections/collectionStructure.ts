@@ -4,7 +4,7 @@ import type { MoveCarried } from "@apipilot/shared-domain";
 import { FolderNotFoundError, InvalidMoveError, InvalidOrderError, ItemNotFoundError } from "./errors";
 
 /** Default-import access, for the ESM/CJS interop reason documented in `uploadedCollectionParsing.ts`. */
-const RequestAuthCtor = (postmanCollection as unknown as { RequestAuth: typeof RequestAuth }).RequestAuth;
+export const RequestAuthCtor = (postmanCollection as unknown as { RequestAuth: typeof RequestAuth }).RequestAuth;
 
 type Folder = ItemGroup<Item>;
 type Container = Collection | Folder;

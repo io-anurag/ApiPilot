@@ -88,6 +88,8 @@ function unresolvedVariablesFor(
  * would add automatically when the request runs. Only `bearer` and header-located `apikey` are
  * represented (see `ImpliedAuthHeader`'s doc comment for why every other type is left
  * undefined) — `undefined` whenever no auth applies or the effective type isn't one of these two.
+ * A literal token or API key value is a secret (FR-002a): it is emptied here, like the Auth tab's
+ * field, so it never reaches the browser.
  */
 function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>): ImpliedAuthHeader | undefined {
   const auth = item.getAuth();
@@ -97,10 +99,12 @@ function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>
   if (auth.type === "bearer") {
     const token = params?.get("token");
     if (typeof token !== "string" || token.length === 0) return undefined;
+    if (isHiddenLiteral(token)) return { key: "Authorization", rawValue: "", resolvedValue: "", hiddenLiteral: true };
     return {
       key: "Authorization",
       rawValue: `Bearer ${token}`,
       resolvedValue: `Bearer ${substituteVariables(token, variableValues)}`,
+      hiddenLiteral: false,
     };
   }
 
@@ -110,7 +114,8 @@ function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>
     const key = params?.get("key");
     const value = params?.get("value");
     if (typeof key !== "string" || key.length === 0 || typeof value !== "string" || value.length === 0) return undefined;
-    return { key, rawValue: value, resolvedValue: substituteVariables(value, variableValues) };
+    if (isHiddenLiteral(value)) return { key, rawValue: "", resolvedValue: "", hiddenLiteral: true };
+    return { key, rawValue: value, resolvedValue: substituteVariables(value, variableValues), hiddenLiteral: false };
   }
 
   return undefined;
@@ -137,6 +142,11 @@ const SECRET_AUTH_FIELD_KEYS = new Set([
 
 function isSecretAuthField(type: string, key: string): boolean {
   return SECRET_AUTH_FIELD_KEYS.has(key) || (type === "apikey" && key === "value");
+}
+
+/** A secret field's value is hidden when any text remains after removing its `{{variable}}` references (data-model.md). */
+function isHiddenLiteral(value: string): boolean {
+  return removeVariableTokens(value).trim().length > 0;
 }
 
 /** An auth parameter's stored value as text; non-string values (booleans, oauth2 objects) as JSON. */
@@ -178,7 +188,7 @@ function describeAuth(auth: RequestAuth, source: RequestAuthView["source"]): { v
     const key = parameter.key ?? "";
     const value = authFieldText(parameter.value);
     storedValues.push(value);
-    const hiddenLiteral = isSecretAuthField(auth.type, key) && removeVariableTokens(value).trim().length > 0;
+    const hiddenLiteral = isSecretAuthField(auth.type, key) && isHiddenLiteral(value);
     return { key, value: hiddenLiteral ? "" : value, hiddenLiteral };
   });
   return { view: { type: auth.type, source, fields }, storedValues };

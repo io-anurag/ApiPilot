@@ -265,6 +265,45 @@ above, not only once at the end.
 
 ---
 
+## Phase 9: Per-run order in the run-order list (FR-015c, 2026-09-25)
+
+The backend half is specs/026-external-collection-execution FR-019 (its Phase 8).
+
+- [X] T073 [P] `frontend/src/utils/runOrder.ts`: pure helpers to apply a stored per-run
+  order to the current requests (deleted requests dropped, added requests placed last) and to
+  move one id to a new index.
+- [X] T074 `ExternalCollectionRunPanel.tsx`: the run-order list takes `runOrder`/`onRunOrderChange`
+  instead of `reorder`; rows can be dragged (native HTML5 drag and drop) or moved with ↑/↓ to any
+  position; Start Run sends the selected ids in the list's order; Reset restores the collection's
+  order and every request.
+- [X] T075 `ExternalCollectionsPage.tsx`: keeps each collection's per-run order in page state
+  until reload; the list no longer calls the collection reorder endpoint.
+- [X] T076 [P] Tests: `runOrder.test.ts`; `ExternalCollectionRunPanel.test.tsx` for cross-folder
+  moves with the buttons and by dragging, the order sent on start, the order kept across runs,
+  and Reset.
+- [X] T077 `quickstart.md` Scenario 5a, `specs/ROADMAP.md`, and user documentation updated.
+
+---
+
+## Phase 10: Editable request auth (FR-002c, 2026-09-25)
+
+- [X] T078 [P] `packages/shared-domain/src/externalCollections.ts`: `RequestAuthEdit` and
+  `SecretAuthFieldEdit`; `ImpliedAuthHeader.hiddenLiteral`.
+- [X] T079 `backend/src/externalCollections/requestAuthEdit.ts`: `parseRequestAuthEdit` and
+  `applyRequestAuthEdit` (`InvalidAuthEditError`); `applyRequestOverride` applies `edit.auth`;
+  `PUT .../requests/:requestId` maps the error to `400 invalid_auth_edit`.
+- [X] T080 `collectionView.ts`: `impliedAuthHeaderFor` hides a literal token or API key value
+  (FR-002a defect).
+- [X] T081 `RequestAuthSections.tsx`/`RequestEditorPanel.tsx`: editable Auth tab (type selector,
+  fields, hidden-secret keep), saved with the request; unsupported own types read-only; the
+  Headers note gets an "Edit auth" button that opens the Auth tab.
+- [X] T082 [P] Tests: `requestAuthEdit.test.ts`, `collectionView.test.ts` (hidden implied
+  header), request-edit integration test (auth saved, keep, invalid, run sends the new token),
+  `RequestEditorPanel.test.tsx`.
+- [X] T083 Contract, data model, quickstart, ROADMAP and user manual updated.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

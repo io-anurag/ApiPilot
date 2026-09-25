@@ -60,6 +60,15 @@ against — see that session's Clarifications for the full reasoning.
   already made — a developer accepting how the collection behaves in Postman/Newman is already
   accepting how long it takes.
 
+### Session 2026-09-25
+
+- Q: Postman's Runner lets a user place any request anywhere in the run order without changing
+  the collection. Should an ApiPilot run be able to do the same, or always follow the
+  collection's stored order? → A: The same as Postman. A run can carry its own request order,
+  which applies to that run only and never changes the collection; the collection's order stays
+  the default (FR-005, FR-019). Each request keeps its own folders' auth and scripts wherever it
+  runs, because each request already runs nested in its own folder chain (FR-008).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run My Own Existing Postman Collection Through ApiPilot (Priority: P1)
@@ -189,6 +198,8 @@ that neither can be mistaken for the other.
 - **FR-005**: The system MUST execute every request in the uploaded collection strictly one at a
   time, in the collection's own request/folder order, mirroring the existing sequential execution
   model (specs/018 FR-010) rather than introducing a second, concurrent execution path.
+  *(Amended 2026-09-25: the collection's own order is the default; a run started with an explicit
+  per-run order runs in that order instead (FR-019).)*
 - **FR-006**: The system MUST report each executed request's outcome, duration, and response
   status code, deriving pass/fail from the collection's own defined test assertions where present,
   and MUST NOT fabricate an assertion the collection itself did not define.
@@ -252,6 +263,21 @@ requests to run" screen, which FR-005 as originally written did not support.
   confirmation gates (FR-007, FR-013) MUST be evaluated against only the chosen subset, not the
   whole collection, so an unselected request's destructive method never blocks a run that never
   included it.
+
+### Post-implementation addendum (2026-09-25, driven by specs/028-collection-editor-ui FR-015c)
+
+Added directly against this spec, as FR-018 was, once specs/028's run-order list needed the
+Postman Runner's behavior: the run screen places any request anywhere in the run, and that order
+belongs to the run, not to the collection.
+
+- **FR-019**: The system MUST allow the user to start a run with an explicit per-run request
+  order: the order of the chosen requests (FR-018) is the order they execute in, one at a time
+  (FR-005). Each request MUST still run with its own folders' auth and scripts and the
+  collection's scripts (FR-008), wherever it sits in that order. A per-run order MUST NOT change
+  the collection's stored order. A run order that repeats a request, contains an entry that is not
+  a request id, or names a request the collection does not contain MUST be refused with a message
+  saying why, rather than corrected silently; an order that names none of the collection's
+  requests keeps FR-018's existing refusal.
 
 ### Key Entities *(include if feature involves data)*
 

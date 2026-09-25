@@ -154,6 +154,7 @@ describe("buildCollectionView", () => {
         key: "Authorization",
         rawValue: "Bearer {{token}}",
         resolvedValue: "Bearer abc123",
+        hiddenLiteral: false,
       });
       // Never merged into the literal, editable header list.
       expect(request.raw.headers).toEqual([]);
@@ -174,7 +175,30 @@ describe("buildCollectionView", () => {
         key: "X-API-Key",
         rawValue: "{{apiKeyValue}}",
         resolvedValue: "secret",
+        hiddenLiteral: false,
       });
+    });
+
+    it("hides a literal bearer token or API key value, so it never reaches the browser (FR-002a)", () => {
+      const bearer = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "eyJliteral", type: "string" }] });
+      expect(buildCollectionView("uc-1", parseUploadedCollection(bearer), bearer, {}).items[0].impliedAuthHeader).toEqual({
+        key: "Authorization",
+        rawValue: "",
+        resolvedValue: "",
+        hiddenLiteral: true,
+      });
+
+      const apikey = collectionWithAuth({
+        type: "apikey",
+        apikey: [
+          { key: "key", value: "X-API-Key", type: "string" },
+          { key: "value", value: "prefix-{{suffix}}", type: "string" },
+          { key: "in", value: "header", type: "string" },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(apikey), apikey, { suffix: "s" });
+      expect(view.items[0].impliedAuthHeader).toEqual({ key: "X-API-Key", rawValue: "", resolvedValue: "", hiddenLiteral: true });
+      expect(JSON.stringify(view)).not.toContain("prefix-");
     });
 
     it("omits a query-located apikey auth — it is already visible in the URL, not a header", () => {

@@ -33,15 +33,20 @@ import { applyRequestOverride } from "../externalCollections/requestOverride";
 import { findEditedItemIds, serializeWithEditMarkers } from "../externalCollections/editedItems";
 import { addFolder, addRequest, deleteItem, moveItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
+import { resolveRunOrder } from "../externalCollections/runOrder";
+import { parseRequestAuthEdit } from "../externalCollections/requestAuthEdit";
 import {
   CollectionLockedError,
   DuplicateNameError,
   FolderNotFoundError,
   InvalidCollectionError,
+  InvalidAuthEditError,
   InvalidEnvironmentError,
   InvalidMoveError,
   InvalidOrderError,
+  InvalidRunOrderError,
   ItemNotFoundError,
+  NoRequestsSelectedError,
   NoRunInProgressError,
   RequestNotFoundError,
   RunNotFoundError,
@@ -272,6 +277,11 @@ export function createExternalCollectionsRouter(): Router {
       res.status(400).json({ error: "invalid_move", message: err.message });
       return true;
     }
+    if (err instanceof InvalidAuthEditError) {
+      logRequestFailed(req.method, req.path, startedAt, 400, "invalid_auth_edit");
+      res.status(400).json({ error: "invalid_auth_edit", message: err.message });
+      return true;
+    }
     return false;
   }
 
@@ -302,6 +312,7 @@ export function createExternalCollectionsRouter(): Router {
         headers,
         body: typeof body.body === "string" ? body.body : undefined,
         testScript: typeof body.testScript === "string" ? body.testScript : undefined,
+        auth: parseRequestAuthEdit(body.auth),
       }, findEditedItemIds(existing.collection));
       updateUploadedCollectionBody(existing.id, updatedCollectionJson);
       respondWithFreshView(res, existing.id);
@@ -447,12 +458,6 @@ export function createExternalCollectionsRouter(): Router {
     const startedAt = logRequestReceived(req.method, req.path);
     const requestBody = req.body as Record<string, unknown> | undefined;
     const confirmed = requestBody?.confirmed === true;
-    // AP-028 follow-up (Postman-Runner-style selective run): `undefined` runs every request,
-    // exactly as before this field existed (additive, backward compatible) — an explicit array
-    // narrows the run to that id set, checked against the collection's own item ids below.
-    const selectedItemIds = Array.isArray(requestBody?.selectedRequestIds)
-      ? new Set((requestBody.selectedRequestIds as unknown[]).filter((id): id is string => typeof id === "string"))
-      : undefined;
     try {
       const uploadedCollection = getUploadedCollection(req.params.id);
 
@@ -474,21 +479,20 @@ export function createExternalCollectionsRouter(): Router {
       // check throw uncaught here.
       const collection = parseStoredCollection(uploadedCollection.collection);
       let requestItemCount = 0;
-      let selectedItemCount = 0;
-      collection.forEachItem((item) => {
+      collection.forEachItem(() => {
         requestItemCount += 1;
-        if (!selectedItemIds || selectedItemIds.has(item.id)) selectedItemCount += 1;
       });
       if (requestItemCount === 0) {
         logRequestFailed(req.method, req.path, startedAt, 400, "empty_collection");
         res.status(400).json({ error: "empty_collection", message: "This collection has no requests to run." });
         return;
       }
-      if (selectedItemIds && selectedItemCount === 0) {
-        logRequestFailed(req.method, req.path, startedAt, 400, "no_requests_selected");
-        res.status(400).json({ error: "no_requests_selected", message: "Select at least one request to run." });
-        return;
-      }
+      // AP-028 follow-up (Postman-Runner-style selective run): omitted, every request runs in the
+      // collection's own order, exactly as before the field existed (additive, backward
+      // compatible); an array is the chosen requests in the order they run (FR-018, FR-019). The
+      // confirmation gates only need the id set.
+      const orderedItemIds = resolveRunOrder(collection, requestBody?.selectedRequestIds);
+      const selectedItemIds = orderedItemIds ? new Set(orderedItemIds) : undefined;
 
       // An unset variable deliberately does NOT refuse the run: an earlier request's test script
       // may capture it (`pm.environment.set`) for a later one, and a request that still sends an
@@ -546,7 +550,7 @@ export function createExternalCollectionsRouter(): Router {
       // Fire-and-poll (mirrors execution/start's identical rationale): the run continues after
       // this response is sent; runUploadedCollectionExecution() never rejects (it settles the run
       // defensively on any internal failure), so this .catch() is a defensive backstop only.
-      runUploadedCollectionExecution({ runId: run.id, uploadedCollection, selectedItemIds }).catch((error) => {
+      runUploadedCollectionExecution({ runId: run.id, uploadedCollection, orderedItemIds }).catch((error) => {
         logger.error("uploaded_collection_execution_run_unhandled_error", {
           runId: run.id,
           errorCategory: error instanceof Error ? error.name : "unknown_error",
@@ -559,6 +563,16 @@ export function createExternalCollectionsRouter(): Router {
       if (err instanceof UploadedCollectionNotFoundError) {
         logRequestFailed(req.method, req.path, startedAt, 404, "uploaded_collection_not_found");
         res.status(404).json({ error: "uploaded_collection_not_found", message: err.message });
+        return;
+      }
+      if (err instanceof NoRequestsSelectedError) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "no_requests_selected");
+        res.status(400).json({ error: "no_requests_selected", message: err.message });
+        return;
+      }
+      if (err instanceof InvalidRunOrderError) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_run_order");
+        res.status(400).json({ error: "invalid_run_order", message: err.message });
         return;
       }
       throw err;

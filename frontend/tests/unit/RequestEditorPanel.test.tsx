@@ -132,7 +132,7 @@ describe("RequestEditorPanel", () => {
           unresolvedVariables: [],
           variableReferences: [],
           copiedScriptFolderIds: [],
-          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123" },
+          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123", hiddenLiteral: false },
         })}
         locked={false}
         onSave={vi.fn()}
@@ -178,7 +178,8 @@ describe("RequestEditorPanel — effective auth and used variables (FR-002a, FR-
       />,
     );
     fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
-    expect(screen.getByText("Bearer Token")).toBeInTheDocument();
+    expect(screen.getByLabelText("Auth type")).toHaveValue("inherit");
+    expect(screen.getByText("Bearer Token", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByText("Inherited from folder “Orders”.")).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getByText("{{token}}")).toBeInTheDocument();
@@ -218,7 +219,7 @@ describe("RequestEditorPanel — the Headers tab auth note", () => {
       <RequestEditorPanel
         request={request({
           raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
-          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123" },
+          impliedAuthHeader: { key: "Authorization", rawValue: "Bearer {{token}}", resolvedValue: "Bearer abc123", hiddenLiteral: false },
           auth: {
             type: "bearer",
             source: { kind: "folder", folderId: "orders", folderName: "Orders" },
@@ -232,5 +233,110 @@ describe("RequestEditorPanel — the Headers tab auth note", () => {
     );
     expect(screen.getByText(/Inherited from folder “Orders”\./)).toBeInTheDocument();
     expect(screen.getAllByText("{{token}}")[0]).toHaveClass("font-mono");
+  });
+});
+
+describe("RequestEditorPanel — editing the request's own auth (FR-002c)", () => {
+  const ownBearerWithHiddenToken = () =>
+    request({
+      raw: { method: "GET", url: "{{baseUrl}}/widgets", headers: [] },
+      impliedAuthHeader: { key: "Authorization", rawValue: "", resolvedValue: "", hiddenLiteral: true },
+      auth: { type: "bearer", source: { kind: "request" }, fields: [{ key: "token", value: "", hiddenLiteral: true }] },
+    });
+
+  async function saveAndReadEdit(onSave: ReturnType<typeof vi.fn>, call = 0) {
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("button", { name: "Save" });
+    return onSave.mock.calls[call][1];
+  }
+
+  it("opens the Auth tab from the Headers note, and shows a hidden literal as hidden in the note and preview", () => {
+    render(<RequestEditorPanel request={ownBearerWithHiddenToken()} locked={false} onSave={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getAllByText("hidden literal value")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit auth" }));
+    expect(editTabs().getByRole("tab", { name: "Auth" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Auth type")).toHaveValue("bearer");
+    expect(screen.getByLabelText("Token")).toHaveValue("");
+    expect(screen.getByText(/Leave this blank to keep it/)).toBeInTheDocument();
+  });
+
+  it("sets a bearer token of its own on a request that inherited its auth", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RequestEditorPanel
+        request={request({
+          auth: { type: "bearer", source: { kind: "collection" }, fields: [{ key: "token", value: "{{token}}", hiddenLiteral: false }] },
+        })}
+        locked={false}
+        onSave={onSave}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "bearer" } });
+    fireEvent.change(screen.getByLabelText("Token"), { target: { value: "{{adminToken}}" } });
+
+    expect((await saveAndReadEdit(onSave)).auth).toEqual({ type: "bearer", token: { kind: "set", value: "{{adminToken}}" } });
+  });
+
+  it("does not send auth when only other fields change, and keeps a hidden token left blank", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RequestEditorPanel request={ownBearerWithHiddenToken()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("URL"), { target: { value: "{{baseUrl}}/widgets/2" } });
+    expect(await saveAndReadEdit(onSave)).not.toHaveProperty("auth");
+
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "apikey" } });
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "bearer" } });
+    expect((await saveAndReadEdit(onSave, 1)).auth).toEqual({ type: "bearer", token: { kind: "keep" } });
+  });
+
+  it("switches back to inheriting, and sends an API key with where it goes", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RequestEditorPanel request={ownBearerWithHiddenToken()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "inherit" } });
+    expect((await saveAndReadEdit(onSave)).auth).toEqual({ type: "inherit" });
+
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "apikey" } });
+    fireEvent.change(screen.getByLabelText("Key"), { target: { value: "X-API-Key" } });
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "{{apiKey}}" } });
+    fireEvent.change(screen.getByLabelText("Add to"), { target: { value: "query" } });
+    expect((await saveAndReadEdit(onSave, 1)).auth).toEqual({
+      type: "apikey",
+      key: "X-API-Key",
+      value: { kind: "set", value: "{{apiKey}}" },
+      in: "query",
+    });
+  });
+
+  it("shows an auth type ApiPilot cannot edit read-only, and leaves it alone on save", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RequestEditorPanel
+        request={request({
+          auth: { type: "oauth2", source: { kind: "request" }, fields: [{ key: "accessToken", value: "", hiddenLiteral: true }] },
+        })}
+        locked={false}
+        onSave={onSave}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    expect(screen.getByLabelText("Auth type")).toHaveValue("unsupported");
+    expect(screen.getByText(/can.t edit OAuth 2\.0/)).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("Hidden literal value")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "noauth" } });
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: "unsupported" } });
+    expect((await saveAndReadEdit(onSave)).auth).toBeUndefined();
+  });
+
+  it("disables the auth controls while locked", () => {
+    render(<RequestEditorPanel request={ownBearerWithHiddenToken()} locked onSave={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    expect(screen.getByLabelText("Auth type")).toBeDisabled();
+    expect(screen.getByLabelText("Token")).toBeDisabled();
   });
 });

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import type { CollectionRequestView } from "@apipilot/shared-domain";
+import type { CollectionRequestView, ImpliedAuthHeader } from "@apipilot/shared-domain";
 import type { RequestEdit } from "../services/externalCollectionsClient";
 import { BUTTON_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 import { CodeBlock } from "./CodeBlock";
 import { VariableHighlightedText } from "./VariableHighlightedText";
-import { RequestAuthSection, RequestVariablesSection } from "./RequestAuthSections";
+import { RequestAuthEditor, RequestVariablesSection } from "./RequestAuthSections";
+import { initialAuthDraft, toRequestAuthEdit, type AuthDraft } from "../utils/authDraft";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const TABS = ["Headers", "Auth", "Body", "Tests", "Used variables"] as const;
@@ -32,12 +33,19 @@ function impliedAuthSourceText(request: CollectionRequestView): string {
   return `Inherited from folder “${source.folderName}”.`;
 }
 
+/** The auth header's value, or a hidden-literal marker: a literal token never reaches the browser (FR-002a). */
+function ImpliedAuthValue({ header, value }: Readonly<{ header: ImpliedAuthHeader; value: string }>) {
+  if (header.hiddenLiteral) return <span className="font-sans italic text-muted">hidden literal value</span>;
+  return <VariableHighlightedText text={value} />;
+}
+
 const TAB_BUTTON =
   "border-b-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 /**
- * Selected-request detail: an editable raw form (method/URL/headers/body/tests — FR-007), the
- * read-only effective auth and used variables (FR-002a, FR-002b), plus a read-only resolved
+ * Selected-request detail: an editable raw form (method/URL/headers/body/tests — FR-007), its own
+ * auth, editable (FR-002c; inherited auth is shown read-only, FR-002a), the used variables
+ * (FR-002b), plus a read-only resolved
  * preview (FR-002, FR-005) that updates immediately whenever the collection's
  * variable values change (via `request` being a freshly re-fetched `CollectionRequestView`).
  * Disabled entirely while `locked` (FR-017).
@@ -68,6 +76,9 @@ export function RequestEditorPanel({
   const [headerRows, setHeaderRows] = useState<HeaderRow[]>(() => toHeaderRows(request.raw.headers));
   const [body, setBody] = useState(request.raw.body ?? "");
   const [testScript, setTestScript] = useState(request.testScript ?? "");
+  const [authDraft, setAuthDraft] = useState<AuthDraft>(() => initialAuthDraft(request.auth));
+  // Auth is sent only once edited, so saving other fields never rewrites it (FR-002c).
+  const [authEdited, setAuthEdited] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Headers");
   const [previewTab, setPreviewTab] = useState<PreviewTab>("Request");
   const [saving, setSaving] = useState(false);
@@ -90,6 +101,7 @@ export function RequestEditorPanel({
       headers: headerRows.filter((row) => row.key.trim().length > 0).map((row) => ({ key: row.key.trim(), value: row.value })),
       body: body.length > 0 ? body : undefined,
       testScript,
+      ...(authEdited ? { auth: toRequestAuthEdit(authDraft) } : {}),
     };
     try {
       await onSave(request.id, edit);
@@ -215,18 +227,31 @@ export function RequestEditorPanel({
                 <p className="text-sm wrap-anywhere">
                   <span className="font-semibold text-slate-900 dark:text-slate-100">Auth adds:</span>{" "}
                   <span className="font-mono">
-                    {request.impliedAuthHeader.key}: <VariableHighlightedText text={request.impliedAuthHeader.rawValue} />
+                    {request.impliedAuthHeader.key}: <ImpliedAuthValue header={request.impliedAuthHeader} value={request.impliedAuthHeader.rawValue} />
                   </span>
                 </p>
-                <p className="text-xs text-muted">
-                  {impliedAuthSourceText(request)} Edit the auth or the variable, not here: it isn&apos;t an editable header.
-                </p>
+                <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                  <span>{impliedAuthSourceText(request)} It comes from the auth, not a header row.</span>
+                  <button type="button" onClick={() => setActiveTab("Auth")} className={BUTTON_STYLES.ghost}>
+                    Edit auth
+                  </button>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === "Auth" && <RequestAuthSection auth={request.auth} />}
+        {activeTab === "Auth" && (
+          <RequestAuthEditor
+            auth={request.auth}
+            draft={authDraft}
+            locked={locked}
+            onChange={(draft) => {
+              setAuthDraft(draft);
+              setAuthEdited(true);
+            }}
+          />
+        )}
 
         {activeTab === "Used variables" && <RequestVariablesSection references={request.variableReferences} />}
 
@@ -302,7 +327,7 @@ export function RequestEditorPanel({
                     {request.impliedAuthHeader && (
                       <li className="font-mono text-muted">
                         {request.impliedAuthHeader.key}:{" "}
-                        <VariableHighlightedText text={request.impliedAuthHeader.resolvedValue} />{" "}
+                        <ImpliedAuthValue header={request.impliedAuthHeader} value={request.impliedAuthHeader.resolvedValue} />{" "}
                         <span className="text-[10px] font-sans uppercase">(from auth)</span>
                       </li>
                     )}

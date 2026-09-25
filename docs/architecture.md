@@ -679,9 +679,16 @@ permutation. It keeps the item behaving as before: inherited auth the move would
 onto the item, and the scripts of the folders it leaves are copied onto it as separate events whose
 first line names the source folder. Only a folder's own events are copied (`listenersOwn`), since
 `EventList.listeners()` also returns every ancestor's. Each request view also carries its effective
-auth and source and its variable references; secret literals in auth fields are blanked on the
-server so they never reach the browser. The run panel's run-order list reorders (move up/down only) through
-the same endpoints. `RequestEditorPanel` is a tabbed
+auth and source and its variable references; secret literals in auth fields, and in the Headers
+tab's implied auth header, are blanked on the server so they never reach the browser. A request's
+own auth is editable (specs/028 FR-002c): `PUT .../requests/:requestId` takes an optional
+`auth: RequestAuthEdit` (shared-domain), which `requestAuthEdit.ts` validates and writes onto
+`item.request.auth`; a secret field is `{ kind: "keep" }` to keep the stored literal the
+browser never received, or `{ kind: "set", value }` to replace it. The run panel's run-order list sets a per-run order instead (specs/028
+FR-015c): `execution/start`'s `selectedRequestIds` is ordered, `resolveRunOrder` validates it, and
+`runUploadedCollectionExecution` runs the requests in that order, each nested in its own folder
+chain, so the collection's stored order never changes (specs/026 FR-019). The page keeps each
+collection's order in memory until reload. `RequestEditorPanel` is a tabbed
 Headers/Body/Tests editor — method, URL, and Save stay visible across tabs, and the resolved
 (variable-substituted) preview is always visible below them — covering full method/URL/header/body
 editing plus the request's own `pm.test(...)` test script, which previously executed on every run

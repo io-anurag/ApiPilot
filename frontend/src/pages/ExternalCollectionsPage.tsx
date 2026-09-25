@@ -16,7 +16,7 @@ import {
 } from "../services/externalCollectionsClient";
 import { ExternalCollectionUpload } from "../components/ExternalCollectionUpload";
 import { ExternalCollectionList } from "../components/ExternalCollectionList";
-import { ExternalCollectionRunPanel, type RunOrderReorder } from "../components/ExternalCollectionRunPanel";
+import { ExternalCollectionRunPanel } from "../components/ExternalCollectionRunPanel";
 import {
   CollectionTreeView,
   flattenCollectionRequestPlacements,
@@ -30,6 +30,7 @@ import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import type { ImportPreload } from "../services/importPreload";
+import type { RunOrder } from "../utils/runOrder";
 
 /** Runs a light poll (2s) only to drive the collection editor's read-only lock (FR-017) — the
  * backend enforces the lock authoritatively regardless of this indicator's freshness; this exists
@@ -88,6 +89,9 @@ export function ExternalCollectionsPage({
   const [deleteDialog, setDeleteDialog] = useState<{ itemId: string } | null>(null);
   const [moveDialog, setMoveDialog] = useState<{ itemId: string; itemName: string } | null>(null);
   const [moveNotice, setMoveNotice] = useState<string | null>(null);
+  // Each collection's per-run order (specs/028 FR-015c), kept here rather than in the run panel so
+  // it lasts across runs and collection switches until the page is reloaded; never persisted.
+  const [runOrders, setRunOrders] = useState<Record<string, RunOrder>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -278,7 +282,6 @@ export function ExternalCollectionsPage({
 
   const requestPlacements = collectionView ? flattenCollectionRequestPlacements(collectionView.items, collectionView.folders) : [];
   const runOrderPlacements = new Map(requestPlacements.map(({ request, ...placement }) => [request.id, placement]));
-  const runOrderReorder: RunOrderReorder = { onMove: treeActions.onMoveItem, locked };
 
   return (
     <div className="space-y-6">
@@ -415,7 +418,8 @@ export function ExternalCollectionsPage({
           uploadedCollection={selected}
           requests={requestPlacements.map((placement) => placement.request)}
           placements={collectionView ? runOrderPlacements : undefined}
-          reorder={collectionView ? runOrderReorder : undefined}
+          runOrder={runOrders[selected.id]}
+          onRunOrderChange={collectionView ? (runOrder) => setRunOrders((current) => ({ ...current, [selected.id]: runOrder })) : undefined}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) => (c.id === selected.id ? { ...c, confirmedAt: new Date().toISOString() } : c)),

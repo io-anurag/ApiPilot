@@ -100,10 +100,29 @@ untouched, mirroring `body`'s own omission rule. Sending an empty/whitespace-onl
 every existing "test" event from the request (a cleared Tests field means "no tests", not "leave
 it alone").
 
+`auth` is optional (FR-002c, amended 2026-09-25). Omitting it leaves the request's own auth
+untouched, including a type ApiPilot cannot edit. When present it replaces the request's own auth:
+
+```json
+{ "type": "inherit" }
+{ "type": "noauth" }
+{ "type": "bearer", "token": { "kind": "set", "value": "{{adminToken}}" } }
+{ "type": "basic", "username": "{{user}}", "password": { "kind": "keep" } }
+{ "type": "apikey", "key": "X-API-Key", "value": { "kind": "set", "value": "{{apiKey}}" }, "in": "header" }
+```
+
+`inherit` removes the request's own auth, so its folder's or the collection's applies. A secret
+field (`token`, `password`, API key `value`) is `{ "kind": "keep" }` to keep the value stored in
+the request's own auth of the same type (a hidden literal the browser never received), or
+`{ "kind": "set", "value": "..." }` to replace it.
+
 **200 OK** — `{ "collectionView": { "...": "..." } }` (full recomputed view; the edited item's
 `wasEdited` is now `true`).
 
 **400 `invalid_request`** — missing/empty `method` or `url`.
+
+**400 `invalid_auth_edit`** — `auth` is malformed or names an unsupported type, or asks to keep
+a secret the request's own stored auth of that type does not have.
 
 **404 `uploaded_collection_not_found`**
 

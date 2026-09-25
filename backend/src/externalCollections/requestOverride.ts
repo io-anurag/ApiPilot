@@ -1,6 +1,8 @@
 import type { Collection, Item, ItemGroup } from "postman-collection";
+import type { RequestAuthEdit } from "@apipilot/shared-domain";
 import { RequestNotFoundError } from "./errors";
 import { serializeWithEditMarkers } from "./editedItems";
+import { applyRequestAuthEdit } from "./requestAuthEdit";
 
 type Folder = ItemGroup<Item>;
 
@@ -31,6 +33,8 @@ export interface RequestEditInput {
   /** The request's "test" event script (FR-007 extension). See `applyTestScript()` below for its
    * omitted-vs-empty semantics — the same "omitting leaves it untouched" rule `body` already uses. */
   testScript?: string;
+  /** The request's own auth (FR-002c, 2026-09-25). Omitting it leaves the request's own auth untouched. */
+  auth?: RequestAuthEdit;
 }
 
 /**
@@ -53,7 +57,7 @@ function applyTestScript(item: Item, script: string | undefined): void {
 /**
  * Applies a direct field edit (FR-007) to an existing request via `postman-collection`'s own
  * `Request.update()` (research.md D10) — locates the item anywhere in the tree by its stable id
- * (research.md D2), updates its method/URL/headers/body/test-script in place, and marks it edited
+ * (research.md D2), updates its method/URL/headers/body/test-script/auth in place, and marks it edited
  * (`editedItems.ts`, research.md D4/D6). Returns the final JSON string ready to persist. Throws
  * `RequestNotFoundError` if `requestId` doesn't resolve (FR-012's discard-on-mismatch case is the
  * caller's responsibility — this function simply refuses a stale id rather than guessing).
@@ -80,6 +84,7 @@ export function applyRequestOverride(
     ...(edit.body !== undefined ? { body: { mode: "raw", raw: edit.body } } : {}),
   });
   applyTestScript(item, edit.testScript);
+  if (edit.auth) applyRequestAuthEdit(item, edit.auth);
 
   return serializeWithEditMarkers(collection, [...previouslyEditedIds, requestId]);
 }

@@ -178,6 +178,76 @@ describe("PUT /api/external-collections/:id/requests/:requestId (AP-028 US4, qui
     ]);
   }, 60_000);
 
+  it("edits the request's own auth, keeps a hidden literal unless replaced, and runs with it (FR-002c)", async () => {
+    const baseUrl = await targetServer.start();
+    const app = createApp();
+    const agent = request.agent(app);
+    const collection = {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Get widget",
+          request: {
+            method: "GET",
+            url: "{{baseUrl}}/widgets/1",
+            auth: { type: "bearer", bearer: [{ key: "token", value: "literal-secret", type: "string" }] },
+          },
+        },
+      ],
+    };
+    const env = {
+      name: "env",
+      values: [
+        { key: "baseUrl", value: baseUrl, enabled: true },
+        { key: "adminToken", value: "admin-123", enabled: true },
+      ],
+    };
+    const uploadResponse = await agent
+      .post("/api/external-collections")
+      .field("name", "Auth edit")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(env)), "environment.json");
+    const id = uploadResponse.body.uploadedCollection.id;
+    const viewResponse = await agent.get(`/api/external-collections/${id}/collection`);
+    expect(JSON.stringify(viewResponse.body)).not.toContain("literal-secret");
+    const requestId = viewResponse.body.collectionView.items[0].id;
+    const fields = { method: "GET", url: "{{baseUrl}}/widgets/1", headers: [] };
+
+    async function runAndReadAuthorization() {
+      targetServer.requests.length = 0;
+      const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+      expect(started.status).toBe(200);
+      await pollUntilSettled(agent, id, started.body.run.id);
+      return targetServer.requests[0].headers.authorization;
+    }
+
+    const kept = await agent
+      .put(`/api/external-collections/${id}/requests/${requestId}`)
+      .send({ ...fields, auth: { type: "bearer", token: { kind: "keep" } } });
+    expect(kept.status).toBe(200);
+    expect(kept.body.collectionView.items[0].auth.fields).toEqual([{ key: "token", value: "", hiddenLiteral: true }]);
+    expect(JSON.stringify(kept.body)).not.toContain("literal-secret");
+    expect(await runAndReadAuthorization()).toBe("Bearer literal-secret");
+
+    const replaced = await agent
+      .put(`/api/external-collections/${id}/requests/${requestId}`)
+      .send({ ...fields, auth: { type: "bearer", token: { kind: "set", value: "{{adminToken}}" } } });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.collectionView.items[0]).toMatchObject({
+      wasEdited: true,
+      auth: { type: "bearer", source: { kind: "request" }, fields: [{ key: "token", value: "{{adminToken}}", hiddenLiteral: false }] },
+      impliedAuthHeader: { rawValue: "Bearer {{adminToken}}", hiddenLiteral: false },
+    });
+    expect(await runAndReadAuthorization()).toBe("Bearer admin-123");
+
+    const invalid = await agent
+      .put(`/api/external-collections/${id}/requests/${requestId}`)
+      .send({ ...fields, auth: { type: "basic", username: "u", password: { kind: "keep" } } });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error).toBe("invalid_auth_edit");
+  }, 60_000);
+
   it("404s request_not_found for an unknown requestId", async () => {
     const app = createApp();
     const agent = request.agent(app);

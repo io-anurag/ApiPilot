@@ -25,6 +25,7 @@ import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { BUTTON_STYLES } from "./controlStyles";
+import { applyRunOrder, moveRunOrderItem, type RunOrder } from "../utils/runOrder";
 
 const POLL_INTERVAL_MS = 750;
 
@@ -339,25 +340,10 @@ function RunHistory({
   );
 }
 
-/** Where a run-order row's request lives: its folder path, and its position among its container's requests. */
+/** Where a run-order row's request lives in the collection; shown in the row's folder column. */
 export interface RunOrderPlacement {
-  /** `"root"` or the id of the folder the request lives directly in. */
-  containerId: string;
   /** Folder names above the request, root first; empty at the collection root. */
   folderPath: string[];
-  index: number;
-  siblingCount: number;
-}
-
-/**
- * Lets the run-order list move requests up or down within their folder (FR-015, amended
- * 2026-09-25), through the same endpoint as the collection tree, since a run always follows the
- * collection's stored order (specs/026 FR-005). Moving to another folder is done from the tree.
- */
-export interface RunOrderReorder {
-  onMove: (containerId: string, itemId: string, direction: "up" | "down") => void;
-  /** The collection editor's own read-only lock (FR-017). */
-  locked: boolean;
 }
 
 /**
@@ -387,30 +373,51 @@ const ROW_ACTION_STYLE =
 /**
  * Postman-Runner-style "which requests will run, in what order" checklist (AP-028 follow-up) —
  * only the parts of Postman's own Runner screen ApiPilot's backend actually supports: choosing a
- * subset of the collection's own requests to run and, with `reorder`, changing their order. Each
- * row shows the request's folder, method, name and endpoint path. Performance/load mode, Mock,
- * Schedule, a Postman-CLI/CI-CD export, and data-driven "Iterations" have no backend behind them
- * and are deliberately left out rather than shown as non-functional controls.
+ * subset of the collection's own requests to run and, with `onMove`, placing any request at any
+ * position in the run, across folders (FR-015c). That order belongs to the run, not the
+ * collection (specs/026 FR-019), so the tree and each request's folder auth and scripts are
+ * untouched. Rows move by drag and drop or with ↑/↓, the keyboard route. Each row shows the
+ * request's folder, method, name and endpoint path. Performance/load mode, Mock, Schedule, a
+ * Postman-CLI/CI-CD export, and data-driven "Iterations" have no backend behind them and are
+ * deliberately left out rather than shown as non-functional controls.
  */
 function RunOrderChecklist({
   requests,
   selectedIds,
   onToggle,
-  onSelectAll,
+  onReset,
+  canReset,
   disabled,
   placements,
-  reorder,
+  onMove,
 }: Readonly<{
+  /** Already in run order. */
   requests: CollectionRequestView[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
-  onSelectAll: () => void;
+  onReset: () => void;
+  canReset: boolean;
   disabled: boolean;
   placements?: ReadonlyMap<string, RunOrderPlacement>;
-  reorder?: RunOrderReorder;
+  /** Moves a request to `toIndex` in the run order; omitted, the list only selects. */
+  onMove?: (itemId: string, toIndex: number) => void;
 }>) {
-  const moveDisabled = disabled || Boolean(reorder?.locked);
-  const allSelected = selectedIds.size === requests.length;
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const draggedIndex = draggedId ? requests.findIndex((item) => item.id === draggedId) : -1;
+  const canMove = Boolean(onMove) && !disabled;
+
+  function move(item: CollectionRequestView, toIndex: number) {
+    onMove?.(item.id, toIndex);
+    setAnnouncement(`Moved ${item.name} to position ${toIndex + 1} of ${requests.length}.`);
+  }
+
+  function endDrag() {
+    setDraggedId(null);
+    setDropIndex(null);
+  }
+
   return (
     <div className="space-y-2 rounded-md border border-border bg-surface p-3">
       <div className="flex items-center justify-between">
@@ -422,20 +429,64 @@ function RunOrderChecklist({
           ·{" "}
           <button
             type="button"
-            onClick={onSelectAll}
-            disabled={disabled || allSelected}
-            title={allSelected ? "Every request is already selected" : "Select every request"}
+            onClick={onReset}
+            disabled={disabled || !canReset}
+            title={canReset ? "Select every request and use the collection's own order" : "Every request is selected, in the collection's own order"}
             className={BUTTON_STYLES.ghost}
           >
             Reset
           </button>
         </span>
       </div>
+      {onMove && (
+        <p className="text-xs text-muted">
+          Drag a request, or use ↑ and ↓, to set the order for runs. The collection keeps its own order.
+        </p>
+      )}
+      <span className="sr-only" aria-live="polite">
+        {announcement}
+      </span>
       <ul className="max-h-56 space-y-0.5 overflow-y-auto">
         {requests.map((item, index) => {
-          const placement = placements?.get(item.id);
+          const isDropTarget = dropIndex === index && draggedIndex !== -1 && draggedIndex !== index;
+          let dropIndicator = "border-y-2 border-transparent";
+          if (isDropTarget) dropIndicator = draggedIndex > index ? "border-y-2 border-transparent border-t-brand-500" : "border-y-2 border-transparent border-b-brand-500";
           return (
-            <li key={item.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5">
+            <li
+              key={item.id}
+              draggable={canMove}
+              onDragStart={(event) => {
+                setDraggedId(item.id);
+                event.dataTransfer.effectAllowed = "move";
+                // Firefox starts a drag only when some data is set.
+                event.dataTransfer.setData("text/plain", item.id);
+              }}
+              onDragOver={(event) => {
+                if (!draggedId) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropIndex(index);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const dragged = requests[draggedIndex];
+                if (dragged && draggedIndex !== index) move(dragged, index);
+                endDrag();
+              }}
+              onDragEnd={endDrag}
+              className={`flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5 ${dropIndicator} ${
+                draggedId === item.id ? "opacity-50" : ""
+              }`}
+            >
+              {onMove && (
+                <span
+                  aria-hidden="true"
+                  title="Drag to reorder"
+                  className={`shrink-0 select-none text-xs text-muted ${canMove ? "cursor-grab" : "cursor-not-allowed opacity-40"}`}
+                >
+                  ⠿
+                </span>
+              )}
               <input
                 type="checkbox"
                 aria-label={`Include ${item.name} in this run`}
@@ -445,7 +496,7 @@ function RunOrderChecklist({
                 className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
               />
               <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
-              {placements && <RunOrderFolder folderPath={placement?.folderPath ?? []} />}
+              {placements && <RunOrderFolder folderPath={placements.get(item.id)?.folderPath ?? []} />}
               <HttpMethodBadge method={item.raw.method} />
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={item.name}>
                 {item.name}
@@ -453,8 +504,15 @@ function RunOrderChecklist({
               <span className="min-w-0 max-w-xs shrink truncate font-mono text-xs text-muted" title={item.raw.url}>
                 {endpointPath(item.raw.url)}
               </span>
-              {reorder && placement && (
-                <RunOrderRowActions item={item} placement={placement} reorder={reorder} disabled={moveDisabled} />
+              {onMove && (
+                <RunOrderRowActions
+                  item={item}
+                  isFirst={index === 0}
+                  isLast={index === requests.length - 1}
+                  onUp={() => move(item, index - 1)}
+                  onDown={() => move(item, index + 1)}
+                  disabled={disabled}
+                />
               )}
             </li>
           );
@@ -476,20 +534,27 @@ function RunOrderFolder({ folderPath }: Readonly<{ folderPath: string[] }>) {
 
 function RunOrderRowActions({
   item,
-  placement,
-  reorder,
+  isFirst,
+  isLast,
+  onUp,
+  onDown,
   disabled,
-}: Readonly<{ item: CollectionRequestView; placement: RunOrderPlacement; reorder: RunOrderReorder; disabled: boolean }>) {
-  const isFirst = placement.index === 0;
-  const isLast = placement.index === placement.siblingCount - 1;
+}: Readonly<{
+  item: CollectionRequestView;
+  isFirst: boolean;
+  isLast: boolean;
+  onUp: () => void;
+  onDown: () => void;
+  disabled: boolean;
+}>) {
   return (
     <span className="flex shrink-0 items-center gap-0.5">
       <button
         type="button"
         aria-label={`Move ${item.name} up`}
-        title={isFirst ? "Already first in its folder" : "Move up"}
+        title={isFirst ? "Already first in the run" : "Move up"}
         disabled={disabled || isFirst}
-        onClick={() => reorder.onMove(placement.containerId, item.id, "up")}
+        onClick={onUp}
         className={ROW_ACTION_STYLE}
       >
         ↑
@@ -497,9 +562,9 @@ function RunOrderRowActions({
       <button
         type="button"
         aria-label={`Move ${item.name} down`}
-        title={isLast ? "Already last in its folder" : "Move down"}
+        title={isLast ? "Already last in the run" : "Move down"}
         disabled={disabled || isLast}
-        onClick={() => reorder.onMove(placement.containerId, item.id, "down")}
+        onClick={onDown}
         className={ROW_ACTION_STYLE}
       >
         ↓
@@ -517,7 +582,8 @@ export function ExternalCollectionRunPanel({
   uploadedCollection,
   requests = [],
   placements,
-  reorder,
+  runOrder,
+  onRunOrderChange,
   onConfirmed,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
@@ -525,10 +591,14 @@ export function ExternalCollectionRunPanel({
    * run-order checklist. Omitted/empty while the collection view hasn't loaded yet; the panel
    * still works, it just runs the whole collection with no checklist shown (pre-AP-028 behavior). */
   requests?: CollectionRequestView[];
-  /** Each request's folder path and position, keyed by request id; shows the folder column. */
+  /** Each request's folder path, keyed by request id; shows the folder column. */
   placements?: ReadonlyMap<string, RunOrderPlacement>;
-  /** Enables move up/down in the run-order list (needs `placements`); omitted, the list only selects. */
-  reorder?: RunOrderReorder;
+  /** The per-run order (FR-015c); `undefined` runs the collection's own order. Held by the parent
+   * so it outlives this panel and every run until the page is reloaded. */
+  runOrder?: RunOrder;
+  /** Enables drag and drop and ↑/↓ in the run-order list; omitted, the list only selects.
+   * `undefined` restores the collection's own order. */
+  onRunOrderChange?: (runOrder: RunOrder) => void;
   /** Called once the unverified-content gate is satisfied for the first time, so the parent page
    * can update its own cached `confirmedAt` — without this, the page's stale copy of
    * `uploadedCollection` kept `confirmedAt` unset for the rest of the session, and every
@@ -551,6 +621,7 @@ export function ExternalCollectionRunPanel({
   const [analysisInProgress, setAnalysisInProgress] = useState<FailureAnalysisInProgress | null>(null);
   const [analysisStartedHere, setAnalysisStartedHere] = useState(false);
   const runId = run?.id;
+  const orderedRequests = applyRunOrder(requests, runOrder);
 
   function refreshAnalyses(forRunId: string) {
     listFailureAnalyses(uploadedCollection.id, forRunId).then((result) => {
@@ -653,8 +724,10 @@ export function ExternalCollectionRunPanel({
     setStartError(null);
     // Explicit ids only once the checklist has actually loaded (`requests.length > 0`) — while it
     // hasn't, omitting the field keeps the pre-AP-028 "run everything" behavior rather than
-    // sending an empty selection that would 400.
-    const selectedRequestIds = requests.length > 0 ? [...selectedIds] : undefined;
+    // sending an empty selection that would 400. The ids go in the list's order, which is the
+    // run's order (specs/026 FR-019).
+    const selectedRequestIds =
+      requests.length > 0 ? orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id) : undefined;
     const result = await startUploadedCollectionExecution(uploadedCollection.id, confirmed, selectedRequestIds);
     setStarting(false);
 
@@ -714,8 +787,19 @@ export function ExternalCollectionRunPanel({
     });
   }
 
-  function selectAll() {
+  function reset() {
     setSelectedIds(new Set(requests.map((item) => item.id)));
+    onRunOrderChange?.(undefined);
+  }
+
+  function moveInRunOrder(itemId: string, toIndex: number) {
+    onRunOrderChange?.(
+      moveRunOrderItem(
+        orderedRequests.map((item) => item.id),
+        itemId,
+        toIndex,
+      ),
+    );
   }
 
   const runDisabled = starting || run?.status === "in-progress" || (requests.length > 0 && selectedIds.size === 0);
@@ -746,13 +830,14 @@ export function ExternalCollectionRunPanel({
 
       {requests.length > 0 && (
         <RunOrderChecklist
-          requests={requests}
+          requests={orderedRequests}
           selectedIds={selectedIds}
           onToggle={toggleSelected}
-          onSelectAll={selectAll}
+          onReset={reset}
+          canReset={selectedIds.size < requests.length || runOrder !== undefined}
           disabled={starting || run?.status === "in-progress"}
           placements={placements}
-          reorder={reorder}
+          onMove={onRunOrderChange ? moveInRunOrder : undefined}
         />
       )}
 

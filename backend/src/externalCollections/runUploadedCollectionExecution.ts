@@ -13,10 +13,11 @@ const logger = createLogger("externalCollections.runUploadedCollectionExecution"
 export interface RunUploadedCollectionExecutionInput {
   runId: string;
   uploadedCollection: UploadedCollectionSet;
-  /** When provided (a selective run — AP-028 follow-up), only these item ids actually dispatch;
-   * everything else in the collection is skipped entirely rather than reported "not-attempted" —
-   * a deselected request was never part of this run to begin with. */
-  selectedItemIds?: Set<string>;
+  /** When provided (a selective run — AP-028 follow-up), only these item ids actually dispatch, in
+   * this order (specs/026 FR-019, the per-run order; validated by `resolveRunOrder`); everything
+   * else in the collection is skipped entirely rather than reported "not-attempted" — a
+   * deselected request was never part of this run to begin with. */
+  orderedItemIds?: readonly string[];
 }
 
 function delay(ms: number): Promise<void> {
@@ -68,25 +69,31 @@ function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedRe
 }
 
 /**
- * Runs every request in an uploaded collection — or, when `input.selectedItemIds` narrows it to a
- * chosen subset (a Postman-Runner-style selective run), only those — strictly one at a time, in
- * the collection's own document order (FR-005) — walked via `postman-collection`'s own
- * `Collection.forEachItem()` (research.md D6), which visits every request item at any folder
- * nesting depth (the Edge Cases' "nested folders" case). Mirrors `execution/runExecution.ts`'s
+ * Runs every request in an uploaded collection — or, when `input.orderedItemIds` narrows it to a
+ * chosen subset (a Postman-Runner-style selective run), only those, in that order (FR-019) —
+ * strictly one at a time, by default in the collection's own document order (FR-005) — walked via
+ * `postman-collection`'s own `Collection.forEachItem()` (research.md D6), which visits every
+ * request item at any folder nesting depth (the Edge Cases' "nested folders" case). Each request
+ * runs nested in its own folder chain wherever it sits in the order. Mirrors `execution/runExecution.ts`'s
  * structure: never throws, settles the run as `completed`/`cancelled` regardless of outcome
  * (constitution XIX).
  */
 export async function runUploadedCollectionExecution(input: RunUploadedCollectionExecutionInput): Promise<void> {
-  const { runId, uploadedCollection, selectedItemIds } = input;
-  const orderedItems: Item[] = [];
+  const { runId, uploadedCollection, orderedItemIds } = input;
+  let orderedItems: Item[] = [];
   let attempted = 0;
 
   try {
     const collection = parseUploadedCollection(uploadedCollection.collection);
     collection.forEachItem((item: Item) => {
-      if (selectedItemIds && !selectedItemIds.has(item.id)) return;
       orderedItems.push(item);
     });
+    if (orderedItemIds) {
+      // The route has already refused unknown ids (resolveRunOrder), and the collection cannot be
+      // edited while this run holds its lock (FR-017), so every id is found here.
+      const itemsById = new Map(orderedItems.map((item) => [item.id, item]));
+      orderedItems = orderedItemIds.flatMap((id) => itemsById.get(id) ?? []);
+    }
 
     const collectionJson = collection.toJSON();
     const collectionAuth = collectionJson.auth;

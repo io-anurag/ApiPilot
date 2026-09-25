@@ -97,6 +97,30 @@ Secret fields for `hiddenLiteral` are those whose key is one of `password`, `tok
 is hidden when any text remains after removing its `{{variable}}` references, so a value made
 only of references is always shown.
 
+`ImpliedAuthHeader` (the Headers tab's auth note) follows the same rule (fixed 2026-09-25): when
+the bearer token or API key value is a hidden literal, `hiddenLiteral` is `true` and `rawValue`
+and `resolvedValue` are empty.
+
+### Request auth edit (FR-002c, amended 2026-09-25)
+
+`PUT .../requests/:requestId` accepts an optional `auth: RequestAuthEdit` (shared-domain):
+
+```ts
+type SecretAuthFieldEdit = { kind: "keep" } | { kind: "set"; value: string };
+
+type RequestAuthEdit =
+  | { type: "inherit" }                      // removes the request's own auth
+  | { type: "noauth" }
+  | { type: "bearer"; token: SecretAuthFieldEdit }
+  | { type: "basic"; username: string; password: SecretAuthFieldEdit }
+  | { type: "apikey"; key: string; value: SecretAuthFieldEdit; in: "header" | "query" };
+```
+
+`requestAuthEdit.ts` validates it (`InvalidAuthEditError`, `400 invalid_auth_edit`) and writes it
+onto `item.request.auth`. `keep` reads the field from the request's own stored auth of the same
+type and refuses when there is none, so a secret is never silently emptied. Omitting `auth`
+leaves the request's own auth as it is.
+
 ### Post-implementation addendum (2026-09-21): the request's own test script
 
 Added directly against this spec once a live UI walkthrough surfaced that a request's own

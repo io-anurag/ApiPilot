@@ -65,10 +65,19 @@ items whose id is in the array actually dispatch — everything else is skipped 
 appears in `results`, not even as `"not-attempted"`), and both confirmation gates are evaluated
 against only the selected subset.
 
+The array's order is the run order (spec.md FR-019, 2026-09-25): the selected requests execute in
+the order listed, each still with its own folders' auth and scripts. Omitting the field runs the
+collection's own order, as before. The collection's stored order never changes.
+
 **200 OK** — `{ "run": { "...": "...", "source": "uploaded", "results": [] } }`
 
 **400 `no_requests_selected`** — `selectedRequestIds` was provided but matched none of the
 collection's current items.
+
+**400 `invalid_run_order`** — `selectedRequestIds` repeats an id, contains a non-string entry, or
+names an id the collection does not contain while naming at least one it does (FR-019). Before
+2026-09-25 such entries were dropped silently.
+`{ "error": "invalid_run_order", "message": "..." }`
 
 **409 `execution_in_progress`** — a run of *either* kind (generated or uploaded) is already in
 progress in this session (FR-015, research.md D7). Carries `runId` exactly like the existing

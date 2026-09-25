@@ -326,7 +326,8 @@ what will be sent, before anything runs.
   inherited from its folder or the collection) is a bearer token or an API key sent in a
   header, the Headers tab shows an "Auth adds" note with the header, its `{{variable}}`
   highlighted, and where the auth comes from; the preview lists it marked "(from auth)". It
-  isn't an editable header entry — change the auth variable instead.
+  isn't a header row: click **Edit auth** in the note to change it on the Auth tab. A token
+  typed directly into the collection shows as "hidden literal value", never as its value.
 - **Tests**: the Tests tab shows and saves only the request's own test script. Test scripts
   on its folders or on the collection also run, as they do in Postman, but they are not
   shown or saved there.
@@ -336,8 +337,16 @@ what will be sent, before anything runs.
   whether that is set on the request or inherited from a folder or the collection, with
   its fields and `{{variable}}` references. A secret typed directly into the collection
   (for example a literal password) is shown as hidden, never as its value. The **Used
-  variables** tab lists every variable the request uses, where, and whether it is set.
-  Both are read-only.
+  variables** tab lists every variable the request uses, where, and whether it is set, and
+  is read-only.
+- **Editing auth**: on the **Auth** tab, choose the request's auth type — **Inherit auth
+  from parent**, **No Auth**, **Bearer Token**, **Basic Auth** or **API Key** (header or
+  query params) — and fill in its fields, for example `{{adminToken}}` to call one endpoint
+  with a different token. Click **Save** to save it with the request's other fields; the
+  request is marked edited and the next run uses it. A hidden secret stays as it is while
+  you leave its field blank; type a value to replace it. Other auth types, such as OAuth
+  2.0, are shown read-only; choosing an editable type replaces them. Folder and collection
+  auth can't be edited in ApiPilot.
 - **Adding, deleting, renaming, and reordering**: use the actions menu on a request or
   folder row to rename, delete, or move it up or down, or **+ Add request** to add a new
   one to a folder or the collection root. Deleting a folder deletes everything nested
@@ -361,9 +370,13 @@ it through the hand-off (section 3.10).
 Before clicking **Start run**, you can optionally use the run panel's checklist to select
 which requests actually run this time — leave everything checked to run the whole
 collection, or narrow it to a subset the way Postman's own collection runner lets you. Each
-row shows the request's folder, method, name and endpoint path, and ↑ and ↓ change its
-order within its folder; the run follows that order. Unchecked requests stay unchecked when
-you reorder. To move a request to another folder, use **Move to…** in the collection tree.
+row shows the request's folder, method, name and endpoint path. Drag a row, or use its ↑ and
+↓ buttons, to place a request anywhere in the run, across folders, as in Postman's Runner.
+That order is for runs only: the collection, its tree and each request's folder auth and
+scripts don't change. It stays for every later run until you reload the page, and **Reset**
+restores the collection's own order with every request selected. Unchecked requests stay
+unchecked when you reorder. To change the collection's own order, or move a request to
+another folder, use the collection tree.
 
 Each request runs with its collection's and folders' auth and pre-request/test scripts
 applied, exactly as Postman runs it.
@@ -378,8 +391,8 @@ with them.
 Click **Start run**. A Staging/Production tier or a destructive request
 (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own requests)
 triggers a second, separate confirmation naming the tier and the specific requests
-involved. Requests then run one at a time, in the collection's own order — including
-everything inside nested folders.
+involved. Requests then run one at a time, in the run-order list's order (the collection's
+own order unless you changed it) — including everything inside nested folders.
 
 While running, you see a live summary and a **Cancel run** button. Each request's row
 shows an outcome:

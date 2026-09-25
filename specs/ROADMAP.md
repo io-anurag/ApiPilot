@@ -60,7 +60,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-025 — Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented — all 34 tasks complete |
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here. FR-008 defect fixed 2026-09-25: runs now apply folder auth, folder scripts and collection scripts (Next Actions #31) |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
-| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31) |
+| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31). Amended again 2026-09-25 (version 19.4.0): a per-run order in the run-order list across folders, and editable request auth (Next Actions #32) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
@@ -2582,3 +2582,24 @@ Implementation
       chain with the collection's scripts (`newmanRunner.ts`, `runUploadedCollectionExecution.ts`).
       Existing collections that rely on folder auth or scripts can now report different results.
     - Version bumped to 19.3.0 (root, backend, frontend) for these features.
+
+32. **AP-028 FR-015c/FR-002c and AP-026 FR-019: per-run order in the run-order list, editable
+    request auth; version 19.4.0 (2026-09-25).**
+    - The run panel's run-order list sets an order for runs only, as Postman's Runner does: a
+      request can be dragged, or moved with ↑/↓, to any position across folders. The collection,
+      its tree and each request's folder auth and scripts are unchanged; each request still runs
+      nested in its own folder chain. The order stays for later runs until the page is reloaded,
+      and **Reset** restores the collection's order. This replaces the same-day behavior in which
+      the list reordered the collection's stored order within a folder.
+    - `execution/start`'s `selectedRequestIds` is now ordered and is the run order. A repeated
+      id, a non-string entry, or an unknown id alongside a known one is refused with
+      `400 invalid_run_order`; such entries were previously dropped silently. Omitting the field
+      still runs the collection's own order.
+    - AP-028 FR-002c: a request's own auth is editable from its Auth tab (inherit, No Auth, Bearer
+      Token, Basic Auth, API Key), saved with the request through an optional `auth` on
+      `PUT .../requests/:requestId` (`400 invalid_auth_edit`). A hidden secret literal is kept
+      unless replaced and still never reaches the browser. Other auth types stay read-only, and
+      folder and collection auth are not editable. The Headers tab's auth note links to the Auth tab.
+    - FR-002a defect: the Headers tab's auth note sent a literal bearer token or API key value to
+      the browser. It is now hidden there too (`ImpliedAuthHeader.hiddenLiteral`).
+    - Version bumped to 19.4.0 (root, backend, frontend, shared-domain) for these features.

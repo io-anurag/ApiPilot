@@ -6,6 +6,7 @@ import type {
   FailureAnalysisAttempt,
   FailureAnalysisInProgress,
   MoveCarried,
+  RequestAuthEdit,
   UploadedCollectionExecutionRun,
   UploadedCollectionSet,
 } from "@apipilot/shared-domain";
@@ -321,6 +322,8 @@ export interface RequestEdit {
   body?: string;
   /** Omitting leaves the request's existing test script untouched; an empty string clears it. */
   testScript?: string;
+  /** The request's own auth (FR-002c). Omitting leaves it untouched. */
+  auth?: RequestAuthEdit;
 }
 
 /** FR-007/FR-009a — edits an existing request's method/URL/headers/body. */

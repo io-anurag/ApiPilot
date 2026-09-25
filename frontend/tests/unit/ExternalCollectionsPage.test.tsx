@@ -197,22 +197,24 @@ describe("ExternalCollectionsPage", () => {
     expect(confirmSpy).not.toHaveBeenCalled();
   });
 
-  it("moving a request down from the run-order list reorders its container through the reorder endpoint (FR-015)", async () => {
+  it("moving a request down from the run-order list sets the run's order without reordering the collection (FR-015c)", async () => {
     stubFetch([
       {
-        match: (url, init) => url.endsWith("/containers/root/order") && init?.method === "PUT",
-        response: { collectionView: { ...collectionView(), items: [...collectionView().items].reverse() } },
+        match: (url, init) => url.includes("/execution/start") && init?.method === "POST",
+        response: { run: { id: "run-1", status: "completed", source: "uploaded", results: [], summary: { total: 0 } } },
       },
     ]);
     render(<ExternalCollectionsPage />);
     fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Move Get widget down" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
 
     await waitFor(() => {
-      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/containers/root/order"));
-      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ orderedIds: ["item-2", "item-1"] });
+      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/execution/start"));
+      expect(JSON.parse(String(call?.[1]?.body)).selectedRequestIds).toEqual(["item-2", "item-1"]);
     });
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/order"))).toBe(false);
   });
 
   it("moves a request to a folder from the tree through the move dialog, then says what was copied (FR-015a, FR-015b)", async () => {

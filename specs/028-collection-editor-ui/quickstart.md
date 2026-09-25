@@ -80,7 +80,7 @@ view reflecting the change; `DELETE .../items/:itemId` returns a view with the i
 run's history that referenced the deleted item (if any) is unaffected when re-fetched via
 `GET .../execution/runs/:runId`.
 
-## Scenario 5a — Move between folders, and reorder from the run-order list (FR-015, FR-015a, FR-015b; amended 2026-09-25)
+## Scenario 5a — Move between folders, and set a per-run order from the run-order list (FR-015, FR-015a, FR-015b, FR-015c; amended 2026-09-25)
 
 Use a collection with a folder that has Bearer `{{token}}` auth and a pre-request script, holding
 a request set to inherit its auth.
@@ -98,15 +98,38 @@ a request set to inherit its auth.
 4. Run the collection. **Expect** the moved request still sends the token and its pre-request
    script's effect.
 5. In the run panel's run-order list, **expect** each row to show the request's folder path,
-   method, name and endpoint path (for example `Orders  GET  Get order  /orders/{{id}}`), with ↑
-   and ↓ but no **Move to…**. Uncheck one request, then use ↓ on another. **Expect** the order to
-   change in both the list and the tree, and the unchecked request to stay unchecked.
+   method, name and endpoint path (for example `Orders  GET  Get order  /orders/{{id}}`), with a
+   drag handle, ↑ and ↓, but no **Move to…** (FR-015c, amended 2026-09-25). Uncheck one request,
+   then drag a request from one folder to between two requests of another folder, and use ↓ on
+   the first row. **Expect** the list to show the new order, the tree to be unchanged, and the
+   unchecked request to stay unchecked. Run the collection twice. **Expect** both runs' results in
+   the list's order, with each moved request still sending its own folder's auth. Click
+   **Reset**. **Expect** the collection's own order and every request selected. Reload the page.
+   **Expect** the collection's own order.
 5b. Open a request that inherits Bearer `{{token}}` from a folder, on its **Headers** tab.
    **Expect** a note "Auth adds: Authorization: Bearer {{token}}" with `{{token}}` highlighted and
    "Inherited from folder …". On its **Tests** tab, **expect** only the request's own test script,
    never its folder's.
 6. Try to move a folder into one of its own subfolders through the API. **Expect**
    `400 invalid_move` and no change.
+
+## Scenario 5c — Edit a request's own auth (FR-002c, 2026-09-25)
+
+Use a request that inherits Bearer `{{token}}` from its folder, an environment with an
+`adminToken` value, and a second request whose own Bearer token is a literal.
+
+1. On the first request's **Headers** tab, click **Edit auth** in the "Auth adds" note. **Expect**
+   the **Auth** tab, with **Inherit auth from parent** selected and the folder's auth shown.
+2. Choose **Bearer Token**, enter `{{adminToken}}`, and click **Save**. **Expect** "Set on this
+   request.", the Headers note showing `Authorization: Bearer {{adminToken}}`, and the request
+   marked Edited. Run it. **Expect** the admin token sent; other requests in the folder still send
+   `{{token}}`.
+3. Choose **Inherit auth from parent** and save. **Expect** the folder's auth again.
+4. Open the second request. **Expect** its Headers note and preview to show "hidden literal value"
+   and the Auth tab's Token field to say a hidden value is stored. Change only its URL and save,
+   then run it. **Expect** the stored token still sent, and never shown in the browser.
+5. Through the API, send `auth: { "type": "basic", "username": "u", "password": { "kind": "keep" } }`
+   for the second request. **Expect** `400 invalid_auth_edit` and no change.
 
 ## Scenario 6 — Collection is locked while a run is in progress (FR-017)
 

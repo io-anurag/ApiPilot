@@ -91,7 +91,15 @@ preview, the way Postman's collection/environment editor works.
   one of its own subfolders. Moving is offered from the collection tree only. The run panel's
   run-order list offers the same move up/move down reordering as the tree (FR-015), so the order
   a run uses can be set where the run is started. *(Refined the same day: moving was first also
-  offered from the run-order list, and was removed from it.)*
+  offered from the run-order list, and was removed from it. Superseded later the same day by the
+  per-run order question below.)*
+- Q: Postman's Runner lets a user place any request anywhere in the run order, across folders,
+  without changing the collection. Should the run-order list do the same instead of reordering
+  the collection within a folder? → A: Yes. The run-order list sets an order for runs only, by
+  drag and drop or move up/move down, across folders; the collection, its tree and each request's
+  folder, auth and scripts are unchanged. The order stays for every later run until the page is
+  reloaded, so the user can run the collection several times in it; **Reset** restores the
+  collection's order (FR-015c, specs/026 FR-019).
 - Q: When a request is moved out of a folder, should it pick up the new folder's auth and
   scripts, or keep behaving as it did? → A: It keeps what it had. If it inherited its auth and the
   move would change the auth it uses, that auth is written onto the request itself ("No Auth" if
@@ -100,6 +108,12 @@ preview, the way Postman's collection/environment editor works.
   folder. The target folder's own scripts still run for it, because Postman and Newman always run
   a folder's scripts for everything inside it; the move dialog lists those scripts before the user
   confirms, and warns when an item would run a folder's scripts twice (FR-015a, FR-015b).
+- Q: The Headers tab says to edit the auth, but the Auth tab is read-only. Should a request's
+  auth be editable, and where? → A: Yes, the request's own auth, from its Auth tab, as Postman
+  does: inherit, No Auth, Bearer Token, Basic Auth or API Key. Other types stay read-only. Folder
+  and collection auth stay read-only for now. A hidden secret literal is kept unless the user
+  types a new value, and still never reaches the browser. The Headers tab's auth note links to
+  the Auth tab (FR-002c).
 - Q: Should a request show the auth and variables it uses, including auth it inherits from a
   folder or the collection? → A: Yes, as Postman does. A selected request shows its effective
   auth, where that auth comes from, and its fields with `{{variable}}` references visible, plus
@@ -240,11 +254,14 @@ items; verify the collection view reflects all three changes immediately.
 9. **Given** a folder, **When** the user tries to move it into itself or into one of its own
    subfolders, **Then** the move is refused with a message saying why, and the collection is
    unchanged (FR-015a).
-10. **Given** the run panel's run-order list, **When** the user moves a request up or down from
-    that list, **Then** the collection's stored order changes exactly as it would from the tree,
-    the list shows the new order, and requests the user had excluded from the run stay excluded
-    (FR-015). Each row shows the request's folder path, method, name and endpoint path, and the
-    list offers no move to another folder.
+10. **Given** the run panel's run-order list, **When** the user drags a request from folder "Auth"
+    to fourth place, or moves it there with its move up/move down buttons, **Then** the list shows
+    it fourth, the next run sends it fourth with Auth's auth and scripts, the collection tree and
+    the collection's stored order are unchanged, and requests the user had excluded from the run
+    stay excluded (FR-015c). The order is kept for later runs until the page is reloaded, and
+    **Reset** restores the collection's order. Each row shows the request's folder path, method,
+    name and endpoint path. *(Amended 2026-09-25: this scenario first changed the collection's
+    stored order, within the request's own folder only.)*
 11. **Given** a request that inherits Bearer `{{token}}` auth and a pre-request script from folder
     "Orders", **When** the user moves it to the collection root, **Then** the request itself now
     has Bearer `{{token}}` auth and a copy of Orders' pre-request script marked as copied from
@@ -252,10 +269,28 @@ items; verify the collection view reflects all three changes immediately.
 12. **Given** a target folder with its own test script, **When** the user chooses it in the move
     dialog, **Then** the dialog says that folder's test script will also run for the moved
     request, before the user confirms (FR-015b).
+13. **Given** a request that inherits Bearer `{{token}}` from folder "Auth", **When** the user
+    opens its Auth tab, chooses Bearer Token, enters `{{adminToken}}` and saves, **Then** the Auth
+    tab says "Set on this request.", the Headers tab note shows `Authorization: Bearer
+    {{adminToken}}`, the request is marked edited, and the next run sends that token (FR-002c).
+14. **Given** a request whose own Bearer token is a literal, **When** the user changes only its
+    URL, or changes the auth type's other fields and leaves the hidden token untouched, and saves,
+    **Then** the stored token is unchanged and is never shown (FR-002c).
+15. **Given** a request whose own auth is Bearer, **When** the user chooses "Inherit auth from
+    parent" and saves, **Then** the request has no auth of its own and uses its folder's or the
+    collection's again (FR-002c).
 
 ---
 
 ### Edge Cases
+
+- What happens when the user switches a request whose own auth has a hidden literal (FR-002a) to
+  another auth type? The literal is dropped with the old type; only a field of the same type can
+  keep it. Keeping a hidden value that the request's own stored auth does not have is refused
+  with a message, rather than saving an empty secret silently (FR-002c).
+- What happens when a request's own auth is a type ApiPilot cannot edit, such as OAuth 2.0? The
+  Auth tab shows it read-only. Saving the request's other fields leaves it unchanged; only
+  choosing one of the editable types replaces it (FR-002c).
 
 - What happens when a variable is referenced by the collection but has no value at any scope? It
   is shown as missing/unresolved, distinctly from a resolved variable, consistent with the
@@ -308,6 +343,9 @@ items; verify the collection view reflects all three changes immediately.
 - What happens when a request is moved while an item in the run-order list is excluded from the
   next run? The exclusion is kept. Reordering or moving never changes which requests are selected
   to run; only adding or deleting requests resets the selection.
+- What happens to a per-run order (FR-015c) when the collection changes? Reordering or moving
+  items in the tree does not change it. A deleted request leaves it; an added request is placed
+  last. Only **Reset** or a page reload returns the run to the collection's own order.
 - What happens if the user attempts any edit while a run of that collection is currently in
   progress? The system refuses the edit and indicates the view is read-only until the run
   finishes (FR-017) — it does not queue the edit for after the run, and does not silently drop it
@@ -331,7 +369,19 @@ items; verify the collection view reflects all three changes immediately.
   stored, with every `{{variable}}` reference visibly distinguished. A literal value in a secret
   field (for example a password, token, client secret or API key value) MUST NOT be sent to the
   browser; the field MUST be shown as a hidden literal instead. When no auth applies, the view
-  MUST say so. This view is read-only.
+  MUST say so. This view is read-only. *(Amended 2026-09-25: the request's own auth is now
+  editable from the same tab (FR-002c); inherited auth and unsupported types are still shown
+  read-only.)*
+- **FR-002c**: The system MUST let the user set a selected request's own auth from its Auth tab:
+  inherit from its folder or the collection, No Auth, Bearer Token (token), Basic Auth (username,
+  password) or API Key (key, value, and whether it goes in a header or the query string). Any
+  field MAY hold `{{variable}}` references. A secret field that holds a hidden literal (FR-002a)
+  MUST keep its stored value unless the user types a new one, and the stored literal MUST still
+  never be sent to the browser. A request whose own auth is another type MUST still show it
+  read-only, and MAY be switched to one of the types above, which replaces it. An auth edit is a
+  request edit: it is saved with the request's other fields (FR-009a) and marks the request
+  edited. Folder and collection auth are not editable from ApiPilot. The Headers tab's note about
+  the header the auth adds MUST offer a way to open the Auth tab.
 - **FR-002b**: For a selected request, the system MUST list every variable it uses — in its URL,
   headers, body or effective auth — with where each is used, whether it is set or missing (shown
   as text, not by color alone), and which source provides its value (collection default or
@@ -388,9 +438,16 @@ items; verify the collection view reflects all three changes immediately.
   record is unaffected, per FR-011/FR-012's existing "past run keeps its own snapshot" rule).
 - **FR-015**: The system MUST allow the user to reorder requests and folders within their
   containing folder (or the collection root); the collection's own stored order MUST reflect the
-  new order for every subsequent view and run. This MUST be available from the collection tree
-  and from the run panel's run-order list, whose rows MUST show each request's folder path,
-  method, name and endpoint path.
+  new order for every subsequent view and run. This MUST be available from the collection tree.
+  *(Amended 2026-09-25, second time the same day: this was also offered from the run panel's
+  run-order list, which now sets a per-run order instead (FR-015c).)*
+- **FR-015c**: The run panel's run-order list MUST let the user place any request at any position
+  in the run, across folders, by dragging a row or with its move up/move down buttons, which MUST
+  be keyboard operable. That order MUST apply to runs only (specs/026 FR-019): it MUST NOT change
+  the collection's stored order, the collection tree or any request's folder, auth or scripts. It
+  MUST stay in place for every later run of that collection until the page is reloaded, and
+  **Reset** MUST restore the collection's own order and select every request. Each row MUST show
+  the request's folder path, method, name and endpoint path.
 - **FR-015a**: The system MUST allow the user to move a request or folder into a different folder
   or to the collection root, from the collection tree. The
   moved item MUST be placed last among its own kind (requests or folders) in the target container,
@@ -520,3 +577,7 @@ Found and fixed while building FR-002a, FR-002b, FR-015a and FR-015b:
 - **Headers tab auth note**: the header that a request's auth adds (Bearer or header API key) is
   shown in a clearer note, with `{{variables}}` highlighted and where the auth comes from, instead
   of saying "this request's own authentication" even when it was inherited.
+- **Headers tab auth note sent a secret literal** (FR-002a): the note's header value was built
+  from the stored token or API key value, so a literal token reached the browser there although
+  the Auth tab hid it. The note now hides a literal the same way (`ImpliedAuthHeader.hiddenLiteral`)
+  and links to the Auth tab, where the request's own auth can now be edited (FR-002c).
