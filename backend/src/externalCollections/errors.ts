@@ -116,6 +116,14 @@ export class InvalidOrderError extends Error {
   }
 }
 
+/** AP-028 (FR-015a, amended 2026-09-25): a move targeted the item's current container, or a folder at itself or one of its own subfolders. */
+export class InvalidMoveError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "InvalidMoveError";
+  }
+}
+
 /** AP-028 (research.md D11): a mutation was attempted on a collection while a run of it is currently in progress (FR-017). */
 export class CollectionLockedError extends Error {
   constructor(uploadedCollectionSetId: string) {

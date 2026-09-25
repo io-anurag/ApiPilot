@@ -114,4 +114,132 @@ describe("external collections: full script fidelity (FR-008, quickstart.md Scen
     expect(targetServer.requests).toHaveLength(1);
     expect(targetServer.requests[0].headers["x-signature"]).toBe("sig-shh");
   }, 60_000);
+
+  it("runs a request with its folder's auth and its collection's and folder's scripts, as Postman does (FR-008)", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/signed", { status: 200, body: {} });
+    const collection = {
+      info: { name: "c" },
+      event: [
+        {
+          listen: "test",
+          script: { type: "text/javascript", exec: ['pm.test("collection test", function () { pm.response.to.have.status(200); });'] },
+        },
+      ],
+      item: [
+        {
+          name: "Signing",
+          auth: { type: "bearer", bearer: [{ key: "token", value: "{{secret}}", type: "string" }] },
+          event: [
+            {
+              listen: "prerequest",
+              script: {
+                type: "text/javascript",
+                exec: ["pm.request.headers.add({ key: 'X-Signature', value: 'sig-' + pm.variables.get('secret') });"],
+              },
+            },
+          ],
+          item: [
+            {
+              name: "Signed request",
+              request: { method: "GET", url: "{{baseUrl}}/signed" },
+              event: [
+                {
+                  listen: "test",
+                  script: { type: "text/javascript", exec: ['pm.test("own test", function () { pm.response.to.have.status(200); });'] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const app = createApp();
+    const agent = request.agent(app);
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "folder-scripts")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const id = uploaded.body.uploadedCollection.id as string;
+
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    const settled = await pollUntilSettled(agent, id, started.body.run.id);
+
+    expect(settled.body.run.results[0].testOutcomes).toEqual([
+      expect.objectContaining({ name: "collection test", outcome: "passed" }),
+      expect.objectContaining({ name: "own test", outcome: "passed" }),
+    ]);
+    expect(targetServer.requests[0].headers.authorization).toBe("Bearer shh");
+    expect(targetServer.requests[0].headers["x-signature"]).toBe("sig-shh");
+  }, 60_000);
+
+  it("a request moved out of its folder still sends the folder's auth and runs the folder's scripts next to its own (FR-015b)", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/signed", { status: 200, body: {} });
+    const collection = {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Signing",
+          auth: { type: "bearer", bearer: [{ key: "token", value: "{{secret}}", type: "string" }] },
+          event: [
+            {
+              listen: "prerequest",
+              script: {
+                type: "text/javascript",
+                exec: ["pm.request.headers.add({ key: 'X-Signature', value: 'sig-' + pm.variables.get('secret') });"],
+              },
+            },
+            {
+              listen: "test",
+              script: { type: "text/javascript", exec: ['pm.test("folder test", function () { pm.response.to.have.status(200); });'] },
+            },
+          ],
+          item: [
+            {
+              name: "Signed request",
+              request: { method: "GET", url: "{{baseUrl}}/signed" },
+              event: [
+                {
+                  listen: "test",
+                  script: { type: "text/javascript", exec: ['pm.test("own test", function () { pm.response.to.have.status(200); });'] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const app = createApp();
+    const agent = request.agent(app);
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "moved-collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const id = uploaded.body.uploadedCollection.id as string;
+    const view = (await agent.get(`/api/external-collections/${id}/collection`)).body.collectionView;
+    const moved = await agent
+      .post(`/api/external-collections/${id}/items/${view.folders[0].items[0].id}/move`)
+      .send({ targetContainerId: "root" });
+    expect(moved.status).toBe(200);
+
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    expect(started.status).toBe(200);
+    const settled = await pollUntilSettled(agent, id, started.body.run.id);
+
+    expect(settled.body.run.status).toBe("completed");
+    expect(settled.body.run.results[0].testOutcomes).toEqual([
+      expect.objectContaining({ name: "folder test", outcome: "passed" }),
+      expect.objectContaining({ name: "own test", outcome: "passed" }),
+    ]);
+    expect(targetServer.requests).toHaveLength(1);
+    expect(targetServer.requests[0].headers["x-signature"]).toBe("sig-shh");
+    expect(targetServer.requests[0].headers.authorization).toBe("Bearer shh");
+  }, 60_000);
 });

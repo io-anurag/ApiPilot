@@ -139,4 +139,62 @@ describe("AP-028 collection structure endpoints (US4, quickstart.md Scenario 5)"
     expect(invalid.status).toBe(400);
     expect(invalid.body.error).toBe("invalid_order");
   });
+
+  it("POST .../items/:itemId/move carries folder auth and scripts, marks the item edited, and persists the move (FR-015a, FR-015b)", async () => {
+    const app = createApp();
+    const agent = request.agent(app);
+    const collection = {
+      info: { name: "c" },
+      item: [
+        { name: "Root request", request: { method: "GET", url: "https://example.test/root" } },
+        {
+          name: "Orders",
+          auth: { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] },
+          event: [{ listen: "prerequest", script: { type: "text/javascript", exec: ["pm.variables.set('d', 1);"] } }],
+          item: [{ name: "Get order", request: { method: "GET", url: "https://example.test/orders/1" } }],
+        },
+      ],
+    };
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "Move collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment())), "environment.json");
+    const id = uploaded.body.uploadedCollection.id as string;
+    const view = (await agent.get(`/api/external-collections/${id}/collection`)).body.collectionView;
+    const ordersId = view.folders[0].id as string;
+    const requestId = view.folders[0].items[0].id as string;
+
+    const moved = await agent.post(`/api/external-collections/${id}/items/${requestId}/move`).send({ targetContainerId: "root" });
+    expect(moved.status).toBe(200);
+    expect(moved.body.carried).toEqual({
+      auth: { type: "bearer", fromFolderName: "Orders" },
+      scriptsFromFolders: [{ id: ordersId, name: "Orders", events: ["prerequest"] }],
+    });
+    const movedRequest = moved.body.collectionView.items.find((item: { id: string }) => item.id === requestId);
+    expect(movedRequest).toMatchObject({
+      wasEdited: true,
+      auth: { type: "bearer", source: { kind: "request" } },
+      copiedScriptFolderIds: [ordersId],
+    });
+    expect(moved.body.collectionView.folders[0].items).toEqual([]);
+
+    const reread = (await agent.get(`/api/external-collections/${id}/collection`)).body.collectionView;
+    expect(reread.items.map((item: { id: string }) => item.id)).toEqual([view.items[0].id, requestId]);
+
+    const sameContainer = await agent.post(`/api/external-collections/${id}/items/${requestId}/move`).send({ targetContainerId: "root" });
+    expect(sameContainer.status).toBe(400);
+    expect(sameContainer.body.error).toBe("invalid_move");
+
+    const missingTarget = await agent.post(`/api/external-collections/${id}/items/${requestId}/move`).send({});
+    expect(missingTarget.status).toBe(400);
+    expect(missingTarget.body.error).toBe("invalid_request");
+
+    const unknownTarget = await agent
+      .post(`/api/external-collections/${id}/items/${requestId}/move`)
+      .send({ targetContainerId: "no-such-folder" });
+    expect(unknownTarget.status).toBe(404);
+    expect(unknownTarget.body.error).toBe("item_not_found");
+  });
 });

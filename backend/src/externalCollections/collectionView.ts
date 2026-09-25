@@ -1,14 +1,17 @@
-import type { Collection, Event, Item, ItemGroup, Variable } from "postman-collection";
+import type { Collection, Event, Item, ItemGroup, RequestAuth, Variable } from "postman-collection";
 import type {
   CollectionFolderView,
   CollectionRequestFields,
   CollectionRequestView,
   CollectionView,
   ImpliedAuthHeader,
+  RequestAuthView,
+  RequestVariableReference,
   VariableBinding,
 } from "@apipilot/shared-domain";
-import { extractReferencedVariables, findVariableTokens, substituteVariables } from "./uploadedCollectionParsing";
+import { extractReferencedVariables, findVariableTokens, removeVariableTokens, substituteVariables } from "./uploadedCollectionParsing";
 import { findEditedItemIds } from "./editedItems";
+import { copiedScriptSourceFolderId, inheritedAuth, ownAuth } from "./collectionStructure";
 
 type Folder = ItemGroup<Item>;
 
@@ -38,12 +41,15 @@ function rawFields(item: Item): CollectionRequestFields {
 }
 
 /**
- * The request's "test" event script, exactly as stored (research.md D6 — read directly off the
- * SDK's own model, never reclassified). A collection item may carry more than one "test" event;
- * every one Newman would run is concatenated in order, matching what a run actually executes.
+ * The request's own "test" event script, exactly as stored (research.md D6 — read directly off the
+ * SDK's own model, never reclassified). An item may carry more than one "test" event of its own;
+ * they are concatenated in order. Only the item's own events are read (`listenersOwn`):
+ * `listeners()` also returns every ancestor folder's and the collection's, and the Tests tab saves
+ * what it shows onto the request, so showing those made each save copy them onto the request and
+ * run them twice (fixed 2026-09-25).
  */
 function testScriptOf(item: Item): string | undefined {
-  const events: Event[] = item.events.listeners("test");
+  const events: Event[] = item.events.listenersOwn("test");
   const sources = events.map((event) => event.script?.toSource()).filter((source): source is string => Boolean(source));
   return sources.length > 0 ? sources.join("\n") : undefined;
 }
@@ -110,33 +116,152 @@ function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>
   return undefined;
 }
 
-function toRequestView(item: Item, variableValues: Record<string, string>, editedItemIds: Set<string>): CollectionRequestView {
+/**
+ * Auth field keys whose literal value is a secret (FR-002a, data-model.md). `value` counts only on
+ * an `apikey` auth, where it holds the key itself.
+ */
+const SECRET_AUTH_FIELD_KEYS = new Set([
+  "password",
+  "token",
+  "accessToken",
+  "refreshToken",
+  "clientSecret",
+  "client_secret",
+  "consumerSecret",
+  "tokenSecret",
+  "secretKey",
+  "sessionToken",
+  "privateKey",
+  "authKey",
+]);
+
+function isSecretAuthField(type: string, key: string): boolean {
+  return SECRET_AUTH_FIELD_KEYS.has(key) || (type === "apikey" && key === "value");
+}
+
+/** An auth parameter's stored value as text; non-string values (booleans, oauth2 objects) as JSON. */
+function authFieldText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** Everything the view builder threads down the tree: the collection, lookups, and the folders above the current node. */
+interface ViewContext {
+  collection: Collection;
+  variableValues: Record<string, string>;
+  editedItemIds: Set<string>;
+  bindings: Map<string, VariableBinding>;
+  chain: Folder[];
+}
+
+/**
+ * The request's effective auth for display (FR-002a): its own, else the nearest folder's or the
+ * collection's — the same walk `Item.getAuth()` makes. Values are as stored; a secret field holding
+ * a literal is emptied here, on the server, so the literal never reaches the browser.
+ */
+function authViewFor(item: Item, context: ViewContext): { view: RequestAuthView; storedValues: string[] } | undefined {
+  const own = ownAuth(item);
+  if (own) return describeAuth(own, { kind: "request" });
+  const inherited = inheritedAuth(context.collection, context.chain);
+  if (!inherited) return undefined;
+  return describeAuth(
+    inherited.auth,
+    inherited.source === context.collection
+      ? { kind: "collection" }
+      : { kind: "folder", folderId: inherited.source.id, folderName: inherited.source.name },
+  );
+}
+
+function describeAuth(auth: RequestAuth, source: RequestAuthView["source"]): { view: RequestAuthView; storedValues: string[] } {
+  const storedValues: string[] = [];
+  const fields = (auth.parameters()?.all() ?? []).map((parameter: Variable) => {
+    const key = parameter.key ?? "";
+    const value = authFieldText(parameter.value);
+    storedValues.push(value);
+    const hiddenLiteral = isSecretAuthField(auth.type, key) && removeVariableTokens(value).trim().length > 0;
+    return { key, value: hiddenLiteral ? "" : value, hiddenLiteral };
+  });
+  return { view: { type: auth.type, source, fields }, storedValues };
+}
+
+/** Every variable the request uses, in first-use order (URL, headers, body, auth), with its binding's status (FR-002b). */
+function variableReferencesFor(
+  raw: CollectionRequestFields,
+  authValues: string[],
+  bindings: Map<string, VariableBinding>,
+): RequestVariableReference[] {
+  const usage = new Map<string, Set<RequestVariableReference["usedIn"][number]>>();
+  const record = (text: string, location: RequestVariableReference["usedIn"][number]) => {
+    for (const name of findVariableTokens(text)) {
+      const locations = usage.get(name) ?? new Set();
+      locations.add(location);
+      usage.set(name, locations);
+    }
+  };
+  record(raw.url, "url");
+  for (const header of raw.headers) record(header.value, "headers");
+  if (raw.body) record(raw.body, "body");
+  for (const value of authValues) record(value, "auth");
+
+  return [...usage].map(([name, locations]) => {
+    const binding = bindings.get(name);
+    const resolved = binding?.resolved ?? false;
+    return {
+      name,
+      usedIn: [...locations],
+      resolved,
+      ...(resolved && binding ? { source: binding.source } : {}),
+    };
+  });
+}
+
+/** Folders whose scripts `member` carries a copy of, from the marker line a move writes (FR-015b). */
+function copiedScriptFolderIdsOf(member: Item | Folder): string[] {
+  const ids = new Set<string>();
+  for (const event of member.events.all()) {
+    const source = event.script?.toSource();
+    const folderId = source ? copiedScriptSourceFolderId(source) : undefined;
+    if (folderId) ids.add(folderId);
+  }
+  return [...ids];
+}
+
+function toRequestView(item: Item, context: ViewContext): CollectionRequestView {
+  const { variableValues } = context;
   const raw = rawFields(item);
   const testScript = testScriptOf(item);
   const impliedAuthHeader = impliedAuthHeaderFor(item, variableValues);
+  const auth = authViewFor(item, context);
   return {
     id: item.id,
     name: item.name,
-    wasEdited: editedItemIds.has(item.id),
+    wasEdited: context.editedItemIds.has(item.id),
     raw,
     resolved: resolvedFields(raw, variableValues),
     unresolvedVariables: unresolvedVariablesFor(raw, variableValues, impliedAuthHeader),
     ...(testScript !== undefined ? { testScript } : {}),
     ...(impliedAuthHeader !== undefined ? { impliedAuthHeader } : {}),
+    ...(auth !== undefined ? { auth: auth.view } : {}),
+    variableReferences: variableReferencesFor(raw, auth?.storedValues ?? [], context.bindings),
+    copiedScriptFolderIds: copiedScriptFolderIdsOf(item),
   };
 }
 
-function toFolderView(group: Folder, variableValues: Record<string, string>, editedItemIds: Set<string>): CollectionFolderView {
+function toFolderView(group: Folder, context: ViewContext): CollectionFolderView {
+  const inner: ViewContext = { ...context, chain: [...context.chain, group] };
   const items: CollectionRequestView[] = [];
   const folders: CollectionFolderView[] = [];
   group.items.each((member: Item | Folder) => {
     if (isFolder(member)) {
-      folders.push(toFolderView(member, variableValues, editedItemIds));
+      folders.push(toFolderView(member, inner));
     } else {
-      items.push(toRequestView(member, variableValues, editedItemIds));
+      items.push(toRequestView(member, inner));
     }
   });
-  return { id: group.id, name: group.name, items, folders };
+  const scriptEvents = (["prerequest", "test"] as const).filter((listen) =>
+    group.events.listenersOwn(listen).some((event) => (event.script?.toSource() ?? "").trim().length > 0),
+  );
+  return { id: group.id, name: group.name, items, folders, scriptEvents, copiedScriptFolderIds: copiedScriptFolderIdsOf(group) };
 }
 
 /**
@@ -187,15 +312,22 @@ export function buildCollectionView(
   rawCollectionJson: string,
   variableValues: Record<string, string>,
 ): CollectionView {
-  const editedItemIds = findEditedItemIds(rawCollectionJson);
+  const variables = buildVariableBindings(collection, variableValues);
+  const context: ViewContext = {
+    collection,
+    variableValues,
+    editedItemIds: findEditedItemIds(rawCollectionJson),
+    bindings: new Map(variables.map((binding) => [binding.name, binding])),
+    chain: [],
+  };
   const folders: CollectionFolderView[] = [];
   const items: CollectionRequestView[] = [];
   collection.items.each((member: Item | Folder) => {
     if (isFolder(member)) {
-      folders.push(toFolderView(member, variableValues, editedItemIds));
+      folders.push(toFolderView(member, context));
     } else {
-      items.push(toRequestView(member, variableValues, editedItemIds));
+      items.push(toRequestView(member, context));
     }
   });
-  return { id: uploadedCollectionSetId, items, folders, variables: buildVariableBindings(collection, variableValues) };
+  return { id: uploadedCollectionSetId, items, folders, variables };
 }

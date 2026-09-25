@@ -339,12 +339,58 @@ function RunHistory({
   );
 }
 
+/** Where a run-order row's request lives: its folder path, and its position among its container's requests. */
+export interface RunOrderPlacement {
+  /** `"root"` or the id of the folder the request lives directly in. */
+  containerId: string;
+  /** Folder names above the request, root first; empty at the collection root. */
+  folderPath: string[];
+  index: number;
+  siblingCount: number;
+}
+
+/**
+ * Lets the run-order list move requests up or down within their folder (FR-015, amended
+ * 2026-09-25), through the same endpoint as the collection tree, since a run always follows the
+ * collection's stored order (specs/026 FR-005). Moving to another folder is done from the tree.
+ */
+export interface RunOrderReorder {
+  onMove: (containerId: string, itemId: string, direction: "up" | "down") => void;
+  /** The collection editor's own read-only lock (FR-017). */
+  locked: boolean;
+}
+
+/**
+ * The endpoint path shown in a run-order row: the raw URL without its scheme and host (or a leading
+ * `{{baseUrl}}`-style variable) and without its query string, `{{variables}}` kept as authored.
+ */
+export function endpointPath(url: string): string {
+  let rest = url.trim();
+  if (rest.startsWith("{{")) {
+    const end = rest.indexOf("}}");
+    rest = end >= 0 ? rest.slice(end + 2) : rest;
+  } else {
+    const schemeEnd = rest.indexOf("://");
+    if (schemeEnd >= 0) {
+      const pathStart = rest.indexOf("/", schemeEnd + 3);
+      rest = pathStart >= 0 ? rest.slice(pathStart) : "";
+    }
+  }
+  const queryStart = rest.indexOf("?");
+  if (queryStart >= 0) rest = rest.slice(0, queryStart);
+  return rest.startsWith("/") ? rest : `/${rest}`;
+}
+
+const ROW_ACTION_STYLE =
+  "rounded px-1.5 py-0.5 text-xs text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white";
+
 /**
  * Postman-Runner-style "which requests will run, in what order" checklist (AP-028 follow-up) —
  * only the parts of Postman's own Runner screen ApiPilot's backend actually supports: choosing a
- * subset of the collection's own requests to run. Performance/load mode, Mock, Schedule, a
- * Postman-CLI/CI-CD export, and data-driven "Iterations" have no backend behind them and are
- * deliberately left out rather than shown as non-functional controls.
+ * subset of the collection's own requests to run and, with `reorder`, changing their order. Each
+ * row shows the request's folder, method, name and endpoint path. Performance/load mode, Mock,
+ * Schedule, a Postman-CLI/CI-CD export, and data-driven "Iterations" have no backend behind them
+ * and are deliberately left out rather than shown as non-functional controls.
  */
 function RunOrderChecklist({
   requests,
@@ -352,13 +398,18 @@ function RunOrderChecklist({
   onToggle,
   onSelectAll,
   disabled,
+  placements,
+  reorder,
 }: Readonly<{
   requests: CollectionRequestView[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   onSelectAll: () => void;
   disabled: boolean;
+  placements?: ReadonlyMap<string, RunOrderPlacement>;
+  reorder?: RunOrderReorder;
 }>) {
+  const moveDisabled = disabled || Boolean(reorder?.locked);
   const allSelected = selectedIds.size === requests.length;
   return (
     <div className="space-y-2 rounded-md border border-border bg-surface p-3">
@@ -381,25 +432,79 @@ function RunOrderChecklist({
         </span>
       </div>
       <ul className="max-h-56 space-y-0.5 overflow-y-auto">
-        {requests.map((item, index) => (
-          <li key={item.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5">
-            <input
-              type="checkbox"
-              aria-label={`Include ${item.name} in this run`}
-              checked={selectedIds.has(item.id)}
-              disabled={disabled}
-              onChange={() => onToggle(item.id)}
-              className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
-            />
-            <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
-            <HttpMethodBadge method={item.raw.method} />
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={item.name}>
-              {item.name}
-            </span>
-          </li>
-        ))}
+        {requests.map((item, index) => {
+          const placement = placements?.get(item.id);
+          return (
+            <li key={item.id} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5">
+              <input
+                type="checkbox"
+                aria-label={`Include ${item.name} in this run`}
+                checked={selectedIds.has(item.id)}
+                disabled={disabled}
+                onChange={() => onToggle(item.id)}
+                className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
+              />
+              <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
+              {placements && <RunOrderFolder folderPath={placement?.folderPath ?? []} />}
+              <HttpMethodBadge method={item.raw.method} />
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={item.name}>
+                {item.name}
+              </span>
+              <span className="min-w-0 max-w-xs shrink truncate font-mono text-xs text-muted" title={item.raw.url}>
+                {endpointPath(item.raw.url)}
+              </span>
+              {reorder && placement && (
+                <RunOrderRowActions item={item} placement={placement} reorder={reorder} disabled={moveDisabled} />
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
+  );
+}
+
+/** A run-order row's folder column; empty at the collection root, so every row stays aligned. */
+function RunOrderFolder({ folderPath }: Readonly<{ folderPath: string[] }>) {
+  const label = folderPath.join(" / ");
+  return (
+    <span className="w-32 shrink-0 truncate text-xs text-muted" title={label || "Collection root"}>
+      {label}
+    </span>
+  );
+}
+
+function RunOrderRowActions({
+  item,
+  placement,
+  reorder,
+  disabled,
+}: Readonly<{ item: CollectionRequestView; placement: RunOrderPlacement; reorder: RunOrderReorder; disabled: boolean }>) {
+  const isFirst = placement.index === 0;
+  const isLast = placement.index === placement.siblingCount - 1;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      <button
+        type="button"
+        aria-label={`Move ${item.name} up`}
+        title={isFirst ? "Already first in its folder" : "Move up"}
+        disabled={disabled || isFirst}
+        onClick={() => reorder.onMove(placement.containerId, item.id, "up")}
+        className={ROW_ACTION_STYLE}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        aria-label={`Move ${item.name} down`}
+        title={isLast ? "Already last in its folder" : "Move down"}
+        disabled={disabled || isLast}
+        onClick={() => reorder.onMove(placement.containerId, item.id, "down")}
+        className={ROW_ACTION_STYLE}
+      >
+        ↓
+      </button>
+    </span>
   );
 }
 
@@ -411,6 +516,8 @@ function RunOrderChecklist({
 export function ExternalCollectionRunPanel({
   uploadedCollection,
   requests = [],
+  placements,
+  reorder,
   onConfirmed,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
@@ -418,6 +525,10 @@ export function ExternalCollectionRunPanel({
    * run-order checklist. Omitted/empty while the collection view hasn't loaded yet; the panel
    * still works, it just runs the whole collection with no checklist shown (pre-AP-028 behavior). */
   requests?: CollectionRequestView[];
+  /** Each request's folder path and position, keyed by request id; shows the folder column. */
+  placements?: ReadonlyMap<string, RunOrderPlacement>;
+  /** Enables move up/down in the run-order list (needs `placements`); omitted, the list only selects. */
+  reorder?: RunOrderReorder;
   /** Called once the unverified-content gate is satisfied for the first time, so the parent page
    * can update its own cached `confirmedAt` — without this, the page's stale copy of
    * `uploadedCollection` kept `confirmedAt` unset for the rest of the session, and every
@@ -493,9 +604,13 @@ export function ExternalCollectionRunPanel({
   // Re-selects everything whenever the *set* of runnable request ids changes (switching
   // collections, or adding/deleting a request while the editor is open) rather than trying to
   // preserve a partial selection across an edit — simplest predictable behavior, and "Reset"
-  // below gets you back to it explicitly at any time regardless.
+  // below gets you back to it explicitly at any time regardless. The ids are sorted so that a
+  // reorder or move, which keeps the same set, never resets the selection (spec Edge Cases).
   // Deliberately keyed on this joined-ids string, not `requests` itself (a fresh array every render).
-  const requestIdsKey = requests.map((item) => item.id).join(",");
+  const requestIdsKey = requests
+    .map((item) => item.id)
+    .sort((left, right) => left.localeCompare(right))
+    .join(",");
   useEffect(() => {
     setSelectedIds(new Set(requests.map((item) => item.id)));
   }, [requestIdsKey]);
@@ -636,6 +751,8 @@ export function ExternalCollectionRunPanel({
           onToggle={toggleSelected}
           onSelectAll={selectAll}
           disabled={starting || run?.status === "in-progress"}
+          placements={placements}
+          reorder={reorder}
         />
       )}
 

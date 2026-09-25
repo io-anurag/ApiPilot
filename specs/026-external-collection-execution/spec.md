@@ -199,7 +199,10 @@ that neither can be mistaken for the other.
 - **FR-008**: The system MUST execute an uploaded collection's own pre-request and test scripts
   with the same fidelity Postman/Newman itself would, rather than disabling or stripping them —
   script-dependent behavior (computed signatures, token refresh, chained values between requests)
-  MUST work exactly as the collection defines it.
+  MUST work exactly as the collection defines it. This includes the collection's and each
+  enclosing folder's auth and pre-request/test scripts, which apply to every request inside them
+  *(clarified 2026-09-25, when a defect that ran each request without them was fixed; see
+  specs/028-collection-editor-ui, Post-implementation follow-up 2026-09-25)*.
 - **FR-009**: A value supplied via an uploaded environment file that resembles a credential MUST
   be persisted encrypted at rest and MUST NOT appear in logs, mirroring the existing protection
   for `Environment.variableValues` (constitution XVII, XVIII).

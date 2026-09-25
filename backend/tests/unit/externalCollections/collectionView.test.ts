@@ -99,6 +99,32 @@ describe("buildCollectionView", () => {
     expect(view.items.find((i) => i.name === "Without tests")?.testScript).toBeUndefined();
   });
 
+  it("reads only the request's own test scripts, never its folders' or the collection's", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('collection', () => {});"] } }],
+      item: [
+        {
+          id: "folder-1",
+          name: "Orders",
+          event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('folder', () => {});"] } }],
+          item: [
+            {
+              id: "item-1",
+              name: "Own tests",
+              request: { method: "GET", url: "https://example.test" },
+              event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('own', () => {});"] } }],
+            },
+            { id: "item-2", name: "No own tests", request: { method: "GET", url: "https://example.test" } },
+          ],
+        },
+      ],
+    });
+    const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+    expect(view.folders[0].items[0].testScript).toBe("pm.test('own', () => {});");
+    expect(view.folders[0].items[1].testScript).toBeUndefined();
+  });
+
   it("marks a request wasEdited: true only when its id carries the _apipilotEdited marker in the raw stored JSON", () => {
     const raw = JSON.stringify({
       info: { name: "c" },
@@ -189,6 +215,126 @@ describe("buildCollectionView", () => {
       const raw = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
       const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
       expect(view.items[0].unresolvedVariables).toEqual(["token"]);
+    });
+  });
+
+  describe("effective auth and used variables (FR-002a, FR-002b)", () => {
+    function folderAuthCollection(collectionAuth?: unknown): string {
+      return JSON.stringify({
+        info: { name: "c" },
+        ...(collectionAuth ? { auth: collectionAuth } : {}),
+        item: [
+          { id: "root-req", name: "Root", request: { method: "GET", url: "{{baseUrl}}/root" } },
+          {
+            id: "orders",
+            name: "Orders",
+            auth: { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] },
+            event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('folder', () => {});"] } }],
+            item: [
+              {
+                id: "order-get",
+                name: "Get order",
+                request: { method: "GET", url: "{{baseUrl}}/orders", header: [{ key: "X-Trace", value: "{{traceId}}" }] },
+              },
+              {
+                id: "own-basic",
+                name: "Own basic",
+                request: {
+                  method: "GET",
+                  url: "https://example.test",
+                  auth: {
+                    type: "basic",
+                    basic: [
+                      { key: "username", value: "{{user}}", type: "string" },
+                      { key: "password", value: "hunter2", type: "string" },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    it("reports inherited folder auth with its source and {{variable}} fields intact", () => {
+      const raw = folderAuthCollection();
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.folders[0].items[0].auth).toEqual({
+        type: "bearer",
+        source: { kind: "folder", folderId: "orders", folderName: "Orders" },
+        fields: expect.arrayContaining([{ key: "token", value: "{{token}}", hiddenLiteral: false }]),
+      });
+    });
+
+    it("reports a request's own auth, and never sends a secret field's literal value", () => {
+      const raw = folderAuthCollection();
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      const auth = view.folders[0].items[1].auth;
+      expect(auth?.source).toEqual({ kind: "request" });
+      expect(auth?.fields).toEqual(
+        expect.arrayContaining([
+          { key: "username", value: "{{user}}", hiddenLiteral: false },
+          { key: "password", value: "", hiddenLiteral: true },
+        ]),
+      );
+      expect(JSON.stringify(view)).not.toContain("hunter2");
+    });
+
+    it("reports collection-level auth, and no auth at all when none applies", () => {
+      const withCollectionAuth = folderAuthCollection({
+        type: "apikey",
+        apikey: [
+          { key: "key", value: "X-Api-Key", type: "string" },
+          { key: "value", value: "literal-key-123", type: "string" },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(withCollectionAuth), withCollectionAuth, {});
+      expect(view.items[0].auth?.source).toEqual({ kind: "collection" });
+      expect(view.items[0].auth?.fields).toEqual(
+        expect.arrayContaining([{ key: "value", value: "", hiddenLiteral: true }]),
+      );
+
+      const withoutAuth = folderAuthCollection();
+      const plain = buildCollectionView("uc-1", parseUploadedCollection(withoutAuth), withoutAuth, {});
+      expect(plain.items[0].auth).toBeUndefined();
+    });
+
+    it("lists every variable a request uses, where, and whether it is set and by which source", () => {
+      const raw = folderAuthCollection();
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { baseUrl: "https://api.test" });
+      expect(view.folders[0].items[0].variableReferences).toEqual([
+        { name: "baseUrl", usedIn: ["url"], resolved: true, source: "environment" },
+        { name: "traceId", usedIn: ["headers"], resolved: false },
+        { name: "token", usedIn: ["auth"], resolved: false },
+      ]);
+    });
+
+    it("reports a folder's own script kinds, and folders whose scripts an item carries a copy of", () => {
+      const raw = JSON.stringify({
+        info: { name: "c" },
+        item: [
+          {
+            id: "moved",
+            name: "Moved",
+            request: { method: "GET", url: "https://example.test" },
+            event: [
+              {
+                listen: "test",
+                script: {
+                  type: "text/javascript",
+                  exec: ['// Copied by ApiPilot from folder "Orders" (id: orders) when this item was moved.', "pm.test();"],
+                },
+              },
+            ],
+          },
+          { id: "orders", name: "Orders", event: [{ listen: "prerequest", script: { exec: ["pm.variables.set('a', 1);"] } }], item: [] },
+        ],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+      expect(view.items[0].copiedScriptFolderIds).toEqual(["orders"]);
+      expect(view.folders[0].scriptEvents).toEqual(["prerequest"]);
+      expect(view.folders[0].copiedScriptFolderIds).toEqual([]);
     });
   });
 });

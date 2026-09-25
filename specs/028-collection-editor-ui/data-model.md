@@ -41,6 +41,10 @@ interface CollectionFolderView {
   name: string;
   items: CollectionRequestView[];
   folders: CollectionFolderView[]; // nested folders, arbitrary depth
+  scriptEvents: Array<"prerequest" | "test">; // amended 2026-09-25 — which script kinds this
+                                // folder itself defines (FR-015b move dialog)
+  copiedScriptFolderIds: string[];   // amended 2026-09-25 — folders whose scripts this folder
+                                // carries a copy of, read from the copy marker line (FR-015b)
 }
 
 interface CollectionRequestView {
@@ -61,8 +65,37 @@ interface CollectionRequestView {
   };
   unresolvedVariables: string[]; // names still unresolved within this specific request
   testScript?: string;          // post-implementation addendum (2026-09-21) — see below
+  auth?: RequestAuthView;       // amended 2026-09-25 (FR-002a) — absent when no auth applies
+  variableReferences: RequestVariableReference[]; // amended 2026-09-25 (FR-002b), by name
+  copiedScriptFolderIds: string[]; // amended 2026-09-25 (FR-015b), as on CollectionFolderView
+}
+
+interface RequestAuthView {     // amended 2026-09-25 (FR-002a)
+  type: string;                 // Postman auth type as stored, e.g. "bearer", "basic", "oauth2", "noauth"
+  source:
+    | { kind: "request" }
+    | { kind: "folder"; folderId: string; folderName: string }
+    | { kind: "collection" };
+  fields: Array<{
+    key: string;
+    value: string;              // as stored, `{{variable}}` intact; "" when `hiddenLiteral`
+    hiddenLiteral: boolean;     // a secret field holding a literal — the value is never sent
+  }>;
+}
+
+interface RequestVariableReference { // amended 2026-09-25 (FR-002b)
+  name: string;
+  usedIn: Array<"url" | "headers" | "body" | "auth">;
+  resolved: boolean;            // same rule as VariableBinding.resolved
+  source?: "collection-default" | "environment"; // the binding providing the value, when set
 }
 ```
+
+Secret fields for `hiddenLiteral` are those whose key is one of `password`, `token`,
+`accessToken`, `refreshToken`, `clientSecret`, `client_secret`, `consumerSecret`, `tokenSecret`,
+`secretKey`, `sessionToken`, `privateKey`, `authKey`, or `value` on an `apikey` auth. Such a field
+is hidden when any text remains after removing its `{{variable}}` references, so a value made
+only of references is always shown.
 
 ### Post-implementation addendum (2026-09-21): the request's own test script
 
@@ -74,8 +107,10 @@ other raw field. Not a new FR number; folded into FR-002/FR-007's existing scope
 renumbered, since it is the same "see and edit what will actually run" capability applied to one
 more field this spec's original field list happened to omit.
 
-- `CollectionRequestView.testScript` — the item's "test" event script(s), concatenated in order,
-  read via `postman-collection`'s `item.events.listeners("test")`. Undefined when the item carries
+- `CollectionRequestView.testScript` — the item's own "test" event script(s), concatenated in
+  order, read via `postman-collection`'s `item.events.listenersOwn("test")` (amended 2026-09-25:
+  it was `listeners("test")`, which also returns every ancestor folder's and the collection's
+  test scripts, so saving the Tests tab copied them onto the request). Undefined when the item carries
   no test event. Deliberately has no `resolved` counterpart the way `raw`/`resolved` request fields
   do — the script isn't textually substituted for display, it runs against the live response.
 - `PUT /:id/requests/:requestId` (contracts/collection-editor-api.md) accepts an optional
@@ -180,6 +215,21 @@ function reorderContainer(
 ): void
   // throws InvalidOrderError if orderedIds doesn't exactly match the container's current child id set
 
+function moveItem(                   // FR-015a, amended 2026-09-25
+  collection: Collection,
+  itemId: string,                      // a request or folder id
+  targetContainerId: string,           // literal "root" for the collection root, otherwise a folder id
+): MoveCarried
+  // appends the item last among its own kind in the target container, keeping the same instance,
+  // after carrying over its auth and the scripts of the folders it leaves (FR-015b)
+  // throws ItemNotFoundError for an unknown item or target, InvalidMoveError for the current
+  // container, or for a folder moved into itself or one of its own subfolders
+
+interface MoveCarried {        // also the route's `carried` response field
+  auth: { type: string; fromFolderName: string | null } | null;
+  scriptsFromFolders: Array<{ id: string; name: string; events: Array<"prerequest" | "test"> }>;
+}
+
 // runLock.ts (research.md D11)
 function assertCollectionNotRunning(uploadedCollectionSetId: string): void
   // throws CollectionLockedError if an UploadedCollectionExecutionRun for this id has status "in-progress"
@@ -198,12 +248,16 @@ separately exported as a route-facing function.
   container, only reordered — not a subset, superset, or including ids from a different container
   (`400 invalid_order` otherwise). This keeps reorder a pure permutation, never a disguised
   move-between-folders operation.
+- **FR-015a (move, amended 2026-09-25)**: `targetContainerId` MUST resolve to the collection root
+  or an existing folder, and MUST differ from the item's current container. A folder MUST NOT be
+  moved into itself or any folder nested within it (`400 invalid_move` otherwise). Moving between
+  folders is a separate operation from reorder, so reorder stays a pure permutation.
 - **FR-016 (rename)**: `name` MUST be a non-empty string; uniqueness among siblings is NOT
   required (real Postman collections do not require sibling name uniqueness either).
 - **FR-017 (locked while running)**: `assertCollectionNotRunning` runs before every mutating
   operation this feature adds (D11) — variable update, request field edit, add, delete, rename,
-  reorder — and before any of them touch the stored `UploadedCollectionSet`. Violation returns
-  `409 collection_locked` uniformly across all six endpoints.
+  reorder, move — and before any of them touch the stored `UploadedCollectionSet`. Violation
+  returns `409 collection_locked` uniformly across all of these endpoints.
 - **FR-018 (unreferenced variable)**: a variable name defined with no current reference is still
   subject to the same non-empty-name validation as any `variableValues` key; it is simply never
   included in `missingUploadedVariableValues`'s evaluation set (which is built from referenced

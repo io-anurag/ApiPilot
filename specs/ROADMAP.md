@@ -58,9 +58,9 @@ is `specs/030-ai-failure-analysis`.
 | AP-023 — Automatic Auth-Credential Chaining (`specs/023-auto-auth-credential-chaining`) | Implemented — all 23 tasks complete |
 | AP-024 — OAuth2 Client-Credentials Auth Support (`specs/024-oauth2-client-credentials-auth`) | Implemented — all 30 tasks complete, re-validated against the PayPal Invoicing API fixture (0/22 operations unsupported, down from 22/22) |
 | AP-025 — Local Persistence Layer (`specs/025-local-persistence-layer`) | Implemented — all 34 tasks complete |
-| AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here |
+| AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here. FR-008 defect fixed 2026-09-25: runs now apply folder auth, folder scripts and collection scripts (Next Actions #31) |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
-| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22) |
+| AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31) |
 | AP-029 — k6 Performance Testing | Not started — roadmap entry added 2026-09-23; `/speckit-specify` not yet run. Blocked on a constitution XVII amendment for its run path (Next Actions #24) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
@@ -1441,8 +1441,12 @@ seeing what was sent afterwards in the results.
 
 ### Scope
 
-- A navigable folder/request tree in the collection's own order, with add, delete, rename, and
-  reorder for requests and folders.
+- A navigable folder/request tree in the collection's own order, with add, delete, rename,
+  reorder, and move between folders for requests and folders. A moved item keeps the auth and
+  scripts it inherited from the folders it leaves (amended 2026-09-25).
+- Per-request read-only Auth and Used variables tabs: the effective auth and where it comes from,
+  and every `{{variable}}` a request uses with its set/missing status; secret literals in auth
+  fields never reach the browser (amended 2026-09-25).
 - A tabbed request editor (Headers/Body/Tests) with a resolved-vs-raw preview in which unresolved
   `{{variable}}` placeholders stay visibly marked.
 - A variable panel listing every referenced variable, its value, its resolved-or-missing status,
@@ -1450,7 +1454,9 @@ seeing what was sent afterwards in the results.
   updates as values change.
 - Edits persisted as an override layered on the original request, reflected in the record of any
   run made with them, and discarded rather than reapplied when the request no longer exists.
-- A selective-run checklist (an optional `selectedRequestIds` on AP-026's `execution/start`).
+- A selective-run checklist (an optional `selectedRequestIds` on AP-026's `execution/start`),
+  which also reorders requests within their folder and shows each request's folder path,
+  method, name and endpoint path (amended 2026-09-25).
 - The whole editor read-only while a run of that collection is in progress (FR-017).
 - Display-only "implied" authentication headers for `bearer` and header-located `apikey` auth, so
   a request does not look unauthenticated when its auth block adds a header at run time.
@@ -2552,3 +2558,27 @@ Implementation
     - Validation: `npm test` 1,611 passed, 3 skipped, across 217 test files (plus 2 skipped
       opt-in real-model files); `npm run lint` and `npm run build` clean. The quickstart browser
       walkthrough (T061) was not performed.
+
+31. **AP-028 amended: move between folders, per-request auth and variables, run-order list; AP-026
+    FR-008 folder-script defect fixed; version 19.3.0 (2026-09-25).** Numbered after the #29 and
+    #30 recorded on the unmerged `AP-031` branch, so the two do not clash when it merges.
+    - AP-028 FR-015a/FR-015b: a request or folder can be moved to another folder or the collection
+      root from the collection tree. It keeps behaving as before: inherited auth the move would
+      change is written onto it, and the scripts of the folders it leaves are copied onto it, each
+      marked as copied. The move dialog lists the destination's scripts that will also run and
+      warns when a folder's scripts would run twice (`POST .../items/:itemId/move`).
+    - AP-028 FR-002a/FR-002b: read-only Auth and Used variables tabs per request. Secret literals
+      in auth fields are blanked on the server. The Headers tab's auth note now highlights
+      `{{variables}}` and names where the auth comes from.
+    - AP-028 FR-015: the run-order list reorders requests within their folder, keeps excluded
+      requests excluded across a reorder (previously any reorder re-selected everything), and
+      shows each request's folder path, method, name and endpoint path. Moving to another folder
+      is offered from the tree only.
+    - Tests tab defect: it showed and saved the request's folder and collection test scripts as
+      its own, because it read `listeners("test")`. It now reads `listenersOwn("test")`. Copies
+      already saved into requests are not removed automatically.
+    - AP-026 FR-008 defect: each request ran with only the collection-level auth, so folder auth,
+      folder scripts and collection scripts never ran. Each request now runs nested in its folder
+      chain with the collection's scripts (`newmanRunner.ts`, `runUploadedCollectionExecution.ts`).
+      Existing collections that rely on folder auth or scripts can now report different results.
+    - Version bumped to 19.3.0 (root, backend, frontend) for these features.

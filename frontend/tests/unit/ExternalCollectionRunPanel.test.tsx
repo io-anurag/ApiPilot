@@ -7,7 +7,12 @@ import type {
   UploadedCollectionExecutionRun,
 } from "@apipilot/shared-domain";
 import type { UploadedCollectionSummary } from "../../src/services/externalCollectionsClient";
-import { ExternalCollectionRunPanel } from "../../src/components/ExternalCollectionRunPanel";
+import {
+  ExternalCollectionRunPanel,
+  endpointPath,
+  type RunOrderPlacement,
+  type RunOrderReorder,
+} from "../../src/components/ExternalCollectionRunPanel";
 
 function requestView(overrides: Partial<CollectionRequestView> = {}): CollectionRequestView {
   return {
@@ -17,6 +22,8 @@ function requestView(overrides: Partial<CollectionRequestView> = {}): Collection
     raw: { method: "GET", url: "https://example.test", headers: [] },
     resolved: { method: "GET", url: "https://example.test", headers: [] },
     unresolvedVariables: [],
+    variableReferences: [],
+    copiedScriptFolderIds: [],
     ...overrides,
   };
 }
@@ -211,6 +218,113 @@ describe("ExternalCollectionRunPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.getByText("1 of 1 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start run" })).not.toBeDisabled();
+  });
+});
+
+describe("ExternalCollectionRunPanel — the run-order list (FR-015)", () => {
+  function placementsFor(ids: string[], folderPath: string[] = []): ReadonlyMap<string, RunOrderPlacement> {
+    return new Map(ids.map((id, index) => [id, { containerId: "root", folderPath, index, siblingCount: ids.length }]));
+  }
+
+  function reorderFor(overrides: Partial<RunOrderReorder> = {}): RunOrderReorder {
+    return { onMove: vi.fn(), locked: false, ...overrides };
+  }
+
+  const twoRequests = () => [requestView({ id: "item-1", name: "Get widget" }), requestView({ id: "item-2", name: "Create widget" })];
+
+  it("moves a request up or down within its folder, disables moves past either end, and offers no Move to…", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const reorder = reorderFor();
+    render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={twoRequests()}
+        placements={placementsFor(["item-1", "item-2"])}
+        reorder={reorder}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Move Get widget up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Create widget down" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Get widget down" }));
+    expect(reorder.onMove).toHaveBeenCalledWith("root", "item-1", "down");
+    expect(screen.queryByRole("button", { name: /to another folder/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Move to…")).not.toBeInTheDocument();
+  });
+
+  it("shows each row's folder, method, name and endpoint path", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const requests = [
+      requestView({
+        id: "item-1",
+        name: "Get order",
+        raw: { method: "GET", url: "{{baseUrl}}/orders/{{orderId}}?expand=items", headers: [] },
+      }),
+      requestView({ id: "item-2", name: "Health", raw: { method: "POST", url: "https://api.example.test/health", headers: [] } }),
+    ];
+    const placements = new Map<string, RunOrderPlacement>([
+      ["item-1", { containerId: "archive", folderPath: ["Orders", "Archive"], index: 0, siblingCount: 1 }],
+      ["item-2", { containerId: "root", folderPath: [], index: 0, siblingCount: 1 }],
+    ]);
+    render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={requests}
+        placements={placements}
+      />,
+    );
+
+    const rows = screen.getAllByRole("checkbox").map((checkbox) => checkbox.closest("li"));
+    expect(rows[0]).toHaveTextContent("1Orders / ArchiveGETGet order/orders/{{orderId}}");
+    expect(rows[1]).toHaveTextContent("2POSTHealth/health");
+  });
+
+  it("derives the endpoint path from the raw URL, keeping {{variables}} and dropping host and query", () => {
+    expect(endpointPath("{{baseUrl}}/orders/{{id}}?x=1")).toBe("/orders/{{id}}");
+    expect(endpointPath("https://api.example.test/v1/health")).toBe("/v1/health");
+    expect(endpointPath("https://api.example.test")).toBe("/");
+    expect(endpointPath("orders")).toBe("/orders");
+  });
+
+  it("shows no move controls without reorder, and disables them while the collection is locked", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const { rerender } = render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={twoRequests()}
+        placements={placementsFor(["item-1", "item-2"])}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Move Get widget down" })).not.toBeInTheDocument();
+
+    rerender(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={twoRequests()}
+        placements={placementsFor(["item-1", "item-2"])}
+        reorder={reorderFor({ locked: true })}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Move Get widget down" })).toBeDisabled();
+  });
+
+  it("keeps an excluded request excluded when the order changes", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const { rerender } = render(
+      <ExternalCollectionRunPanel uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })} requests={twoRequests()} />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Create widget in this run" }));
+    expect(screen.getByText("1 of 2 selected")).toBeInTheDocument();
+
+    rerender(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={[...twoRequests()].reverse()}
+      />,
+    );
+    expect(screen.getByText("1 of 2 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include Create widget in this run" })).not.toBeChecked();
   });
 });
 

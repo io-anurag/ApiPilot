@@ -175,6 +175,45 @@ container, in the desired new order — not a subset or superset, data-model.md'
 **404 `uploaded_collection_not_found`** / **404 `item_not_found`** (unknown `containerId`, other
 than the literal `root`)
 
+## `POST /api/external-collections/:id/items/:itemId/move`
+
+Moves a request or folder into a different container — another folder or the collection root
+(FR-015a, FR-015b, amended 2026-09-25). The item is placed last among its own kind (requests or
+folders) in the target container, keeping its id, fields and scripts. It keeps the auth and
+scripts it had: inherited auth that the move would change is written onto the item (`noauth` if
+none applied), and the pre-request and test scripts of each folder it leaves are copied onto it,
+outermost first, ahead of its own, each as a separate event whose first line is
+`// Copied by ApiPilot from folder "<name>" (id: <folderId>) when this item was moved.` An item
+changed this way gets the `_apipilotEdited` marker.
+
+**Request** — `{ "targetContainerId": "folder-b" }` (`"root"` for the collection root)
+
+**200 OK** —
+
+```json
+{
+  "collectionView": { "...": "..." },
+  "carried": {
+    "auth": { "type": "bearer", "fromFolderName": "Orders" },
+    "scriptsFromFolders": [{ "id": "folder-a", "name": "Orders", "events": ["prerequest", "test"] }]
+  }
+}
+```
+
+`carried.auth` is `null` when no auth was written onto the item. `fromFolderName` is `null` when
+the carried auth came from the collection, and `type` is `noauth` when the item had no auth
+before the move. `scriptsFromFolders` is empty when no script was copied.
+
+**400 `invalid_move`** — the target is the item's current container, or the item is a folder and
+the target is that folder or one of its own subfolders. The collection is unchanged.
+
+**400 `invalid_request`** — `targetContainerId` missing or not a string.
+
+**404 `uploaded_collection_not_found`** / **404 `item_not_found`** (unknown `:itemId`, or unknown
+`targetContainerId` other than the literal `root`)
+
+**409 `collection_locked`** — a run of this collection is in progress (FR-017).
+
 ## Interaction with existing endpoints
 
 - `GET /api/external-collections/:id/execution/runs/:runId` (specs/026) now may include
