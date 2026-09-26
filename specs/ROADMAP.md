@@ -2602,4 +2602,9 @@ Implementation
       folder and collection auth are not editable. The Headers tab's auth note links to the Auth tab.
     - FR-002a defect: the Headers tab's auth note sent a literal bearer token or API key value to
       the browser. It is now hidden there too (`ImpliedAuthHeader.hiddenLiteral`).
+    - AP-026 defect: a value a script set during a run that was not a string (for example
+      `pm.environment.set("id", 42)`) was saved back as is, and opening the Variables panel then
+      crashed the page. Captured values are now stored as text, and values already stored are
+      converted when read (`variableValueText.ts`). Within a run, later requests still see the
+      value as the script set it.
     - Version bumped to 19.4.0 (root, backend, frontend, shared-domain) for these features.

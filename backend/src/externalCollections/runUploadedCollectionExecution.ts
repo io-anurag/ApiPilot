@@ -7,6 +7,7 @@ import { runSingleItem } from "../execution/newmanRunner";
 import { appendResult, isCancelRequested, settleRun } from "./uploadedCollectionExecutionStore";
 import { findEditedItemIds } from "./editedItems";
 import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
+import { toStoredVariableValues } from "./variableValueText";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
 
@@ -99,7 +100,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
     const collectionAuth = collectionJson.auth;
     const collectionEvents = collectionJson.event;
     const declaredVariables = Object.keys(uploadedCollection.variableValues).map((key) => ({ key, value: "" }));
-    let environmentRecord: Record<string, string> = { ...uploadedCollection.variableValues };
+    let environmentRecord: Record<string, unknown> = { ...uploadedCollection.variableValues };
     const captureRawDetails = uploadedCollection.tier === "local";
     const editedItemIds = findEditedItemIds(uploadedCollection.collection);
 
@@ -135,7 +136,9 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       // therefore the "resolved preview" every request view builds from (`collectionView.ts`) —
       // would keep showing whatever was last explicitly saved, silently diverging from the value a
       // later step (in this run or the next one) actually resolves and sends.
-      updateUploadedCollectionVariables(uploadedCollection.id, environmentRecord);
+      // A script can set a number or an object; stored values are text (toStoredVariableValues), or
+      // the variable panel and every later read would get a non-string value.
+      updateUploadedCollectionVariables(uploadedCollection.id, toStoredVariableValues(environmentRecord));
       appendResult(
         runId,
         mapUploadedResult(

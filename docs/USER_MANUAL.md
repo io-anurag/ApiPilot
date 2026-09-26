@@ -386,7 +386,9 @@ earlier request's test script may capture a value (for example a token, with
 `pm.environment.set`) that a later request uses. A request that still sends an unresolved
 `{{variable}}` simply records its own failure. Values captured by scripts during a run are
 saved back to the collection, so the preview shows them afterwards and the next run starts
-with them.
+with them. They are saved as text: a number such as `42` becomes `"42"`, and an object
+becomes its JSON. Within a single run, later requests see the value exactly as the script
+set it.
 
 Click **Start run**. A Staging/Production tier or a destructive request
 (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own requests)

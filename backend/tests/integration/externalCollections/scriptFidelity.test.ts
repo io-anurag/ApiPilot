@@ -242,4 +242,46 @@ describe("external collections: full script fidelity (FR-008, quickstart.md Scen
     expect(targetServer.requests[0].headers["x-signature"]).toBe("sig-shh");
     expect(targetServer.requests[0].headers.authorization).toBe("Bearer shh");
   }, 60_000);
+
+  it("stores a number or an object a test script sets as text, so the variable panel can show it", async () => {
+    const baseUrl = await targetServer.start();
+    const app = createApp();
+    const agent = request.agent(app);
+    const collection = {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Create user",
+          request: { method: "GET", url: "{{baseUrl}}/users" },
+          event: [
+            {
+              listen: "test",
+              script: {
+                type: "text/javascript",
+                exec: ["pm.environment.set('userId', 42);", "pm.environment.set('user', { id: 42 });", "pm.environment.set('active', true);"],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const uploadResponse = await agent
+      .post("/api/external-collections")
+      .field("name", "Captures")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const id = uploadResponse.body.uploadedCollection.id;
+
+    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    expect(started.status).toBe(200);
+    await pollUntilSettled(agent, id, started.body.run.id);
+
+    const view = await agent.get(`/api/external-collections/${id}/collection`);
+    const valueOf = (name: string) =>
+      view.body.collectionView.variables.find((variable: { name: string }) => variable.name === name)?.value;
+    expect(valueOf("userId")).toBe("42");
+    expect(valueOf("user")).toBe('{"id":42}');
+    expect(valueOf("active")).toBe("true");
+  }, 60_000);
 });

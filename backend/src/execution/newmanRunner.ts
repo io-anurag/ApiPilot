@@ -46,9 +46,10 @@ export interface NewmanItemRunInput {
   declaredVariables: PostmanCollectionVariable[];
   /**
    * Accumulated environment values from prior items in this run (workflow handoffs,
-   * research.md D2 addendum) — `{}` for the first item.
+   * research.md D2 addendum) — `{}` for the first item. Values are whatever the scripts set
+   * (a number, an object, ...), passed on unchanged so the next item's scripts see the same value.
    */
-  environment: Record<string, string>;
+  environment: Record<string, unknown>;
   /**
    * The item's ancestor folders, root first, each as its own Postman folder definition without
    * children (`name`, `id`, `auth`, `event`). The item runs nested inside them, so Newman applies
@@ -62,8 +63,9 @@ export interface NewmanItemRunInput {
 
 export interface NewmanItemRunOutput {
   execution: NewmanExecutionResult;
-  /** This item's resulting environment values; feed forward as the next item's `environment`. */
-  environment: Record<string, string>;
+  /** This item's resulting environment values; feed forward as the next item's `environment`.
+   * Not all strings: a script can set any value (`toStoredVariableValues` before storing them). */
+  environment: Record<string, unknown>;
 }
 
 /**
@@ -122,7 +124,7 @@ export async function runSingleItem(
         const execution = (summary.run.executions[0] ?? {}) as unknown as NewmanExecutionResult;
         resolve({
           execution,
-          environment: summary.environment.toObject(false, true) as Record<string, string>,
+          environment: summary.environment.toObject(false, true),
         });
       },
     );
