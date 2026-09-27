@@ -47,6 +47,7 @@ import {
 import { runDeterministicGeneration } from "../testGenerationWorkflow/deterministicGenerationStage";
 import {
   AiEnhancementAlreadyRunningError,
+  AiEnhancementRunningError,
   BatchNotFoundError,
   BatchNotRetryableError,
   EmptyApprovedScenariosError,
@@ -70,7 +71,10 @@ import {
   finalizeScenarioReview,
   regenerateScenario,
 } from "../testGenerationWorkflow/scenarioReviewStage";
-import { startWorkflowFromUpload } from "../testGenerationWorkflow/startWorkflow";
+import {
+  discardCurrentWorkflow,
+  startWorkflowFromUpload,
+} from "../testGenerationWorkflow/startWorkflow";
 import { getCurrentWorkflow } from "../testGenerationWorkflow/workflowStore";
 import { reaffirmSession } from "../session/sessionMiddleware";
 import { getSessionId } from "../session/sessionContext";
@@ -328,6 +332,23 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         // Forwarded to app.ts's centralized error handler, which logs this generically —
         // not duplicated here.
         next(err);
+      }
+    })
+    // Discards the in-progress workflow on its own (FR-010) — 204 whether or not there was one,
+    // so a repeated or racing discard is harmless.
+    .delete((req, res) => {
+      const startedAt = logRequestReceived(req);
+      try {
+        discardCurrentWorkflow();
+        res.status(204).end();
+        logRequestSucceeded(req, startedAt, 204);
+      } catch (err) {
+        if (err instanceof AiEnhancementRunningError) {
+          logRequestFailed(req, startedAt, 409, "ai_enhancement_running");
+          res.status(409).json({ error: "ai_enhancement_running", message: err.message });
+          return;
+        }
+        throw err;
       }
     })
     .all((_req, res) => {

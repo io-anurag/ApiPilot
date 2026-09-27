@@ -22,8 +22,8 @@ export function EntryChooser({
           How do you want to start?
         </h1>
         <p className="mx-auto max-w-xl text-base leading-7 text-muted">
-          Generate a test suite from an OpenAPI specification, or bring an existing
-          Postman collection to run directly.
+          Generate functional and k6 performance tests from an OpenAPI specification, or
+          bring an existing Postman collection to run directly.
         </p>
       </div>
       <div className="grid w-full gap-5 sm:grid-cols-2">
@@ -42,7 +42,8 @@ export function EntryChooser({
           </span>
           <span className="text-sm leading-6 text-muted">
             Upload an OpenAPI specification, review the analysis, generate and approve
-            test scenarios, then produce a runnable Postman collection.
+            test scenarios, then produce a runnable Postman collection and an optional k6
+            performance test.
           </span>
         </button>
         <button

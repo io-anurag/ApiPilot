@@ -90,6 +90,7 @@ flowchart LR
     Workflow --> Dependencies[Dependency analysis]
     Workflow --> Postman[Postman artifact generator]
     Workflow --> Execution[Execution service]
+    Workflow --> Performance[k6 performance testing]
     OpenAPI --> Model[ApiModel]
     Model --> Design
     Design --> TestModel[TestModel]
@@ -102,6 +103,9 @@ flowchart LR
     Approved --> Postman
     Postman --> Artifacts[Collection + environment + README]
     Artifacts --> Execution
+    Approved --> Performance
+    Performance -->|explicit trigger| K6[User-installed k6]
+    Performance --> SQLite
     Execution --> Newman[Newman runner]
     Execution --> SQLite[(Local SQLite)]
     SQLite --> Execution
@@ -172,6 +176,12 @@ flowchart TD
     Edit --> Run[Explicit execution start]
     Run --> Newman[Newman, one item at a time]
     Newman --> Results[Categorized request results]
+    Approved --> PerfPlan[Optional performance plan]
+    ApprovedWorkflows --> PerfPlan
+    PostmanArtifacts -.->|opens once generated| PerfPlan
+    PerfPlan --> K6Script[k6 script, no secrets]
+    K6Script --> K6Run[Explicit run with user-installed k6]
+    K6Run --> PerfReport[HTML performance report]
 ```
 
 ### 1. OpenAPI to `ApiModel`
@@ -330,6 +340,7 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | Method         | Endpoint                                                    | Purpose                                                                                                 |
 | -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `GET` / `POST` | `/api/test-generation-workflow`                             | Read the current session workflow, poll progress with `?progressOnly=true`, or upload/start a workflow. |
+| `DELETE`       | `/api/test-generation-workflow`                             | Discard the current session workflow; `409 ai_enhancement_running` while AI enhancement runs.           |
 | `POST`         | `/api/test-generation-workflow/api-review/continue`         | Complete API review, optionally with `{ selectedOperationKeys }`; absent or empty keeps every operation. |
 | `POST`         | `/api/test-generation-workflow/deterministic-generation`    | Run deterministic scenario generation.                                                                  |
 | `POST`         | `/api/test-generation-workflow/ai-enhancement`              | Start optional AI enhancement.                                                                          |

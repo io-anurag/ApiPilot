@@ -35,6 +35,9 @@ flowchart LR
   PM --> ART["Collection + environment + README"]
   ART --> EXEC["Execution (Newman)"]
   ART -->|"UI hand-off"| EXTC
+  APPROVED --> PERF["k6 performance testing (optional)"]
+  PERF -->|"explicit trigger"| K6["User-installed k6"]
+  PERF --> DB
   EXEC --> RESULTS["Execution results"]
   AI --> PROVIDER["AIProvider"]
   DEP --> PROVIDER
@@ -97,6 +100,8 @@ flowchart TD
   R --> AT["Approved test intent"]
   W --> AT
   AT --> X["Deterministic Postman export"]
+  AT --> PP["Optional k6 performance plan and script"]
+  X -.->|"opens once export is complete"| PP
 ```
 
 ### OpenAPI to `ApiModel`
@@ -216,6 +221,11 @@ assigns each browser an unguessable, cryptographically random session identifier
 pipeline module needed to change to become session-aware. Concurrent sessions never see or
 affect each other's workflow, and a session idle for over 60 minutes is evicted — its next visit
 is told explicitly that its session expired, rather than shown an indistinguishable empty state.
+A user-confirmed discard (FR-010) happens either as part of a replacement upload
+(`POST ?discardExisting=true`) or on its own through `DELETE /api/test-generation-workflow`
+(v19.5.1), which the UI's "Discard and start new" calls immediately. The standalone discard is
+refused (`409 ai_enhancement_running`) while an AI enhancement run is in flight, because that run
+still writes into the workflow at each batch boundary.
 The underlying `AIProvider` (readiness, model, and serial inference queue) remains one shared,
 process-wide resource, unaffected by this per-session isolation.
 
@@ -231,10 +241,16 @@ stateDiagram-v2
   DependencyAnalysis --> WorkflowReview
   WorkflowReview --> PostmanGeneration
   PostmanGeneration --> Execution: entered automatically
+  PostmanGeneration --> PerformanceTesting: optional, opened by the user
+  PerformanceTesting --> PerformanceTesting: complete once a script is generated, active again if the plan changes
   Execution --> Complete: skipped or finished
   AiEnhancement --> AiEnhancement: retry before scenario review finalizes
   Analysis --> Upload: invalid document
-  Complete --> Upload: explicit replacement confirmation
+  note left of Upload
+    Discard (FR-010) from any stage after explicit confirmation:
+    DELETE /api/test-generation-workflow, or a replacement upload
+    with discardExisting=true. Refused while an AI enhancement run is in flight.
+  end note
 ```
 
 `execution` (specs/009 Clarifications 2026-09-20) is the tenth stage and the only optional one
@@ -471,7 +487,10 @@ views keeps each one's in-progress state. The guided workflow page stays mounted
 the session once first reached, even across "Back to start": its resume-on-mount effect repeats
 the hand-off for a workflow already at `execution`, guarded by a per-instance `useRef`, and
 remounting would reset that guard and bounce the user straight back to "Import & Run Collection".
-The external collections page is unmounted on "Back to start". No routing library was introduced,
+The external collections page follows the same rule (v19.5.1): it has its own "Back to start"
+control and stays mounted once first reached, so its selection, per-run order (specs/028
+FR-015c) and in-progress run view survive a return to the entry chooser. No routing library was
+introduced,
 mirroring the guided workflow's own original decision against one for stage navigation.
 
 ## AI failure analysis

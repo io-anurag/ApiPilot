@@ -74,6 +74,18 @@
   an API-only path (see specs/018 Clarifications 2026-09-23). Refines the 2026-09-20 answer above;
   it does not change which stages exist or their order.
 
+### Session 2026-09-27
+
+- Q: Confirming "Discard and start new" (FR-010) only opened the starting page; the old workflow
+  was discarded later, and only if a new specification was uploaded, so it was still resumable
+  after a reload or through "Cancel — return to my in-progress workflow". Is the confirmation
+  itself the discard? → A: Yes. Confirming discards the workflow immediately through
+  `DELETE /api/test-generation-workflow` (contracts/test-generation-workflow-api.md), and the
+  starting page no longer offers a way back to it. The discard is refused with
+  `409 ai_enhancement_running` while an AI enhancement run is in flight, since that run still
+  writes into the workflow; the UI shows the reason and keeps the workflow. Uploading with
+  `discardExisting=true` is unchanged and still supported. Released in v19.5.1.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Go From Specification to Executable Tests in One Guided Flow (Priority: P1)

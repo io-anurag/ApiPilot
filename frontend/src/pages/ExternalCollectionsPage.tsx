@@ -73,7 +73,8 @@ function containerOf(view: CollectionView, containerId: string): { items: Collec
  */
 export function ExternalCollectionsPage({
   preload,
-}: Readonly<{ preload?: ImportPreload | null }>) {
+  onExit,
+}: Readonly<{ preload?: ImportPreload | null; onExit?: () => void }>) {
   const [uploadedCollections, setUploadedCollections] = useState<
     UploadedCollectionSummary[]
   >([]);
@@ -285,6 +286,18 @@ export function ExternalCollectionsPage({
 
   return (
     <div className="space-y-6">
+      {onExit && (
+        <div className="flex justify-start">
+          <button
+            type="button"
+            aria-label="Exit Import & Run Collection and return to the start screen"
+            onClick={onExit}
+            className={BUTTON_STYLES.ghost}
+          >
+            ← Back to start
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
           <p className="font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">

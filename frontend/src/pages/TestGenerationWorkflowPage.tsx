@@ -15,6 +15,7 @@ import type {
   WorkflowStageId,
 } from "@apipilot/shared-domain";
 import {
+  discardWorkflow,
   fetchCurrentWorkflow,
   runDeterministicGeneration,
   startWorkflow,
@@ -147,7 +148,7 @@ const HOME_FEATURES: {
   { label: "LOCAL", description: "Private by default", Icon: LockIcon },
   { label: "REPEATABLE", description: "Deterministic core", Icon: RepeatIcon },
   { label: "TRACEABLE", description: "Visible provenance", Icon: TrailIcon },
-  { label: "VERIFIABLE", description: "Runs against your API", Icon: CheckShieldIcon },
+  { label: "VERIFIABLE", description: "Functional and k6 load runs", Icon: CheckShieldIcon },
 ];
 
 /**
@@ -173,13 +174,12 @@ export function TestGenerationWorkflowPage({
   const [loading, setLoading] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  // Gates opening the starting page at all: clicking "Start a new workflow" while one is running
-  // must confirm the discard up front (FR-010), rather than only warning once a replacement file
-  // is chosen. Confirming sets showStartPage; the page is only reachable via that confirmation
-  // (or directly, when there is no workflow to discard), so any file chosen there is uploaded with
-  // discardExisting already implied.
+  // Clicking "Start a new workflow" while one is running must confirm the discard up front
+  // (FR-010). Confirming discards it on the server right away (DELETE), so the starting page is
+  // only ever shown with no workflow left to return to or to replace on upload.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [showStartPage, setShowStartPage] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState<string | null>(null);
   // Set only when this session's own prior workflow was discarded for inactivity
   // (specs/017-session-workflow-isolation FR-007a) — distinct from a session that never
   // started one, which never sets this.
@@ -261,9 +261,7 @@ export function TestGenerationWorkflowPage({
       setUploadError("Only .yaml or .yml OpenAPI specification files are supported.");
       return;
     }
-    // Reaching the starting page while a workflow exists only happens after the user already
-    // confirmed the discard (see confirmDiscard below), so no second confirmation is needed here.
-    await doUpload(file, workflow !== null);
+    await doUpload(file);
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -292,10 +290,10 @@ export function TestGenerationWorkflowPage({
     await processFile(file);
   }
 
-  async function doUpload(file: File, discardExisting: boolean) {
+  async function doUpload(file: File) {
     setUploading(true);
     setUploadError(null);
-    const result = await startWorkflow(file, discardExisting);
+    const result = await startWorkflow(file);
     setUploading(false);
     if (!result.ok) {
       setUploadError(result.message);
@@ -303,11 +301,24 @@ export function TestGenerationWorkflowPage({
     }
     setWorkflow(result.workflow);
     setViewedStageId(result.workflow.activeStageId);
-    setShowStartPage(false);
+  }
+
+  async function handleConfirmDiscard() {
+    setDiscarding(true);
+    setDiscardError(null);
+    const result = await discardWorkflow();
+    setDiscarding(false);
+    if (!result.ok) {
+      setDiscardError(result.message);
+      return;
+    }
+    setConfirmDiscard(false);
+    setWorkflow(null);
+    setViewedStageId(null);
   }
 
   const displayStageId = viewedStageId ?? workflow?.activeStageId ?? null;
-  const showHome = !workflow || showStartPage;
+  const showHome = !workflow;
   // The AI Enhancement stage's own view carries an actual retry action once skipped/partial
   // (rendered below), so the generic "nothing here can be changed" read-only notice would
   // directly contradict it — suppressed only for that specific case.
@@ -359,20 +370,23 @@ export function TestGenerationWorkflowPage({
           <p className="text-sm text-warning-700 dark:text-warning-100">
             A workflow is already in progress. Starting a new one discards it. Continue?
           </p>
+          {discardError && <ErrorState testId="discard-error" message={discardError} />}
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleConfirmDiscard}
+              disabled={discarding}
+              className={BUTTON_STYLES.danger}
+            >
+              {discarding ? "Discarding…" : "Discard and start new"}
+            </button>
             <button
               type="button"
               onClick={() => {
                 setConfirmDiscard(false);
-                setShowStartPage(true);
+                setDiscardError(null);
               }}
-              className={BUTTON_STYLES.danger}
-            >
-              Discard and start new
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDiscard(false)}
+              disabled={discarding}
               className={BUTTON_STYLES.secondary}
             >
               Cancel
@@ -410,8 +424,9 @@ export function TestGenerationWorkflowPage({
                 <p className="max-w-2xl text-base leading-7 text-muted">
                   Analyze endpoints, generate deterministic scenarios, and enhance
                   selectively with local AI. Review every result with its provenance
-                  intact, then run the approved suite against your own environment to see
-                  real pass/fail results.
+                  intact, run the approved suite against your own environment to see real
+                  pass/fail results, then turn the same scenarios into an optional k6 load
+                  test.
                 </p>
               </div>
               <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
@@ -482,15 +497,6 @@ export function TestGenerationWorkflowPage({
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   />
                 </label>
-                {workflow && (
-                  <button
-                    type="button"
-                    onClick={() => setShowStartPage(false)}
-                    className={BUTTON_STYLES.ghost}
-                  >
-                    Cancel — return to my in-progress workflow
-                  </button>
-                )}
               </div>
             </div>
             <ol className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
@@ -526,7 +532,7 @@ export function TestGenerationWorkflowPage({
           </div>
         </div>
       )}
-      {workflow && !showStartPage && (
+      {workflow && (
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
             <p className="font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
@@ -550,7 +556,7 @@ export function TestGenerationWorkflowPage({
       )}
       {uploading && <p className="text-sm text-muted">Uploading…</p>}
       {uploadError && <ErrorState testId="upload-error" message={uploadError} />}
-      {workflow && !showStartPage && (
+      {workflow && (
         <>
           <div className="border border-border bg-surface p-3 shadow-sm">
             <WorkflowStageTracker

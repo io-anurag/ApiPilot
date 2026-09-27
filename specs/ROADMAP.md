@@ -2710,3 +2710,28 @@ Implementation
       `GET /environments` (AP-017) returns decrypted variable values to the browser, which the
       restored form keeps in password inputs.
     - Version bumped to 19.5.0 (root, backend, frontend, shared-domain).
+
+35. **Guided workflow discard fix, Import "Back to start", k6 on the start screens; version 19.5.1 (2026-09-27).**
+    - AP-009 defect (FR-010): confirming **Discard and start new** only opened the starting page;
+      the old workflow was discarded later, and only if a new specification was uploaded, so it
+      stayed resumable. Confirming now discards it immediately through the new, additive
+      `DELETE /api/test-generation-workflow` (`204`, idempotent), and the starting page's
+      "Cancel — return to my in-progress workflow" action is removed. The discard is refused with
+      `409 ai_enhancement_running` while an AI enhancement run is in flight, because that run still
+      writes into the workflow; the UI shows the reason and keeps the workflow. Recorded in specs/009
+      Clarifications 2026-09-27 and contracts/test-generation-workflow-api.md.
+      `POST ?discardExisting=true` is unchanged.
+    - AP-026: "Import & Run Collection" has its own **← Back to start**. Its page now stays mounted
+      once reached, as the guided workflow already did, so the selection, per-run order (specs/028
+      FR-015c) and in-progress run view survive the return to the entry chooser.
+    - Start screen and guided-workflow start page copy now mention the optional k6 performance test
+      (AP-029). Layout unchanged.
+    - Diagrams: the architecture.md stage diagram now shows the `performanceTesting` stage and
+      notes that a confirmed discard can happen from any stage. The README and architecture.md
+      flowcharts now show k6 performance testing. All of this was missing since AP-029 (19.5.0).
+    - Validation: `npm test` 1,851 passed, 1 failed and 5 skipped across 249 test files. The one
+      failure, `renderScript.test.ts` "matches the reviewed golden script", already existed and is
+      unrelated to this change: with `core.autocrlf=true` the golden fixtures in
+      `backend/tests/fixtures/performance/golden/` are checked out with CRLF line endings while
+      the renderer emits LF. `npm run lint` and `npm run build` are clean.
+    - Version bumped to 19.5.1 (root, backend, frontend, shared-domain).

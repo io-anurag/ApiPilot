@@ -51,6 +51,14 @@ export function getCurrentWorkflow(): TestGenerationWorkflow | undefined {
   return getState().currentWorkflow;
 }
 
+/** Removes the calling session's current workflow, returning it (or `undefined` if there was none). */
+export function clearCurrentWorkflow(): TestGenerationWorkflow | undefined {
+  const state = getState();
+  const previous = state.currentWorkflow;
+  state.currentWorkflow = undefined;
+  return previous;
+}
+
 /** Test-only hook to clear every session's state between test runs (mirrors resetAIProvider). */
 export function resetStore(): void {
   sessionStates.clear();

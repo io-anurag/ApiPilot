@@ -14,6 +14,20 @@ export class WorkflowInProgressError extends Error {
   }
 }
 
+/**
+ * `DELETE /api/test-generation-workflow` was called while an AI enhancement run is still in
+ * flight. The run writes back into the workflow at every batch boundary, so discarding under it
+ * would fail that run mid-way rather than stop it.
+ */
+export class AiEnhancementRunningError extends Error {
+  constructor() {
+    super(
+      "AI enhancement is still running. Cancel it and wait for it to stop before discarding this workflow.",
+    );
+    this.name = "AiEnhancementRunningError";
+  }
+}
+
 /** `scenario-review/finalize` was called with zero approved scenarios (FR-011). */
 export class EmptyApprovedScenariosError extends Error {
   constructor() {

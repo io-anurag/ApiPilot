@@ -55,6 +55,30 @@ POST /api/test-generation-workflow?discardExisting=true
 `POST /api/specifications` (AP-002 contract), since this endpoint calls the same parse/validate/build
 pipeline.
 
+## `DELETE /api/test-generation-workflow`
+
+Discards the calling session's in-progress workflow on its own (FR-010), once the user has
+confirmed it. Added 2026-09-27 (v19.5.1) so the UI's "Discard and start new" confirmation takes
+effect immediately rather than only when a replacement specification is uploaded. Additive:
+`POST ?discardExisting=true` is unchanged.
+
+### Success Response: `204 No Content`
+
+The workflow was discarded, or there was none to discard (idempotent). A following `GET` returns
+`204`, and a plain `POST` (without `discardExisting`) starts a new workflow.
+
+### Error Response: `409 Conflict`
+
+An AI enhancement run is still in flight (`stages.aiEnhancement.progress` present — the same
+signal as FR-008). The workflow is left unchanged; cancel the run and retry once it has settled.
+
+```json
+{
+  "error": "ai_enhancement_running",
+  "message": "AI enhancement is still running. Cancel it and wait for it to stop before discarding this workflow."
+}
+```
+
 ## `POST /api/test-generation-workflow/api-review/continue`
 
 Completes the `apiReview` stage, recording which operations to carry forward (research.md D3

@@ -144,6 +144,30 @@ export async function startWorkflow(file: File, discardExisting = false): Promis
   }
 }
 
+export type DiscardWorkflowResult = { ok: true } | { ok: false; error: string; message: string };
+
+/**
+ * Discards the in-progress workflow once the user has confirmed it (FR-010). Refused with
+ * `ai_enhancement_running` while an AI enhancement run is still in flight.
+ */
+export async function discardWorkflow(): Promise<DiscardWorkflowResult> {
+  try {
+    const response = await fetch("/api/test-generation-workflow", { method: "DELETE" });
+    if (response.ok) return { ok: true };
+    const parsed = await response.json().catch(() => null);
+    const errorCategory = (parsed?.error as string) ?? "unknown_error";
+    logger.error("request_failed", { operation: "discardWorkflow", errorCategory, statusCode: response.status });
+    return {
+      ok: false,
+      error: errorCategory,
+      message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
+    };
+  } catch (err) {
+    logger.error("network_error", { operation: "discardWorkflow", errorCategory: "network_error" });
+    return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
+  }
+}
+
 /**
  * Completes API review. `selectedOperationKeys` (`toOperationKey()` keys) narrows deterministic
  * generation and AI enhancement to those operations; omitted or empty keeps every operation in

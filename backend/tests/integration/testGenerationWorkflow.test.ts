@@ -58,6 +58,41 @@ describe("test generation workflow orchestration", () => {
     expect(discarded.body.workflow.id).not.toBe(first.body.workflow.id);
   });
 
+  it("DELETE discards the in-progress workflow on its own, so a plain upload then succeeds (FR-010)", async () => {
+    const app = createApp(fixedProvider(emptyCandidates));
+    const agent = request.agent(app);
+
+    await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+
+    const discarded = await agent.delete("/api/test-generation-workflow");
+    expect(discarded.status).toBe(204);
+    expect((await agent.get("/api/test-generation-workflow")).status).toBe(204);
+
+    // Idempotent: nothing left to discard is still a success.
+    expect((await agent.delete("/api/test-generation-workflow")).status).toBe(204);
+
+    const restarted = await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    expect(restarted.status).toBe(200);
+  });
+
+  it("DELETE only discards the calling session's own workflow (specs/017)", async () => {
+    const app = createApp(fixedProvider(emptyCandidates));
+    const owner = request.agent(app);
+    const other = request.agent(app);
+
+    await owner
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await other.get("/api/test-generation-workflow");
+
+    expect((await other.delete("/api/test-generation-workflow")).status).toBe(204);
+    expect((await owner.get("/api/test-generation-workflow")).status).toBe(200);
+  });
+
   it("maps malformed uploads to AP-002's existing error codes", async () => {
     const app = createApp();
     const response = await request(app)
@@ -551,6 +586,51 @@ describe("test generation workflow orchestration", () => {
     expect(afterEnhancement.status).toBe(200);
     expect(concurrentResponse?.status).toBe(409);
     expect(concurrentResponse?.body.error).toBe("ai_enhancement_already_running");
+  });
+
+  it("DELETE returns 409 ai_enhancement_running while an AI enhancement run is in flight, leaving the workflow intact", async () => {
+    let discardResponse: { status: number; body: { error?: string } } | undefined;
+    // As above: the nested request during `infer` must reuse this test's own session agent.
+    const provider: AIProvider = {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date(0).toISOString(),
+      }),
+      getInputBudget: async () => 10,
+      infer: async (req) => {
+        if (req.requestId.endsWith("-batch1") && !discardResponse) {
+          discardResponse = await agent.delete("/api/test-generation-workflow");
+        }
+        return {
+          contractVersion: 1,
+          requestId: req.requestId,
+          status: "success",
+          content: emptyCandidates,
+          modelId: "mock-model",
+          provider: "mock",
+          durationMs: 1,
+        };
+      },
+    };
+    const app = createApp(provider);
+    const agent = request.agent(app);
+
+    await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const afterEnhancement = await agent.post(
+      "/api/test-generation-workflow/ai-enhancement",
+    );
+
+    expect(discardResponse?.status).toBe(409);
+    expect(discardResponse?.body.error).toBe("ai_enhancement_running");
+    expect(afterEnhancement.status).toBe(200);
+    expect((await agent.get("/api/test-generation-workflow")).status).toBe(200);
   });
 });
 

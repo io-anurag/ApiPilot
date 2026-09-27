@@ -135,6 +135,41 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("'Back to start' on Import & Run Collection returns to the entry chooser and keeps the page mounted for when it is picked again", async () => {
+    stubFetch();
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Import & Run Collection" }),
+    );
+    expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
+    const externalCollectionFetches = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([input]) => input.toString().includes("/api/external-collections"))
+        .length;
+    await waitFor(() => expect(externalCollectionFetches()).toBeGreaterThan(0));
+    const fetchesBeforeExit = externalCollectionFetches();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Exit Import & Run Collection and return to the start screen",
+      }),
+    );
+
+    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Top-level views" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
+
+    expect(await screen.findByText("Import a Postman collection")).toBeVisible();
+    // Not remounted: its uploaded-collections list is not fetched a second time.
+    expect(externalCollectionFetches()).toBe(fetchesBeforeExit);
+  });
+
   it("re-selecting 'Guided Workflow' after 'Back to start' resumes it instead of silently handing off to Import & Run Collection again (regression)", async () => {
     const postmanArtifact = {
       collection: { info: { name: "c" }, item: [] },

@@ -41,8 +41,12 @@ function workflowAt(activeStageId: string, overrides: Record<string, unknown> = 
   };
 }
 
-/** Routes fetch calls to canned JSON responses; POST responses come from `postQueue`, in order. */
-function stubFetch(postQueue: unknown[]) {
+/** Routes fetch calls to canned JSON responses; POST responses come from `postQueue`, in order.
+ * DELETE (discard) answers 204 unless `deleteResponse` supplies a failure. */
+function stubFetch(
+  postQueue: unknown[],
+  deleteResponse: { status: number; body: unknown } = { status: 204, body: null },
+) {
   let postCallIndex = 0;
   vi.stubGlobal(
     "fetch",
@@ -56,6 +60,13 @@ function stubFetch(postQueue: unknown[]) {
         const response = postQueue[postCallIndex];
         postCallIndex += 1;
         return { ok: true, status: 200, json: () => Promise.resolve(response) };
+      }
+      if (method === "DELETE" && url.includes("/api/test-generation-workflow")) {
+        return {
+          ok: deleteResponse.status < 400,
+          status: deleteResponse.status,
+          json: () => Promise.resolve(deleteResponse.body),
+        };
       }
       throw new Error(`Unexpected fetch: ${method} ${url}`);
     }),
@@ -210,23 +221,32 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
-  it("requires confirmation before discarding an in-progress workflow to start a new one (FR-010)", async () => {
-    stubFetch([{ workflow: workflowAt("apiReview") }]);
-
+  async function renderWithWorkflowInProgress() {
     render(<TestGenerationWorkflowPage />);
     await waitFor(() =>
       expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
     );
-
-    const file = new File(["openapi: 3.0.3"], "valid.yaml", {
-      type: "application/x-yaml",
-    });
     fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
-      target: { files: [file] },
+      target: {
+        files: [
+          new File(["openapi: 3.0.3"], "valid.yaml", { type: "application/x-yaml" }),
+        ],
+      },
     });
     await waitFor(() =>
       expect(screen.getByTestId("api-review-stage")).toBeInTheDocument(),
     );
+  }
+
+  function deleteCalls() {
+    return vi
+      .mocked(fetch)
+      .mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "DELETE");
+  }
+
+  it("requires confirmation before discarding an in-progress workflow, then discards it on the server immediately (FR-010)", async () => {
+    stubFetch([{ workflow: workflowAt("apiReview") }]);
+    await renderWithWorkflowInProgress();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -246,6 +266,7 @@ describe("TestGenerationWorkflowPage", () => {
     // Cancelling the confirmation leaves the in-progress workflow untouched.
     expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
     expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
+    expect(deleteCalls()).toHaveLength(0);
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -254,44 +275,26 @@ describe("TestGenerationWorkflowPage", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
 
-    // Confirmed — now on the starting page, with the prior workflow's content gone.
+    // Confirmed — the workflow is discarded on the server, and the starting page offers no way
+    // back to it.
     expect(
-      screen.getByText("Turn an OpenAPI specification into a test suite"),
+      await screen.findByText("Turn an OpenAPI specification into a test suite"),
     ).toBeInTheDocument();
+    expect(deleteCalls()).toHaveLength(1);
+    expect(String(deleteCalls()[0][0])).toContain("/api/test-generation-workflow");
     expect(screen.queryByTestId("api-review-stage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Cancel — return to my in-progress workflow" }),
-    );
-
-    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
     expect(
-      screen.queryByText("Turn an OpenAPI specification into a test suite"),
+      screen.queryByRole("button", { name: "Cancel — return to my in-progress workflow" }),
     ).not.toBeInTheDocument();
   });
 
-  it("uploads with discardExisting when a file is chosen after confirming the discard (FR-010)", async () => {
+  it("uploads a new specification without discardExisting once the discard has already happened", async () => {
     stubFetch([
       { workflow: workflowAt("apiReview") },
       { workflow: workflowAt("apiReview", { specificationFilename: "other.yaml" }) },
     ]);
-
-    render(<TestGenerationWorkflowPage />);
-    await waitFor(() =>
-      expect(screen.getByLabelText("Upload OpenAPI specification")).toBeInTheDocument(),
-    );
-
-    fireEvent.change(screen.getByLabelText("Upload OpenAPI specification"), {
-      target: {
-        files: [
-          new File(["openapi: 3.0.3"], "valid.yaml", { type: "application/x-yaml" }),
-        ],
-      },
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("api-review-stage")).toBeInTheDocument(),
-    );
+    await renderWithWorkflowInProgress();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -299,6 +302,7 @@ describe("TestGenerationWorkflowPage", () => {
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
+    await screen.findByText("Turn an OpenAPI specification into a test suite");
 
     const fetchMock = vi.mocked(fetch);
     const callsBefore = fetchMock.mock.calls.length;
@@ -313,7 +317,32 @@ describe("TestGenerationWorkflowPage", () => {
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore));
 
     const [url] = fetchMock.mock.calls[callsBefore];
-    expect(String(url)).toContain("discardExisting=true");
+    expect(String(url)).not.toContain("discardExisting");
+  });
+
+  it("keeps the workflow and explains why when the server refuses the discard", async () => {
+    stubFetch([{ workflow: workflowAt("apiReview") }], {
+      status: 409,
+      body: {
+        error: "ai_enhancement_running",
+        message:
+          "AI enhancement is still running. Cancel it and wait for it to stop before discarding this workflow.",
+      },
+    });
+    await renderWithWorkflowInProgress();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Start a new workflow from a different specification",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
+
+    expect(await screen.findByTestId("discard-error")).toHaveTextContent(
+      "AI enhancement is still running",
+    );
+    expect(screen.getByTestId("discard-existing-confirmation")).toBeInTheDocument();
+    expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
   });
 
   it("renders the AI-enhancement partial banner (not skipped) on the AI Enhancement stage's own view, not cluttering scenario review, when the stage status is 'partial' (FR-011)", async () => {

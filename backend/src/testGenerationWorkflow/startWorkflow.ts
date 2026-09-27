@@ -2,8 +2,12 @@ import { buildApiModel } from "../openapi/buildApiModel";
 import { parseYaml } from "../openapi/parseYaml";
 import { validateSpec } from "../openapi/validateSpec";
 import { createLogger } from "../logger";
-import { WorkflowInProgressError } from "./errors";
-import { getCurrentWorkflow, startWorkflow as startWorkflowInStore } from "./workflowStore";
+import { AiEnhancementRunningError, WorkflowInProgressError } from "./errors";
+import {
+  clearCurrentWorkflow,
+  getCurrentWorkflow,
+  startWorkflow as startWorkflowInStore,
+} from "./workflowStore";
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 
 const logger = createLogger("testGenerationWorkflow.startWorkflow");
@@ -38,4 +42,22 @@ export async function startWorkflowFromUpload(
     operationCount: apiModel.summary.operationCount,
   });
   return workflow;
+}
+
+/**
+ * Discards the calling session's in-progress workflow on its own, once the user has confirmed it
+ * (FR-010), so the confirmation takes effect immediately rather than only when a replacement
+ * specification is uploaded. Idempotent: returns `false` when there was nothing to discard.
+ * Refuses with `AiEnhancementRunningError` while an AI enhancement run is in flight
+ * (`progress` present, the same signal FR-008 uses), since that run still writes into the workflow.
+ */
+export function discardCurrentWorkflow(): boolean {
+  const existing = getCurrentWorkflow();
+  if (!existing) return false;
+  if (existing.stages.aiEnhancement.progress) {
+    throw new AiEnhancementRunningError();
+  }
+  clearCurrentWorkflow();
+  logger.info("workflow_discarded", { workflowId: existing.id });
+  return true;
 }
