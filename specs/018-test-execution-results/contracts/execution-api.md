@@ -112,6 +112,10 @@ confirmation step; the run then starts exactly as the plain success case above.
 { "error": "execution_in_progress", "message": "...", "runId": "..." }
 ```
 
+*Note 2026-09-27 (AP-029, `specs/031-k6-performance-testing` FR-029): a k6 performance run in
+progress also occupies this slot, so it refuses a start with this same response and `runId`.
+Additive; nothing else about this route changes.*
+
 **409 `empty_approved_test_model`** — mirrors the existing Postman-generation refusal; there is
 nothing to execute.
 

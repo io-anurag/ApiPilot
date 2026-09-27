@@ -70,11 +70,12 @@ model lifecycle, batching, request queueing, and diagnostics.
 | `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
 | `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection/environment pair, sibling to `execution/` rather than an extension of it (specs/026-external-collection-execution). Reuses `execution/newmanRunner.ts`'s dispatch unchanged; maps results through its own, narrower mapper rather than `execution/mapNewmanResult.ts`, since an uploaded collection's arbitrary named tests have no `TestScenario` to interpret them against. |
 | `backend/src/failureAnalysis/`        | On-demand AI analysis of one failed uploaded-collection result (specs/030-ai-failure-analysis): deterministic evidence extraction, redaction, specification-context matching against the current guided workflow, versioned prompt, response parsing/validation, and the per-session in-progress registry. Reaches the model only through `AIProvider` and never calls the target API. |
-| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, failure analyses, and AI readiness/benchmark diagnostics; at-rest encryption of credential values and analyses (specs/025-local-persistence-layer, specs/026-external-collection-execution, specs/030-ai-failure-analysis). |
+| `backend/src/performance/`            | k6 performance testing (specs/031-k6-performance-testing): pure plan building and reorder validation (`plan/`), the only k6-aware code (`k6/`: script rendering, readiness probe, process runner, metrics stream), and pure aggregation, thresholds, findings and HTML report rendering (`report/`). Reuses the Postman request builders unchanged. |
+| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, failure analyses, performance runs, and AI readiness/benchmark diagnostics; at-rest encryption of credential values and analyses (specs/025-local-persistence-layer, specs/026-external-collection-execution, specs/030-ai-failure-analysis). |
 | `frontend/src/pages/`                 | Composition roots for the guided workflow and the collection import/editing/execution view.                                                    |
 | `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
 | `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
-| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, Postman artifact, execution, uploaded-collection, and failure-analysis concepts. |
+| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, Postman artifact, execution, uploaded-collection, failure-analysis, and performance-testing concepts. |
 
 ## Domain pipeline
 
@@ -573,6 +574,74 @@ additionally requires at least 4 real, redacted recorded failures in the corpus,
 yet, so the feature is not recorded as Implemented (constitution XXII). The pipeline around the
 model is model-agnostic and does not change with it.
 
+## k6 performance testing
+
+AP-029 (`specs/031-k6-performance-testing`) turns the guided workflow's approved scenarios and
+workflows into a k6 load test, runs it on the user's explicit trigger with a k6 the user
+installed, and reports the result. It is the optional last guided-workflow stage,
+`performanceTesting`, which opens once `postmanGeneration` is `complete`, whatever `execution`'s
+status (research D1). It never blocks the workflow: nothing computes whole-workflow completion.
+
+```text
+approved TestModel + approved IntegrationWorkflows + selection
+  → plan/            PerformancePlan (journeys, steps, expected statuses, values, profile, thresholds)
+  → k6/renderScript  byte-identical script.js + environment template (no values)
+  → POST /runs       run directory → integrity check → k6 child process (no shell, minimal env)
+  → metrics stream   k6 --out json → constant-memory aggregate → progress checkpoints
+  → report/          thresholds, fixed-rule findings, self-contained HTML (CSP, escaped, no JS)
+```
+
+- **Module boundaries** (`backend/src/performance/`). `plan/` is pure: scenario selection
+  (rule-generated before AI-enhanced, then the lowest id), journey building from approved
+  workflows, reorder validation, expected statuses, user-supplied values and unique body fields.
+  `k6/` is the only code that knows k6: script rendering, readiness, the process runner and the
+  metrics-stream parser. `report/` is pure: histogram, aggregate, thresholds, findings and the HTML
+  renderer. The shared types in `packages/shared-domain/src/performance.ts` contain no k6 syntax.
+- **Postman reuse.** Each step's request is built by the Postman generator's own
+  `buildRequestItem`, with its auth from `mapOperationAuth` and its OAuth2 token request from
+  `buildOAuth2SetupFolders`, so URL, query, header and body serialization match the functional
+  tests exactly. Only three things differ: a path parameter no workflow step produces becomes a
+  user-supplied value instead of the scenario's generated placeholder, FR-016's unique email and
+  uuid fields become per-iteration values, and tokens are acquired in k6's `setup()` rather than by
+  Postman scripts. `postman/` itself is unchanged.
+- **The script** embeds the plan as data (journeys, request templates, expected codes, extractions)
+  and runs it with one fixed interpreter. Templates hold only `{{name}}` references; each value is
+  read from `APIPILOT_V_<index>` at run time. It imports only k6 built-in modules, excludes the
+  `url` and `name` system tags, tags every request with its step and journey, and records missing
+  data, dependants not attempted, journeys cut short and token refreshes as custom counters. The
+  first token is acquired once and shared; each virtual user then refreshes its own copy at a fixed
+  point between 70% and 80% of the stated lifetime, derived from its virtual-user number.
+- **The generated script stays backend-only** (`performance/scriptStore.ts`, per session and
+  workflow). The workflow record carries the plan, never the script text; the frontend receives
+  `ScriptStatus` and downloads the files through their routes.
+- **Execution and the XVII exception.** Running a generated script is permitted only under the
+  constitution v2.3.0 XVII exception of 2026-09-24, and every condition is enforced in code:
+  - a run starts only on `POST .../performance/runs`, the per-run trigger, which names its target;
+    nothing starts, repeats or resumes a run automatically;
+  - before k6 is spawned, the written script is re-read and compared by SHA-256 with the generated
+    one; no route accepts script content;
+  - k6 is found through `K6_BINARY_PATH` or `PATH` and probed with `k6 version` (≥ 1.0.0), and is
+    never downloaded or installed;
+  - k6 runs with `--no-usage-report` and local JSON output only, no shell, and a child environment
+    of `PATH`, the platform's temp/home variables and the `APIPILOT_V_<n>` values only;
+  - the run controls state that load comes from the machine running the backend.
+- **Runs** are rows in the unencrypted `performance_runs` table (no values, bodies, tokens or
+  URLs), owned by the session and deleted with it. A run shares the session-wide "one execution in
+  progress" slot with functional and uploaded-collection runs. Its orchestration uses the session
+  id captured at the trigger rather than the request's AsyncLocalStorage context, checkpoints
+  progress every 2 seconds, and calls the session registry's `touch` on each checkpoint, so a long
+  run keeps its session alive with no browser open. Cancelling sends SIGINT, then SIGKILL after
+  5 seconds (`taskkill /T /F` on Windows). At startup, runs left in progress are recorded as
+  cancelled for `backend-restart` and leftover run directories under `os.tmpdir()/apipilot-k6/`
+  are removed.
+- **Results.** ApiPilot, not k6, decides what a failure is: a status outside the step's expected
+  codes, or no response. Latency percentiles come from a log-linear histogram accurate to 1%, and
+  the timeline has at most about 200 buckets, so memory is constant in the request count.
+  Thresholds are evaluated from the aggregate after the run and never abort it. The HTML report is
+  rendered on request from the stored run and shown in an `<iframe sandbox="">`: the app's only
+  embedded HTML, granted no permissions, with every string escaped and a Content-Security-Policy
+  that lets it load nothing.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -593,6 +662,10 @@ model is model-agnostic and does not change with it.
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
   review, dependency detection, export, or AI failure analysis. Generating a collection is not
   authorization to execute it.
+- A second narrow exception runs an ApiPilot-generated k6 script, unmodified and verified by hash,
+  with a k6 the user installed, only on the user's explicit per-run trigger (AP-029, constitution
+  v2.3.0 XVII exception of 2026-09-24; see "k6 performance testing"). k6's stderr is counted and
+  never logged, and its output stays local.
 - AI failure analysis redacts captured request/response content before it reaches the prompt or
   storage and stores analyses encrypted. Target-controlled response text still reaches the model,
   so prompt injection is a known, bounded risk: the answer is limited to a closed cause set,
@@ -650,8 +723,8 @@ A shared component library gives recurring concepts one implementation instead o
 AI-vs-deterministic provenance indicators; `Dialog`/`ConfirmDialog` and `Tabs` for interaction
 chrome; `EmptyState`, `ErrorState`, and `Skeleton` for the loading/empty/error triad; and
 `controlStyles.ts` for shared button/input variants. `WorkflowStageTracker.tsx` is the one reusable
-workflow-progress indicator, presenting the product's real ten-stage order (Upload through
-Execution) with completed/active/pending/locked status and an explanation for why a locked stage is
+workflow-progress indicator, presenting the product's real eleven-stage order (Upload through
+Performance Testing) with completed/active/pending/locked status and an explanation for why a locked stage is
 unavailable, rather than each page building its own progress display. Every status/decision
 indicator carries a text label or icon in addition to color, and every interactive element is
 keyboard-operable with a visible focus indicator (constitution/CLAUDE.md §38).

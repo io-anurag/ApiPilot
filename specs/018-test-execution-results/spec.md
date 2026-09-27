@@ -354,6 +354,10 @@ retrieved again without re-executing anything.
   involved — beyond the ordinary action that starts execution against a Local/Dev environment
   with no destructive requests. Completing this confirmation is sufficient to proceed; this
   feature does not technically block such executions outright.
+  *Note 2026-09-27 (AP-029, `specs/031-k6-performance-testing` FR-025): k6 performance runs
+  deliberately use no such confirmation on any tier; their trigger names the environment, its
+  tier and base URL instead. Functional runs are unchanged and still require this
+  confirmation.*
 - **FR-008**: The system MUST NOT allow two executions of the same approved test collection to
   run concurrently; an attempt to start a second execution while one is in progress MUST be
   refused and MUST direct the user to the run already in progress.

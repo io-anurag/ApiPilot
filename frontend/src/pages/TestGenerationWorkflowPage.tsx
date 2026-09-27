@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import { AiEnhancementOutcomeSummary } from "../components/AiEnhancementOutcomeS
 import { ScenarioReviewStage } from "../components/ScenarioReviewStage";
 import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
+import { PerformanceTestingStage } from "../components/performance/PerformanceTestingStage";
 import { AnalysisSummary } from "../components/AnalysisSummary";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
@@ -224,6 +226,14 @@ export function TestGenerationWorkflowPage({
     setViewedStageId(result.workflow.activeStageId);
   }
 
+  /** AP-029: the performance stage changes stage status through its own routes; this refreshes the
+   * tracker without moving the view away from the stage the user is on. */
+  const refreshWorkflow = useCallback(() => {
+    void fetchCurrentWorkflow().then((result) => {
+      if (result.ok && result.workflow) setWorkflow(result.workflow);
+    });
+  }, []);
+
   // Postman generation's own onGenerated: deliberately does NOT follow activeStageId to
   // "execution" — the success screen (with its downloads) must stay visible until the user
   // explicitly continues, rather than the workflow jumping away from it the instant generation
@@ -308,7 +318,9 @@ export function TestGenerationWorkflowPage({
   // PostmanGenerationStage stays interactive (regenerable) even once `activeStageId` has moved on
   // to `execution` — it was never gated on being the active stage to begin with (see its own
   // render call below) — so the same read-only notice would misreport it too.
-  const postmanGenerationAlwaysActionable = displayStageId === "postmanGeneration";
+  // The performance stage (AP-029) is always editable once opened, never a read-only summary.
+  const postmanGenerationAlwaysActionable =
+    displayStageId === "postmanGeneration" || displayStageId === "performanceTesting";
 
   if (loading) {
     return (
@@ -643,8 +655,16 @@ export function TestGenerationWorkflowPage({
               }
             />
           )}
+          {displayStageId === "performanceTesting" && (
+            <PerformanceTestingStage onAdvanced={refreshWorkflow} />
+          )}
           {displayStageId === "execution" && (
             <ExecutionHandoffNotice
+              onOpenPerformance={
+                workflow.stages.postmanGeneration.status === "complete"
+                  ? () => setViewedStageId("performanceTesting")
+                  : undefined
+              }
               onGoToImportAndRun={() => {
                 if (workflow.postmanArtifact) {
                   onHandoffToExecution?.(
@@ -671,7 +691,8 @@ export function TestGenerationWorkflowPage({
  */
 function ExecutionHandoffNotice({
   onGoToImportAndRun,
-}: Readonly<{ onGoToImportAndRun: () => void }>) {
+  onOpenPerformance,
+}: Readonly<{ onGoToImportAndRun: () => void; onOpenPerformance?: () => void }>) {
   return (
     <section
       data-testid="execution-handoff-notice"
@@ -681,13 +702,20 @@ function ExecutionHandoffNotice({
         The Postman collection has been generated. Run it against a real environment from
         &quot;Import &amp; Run Collection&quot;.
       </p>
-      <button
-        type="button"
-        onClick={onGoToImportAndRun}
-        className={BUTTON_STYLES.primary}
-      >
-        Go to Import &amp; Run Collection
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onGoToImportAndRun}
+          className={BUTTON_STYLES.primary}
+        >
+          Go to Import &amp; Run Collection
+        </button>
+        {onOpenPerformance && (
+          <button type="button" onClick={onOpenPerformance} className={BUTTON_STYLES.secondary}>
+            Set up a performance test
+          </button>
+        )}
+      </div>
     </section>
   );
 }

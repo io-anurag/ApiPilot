@@ -1,0 +1,22 @@
+{
+  "baseUrl": {
+    "env": "APIPILOT_V_0",
+    "secret": false,
+    "value": ""
+  },
+  "clientId": {
+    "env": "APIPILOT_V_1",
+    "secret": true,
+    "value": ""
+  },
+  "clientSecret": {
+    "env": "APIPILOT_V_2",
+    "secret": true,
+    "value": ""
+  },
+  "warehouseId": {
+    "env": "APIPILOT_V_3",
+    "secret": false,
+    "value": ""
+  }
+}

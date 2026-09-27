@@ -1,6 +1,6 @@
 {
   "name": "@apipilot/backend",
-  "version": "19.4.1",
+  "version": "19.5.0",
   "private": true,
   "type": "module",
   "main": "src/server.ts",
@@ -11,7 +11,9 @@
     "test": "vitest run --root .",
     "test:ai-real": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/localProvider.real.test.ts",
     "test:ai-real:failure-analysis": "cross-env AI_TEST_REAL_MODEL=1 vitest run --root . tests/integration/failureAnalysis.real.test.ts",
-    "ai:benchmark": "tsx src/ai/benchmark/runBenchmark.ts"
+    "ai:benchmark": "tsx src/ai/benchmark/runBenchmark.ts",
+    "perf:stub": "tsx scripts/perfStubTarget.ts",
+    "test:k6-real": "cross-env K6_TEST_REAL=1 vitest run --root . tests/integration/performance.k6.real.test.ts"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^10.1.1",

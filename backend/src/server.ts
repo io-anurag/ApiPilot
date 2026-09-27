@@ -6,6 +6,7 @@ import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
 import { getUploadedCollectionRunRepository } from "./persistence/uploadedCollectionRunRepository";
+import { recoverPerformanceRunsAtStartup } from "./performance/startup";
 
 const logger = createLogger("server");
 
@@ -66,6 +67,9 @@ getExecutionRunRepository().markInterruptedRunsCancelled();
 // Same guard for an uploaded-collection run left "in-progress" by a prior process
 // (specs/026-external-collection-execution, mirrors FR-008's rationale exactly).
 getUploadedCollectionRunRepository().markInterruptedRunsCancelled();
+// Same guard for an AP-029 performance run, which is never started again after a restart
+// (specs/031-k6-performance-testing FR-032), plus removal of leftover k6 run directories.
+recoverPerformanceRunsAtStartup();
 
 const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 

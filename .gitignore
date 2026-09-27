@@ -37,9 +37,15 @@ Thumbs.db
 .claude/skills
 .qodo/
 .specify/*
+# Track the authoritative constitution (its amendment procedure is a pull request to this file);
+# the rest of .specify/, including .specify/memory/'s tool metadata, stays ignored.
+!.specify/memory/
+.specify/memory/*
+!.specify/memory/constitution.md
 .playwright-mcp/
 backend/models/**
 backend/db/**
+backend/k6/**
 # Where AI_MODEL_CACHE_DIR / APIPILOT_DB_PATH land if the backend is started from the repo root.
 /models/
 /db/

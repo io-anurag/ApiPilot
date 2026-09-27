@@ -56,10 +56,13 @@ export class TargetServer {
     this.routes.set(`${method.toUpperCase()} ${path}`, config);
   }
 
-  /** Starts listening on an OS-assigned local port and returns its base URL. */
-  async start(): Promise<string> {
+  /**
+   * Starts listening on `port` (an OS-assigned local port by default) and returns its base URL.
+   * AP-029's manual stub target (`npm run perf:stub -w backend`) passes a fixed port.
+   */
+  async start(port = 0): Promise<string> {
     await new Promise<void>((resolve) => {
-      this.server = this.app.listen(0, "127.0.0.1", resolve);
+      this.server = this.app.listen(port, "127.0.0.1", resolve);
     });
     const address = this.server!.address();
     this.port = typeof address === "object" && address !== null ? address.port : 0;
