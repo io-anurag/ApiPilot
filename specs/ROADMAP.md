@@ -2735,3 +2735,20 @@ Implementation
       `backend/tests/fixtures/performance/golden/` are checked out with CRLF line endings while
       the renderer emits LF. `npm run lint` and `npm run build` are clean.
     - Version bumped to 19.5.1 (root, backend, frontend, shared-domain).
+
+36. **Performance plan readability fixes; version 19.5.2 (2026-09-27).**
+    - AP-029 journey table: the Request column no longer wraps, so a path such as
+      `/api/v1/info` stays on one line; wide tables scroll horizontally inside their panel.
+    - Expected status: the add input was too narrow and cut its placeholder to "e.g. 200 or 2".
+      It now reads `201 or 2XX`, and one visible note above the journeys (also the input's
+      accessible description) says that an unlisted status counts as a failure and that `2XX`
+      means any 2xx.
+    - The scenario-choice note is omitted when an operation has only one positive scenario, since
+      there was no choice. "Rule-generated", "AI-enhanced (no rule-generated alternative)" and the
+      lowest-id tie-break are still shown (FR-039).
+    - USER_MANUAL §3.11 now states that a step's headers, query parameters and body come from the
+      chosen scenario's generated request (FR-011) and are not edited in the plan.
+    - Validation: `npm test` 1,852 passed, 1 failed and 5 skipped across 249 test files; the
+      failure is the known CRLF golden-script issue noted in entry 35. `npm run lint` and
+      `npm run build` are clean.
+    - Version bumped to 19.5.2 (root, backend, frontend, shared-domain).

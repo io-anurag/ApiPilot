@@ -19,11 +19,19 @@ export const TIER_TONE: Record<EnvironmentTier, StatusTone> = {
   production: "danger",
 };
 
-export const SCENARIO_CHOICE_LABEL: Record<PerformanceStep["scenarioChoice"], string> = {
+/** `null` when the choice needs no explanation: an operation's only positive scenario is simply used. */
+export const SCENARIO_CHOICE_LABEL: Record<PerformanceStep["scenarioChoice"], string | null> = {
   "rule-generated": "Rule-generated",
-  "only-positive": "Only positive scenario",
+  "only-positive": null,
   "ai-enhanced-no-rule-alternative": "AI-enhanced (no rule-generated alternative)",
 };
+
+/** Why this scenario was chosen, or `null` when there is nothing to explain. */
+export function choiceNote(step: Pick<PerformanceStep, "scenarioChoice" | "tieBrokenByLowestId">): string | null {
+  const parts = [SCENARIO_CHOICE_LABEL[step.scenarioChoice], step.tieBrokenByLowestId ? "lowest id among equals" : null];
+  const note = parts.filter((part): part is string => part !== null).join(" · ");
+  return note.length > 0 ? note : null;
+}
 
 export const AUTH_LABEL: Record<StepAuthKind, string> = {
   "oauth2-client-credentials": "OAuth2 client credentials",

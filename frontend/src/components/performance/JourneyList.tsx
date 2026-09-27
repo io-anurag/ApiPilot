@@ -3,7 +3,7 @@ import type { PerformanceJourney, PerformanceStep } from "@apipilot/shared-domai
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
-import { AUTH_LABEL, SCENARIO_CHOICE_LABEL } from "./performanceViewModel";
+import { AUTH_LABEL, choiceNote } from "./performanceViewModel";
 
 /**
  * The plan's journeys and steps (FR-004 to FR-007, FR-012, FR-039). Reorder and removal requests go
@@ -12,6 +12,8 @@ import { AUTH_LABEL, SCENARIO_CHOICE_LABEL } from "./performanceViewModel";
  */
 const ROW_ACTION =
   "rounded border border-border bg-surface px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-200 dark:hover:bg-white/10";
+
+const EXPECTED_STATUS_HINT_ID = "performance-expected-status-hint";
 
 function move<T>(items: readonly T[], index: number, delta: number): T[] {
   const next = [...items];
@@ -66,14 +68,15 @@ function ExpectedStatusEditor({
         </label>
         <input
           id={inputId}
+          aria-describedby={EXPECTED_STATUS_HINT_ID}
           value={draft}
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") add();
           }}
-          placeholder="e.g. 200 or 2XX"
-          className="w-28 rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          placeholder="201 or 2XX"
+          className="w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         />
         <button type="button" disabled={disabled || draft.trim().length === 0} onClick={add} className={ROW_ACTION}>
           Add
@@ -105,6 +108,10 @@ export function JourneyList({
     <div className="space-y-5">
       <p aria-live="polite" className="sr-only">
         {announcement}
+      </p>
+      <p id={EXPECTED_STATUS_HINT_ID} className="text-xs text-muted">
+        Expected status: a response with any other status counts as a failure. Add an exact code such as 201, or a
+        range such as 2XX for any 2xx.
       </p>
       {journeys.map((journey, journeyIndex) => {
         const label = journey.source.kind === "workflow" ? "Workflow journey" : "Single operation";
@@ -157,21 +164,19 @@ export function JourneyList({
                   {journey.steps.map((step, stepIndex) => {
                     const stepIds = journey.steps.map((candidate) => candidate.id);
                     const rowTone = step.expectedStatuses.length === 0 ? "bg-warning-50 dark:bg-warning-500/10" : "";
+                    const note = choiceNote(step);
                     return (
                       <tr key={step.id} className={`border-t border-border align-top ${rowTone}`}>
                         <td className="px-3 py-2.5 font-mono text-xs text-muted">{stepIndex + 1}</td>
-                        <td className="px-3 py-2.5">
+                        <td className="whitespace-nowrap px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <HttpMethodBadge method={step.method} />
-                            <span className="break-all font-mono text-xs">{step.path}</span>
+                            <span className="font-mono text-xs">{step.path}</span>
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
                           <div>{step.scenarioDescription}</div>
-                          <div className="text-xs text-muted">
-                            {SCENARIO_CHOICE_LABEL[step.scenarioChoice]}
-                            {step.tieBrokenByLowestId ? " · lowest id among equals" : ""}
-                          </div>
+                          {note && <div className="text-xs text-muted">{note}</div>}
                         </td>
                         <td className="px-3 py-2.5">
                           <ExpectedStatusEditor step={step} disabled={busy} onChange={(codes) => onExpectedStatuses(step.id, codes)} />

@@ -37,6 +37,17 @@ describe("PerformanceTestingStage", () => {
     expect(within(journey).getAllByText("· from specification").length).toBeGreaterThan(0);
   });
 
+  it("explains the expected-status input and adds no choice note for an operation's only positive scenario", async () => {
+    stubFetch(baseRoutes());
+    render(<PerformanceTestingStage />);
+    await screen.findByText("Service status");
+    const row = screen.getByText("Service status").closest("td")!;
+    expect(row.children).toHaveLength(1);
+    expect(screen.getByLabelText("Add an expected status for GET /status")).toHaveAccessibleDescription(
+      "Expected status: a response with any other status counts as a failure. Add an exact code such as 201, or a range such as 2XX for any 2xx.",
+    );
+  });
+
   it("lists the step that needs an expected status and keeps Generate disabled with the reason (FR-012a)", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);

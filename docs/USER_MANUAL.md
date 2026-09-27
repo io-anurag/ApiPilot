@@ -289,9 +289,11 @@ Testing** chip in the stage tracker. Nothing is sent to any system until you tri
 **The plan.** ApiPilot proposes one journey per approved workflow, with its steps in
 dependency order, and one single-step journey for each other operation in scope. Every
 virtual user runs every journey, in order, on each iteration. For each step you see its
-method and path, the one positive scenario used and why (a rule-generated scenario is
-preferred over an AI-enhanced one), its authentication, and the variables it produces or
-needs. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
+method and path, the one positive scenario used and, when there was a choice, why (a
+rule-generated scenario is preferred over an AI-enhanced one), its authentication, and the
+variables it produces or needs. Each step sends that scenario's generated request, built the
+same way as the Postman collection: its headers, query parameters and body come from the
+scenario and are not edited here. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
 DELETE) are included by default: choose **Remove** on any operation you do not want sent.
 
 - **Expected status.** Each step starts with the success statuses the specification
