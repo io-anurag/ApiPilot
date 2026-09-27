@@ -22,7 +22,7 @@ function workflowWithStatuses(
 }
 
 describe("workflowStages", () => {
-  it("WORKFLOW_STAGE_ORDER matches spec.md FR-001's ten-stage list (specs/009 Clarifications 2026-09-20 amendment adds 'execution')", () => {
+  it("WORKFLOW_STAGE_ORDER matches the eleven-stage list (specs/009 Clarifications 2026-09-20 adds 'execution'; AP-029 adds 'performanceTesting')", () => {
     expect(WORKFLOW_STAGE_ORDER).toEqual([
       "upload",
       "analysis",
@@ -34,6 +34,7 @@ describe("workflowStages", () => {
       "workflowReview",
       "postmanGeneration",
       "execution",
+      "performanceTesting",
     ]);
   });
 
@@ -68,6 +69,21 @@ describe("workflowStages", () => {
       expect(nextStageId(WORKFLOW_STAGE_ORDER[i - 1])).toBe(WORKFLOW_STAGE_ORDER[i]);
     }
     expect(previousStageId("upload")).toBeUndefined();
-    expect(nextStageId("execution")).toBeUndefined();
+    expect(nextStageId("execution")).toBe("performanceTesting");
+    expect(nextStageId("performanceTesting")).toBeUndefined();
+  });
+
+  it("performanceTesting is enterable once postmanGeneration is complete, whatever execution's status (AP-029 research D1)", () => {
+    for (const execution of ["active", "skipped", "complete", "not-yet-reached"] as const) {
+      const wf = workflowWithStatuses({ postmanGeneration: "complete", execution });
+      expect(isStageEnterable(wf, "performanceTesting")).toBe(true);
+    }
+  });
+
+  it("performanceTesting is not enterable while postmanGeneration is not complete", () => {
+    for (const postmanGeneration of ["not-yet-reached", "active", "stale"] as const) {
+      const wf = workflowWithStatuses({ postmanGeneration, execution: "complete" });
+      expect(isStageEnterable(wf, "performanceTesting")).toBe(false);
+    }
   });
 });

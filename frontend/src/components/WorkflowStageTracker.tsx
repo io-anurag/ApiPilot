@@ -136,7 +136,9 @@ export function WorkflowStageTracker({
     >
       <ol className="flex gap-1 overflow-x-auto pb-1">
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
-          const stage = workflow.stages[stageId];
+          // A workflow recorded before a stage existed (AP-029 added `performanceTesting`) simply
+          // has not reached it.
+          const stage = workflow.stages[stageId] ?? { stageId, status: "not-yet-reached" as const };
           const isActive = workflow.activeStageId === stageId;
           // The stage currently shown on screen — the active stage by default, or whichever
           // stage the user clicked "back"/"view" to revisit (viewedStageId, when the caller
@@ -160,14 +162,24 @@ export function WorkflowStageTracker({
             !REVISABLE_STAGES.has(stageId) &&
             READ_ONLY_VIEWABLE_STATUSES.has(stage.status);
           const isReturnToActiveView = isActive && isViewingAnotherStage;
+          const lockReason =
+            stage.status === "not-yet-reached" ? getLockReason(stageId, workflow) : undefined;
+          // AP-029 (research D1): the optional performance stage can be opened as soon as Postman
+          // Generation is complete, before it has ever been entered and whatever Execution's state.
+          const isOpenable =
+            !!onViewStage &&
+            stageId === "performanceTesting" &&
+            stage.status === "not-yet-reached" &&
+            lockReason === undefined &&
+            !isCurrentlyViewed;
           let actionLabel = "view";
           if (isReturnToActiveView) {
             actionLabel = "return";
           } else if (isRevisitable) {
             actionLabel = "revisit";
+          } else if (isOpenable) {
+            actionLabel = "open";
           }
-          const lockReason =
-            stage.status === "not-yet-reached" ? getLockReason(stageId, workflow) : undefined;
           return (
             <li
               key={stageId}
@@ -186,7 +198,7 @@ export function WorkflowStageTracker({
                 )}
               </span>
               <span>{STAGE_LABELS[stageId]}</span>
-              {isRevisitable || isReadOnlyViewable || isReturnToActiveView ? (
+              {isRevisitable || isReadOnlyViewable || isReturnToActiveView || isOpenable ? (
                 <button
                   type="button"
                   data-testid={`stage-status-${stageId}`}

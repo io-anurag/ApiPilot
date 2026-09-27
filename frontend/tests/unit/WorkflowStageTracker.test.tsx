@@ -280,4 +280,24 @@ describe("WorkflowStageTracker", () => {
     render(<WorkflowStageTracker workflow={workflow} />);
     expect(screen.queryByTestId("workflow-dependency-ai-issue")).not.toBeInTheDocument();
   });
+
+  it("lets the performance stage be opened once Postman Generation is complete, whatever Execution's state (AP-029 research D1)", () => {
+    const onViewStage = vi.fn();
+    const complete = Object.fromEntries(
+      WORKFLOW_STAGE_ORDER.slice(0, WORKFLOW_STAGE_ORDER.indexOf("postmanGeneration") + 1).map((id) => [id, "complete" as StageStatus]),
+    );
+    render(
+      <WorkflowStageTracker
+        workflow={{ ...workflowWithStatuses({ ...complete, execution: "active" }), activeStageId: "execution" }}
+        onViewStage={onViewStage}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Not yet reached — open/ }));
+    expect(onViewStage).toHaveBeenCalledWith("performanceTesting");
+  });
+
+  it("keeps the performance stage locked until Postman Generation is complete", () => {
+    render(<WorkflowStageTracker workflow={workflowWithStatuses({ postmanGeneration: "active" })} onViewStage={vi.fn()} />);
+    expect(screen.getByTestId("stage-status-performanceTesting")).toHaveTextContent("Not yet reached — Complete Postman Generation first");
+  });
 });

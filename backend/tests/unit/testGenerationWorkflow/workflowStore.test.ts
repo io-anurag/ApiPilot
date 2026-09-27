@@ -74,6 +74,17 @@ describe("workflowStore", () => {
     );
   });
 
+  it("performanceTesting uses the general transitions only: it can complete, reopen and go stale, but never be skipped (AP-029 research D1)", () => {
+    startWorkflow({ specificationFilename: "valid.yaml", apiModel });
+    expect(getCurrentWorkflow()?.stages.performanceTesting.status).toBe("not-yet-reached");
+    updateStage("performanceTesting", "active");
+    expect(() => updateStage("performanceTesting", "skipped")).toThrow(InvalidStageTransitionError);
+    updateStage("performanceTesting", "complete");
+    expect(updateStage("performanceTesting", "active").stages.performanceTesting.status).toBe("active");
+    updateStage("performanceTesting", "complete");
+    expect(updateStage("performanceTesting", "stale").stages.performanceTesting.status).toBe("stale");
+  });
+
   it("updateStage allows skipped -> active for aiEnhancement retry (FR-008a)", () => {
     startWorkflow({ specificationFilename: "valid.yaml", apiModel });
     updateStage("aiEnhancement", "active");

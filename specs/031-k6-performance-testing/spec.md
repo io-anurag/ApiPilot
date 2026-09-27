@@ -89,6 +89,15 @@ Generating the script alone does not depend on the exception.
   by the user before the script can be generated; the plan lists the steps that still need one
   (FR-012, FR-012a).
 
+### Session 2026-09-27
+
+- Q: When does performance testing become available in the guided workflow? → A: Once the Postman
+  collection has been generated, whatever the functional run's status, because the environments
+  that hold the user-supplied values are available from that point (Assumptions; plan research D1).
+- Q: Should live progress show per-step figures, or only the run-wide totals? → A: Both. Progress
+  also shows failures, journeys cut short and token refreshes so far, and per step the requests
+  sent, failures and requests not sent with their reason (FR-030).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Build a performance test from approved scenarios and workflows (Priority: P1)
@@ -400,7 +409,11 @@ verify the new order is kept in the regenerated script.
   functional runs. A trigger while another execution is in progress MUST be refused with a reason,
   and nothing MUST be sent.
 - **FR-030**: While a run is in progress, the system MUST show elapsed time against planned
-  duration, current virtual users and requests so far.
+  duration, current virtual users and requests so far. It MUST also show, so far, the number of
+  failures (as FR-012a defines them), journeys cut short and token refreshes, and per step the
+  requests sent, the failures, and the requests not sent with their reason (missing data or
+  dependency not attempted). These are running figures from the same measurements as the report,
+  not a second definition of them (amended 2026-09-27).
 - **FR-031**: The user MUST be able to cancel a running test. Cancelling MUST stop load generation,
   record the run as cancelled, and keep the results measured up to that point.
 - **FR-032**: A run left in progress when the backend stops MUST be recorded on restart as cancelled

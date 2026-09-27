@@ -76,6 +76,7 @@ sends codes only. The server computes each code's `source` (FR-012, FR-039, rese
 - `400 invalid_expected_status {stepId}`: an unknown step, an empty list, or a code that is not
   `^[1-5]\d\d$` or `^[1-5]XX$`. The plan is unchanged.
 - `400 unknown_operation`
+- `400 invalid_request`: a body that is not an object, or a field of the wrong shape (for example a `scope` other than `selection` or `all`).
 - `409 postman_generation_incomplete`
 
 ### `POST /plan/reset`

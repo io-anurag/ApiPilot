@@ -59,6 +59,7 @@ clicking its chip in the stage tracker at the top of the page.
 Upload → Analysis → API Review → Deterministic Generation → AI Enhancement
   → Scenario Review → Dependency Analysis → Workflow Review → Postman Generation
   → Execution (hand-off to Import & Run Collection)
+  → Performance Testing (optional; opens once Postman Generation is complete)
 ```
 
 Each stage chip shows one of: **Not yet reached**, **Active**, **Complete**, **Needs to
@@ -274,6 +275,68 @@ one-time uploaded-content confirmation before its first run.
 The **Execution** chip in the stage tracker shows a short notice with a **Go to Import &
 Run Collection** button, in case you reload the page or navigate away before the
 hand-off.
+
+### 3.11 Performance Testing (optional)
+
+Performance Testing turns the scenarios and workflows you approved into a k6 load test. It
+opens once the Postman collection has been generated (section 3.9), whether or not you run
+it: choose **Set up a performance test** on the Execution notice, or the **Performance
+Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
+
+**The plan.** ApiPilot proposes one journey per approved workflow, with its steps in
+dependency order, and one single-step journey for each other operation in scope. Every
+virtual user runs every journey, in order, on each iteration. For each step you see its
+method and path, the one positive scenario used and why (a rule-generated scenario is
+preferred over an AI-enhanced one), its authentication, and the variables it produces or
+needs. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
+DELETE) are included by default: choose **Remove** on any operation you do not want sent.
+
+- **Expected status.** Each step starts with the success statuses the specification
+  documents, labelled "from specification". You can add codes (an exact code such as `201`,
+  or a range such as `2XX`) or remove them; yours are labelled "set by you". Any other
+  response counts as a failure. A step whose specification documents no success status
+  starts empty, and the script cannot be generated until you set one.
+- **Order and think time.** Use ↑ and ↓ to reorder journeys, or steps within a journey.
+  A move that would run a step before the step producing a value it needs is refused, and
+  the message names the value. **Think time** pauses between requests.
+- **Load profile.** Pick Smoke, Load, Stress, Spike or Soak and edit its stages (duration and
+  target virtual users). These are starting values, not recommendations. ApiPilot applies no
+  limit on virtual users or duration and gives no warning.
+- **Thresholds.** None are set until you add one (a latency percentile or a failure rate,
+  for the run or one step). With none, the report gives no pass/fail verdict.
+
+**Values.** Values the specification cannot produce (the base URL, client credentials, a
+path parameter no operation produces) are the target environment's values. Choose the
+environment, then **Edit values** or **New environment**; values are typed into hidden
+fields and stored encrypted. The checklist shows each value as **Present** or **Missing**
+for the chosen environment. A missing value does not block a run: that step is not sent and
+is reported as missing data, and the steps that depend on it are reported as not attempted.
+
+**The script.** **Generate script** creates a k6 script and an environment template, which
+you can download and run elsewhere. The same plan always produces the same bytes, and neither
+file ever contains a value. Any change to the plan marks the script **Out of date** until you
+regenerate it.
+
+**Running.** You need k6 1.0.0 or later installed yourself on the machine running the
+ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration). ApiPilot
+never downloads or installs k6; the panel shows whether k6 is ready, and **Check again**
+re-checks. The trigger names its target, for example **Run on perf-local (local)**, next to
+the environment's tier and base URL and the statement that load comes from the machine
+running the backend. There is no extra confirmation on any tier, production included. While
+it runs you see elapsed time against the plan, virtual users, requests, failures, journeys
+cut short, token refreshes, and a per-step table. **Cancel run** stops load within about 10
+seconds and keeps what was measured. A run carries on if you close the page, and it keeps
+your session alive; only one run (performance or functional) can be in progress per session.
+ApiPilot never starts, repeats or resumes a run by itself: a run interrupted by a backend
+restart is recorded as cancelled.
+
+**The report.** When a run ends, its report appears automatically, and **Download report
+(HTML)** saves the same file, which opens with no network access. It shows per-step p50, p90,
+p95 and p99 latency (within 1%), throughput, failures by status and category, check pass
+rate, a timeline, your thresholds with passed or failed, findings from fixed rules (such as
+the slowest step or where failures start), what the run changed on the target (write
+requests sent and succeeded), token refreshes, and each step's provenance. It never contains
+a credential, token, request or response body, or a resolved URL.
 
 ## 4. Importing and running your own Postman collection
 
@@ -555,6 +618,21 @@ Variable and credential values are encrypted before being stored.
   it through the hand-off (section 3.10).
 - Headers added by authentication are previewed only for bearer tokens and API keys sent
   in a header (section 4.3).
+- Performance testing (section 3.11) needs k6 1.0.0 or later that you install yourself.
+  Its status is *implementation complete, real-k6 validation pending*: automated tests
+  replay recorded k6 output, but the run path has not yet been checked against a real k6
+  binary.
+- Performance runs apply no limit and no warning on virtual users or duration, include write
+  operations by default, and never clean up what they create. Load comes from the machine
+  running the backend, so a heavy profile can be limited by that machine; the report shows it.
+- Under load, each step checks its status and extracted values only, not response schemas.
+- Each virtual user refreshes its own token before its stated lifetime ends, so a run sends
+  one token request per virtual user per token lifetime. A token provider that rate-limits
+  token requests, or revokes older tokens when it issues a new one, can make refreshes fail;
+  the report shows this as failed refreshes and authentication failures.
+- For an operation with both a rule-generated and an AI-enhanced positive scenario, the
+  performance test uses the rule-generated one, while the Postman collection's choice ignores
+  the origin, so the two can send different requests for that operation.
 
 ## 8. Troubleshooting
 
@@ -579,6 +657,11 @@ Variable and credential values are encrypted before being stored.
 | **Analyze failure** is disabled on every request | Another failure analysis is already running in your session | Wait for it to finish; the buttons re-enable automatically |
 | Failure analysis stays on "Waiting for the local AI" | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins |
 | Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` (README Configuration). An earlier explanation is kept |
+| Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
+| "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
+| **Generate script** stays disabled | A step has no expected status (its specification documents no success status) | Add an expected status to the listed step |
+| Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
+| Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |
 
 ## 9. Where to look next

@@ -14,15 +14,23 @@ import {
  *
  * `options.accept` narrows which scenarios are accepted; every other scenario is rejected
  * (specs/029-execution-gap-closure T014, e.g. approving only GET scenarios). Omitted, every
- * scenario is accepted exactly as before.
+ * scenario is accepted exactly as before. `options.specification` replaces the Pet Store fixture
+ * (AP-029 uses `performance.yaml`); omitted, the Pet Store fixture is used as before.
  */
 export async function driveToPostmanGenerationComplete(
   agent: ReturnType<typeof request.agent>,
-  options: { accept?: (scenario: TestScenario) => boolean } = {},
+  options: {
+    accept?: (scenario: TestScenario) => boolean;
+    specification?: { buffer: Buffer; filename: string };
+  } = {},
 ): Promise<TestGenerationWorkflow> {
   await agent
     .post("/api/test-generation-workflow")
-    .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    .attach(
+      "file",
+      options.specification?.buffer ?? validSpecificationBuffer(),
+      options.specification?.filename ?? VALID_SPECIFICATION_FILENAME,
+    );
   await agent.post("/api/test-generation-workflow/api-review/continue");
   await agent.post("/api/test-generation-workflow/deterministic-generation");
   const afterEnhancement = await agent.post("/api/test-generation-workflow/ai-enhancement");

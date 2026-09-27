@@ -1,6 +1,6 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. AP-001 through AP-028, AP-030, and AP-031 have each been run
+**Status**: Reference document. AP-001 through AP-031 have each been run
 through `/speckit-specify` individually, in dependency order. See the Implementation Status table
 below for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
 `analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
@@ -15,9 +15,10 @@ Feature Decomposition sections below). AP-026 is a standalone capability layered
 existing defect. AP-027 (frontend design system and application shell) is a presentation-layer
 feature that changes no backend contract or workflow rule, and AP-028 (Postman-style collection
 and variable editor) is a pre-run editing surface layered on top of AP-026. AP-029 (k6
-performance testing) was specified on 2026-09-24 as `specs/031-k6-performance-testing`, and is
-awaiting `/speckit-plan`. Its run path's constitution prerequisite was met by v2.3.0 the same day
-(see its Feature Decomposition section).
+performance testing, `specs/031-k6-performance-testing`) is implementation complete with its
+real-k6 validation pending, so it is not yet recorded as Implemented (constitution XXXI; Next
+Actions #34). Its run path's constitution prerequisite was met by v2.3.0 on 2026-09-24 (see its
+Feature Decomposition section).
 
 AP-011 through AP-016 were originally tracked as unnumbered "hardening" specs to avoid a
 numbering collision with the post-MVP features, which were numbered AP-011/AP-012 at the time.
@@ -62,7 +63,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here. FR-008 defect fixed 2026-09-25: runs now apply folder auth, folder scripts and collection scripts (Next Actions #31) |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31). Amended again 2026-09-25 (version 19.4.0): a per-run order in the run-order list across folders, and editable request auth (Next Actions #32) |
-| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Specified and planned (2026-09-24); `/speckit-tasks` not yet run. Its three open decisions are answered in the spec's Clarifications: write operations included by default, tokens with a stated lifetime refreshed before expiry, and no virtual-user or duration limit. The plan's two open questions were resolved on 2026-09-25: FR-015 amended to per-virtual-user token refresh, and FR-003's rule-first scenario choice kept, with Postman alignment as a follow-up. Governance prerequisite met by constitution v2.3.0 (Next Actions #24, #29, #30) |
+| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: (1) T093, `npm run test:k6-real -w backend` against a real k6 1.0.0+, not run because no k6 was installed; (2) T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. Version 19.5.0. See Next Actions #34 |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 
@@ -2679,3 +2680,33 @@ Implementation
     - The boundary covers rendering only. Event-handler exceptions and unhandled promise rejections
       are still caught by the global `window` handlers (FR-010a), as before.
     - Version bumped to 19.4.1 (root, backend, frontend, shared-domain).
+
+34. **AP-029 k6 performance testing implemented; version 19.5.0 (2026-09-27).**
+    - Two decisions recorded first (spec Clarifications 2026-09-27). The stage opens once Postman
+      generation is complete, not after Workflow Review, because the environments that hold the
+      user-supplied values are gated on Postman generation (research D1; this keeps AP-017's
+      environments contract unchanged). FR-030 was amended so live progress also shows failures,
+      journeys cut short, token refreshes and a per-step table, as in the approved mock-up.
+    - Backend: `backend/src/performance/` (`plan/`, `k6/`, `report/`), `api/performanceTesting.ts`
+      and `api/performanceRuns.ts`, and the `performance_runs` table. Each step's request is built by
+      the Postman generator's own `buildRequestItem`, so serialization matches the functional tests
+      by construction (research D3 implementation note). A performance run now also occupies the
+      shared execution slot in both existing start routes, and runs left in progress are recorded
+      as cancelled at startup.
+    - Frontend: the Performance Testing stage (plan editor, expected-status editor, load profile,
+      thresholds, environment picker and values checklist, run panel, sandboxed report frame), a
+      tracker "open" action and a "Set up a performance test" action on the Execution notice. The
+      environments UI removed in commit 32930ed is restored as `EnvironmentForm` and
+      `environmentsClient.ts`, with values in password inputs.
+    - Shared: `packages/shared-domain/src/performance.ts`, the `performanceTesting` stage, and
+      `LOAD_PROFILE_STARTING_STAGES`. The tracker now treats a stage missing from an older workflow
+      record as not yet reached.
+    - Tooling: `npm run perf:stub -w backend` (local stub target for the quickstart) and the opt-in
+      `npm run test:k6-real -w backend` (`K6_TEST_REAL=1`). `K6_BINARY_PATH` is documented in
+      `.env.example` and the README.
+    - Validation: `npm test` 1,847 passed and 5 skipped across 246 test files (3 skipped opt-in
+      files); `npm run lint` and `npm run build` clean. Not done: the real-k6 test (no k6 was
+      installed) and the quickstart browser walkthrough. Existing behaviour noted, not changed:
+      `GET /environments` (AP-017) returns decrypted variable values to the browser, which the
+      restored form keeps in password inputs.
+    - Version bumped to 19.5.0 (root, backend, frontend, shared-domain).

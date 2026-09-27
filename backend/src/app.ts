@@ -21,6 +21,9 @@ import {
 } from "./api/testGenerationWorkflow";
 import { externalCollectionsRouter } from "./api/externalCollections";
 import { createFailureAnalysisRouter, failureAnalysisRouter } from "./api/failureAnalysis";
+import { createPerformanceTestingRouter, type PerformanceTestingDependencies } from "./api/performanceTesting";
+import { createK6Probe } from "./performance/k6/readiness";
+import { createK6Runner } from "./performance/k6/runner";
 import { versionRouter } from "./api/version";
 import { clientLogsRouter, CLIENT_LOGS_BODY_LIMIT } from "./api/clientLogs";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
@@ -34,6 +37,15 @@ const requestLogger = createLogger("api.request");
 export interface CreateAppOptions {
   /** See `DEBUG_LOG_REAL_CLIENT_IP` in `.env.example`. Default false. */
   debugLogRealClientIp?: boolean;
+  /**
+   * AP-029: replaces the k6 runner, readiness probe, clock or tick interval. Tests inject a fake
+   * runner here so `npm test` never needs k6.
+   */
+  performance?: Partial<PerformanceTestingDependencies>;
+}
+
+function defaultPerformanceDependencies(): PerformanceTestingDependencies {
+  return { runner: createK6Runner(), probe: createK6Probe(), tickIntervalMs: 2_000, now: () => new Date() };
 }
 
 /** Assembles the Express app: JSON body parsing sized to the upload contract, every `/api` router, and the centralized error handler. `provider` (when supplied) is threaded into the routers that support AI-assisted behavior instead of each using the process-wide default. */
@@ -116,6 +128,9 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // Standalone route family (FR-011) — mounted independently of testGenerationWorkflowRouter;
   // no active TestGenerationWorkflow is required for any endpoint below.
   app.use("/api", externalCollectionsRouter);
+  // AP-029: k6 performance testing. A run starts only on POST .../performance/runs, the user's
+  // explicit per-run trigger (constitution XVII exception of 2026-09-24).
+  app.use("/api", createPerformanceTestingRouter({ ...defaultPerformanceDependencies(), ...options?.performance }));
   // AP-031: reads recorded AP-026 results only; never executes a request (specs/030 FR-009).
   app.use(
     "/api",

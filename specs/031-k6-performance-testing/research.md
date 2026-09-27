@@ -88,6 +88,14 @@ repository is testable with no binary and no database (XXI).
 **Rationale**: The same serialization and auth planning are what make "a k6 request matches its
 Postman equivalent" true. The renderers are format-specific by nature.
 
+**Implementation note (2026-09-27)**: the request part of the Postman renderer is reused after
+all. `performance/plan/stepRequest.ts` calls `postman/requestItem.ts`'s exported, pure
+`buildRequestItem` and reads only the request it returns (method, URL, query, headers, body,
+auth), never its `pm.*` event scripts; the OAuth2 token request likewise comes from
+`buildOAuth2SetupFolders`. This makes FR-011's match hold by construction rather than by a second
+implementation of the same serialization, and a unit test compares each k6 request with the
+Postman item for the same scenario. `postman/` is still unchanged.
+
 **Alternatives rejected**: Converting the generated Postman collection into k6 (a
 Postman-to-k6 translation). It would inherit Postman's `pm.*` semantics and make k6 output depend
 on an unrelated renderer.
@@ -161,6 +169,13 @@ tie-break, which is the same as for Postman.
 **Rationale**: No new secret store, and environments already have per-environment values (spec
 Clarifications).
 
+**Implementation note (2026-09-27)**: a deterministic positive scenario always carries a generated
+placeholder for each path parameter (for example `string`), so "unresolved" in Postman's sense
+almost never occurs. Following spec US1 AS3, a path parameter that no workflow step produces is a
+user-supplied value for k6, named by `pathParameterVariableName`; the scenario's placeholder is not
+sent. Values a template references are read from the Postman builders' own `{{name}}` output, so
+the list is exactly the variables the requests use, plus the values each token request needs.
+
 ## D7. How values reach k6: process environment, never argv or the script (FR-021)
 
 **Decision**:
@@ -188,8 +203,9 @@ further.
     compares its SHA-256 before spawning. A mismatch aborts the run with `script_integrity_failed`.
 - **No input path:** no endpoint accepts script content.
 - **Imports:** the generated script imports only k6 built-in modules (`k6`, `k6/http`,
-  `k6/metrics`). A unit test rejects any other import, including URLs, because k6 can import
-  modules from the network.
+  `k6/metrics`, and `k6/encoding` when a plan uses basic auth, which the OAuth2 token request
+  does). A unit test rejects any other import, including URLs, because k6 can import modules from
+  the network.
 
 ## D9. Finding and checking k6 (FR-027)
 

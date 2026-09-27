@@ -1,0 +1,113 @@
+# AP-029 k6 Performance Testing fixture (specs/031-k6-performance-testing, tasks T002).
+#
+# Each operation exists for one reason:
+# - POST /orders            a write operation that produces `orderId` (uuid) and carries a
+#                           `customerEmail` (format: email) that must be unique per iteration.
+# - GET /orders/{orderId}   consumes `orderId`; with POST /orders it forms the one CONFIRMED
+#                           create-then-read dependency workflow (name, format and path match).
+# - GET /warehouses/{warehouseId}
+#                           no operation produces `warehouseId`, so it is a user-supplied value.
+# - GET /status             documents only `default` and 503: no success status, so its step
+#                           needs an expected status before a script can be generated.
+# The OAuth2 client-credentials token endpoint (/oauth/token) is deliberately not an operation.
+# No response declares a bare `id` field (it would also match `warehouseId`), and no response field
+# shares a name with a request field (GET /orders/{orderId} returning `quantity` would make a
+# second, reverse relationship to POST /orders).
+openapi: 3.0.3
+info:
+  title: Performance Fixture
+  version: "1.0"
+servers:
+  - url: https://example.invalid/api
+security:
+  - OrdersAuth: []
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create an order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerEmail, quantity]
+              properties:
+                customerEmail:
+                  type: string
+                  format: email
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orderId]
+                properties:
+                  orderId:
+                    type: string
+                    format: uuid
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Fetch one order.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fulfilmentState:
+                    type: string
+  /warehouses/{warehouseId}:
+    get:
+      operationId: getWarehouse
+      summary: Fetch one warehouse.
+      parameters:
+        - name: warehouseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Warehouse
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+  /status:
+    get:
+      operationId: getStatus
+      summary: Service status.
+      responses:
+        "503":
+          description: Unavailable
+        default:
+          description: Any other outcome
+components:
+  securitySchemes:
+    OrdersAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes: {}

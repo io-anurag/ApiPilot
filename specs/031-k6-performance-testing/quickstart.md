@@ -12,15 +12,16 @@ fake runner, is part of `npm test`.
 - **For scenarios 3 to 9 only:** k6 1.0.0 or later installed by you, and on `PATH` or named in
   `K6_BINARY_PATH` in `.env`. ApiPilot does not install it.
 - **A local stub target:** `npm run perf:stub -w backend`, which serves the fixture API on
-  `http://localhost:4600` (added by the tasks; built on `backend/tests/fixtures/execution/targetServer.ts`).
+  `http://127.0.0.1:4600` (`backend/scripts/perfStubTarget.ts`, built on
+  `backend/tests/fixtures/execution/targetServer.ts`; `PERF_STUB_PORT` changes the port).
   Never point these scenarios at a system you are not authorized to load.
-- **A specification:** `backend/tests/fixtures/openapi/` contains one with at least one dependency
-  workflow, one write operation, and one operation that documents no 2xx response (the tasks name
-  the file). Take it through the guided workflow
+- **A specification:** `backend/tests/fixtures/openapi/performance.yaml` has one dependency
+  workflow (`POST /orders` then `GET /orders/{orderId}`), a write operation, a path parameter no
+  operation produces (`warehouseId`), and `GET /status`, which documents no 2xx response. Take it through the guided workflow
   up to and including **Postman Generation**, approving at least one workflow in Workflow Review
   (the stage opens once the Postman collection is generated; research D1).
-- **An environment** named `perf-local`, tier `local`, base URL `http://localhost:4600`, created in
-  the existing environments panel.
+- **An environment** named `perf-local`, tier `local`, base URL `http://127.0.0.1:4600`, created from
+  the stage's **New environment** action (values `clientId`, `clientSecret` and `warehouseId`).
 
 ## 1. Plan and script without k6 (User Story 1; SC-001, SC-003)
 

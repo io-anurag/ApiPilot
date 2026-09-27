@@ -27,6 +27,7 @@ import {
   requestCancel as requestUploadedCancel,
 } from "../externalCollections/uploadedCollectionExecutionStore";
 import { getInProgressRun as getGeneratedInProgressRun } from "../execution/executionRunStore";
+import { getPerformanceInProgressRun } from "../performance/performanceRunStore";
 import { runUploadedCollectionExecution } from "../externalCollections/runUploadedCollectionExecution";
 import { buildCollectionView } from "../externalCollections/collectionView";
 import { applyRequestOverride } from "../externalCollections/requestOverride";
@@ -461,8 +462,9 @@ export function createExternalCollectionsRouter(): Router {
     try {
       const uploadedCollection = getUploadedCollection(req.params.id);
 
-      // FR-015 (research.md D7): the slot is shared across both run kinds.
-      const inProgress = getUploadedInProgressRun() ?? getGeneratedInProgressRun();
+      // FR-015 (research.md D7): the slot is shared across both run kinds, and, since AP-029
+      // (FR-029), with a k6 performance run in progress.
+      const inProgress = getUploadedInProgressRun() ?? getGeneratedInProgressRun() ?? getPerformanceInProgressRun();
       if (inProgress) {
         logRequestFailed(req.method, req.path, startedAt, 409, "execution_in_progress");
         res.status(409).json({

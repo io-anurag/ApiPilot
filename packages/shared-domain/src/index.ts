@@ -32,3 +32,4 @@ export * from "./testGenerationWorkflow";
 export * from "./execution";
 export * from "./externalCollections";
 export * from "./failureAnalysis";
+export * from "./performance";

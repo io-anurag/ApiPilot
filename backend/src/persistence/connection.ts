@@ -174,6 +174,30 @@ export class SqliteConnection {
     this.ensureColumn("failure_analyses", "analysis_version", "INTEGER");
     const removed = this.db.prepare("DELETE FROM failure_analyses WHERE analysis_version IS NULL").run().changes;
     if (removed > 0) logger.info("failure_analyses_legacy_removed", { count: removed });
+
+    // AP-029 (specs/031-k6-performance-testing research D20): one row per k6 performance run.
+    // Not encrypted: it holds no variable value, body, token or resolved URL — the environment
+    // snapshot is name, tier and base URL only, and the plan snapshot holds no values.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS performance_runs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cancel_reason TEXT,
+        failure_category TEXT,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        environment_snapshot TEXT NOT NULL,
+        plan_snapshot TEXT NOT NULL,
+        script_sha256 TEXT NOT NULL,
+        k6_version TEXT NOT NULL,
+        planned_duration_ms INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        progress TEXT,
+        result TEXT
+      );
+      CREATE INDEX IF NOT EXISTS performance_runs_session ON performance_runs (session_id, started_at);
+    `);
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

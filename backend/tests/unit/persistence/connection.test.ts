@@ -51,6 +51,7 @@ describe("SqliteConnection", () => {
         "environments",
         "execution_runs",
         "failure_analyses",
+        "performance_runs",
         "sqlite_sequence",
         "uploaded_collection_runs",
         "uploaded_collections",

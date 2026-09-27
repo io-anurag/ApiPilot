@@ -22,7 +22,7 @@ stay inside `backend/src/performance/k6/`.
 | `thresholds` | `PerformanceThreshold[]` | Empty by default. Set by the user only (FR-018). |
 | `userSuppliedValues` | `UserSuppliedValueRequirement[]` | FR-013, sorted by name. |
 | `uniqueValueFields` | `UniqueValueField[]` | FR-016, D13. |
-| `fingerprint` | `string` | SHA-256 over the canonical JSON of every field above, including each step's expected statuses, plus the ids of the scenarios and workflows used. It is the out-of-date check (FR-023). |
+| `fingerprint` | `string` | SHA-256 over the canonical JSON of every field above, including each step's expected statuses, plus `upstreamFingerprint` (so a revised scenario that keeps its id still makes a script out of date). It is the out-of-date check (FR-023). |
 | `stepsNeedingExpectedStatus` | `string[]` | Derived, not part of the fingerprint: the ids of steps whose `expectedStatuses` is empty, in plan order. Script generation is refused while it is non-empty (FR-012a, D26). |
 
 ### `PerformanceJourney`
@@ -39,6 +39,9 @@ stay inside `backend/src/performance/k6/`.
 |---|---|---|
 | `id` | `string` | Content-derived, from the journey id and operation key (`identifiers.ts` style). It is also the `step` metrics tag. |
 | `operationKey` | `string` | `"METHOD /path"`. The path is the template, never a resolved URL (FR-040). |
+| `path` | `string` | The path template, for display. |
+| `scenarioDescription` | `string` | The chosen scenario's provenance description, for display. |
+| `variableBindings` | `StepVariableBinding[]` | Where each variable leaves or enters the step: `{variable, role: "produces" \| "consumes", field, location?, producerStepId?}` (FR-010, FR-039). |
 | `method` | `HttpMethod` | Shown in the plan (FR-004). |
 | `scenarioId` | `string` | The chosen positive scenario (FR-002). |
 | `scenarioChoice` | `"rule-generated" \| "only-positive" \| "ai-enhanced-no-rule-alternative"` | Plus `tieBrokenByLowestId: boolean` (FR-003, D4). |
@@ -123,8 +126,16 @@ detail?: string, checkedAt}`, where `K6UnavailableReason = "not-found" | "not-ex
 | `plannedDurationMs` | `number` | |
 | `startedAt` / `endedAt` | ISO string | |
 | `cancelRequested` | `boolean` | |
-| `progress` | `{elapsedMs, currentVirtualUsers, requestsSoFar}` | While in progress (FR-030). |
+| `progress` | `RunProgress` | While in progress (FR-030, amended 2026-09-27). |
 | `result` | `PerformanceResult` | Written at settle, and at checkpoints so that partial results survive a cancel. |
+
+### `RunProgress`
+
+`{elapsedMs, currentVirtualUsers, requestsSoFar, failuresSoFar, journeysCutShortSoFar,
+tokenRefreshesSoFar, steps: StepProgress[]}`, where `StepProgress = {stepId, requests, failures,
+notSent: {missingData, dependencyNotAttempted}}`, in plan order. Every figure is read from the
+same aggregate as `PerformanceResult` (D11, D14), so a settled run's last progress equals its
+result's totals.
 
 State transitions:
 
@@ -169,7 +180,7 @@ errorsByCategory: {category: FailureCategory, count}[], checkPassRatePercent, no
 `errorsByStatus` counts only failures: statuses outside `expectedStatuses`, with `"0"` for no
 response (FR-012a).
 
-`FailureCategory = "unexpected-status" | "connection-error" | "timeout" | "extraction-failed" |
+`PerformanceFailureCategory` (named so because `FailureCategory` already belongs to AP-017's `execution.ts`) `= "unexpected-status" | "connection-error" | "timeout" | "extraction-failed" |
 "missing-data" | "dependency-not-attempted" | "authentication" | "rate-limited"` (D14). A
 response whose status is among the step's expected codes is never categorized, including 401,
 403 or 429.

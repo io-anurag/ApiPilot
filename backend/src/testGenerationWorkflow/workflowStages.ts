@@ -8,7 +8,7 @@ export function previousStageId(stageId: WorkflowStageId): WorkflowStageId | und
   return index > 0 ? WORKFLOW_STAGE_ORDER[index - 1] : undefined;
 }
 
-/** The stage immediately after `stageId` in WORKFLOW_STAGE_ORDER, or undefined for the last stage ("postmanGeneration"). */
+/** The stage immediately after `stageId` in WORKFLOW_STAGE_ORDER, or undefined for the last stage ("performanceTesting"). */
 export function nextStageId(stageId: WorkflowStageId): WorkflowStageId | undefined {
   const index = WORKFLOW_STAGE_ORDER.indexOf(stageId);
   return index >= 0 && index < WORKFLOW_STAGE_ORDER.length - 1
@@ -19,7 +19,9 @@ export function nextStageId(stageId: WorkflowStageId): WorkflowStageId | undefin
 /**
  * Whether `stageId` can be entered right now (FR-002), per data-model.md's stage-dependency
  * table. `scenarioReview` is reachable once `aiEnhancement` is either `complete` or `skipped`
- * (FR-008); every other stage requires its immediate predecessor to be `complete`.
+ * (FR-008). `performanceTesting` (AP-029 research D1) is reachable once `postmanGeneration` is
+ * `complete`, whatever `execution`'s status, because the environments holding its values are
+ * gated on Postman generation. Every other stage requires its immediate predecessor `complete`.
  */
 export function isStageEnterable(workflow: TestGenerationWorkflow, stageId: WorkflowStageId): boolean {
   if (stageId === "upload") return true;
@@ -28,6 +30,7 @@ export function isStageEnterable(workflow: TestGenerationWorkflow, stageId: Work
     const status = workflow.stages.aiEnhancement.status;
     return status === "complete" || status === "skipped";
   }
+  if (stageId === "performanceTesting") return workflow.stages.postmanGeneration.status === "complete";
   const prior = previousStageId(stageId);
   if (!prior) return true;
   return workflow.stages[prior].status === "complete";
