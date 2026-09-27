@@ -508,6 +508,10 @@ verify the new order is kept in the regenerated script.
 - The feature is used from the guided workflow once scenarios and workflows are approved, since it
   builds on the approved test model. Uploaded collections (AP-026) are not a source for
   performance tests in this version.
+- Performance testing becomes available once the Postman collection has been generated, whether
+  or not a functional run follows. The user-supplied values live in environments (FR-013), and
+  environments are available from that point in the guided workflow (decision 2026-09-27; plan
+  research D1).
 - The target environment is an existing environment with a unique name, a tier (`local`, `dev`,
   `qa`, `staging` or `production`) and a base URL, as defined by AP-017. No new environment
   model is introduced. User-supplied values are that environment's variable values

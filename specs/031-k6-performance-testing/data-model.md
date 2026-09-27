@@ -183,8 +183,12 @@ message is fixed text built from `values`, so the same data gives the same findi
 
 ## Workflow state additions (`TestGenerationWorkflow`)
 
-- `stages.performanceTesting`: a new `WorkflowStageState`. It is optional and may be `skipped`,
-  and it is available once `workflowReview` is `completed` (D1).
+- `stages.performanceTesting`: a new `WorkflowStageState`. It is optional, and it is available
+  once `postmanGeneration` is `complete`, whatever `execution`'s status (D1, amended 2026-09-27).
+  There is no skip route: a stage left `not-yet-reached` blocks nothing.
+- `performancePlan` also records `upstreamFingerprint` (backend-computed, not part of
+  `fingerprint`): a SHA-256 over the approved scenario ids, approved workflow ids and operation
+  selection it was built from. A mismatch on the next read rebuilds the plan (D1, D26).
 - `performancePlan?: PerformancePlan`.
 - The generated script, backend-only: the frontend receives `{planFingerprint, scriptSha256,
   stepCount, outOfDate: boolean}` and never the script text, except through the download route.

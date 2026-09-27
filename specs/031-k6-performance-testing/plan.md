@@ -167,6 +167,12 @@ code facts were corrected:
   before AP-028's run-order validation (D18);
 - the runner's per-tick `touch` is the first caller of `touch` outside the session middleware (D18).
 
+One design change was made the same day, by user decision: the stage opens once
+`postmanGeneration` is complete rather than once `workflowReview` is (D1). The environments routes
+that hold the user-supplied values are gated on Postman generation, so this keeps AP-017's
+contract unchanged. The contract's stage error is renamed `409 postman_generation_incomplete`.
+Constitution check unchanged: PASS.
+
 ## Project Structure
 
 ### Documentation (this feature)

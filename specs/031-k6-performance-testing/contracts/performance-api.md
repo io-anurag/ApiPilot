@@ -11,6 +11,23 @@ id in any path.
 
 Types are defined in [data-model.md](../data-model.md).
 
+**Stage gating** (research D1, amended 2026-09-27): the plan routes, the script routes and `POST
+/runs` return `409 postman_generation_incomplete` unless `postmanGeneration` is `complete`.
+`GET /readiness`, `GET /runs`, `GET /runs/:runId`, `POST /runs/:runId/cancel` and
+`GET /runs/:runId/report` are not gated. A run that has already started stays visible,
+cancellable and reportable even if an upstream revision later makes `postmanGeneration` stale
+(FR-031, SC-008).
+
+**Stage transitions** caused by these routes (research D1):
+- `GET /plan`, first call, or when the stage is `stale`: the stage moves to `active` and becomes
+  the workflow's `activeStageId`.
+- `POST /script`, on success: the stage moves to `complete`.
+- `PUT /plan` that changes the fingerprint while the stage is `complete`: the stage moves back to
+  `active`.
+
+`GET /plan` therefore has a side effect. Clients call it when the user opens the stage, never to
+pre-fetch.
+
 ## Readiness
 
 ### `GET /readiness`
@@ -23,7 +40,7 @@ Types are defined in [data-model.md](../data-model.md).
 
 - `200 {plan: PerformancePlan, script: ScriptStatus | null}`. It builds the proposed plan on
   first call (FR-006), from the approved test model and approved workflows.
-- `409 workflow_review_incomplete` when `workflowReview` is not `completed`.
+- `409 postman_generation_incomplete` when `postmanGeneration` is not `complete` (research D1).
 
 `ScriptStatus = {planFingerprint, scriptSha256, stepCount, outOfDate: boolean}`.
 
@@ -59,7 +76,7 @@ sends codes only. The server computes each code's `source` (FR-012, FR-039, rese
 - `400 invalid_expected_status {stepId}`: an unknown step, an empty list, or a code that is not
   `^[1-5]\d\d$` or `^[1-5]XX$`. The plan is unchanged.
 - `400 unknown_operation`
-- `409 workflow_review_incomplete`
+- `409 postman_generation_incomplete`
 
 ### `POST /plan/reset`
 
@@ -73,7 +90,7 @@ Presence is only ever a boolean (FR-013).
 
 **Errors:**
 - `404 environment_not_found`
-- `409 workflow_review_incomplete`
+- `409 postman_generation_incomplete`
 
 The values themselves are edited through the existing `PUT
 /api/test-generation-workflow/environments/:environmentId`. This feature adds no value-writing
@@ -89,7 +106,7 @@ Generates the script and environment template from the current plan (FR-020).
 `scriptSha256` (SC-001).
 
 **Errors:**
-- `409 workflow_review_incomplete`
+- `409 postman_generation_incomplete`
 - `422 nothing_to_test`, when the plan has no steps.
 - `422 expected_status_missing {stepIds}`, when any step has no expected status. `stepIds` is in
   plan order. Nothing is generated (FR-012a). A missing user-supplied value does not cause this
@@ -120,7 +137,7 @@ The checks run in this order, and the first one that fails is returned:
 
 | # | Check | Response |
 |---|---|---|
-| 1 | The workflow review is complete | `409 workflow_review_incomplete` |
+| 1 | Postman generation is complete | `409 postman_generation_incomplete` |
 | 2 | A script exists and is current | `409 script_not_generated`, `409 script_out_of_date` (FR-023) |
 | 3 | k6 is ready (probed now) | `409 k6_unavailable {readiness}` (FR-027) |
 | 4 | The environment exists | `404 environment_not_found` |

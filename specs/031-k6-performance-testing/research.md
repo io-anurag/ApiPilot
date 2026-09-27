@@ -10,14 +10,28 @@ recorded as Implemented.
 
 ## D1. Where the feature lives: a new optional last stage of the guided workflow
 
-**Decision**: Add a `performanceTesting` stage to `WORKFLOW_STAGE_ORDER`
+**Decision** (gate amended 2026-09-27): Add a `performanceTesting` stage to `WORKFLOW_STAGE_ORDER`
 (`packages/shared-domain/src/testGenerationWorkflow.ts`), after `execution`.
-- It becomes available once `workflowReview` is completed. Neither `postmanGeneration` nor
-  `execution` is a prerequisite.
-- It is optional. Like `execution`, it may be `skipped`, and it never blocks the workflow from
-  being complete.
+- It becomes available once `postmanGeneration` is complete, whatever `execution`'s status
+  (`active`, `skipped` or `complete`). `execution` is not a prerequisite.
+- Why Postman generation and not Workflow Review (the original gate): the user-supplied values
+  live in environments (FR-013), and every environments route
+  (`GET`/`POST /environments`, `PUT /environments/:environmentId`) is gated by
+  `requireCompletedWorkflow()`, which requires `postmanGeneration` to be complete. Gating the stage
+  the same way keeps AP-017's environments contract unchanged. Generating the Postman collection is
+  deterministic and quick, so the extra step costs little. Widening the environments gate was
+  rejected, because it would loosen a shipped contract used by functional runs (user decision
+  2026-09-27).
+- It is optional. Nothing in ApiPilot computes whether the whole workflow is complete, so a stage
+  left `not-yet-reached` blocks nothing, and no skip route is needed.
+- Transitions: `not-yet-reached → active` when the user enters it, `active → complete` when a
+  current script is generated, and `complete → active` when a plan change makes that script out of
+  date. The general `complete → stale` and `stale → active` transitions apply.
 - Upstream changes (a re-finalized scenario review or workflow review) mark it stale through the
-  existing `staleness.ts` mechanism. That is also how the script becomes out of date (FR-023).
+  existing `staleness.ts` mechanism. Independently, the plan records a fingerprint of its upstream
+  inputs (the approved scenario ids, approved workflow ids and operation selection). When they
+  differ on the next read, the plan is rebuilt as `POST /plan/reset` does (D26), and the script
+  becomes out of date (FR-023).
 
 **Rationale**: The spec builds on the approved test model and workflows, which live only in the
 guided workflow's state (`approvedTestModel`, `approvedWorkflowIds`). A stage gets the stage

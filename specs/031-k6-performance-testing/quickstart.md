@@ -17,7 +17,8 @@ fake runner, is part of `npm test`.
 - **A specification:** `backend/tests/fixtures/openapi/` contains one with at least one dependency
   workflow, one write operation, and one operation that documents no 2xx response (the tasks name
   the file). Take it through the guided workflow
-  up to and including **Workflow Review**, approving at least one workflow.
+  up to and including **Postman Generation**, approving at least one workflow in Workflow Review
+  (the stage opens once the Postman collection is generated; research D1).
 - **An environment** named `perf-local`, tier `local`, base URL `http://localhost:4600`, created in
   the existing environments panel.
 
