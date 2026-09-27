@@ -52,7 +52,7 @@ is `specs/030-ai-failure-analysis`.
 | Session-Scoped Concurrent Workflow Isolation (`specs/017-session-workflow-isolation`) | Implemented |
 | AP-017 — Test Execution & Results *(post-MVP)* | Implemented (`specs/018-test-execution-results`) — all 49 tasks complete, full backend/frontend suites passing, real end-to-end quickstart walkthrough recorded in Next Actions #13. Since 2026-09-23 its endpoints are an API-only path; the UI runs generated collections through AP-026 after the guided workflow's hand-off, and its unrendered frontend components were removed (Next Actions #22, #23) |
 | AP-019 — Automatic Workflow Chaining (`specs/019-auto-workflow-chaining`) | Implemented — all tasks (T001–T037) complete |
-| AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete |
+| AP-020 — Frontend Application Logging (`specs/020-frontend-application-logging`) | Implemented — all tasks (T001–T028) complete. Amended 2026-09-27 (version 19.4.1): a root React error boundary shows an error message instead of a blank page when rendering crashes, and logs the crash (Next Actions #33) |
 | AP-021 — Distinct-Credential Token Provisioning (`specs/021-multi-credential-token-provisioning`) | Implemented — all 22 tasks complete |
 | AP-022 — Specification-Conformant Parameter Serialization (`specs/022-openapi-parameter-serialization`) | Implemented — all 25 tasks complete |
 | AP-023 — Automatic Auth-Credential Chaining (`specs/023-auto-auth-credential-chaining`) | Implemented — all 23 tasks complete |
@@ -1135,6 +1135,8 @@ developer's own browser console.
 - A frontend logger (`frontend/src/logger.ts`) with `info`/`warn`/`error` levels, timestamps, and
   component/event naming.
 - Global `window` `error`/`unhandledrejection` handlers wired in at application bootstrap.
+- A root React error boundary (`AppErrorBoundary`, added 2026-09-27) that logs a render-phase
+  crash and replaces the blank page with an error message and a reload action.
 - Every existing service-client module logs its own caught errors.
 - `warn`/`error` entries are additionally forwarded, best-effort, to a new backend endpoint and
   persisted through the existing server-side logger under a dedicated component name.
@@ -2608,3 +2610,14 @@ Implementation
       converted when read (`variableValueText.ts`). Within a run, later requests still see the
       value as the script set it.
     - Version bumped to 19.4.0 (root, backend, frontend, shared-domain) for these features.
+
+33. **AP-020: root React error boundary; version 19.4.1 (2026-09-27).**
+    - An exception thrown while rendering (such as the Variables panel crash fixed in #32)
+      previously unmounted the whole app and left a blank page. `AppErrorBoundary`, wrapped around
+      `App` in `main.tsx`, now shows "Something went wrong and this page could not be shown." with
+      a **Reload page** action, and logs the error's message as `render_error` through the
+      frontend logger, which forwards it to `POST /api/client-logs`. Props, state and the component
+      stack are not logged.
+    - The boundary covers rendering only. Event-handler exceptions and unhandled promise rejections
+      are still caught by the global `window` handlers (FR-010a), as before.
+    - Version bumped to 19.4.1 (root, backend, frontend, shared-domain).
