@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./App";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { installGlobalErrorHandlers } from "./globalErrorHandlers";
 // Self-hosted (no runtime network call, per the project's local-first requirement) — these back
 // the --font-sans/--font-mono/--font-display tokens declared in index.css, which previously named
@@ -24,6 +25,8 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </React.StrictMode>,
 );

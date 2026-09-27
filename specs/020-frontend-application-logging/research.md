@@ -88,6 +88,13 @@ property assignment silently overwrites any other handler already assigned the s
 `addEventListener` composes with other listeners; there are none in this codebase today, but
 `addEventListener` costs nothing extra and avoids a foot-gun for future code.
 
+**Amendment (2026-09-27)**: A root `<AppErrorBoundary>` (`frontend/src/components/AppErrorBoundary.tsx`)
+now wraps `App` in addition to, not instead of, these listeners. React sends a render-phase
+error to the nearest boundary and, in production builds, not to `window`; without a boundary the
+tree unmounts and the page goes blank. The boundary logs the error message as `render_error`
+and shows an error message with a reload action. The listeners above remain the only capture for
+rejections and non-render exceptions.
+
 **Testability**: jsdom supports dispatching synthetic `ErrorEvent` and (via a small polyfill-free
 custom event carrying `reason`) rejection-like events on `window`, so SC-007's tests can trigger
 both listeners deterministically without an actual unhandled crash reaching the test runner.

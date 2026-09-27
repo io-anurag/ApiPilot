@@ -609,7 +609,11 @@ model is model-agnostic and does not change with it.
   a dedicated backend endpoint (`POST /api/client-logs`) that persists them through the existing
   server-side logger under a distinct component name (specs/020-frontend-application-logging). A
   credential-shaped field-name denylist is enforced independently on both sides; forwarding never
-  blocks the UI and is never retried, and nothing is sent to an external service.
+  blocks the UI and is never retried, and nothing is sent to an external service. A root React
+  error boundary (`frontend/src/components/AppErrorBoundary.tsx`, wrapped around `App` in
+  `main.tsx`) catches render-phase exceptions, which React does not pass to the `window` handlers
+  in production builds: it logs the error message as `render_error` and shows an error message with
+  a reload action instead of a blank page.
 
 ## Frontend architecture
 
