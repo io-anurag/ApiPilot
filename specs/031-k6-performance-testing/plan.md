@@ -1,6 +1,6 @@
 # Implementation Plan: k6 Performance Testing
 
-**Branch**: `031-k6-performance-testing` | **Date**: 2026-09-24, revised 2026-09-25 | **Spec**: [spec.md](./spec.md)
+**Branch**: `031-k6-performance-testing` | **Date**: 2026-09-24, revised 2026-09-25, re-validated 2026-09-27 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/031-k6-performance-testing/spec.md` (AP-029)
 
@@ -125,7 +125,7 @@ Checked against `.specify/memory/constitution.md` v2.3.0.
 | IV. Structured and validated | N/A | No AI output. k6's metrics lines are parsed defensively, and an unreadable stream fails the run with `metrics-unreadable` (D11). |
 | V, VI, VII, XXII, XXIII, XXIX. AI-related principles | N/A | No AI. |
 | VIII. Framework-independent test model | Pass | The shared types are k6-agnostic. k6 syntax, options and output formats are confined to `performance/k6/` (D2). |
-| IX. Separation of concerns | Pass | A new `performance/` module and router. The only change to `postman/` is exporting pure planning functions (D3). The run slot change is one extra check in two routes (D18). |
+| IX. Separation of concerns | Pass | A new `performance/` module and router. `postman/` is unchanged: the planning functions it reuses are already exported (D3). The run slot change is one extra check in two routes (D18). |
 | X. Domain model first | Pass | `performance.ts` in `shared-domain` (data-model.md). |
 | XI. Human in the loop | Pass | Every run is a user trigger. The plan is reviewed and editable before generation (FR-007, FR-024). |
 | XII. Quality over quantity | Pass | One positive scenario per operation, and no negative scenarios under load (FR-002). |
@@ -157,6 +157,15 @@ execution path, stored secret, or network destination.
 add plan fields, one validation error and one generation refusal. They add no execution path,
 stored secret, network destination or AI. The user-set codes are explicit configuration under
 principle I, and the generation block strengthens XIX.
+
+**Re-validation of 2026-09-27: PASS.** The design was checked against the current spec (both
+clarification sessions), constitution v2.3.0 (`specs/constitution.md` identical), and the code
+after the version 19.4.1 merge into `AP-031`. There is no design change and no new unknown. Three
+code facts were corrected:
+- `postman/` needs no change, because every function D3 reuses is already exported;
+- the uploaded-collection slot check is now at `externalCollections.ts:464-472`, and it still runs
+  before AP-028's run-order validation (D18);
+- the runner's per-tick `touch` is the first caller of `touch` outside the session middleware (D18).
 
 ## Project Structure
 
@@ -209,7 +218,7 @@ backend/src/
 ├── persistence/
 │   ├── connection.ts                  # + performance_runs table
 │   └── performanceRunRepository.ts    # NEW
-├── postman/                           # export existing pure planning functions only (D3)
+├── postman/                           # unchanged; reused planning functions already exported (D3)
 ├── testGenerationWorkflow/            # + stage wiring, staleness entry
 ├── api/
 │   ├── performanceTesting.ts          # NEW router (contract)
@@ -240,7 +249,7 @@ new backend module with its own router and table, a new shared-domain file, and 
 component folder behind one new guided-workflow stage. Existing modules change only additively:
 - the stage list;
 - the slot checks in two routes;
-- the exports from `postman/`.
+- restart marking and run-directory cleanup in `server.ts`, and the new table in `connection.ts`.
 
 Configuration adds one optional variable, `K6_BINARY_PATH`, to `.env.example` and the README.
 

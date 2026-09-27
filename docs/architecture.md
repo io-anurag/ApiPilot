@@ -418,6 +418,14 @@ stretching the generator's own type past its documented purpose. `execution/newm
 modified) to accept either item type, since `newman.run()` already accepts either shape as plain
 JSON.
 
+Each request still runs in its own one-item Newman collection, which keeps per-request
+cancellation, pacing and environment write-back. Since 2026-09-25 that item is nested inside its
+ancestor folders (each reduced to its `name`, `id`, `auth`, `event` and
+`protocolProfileBehavior`, without its other children), and the collection's own `event` array is
+passed alongside its `auth`. Before this, the bare item ran with only the collection-level auth, so
+folder auth, folder scripts and collection scripts were silently skipped, contrary to specs/026
+FR-008. ApiPilot's own generated items pass no folder chain, so that path is unchanged.
+
 Result *interpretation* is not shared with the generated-collection path: `mapUploadedResult.ts`
 reads `testOutcomes` directly off Newman's own `execution.assertions[]`, naming each test exactly
 as the collection's own `pm.test(...)` script named it, rather than forcing it through
@@ -601,7 +609,11 @@ model is model-agnostic and does not change with it.
   a dedicated backend endpoint (`POST /api/client-logs`) that persists them through the existing
   server-side logger under a distinct component name (specs/020-frontend-application-logging). A
   credential-shaped field-name denylist is enforced independently on both sides; forwarding never
-  blocks the UI and is never retried, and nothing is sent to an external service.
+  blocks the UI and is never retried, and nothing is sent to an external service. A root React
+  error boundary (`frontend/src/components/AppErrorBoundary.tsx`, wrapped around `App` in
+  `main.tsx`) catches render-phase exceptions, which React does not pass to the `window` handlers
+  in production builds: it logs the error message as `render_error` and shows an error message with
+  a reload action instead of a blank page.
 
 ## Frontend architecture
 
@@ -665,7 +677,22 @@ so every mutation re-applies all existing edit markers when it serializes
 recently edited request's marker.
 
 `CollectionTreeView` reproduces the collection's own folder/request order and supports add, delete,
-rename, and reorder for both requests and folders. `RequestEditorPanel` is a tabbed
+rename, reorder, and move for both requests and folders. A move (`moveItem` in
+`collectionStructure.ts`, amended 2026-09-25) is separate from reorder, which stays a pure
+permutation. It keeps the item behaving as before: inherited auth the move would change is written
+onto the item, and the scripts of the folders it leaves are copied onto it as separate events whose
+first line names the source folder. Only a folder's own events are copied (`listenersOwn`), since
+`EventList.listeners()` also returns every ancestor's. Each request view also carries its effective
+auth and source and its variable references; secret literals in auth fields, and in the Headers
+tab's implied auth header, are blanked on the server so they never reach the browser. A request's
+own auth is editable (specs/028 FR-002c): `PUT .../requests/:requestId` takes an optional
+`auth: RequestAuthEdit` (shared-domain), which `requestAuthEdit.ts` validates and writes onto
+`item.request.auth`; a secret field is `{ kind: "keep" }` to keep the stored literal the
+browser never received, or `{ kind: "set", value }` to replace it. The run panel's run-order list sets a per-run order instead (specs/028
+FR-015c): `execution/start`'s `selectedRequestIds` is ordered, `resolveRunOrder` validates it, and
+`runUploadedCollectionExecution` runs the requests in that order, each nested in its own folder
+chain, so the collection's stored order never changes (specs/026 FR-019). The page keeps each
+collection's order in memory until reload. `RequestEditorPanel` is a tabbed
 Headers/Body/Tests editor — method, URL, and Save stay visible across tabs, and the resolved
 (variable-substituted) preview is always visible below them — covering full method/URL/header/body
 editing plus the request's own `pm.test(...)` test script, which previously executed on every run

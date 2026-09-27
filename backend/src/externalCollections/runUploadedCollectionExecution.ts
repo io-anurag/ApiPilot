@@ -1,5 +1,5 @@
 import type { NotAttemptedReason, PostmanRawItem, UploadedCollectionSet } from "@apipilot/shared-domain";
-import type { Item } from "postman-collection";
+import type { Collection, Item } from "postman-collection";
 import { createLogger } from "../logger";
 import { parseUploadedCollection } from "./uploadedCollectionParsing";
 import { mapUploadedResult } from "./mapUploadedResult";
@@ -7,16 +7,18 @@ import { runSingleItem } from "../execution/newmanRunner";
 import { appendResult, isCancelRequested, settleRun } from "./uploadedCollectionExecutionStore";
 import { findEditedItemIds } from "./editedItems";
 import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
+import { toStoredVariableValues } from "./variableValueText";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
 
 export interface RunUploadedCollectionExecutionInput {
   runId: string;
   uploadedCollection: UploadedCollectionSet;
-  /** When provided (a selective run — AP-028 follow-up), only these item ids actually dispatch;
-   * everything else in the collection is skipped entirely rather than reported "not-attempted" —
-   * a deselected request was never part of this run to begin with. */
-  selectedItemIds?: Set<string>;
+  /** When provided (a selective run — AP-028 follow-up), only these item ids actually dispatch, in
+   * this order (specs/026 FR-019, the per-run order; validated by `resolveRunOrder`); everything
+   * else in the collection is skipped entirely rather than reported "not-attempted" — a
+   * deselected request was never part of this run to begin with. */
+  orderedItemIds?: readonly string[];
 }
 
 function delay(ms: number): Promise<void> {
@@ -26,6 +28,29 @@ function delay(ms: number): Promise<void> {
 /** `item.toJSON()`'s runtime shape matches `PostmanRawItem` (research.md D6) — verified against the installed `postman-collection` at design time; this is the one, isolated boundary cast (CLAUDE.md §44). */
 function toRawItem(item: Item): PostmanRawItem {
   return item.toJSON() as unknown as PostmanRawItem;
+}
+
+/**
+ * The item's ancestor folders, root first, as childless Postman folder definitions: only what a
+ * folder contributes to its requests (auth, pre-request/test events, protocol profile behavior).
+ * Running the item nested inside them is what makes Newman apply folder auth and folder scripts
+ * as Postman does (specs/026 FR-008, fixed 2026-09-25); running the bare item skipped them.
+ */
+function folderChainOf(item: Item, collection: Collection): Array<Record<string, unknown>> {
+  const chain: Array<Record<string, unknown>> = [];
+  let parent = item.parent();
+  while (parent && parent !== collection) {
+    const json = parent.toJSON() as Record<string, unknown>;
+    chain.unshift({
+      name: json.name,
+      id: json.id,
+      ...(json.auth ? { auth: json.auth } : {}),
+      ...(json.event ? { event: json.event } : {}),
+      ...(json.protocolProfileBehavior ? { protocolProfileBehavior: json.protocolProfileBehavior } : {}),
+    });
+    parent = parent.parent();
+  }
+  return chain;
 }
 
 function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedReason): void {
@@ -45,29 +70,37 @@ function appendNotAttempted(runId: string, items: Item[], reason: NotAttemptedRe
 }
 
 /**
- * Runs every request in an uploaded collection — or, when `input.selectedItemIds` narrows it to a
- * chosen subset (a Postman-Runner-style selective run), only those — strictly one at a time, in
- * the collection's own document order (FR-005) — walked via `postman-collection`'s own
- * `Collection.forEachItem()` (research.md D6), which visits every request item at any folder
- * nesting depth (the Edge Cases' "nested folders" case). Mirrors `execution/runExecution.ts`'s
+ * Runs every request in an uploaded collection — or, when `input.orderedItemIds` narrows it to a
+ * chosen subset (a Postman-Runner-style selective run), only those, in that order (FR-019) —
+ * strictly one at a time, by default in the collection's own document order (FR-005) — walked via
+ * `postman-collection`'s own `Collection.forEachItem()` (research.md D6), which visits every
+ * request item at any folder nesting depth (the Edge Cases' "nested folders" case). Each request
+ * runs nested in its own folder chain wherever it sits in the order. Mirrors `execution/runExecution.ts`'s
  * structure: never throws, settles the run as `completed`/`cancelled` regardless of outcome
  * (constitution XIX).
  */
 export async function runUploadedCollectionExecution(input: RunUploadedCollectionExecutionInput): Promise<void> {
-  const { runId, uploadedCollection, selectedItemIds } = input;
-  const orderedItems: Item[] = [];
+  const { runId, uploadedCollection, orderedItemIds } = input;
+  let orderedItems: Item[] = [];
   let attempted = 0;
 
   try {
     const collection = parseUploadedCollection(uploadedCollection.collection);
     collection.forEachItem((item: Item) => {
-      if (selectedItemIds && !selectedItemIds.has(item.id)) return;
       orderedItems.push(item);
     });
+    if (orderedItemIds) {
+      // The route has already refused unknown ids (resolveRunOrder), and the collection cannot be
+      // edited while this run holds its lock (FR-017), so every id is found here.
+      const itemsById = new Map(orderedItems.map((item) => [item.id, item]));
+      orderedItems = orderedItemIds.flatMap((id) => itemsById.get(id) ?? []);
+    }
 
-    const collectionAuth = collection.toJSON().auth;
+    const collectionJson = collection.toJSON();
+    const collectionAuth = collectionJson.auth;
+    const collectionEvents = collectionJson.event;
     const declaredVariables = Object.keys(uploadedCollection.variableValues).map((key) => ({ key, value: "" }));
-    let environmentRecord: Record<string, string> = { ...uploadedCollection.variableValues };
+    let environmentRecord: Record<string, unknown> = { ...uploadedCollection.variableValues };
     const captureRawDetails = uploadedCollection.tier === "local";
     const editedItemIds = findEditedItemIds(uploadedCollection.collection);
 
@@ -91,6 +124,8 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       const itemOutcome = await runSingleItem({
         item: toRawItem(item),
         collectionAuth,
+        collectionEvents,
+        folderChain: folderChainOf(item, collection),
         declaredVariables,
         environment: environmentRecord,
       });
@@ -101,7 +136,9 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       // therefore the "resolved preview" every request view builds from (`collectionView.ts`) —
       // would keep showing whatever was last explicitly saved, silently diverging from the value a
       // later step (in this run or the next one) actually resolves and sends.
-      updateUploadedCollectionVariables(uploadedCollection.id, environmentRecord);
+      // A script can set a number or an object; stored values are text (toStoredVariableValues), or
+      // the variable panel and every later read would get a non-string value.
+      updateUploadedCollectionVariables(uploadedCollection.id, toStoredVariableValues(environmentRecord));
       appendResult(
         runId,
         mapUploadedResult(

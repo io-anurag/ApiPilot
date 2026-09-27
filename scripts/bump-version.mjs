@@ -37,7 +37,13 @@ if (index === 0) {
 }
 const nextVersion = next.join(".");
 
-const packagePaths = ["package.json", "backend/package.json", "frontend/package.json"];
+// Every workspace moves in lockstep with the root version, the shared package included.
+const packagePaths = [
+  "package.json",
+  "backend/package.json",
+  "frontend/package.json",
+  "packages/shared-domain/package.json",
+];
 for (const relativePath of packagePaths) {
   const packageFile = readJson(relativePath);
   packageFile.value.version = nextVersion;

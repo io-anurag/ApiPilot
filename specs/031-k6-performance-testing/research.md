@@ -1,9 +1,10 @@
 # Research: k6 Performance Testing (AP-029)
 
-**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-09-24 (D14, D16, D25, D26 revised or added 2026-09-25)
+**Feature**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Date**: 2026-09-24 (D14, D16, D25, D26 revised or added 2026-09-25; D3 and D18 code facts re-verified 2026-09-27)
 
 This records each design decision with its rationale and the alternatives rejected. Facts about
-the existing code were taken from the repository on 2026-09-24. Facts about k6 are k6's documented
+the existing code were taken from the repository on 2026-09-24, and re-verified on 2026-09-27
+after the version 19.4.1 merge into `AP-031`. Facts about k6 are k6's documented
 behaviour, and the opt-in real-k6 test (quickstart scenario 9) verifies them before the feature is
 recorded as Implemented.
 
@@ -61,8 +62,14 @@ repository is testable with no binary and no database (XXI).
   - `identifiers.ts`'s content-derived ids.
 - **Not reused:** the Postman renderers (`requestItem`, `oauth2TokenFetch`,
   `assertionScripts`). They emit Postman items and `pm.*` scripts, so `k6/` renders its own.
-- **Only change to `backend/src/postman/`:** export the planning functions above, if any is not
-  already exported. No behaviour changes.
+- **No change to `backend/src/postman/`:** every function listed above is already exported
+  (verified 2026-09-27): `parameterSerialization.ts` (`resolveParameterStyle`,
+  `serializeQueryParameter`, `serializeSimpleValue`, `percentEncode`), `authMapping.ts`
+  (`planSchemeVariables`, `mapOperationAuth`), `credentialProducers.ts`
+  (`findCredentialProducers`) and `authCredentialRelationships.ts`
+  (`buildAuthCredentialRelationships`). If implementation finds it needs a private helper (for
+  example `workflowRendering.ts`'s `operationKey`), exporting it is the only permitted change, with
+  no behaviour change.
 
 **Rationale**: The same serialization and auth planning are what make "a k6 request matches its
 Postman equivalent" true. The renderers are format-specific by nature.
@@ -372,13 +379,19 @@ status.
 
 **Decision**:
 - **The slot:** add `getPerformanceInProgressRun()` to the two existing inline checks
-  (`testGenerationWorkflow.ts:754-761`, `externalCollections.ts:426-435`). The new start route
-  checks all three. The check and the insert stay synchronous, with no `await` between them, as
-  today.
+  (`testGenerationWorkflow.ts:754-761`, `getInProgressRun() ?? getUploadedInProgressRun()`, and
+  `externalCollections.ts:464-472`, `getUploadedInProgressRun() ?? getGeneratedInProgressRun()`;
+  line numbers as of 2026-09-27). In the uploaded-collection start route the slot check still runs
+  before the AP-028 run-order resolution (`resolveRunOrder`, `400 invalid_run_order`), and the new
+  term is added there, so a performance run in progress is reported as `409
+  execution_in_progress` before any run-order error. The new start route checks all three. The
+  check and the insert stay synchronous, with no `await` between them, as today.
 - **Session keep-alive:** while a run is in progress, the runner calls the session registry's
-  `touch(sessionId)` on each progress tick (at most every 5 s). So the idle timeout cannot pass
-  during a run, and it restarts from the last tick, at the run's end (FR-034a). There is no new
-  mechanism in the registry.
+  `touch(sessionId)` (`session/sessionRegistry.ts`) on each progress tick (at most every 5 s). So
+  the idle timeout (60 minutes, swept every 5 minutes) cannot pass during a run, and it restarts
+  from the last tick, at the run's end (FR-034a). There is no new mechanism in the registry, but
+  this is the first caller of `touch` outside `sessionMiddleware.ts`, which calls it once per HTTP
+  request. The existing run stores use only `onExpire`.
 - **Restart:** a new `performance_runs` table gets the same statement as the other run tables:
   `UPDATE … SET status='cancelled', cancel_reason='backend-restart' WHERE status='in-progress'`,
   called from `server.ts` before `listen`. Its `deleteBySession` is registered as an `onExpire`

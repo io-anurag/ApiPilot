@@ -324,14 +324,40 @@ what will be sent, before anything runs.
   with the edit applied marks that request as edited in its results.
 - **Headers added by authentication**: if a request's authentication (its own, or
   inherited from its folder or the collection) is a bearer token or an API key sent in a
-  header, the editor notes the header it will add, and the preview lists it marked
-  "(from auth)". It isn't an editable header entry — change the auth variable instead.
+  header, the Headers tab shows an "Auth adds" note with the header, its `{{variable}}`
+  highlighted, and where the auth comes from; the preview lists it marked "(from auth)". It
+  isn't a header row: click **Edit auth** in the note to change it on the Auth tab. A token
+  typed directly into the collection shows as "hidden literal value", never as its value.
+- **Tests**: the Tests tab shows and saves only the request's own test script. Test scripts
+  on its folders or on the collection also run, as they do in Postman, but they are not
+  shown or saved there.
   Other authentication types (basic, digest, OAuth, AWS signature, and so on) are not
   previewed, because their header can't be shown ahead of time without guessing.
+- **Auth and used variables**: a request's **Auth** tab shows the auth it actually uses,
+  whether that is set on the request or inherited from a folder or the collection, with
+  its fields and `{{variable}}` references. A secret typed directly into the collection
+  (for example a literal password) is shown as hidden, never as its value. The **Used
+  variables** tab lists every variable the request uses, where, and whether it is set, and
+  is read-only.
+- **Editing auth**: on the **Auth** tab, choose the request's auth type — **Inherit auth
+  from parent**, **No Auth**, **Bearer Token**, **Basic Auth** or **API Key** (header or
+  query params) — and fill in its fields, for example `{{adminToken}}` to call one endpoint
+  with a different token. Click **Save** to save it with the request's other fields; the
+  request is marked edited and the next run uses it. A hidden secret stays as it is while
+  you leave its field blank; type a value to replace it. Other auth types, such as OAuth
+  2.0, are shown read-only; choosing an editable type replaces them. Folder and collection
+  auth can't be edited in ApiPilot.
 - **Adding, deleting, renaming, and reordering**: use the actions menu on a request or
-  folder row to rename, delete, or move it, or **+ Add request** to add a new one to a
-  folder or the collection root. Deleting a folder deletes everything nested inside it.
-  None of this affects a run you already completed.
+  folder row to rename, delete, or move it up or down, or **+ Add request** to add a new
+  one to a folder or the collection root. Deleting a folder deletes everything nested
+  inside it. None of this affects a run you already completed.
+- **Moving to another folder**: choose **Move to…** in the request's or folder's actions
+  menu. The item lands last in its new folder. It keeps working as it
+  did: auth it inherited from the folder it leaves is written onto it, and that folder's
+  pre-request and test scripts are copied onto it, each marked as copied. ApiPilot then
+  tells you what it copied and marks the item edited. The new folder's own scripts also
+  run for it, because a folder's scripts run for everything inside it; the dialog lists
+  them before you confirm, and warns if a folder's scripts would run twice.
 - While a run of this collection is in progress, the entire editor becomes read-only
   until the run finishes — you'll see this indicated rather than being allowed to make a
   change that might not apply.
@@ -343,20 +369,32 @@ it through the hand-off (section 3.10).
 
 Before clicking **Start run**, you can optionally use the run panel's checklist to select
 which requests actually run this time — leave everything checked to run the whole
-collection, or narrow it to a subset the way Postman's own collection runner lets you.
+collection, or narrow it to a subset the way Postman's own collection runner lets you. Each
+row shows the request's folder, method, name and endpoint path. Drag a row, or use its ↑ and
+↓ buttons, to place a request anywhere in the run, across folders, as in Postman's Runner.
+That order is for runs only: the collection, its tree and each request's folder auth and
+scripts don't change. It stays for every later run until you reload the page, and **Reset**
+restores the collection's own order with every request selected. Unchecked requests stay
+unchecked when you reorder. To change the collection's own order, or move a request to
+another folder, use the collection tree.
+
+Each request runs with its collection's and folders' auth and pre-request/test scripts
+applied, exactly as Postman runs it.
 
 A variable that's still missing a value does not stop the run. That's deliberate: an
 earlier request's test script may capture a value (for example a token, with
 `pm.environment.set`) that a later request uses. A request that still sends an unresolved
 `{{variable}}` simply records its own failure. Values captured by scripts during a run are
 saved back to the collection, so the preview shows them afterwards and the next run starts
-with them.
+with them. They are saved as text: a number such as `42` becomes `"42"`, and an object
+becomes its JSON. Within a single run, later requests see the value exactly as the script
+set it.
 
 Click **Start run**. A Staging/Production tier or a destructive request
 (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own requests)
 triggers a second, separate confirmation naming the tier and the specific requests
-involved. Requests then run one at a time, in the collection's own order — including
-everything inside nested folders.
+involved. Requests then run one at a time, in the run-order list's order (the collection's
+own order unless you changed it) — including everything inside nested folders.
 
 While running, you see a live summary and a **Cancel run** button. Each request's row
 shows an outcome:
@@ -522,6 +560,7 @@ Variable and credential values are encrypted before being stored.
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
+| "Something went wrong and this page could not be shown." | The page hit an unexpected error while displaying something | Choose **Reload page**. Saved collections, environments and run history are not affected. If it happens again, report it; the error is recorded in the backend log |
 | Upload rejected immediately | File isn't `.yaml`/`.yml`, or exceeds 10 MB | Check the extension and file size |
 | "Invalid YAML" / "Unsupported version" error | File isn't valid YAML, or isn't OpenAPI 3.x | Validate the file locally; Swagger 2.0 must be converted to OpenAPI 3.x first |
 | Analysis issues listed after upload | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs | Review the listed locations; generation still proceeds but treat affected operations' tests with caution |

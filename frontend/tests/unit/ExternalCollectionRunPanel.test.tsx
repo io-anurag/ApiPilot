@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
@@ -7,7 +8,12 @@ import type {
   UploadedCollectionExecutionRun,
 } from "@apipilot/shared-domain";
 import type { UploadedCollectionSummary } from "../../src/services/externalCollectionsClient";
-import { ExternalCollectionRunPanel } from "../../src/components/ExternalCollectionRunPanel";
+import {
+  ExternalCollectionRunPanel,
+  endpointPath,
+  type RunOrderPlacement,
+} from "../../src/components/ExternalCollectionRunPanel";
+import type { RunOrder } from "../../src/utils/runOrder";
 
 function requestView(overrides: Partial<CollectionRequestView> = {}): CollectionRequestView {
   return {
@@ -17,6 +23,8 @@ function requestView(overrides: Partial<CollectionRequestView> = {}): Collection
     raw: { method: "GET", url: "https://example.test", headers: [] },
     resolved: { method: "GET", url: "https://example.test", headers: [] },
     unresolvedVariables: [],
+    variableReferences: [],
+    copiedScriptFolderIds: [],
     ...overrides,
   };
 }
@@ -211,6 +219,181 @@ describe("ExternalCollectionRunPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(screen.getByText("1 of 1 selected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start run" })).not.toBeDisabled();
+  });
+});
+
+describe("ExternalCollectionRunPanel — the run-order list (FR-015c)", () => {
+  const threeRequests = () => [
+    requestView({ id: "item-1", name: "Get token" }),
+    requestView({ id: "item-2", name: "Get health" }),
+    requestView({ id: "item-3", name: "Get version" }),
+  ];
+
+  const placementsFor = (): ReadonlyMap<string, RunOrderPlacement> =>
+    new Map([
+      ["item-1", { folderPath: ["Auth"] }],
+      ["item-2", { folderPath: ["Meta"] }],
+      ["item-3", { folderPath: ["Meta"] }],
+    ]);
+
+  /** Holds the per-run order the way ExternalCollectionsPage does. */
+  function Harness({ requests = threeRequests() }: Readonly<{ requests?: CollectionRequestView[] }>) {
+    const [runOrder, setRunOrder] = useState<RunOrder>(undefined);
+    return (
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={requests}
+        placements={placementsFor()}
+        runOrder={runOrder}
+        onRunOrderChange={setRunOrder}
+      />
+    );
+  }
+
+  function rowNames() {
+    return screen.getAllByRole("checkbox").map((checkbox) => checkbox.getAttribute("aria-label"));
+  }
+
+  async function startedIds(calls: Array<{ url: string; init?: RequestInit }>, nth = 0) {
+    await waitFor(() => expect(calls.filter((call) => call.url.includes("/execution/start")).length).toBeGreaterThan(nth));
+    const startCall = calls.filter((call) => call.url.includes("/execution/start"))[nth];
+    return JSON.parse(startCall.init!.body as string).selectedRequestIds;
+  }
+
+  it("moves a request across folders with ↑/↓, disables moves past either end, and offers no Move to…", async () => {
+    const calls = stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    render(<Harness />);
+
+    expect(screen.getByRole("button", { name: "Move Get token up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Get version down" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Get version up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Get version up" }));
+    expect(rowNames()).toEqual([
+      "Include Get version in this run",
+      "Include Get token in this run",
+      "Include Get health in this run",
+    ]);
+    expect(screen.getByText("Moved Get version to position 1 of 3.")).toBeInTheDocument();
+    expect(screen.queryByText("Move to…")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(await startedIds(calls)).toEqual(["item-3", "item-1", "item-2"]);
+  });
+
+  it("moves a request by dragging it onto another row", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    render(<Harness />);
+    const rowOf = (name: string) => screen.getByRole("checkbox", { name: `Include ${name} in this run` }).closest("li")!;
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+
+    fireEvent.dragStart(rowOf("Get token"), { dataTransfer });
+    fireEvent.dragOver(rowOf("Get version"), { dataTransfer });
+    fireEvent.drop(rowOf("Get version"), { dataTransfer });
+
+    expect(rowNames()).toEqual([
+      "Include Get health in this run",
+      "Include Get version in this run",
+      "Include Get token in this run",
+    ]);
+  });
+
+  it("keeps the order for every later run, and Reset restores the collection's order and selection", async () => {
+    const calls = stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Get token down" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get version in this run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(await startedIds(calls, 0)).toEqual(["item-2", "item-1"]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start run" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(await startedIds(calls, 1)).toEqual(["item-2", "item-1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(rowNames()).toEqual([
+      "Include Get token in this run",
+      "Include Get health in this run",
+      "Include Get version in this run",
+    ]);
+    expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+  });
+
+  it("drops a deleted request from the order and places an added one last", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const { rerender } = render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Move Get version up" }));
+
+    rerender(<Harness requests={[threeRequests()[1], threeRequests()[2], requestView({ id: "item-4", name: "Get info" })]} />);
+    expect(rowNames()).toEqual([
+      "Include Get version in this run",
+      "Include Get health in this run",
+      "Include Get info in this run",
+    ]);
+  });
+
+  it("shows each row's folder, method, name and endpoint path", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const requests = [
+      requestView({
+        id: "item-1",
+        name: "Get order",
+        raw: { method: "GET", url: "{{baseUrl}}/orders/{{orderId}}?expand=items", headers: [] },
+      }),
+      requestView({ id: "item-2", name: "Health", raw: { method: "POST", url: "https://api.example.test/health", headers: [] } }),
+    ];
+    const placements = new Map<string, RunOrderPlacement>([
+      ["item-1", { folderPath: ["Orders", "Archive"] }],
+      ["item-2", { folderPath: [] }],
+    ]);
+    render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={requests}
+        placements={placements}
+      />,
+    );
+
+    const rows = screen.getAllByRole("checkbox").map((checkbox) => checkbox.closest("li"));
+    expect(rows[0]).toHaveTextContent("1Orders / ArchiveGETGet order/orders/{{orderId}}");
+    expect(rows[1]).toHaveTextContent("2POSTHealth/health");
+  });
+
+  it("derives the endpoint path from the raw URL, keeping {{variables}} and dropping host and query", () => {
+    expect(endpointPath("{{baseUrl}}/orders/{{id}}?x=1")).toBe("/orders/{{id}}");
+    expect(endpointPath("https://api.example.test/v1/health")).toBe("/v1/health");
+    expect(endpointPath("https://api.example.test")).toBe("/");
+    expect(endpointPath("orders")).toBe("/orders");
+  });
+
+  it("shows no move controls without onRunOrderChange", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={threeRequests()}
+        placements={placementsFor()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Move Get token down" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include Get token in this run" }).closest("li")).not.toHaveAttribute(
+      "draggable",
+      "true",
+    );
+  });
+
+  it("keeps an excluded request excluded when the order changes", () => {
+    stubFetch([{ status: 200, body: { run: completedRun() } }]);
+    const { rerender } = render(<Harness />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get health in this run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move Get health up" }));
+    expect(screen.getByText("2 of 3 selected")).toBeInTheDocument();
+
+    rerender(<Harness requests={[...threeRequests()].reverse()} />);
+    expect(screen.getByText("2 of 3 selected")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include Get health in this run" })).not.toBeChecked();
   });
 });
 

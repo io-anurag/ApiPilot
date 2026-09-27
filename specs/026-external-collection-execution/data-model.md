@@ -109,6 +109,16 @@ the given item ids when it's provided (undefined behaves exactly as before):
 item ids, the route returns `400 no_requests_selected` before either confirmation gate or the
 missing-variable check runs.
 
+**Per-run order (spec.md FR-019, 2026-09-25)**: `selectedRequestIds` is ordered, and its order is
+the run order. `resolveRunOrder(collection, selectedRequestIds)` (`runOrder.ts`) validates it and
+returns the ordered ids: a repeated id, a non-string entry, or an id the collection does not
+contain throws `InvalidRunOrderError` (`400 invalid_run_order`); an array naming none of the
+collection's ids throws `NoRequestsSelectedError` (`400 no_requests_selected`, unchanged). The
+route passes the ordered ids to `runUploadedCollectionExecution({ ..., orderedItemIds })`, which
+runs them in that order, and a `Set` of the same ids to the two gate functions above, whose
+behavior is unchanged. Each request still runs nested in its own folder chain, so a per-run order
+never changes which auth and scripts apply to it.
+
 ## Persistence
 
 One new table, `uploaded_collections`, added to `backend/src/persistence/connection.ts`'s schema

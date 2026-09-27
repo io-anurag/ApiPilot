@@ -83,6 +83,12 @@ describe("AP-028 collection locked while a run is in progress (US4 FR-017, quick
       .send({ orderedIds: [requestId] });
     expect(lockedOrder.status).toBe(409);
 
+    const lockedMove = await agent
+      .post(`/api/external-collections/${id}/items/${requestId}/move`)
+      .send({ targetContainerId: "root" });
+    expect(lockedMove.status).toBe(409);
+    expect(lockedMove.body.error).toBe("collection_locked");
+
     await pollUntilSettled(agent, id, started.body.run.id);
 
     const afterCompletion = await agent

@@ -17,7 +17,33 @@ export function flattenCollectionRequests(
   items: CollectionRequestView[],
   folders: CollectionFolderView[],
 ): CollectionRequestView[] {
-  return [...folders.flatMap((folder) => flattenCollectionRequests(folder.items, folder.folders)), ...items];
+  return flattenCollectionRequestPlacements(items, folders).map((placement) => placement.request);
+}
+
+/** Where one flattened request sits: its folder path, and its position among its own container's requests (FR-015). */
+export interface CollectionRequestPlacement {
+  request: CollectionRequestView;
+  /** `"root"` or the id of the folder the request lives directly in. */
+  containerId: string;
+  /** Names of the folders above the request, root first; empty at the collection root. */
+  folderPath: string[];
+  index: number;
+  siblingCount: number;
+}
+
+/** `flattenCollectionRequests`' order, with each request's folder path, container and position among its sibling requests. */
+export function flattenCollectionRequestPlacements(
+  items: CollectionRequestView[],
+  folders: CollectionFolderView[],
+  containerId = "root",
+  folderPath: string[] = [],
+): CollectionRequestPlacement[] {
+  return [
+    ...folders.flatMap((folder) =>
+      flattenCollectionRequestPlacements(folder.items, folder.folders, folder.id, [...folderPath, folder.name]),
+    ),
+    ...items.map((request, index) => ({ request, containerId, folderPath, index, siblingCount: items.length })),
+  ];
 }
 
 export interface CollectionTreeActions {
@@ -34,6 +60,8 @@ export interface CollectionTreeActions {
    * CollectionTreeView's own doc comment for why cross-kind interleaving isn't exposed here.
    */
   onMoveItem: (containerId: string, itemId: string, direction: "up" | "down") => void;
+  /** Opens the "Move to…" dialog for a request or folder (FR-015a). */
+  onMoveItemTo: (itemId: string) => void;
 }
 
 interface RowMenuItem {
@@ -193,6 +221,7 @@ function RequestRow({
               disabled: index === siblingCount - 1,
               onSelect: () => actions.onMoveItem(containerId, item.id, "down"),
             },
+            { label: "Move to…", onSelect: () => actions.onMoveItemTo(item.id) },
             { label: "Rename", onSelect: () => actions.onRenameItem(item.id, item.name) },
             { label: "Delete", danger: true, onSelect: () => actions.onDeleteItem(item.id) },
           ]}
@@ -248,6 +277,7 @@ function FolderRow({
               disabled: index === siblingCount - 1,
               onSelect: () => actions.onMoveItem(containerId, folder.id, "down"),
             },
+            { label: "Move to…", onSelect: () => actions.onMoveItemTo(folder.id) },
             { label: "Rename", onSelect: () => actions.onRenameItem(folder.id, folder.name) },
             { label: "Delete", danger: true, onSelect: () => actions.onDeleteItem(folder.id) },
           ]}

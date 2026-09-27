@@ -3,6 +3,7 @@ import type {
   PostmanRawItem,
   PostmanRequestItem,
 } from "@apipilot/shared-domain";
+import type { EventDefinition, ItemDefinition, ItemGroupDefinition } from "postman-collection";
 import type { NewmanExecutionResult } from "./mapNewmanResult";
 
 /**
@@ -45,15 +46,26 @@ export interface NewmanItemRunInput {
   declaredVariables: PostmanCollectionVariable[];
   /**
    * Accumulated environment values from prior items in this run (workflow handoffs,
-   * research.md D2 addendum) — `{}` for the first item.
+   * research.md D2 addendum) — `{}` for the first item. Values are whatever the scripts set
+   * (a number, an object, ...), passed on unchanged so the next item's scripts see the same value.
    */
-  environment: Record<string, string>;
+  environment: Record<string, unknown>;
+  /**
+   * The item's ancestor folders, root first, each as its own Postman folder definition without
+   * children (`name`, `id`, `auth`, `event`). The item runs nested inside them, so Newman applies
+   * folder auth and folder scripts exactly as Postman does (specs/026 FR-008, fixed 2026-09-25).
+   * Omitted for ApiPilot's own generated items, which carry everything on the item itself.
+   */
+  folderChain?: ReadonlyArray<Record<string, unknown>>;
+  /** The collection's own `event` array (collection-level pre-request/test scripts), passed as is. */
+  collectionEvents?: EventDefinition[];
 }
 
 export interface NewmanItemRunOutput {
   execution: NewmanExecutionResult;
-  /** This item's resulting environment values; feed forward as the next item's `environment`. */
-  environment: Record<string, string>;
+  /** This item's resulting environment values; feed forward as the next item's `environment`.
+   * Not all strings: a script can set any value (`toStoredVariableValues` before storing them). */
+  environment: Record<string, unknown>;
 }
 
 /**
@@ -64,6 +76,20 @@ export interface NewmanItemRunOutput {
  * starting up rather than adding load time to the first actual execution request.
  */
 const newmanModule = import("newman");
+
+/**
+ * Wraps `item` in its folder chain (root first), innermost folder closest to the item. The result
+ * is plain Postman JSON that Newman parses itself, hence the one boundary cast to its definition
+ * types (CLAUDE.md §44).
+ */
+function nestInFolders(
+  item: PostmanRequestItem | PostmanRawItem,
+  folderChain: ReadonlyArray<Record<string, unknown>>,
+): ItemDefinition | ItemGroupDefinition {
+  return folderChain.reduceRight<unknown>((child, folder) => ({ ...folder, item: [child] }), item) as
+    | ItemDefinition
+    | ItemGroupDefinition;
+}
 
 /** Runs one Postman request item in isolation and reports its outcome plus updated environment state. */
 export async function runSingleItem(
@@ -76,8 +102,9 @@ export async function runSingleItem(
         collection: {
           info: { name: "apipilot-execution-item" },
           ...(input.collectionAuth ? { auth: input.collectionAuth } : {}),
+          ...(input.collectionEvents ? { event: input.collectionEvents } : {}),
           variable: input.declaredVariables,
-          item: [input.item],
+          item: [nestInFolders(input.item, input.folderChain ?? [])],
         },
         environment: {
           values: Object.entries(input.environment).map(([key, value]) => ({
@@ -97,7 +124,7 @@ export async function runSingleItem(
         const execution = (summary.run.executions[0] ?? {}) as unknown as NewmanExecutionResult;
         resolve({
           execution,
-          environment: summary.environment.toObject(false, true) as Record<string, string>,
+          environment: summary.environment.toObject(false, true),
         });
       },
     );

@@ -160,6 +160,18 @@ Existing web-application layout (plan.md Structure Decision): `backend/src/`, `f
 
 ---
 
+## Phase 8: Post-implementation addendum (2026-09-25) — per-run order (FR-019)
+
+**Purpose**: specs/028's run-order list (its FR-015c) places any request anywhere in a run, as Postman's Runner does, without changing the collection. This phase is the backend half.
+
+- [X] T053 [P] `backend/src/externalCollections/runOrder.ts`: pure `resolveRunOrder(collection, selectedRequestIds)` returns the ordered ids (`undefined` when the field is omitted); throws `InvalidRunOrderError` for a repeated id, a non-string entry, or an unknown id, and `NoRequestsSelectedError` when no id matches. Both errors added to `errors.ts`.
+- [X] T054 `runUploadedCollectionExecution()`'s `selectedItemIds?: Set<string>` becomes `orderedItemIds?: readonly string[]`; requests run in that order, each still nested in its own folder chain.
+- [X] T055 `POST /:id/execution/start` calls T053, maps its errors to `400 invalid_run_order` / `400 no_requests_selected`, passes the ordered ids to T054 and a `Set` of them to the two confirmation gates.
+- [X] T056 [P] Tests: unit tests for T053 in `backend/tests/unit/externalCollections/runOrder.test.ts`; integration tests in `selectiveRun.test.ts` for a run in a cross-folder order that keeps each request's folder auth and leaves the stored order unchanged, and for `400 invalid_run_order`.
+- [X] T057 `contracts/external-collections-api.md` and `data-model.md` updated.
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

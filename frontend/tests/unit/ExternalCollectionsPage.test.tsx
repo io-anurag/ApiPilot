@@ -26,6 +26,8 @@ function requestView(id: string, name: string, url: string) {
     raw: { method: "GET", url, headers: [] },
     resolved: { method: "GET", url, headers: [] },
     unresolvedVariables: [],
+    variableReferences: [],
+    copiedScriptFolderIds: [],
   };
 }
 
@@ -193,6 +195,56 @@ describe("ExternalCollectionsPage", () => {
 
     await waitFor(() => expect(screen.queryByText("Get widget")).not.toBeInTheDocument());
     expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("moving a request down from the run-order list sets the run's order without reordering the collection (FR-015c)", async () => {
+    stubFetch([
+      {
+        match: (url, init) => url.includes("/execution/start") && init?.method === "POST",
+        response: { run: { id: "run-1", status: "completed", source: "uploaded", results: [], summary: { total: 0 } } },
+      },
+    ]);
+    render(<ExternalCollectionsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move Get widget down" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+
+    await waitFor(() => {
+      const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes("/execution/start"));
+      expect(JSON.parse(String(call?.[1]?.body)).selectedRequestIds).toEqual(["item-2", "item-1"]);
+    });
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/order"))).toBe(false);
+  });
+
+  it("moves a request to a folder from the tree through the move dialog, then says what was copied (FR-015a, FR-015b)", async () => {
+    const orders = { id: "orders", name: "Orders", items: [], folders: [], scriptEvents: [], copiedScriptFolderIds: [] };
+    const withFolder = { ...collectionView(), folders: [orders] };
+    stubFetch([
+      { match: (url) => url.endsWith("/collection"), response: { collectionView: withFolder } },
+      {
+        match: (url, init) => url.endsWith("/items/item-1/move") && init?.method === "POST",
+        response: {
+          collectionView: { ...withFolder, items: [collectionView().items[1]], folders: [{ ...orders, items: [collectionView().items[0]] }] },
+          carried: { auth: { type: "noauth", fromFolderName: null }, scriptsFromFolders: [] },
+        },
+      },
+    ]);
+    render(<ExternalCollectionsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+
+    await findRequestRowButton("Get widget");
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Get widget" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to…" }));
+    const dialog = await screen.findByTestId("move-item-dialog");
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Orders" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Moved “Get widget” and marked it edited. Copied into it: an explicit “No Auth”, so the new folder’s auth does not apply.",
+    );
+    const call = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/items/item-1/move"));
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ targetContainerId: "orders" });
   });
 
   it("does not re-show the unverified-content dialog on a second run after the first is confirmed", async () => {

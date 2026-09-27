@@ -1,5 +1,6 @@
 import type { UploadedCollectionSet } from "@apipilot/shared-domain";
 import { DuplicateNameError, UploadedCollectionNotFoundError } from "../externalCollections/errors";
+import { toStoredVariableValues } from "../externalCollections/variableValueText";
 import { getSharedConnection, type SqliteConnection } from "./connection";
 
 /**
@@ -52,7 +53,8 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
       name: row.name,
       tier: row.tier as UploadedCollectionSet["tier"],
       collection: row.collection,
-      variableValues: JSON.parse(json) as Record<string, string>,
+      // Values saved before run-captured values were stored as text can be numbers or objects.
+      variableValues: toStoredVariableValues(JSON.parse(json) as Record<string, unknown>),
       requestDelayMs: row.request_delay_ms,
       confirmedAt: row.confirmed_at ?? undefined,
       createdAt: row.created_at,

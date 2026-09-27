@@ -146,7 +146,7 @@ export async function runExecution(input: RunExecutionInput): Promise<void> {
 
     const allItems = outcome.result.collection.item.flatMap((folder) => folder.item);
     orderedItems = executionOrder(allItems);
-    let environmentRecord: Record<string, string> = Object.fromEntries(
+    let environmentRecord: Record<string, unknown> = Object.fromEntries(
       outcome.result.environment.values.map((value) => [value.key, value.value]),
     );
     const { dataDependencies } = outcome;

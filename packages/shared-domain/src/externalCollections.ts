@@ -182,10 +182,12 @@ export interface CollectionRequestFields {
  */
 export interface ImpliedAuthHeader {
   key: string;
-  /** Exactly as stored — `{{variable}}` placeholders intact, mirroring `raw`. */
+  /** Exactly as stored — `{{variable}}` placeholders intact, mirroring `raw`. Empty when `hiddenLiteral`. */
   rawValue: string;
-  /** `rawValue` with every resolvable `{{variable}}` substituted, mirroring `resolved`. */
+  /** `rawValue` with every resolvable `{{variable}}` substituted, mirroring `resolved`. Empty when `hiddenLiteral`. */
   resolvedValue: string;
+  /** The token or API key value is a secret literal, which is never sent to the browser (FR-002a). */
+  hiddenLiteral: boolean;
 }
 
 /** One request within a `CollectionView` (research.md D2, D9; data-model.md). */
@@ -212,6 +214,68 @@ export interface CollectionRequestView {
    * rather than being substituted for display.
    */
   testScript?: string;
+  /** The request's effective auth and where it comes from (FR-002a). `undefined` when no auth
+   * applies anywhere in its chain. */
+  auth?: RequestAuthView;
+  /** Every variable this request uses in its URL, headers, body or effective auth, by name (FR-002b). */
+  variableReferences: RequestVariableReference[];
+  /** Folders whose scripts this request carries a copy of from an earlier move (FR-015b). */
+  copiedScriptFolderIds: string[];
+}
+
+/** Where a request's effective auth is defined (FR-002a). */
+export type RequestAuthSource =
+  | { kind: "request" }
+  | { kind: "folder"; folderId: string; folderName: string }
+  | { kind: "collection" };
+
+/**
+ * A request's effective auth for display (FR-002a, read-only). `fields` are as stored, with
+ * `{{variable}}` references intact. A secret field holding a literal is never sent to the browser:
+ * its `value` is empty and `hiddenLiteral` is `true` (data-model.md lists the secret field keys).
+ */
+export interface RequestAuthView {
+  /** The Postman auth type as stored, e.g. `bearer`, `basic`, `oauth2`, `noauth`. */
+  type: string;
+  source: RequestAuthSource;
+  fields: Array<{ key: string; value: string; hiddenLiteral: boolean }>;
+}
+
+/**
+ * A secret auth field in a `RequestAuthEdit`: keep the value stored in the request's own auth of
+ * the same type (a hidden literal the browser never received), or replace it.
+ */
+export type SecretAuthFieldEdit = { kind: "keep" } | { kind: "set"; value: string };
+
+/** The auth types a request's own auth can be edited to (FR-002c). */
+export const EDITABLE_REQUEST_AUTH_TYPES = ["inherit", "noauth", "bearer", "basic", "apikey"] as const;
+
+/**
+ * An edit to a request's own auth (FR-002c). `inherit` removes it, so the request's folder's or the
+ * collection's auth applies. Any field may hold `{{variable}}` references.
+ */
+export type RequestAuthEdit =
+  | { type: "inherit" }
+  | { type: "noauth" }
+  | { type: "bearer"; token: SecretAuthFieldEdit }
+  | { type: "basic"; username: string; password: SecretAuthFieldEdit }
+  | { type: "apikey"; key: string; value: SecretAuthFieldEdit; in: "header" | "query" };
+
+/** One variable a request uses (FR-002b). `resolved` and `source` follow the collection's `VariableBinding`. */
+export interface RequestVariableReference {
+  name: string;
+  usedIn: Array<"url" | "headers" | "body" | "auth">;
+  resolved: boolean;
+  /** The binding that provides the value; absent when the variable is missing. */
+  source?: VariableBinding["source"];
+}
+
+/** What a move carried onto the moved item (FR-015b); the move route's `carried` field. */
+export interface MoveCarried {
+  /** `null` when no auth was written onto the item. `fromFolderName` is `null` for collection-level
+   * auth, and `type` is `noauth` when the item had none before the move. */
+  auth: { type: string; fromFolderName: string | null } | null;
+  scriptsFromFolders: Array<{ id: string; name: string; events: Array<"prerequest" | "test"> }>;
 }
 
 /** One folder within a `CollectionView` (research.md D9) — arbitrary nesting depth. */
@@ -221,6 +285,10 @@ export interface CollectionFolderView {
   name: string;
   items: CollectionRequestView[];
   folders: CollectionFolderView[];
+  /** Script kinds this folder itself defines, which run for everything inside it (FR-015b). */
+  scriptEvents: Array<"prerequest" | "test">;
+  /** Folders whose scripts this folder carries a copy of from an earlier move (FR-015b). */
+  copiedScriptFolderIds: string[];
 }
 
 /**
