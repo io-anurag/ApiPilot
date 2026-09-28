@@ -20,19 +20,98 @@ function CheckIcon({ className }: Readonly<{ className?: string }>) {
   );
 }
 
+function StageIcon({ stageId }: Readonly<{ stageId: WorkflowStageId }>) {
+  const icons: Record<WorkflowStageId, React.ReactNode> = {
+    upload: <path d="M12 16V4m0 0L8 8m4-4l4 4M5 14v5h14v-5" />,
+    analysis: (
+      <>
+        <circle cx="11" cy="11" r="6" />
+        <path d="m16 16 4 4" />
+      </>
+    ),
+    apiReview: (
+      <>
+        <path d="M8 5 4 12l4 7M16 5l4 7-4 7M10 15l4-6" />
+      </>
+    ),
+    deterministicGeneration: (
+      <>
+        <path d="M6 5h12v14H6zM9 9h6M9 12h6M9 15h4" />
+      </>
+    ),
+    aiEnhancement: (
+      <>
+        <path d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4L12 3z" />
+      </>
+    ),
+    scenarioReview: (
+      <>
+        <path d="M6 4h12v16H6zM9 9l1.5 1.5L14 7M9 15l1.5 1.5L14 13" />
+      </>
+    ),
+    dependencyAnalysis: (
+      <>
+        <circle cx="6" cy="7" r="2" />
+        <circle cx="18" cy="7" r="2" />
+        <circle cx="12" cy="17" r="2" />
+        <path d="m7.7 8.2 2.6 6M16.3 8.2l-2.6 6M8 7h8" />
+      </>
+    ),
+    workflowReview: (
+      <>
+        <path d="M5 6h14v12H5zM8 10h8M8 14h5" />
+        <path d="m16 3 2 2" />
+      </>
+    ),
+    postmanGeneration: (
+      <>
+        <path d="M7 3h7l4 4v14H7zM14 3v5h4M10 12h5M10 15h5" />
+      </>
+    ),
+    execution: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="m10 8 6 4-6 4z" />
+      </>
+    ),
+    performanceTesting: (
+      <>
+        <path d="M5 18V9m5 9V5m5 13v-7m5 7V7" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      data-testid={`stage-icon-${stageId}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
+      {icons[stageId]}
+    </svg>
+  );
+}
+
 /** Chip container styling per stage status — border/background echo the StatusBadge tone so the
  * whole chip reads as a unit; the badge's text remains the sole load-bearing signal (FR-016). */
 const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
   "not-yet-reached": "border-transparent bg-surface",
   active: "border-brand-300 bg-brand-50 dark:border-brand-500 dark:bg-brand-500/15",
   complete: "border-transparent bg-success-50 dark:bg-success-500/15",
-  stale: "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
+  stale:
+    "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
   skipped: "border-transparent bg-slate-50 dark:bg-slate-500/15",
-  partial: "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
+  partial:
+    "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
 };
 
 const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
-  "not-yet-reached": "bg-slate-200 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
+  "not-yet-reached":
+    "bg-slate-200 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
   active: "bg-brand-600 text-white",
   complete: "bg-success-600 text-white",
   stale: "bg-warning-500 text-white",
@@ -138,7 +217,10 @@ export function WorkflowStageTracker({
         {WORKFLOW_STAGE_ORDER.map((stageId, index) => {
           // A workflow recorded before a stage existed (AP-029 added `performanceTesting`) simply
           // has not reached it.
-          const stage = workflow.stages[stageId] ?? { stageId, status: "not-yet-reached" as const };
+          const stage = workflow.stages[stageId] ?? {
+            stageId,
+            status: "not-yet-reached" as const,
+          };
           const isActive = workflow.activeStageId === stageId;
           // The stage currently shown on screen — the active stage by default, or whichever
           // stage the user clicked "back"/"view" to revisit (viewedStageId, when the caller
@@ -163,7 +245,9 @@ export function WorkflowStageTracker({
             READ_ONLY_VIEWABLE_STATUSES.has(stage.status);
           const isReturnToActiveView = isActive && isViewingAnotherStage;
           const lockReason =
-            stage.status === "not-yet-reached" ? getLockReason(stageId, workflow) : undefined;
+            stage.status === "not-yet-reached"
+              ? getLockReason(stageId, workflow)
+              : undefined;
           // AP-029 (research D1): the optional performance stage can be opened as soon as Postman
           // Generation is complete, before it has ever been entered and whatever Execution's state.
           const isOpenable =
@@ -197,8 +281,12 @@ export function WorkflowStageTracker({
                   index + 1
                 )}
               </span>
+              <StageIcon stageId={stageId} />
               <span>{STAGE_LABELS[stageId]}</span>
-              {isRevisitable || isReadOnlyViewable || isReturnToActiveView || isOpenable ? (
+              {isRevisitable ||
+              isReadOnlyViewable ||
+              isReturnToActiveView ||
+              isOpenable ? (
                 <button
                   type="button"
                   data-testid={`stage-status-${stageId}`}
@@ -236,8 +324,8 @@ export function WorkflowStageTracker({
           className="rounded-md border border-warning-100 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100"
         >
           <summary className="cursor-pointer font-medium marker:text-warning-500">
-            {issues.length} specification analysis issue{issues.length === 1 ? "" : "s"} found
-            — click to expand
+            {issues.length} specification analysis issue{issues.length === 1 ? "" : "s"}{" "}
+            found — click to expand
           </summary>
           <ul className="mt-2 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2">
             {issues.map((issue) => (

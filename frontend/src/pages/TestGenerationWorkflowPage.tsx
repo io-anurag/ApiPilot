@@ -36,16 +36,17 @@ import { AnalysisSummary } from "../components/AnalysisSummary";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
  * in-progress, per-stage breakdown is WorkflowStageTracker's job once a workflow exists. */
 const PIPELINE_PREVIEW_STEPS = [
-  "OpenAPI",
-  "Analysis",
-  "Test Design",
-  "Generated Tests",
-  "Results",
-];
+  { label: "OpenAPI", icon: "upload" },
+  { label: "Analysis", icon: "analyze" },
+  { label: "Test Design", icon: "design" },
+  { label: "Generated Tests", icon: "collection" },
+  { label: "Results", icon: "run" },
+] as const;
 
 function UploadIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -148,7 +149,11 @@ const HOME_FEATURES: {
   { label: "LOCAL", description: "Private by default", Icon: LockIcon },
   { label: "REPEATABLE", description: "Deterministic core", Icon: RepeatIcon },
   { label: "TRACEABLE", description: "Visible provenance", Icon: TrailIcon },
-  { label: "VERIFIABLE", description: "Functional and k6 load runs", Icon: CheckShieldIcon },
+  {
+    label: "VERIFIABLE",
+    description: "Functional and k6 load runs",
+    Icon: CheckShieldIcon,
+  },
 ];
 
 /**
@@ -408,7 +413,7 @@ export function TestGenerationWorkflowPage({
             aria-hidden="true"
             className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-500/10"
           />
-          <div className="grid grid-cols-1 min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
+          <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
               <div className="space-y-4">
                 <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
@@ -499,36 +504,7 @@ export function TestGenerationWorkflowPage({
                 </label>
               </div>
             </div>
-            <ol className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
-              {PIPELINE_PREVIEW_STEPS.map((label, index) => (
-                <li key={label} className="flex flex-1 items-center gap-2.5 sm:gap-0">
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${
-                        index === 0
-                          ? "border-brand-500 text-brand-700 dark:text-brand-300"
-                          : "border-border text-muted"
-                      }`}
-                    >
-                      {index + 1}
-                    </span>
-                    <span
-                      className={`whitespace-nowrap text-xs font-medium ${
-                        index === 0 ? "text-slate-900 dark:text-white" : "text-muted"
-                      }`}
-                    >
-                      {label}
-                    </span>
-                  </div>
-                  {index < PIPELINE_PREVIEW_STEPS.length - 1 && (
-                    <span
-                      aria-hidden="true"
-                      className="mx-3 hidden h-px flex-1 bg-border sm:block"
-                    />
-                  )}
-                </li>
-              ))}
-            </ol>
+            <WorkflowPathPreview steps={PIPELINE_PREVIEW_STEPS} />
           </div>
         </div>
       )}
@@ -717,7 +693,11 @@ function ExecutionHandoffNotice({
           Go to Import &amp; Run Collection
         </button>
         {onOpenPerformance && (
-          <button type="button" onClick={onOpenPerformance} className={BUTTON_STYLES.secondary}>
+          <button
+            type="button"
+            onClick={onOpenPerformance}
+            className={BUTTON_STYLES.secondary}
+          >
             Set up a performance test
           </button>
         )}

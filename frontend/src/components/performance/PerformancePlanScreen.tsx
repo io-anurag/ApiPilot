@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { Environment, PerformancePlan, ScriptStatus, UserSuppliedValueStatus } from "@apipilot/shared-domain";
-import { LOAD_PROFILE_STARTING_STAGES, summarizeWriteOperations } from "@apipilot/shared-domain";
+import type {
+  Environment,
+  PerformancePlan,
+  ScriptStatus,
+  UserSuppliedValueStatus,
+} from "@apipilot/shared-domain";
+import {
+  LOAD_PROFILE_STARTING_STAGES,
+  summarizeWriteOperations,
+} from "@apipilot/shared-domain";
 import { fetchEnvironments } from "../../services/environmentsClient";
-import type { PerformanceClient, PerformanceErrorResult, PlanUpdate } from "../../services/performanceTestingClient";
+import type {
+  PerformanceClient,
+  PerformanceErrorResult,
+  PlanUpdate,
+} from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { EmptyState } from "../EmptyState";
 import { ErrorState } from "../ErrorState";
@@ -27,7 +39,8 @@ import { WriteOperationSummary } from "./WriteOperationSummary";
  */
 const PANEL = "space-y-3 rounded-lg border border-border bg-surface p-5";
 
-type LoadState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready" };
+type LoadState =
+  { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready" };
 
 export interface PlanScopeContext {
   plan: PerformancePlan;
@@ -54,7 +67,15 @@ export function PerformancePlanScreen({
   onAdvanced?: () => void;
   testId: string;
 }>) {
-  const { fetchPlan, fetchValueStatuses, fetchStepRequest, generateScript, resetPlan, scriptDownloadUrl, updatePlan } = client;
+  const {
+    fetchPlan,
+    fetchValueStatuses,
+    fetchStepRequest,
+    generateScript,
+    resetPlan,
+    scriptDownloadUrl,
+    updatePlan,
+  } = client;
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [plan, setPlan] = useState<PerformancePlan | null>(null);
   const [script, setScript] = useState<ScriptStatus | null>(null);
@@ -66,20 +87,27 @@ export function PerformancePlanScreen({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [focusStepId, setFocusStepId] = useState<string | null>(null);
 
-  const loadValues = useCallback(async (id: string | null) => {
-    if (!id) {
-      setValues([]);
-      return;
-    }
-    const result = await fetchValueStatuses(id);
-    setValues(result.ok ? result.values : []);
-  }, [fetchValueStatuses]);
+  const loadValues = useCallback(
+    async (id: string | null) => {
+      if (!id) {
+        setValues([]);
+        return;
+      }
+      const result = await fetchValueStatuses(id);
+      setValues(result.ok ? result.values : []);
+    },
+    [fetchValueStatuses],
+  );
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [planResult, environmentResult] = await Promise.all([fetchPlan(), fetchEnvironments()]);
+      const [planResult, environmentResult] = await Promise.all([
+        fetchPlan(),
+        fetchEnvironments(),
+      ]);
       if (cancelled) return;
       if (!planResult.ok) {
         setState({ kind: "error", message: planResult.message });
@@ -164,12 +192,20 @@ export function PerformancePlanScreen({
     );
   }
   if (state.kind === "error" || !plan) {
-    return <ErrorState message="The performance plan could not be loaded." detail={state.kind === "error" ? state.message : undefined} testId="performance-plan-error" />;
+    return (
+      <ErrorState
+        message="The performance plan could not be loaded."
+        detail={state.kind === "error" ? state.message : undefined}
+        testId="performance-plan-error"
+      />
+    );
   }
 
   const steps = plan.journeys.flatMap((journey) => journey.steps);
-  const stepLabel = (stepId: string) => steps.find((step) => step.id === stepId)?.operationKey ?? stepId;
-  const environment = environments.find((candidate) => candidate.id === environmentId) ?? null;
+  const stepLabel = (stepId: string) =>
+    steps.find((step) => step.id === stepId)?.operationKey ?? stepId;
+  const environment =
+    environments.find((candidate) => candidate.id === environmentId) ?? null;
   const needsStatus = plan.stepsNeedingExpectedStatus.map(stepLabel);
   const writeSummary = summarizeWriteOperations(plan.journeys);
   const writeListId = `${testId}-write-operations`;
@@ -177,15 +213,30 @@ export function PerformancePlanScreen({
   let generateBlockedReason: string | null = null;
   if (noOperations) generateBlockedReason = "The plan has no operations";
   else if (steps.length === 0) generateBlockedReason = "The plan has nothing to test";
-  else if (needsStatus.length > 0) generateBlockedReason = "Every step needs an expected status";
-  const methodsPresent = [...new Set(steps.map((step) => step.method.toUpperCase()))].sort();
+  else if (needsStatus.length > 0)
+    generateBlockedReason = "Every step needs an expected status";
+  const methodsPresent = [
+    ...new Set(steps.map((step) => step.method.toUpperCase())),
+  ].sort();
   const exclude = (keys: readonly string[], success: string) =>
-    void apply({ excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] }, success);
+    void apply(
+      { excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] },
+      success,
+    );
   const removeMethod = (method: string) => {
-    const keys = [...new Set(steps.filter((step) => step.method.toUpperCase() === method).map((step) => step.operationKey))];
-    exclude(keys, `${keys.length} ${method} operation${keys.length === 1 ? "" : "s"} removed.`);
+    const keys = [
+      ...new Set(
+        steps
+          .filter((step) => step.method.toUpperCase() === method)
+          .map((step) => step.operationKey),
+      ),
+    ];
+    exclude(
+      keys,
+      `${keys.length} ${method} operation${keys.length === 1 ? "" : "s"} removed.`,
+    );
   };
-  const focusStep = (stepId: string) => document.getElementById(`expected-${stepId}`)?.focus();
+  const focusStep = (stepId: string) => setFocusStepId(stepId);
 
   return (
     <div className="space-y-5" data-testid={testId}>
@@ -195,8 +246,15 @@ export function PerformancePlanScreen({
           <div className="max-w-3xl text-sm text-muted">{lead}</div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge label={`${plan.journeys.length} journeys · ${steps.length} steps`} />
-          <button type="button" className={BUTTON_STYLES.secondary} disabled={busy} onClick={() => void handleReset()}>
+          <StatusBadge
+            label={`${plan.journeys.length} journeys · ${steps.length} steps`}
+          />
+          <button
+            type="button"
+            className={BUTTON_STYLES.secondary}
+            disabled={busy}
+            onClick={() => void handleReset()}
+          >
             Reset plan
           </button>
         </div>
@@ -210,7 +268,11 @@ export function PerformancePlanScreen({
               Operations in scope
             </h3>
             {scopeNote({ plan, busy, apply })}
-            <p className="text-sm text-muted">One positive scenario per operation. Negative scenarios are never run under load. Write operations are included; remove any you do not want sent to the target.</p>
+            <p className="text-sm text-muted">
+              One positive scenario per operation. Negative scenarios are never run under
+              load. Write operations are included; remove any you do not want sent to the
+              target.
+            </p>
             <CountedOperationList
               label={(count) => `${count} operation${count === 1 ? "" : "s"} removed`}
               testId="performance-removed-list"
@@ -223,7 +285,16 @@ export function PerformancePlanScreen({
                     className={BUTTON_STYLES.ghost}
                     disabled={busy}
                     aria-label={`Restore ${operationKey}`}
-                    onClick={() => void apply({ excludedOperationKeys: plan.excludedOperationKeys.filter((key) => key !== operationKey) }, `${operationKey} restored.`)}
+                    onClick={() =>
+                      void apply(
+                        {
+                          excludedOperationKeys: plan.excludedOperationKeys.filter(
+                            (key) => key !== operationKey,
+                          ),
+                        },
+                        `${operationKey} restored.`,
+                      )
+                    }
                   >
                     Restore
                   </button>
@@ -231,14 +302,27 @@ export function PerformancePlanScreen({
               }))}
             />
             {plan.excludedOperationKeys.length > 1 && (
-              <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => void apply({ excludedOperationKeys: [] }, "Every removed operation restored.")}>
+              <button
+                type="button"
+                className={BUTTON_STYLES.ghost}
+                disabled={busy}
+                onClick={() =>
+                  void apply(
+                    { excludedOperationKeys: [] },
+                    "Every removed operation restored.",
+                  )
+                }
+              >
                 Restore all
               </button>
             )}
             <CountedOperationList
               label={(count) => `${count} operation${count === 1 ? "" : "s"} left out`}
               testId="performance-omitted-list"
-              entries={plan.omitted.map((entry) => ({ operationKey: entry.operationKey, detail: OMITTED_REASON_LABEL[entry.reason] }))}
+              entries={plan.omitted.map((entry) => ({
+                operationKey: entry.operationKey,
+                detail: OMITTED_REASON_LABEL[entry.reason],
+              }))}
             />
           </section>
 
@@ -252,7 +336,12 @@ export function PerformancePlanScreen({
                   type="button"
                   className={BUTTON_STYLES.secondary}
                   disabled={busy}
-                  onClick={() => exclude(writeSummary.operations.map((entry) => entry.operationKey), `${writeSummary.total} write operations removed.`)}
+                  onClick={() =>
+                    exclude(
+                      writeSummary.operations.map((entry) => entry.operationKey),
+                      `${writeSummary.total} write operations removed.`,
+                    )
+                  }
                 >
                   Remove all write operations
                 </button>
@@ -265,31 +354,72 @@ export function PerformancePlanScreen({
               <h3 id="performance-journeys-title" className="text-base font-semibold">
                 Journeys
               </h3>
-              <span className="text-sm text-muted">Every virtual user runs every journey, in this order, on each iteration.</span>
+              <span className="text-sm text-muted">
+                Every virtual user runs every journey, in this order, on each iteration.
+              </span>
             </div>
             {methodsPresent.length > 0 && (
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Remove by method">
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Remove by method"
+              >
                 {methodsPresent.map((method) => (
-                  <button key={method} type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => removeMethod(method)}>
+                  <button
+                    key={method}
+                    type="button"
+                    className={BUTTON_STYLES.ghost}
+                    disabled={busy}
+                    onClick={() => removeMethod(method)}
+                  >
                     Remove all {method} operations
                   </button>
                 ))}
               </div>
             )}
             {noOperations && (
-              <EmptyState message="The plan has no operations" description="Every operation was removed. Restore one to generate a script." testId="performance-plan-no-operations" />
+              <EmptyState
+                message="The plan has no operations"
+                description="Every operation was removed. Restore one to generate a script."
+                testId="performance-plan-no-operations"
+              />
             )}
-            {!noOperations && steps.length === 0 && (emptyState ?? <EmptyState message="Nothing to test" description="No operation in scope has a positive scenario." testId="performance-plan-empty" />)}
+            {!noOperations &&
+              steps.length === 0 &&
+              (emptyState ?? (
+                <EmptyState
+                  message="Nothing to test"
+                  description="No operation in scope has a positive scenario."
+                  testId="performance-plan-empty"
+                />
+              ))}
             {steps.length > 0 && (
               <JourneyList
                 loadPreview={fetchStepRequest}
                 journeys={plan.journeys}
                 busy={busy}
                 announcement={announcement}
-                onExpectedStatuses={(stepId, codes) => void apply({ expectedStatuses: { [stepId]: codes } })}
-                onRemoveOperation={(operationKey) => void apply({ excludedOperationKeys: [...plan.excludedOperationKeys, operationKey] }, `${operationKey} removed from the plan.`)}
-                onStepOrder={(journeyId, stepIds) => void apply({ stepOrder: { [journeyId]: stepIds } }, "Step moved.")}
-                onJourneyOrder={(journeyIds) => void apply({ journeyOrder: journeyIds }, "Journey moved.")}
+                onExpectedStatuses={(stepId, codes) =>
+                  void apply({ expectedStatuses: { [stepId]: codes } })
+                }
+                onRemoveOperation={(operationKey) =>
+                  void apply(
+                    {
+                      excludedOperationKeys: [
+                        ...plan.excludedOperationKeys,
+                        operationKey,
+                      ],
+                    },
+                    `${operationKey} removed from the plan.`,
+                  )
+                }
+                onStepOrder={(journeyId, stepIds) =>
+                  void apply({ stepOrder: { [journeyId]: stepIds } }, "Step moved.")
+                }
+                onJourneyOrder={(journeyIds) =>
+                  void apply({ journeyOrder: journeyIds }, "Journey moved.")
+                }
+                focusStepId={focusStepId}
               />
             )}
             <label className="flex flex-wrap items-center gap-2 text-sm text-muted">
@@ -303,7 +433,8 @@ export function PerformancePlanScreen({
                 disabled={busy}
                 onBlur={(event) => {
                   const ms = Math.round(Number(event.target.value) * 1000);
-                  if (Number.isFinite(ms) && ms >= 0 && ms !== plan.thinkTimeMs) void apply({ thinkTimeMs: ms });
+                  if (Number.isFinite(ms) && ms >= 0 && ms !== plan.thinkTimeMs)
+                    void apply({ thinkTimeMs: ms });
                 }}
                 className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
                 aria-label="Think time between steps in seconds"
@@ -320,9 +451,13 @@ export function PerformancePlanScreen({
             </h3>
             <LoadProfileEditor
               profile={plan.loadProfile}
-              startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
+              startingStages={(kind) =>
+                LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))
+              }
               busy={busy}
-              onSave={(profile) => void apply({ loadProfile: profile }, "Load profile saved.")}
+              onSave={(profile) =>
+                void apply({ loadProfile: profile }, "Load profile saved.")
+              }
             />
           </section>
 
@@ -342,7 +477,13 @@ export function PerformancePlanScreen({
             <h3 id="performance-environment-title" className="text-base font-semibold">
               Target environment and values
             </h3>
-            {environmentError && <ErrorState message="The environments could not be loaded." detail={environmentError} testId="performance-environments-error" />}
+            {environmentError && (
+              <ErrorState
+                message="The environments could not be loaded."
+                detail={environmentError}
+                testId="performance-environments-error"
+              />
+            )}
             <EnvironmentPicker
               environments={environments}
               selectedId={environmentId}
@@ -352,7 +493,10 @@ export function PerformancePlanScreen({
                 void loadValues(id);
               }}
               onSaved={(saved) => {
-                setEnvironments((current) => [...current.filter((candidate) => candidate.id !== saved.id), saved]);
+                setEnvironments((current) => [
+                  ...current.filter((candidate) => candidate.id !== saved.id),
+                  saved,
+                ]);
                 setEnvironmentId(saved.id);
                 void loadValues(saved.id);
               }}
@@ -365,10 +509,16 @@ export function PerformancePlanScreen({
               k6 script
             </h3>
             {needsStatus.length > 0 && (
-              <div role="status" className="space-y-2 rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-100">
+              <div
+                role="status"
+                className="space-y-2 rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-100"
+              >
                 <p>
                   <strong>
-                    {needsStatus.length === 1 ? "1 step needs" : `${needsStatus.length} steps need`} an expected status
+                    {needsStatus.length === 1
+                      ? "1 step needs"
+                      : `${needsStatus.length} steps need`}{" "}
+                    an expected status
                   </strong>{" "}
                   before the script can be generated.
                 </p>
@@ -378,7 +528,12 @@ export function PerformancePlanScreen({
                   entries={plan.stepsNeedingExpectedStatus.map((stepId) => ({
                     operationKey: stepLabel(stepId),
                     action: (
-                      <button type="button" className={BUTTON_STYLES.ghost} onClick={() => focusStep(stepId)} aria-label={`Set the expected status of ${stepLabel(stepId)}`}>
+                      <button
+                        type="button"
+                        className={BUTTON_STYLES.ghost}
+                        onClick={() => focusStep(stepId)}
+                        aria-label={`Set the expected status of ${stepLabel(stepId)}`}
+                      >
                         Set status
                       </button>
                     ),
@@ -386,33 +541,57 @@ export function PerformancePlanScreen({
                 />
               </div>
             )}
-            {script?.outOfDate && <StatusBadge label="Out of date — regenerate" tone="warning" />}
+            {script?.outOfDate && (
+              <StatusBadge label="Out of date — regenerate" tone="warning" />
+            )}
             {script && !script.outOfDate && (
               <p className="text-sm">
-                <StatusBadge label="Script current" tone="success" /> <span className="font-mono text-xs">sha256 {script.scriptSha256.slice(0, 12)}…</span>
+                <StatusBadge label="Script current" tone="success" />{" "}
+                <span className="font-mono text-xs">
+                  sha256 {script.scriptSha256.slice(0, 12)}…
+                </span>
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={BUTTON_STYLES.primary} disabled={busy || generateBlockedReason !== null} onClick={() => void handleGenerate()}>
+              <button
+                type="button"
+                className={BUTTON_STYLES.primary}
+                disabled={busy || generateBlockedReason !== null}
+                onClick={() => void handleGenerate()}
+              >
                 {script ? "Regenerate script" : "Generate script"}
               </button>
               {generateBlockedReason && (
-                <span data-testid="performance-generate-blocked" className="self-center text-xs text-muted">
+                <span
+                  data-testid="performance-generate-blocked"
+                  className="self-center text-xs text-muted"
+                >
                   {generateBlockedReason}.
                 </span>
               )}
               {script && !script.outOfDate && (
                 <>
-                  <a className={BUTTON_STYLES.secondary} href={scriptDownloadUrl("script")} download>
+                  <a
+                    className={BUTTON_STYLES.secondary}
+                    href={scriptDownloadUrl("script")}
+                    download
+                  >
                     Download script
                   </a>
-                  <a className={BUTTON_STYLES.secondary} href={scriptDownloadUrl("environment-template")} download>
+                  <a
+                    className={BUTTON_STYLES.secondary}
+                    href={scriptDownloadUrl("environment-template")}
+                    download
+                  >
                     Download environment template
                   </a>
                 </>
               )}
             </div>
-            <p className="text-xs text-muted">The same plan always gives a byte-identical script. It never contains a secret; values reach k6 only at run time.</p>
+            <p className="text-xs text-muted">
+              The same plan always gives a byte-identical script. It never contains a
+              secret; values reach k6 only at run time.
+            </p>
           </section>
         </div>
       </div>
@@ -421,7 +600,13 @@ export function PerformancePlanScreen({
         <h3 id="performance-run-title" className="text-base font-semibold">
           Run
         </h3>
-        <PerformanceRunPanel client={client} plan={plan} script={script} environment={environment} writeListId={writeListId} />
+        <PerformanceRunPanel
+          client={client}
+          plan={plan}
+          script={script}
+          environment={environment}
+          writeListId={writeListId}
+        />
       </section>
     </div>
   );

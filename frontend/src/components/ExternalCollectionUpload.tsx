@@ -144,10 +144,7 @@ export function ExternalCollectionUpload({
     name.trim().length > 0 && !!collectionFile && !!environmentFile && !uploading;
 
   return (
-    <div
-      data-testid="external-collection-upload"
-      className="space-y-3 rounded-md border border-border bg-slate-50 dark:bg-white/5 p-4"
-    >
+    <div data-testid="external-collection-upload" className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <label
