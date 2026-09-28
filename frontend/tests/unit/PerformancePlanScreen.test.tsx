@@ -131,6 +131,28 @@ describe("PerformancePlanScreen operations table", () => {
     expect(within(table).getAllByRole("button", { name: /^Details of / }).map((button) => button.getAttribute("aria-label"))).toEqual(["Details of GET /status"]);
   });
 
+  it("still lists the remaining steps after the steps a filter shows are all removed", async () => {
+    const plan = quickPlan();
+    const calls = stubFetch(
+      routes(plan, (body) => {
+        const excluded = (body as { excludedOperationKeys: string[] }).excludedOperationKeys;
+        const removed = withoutKeys(plan, excluded.filter((key) => !plan.excludedOperationKeys.includes(key)));
+        return { ...removed, stepsNeedingExpectedStatus: [] };
+      }),
+    );
+    renderScreen();
+    await screen.findByRole("button", { name: "Details of GET /orders" });
+    fireEvent.click(screen.getByRole("button", { name: "Needs expected status · 1" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /status" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Selected operations" })).getByRole("button", { name: "Remove from plan" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    // The filter's chip is gone with its last step, so the filter no longer hides the other six.
+    const table = await screen.findByRole("table", { name: "Performance plan operations" });
+    await waitFor(() => expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(6));
+    expect(screen.queryByRole("button", { name: /^Needs expected status/ })).not.toBeInTheDocument();
+    expect(screen.getByText("6 of 6 steps shown")).toBeInTheDocument();
+  });
+
   it("opens a step's details in a row under it, and closes them again", async () => {
     stubFetch(routes(quickPlan()));
     renderScreen();
@@ -144,6 +166,30 @@ describe("PerformancePlanScreen operations table", () => {
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("region", { name: "Details for POST /orders" })).not.toBeInTheDocument();
+  });
+
+  it("opens an operation's details in the table from the write list, including the one beside the trigger", async () => {
+    stubFetch(routes(quickPlan()));
+    renderScreen();
+    const list = await screen.findByTestId("write-summary-plan-list");
+    fireEvent.click(within(list).getByRole("button", { name: "Show PATCH /orders/{orderId} in the plan" }));
+    expect(detailsButton("PATCH /orders/{orderId}")).toHaveAttribute("aria-expanded", "true");
+    expect(document.activeElement).toBe(detailsButton("PATCH /orders/{orderId}"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
+    const trigger = screen.getByTestId("write-summary-trigger-list");
+    fireEvent.click(within(trigger).getByRole("button", { name: "Show DELETE /products/{productId} in the plan" }));
+    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute("aria-current", "page");
+    expect(document.activeElement).toBe(detailsButton("DELETE /products/{productId}"));
+  });
+
+  it("labels a removed operation only when there is a reason beyond having been removed", async () => {
+    stubFetch(routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] })));
+    renderScreen();
+    const removed = await screen.findByTestId("performance-removed-list");
+    const items = within(removed).getAllByRole("listitem");
+    expect(items.find((item) => item.textContent?.includes("/auth/login"))).toHaveTextContent("used to acquire the run's credentials");
+    expect(items.find((item) => item.textContent?.includes("/orders"))).not.toHaveTextContent("Removed");
   });
 
   it("opens the step and focuses its editor from the row's own status button", async () => {

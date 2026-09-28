@@ -86,8 +86,9 @@ export function secondsToMs(seconds: number): number {
 }
 
 /** AP-032 FR-003a, FR-024: why an operation is in the removed list. Derived, never stored. */
-export function removalReason(operationKey: string, credentialProducerOperationKeys: readonly string[]): string {
-  return credentialProducerOperationKeys.includes(operationKey) ? "used to acquire the run's credentials" : "Removed";
+export function removalReason(operationKey: string, credentialProducerOperationKeys: readonly string[]): string | undefined {
+  // An operation you removed yourself needs no label: the list's heading already says "removed".
+  return credentialProducerOperationKeys.includes(operationKey) ? "used to acquire the run's credentials" : undefined;
 }
 
 /** AP-032 FR-024: why an operation contributes no step. */

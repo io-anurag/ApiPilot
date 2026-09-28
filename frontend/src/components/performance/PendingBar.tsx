@@ -28,11 +28,12 @@ export interface PendingItem {
   detail?: ReactNode;
 }
 
+// One width for every action, so the column of buttons lines up whatever their labels.
 function ActionButton({ action }: Readonly<{ action: PendingAction }>) {
   return (
     <button
       type="button"
-      className={BUTTON_STYLES.secondary}
+      className={`${BUTTON_STYLES.secondary} w-32`}
       disabled={action.disabled}
       aria-label={action.ariaLabel}
       onClick={action.onClick}
@@ -81,13 +82,15 @@ export function PendingBar({
           <ul className="divide-y divide-warning-500/30">
             {items.map((item) => (
               <li key={item.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 py-2">
-                <StateMark state={item.state} />
+                <div className="flex min-h-8 items-center">
+                  <StateMark state={item.state} />
+                </div>
                 <div className="min-w-0 flex-1 space-y-1.5 text-sm">
-                  <p>{item.text}</p>
+                  <p className="flex min-h-8 items-center">{item.text}</p>
                   {item.detail}
                 </div>
                 {item.action && (
-                  <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex w-32 flex-col items-stretch gap-0.5 text-center">
                     <ActionButton action={item.action} />
                     {item.hint && <span className="text-xs text-muted">{item.hint}</span>}
                   </div>

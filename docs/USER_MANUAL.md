@@ -339,7 +339,8 @@ below).
   reminder that every virtual user sends each of them on every iteration for the whole run and
   that ApiPilot does not clean up afterwards. Each write step carries a text marker
   (**Creates**, **Replaces**, **Updates** or **Deletes**) beside its method. The same list is
-  shown next to the run trigger. A plan with no writes says it sends only read requests.
+  shown next to the run trigger. Select an operation's path in either list to open its details
+  in the table. A plan with no writes says it sends only read requests.
 - **Removing.** **Remove all write operations** removes every write in one action, and
   **Remove by method** offers **Remove all <METHOD> operations** for each method in the plan.
   To remove a few operations, tick their rows and choose **Remove from plan**, or use
@@ -381,6 +382,10 @@ environment, then **Edit values** or **New environment**; values are typed into 
 fields and stored encrypted. The checklist shows each value as **Present** or **Missing**
 for the chosen environment. A missing value does not block a run: that step is not sent and
 is reported as missing data, and the steps that depend on it are reported as not attempted.
+The environment form suggests one row for each value the plan still needs. Removing an
+operation drops only the values no remaining step needs: a path parameter such as `customer_id`
+stays while any remaining operation, for example `GET /customers/{id}`, uses it. The checklist's
+**Needed by** column shows which steps need each value. Rows left empty are not saved.
 
 **The script.** **Generate script** creates a k6 script and an environment template, which
 you can download and run elsewhere. The same plan always produces the same bytes, and neither

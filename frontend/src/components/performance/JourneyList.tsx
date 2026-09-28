@@ -32,12 +32,14 @@ const WRITES = "WRITES";
 const ALL = "ALL";
 
 /**
- * Asks the list, from outside it, to show every step still needing an expected status, or to open
- * one step and focus its expected-status editor. A new `nonce` repeats the same request.
+ * Asks the list, from outside it, to show every step still needing an expected status, to open one
+ * step and focus its expected-status editor, or to open an operation's first step (from a list of
+ * operations elsewhere on the screen). A new `nonce` repeats the same request.
  */
 export type ListRequest =
   | { readonly kind: "show-needs-status"; readonly nonce: number }
-  | { readonly kind: "set-status"; readonly stepId: string; readonly nonce: number };
+  | { readonly kind: "set-status"; readonly stepId: string; readonly nonce: number }
+  | { readonly kind: "open-operation"; readonly operationKey: string; readonly nonce: number };
 
 type InventoryRow = {
   readonly journey: PerformanceJourney;
@@ -246,12 +248,13 @@ export function JourneyList({
   const [needsStatusOnly, setNeedsStatusOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
+  // The id of the element to focus once the row it is in has rendered.
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const handledRequest = useRef<number | null>(null);
 
-  // A request from outside the table (the pending bar) resets the filters so what it asks for is
-  // on screen: either every step still needing a status, or one step's editor, on its page.
+  // A request from outside the table (the pending bar, a list of operations) resets the filters so
+  // what it asks for is on screen: every step still needing a status, or one step, on its page.
   useEffect(() => {
     if (!listRequest || handledRequest.current === listRequest.nonce) return;
     handledRequest.current = listRequest.nonce;
@@ -262,19 +265,23 @@ export function JourneyList({
       setPage(0);
       return;
     }
-    const index = journeys
-      .flatMap((journey) => journey.steps)
-      .findIndex((step) => step.id === listRequest.stepId);
+    const allSteps = journeys.flatMap((journey) => journey.steps);
+    const index =
+      listRequest.kind === "set-status"
+        ? allSteps.findIndex((step) => step.id === listRequest.stepId)
+        : allSteps.findIndex((step) => step.operationKey === listRequest.operationKey);
+    if (index < 0) return;
+    const stepId = allSteps[index].id;
     setNeedsStatusOnly(false);
-    setPage(Math.max(0, Math.floor(index / PAGE_SIZE)));
-    setExpandedStepId(listRequest.stepId);
-    setPendingFocus(listRequest.stepId);
+    setPage(Math.floor(index / PAGE_SIZE));
+    setExpandedStepId(stepId);
+    setPendingFocus(listRequest.kind === "set-status" ? `expected-${stepId}` : `step-toggle-${stepId}`);
   }, [listRequest, journeys]);
   useEffect(() => {
     if (!pendingFocus) return;
-    const input = document.getElementById(`expected-${pendingFocus}`);
-    if (input) {
-      input.focus();
+    const element = document.getElementById(pendingFocus);
+    if (element) {
+      element.focus();
       setPendingFocus(null);
     }
   });
@@ -294,15 +301,29 @@ export function JourneyList({
   const methods = [...methodCounts.keys()].sort((a, b) => a.localeCompare(b));
   const writeCount = rows.filter(({ step }) => writeEffectLabelOf(step.method)).length;
   const needsStatusCount = rows.filter(({ step }) => step.expectedStatuses.length === 0).length;
+  const methodChips: { id: string; label: string; count: number }[] = [
+    { id: ALL, label: "All", count: rows.length },
+    ...methods.map((method) => ({ id: method, label: method, count: methodCounts.get(method) ?? 0 })),
+    ...(writeCount > 0 ? [{ id: WRITES, label: "Writes", count: writeCount }] : []),
+  ];
+  // A filter whose chip is gone (its last matching step was removed from the plan, or given a
+  // status) stops applying. Otherwise it would hide every remaining step, with no chip left to turn
+  // it off. The effect below also clears it, so it does not come back on when a step is restored.
+  const activeMethod = methodChips.some((chip) => chip.id === methodFilter) ? methodFilter : ALL;
+  const activeNeedsStatusOnly = needsStatusOnly && needsStatusCount > 0;
+  useEffect(() => {
+    if (activeMethod !== methodFilter) setMethodFilter(ALL);
+    if (activeNeedsStatusOnly !== needsStatusOnly) setNeedsStatusOnly(false);
+  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly]);
   const filteredRows = rows.filter(({ step }) => {
     const method = step.method.toUpperCase();
     const matchesMethod =
-      methodFilter === ALL ||
-      (methodFilter === WRITES ? writeEffectLabelOf(method) !== null : method === methodFilter);
+      activeMethod === ALL ||
+      (activeMethod === WRITES ? writeEffectLabelOf(method) !== null : method === activeMethod);
     const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}`.toLowerCase();
     return (
       matchesMethod &&
-      (!needsStatusOnly || step.expectedStatuses.length === 0) &&
+      (!activeNeedsStatusOnly || step.expectedStatuses.length === 0) &&
       text.includes(query.toLowerCase())
     );
   });
@@ -337,14 +358,8 @@ export function JourneyList({
     });
   const openForStatus = (stepId: string) => {
     setExpandedStepId(stepId);
-    setPendingFocus(stepId);
+    setPendingFocus(`expected-${stepId}`);
   };
-
-  const methodChips: { id: string; label: string; count: number }[] = [
-    { id: ALL, label: "All", count: rows.length },
-    ...methods.map((method) => ({ id: method, label: method, count: methodCounts.get(method) ?? 0 })),
-    ...(writeCount > 0 ? [{ id: WRITES, label: "Writes", count: writeCount }] : []),
-  ];
 
   const body: ReactNode[] = [];
   let previousJourneyId: string | null = null;
@@ -392,6 +407,7 @@ export function JourneyList({
             onClick={() => setExpandedStepId(expanded ? null : step.id)}
             aria-expanded={expanded}
             aria-controls={expanded ? `performance-step-details-${step.id}` : undefined}
+            id={`step-toggle-${step.id}`}
             aria-label={`Details of ${step.operationKey}`}
             className={`flex w-full items-center gap-2 rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${isGroupedJourney(journey) ? "pl-3" : ""}`}
           >
@@ -485,12 +501,12 @@ export function JourneyList({
             <button
               key={chip.id}
               type="button"
-              aria-pressed={methodFilter === chip.id}
+              aria-pressed={activeMethod === chip.id}
               onClick={() => {
                 setMethodFilter(chip.id);
                 resetPage();
               }}
-              className={`${CHIP} ${methodFilter === chip.id ? CHIP_ON : CHIP_OFF}`}
+              className={`${CHIP} ${activeMethod === chip.id ? CHIP_ON : CHIP_OFF}`}
             >
               {chip.label} <span className="opacity-70">{chip.count}</span>
             </button>
@@ -499,12 +515,12 @@ export function JourneyList({
         {needsStatusCount > 0 && (
           <button
             type="button"
-            aria-pressed={needsStatusOnly}
+            aria-pressed={activeNeedsStatusOnly}
             onClick={() => {
               setNeedsStatusOnly((current) => !current);
               resetPage();
             }}
-            className={`rounded-full border border-warning-500 px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-warning-500 ${needsStatusOnly ? "bg-warning-600 text-white" : "bg-warning-50 text-warning-700 hover:bg-warning-100 dark:bg-warning-500/10 dark:text-warning-100"}`}
+            className={`rounded-full border border-warning-500 px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-warning-500 ${activeNeedsStatusOnly ? "bg-warning-600 text-white" : "bg-warning-50 text-warning-700 hover:bg-warning-100 dark:bg-warning-500/10 dark:text-warning-100"}`}
           >
             Needs expected status · {needsStatusCount}
           </button>

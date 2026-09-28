@@ -49,19 +49,16 @@ export function PerformanceRunTrigger({
   plan,
   script,
   environment,
-  writeListId,
   onStarted,
-  onViewRuns,
+  onSelectOperation,
 }: Readonly<{
   runs: PerformanceRuns;
   plan: PerformancePlan;
   script: ScriptStatus | null;
   environment: Environment | null;
-  /** The plan screen's write list, for the trigger's link back to it. */
-  writeListId?: string;
   onStarted?: () => void;
-  /** Offered while a run is in progress, to show its live progress. */
-  onViewRuns?: () => void;
+  /** Opens a write operation's details in the plan's table. */
+  onSelectOperation?: (operationKey: string) => void;
 }>) {
   const { readiness, checking, checkReadiness, run, inProgress, starting, error, start } = runs;
   const blockedReason = runBlockedReason(script, environment, readiness, inProgress);
@@ -81,7 +78,7 @@ export function PerformanceRunTrigger({
   const trigger = (
     <>
       {/* AP-032 FR-011: every write operation this run sends, next to the trigger that names the target. */}
-      <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" listId={writeListId} />
+      <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" onSelect={onSelectOperation} />
       <button type="button" className={`${BUTTON_STYLES.primary} w-full py-2`} disabled={blockedReason !== null || starting} onClick={() => void handleStart()}>
         {triggerLabel}
       </button>
@@ -124,14 +121,6 @@ export function PerformanceRunTrigger({
         <div className="space-y-3">{trigger}</div>
       )}
       {error && <ErrorState message={error} testId="performance-run-error" />}
-      {inProgress && onViewRuns && (
-        <p className="text-sm">
-          <StatusBadge label="Run in progress" tone="info" />{" "}
-          <button type="button" className={BUTTON_STYLES.ghost} onClick={onViewRuns}>
-            View progress
-          </button>
-        </p>
-      )}
     </div>
   );
 }

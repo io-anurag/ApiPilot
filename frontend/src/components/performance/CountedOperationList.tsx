@@ -28,16 +28,21 @@ export function CountedOperationList({
   entries,
   collapseAbove = 10,
   columns = false,
+  onSelect,
+  selectLabel = (operationKey) => `Show ${operationKey} in the plan`,
   testId,
 }: Readonly<{
   label: (count: number) => string;
   entries: readonly CountedOperationEntry[];
   collapseAbove?: number;
   columns?: boolean;
+  /** Makes each entry's path a button, e.g. to open that operation's details elsewhere. */
+  onSelect?: (operationKey: string) => void;
+  selectLabel?: (operationKey: string) => string;
   testId: string;
 }>) {
   if (entries.length === 0) return null;
-  const list = (
+  const items = (
     <ul className={columns ? "grid gap-x-4 gap-y-1 @xl:grid-cols-2 @5xl:grid-cols-3" : "divide-y divide-border rounded-md border border-border"}>
       {entries.map((entry) => {
         const { method, path } = splitOperationKey(entry.operationKey);
@@ -48,9 +53,20 @@ export function CountedOperationList({
                 <HttpMethodBadge method={method} />
               </span>
             )}
-            <span className="min-w-0">
-              <WrappingPath path={path} />
-            </span>
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(entry.operationKey)}
+                aria-label={selectLabel(entry.operationKey)}
+                className="min-w-0 rounded text-left text-brand-800 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-200"
+              >
+                <WrappingPath path={path} />
+              </button>
+            ) : (
+              <span className="min-w-0">
+                <WrappingPath path={path} />
+              </span>
+            )}
             {entry.detail && <span className="shrink-0 text-xs text-muted">{entry.detail}</span>}
             {entry.action && <span className="ml-auto">{entry.action}</span>}
           </li>
@@ -58,9 +74,11 @@ export function CountedOperationList({
       })}
     </ul>
   );
+  // The container query sizes the columns by the list's own width, collapsed or not.
+  const list = columns ? <div className="@container">{items}</div> : items;
   if (entries.length <= collapseAbove) {
     return (
-      <div data-testid={testId} className={columns ? "@container space-y-1.5" : "space-y-1.5"}>
+      <div data-testid={testId} className="space-y-1.5">
         <p className="text-sm font-semibold">{label(entries.length)}</p>
         {list}
       </div>

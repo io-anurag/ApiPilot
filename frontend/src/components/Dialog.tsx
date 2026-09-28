@@ -59,17 +59,22 @@ export function Dialog({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  // The backdrop scrolls, and the panel is centred with auto margins rather than `items-center`:
+  // a dialog taller than the window (an environment with many values) then starts at the top and
+  // scrolls, instead of being centred with its title and buttons pushed off screen.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div
-        ref={panelRef}
-        role={role}
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        data-testid={testId}
-        className={panelClassName}
-      >
-        {children}
+    <div className="fixed inset-0 z-50 flex overflow-y-auto bg-slate-900/40 p-4">
+      <div className="m-auto flex w-full justify-center">
+        <div
+          ref={panelRef}
+          role={role}
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          data-testid={testId}
+          className={panelClassName}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

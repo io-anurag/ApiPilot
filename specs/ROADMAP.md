@@ -2880,3 +2880,41 @@ Implementation
     - Docs: USER_MANUAL §3.11 (the pending bar, the three tabs, table and order controls);
       architecture.md "Frontend architecture".
     - Version bumped to 19.8.0 (root, backend, frontend, shared-domain).
+
+41. **Tall dialogs scroll; version 19.8.1 (2026-09-28).**
+    - The shared `Dialog` centred its panel with `items-center` in a fixed backdrop that did not
+      scroll, so a panel taller than the window (the environment form with the ~20 values of a
+      large specification) had its title and its Save and Cancel buttons pushed off screen and out
+      of reach. The backdrop now scrolls and the panel is centred with auto margins: a short dialog
+      is still centred, a tall one starts at the top and scrolls. This affects every dialog
+      (environment form, confirm, prompt, move item) and was not introduced by entries 39 and 40.
+    - Checked in a browser at 1000 x 500 px: the environment form's top is on screen and its
+      buttons are reachable by scrolling.
+    - Clarified in USER_MANUAL §3.11 why the environment form still lists a value after operations
+      are removed: a value stays while any remaining step needs it (checked against the backend: a
+      22-operation plan cut to 3 operations went from 7 values to 3).
+    - Validation: `npm test` 1,953 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean.
+    - Version bumped to 19.8.1 (root, backend, frontend, shared-domain).
+
+42. **Plan screen list and button fixes; version 19.8.2 (2026-09-28).**
+    - The removed and left-out lists used half the panel width (a two-column grid meant for both
+      lists side by side) and labelled every entry "Removed". They now take the full width, in the
+      same container-query columns as the write lists, and only an operation removed for a reason
+      of its own is labelled ("used to acquire the run's credentials"). Each entry is still on its
+      own line with its method, path and Restore (FR-024).
+    - The paths in both write lists are buttons that open the operation's details in the table,
+      switching to the Plan tab from the one beside the run trigger (`ListRequest` "open-operation").
+    - The pending bar's action buttons took the width of their labels and sat below their text; they
+      now share one width and line up with the text.
+    - Fixed: after the steps a filter showed were all removed (for example every step needing an
+      expected status), the filter's chip disappeared but the filter stayed on, so the table said
+      "No operations match these filters" with no way to clear it. A filter whose chip is gone now
+      stops applying and is cleared.
+    - Not done: a removed operation has no step in the plan, so it has no request preview to open.
+      Showing one needs a new backend route, an API contract change awaiting a decision.
+    - Validation: `npm test` 1,956 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser at 1300 px.
+    - Version bumped to 19.8.2 (root, backend, frontend, shared-domain).

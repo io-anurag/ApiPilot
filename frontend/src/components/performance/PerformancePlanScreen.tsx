@@ -271,6 +271,10 @@ export function PerformancePlanScreen({
     setTab("plan");
     setListRequest((current) => ({ kind: "show-needs-status", nonce: nextNonce(current) }));
   };
+  const openOperation = (operationKey: string) => {
+    setTab("plan");
+    setListRequest((current) => ({ kind: "open-operation", operationKey, nonce: nextNonce(current) }));
+  };
   const setStatusOf = (stepId: string) => {
     setTab("plan");
     setListRequest((current) => ({ kind: "set-status", stepId, nonce: nextNonce(current) }));
@@ -456,6 +460,7 @@ export function PerformancePlanScreen({
           summary={writeSummary}
           variant="plan"
           listId={writeListId}
+          onSelect={openOperation}
           actions={
             writeSummary.total > 0 && (
               <button
@@ -476,11 +481,12 @@ export function PerformancePlanScreen({
         />
 
         {(plan.excludedOperationKeys.length > 0 || plan.omitted.length > 0) && (
-          <div className="grid items-start gap-3 lg:grid-cols-2">
+          <div className="space-y-3">
             {plan.excludedOperationKeys.length > 0 && (
               <div className="space-y-1.5">
                 <CountedOperationList
                   label={(count) => `${count} operation${count === 1 ? "" : "s"} removed`}
+                  columns
                   testId="performance-removed-list"
                   entries={plan.excludedOperationKeys.map((operationKey) => ({
                     operationKey,
@@ -523,6 +529,7 @@ export function PerformancePlanScreen({
             )}
             <CountedOperationList
               label={(count) => `${count} operation${count === 1 ? "" : "s"} left out`}
+              columns
               testId="performance-omitted-list"
               entries={plan.omitted.map((entry) => ({
                 operationKey: entry.operationKey,
@@ -736,6 +743,7 @@ export function PerformancePlanScreen({
             script={script}
             environment={environment}
             onStarted={() => setTab("runs")}
+            onSelectOperation={openOperation}
           />
           <p className="text-xs text-muted">
             Planned duration {formatDuration(plan.loadProfile.plannedDurationMs)}. Nothing is sent

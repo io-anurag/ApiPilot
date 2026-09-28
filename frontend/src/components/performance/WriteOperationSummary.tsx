@@ -23,6 +23,7 @@ export function WriteOperationSummary({
   variant,
   listId,
   actions,
+  onSelect,
 }: Readonly<{
   summary: Summary;
   variant: "plan" | "trigger";
@@ -30,6 +31,8 @@ export function WriteOperationSummary({
   listId?: string;
   /** Plan variant only: bulk removal controls. */
   actions?: ReactNode;
+  /** Opens a write operation's details in the plan's table. */
+  onSelect?: (operationKey: string) => void;
 }>) {
   if (summary.total === 0) {
     return (
@@ -70,7 +73,7 @@ export function WriteOperationSummary({
         </p>
         {counts}
         <div className="max-h-48 overflow-y-auto">
-          <CountedOperationList label={() => "Write operations"} entries={entries} collapseAbove={Infinity} columns testId="write-summary-trigger-list" />
+          <CountedOperationList label={() => "Write operations"} entries={entries} collapseAbove={Infinity} columns onSelect={onSelect} testId="write-summary-trigger-list" />
         </div>
       </section>
     );
@@ -87,7 +90,7 @@ export function WriteOperationSummary({
       </div>
       <p className="border-t border-warning-500/40 px-3 py-1.5 text-xs text-warning-700 dark:text-warning-100">{WRITE_REPETITION_SENTENCE}</p>
       <div className="border-t border-warning-500/40 px-3 py-2">
-        <CountedOperationList label={(count) => `${count} write operations`} entries={entries} collapseAbove={Infinity} columns testId="write-summary-plan-list" />
+        <CountedOperationList label={(count) => `${count} write operations`} entries={entries} collapseAbove={Infinity} columns onSelect={onSelect} testId="write-summary-plan-list" />
       </div>
     </section>
   );
