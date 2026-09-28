@@ -1,7 +1,7 @@
 import type { PerformanceResult, PerformanceRun, PerformanceThreshold } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { deriveFindings } from "../../../src/performance/report/findings";
-import { escapeHtml, formatCount, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
+import { escapeHtml, formatCount, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
@@ -150,6 +150,22 @@ describe("HTML report (D17)", () => {
     expect(html).toContain("Failed · k6-unavailable");
     expect(html).toContain("This run recorded no measurements (failure: k6-unavailable).");
     expect(html).toContain("Provenance");
+  });
+
+  it("states that a quick plan's scenarios were generated and not reviewed, and nothing of the kind for a guided plan (AP-032 FR-013)", () => {
+    const quick = completedRun({ planSnapshot: { ...plan, source: "quick" }, planSource: "quick" });
+    const quickHtml = renderHtmlReport({ ...quick, result: withReportFields(result(), quick) });
+    expect(quickHtml).toContain(QUICK_PLAN_PROVENANCE);
+    expect(renderHtmlReport({ ...quick, result: withReportFields(result(), quick) })).toBe(quickHtml);
+
+    const guided = completedRun({ planSnapshot: { ...plan, source: "guided" } });
+    expect(renderHtmlReport({ ...guided, result: withReportFields(result(), guided) })).not.toContain(QUICK_PLAN_PROVENANCE);
+
+    // A snapshot recorded before AP-032 has no source and is a guided plan.
+    const legacyPlan: Partial<typeof plan> = { ...plan };
+    delete legacyPlan.source;
+    const legacy = completedRun({ planSnapshot: legacyPlan as typeof plan });
+    expect(renderHtmlReport({ ...legacy, result: withReportFields(result(), legacy) })).not.toContain(QUICK_PLAN_PROVENANCE);
   });
 
   it("formats numbers without the locale", () => {

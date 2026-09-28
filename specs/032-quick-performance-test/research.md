@@ -56,7 +56,7 @@ interface PlanHandle {
   onPlanReset(plan): void;            // guided: complete → active when the script is out of date; quick: nothing
   onScriptGenerated(): void;          // guided: stage → complete; quick: nothing
 }
-// plus, on the source: onOpen?(): void, called by GET /plan (guided: enterStageIfNeeded)
+// plus, on the handle: onOpen?(): void, called by GET /plan (guided: enterStageIfNeeded)
 ```
 
 `registerPerformanceRoutes(router, base, source, deps)` registers `GET/PUT /plan`,
@@ -85,6 +85,12 @@ existing order (`positiveScenario`, `enumPositiveScenarios`, `minimalPositiveSce
 every operation, then applies the existing `deduplicate`. `generateTestModel` is unchanged.
 No AI provider is referenced anywhere in the quick path.
 
+**Implementation finding (2026-09-28)**: the boundary rules (for example `numericBoundaryScenarios`)
+also emit valid at-boundary variants in the `positive` category, such as
+`numeric-boundary-at-maximum`. They are not generated on the quick path, because running a
+boundary rule also generates its negative scenarios. Every operation still has its full
+happy-path scenario, which is the one the quick ids rank lowest (Q4).
+
 **Rationale**: FR-004 says negative categories "MUST NOT be generated", not merely filtered out.
 Running the rule subset is also cheaper for large specifications. The rules and deduplication are
 reused unchanged, so the scenarios are the same ones the guided workflow's test design would
@@ -109,7 +115,7 @@ q<rank>-<first 24 hex of SHA-256(canonicalJson({operationKey, rule, request, ass
 ```
 
 - `rank` is the two-digit position of the scenario's generating rule in the positive rule order
-  (`00` for `positive-scenario`, `01` for `enum-positive-scenarios`, `02` for
+  (`00` for `positive-scenario`, `01` for `enum-positive-variant`, `02` for
   `minimal-positive-scenario`). AP-029's rule, "lowest identifier among rule-generated
   scenarios", then picks the full happy-path scenario whenever it exists, which is also the most
   representative request. The choice and its reason are recorded as today (`scenarioChoice`,
@@ -340,7 +346,7 @@ called the same way by `POST /api/specifications`.
   journeys, it shows `EmptyState` ("Nothing can be load-tested"), the left-out list and "Back to
   start".
 - **New components**: `WriteOperationSummary` (plan and run-trigger variants), `CountedOperationList`,
-  `StepRequestPreview` (a disclosure per step in `JourneyList`, loaded on first open), and a text
+  `StepRequestPreview` (an `aria-expanded` disclosure button per step in `JourneyList`, loaded on first open), and a text
   effect marker beside each write step's `HttpMethodBadge`.
 - **Clients**: `quickPerformanceClient.ts` for upload and `GET /api/quick-performance`, plus
   `createPerformanceClient("/api/quick-performance")` for the plan and run routes.

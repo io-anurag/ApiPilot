@@ -57,7 +57,7 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     requiredValues: ["baseUrl", "clientId", "clientSecret", "warehouseId"],
   });
   return {
-    scope: "all",
+    source: "guided",
     excludedOperationKeys: [],
     omitted: [],
     journeys: [
@@ -78,6 +78,7 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     fingerprint: "fp-1",
     upstreamFingerprint: "up-1",
     stepsNeedingExpectedStatus: ["s-status"],
+    credentialProducerOperationKeys: [],
     ...overrides,
   };
 }
@@ -109,6 +110,7 @@ export function runFixture(overrides: Partial<PerformanceRun> = {}): Performance
     status: "in-progress",
     environment: { id: "env-1", name: "perf-local", tier: "local", baseUrl: "http://127.0.0.1:4600" },
     planSnapshot: readyPlan(),
+    planSource: "guided",
     scriptSha256: "abcdef0123456789",
     k6Version: "1.2.0",
     plannedDurationMs: 60_000,
@@ -147,4 +149,55 @@ export function stubFetch(routes: Record<string, (call: Call) => [number, unknow
     }),
   );
   return calls;
+}
+
+/**
+ * AP-032: a quick plan (specs/032-quick-performance-test), single-step journeys only, shaped like
+ * the backend's for quick-performance.yaml, with the login removed as a credential producer.
+ */
+export function quickStep(method: string, path: string, overrides: Partial<PerformanceStep> = {}): PerformanceStep {
+  const id = `s-${method.toLowerCase()}-${path.replace(/[^a-z0-9]+/gi, "-")}`;
+  return step({
+    id,
+    operationKey: `${method} ${path}`,
+    method,
+    path,
+    scenarioDescription: `${method} ${path} happy path`,
+    scenarioChoice: "rule-generated",
+    auth: { kind: "chained-login", schemeName: "LoginAuth" },
+    requiredValues: ["baseUrl", "username", "password"],
+    ...overrides,
+  });
+}
+
+export function quickPlan(overrides: Partial<PerformancePlan> = {}): PerformancePlan {
+  const steps = [
+    quickStep("GET", "/orders"),
+    quickStep("POST", "/orders", { expectedStatuses: [{ code: "201", source: "specification" }] }),
+    quickStep("PUT", "/orders/{orderId}"),
+    quickStep("PATCH", "/orders/{orderId}"),
+    quickStep("DELETE", "/orders/{orderId}"),
+    quickStep("DELETE", "/products/{productId}"),
+    quickStep("GET", "/status", { expectedStatuses: [] }),
+  ];
+  return planFixture({
+    source: "quick",
+    excludedOperationKeys: ["POST /auth/login"],
+    credentialProducerOperationKeys: ["POST /auth/login"],
+    journeys: steps.map((entry) => ({ id: `j-${entry.id}`, source: { kind: "operation" as const }, steps: [entry] })),
+    userSuppliedValues: [
+      { name: "baseUrl", secret: false, neededBySteps: steps.map((entry) => entry.id), source: "base-url" },
+      { name: "password", secret: true, neededBySteps: steps.map((entry) => entry.id), source: "credential" },
+    ],
+    stepsNeedingExpectedStatus: [steps[6].id],
+    ...overrides,
+  });
+}
+
+export function quickTestView(plan = quickPlan(), scriptStatus: ScriptStatus | null = null) {
+  return {
+    specification: { filename: "quick-performance.yaml", info: { title: "Quick Performance Fixture", version: "1.0" }, operationCount: 13 },
+    plan,
+    script: scriptStatus,
+  };
 }

@@ -1,6 +1,7 @@
 /**
  * Typed errors for AP-029 k6 performance testing (specs/031-k6-performance-testing). Each maps to
- * one contract error code in `backend/src/api/performanceTesting.ts`; none carries a value.
+ * one contract error code in `backend/src/api/performanceHttp.ts` or the route that throws it;
+ * none carries a value.
  */
 
 export class PerformanceRunNotFoundError extends Error {
@@ -62,5 +63,21 @@ export class DependencyOrderViolationError extends Error {
   ) {
     super(`This order would run a step before the step that produces '${variable}'.`);
     this.name = "DependencyOrderViolationError";
+  }
+}
+
+/** AP-032 `404 step_not_found`: a step id that is not in the current plan (step request preview). */
+export class StepNotFoundError extends Error {
+  constructor(public readonly stepId: string) {
+    super(`'${stepId}' is not a step in this plan.`);
+    this.name = "StepNotFoundError";
+  }
+}
+
+/** AP-032 `409 quick_test_exists`: a new upload while a quick test exists and replacing was not confirmed (FR-021). */
+export class QuickTestExistsError extends Error {
+  constructor() {
+    super("This session already has a quick performance test. Confirm to replace it; runs and reports are kept.");
+    this.name = "QuickTestExistsError";
   }
 }

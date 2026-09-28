@@ -42,8 +42,13 @@ interface Candidate {
   selection: Extract<PerformanceScenarioSelection, { scenario: TestScenario }>;
 }
 
-export function operationsInScope(context: PerformanceContext, scope: "selection" | "all"): ApiOperation[] {
-  const selected = scope === "selection" && context.selectedOperationKeys ? new Set(context.selectedOperationKeys) : undefined;
+/**
+ * The operations in scope (AP-032 FR-022, replacing AP-029 FR-001): the guided workflow's API
+ * review selection, or every analyzed operation when none was made. A quick plan's context has no
+ * selection, so it covers every operation (FR-003). Only these can be listed as left out (FR-023).
+ */
+export function operationsInScope(context: PerformanceContext): ApiOperation[] {
+  const selected = context.selectedOperationKeys ? new Set(context.selectedOperationKeys) : undefined;
   return context.apiModel.operations.filter((operation) => !selected || selected.has(operationKeyOf(operation)));
 }
 
@@ -120,13 +125,8 @@ function makeStep(
   };
 }
 
-export function buildJourneys(
-  context: PerformanceContext,
-  auth: AuthPlan,
-  scope: "selection" | "all",
-  excludedOperationKeys: ReadonlySet<string>,
-): BuiltJourneys {
-  const inScope = operationsInScope(context, scope).filter((operation) => !excludedOperationKeys.has(operationKeyOf(operation)));
+export function buildJourneys(context: PerformanceContext, auth: AuthPlan, excludedOperationKeys: ReadonlySet<string>): BuiltJourneys {
+  const inScope = operationsInScope(context).filter((operation) => !excludedOperationKeys.has(operationKeyOf(operation)));
   const omitted: OmittedOperation[] = [];
   const candidates = new Map<string, Candidate>();
   for (const operation of inScope) {

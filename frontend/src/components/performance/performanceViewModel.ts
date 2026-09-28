@@ -67,3 +67,13 @@ export function formatDuration(ms: number): string {
 export function secondsToMs(seconds: number): number {
   return Math.max(1, Math.round(seconds)) * 1000;
 }
+
+/** AP-032 FR-003a, FR-024: why an operation is in the removed list. Derived, never stored. */
+export function removalReason(operationKey: string, credentialProducerOperationKeys: readonly string[]): string {
+  return credentialProducerOperationKeys.includes(operationKey) ? "used to acquire the run's credentials" : "Removed";
+}
+
+/** AP-032 FR-024: why an operation contributes no step. */
+export const OMITTED_REASON_LABEL: Record<"no-positive-scenario", string> = {
+  "no-positive-scenario": "No positive scenario",
+};

@@ -7,26 +7,39 @@ import type {
   PerformanceRunSummary,
   ScriptStatus,
 } from "@apipilot/shared-domain";
-import { cancelRun, fetchReadiness, fetchRun, fetchRuns, startRun } from "../../services/performanceTestingClient";
+import { summarizeWriteOperations } from "@apipilot/shared-domain";
+import type { PerformanceClient } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
 import { PerformanceReportFrame } from "./PerformanceReportFrame";
 import { READINESS_REASON, TIER_TONE, formatDuration, runStatusLabel } from "./performanceViewModel";
+import { WriteOperationSummary } from "./WriteOperationSummary";
 
 /**
  * Readiness, the run trigger, live progress and cancel, and run history (FR-024 to FR-031,
- * FR-034a, FR-035). The trigger names its target, and the target and load origin stay on screen
- * throughout the run. No confirmation step is added on any tier (FR-025).
+ * FR-034a, FR-035). The trigger names its target, and the target, load origin and every write
+ * operation the run sends (AP-032 FR-011) stay on screen throughout the run. No confirmation step
+ * is added on any tier (FR-025).
  */
 export const RUN_POLL_INTERVAL_MS = 2_000;
 
 export function PerformanceRunPanel({
+  client,
   plan,
   script,
   environment,
-}: Readonly<{ plan: PerformancePlan; script: ScriptStatus | null; environment: Environment | null }>) {
+  writeListId,
+}: Readonly<{
+  client: PerformanceClient;
+  plan: PerformancePlan;
+  script: ScriptStatus | null;
+  environment: Environment | null;
+  /** The plan screen's write list, for the trigger's link back to it. */
+  writeListId?: string;
+}>) {
+  const { cancelRun, fetchReadiness, fetchRun, fetchRuns, startRun } = client;
   const [readiness, setReadiness] = useState<K6Readiness | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<PerformanceRun | null>(null);
@@ -40,14 +53,14 @@ export function PerformanceRunPanel({
   const refreshRuns = useCallback(async () => {
     const result = await fetchRuns();
     if (result.ok) setRuns(result.runs);
-  }, []);
+  }, [fetchRuns]);
 
   const checkReadiness = useCallback(async (recheck: boolean) => {
     setChecking(true);
     const result = await fetchReadiness(recheck);
     setChecking(false);
     setReadiness(result.ok ? result.readiness : null);
-  }, []);
+  }, [fetchReadiness]);
 
   useEffect(() => {
     void checkReadiness(false);
@@ -59,7 +72,7 @@ export function PerformanceRunPanel({
         if (detail.ok) setRun(detail.run);
       }
     });
-  }, [checkReadiness, refreshRuns]);
+  }, [checkReadiness, refreshRuns, fetchRuns, fetchRun]);
 
   useEffect(() => {
     if (run?.status !== "in-progress") return undefined;
@@ -76,7 +89,7 @@ export function PerformanceRunPanel({
     return () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-  }, [run, refreshRuns]);
+  }, [run, refreshRuns, fetchRun]);
 
   const inProgress = run?.status === "in-progress";
   const blockedReason = !script
@@ -160,6 +173,8 @@ export function PerformanceRunPanel({
               {plan.loadProfile.kind} · {stages.length} stages · {formatDuration(plan.loadProfile.plannedDurationMs)} · peak {peak} VUs:{" "}
               {stages.map((stage) => `${stage.durationMs / 1000} s → ${stage.targetVirtualUsers}`).join(", ")}
             </p>
+            {/* AP-032 FR-011: every write operation this run sends, next to the trigger that names the target. */}
+            <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" listId={writeListId} />
           </div>
           <div className="flex flex-col items-end gap-1">
             <button type="button" className={BUTTON_STYLES.primary} disabled={blockedReason !== null || starting} onClick={() => void handleStart()}>
@@ -253,7 +268,7 @@ export function PerformanceRunPanel({
         </section>
       )}
 
-      {reportRunId && <PerformanceReportFrame runId={reportRunId} />}
+      {reportRunId && <PerformanceReportFrame client={client} runId={reportRunId} />}
 
       <section aria-labelledby="performance-runs-title" className="space-y-2">
         <h3 id="performance-runs-title" className="text-base font-semibold">

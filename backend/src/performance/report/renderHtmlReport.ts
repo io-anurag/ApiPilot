@@ -279,6 +279,11 @@ export function renderHtmlReport(run: PerformanceRun): string {
   return [...head, ...body, "</body>", "</html>", ""].join("\n");
 }
 
+/** AP-032 FR-013: a quick plan's report says its scenarios were generated and never reviewed. */
+export const QUICK_PLAN_PROVENANCE = "Plan built by the quick performance test from generated positive scenarios that were not reviewed.";
+
 function provenanceSection(plan: PerformancePlan): string {
-  return `<h2>Provenance</h2>${provenance(plan)}`;
+  // A snapshot recorded before AP-032 has no `source`; it came from the guided workflow.
+  const quick = plan.source === "quick" ? `<p>${escapeHtml(QUICK_PLAN_PROVENANCE)}</p>` : "";
+  return `<h2>Provenance</h2>${quick}${provenance(plan)}`;
 }

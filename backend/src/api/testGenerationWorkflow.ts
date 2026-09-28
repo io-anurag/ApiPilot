@@ -35,6 +35,7 @@ import {
 } from "../execution/executionRunStore";
 import { getInProgressRun as getUploadedInProgressRun } from "../externalCollections/uploadedCollectionExecutionStore";
 import { getPerformanceInProgressRun } from "../performance/performanceRunStore";
+import { hasQuickTest } from "../performance/quick/quickTestStore";
 import { missingVariableValues } from "../execution/variableCompleteness";
 import { confirmationRequirement } from "../execution/destructiveOperations";
 import { generateCollection } from "../postman/generateCollection";
@@ -153,6 +154,21 @@ function requireCompletedWorkflow(): TestGenerationWorkflow {
     );
   }
   return workflow;
+}
+
+/**
+ * The three environments routes' condition (AP-032, specs/032-quick-performance-test FR-016 to
+ * FR-018, research Q6): environments are one set per session, reachable once the guided workflow
+ * has generated its Postman collection or once the session has a quick performance test. The
+ * refusal is unchanged (`409 stage_not_active`), and every other route that uses
+ * `requireCompletedWorkflow()` keeps requiring Postman generation.
+ */
+function requireEnvironmentAccess(): void {
+  const workflow = getCurrentWorkflow();
+  if (workflow?.stages.postmanGeneration.status === "complete" || hasQuickTest()) return;
+  throw new StageNotActiveError(
+    "Environments open once the guided workflow's Postman collection is generated or a quick performance test is started.",
+  );
 }
 
 const ENVIRONMENT_TIERS: ReadonlySet<string> = new Set([
@@ -676,7 +692,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
   router.get("/test-generation-workflow/environments", (req, res) => {
     const startedAt = logRequestReceived(req);
     try {
-      requireCompletedWorkflow();
+      requireEnvironmentAccess();
       res.status(200).json({ environments: listEnvironments() });
       logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
@@ -700,7 +716,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       return;
     }
     try {
-      requireCompletedWorkflow();
+      requireEnvironmentAccess();
       const environment = createEnvironment(input);
       res.status(200).json({ environment });
       logRequestSucceeded(req, startedAt, 200);
@@ -730,7 +746,7 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       return;
     }
     try {
-      requireCompletedWorkflow();
+      requireEnvironmentAccess();
       const environment = updateEnvironment(req.params.environmentId, input);
       res.status(200).json({ environment });
       logRequestSucceeded(req, startedAt, 200);

@@ -2,7 +2,8 @@ import { TargetServer } from "../tests/fixtures/execution/targetServer";
 
 /**
  * A local stub target for AP-029's manual quickstart (specs/031-k6-performance-testing quickstart.md,
- * tasks T091). It serves `tests/fixtures/openapi/performance.yaml`'s API on 127.0.0.1 so a real k6
+ * tasks T091) and AP-032's (specs/032-quick-performance-test quickstart.md). It serves
+ * `tests/fixtures/openapi/performance.yaml`'s and `quick-performance.yaml`'s APIs on 127.0.0.1 so a real k6
  * run never has to touch a real system. Every route not configured below answers `200 {}`, which
  * covers `GET /orders/{orderId}`, `GET /warehouses/{warehouseId}` and `GET /status`.
  *
@@ -18,6 +19,11 @@ async function main(): Promise<void> {
     body: { access_token: "stub-token", token_type: "Bearer", expires_in: 300 },
   });
   server.configure("POST", "/orders", { status: 201, body: { orderId: ORDER_ID } });
+  // AP-032 (specs/032-quick-performance-test tasks T002): tests/fixtures/openapi/quick-performance.yaml.
+  // Its login issues the bearer token; POST /orders above already answers 201, and every other
+  // path it documents (reads, PUT/PATCH/DELETE, logout) answers the unconfigured `200 {}`.
+  server.configure("POST", "/auth/login", { status: 200, body: { accessToken: "stub-login-token" } });
+  server.configure("POST", "/products", { status: 201, body: {} });
   const baseUrl = await server.start(port);
   process.stdout.write(`Performance stub target listening on ${baseUrl}\n`);
 

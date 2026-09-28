@@ -198,6 +198,10 @@ export class SqliteConnection {
       );
       CREATE INDEX IF NOT EXISTS performance_runs_session ON performance_runs (session_id, started_at);
     `);
+    // AP-032 (specs/032-quick-performance-test research Q12): which path built the run's plan, so
+    // each path lists only its own runs. The default makes every row recorded before AP-032 a
+    // guided run. Holds no value, so it is not encrypted.
+    this.ensureColumn("performance_runs", "plan_source", "TEXT NOT NULL DEFAULT 'guided'");
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

@@ -28,6 +28,13 @@ function stubFetch() {
           json: () => Promise.resolve({ uploadedCollections: [] }),
         });
       }
+      if (url.includes("/api/quick-performance")) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({ error: "quick_test_not_found", message: "none" }),
+        });
+      }
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     }),
   );
@@ -168,6 +175,23 @@ describe("App", () => {
     expect(await screen.findByText("Import a Postman collection")).toBeVisible();
     // Not remounted: its uploaded-collections list is not fetched a second time.
     expect(externalCollectionFetches()).toBe(fetchesBeforeExit);
+  });
+
+  it("offers the quick performance test next to Import & Run Collection, with its one-sentence statement (AP-032 FR-001)", async () => {
+    stubFetch();
+    render(<App />);
+    const quick = await screen.findByRole("button", { name: "Quick performance test" });
+    expect(quick).toHaveTextContent(
+      "Load-tests every operation of an uploaded specification with generated requests that no one reviews.",
+    );
+    expect(screen.getByRole("button", { name: "Import & Run Collection" })).toBeInTheDocument();
+
+    fireEvent.click(quick);
+    expect(await screen.findByLabelText("Upload OpenAPI specification for a quick performance test")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Top-level views" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit the quick performance test and return to the start screen" }));
+    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
   });
 
   it("re-selecting 'Guided Workflow' after 'Back to start' resumes it instead of silently handing off to Import & Run Collection again (regression)", async () => {

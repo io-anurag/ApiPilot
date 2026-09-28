@@ -80,17 +80,17 @@ same step request the script sends and never contains a value read from an envir
 
 `PreviewParameter = {location: "path" | "query" | "header", name: string, value: PreviewValue}`.
 
-`PreviewValue` is one of:
-- `{kind: "generated", text}`: a value from the generated scenario;
-- `{kind: "environment", name, secret: boolean}`: a value the target environment supplies, shown by
-  name only;
-- `{kind: "workflow-variable", variable, producerStepId}`: guided plans only;
-- `{kind: "unique-per-iteration", format: "email" | "uuid"}`: AP-029 D13;
-- `{kind: "template", text, references: PreviewReference[]}`: a value that mixes text and
-  references.
+`PreviewReference` is where one `{{name}}` gets its value at run time, and never carries a value:
+- `{kind: "environment", name, secret: boolean}`: supplied by the target environment, shown by name
+  only;
+- `{kind: "workflow-variable", name, variable, producerStepId: string | null}`: produced by an
+  earlier step of a guided workflow journey;
+- `{kind: "unique-per-iteration", name, format: "email" | "uuid"}`: AP-029 D13;
+- `{kind: "credential", name, schemeName}`: a token the plan acquires.
 
-`PreviewReference = {name} & ({kind: "environment", secret: boolean} | {kind: "workflow-variable",
-producerStepId} | {kind: "unique-per-iteration", format} | {kind: "credential", schemeName})`.
+`PreviewValue` is `{kind: "generated", text}` (a value from the generated scenario), a single
+`PreviewReference` (the whole value is one reference), or `{kind: "template", text, references:
+PreviewReference[]}` (text that mixes a value and references).
 
 `PreviewAuth = {kind: StepAuthKind, schemeName: string | null, location: "header" | "query" | null,
 references: PreviewReference[]}`. A token acquired by the plan (OAuth2 client credentials or a
@@ -127,7 +127,7 @@ relationships: [], selectedOperationKeys: undefined, source: "quick"}`, so there
 
 `q<rank>-<hex>` (research Q4):
 - `rank` is the two-digit index of the generating rule in the positive rule order:
-  `00` positive-scenario, `01` enum-positive-scenarios, `02` minimal-positive-scenario.
+  `00` positive-scenario, `01` enum-positive-variant, `02` minimal-positive-scenario.
 - `hex` is the first 24 hex characters of `sha256Hex(canonicalJson({operationKey, rule, request,
   assertions}))`.
 

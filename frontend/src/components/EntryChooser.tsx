@@ -1,9 +1,9 @@
-export type EntryChoice = "guided-workflow" | "import-collection";
+export type EntryChoice = "guided-workflow" | "import-collection" | "quick-performance";
 
 /**
- * The very first thing a user sees: a choice between the guided workflow and the standalone
- * "Import & Run Collection" path. Shown only until a choice is made — after that the top tab
- * menu takes over navigation between the two (App.tsx).
+ * The very first thing a user sees: a choice between the guided workflow, the standalone
+ * "Import & Run Collection" path, and the quick performance test (AP-032 FR-001). Shown only until
+ * a choice is made — after that the top tab menu takes over navigation between them (App.tsx).
  */
 export function EntryChooser({
   onSelect,
@@ -11,7 +11,7 @@ export function EntryChooser({
   return (
     <div
       data-testid="entry-chooser"
-      className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-4xl flex-col items-center justify-center gap-8 py-10 text-center"
+      className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-5xl flex-col items-center justify-center gap-8 py-10 text-center"
     >
       <div className="space-y-3">
         <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
@@ -22,11 +22,11 @@ export function EntryChooser({
           How do you want to start?
         </h1>
         <p className="mx-auto max-w-xl text-base leading-7 text-muted">
-          Generate functional and k6 performance tests from an OpenAPI specification, or
-          bring an existing Postman collection to run directly.
+          Generate functional and k6 performance tests from an OpenAPI specification, load-test
+          a specification straight away, or bring an existing Postman collection to run directly.
         </p>
       </div>
-      <div className="grid w-full gap-5 sm:grid-cols-2">
+      <div className="grid w-full gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <button
           type="button"
           aria-label="Guided Workflow"
@@ -62,6 +62,24 @@ export function EntryChooser({
           <span className="text-sm leading-6 text-muted">
             Already have a Postman collection and environment? Upload them and run them
             against your API directly — no specification required.
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label="Quick performance test"
+          onClick={() => onSelect("quick-performance")}
+          className="flex flex-col items-start gap-2 rounded-xl border border-slate-300 bg-surface p-6 text-left shadow-[6px_6px_0_0_var(--color-border)] transition-colors hover:border-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:border-slate-700"
+        >
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-10 rounded-full bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800"
+          />
+          <span className="font-display text-lg font-semibold text-slate-950 dark:text-white">
+            Quick performance test
+          </span>
+          <span className="text-sm leading-6 text-muted">
+            Load-tests every operation of an uploaded specification with generated requests that
+            no one reviews.
           </span>
         </button>
       </div>

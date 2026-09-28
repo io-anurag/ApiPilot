@@ -6,7 +6,7 @@ import { pathParameterVariableName } from "../../../src/postman/artifactVariable
 import { InvalidLoadProfileError, InvalidThresholdError, UnknownOperationError } from "../../../src/performance/errors";
 import { STARTING_STAGES, startingProfile, validateLoadProfile } from "../../../src/performance/plan/loadProfiles";
 import { environmentFixture, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { performanceContext } from "../../fixtures/performance/context";
+import { performanceContext, quickContext } from "../../fixtures/performance/context";
 
 /** US1 plan building (research D4, D5, D6, D13, D26; tasks T024 to T029). */
 
@@ -179,5 +179,76 @@ describe("plan updates (tasks T028)", () => {
     expect(stepKeys(plan)).toEqual([["GET /status"], ["GET /warehouses/{warehouseId}"], ["GET /orders/{orderId}"]]);
     expect(plan.excludedOperationKeys).toEqual(["POST /orders"]);
     expect(plan.userSuppliedValues.some((value) => value.name === "orderId")).toBe(true);
+  });
+});
+
+describe("credential producers (AP-032 FR-003a, US1 AS6; specs/032 tasks T017)", () => {
+  it("lists the login the chained-login token source calls, on both paths", async () => {
+    expect(buildPlan(await quickContext()).credentialProducerOperationKeys).toEqual(["POST /auth/login"]);
+    expect(buildPlan(await quickContext("guided")).credentialProducerOperationKeys).toEqual(["POST /auth/login"]);
+    expect(buildPlan(await performanceContext()).credentialProducerOperationKeys).toEqual([]);
+  });
+
+  it("starts a quick plan with the login removed, and the secured steps authenticated by it", async () => {
+    const plan = buildPlan(await quickContext());
+    expect(plan.source).toBe("quick");
+    expect(plan.excludedOperationKeys).toEqual(["POST /auth/login"]);
+    const steps = plan.journeys.flatMap((journey) => journey.steps);
+    expect(steps.map((step) => step.operationKey)).not.toContain("POST /auth/login");
+    const listOrders = steps.find((step) => step.operationKey === "GET /orders")!;
+    expect(listOrders.auth).toEqual({ kind: "chained-login", schemeName: "LoginAuth" });
+    expect(plan.journeys.every((journey) => journey.source.kind === "operation" && journey.steps.length === 1)).toBe(true);
+  });
+
+  it("keeps a guided plan's exclusions empty (AP-029 behaviour)", async () => {
+    const plan = buildPlan(await quickContext("guided"));
+    expect(plan.source).toBe("guided");
+    expect(plan.excludedOperationKeys).toEqual([]);
+    expect(plan.journeys.flatMap((journey) => journey.steps).map((step) => step.operationKey)).toContain("POST /auth/login");
+  });
+
+  it("makes the login a journey again when it is restored, and still acquires the token from it", async () => {
+    const context = await quickContext();
+    const restored = applyPlanUpdate(buildPlan(context), { excludedOperationKeys: [] }, context);
+    const keys = restored.journeys.flatMap((journey) => journey.steps).map((step) => step.operationKey);
+    expect(keys).toContain("POST /auth/login");
+    expect(restored.credentialProducerOperationKeys).toEqual(["POST /auth/login"]);
+    expect(restored.journeys.flatMap((journey) => journey.steps).find((step) => step.operationKey === "GET /orders")!.auth.kind).toBe("chained-login");
+  });
+
+  it("never removes an operation by its name: logout stays in the plan", async () => {
+    const plan = buildPlan(await quickContext());
+    expect(plan.journeys.flatMap((journey) => journey.steps).map((step) => step.operationKey)).toContain("POST /auth/logout");
+  });
+
+  it("fingerprints the source, and not the derived producer list", async () => {
+    const quick = buildPlan(await quickContext());
+    const guidedWithSameChoices = applyPlanUpdate(buildPlan(await quickContext("guided")), { excludedOperationKeys: ["POST /auth/login"] }, await quickContext("guided"));
+    expect(guidedWithSameChoices.journeys).toEqual(quick.journeys);
+    expect(guidedWithSameChoices.fingerprint).not.toBe(quick.fingerprint);
+  });
+});
+
+describe("operations in scope follow the API review selection (AP-032 FR-022, FR-023, SC-005; specs/032 tasks T058)", () => {
+  it("covers only the selected operations and never lists the others as left out", async () => {
+    const context = await quickContext("guided");
+    const selected = ["GET /orders", "POST /orders", "GET /orders/{orderId}", "DELETE /orders/{orderId}", "GET /status"];
+    const plan = buildPlan({ ...context, selectedOperationKeys: selected });
+    const keys = plan.journeys.flatMap((journey) => journey.steps).map((step) => step.operationKey);
+    expect([...keys].sort()).toEqual([...selected].sort());
+    expect(plan.omitted.every((entry) => selected.includes(entry.operationKey))).toBe(true);
+  });
+
+  it("covers every analyzed operation when no subset was selected", async () => {
+    const context = await quickContext("guided");
+    const plan = buildPlan(context);
+    expect(plan.journeys.flatMap((journey) => journey.steps)).toHaveLength(context.apiModel.operations.length);
+  });
+
+  it("has no scope, and rejects an update that sends one", async () => {
+    const context = await quickContext("guided");
+    const plan = buildPlan(context);
+    expect("scope" in plan).toBe(false);
+    expect(() => applyPlanUpdate(plan, { scope: "all" }, context)).toThrow("The operations in scope follow the API review selection.");
   });
 });

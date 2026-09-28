@@ -1,5 +1,6 @@
 import type {
   PerformancePlan,
+  PerformancePlanSourceKind,
   PerformanceResult,
   PerformanceRun,
   PerformanceRunCancelReason,
@@ -26,6 +27,8 @@ export type PerformanceRunSettlement =
 
 export interface PerformanceRunRepository {
   listBySession(sessionId: string): PerformanceRunSummary[];
+  /** AP-032 research Q12: one path's runs only, newest first. */
+  listBySessionAndSource(sessionId: string, source: PerformancePlanSourceKind): PerformanceRunSummary[];
   get(sessionId: string, runId: string): PerformanceRun | undefined;
   getInProgress(sessionId: string): PerformanceRun | undefined;
   create(sessionId: string, run: PerformanceRun): void;
@@ -60,16 +63,19 @@ interface PerformanceRunRow {
   ended_at: string | null;
   progress: string | null;
   result: string | null;
+  /** AP-032: `guided` or `quick`; the column's default makes every earlier row `guided`. */
+  plan_source: string | null;
 }
 
 const SUMMARY_COLUMNS =
-  "id, session_id, status, cancel_reason, failure_category, cancel_requested, environment_snapshot, script_sha256, k6_version, planned_duration_ms, started_at, ended_at";
+  "id, session_id, status, cancel_reason, failure_category, cancel_requested, environment_snapshot, script_sha256, k6_version, planned_duration_ms, started_at, ended_at, plan_source";
 
 function toSummary(row: Omit<PerformanceRunRow, "plan_snapshot" | "progress" | "result">): PerformanceRunSummary {
   const summary: PerformanceRunSummary = {
     id: row.id,
     status: row.status as PerformanceRunStatus,
     environment: JSON.parse(row.environment_snapshot) as PerformanceRunEnvironment,
+    planSource: row.plan_source === "quick" ? "quick" : "guided",
     scriptSha256: row.script_sha256,
     k6Version: row.k6_version,
     plannedDurationMs: row.planned_duration_ms,
@@ -97,6 +103,15 @@ export class SqlitePerformanceRunRepository implements PerformanceRunRepository 
     const rows = this.connection.db
       .prepare(`SELECT ${SUMMARY_COLUMNS} FROM performance_runs WHERE session_id = ? ORDER BY started_at DESC, rowid DESC`)
       .all(sessionId) as PerformanceRunRow[];
+    return rows.map((row) => toSummary(row));
+  }
+
+  listBySessionAndSource(sessionId: string, source: PerformancePlanSourceKind): PerformanceRunSummary[] {
+    const rows = this.connection.db
+      .prepare(
+        `SELECT ${SUMMARY_COLUMNS} FROM performance_runs WHERE session_id = ? AND plan_source = ? ORDER BY started_at DESC, rowid DESC`,
+      )
+      .all(sessionId, source) as PerformanceRunRow[];
     return rows.map((row) => toSummary(row));
   }
 
@@ -129,8 +144,9 @@ export class SqlitePerformanceRunRepository implements PerformanceRunRepository 
       .prepare(
         `INSERT INTO performance_runs
            (id, session_id, status, cancel_reason, failure_category, cancel_requested, environment_snapshot,
-            plan_snapshot, script_sha256, k6_version, planned_duration_ms, started_at, ended_at, progress, result)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            plan_snapshot, script_sha256, k6_version, planned_duration_ms, started_at, ended_at, progress, result,
+            plan_source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         run.id,
@@ -148,6 +164,7 @@ export class SqlitePerformanceRunRepository implements PerformanceRunRepository 
         run.endedAt ?? null,
         run.progress ? JSON.stringify(run.progress) : null,
         run.result ? JSON.stringify(run.result) : null,
+        run.planSource,
       );
   }
 

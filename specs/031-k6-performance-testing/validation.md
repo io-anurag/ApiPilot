@@ -7,6 +7,11 @@ Implemented. Nothing below is estimated: a check that was not run says so.
 
 ## Real-k6 check (T093)
 
+**Update (2026-09-28): passed.** Run during AP-032's validation with k6 `v2.3.0` (windows/amd64)
+on Windows 11: `npm run test:k6-real -w backend` passed all of the checks below, plus AP-032's new
+quick-path run (see `specs/032-quick-performance-test/validation.md`). The `error_code` 1050
+timeout mapping below is still unconfirmed. The original record follows.
+
 **Status: not run (2026-09-27).** No k6 binary was installed on the machine used for the
 implementation (`k6 version` and `where k6` found nothing), and ApiPilot never installs k6.
 

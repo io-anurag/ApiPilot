@@ -53,8 +53,13 @@ describe("PerformanceTestingStage", () => {
     render(<PerformanceTestingStage />);
     await screen.findByText("Service status");
     expect(screen.getByText("The specification documents no success status. Set at least one.")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("1 step needs an expected status before the script can be generated: GET /status.");
+    expect(screen.getByRole("status")).toHaveTextContent("1 step needs an expected status before the script can be generated.");
+    // AP-032 FR-024: a counted list with one step per line, each reachable from it.
+    const list = screen.getByTestId("performance-needs-status-list");
+    expect(list).toHaveTextContent("1 step to set");
+    expect(list).toHaveTextContent("/status");
     expect(screen.getByRole("button", { name: "Generate script" })).toBeDisabled();
+    expect(screen.getByTestId("performance-generate-blocked")).toHaveTextContent("Every step needs an expected status.");
   });
 
   it("sends a new expected status and enables Generate once none is missing", async () => {
@@ -164,5 +169,18 @@ describe("PerformanceTestingStage", () => {
     await screen.findByText("Create order");
     fireEvent.change(screen.getByLabelText("Target environment"), { target: { value: "env-2" } });
     await waitFor(() => expect(calls.some((call) => call.url.endsWith("environmentId=env-2"))).toBe(true));
+  });
+
+  it("offers no scope choice, explains how to include other operations, and shows the write summary, markers and preview (AP-032 FR-022, FR-023, FR-012a)", async () => {
+    stubFetch(baseRoutes());
+    render(<PerformanceTestingStage />);
+    await screen.findByText("Create order");
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByText("API review selection")).not.toBeInTheDocument();
+    expect(screen.queryByText("All analyzed operations")).not.toBeInTheDocument();
+    expect(screen.getByText(/widen the selection in API review and regenerate, or use the quick performance test/)).toBeInTheDocument();
+    expect(screen.getByTestId("write-summary-plan")).toHaveTextContent("1 write operation will be sent");
+    expect(screen.getByText("Create order").closest("tr")).toHaveTextContent("Creates");
+    expect(screen.getAllByRole("button", { name: "Request" }).length).toBeGreaterThan(0);
   });
 });

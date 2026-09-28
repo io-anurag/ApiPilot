@@ -1,6 +1,6 @@
 # ApiPilot — Product Roadmap (Spec-of-Specs)
 
-**Status**: Reference document. AP-001 through AP-031 have each been run
+**Status**: Reference document. AP-001 through AP-032 have each been run
 through `/speckit-specify` individually, in dependency order. See the Implementation Status table
 below for where each one currently stands in the `clarify` → `plan` → `checklist` → `tasks` →
 `analyze` → `implement` → `converge` lifecycle. Of the two originally post-MVP features, AP-017
@@ -63,9 +63,10 @@ is `specs/030-ai-failure-analysis`.
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here. FR-008 defect fixed 2026-09-25: runs now apply folder auth, folder scripts and collection scripts (Next Actions #31) |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31). Amended again 2026-09-25 (version 19.4.0): a per-run order in the run-order list across folders, and editable request auth (Next Actions #32) |
-| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: (1) T093, `npm run test:k6-real -w backend` against a real k6 1.0.0+, not run because no k6 was installed; (2) T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. Version 19.5.0. See Next Actions #34 |
+| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34 |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
+| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -2788,3 +2789,35 @@ Implementation
       names, the template's `APIPILOT_V_<n>` mapping, a `k6 run` example, secret-handling advice,
       and that outside runs get k6's summary rather than ApiPilot's report.
     - Version bumped to 19.5.3 (root, backend, frontend, shared-domain).
+
+38. **AP-032 Quick Performance Test implemented; version 19.6.0 (2026-09-28).**
+    - A third entry, **Quick performance test**, goes from an uploaded OpenAPI specification to
+      AP-029's performance plan with no review stage (`/api/quick-performance`, in-memory per
+      session, never touching the guided workflow). It runs only the three positive rules and
+      re-identifies the scenarios by content (`q<rank>-<sha256>`), because AP-029 chooses the
+      lowest scenario id and generated ids are random. Two uploads of one file with the same edits
+      give byte-identical scripts and templates.
+    - AP-029's plan, script, preview and run routes are now registered once per plan source
+      (`api/performanceRoutes.ts`), so both paths share one `POST /runs` and the constitution v2.4.0
+      XVII exception is enforced in one place.
+    - Login operations the credential producers identify start removed from a quick plan ("used to
+      acquire the run's credentials") and can be restored; nothing is removed by name.
+    - Both paths: the write summary is shown above the journeys and beside the run trigger, never
+      collapsed; write steps carry Creates / Replaces / Updates / Deletes markers; operations can be
+      removed per method or all writes at once; each step's request can be previewed (values by name
+      only); left-out, removed and needs-status lists are counted and collapse above ten entries.
+    - Environments open to a session with a quick test (`requireEnvironmentAccess`); the functional
+      execution routes still need Postman generation.
+    - The guided stage's scope choice is removed (AP-029 FR-001 replaced); `PUT /plan` with `scope`
+      returns `400 invalid_request`. Runs gain `planSource` (`performance_runs.plan_source`,
+      default `guided`); each path lists its own runs; the quick run's report states its scenarios
+      were not reviewed.
+    - Validation (`specs/032-quick-performance-test/validation.md`): `npm test` 1,943 passed,
+      1 failed (the known CRLF golden-template comparison, entry 35) and 6 skipped across 262 test
+      files; `npm run lint` and `npm run build` clean; `npm run test:k6-real -w backend` 3 of 3
+      passed with k6 v2.3.0 on Windows, which is also AP-029's first real-k6 run (its T093).
+      Not done: the manual browser walkthrough of quickstart scenarios 1 to 8.
+    - Docs: USER_MANUAL gains section 5 (later sections renumbered) and an updated 3.11;
+      architecture.md gains "Quick performance test (AP-032)"; AP-029's contract carries a pointer
+      to the changed fields.
+    - Version bumped to 19.6.0 (root, backend, frontend, shared-domain).
