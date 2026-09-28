@@ -161,8 +161,8 @@ per-step marking, and that bulk and single removal and restore each update the s
    write operations", **Then** those operations leave the plan in one action, the summary updates,
    and they appear in the removed list from which they can be restored.
 4. **Given** a plan with write operations, **When** the run controls are shown, **Then** the same
-   write summary (count per method and a link to the list) is shown next to the trigger that names
-   the target environment.
+   write summary (count per method and each write operation by method and path) is shown next to
+   the trigger that names the target environment.
 5. **Given** a plan with no write operations, **When** it is shown, **Then** the summary states
    that the plan sends only read requests.
 
@@ -276,8 +276,9 @@ with its method badge, and that bulk removal works on the journeys.
   script generation until the engineer sets one, as in AP-029 FR-012a. With many such operations,
   the list of steps needing a status is counted and each step is reachable from it.
 - **Unsupported constructs** (callbacks, links, `oneOf`, `anyOf`, `allOf`, discriminator,
-  webhooks): they are handled as the analysis already handles them. An operation whose positive
-  scenario cannot be generated because of one is left out with that reason; others are planned.
+  webhooks): they are handled as the analysis already handles them, which degrades the affected
+  schema node rather than dropping the operation, so the operation is still planned. Any operation
+  for which no positive scenario is generated is left out with the reason "no positive scenario".
 - **A guided workflow already in progress in the session**: it is not affected. The quick path is a
   separate entry and does not discard, resume or read that workflow.
 - **Starting a second quick test in the same session**: the new specification replaces the
@@ -331,9 +332,9 @@ with its method badge, and that bulk removal works on the journeys.
 - **FR-010**: Each write step MUST carry a text marker naming its effect ("Creates" for POST,
   "Replaces" for PUT, "Updates" for PATCH, "Deletes" for DELETE) in addition to its method badge.
   The marker MUST NOT rely on colour alone.
-- **FR-011**: The write-operation summary (counts per method, with a way to reach the list) MUST
-  also be shown next to the run trigger, together with the target environment's name, tier and
-  base URL that AP-029 already shows there.
+- **FR-011**: The write-operation summary MUST also be shown next to the run trigger: the count per
+  method and each write operation by method and path, readable without expanding a section,
+  together with the target environment's name, tier and base URL that AP-029 already shows there.
 - **FR-012**: A plan with no write operations MUST say that it sends only read requests.
 - **FR-012a**: FR-008 to FR-012 MUST apply wherever the performance plan is shown: in the quick
   path and in the guided workflow's Performance Testing stage alike.
