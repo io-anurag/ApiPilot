@@ -79,6 +79,14 @@ Generating the script alone does not depend on the exception.
   operations the existing credential producers identify start removed; nothing is guessed by name
   (FR-003a).
 
+### Session 2026-09-28
+
+- Q: Where are removed and left-out operations shown, and can a removed operation's details be
+  seen? → A: In the operations table, as its own counted views beside the plan's steps, not as
+  separate lists. A removed operation opens, like a step, to the step and request it would have if
+  restored, read-only, and can be restored from there (FR-024, FR-024a). Decided with the product
+  owner after the separate lists proved hard to read on a large specification.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Go from a specification to a performance plan in one step (Priority: P1)
@@ -389,9 +397,15 @@ with its method badge, and that bulk removal works on the journeys.
 
 **Lists at scale**
 
-- **FR-024**: Left-out operations and removed operations MUST each be shown as a counted list with
-  one operation per line, its method badge, path and reason (or restore action). A list longer than
-  ten entries MUST start collapsed, showing its count. This applies to both paths.
+- **FR-024**: Left-out operations and removed operations MUST each be shown as a counted view of
+  the operations table, beside the plan's steps, with one operation per row, its method badge,
+  path and reason (or restore action). The plan's steps are shown by default, so these views start
+  hidden, showing their count. This applies to both paths. (Amended 2026-09-28: previously two
+  counted lists above the journeys, collapsed above ten entries.)
+- **FR-024a**: The engineer MUST be able to open a removed operation and see the step and request
+  it would have if restored, as FR-008 shows them for a step, without the plan changing, and MUST
+  be able to restore it from there, alone, with others, or all at once. A removed operation that
+  would have no positive scenario says so. This applies to both paths.
 - **FR-025**: The quick path MUST offer "Back to start", which returns to the entry chooser and
   keeps the quick plan for the session, as AP-026's Import & Run does.
 

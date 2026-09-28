@@ -16,6 +16,7 @@ Source contract: [specs/031 contracts/performance-api.md](../../031-k6-performan
 | `PerformancePlan.source` | Absent | `"guided"` | FR-013 |
 | `PerformancePlan.credentialProducerOperationKeys` | Absent | Added (derived) | FR-003a, FR-024 |
 | `GET /plan/steps/:stepId/request` | Absent | Added (see the quick contract) | FR-008, FR-012a |
+| `GET /plan/removed-operation?operationKey=` | Absent | Added 2026-09-28 (see the quick contract) | FR-024a |
 | `PerformanceRun.planSource`, `PerformanceRunSummary.planSource` | Absent | `"guided"` for runs from this path and for every run recorded before AP-032 | FR-013 |
 | `GET /runs` | Every performance run of the session | Only `planSource: "guided"` runs | research Q12 |
 

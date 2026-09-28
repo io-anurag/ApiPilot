@@ -3,6 +3,7 @@ import type {
   PerformancePlan,
   PerformanceRun,
   PerformanceRunSummary,
+  RemovedOperationPreview,
   ScriptStatus,
   StepRequestPreview,
   UserSuppliedValueStatus,
@@ -94,6 +95,8 @@ export interface PerformanceClient {
   fetchValueStatuses(environmentId: string): Promise<ValueStatusesResult>;
   /** AP-032 FR-008: the view-only request of one step. */
   fetchStepRequest(stepId: string): Promise<Result<{ request: StepRequestPreview }>>;
+  /** A removed operation's step and request as they would be if restored; the plan is unchanged. */
+  fetchRemovedOperation(operationKey: string): Promise<Result<RemovedOperationPreview>>;
   generateScript(): Promise<Result<{ script: ScriptStatus }>>;
   /** For an `<a download>`: the browser fetches the file itself, so no script text passes through app state. */
   scriptDownloadUrl(file: "script" | "environment-template"): string;
@@ -139,6 +142,13 @@ export function createPerformanceClient(base: string): PerformanceClient {
       request("fetchStepRequest", `${base}/plan/steps/${encodeURIComponent(stepId)}/request`, undefined, (body) => ({
         request: body.request as StepRequestPreview,
       })),
+    fetchRemovedOperation: (operationKey) =>
+      request(
+        "fetchRemovedOperation",
+        `${base}/plan/removed-operation?operationKey=${encodeURIComponent(operationKey)}`,
+        undefined,
+        (body) => ({ step: body.step as RemovedOperationPreview["step"], request: body.request as StepRequestPreview }),
+      ),
     generateScript: () => request("generateScript", `${base}/script`, json("POST"), (body) => ({ script: body.script as ScriptStatus })),
     scriptDownloadUrl: (file) => `${base}/script/download?file=${file}`,
     fetchReadiness: (recheck = false) =>
@@ -162,6 +172,7 @@ export const {
   resetPlan,
   fetchValueStatuses,
   fetchStepRequest,
+  fetchRemovedOperation,
   generateScript,
   scriptDownloadUrl,
   fetchReadiness,

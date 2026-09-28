@@ -104,9 +104,10 @@ describe("QuickPerformancePage", () => {
     stubFetch(planRoutes(empty, { [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView(empty) }] }));
     render(<QuickPerformancePage onExit={onExit} />);
     expect(await screen.findByText("Nothing can be load-tested")).toBeInTheDocument();
-    expect(screen.getByText("/a")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to start from an empty plan" }));
     expect(onExit).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Left out 1" }));
+    expect(screen.getByRole("table", { name: "Operations left out" })).toHaveTextContent("/a");
   });
 
   it("calls onExit from Back to start", async () => {
@@ -125,7 +126,8 @@ describe("QuickPerformancePage", () => {
       }),
     );
     render(<QuickPerformancePage onExit={() => undefined} />);
-    const removed = await screen.findByTestId("performance-removed-list");
+    fireEvent.click(await screen.findByRole("button", { name: "Removed 1" }));
+    const removed = screen.getByRole("table", { name: "Removed operations" });
     expect(removed).toHaveTextContent("/auth/login");
     expect(removed).toHaveTextContent("used to acquire the run's credentials");
     fireEvent.click(within(removed).getByRole("button", { name: "Restore POST /auth/login" }));

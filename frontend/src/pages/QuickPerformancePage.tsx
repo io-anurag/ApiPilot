@@ -313,7 +313,7 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
               <div className="space-y-3">
                 <EmptyState
                   message="Nothing can be load-tested"
-                  description="No operation of this specification has a positive scenario. The operations and their reasons are listed above."
+                  description="No operation of this specification has a positive scenario. The operations and their reasons are under Left out."
                   testId="quick-plan-empty"
                 />
                 {onExit && (

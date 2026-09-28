@@ -66,7 +66,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34 |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
-| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40) |
+| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -2918,3 +2918,28 @@ Implementation
       failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
       `npm run build` are clean. Checked in a browser at 1300 px.
     - Version bumped to 19.8.2 (root, backend, frontend, shared-domain).
+
+43. **Removed and left-out operations in the operations table, with a preview; version 19.9.0 (2026-09-28).**
+    - Product decision (spec Clarifications, Session 2026-09-28): removed and left-out operations
+      are views of the operations table (**In plan / Removed / Left out**, each with its count),
+      not separate lists, and a removed operation opens to the step and request it would have if
+      restored. FR-024 amended; FR-024a added.
+    - New route on both paths, `GET <base>/plan/removed-operation?operationKey=` →
+      `200 {step, request}` (`RemovedOperationPreview` in shared-domain), `400 invalid_request`,
+      `404 operation_not_removed`, `409 no_positive_scenario`. It rebuilds the plan with the
+      operation restored through the same `applyPlanUpdate` a Restore sends, reads it and discards
+      it, so the stored plan, its fingerprint and the script status never change
+      (`backend/src/performance/plan/removedOperationPreview.ts`). Contracts updated
+      (`quick-performance-api.md`, `changes-to-existing-apis.md`).
+    - Frontend: `OtherOperationsTable` renders both views: reason per row, Restore per row, tick to
+      restore together, Restore all, search; a removed row expands to the read-only preview with
+      **Restore to the plan**. The lists above the table are gone. The pending bar's "every
+      operation was removed" item opens the Removed view.
+    - Validation: `npm test` 1,960 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser with the PayPal Invoicing fixture: 16
+      removed writes in the Removed view, `POST /v2/invoicing/invoices` expanded to its request
+      with its JSON body. Not tested: `409 no_positive_scenario` (no fixture has a removed
+      operation without a positive scenario) and the guided path's copy of the route in a browser.
+    - Docs: USER_MANUAL §3.11 and troubleshooting; architecture.md "Frontend architecture".
+    - Version bumped to 19.9.0 (root, backend, frontend, shared-domain).

@@ -25,6 +25,7 @@ import { CountedOperationList } from "./CountedOperationList";
 import { EnvironmentPicker } from "./EnvironmentPicker";
 import { JourneyList, type ListRequest } from "./JourneyList";
 import { LoadProfileEditor } from "./LoadProfileEditor";
+import { OtherOperationsTable } from "./OtherOperationsTable";
 import { PendingBar, type PendingItem } from "./PendingBar";
 import { PerformanceRunActivity, PerformanceRunTrigger } from "./PerformanceRunPanel";
 import { SetupItem, type SetupItemState } from "./SetupItem";
@@ -54,6 +55,7 @@ import { WriteOperationSummary, writeCountLabel } from "./WriteOperationSummary"
  * FR-025).
  */
 type PlanTab = "plan" | "setup" | "runs";
+type OperationScope = "plan" | "removed" | "left-out";
 
 const RUN_TITLE_ID = "performance-run-title";
 const ENVIRONMENT_TITLE_ID = "performance-environment-title";
@@ -90,6 +92,7 @@ export function PerformancePlanScreen({
     fetchPlan,
     fetchValueStatuses,
     fetchStepRequest,
+    fetchRemovedOperation,
     generateScript,
     resetPlan,
     scriptDownloadUrl,
@@ -108,6 +111,7 @@ export function PerformancePlanScreen({
   const [announcement, setAnnouncement] = useState("");
   const [listRequest, setListRequest] = useState<ListRequest | null>(null);
   const [tab, setTab] = useState<PlanTab>("plan");
+  const [scope, setScope] = useState<OperationScope>("plan");
   // A heading to move focus to once the tab it is on is shown (the pending bar's actions).
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const runs = usePerformanceRuns(client);
@@ -262,6 +266,22 @@ export function PerformancePlanScreen({
       `${keys.length} ${method} operation${keys.length === 1 ? "" : "s"} removed.`,
     );
   };
+  const restore = (keys: readonly string[], success: string) =>
+    void apply(
+      { excludedOperationKeys: plan.excludedOperationKeys.filter((key) => !keys.includes(key)) },
+      success,
+    );
+  // The table's views: the plan's steps, and the operations not in it. A view with nothing in it
+  // is not offered, and a chosen view that empties (its last operation restored) falls back to
+  // the plan.
+  const scopes: { id: OperationScope; label: string; count: number }[] = [
+    { id: "plan", label: "In plan", count: steps.length },
+    ...(plan.excludedOperationKeys.length > 0
+      ? [{ id: "removed" as const, label: "Removed", count: plan.excludedOperationKeys.length }]
+      : []),
+    ...(plan.omitted.length > 0 ? [{ id: "left-out" as const, label: "Left out", count: plan.omitted.length }] : []),
+  ];
+  const activeScope: OperationScope = scopes.some((option) => option.id === scope) ? scope : "plan";
   const goTo = (next: PlanTab, focusId?: string) => {
     setTab(next);
     if (focusId) setFocusTarget(focusId);
@@ -269,14 +289,17 @@ export function PerformancePlanScreen({
   const nextNonce = (current: ListRequest | null) => (current?.nonce ?? 0) + 1;
   const showNeedsStatus = () => {
     setTab("plan");
+    setScope("plan");
     setListRequest((current) => ({ kind: "show-needs-status", nonce: nextNonce(current) }));
   };
   const openOperation = (operationKey: string) => {
     setTab("plan");
+    setScope("plan");
     setListRequest((current) => ({ kind: "open-operation", operationKey, nonce: nextNonce(current) }));
   };
   const setStatusOf = (stepId: string) => {
     setTab("plan");
+    setScope("plan");
     setListRequest((current) => ({ kind: "set-status", stepId, nonce: nextNonce(current) }));
   };
 
@@ -301,8 +324,14 @@ export function PerformancePlanScreen({
     pending.push({
       id: "operations",
       state: "attention",
-      text: "Every operation was removed. Restore at least one in the Plan tab.",
-      action: { label: "Show the plan", onClick: () => goTo("plan") },
+      text: "Every operation was removed. Restore at least one.",
+      action: {
+        label: "Show removed",
+        onClick: () => {
+          setScope("removed");
+          goTo("plan");
+        },
+      },
     });
   } else if (steps.length === 0) {
     pending.push({
@@ -424,6 +453,9 @@ export function PerformancePlanScreen({
         </div>
       </div>
       {problem && <ErrorState message={problem} testId="performance-plan-problem" />}
+      <p aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       <PendingBar
         items={pending}
@@ -480,73 +512,58 @@ export function PerformancePlanScreen({
           }
         />
 
-        {(plan.excludedOperationKeys.length > 0 || plan.omitted.length > 0) && (
-          <div className="space-y-3">
-            {plan.excludedOperationKeys.length > 0 && (
-              <div className="space-y-1.5">
-                <CountedOperationList
-                  label={(count) => `${count} operation${count === 1 ? "" : "s"} removed`}
-                  columns
-                  testId="performance-removed-list"
-                  entries={plan.excludedOperationKeys.map((operationKey) => ({
-                    operationKey,
-                    detail: removalReason(operationKey, plan.credentialProducerOperationKeys),
-                    action: (
-                      <button
-                        type="button"
-                        className={BUTTON_STYLES.ghost}
-                        disabled={busy}
-                        aria-label={`Restore ${operationKey}`}
-                        onClick={() =>
-                          void apply(
-                            {
-                              excludedOperationKeys: plan.excludedOperationKeys.filter(
-                                (key) => key !== operationKey,
-                              ),
-                            },
-                            `${operationKey} restored.`,
-                          )
-                        }
-                      >
-                        Restore
-                      </button>
-                    ),
-                  }))}
-                />
-                {plan.excludedOperationKeys.length > 1 && (
-                  <button
-                    type="button"
-                    className={BUTTON_STYLES.ghost}
-                    disabled={busy}
-                    onClick={() =>
-                      void apply({ excludedOperationKeys: [] }, "Every removed operation restored.")
-                    }
-                  >
-                    Restore all
-                  </button>
-                )}
-              </div>
-            )}
-            <CountedOperationList
-              label={(count) => `${count} operation${count === 1 ? "" : "s"} left out`}
-              columns
-              testId="performance-omitted-list"
-              entries={plan.omitted.map((entry) => ({
-                operationKey: entry.operationKey,
-                detail: OMITTED_REASON_LABEL[entry.reason],
-              }))}
-            />
+        {scopes.length > 1 && (
+          <div
+            role="group"
+            aria-label="Operations to show"
+            className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-chrome p-0.5 dark:bg-white/5"
+          >
+            {scopes.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={activeScope === option.id}
+                onClick={() => setScope(option.id)}
+                className={`rounded px-3 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${activeScope === option.id ? "bg-surface font-medium text-slate-900 shadow-sm dark:bg-white/10 dark:text-white" : "text-muted hover:text-slate-900 dark:hover:text-white"}`}
+              >
+                {option.label} <span className="font-mono text-xs">{option.count}</span>
+              </button>
+            ))}
           </div>
         )}
 
-        {noOperations && (
+        {activeScope === "removed" && (
+          <OtherOperationsTable
+            kind="removed"
+            entries={plan.excludedOperationKeys.map((operationKey) => ({
+              operationKey,
+              reason: removalReason(operationKey, plan.credentialProducerOperationKeys),
+            }))}
+            busy={busy}
+            onRestore={restore}
+            loadRemoved={fetchRemovedOperation}
+          />
+        )}
+        {activeScope === "left-out" && (
+          <OtherOperationsTable
+            kind="left-out"
+            entries={plan.omitted.map((entry) => ({
+              operationKey: entry.operationKey,
+              reason: OMITTED_REASON_LABEL[entry.reason],
+            }))}
+            busy={busy}
+          />
+        )}
+
+        {activeScope === "plan" && noOperations && (
           <EmptyState
             message="The plan has no operations"
-            description="Every operation was removed. Restore one to generate a script."
+            description="Every operation was removed. Restore one from Removed to generate a script."
             testId="performance-plan-no-operations"
           />
         )}
-        {!noOperations &&
+        {activeScope === "plan" &&
+          !noOperations &&
           steps.length === 0 &&
           (emptyState ?? (
             <EmptyState
@@ -555,12 +572,11 @@ export function PerformancePlanScreen({
               testId="performance-plan-empty"
             />
           ))}
-        {steps.length > 0 && (
+        {activeScope === "plan" && steps.length > 0 && (
           <JourneyList
             loadPreview={fetchStepRequest}
             journeys={plan.journeys}
             busy={busy}
-            announcement={announcement}
             onExpectedStatuses={(stepId, codes) =>
               void apply({ expectedStatuses: { [stepId]: codes } })
             }

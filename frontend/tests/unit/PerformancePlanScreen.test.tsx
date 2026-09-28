@@ -75,7 +75,8 @@ describe("PerformancePlanScreen write visibility (US2)", () => {
       excludedOperationKeys: ["POST /auth/login", "DELETE /orders/{orderId}", "DELETE /products/{productId}"],
     });
     expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent("3 write operations will be sent");
-    expect(screen.getByTestId("performance-removed-list")).toHaveTextContent("/products/{productId}");
+    fireEvent.click(screen.getByRole("button", { name: "Removed 3" }));
+    expect(screen.getByRole("table", { name: "Removed operations" })).toHaveTextContent("/products/{productId}");
 
     fireEvent.click(screen.getByRole("button", { name: "Remove all write operations" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(2));
@@ -183,13 +184,49 @@ describe("PerformancePlanScreen operations table", () => {
     expect(document.activeElement).toBe(detailsButton("DELETE /products/{productId}"));
   });
 
-  it("labels a removed operation only when there is a reason beyond having been removed", async () => {
+  it("lists removed operations in the table's Removed view, each with its reason (FR-024)", async () => {
     stubFetch(routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] })));
     renderScreen();
-    const removed = await screen.findByTestId("performance-removed-list");
-    const items = within(removed).getAllByRole("listitem");
-    expect(items.find((item) => item.textContent?.includes("/auth/login"))).toHaveTextContent("used to acquire the run's credentials");
-    expect(items.find((item) => item.textContent?.includes("/orders"))).not.toHaveTextContent("Removed");
+    fireEvent.click(await screen.findByRole("button", { name: "Removed 2" }));
+    const table = screen.getByRole("table", { name: "Removed operations" });
+    const rowOfKey = (key: string) => within(table).getByRole("button", { name: `Details of ${key}` }).closest("tr")!;
+    expect(rowOfKey("POST /auth/login")).toHaveTextContent("used to acquire the run's credentials");
+    expect(rowOfKey("GET /orders")).toHaveTextContent("Removed by you");
+    expect(screen.queryByRole("table", { name: "Performance plan operations" })).not.toBeInTheDocument();
+  });
+
+  it("opens a removed operation's step and request as they would be if restored, and restores it (FR-024a)", async () => {
+    const plan = quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] });
+    const restoredStep = quickStep("GET", "/orders");
+    const calls = stubFetch({
+      ...routes(plan),
+      [`GET ${QUICK}/plan/removed-operation`]: () =>
+        [200, {
+          step: restoredStep,
+          request: { stepId: restoredStep.id, operationKey: "GET /orders", method: "GET", pathTemplate: "/orders", parameters: [], auth: { kind: "none", schemeName: null, location: null, references: [] }, body: null },
+        }] as [number, unknown],
+    });
+    renderScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "Removed 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Details of GET /orders" }));
+    const details = await screen.findByRole("region", { name: "Details for GET /orders" });
+    await waitFor(() => expect(details).toHaveTextContent("GET /orders happy path"));
+    expect(details).toHaveTextContent("This is what Restore would add back.");
+    expect(calls.find((call) => call.url.includes("/plan/removed-operation"))?.url).toBe(`${QUICK}/plan/removed-operation?operationKey=GET%20%2Forders`);
+    fireEvent.click(within(details).getByRole("button", { name: "Restore to the plan" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login"] });
+  });
+
+  it("restores the ticked removed operations together", async () => {
+    const calls = stubFetch(routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders", "GET /status"] })));
+    renderScreen();
+    fireEvent.click(await screen.findByRole("button", { name: "Removed 3" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /orders" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /status" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Selected operations" })).getByRole("button", { name: "Restore to the plan" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login"] });
   });
 
   it("opens the step and focuses its editor from the row's own status button", async () => {
@@ -297,14 +334,16 @@ describe("PerformancePlanScreen lists at scale (US5)", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Add an expected status for GET /s55"));
   });
 
-  it("shows left-out operations as a counted list, collapsed when longer than ten (FR-024, US5 AS1)", async () => {
+  it("counts left-out operations on their view, hidden until chosen, one per row with its reason (FR-024, US5 AS1)", async () => {
     const omitted = Array.from({ length: 30 }, (_, index) => ({ operationKey: `GET /left${String(index).padStart(2, "0")}`, reason: "no-positive-scenario" as const }));
     stubFetch(routes(quickPlan({ omitted })));
     renderScreen();
-    const list = await screen.findByTestId("performance-omitted-list");
-    expect(list.tagName).toBe("DETAILS");
-    expect(within(list).getByText("30 operations left out")).toBeInTheDocument();
-    expect(within(list).getAllByRole("listitem")).toHaveLength(30);
-    expect(within(list).getAllByRole("listitem")[0]).toHaveTextContent("No positive scenario");
+    const view = await screen.findByRole("button", { name: "Left out 30" });
+    expect(screen.queryByRole("table", { name: "Operations left out" })).not.toBeInTheDocument();
+    fireEvent.click(view);
+    const rows = within(screen.getByRole("table", { name: "Operations left out" })).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toHaveTextContent("/left00");
+    expect(rows[0]).toHaveTextContent("No positive scenario");
   });
 });

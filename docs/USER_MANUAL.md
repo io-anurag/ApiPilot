@@ -345,17 +345,24 @@ below).
   **Remove by method** offers **Remove all <METHOD> operations** for each method in the plan.
   To remove a few operations, tick their rows and choose **Remove from plan**, or use
   **Remove from plan** in one step's details. Removed
-  operations are listed with a **Restore** button each, plus **Restore all**. When every
-  operation is removed, the plan says so and the script cannot be generated until you
-  restore one.
+  operations are in the table's **Removed** view (see below). When every operation is removed,
+  the plan says so and the script cannot be generated until you restore one.
+- **Removed and left-out operations.** Above the table, **In plan**, **Removed** and **Left out**
+  switch between the plan's steps, the operations you (or ApiPilot, for a login it uses for
+  credentials) removed, and the operations left out because they have no positive scenario. Each
+  shows its count; a view with nothing in it is not offered. In **Removed**, each row gives the
+  reason and a **Restore** button; tick several rows to restore them together, or use **Restore
+  all**. Select a removed operation's path to see, under it, the step and request it would have
+  if restored: scenario, expected status, authentication, variables and the request preview. This
+  view does not change the plan; **Restore to the plan** there adds it back. A left-out operation
+  has nothing to open or restore.
 - **The request a step sends.** In a step's details, choose **Request** to see what it sends: the
   method, the path template, each path, query and header parameter with its generated value
   or the environment value it needs, the authentication, and the body. Values that come from
   the environment are shown by name only, and secrets are marked, never shown. The preview is
   view only.
-- **Long lists.** Removed operations, operations left out (no positive scenario), and steps
-  that still need an expected status are counted lists, one operation per line, collapsed
-  when they have more than ten entries. The write list is never collapsed. The steps that need an
+- **Long lists.** The steps that still need an expected status are a counted list, collapsed.
+  The write list is never collapsed. The steps that need an
   expected status are counted in the bar above the tabs; open **steps to set** there, and each
   entry opens that step in the table and puts the cursor in its editor. **Needs status · Set** in
   the table does the same for its row.
@@ -820,7 +827,7 @@ Variable and credential values are encrypted before being stored.
 | **Generate script** stays disabled | A step has no expected status (its specification documents no success status) | Add an expected status to the listed step |
 | **Generate script** is disabled with "The plan has no operations" | Every operation was removed | Restore at least one operation from the removed list |
 | Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; runs and reports are kept |
-| Quick performance test: the login operation is in the removed list | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
+| Quick performance test: the login operation is under Removed | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |

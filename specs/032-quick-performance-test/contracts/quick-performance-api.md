@@ -60,6 +60,7 @@ the same name, applied to the quick plan. Only the differences are listed.
 | `POST /plan/reset` | Rebuilds from the stored scenarios, keeping the load profile, thresholds, exclusions and expected statuses of steps that still exist. |
 | `GET /plan/values?environmentId=` | None. |
 | `GET /plan/steps/:stepId/request` | New on both paths (below). |
+| `GET /plan/removed-operation?operationKey=` | New on both paths (below), 2026-09-28. |
 | `POST /script` | No stage transition. |
 | `GET /script/download?file=script\|environment-template` | None. Two quick tests from the same specification with the same edits give byte-identical files (FR-007, SC-004). |
 
@@ -76,6 +77,29 @@ request the script sends, and never contains a value from an environment (FR-008
 
 **Errors:**
 - `404 step_not_found`: the step is not in the current plan.
+- `404 quick_test_not_found` (quick path) or `409 postman_generation_incomplete` (guided path).
+
+### `GET /plan/removed-operation?operationKey=<key>` (both paths)
+
+Added 2026-09-28 (FR-024a). Also at
+`/api/test-generation-workflow/performance/plan/removed-operation`, with that path's gate. The
+operation key (`"METHOD /path"`) is a query parameter, URL-encoded, because it holds a space and
+a path template.
+
+The server rebuilds the plan with the operation restored, through the same update a Restore sends
+(`PUT /plan` with the key left out of `excludedOperationKeys`), reads it, and discards it. The
+stored plan, its fingerprint and the script status are unchanged, so the response always matches
+what Restore would produce. When the operation would be in more than one journey (guided
+workflows), its first step is returned.
+
+**Success:** `200 {step: PerformanceStep, request: StepRequestPreview}` (`RemovedOperationPreview`
+in shared-domain). `request` follows the same rules as the step request preview: view-only, never a
+value from an environment (FR-008).
+
+**Errors:**
+- `400 invalid_request`: no `operationKey`.
+- `404 operation_not_removed`: the key is not in the plan's `excludedOperationKeys`.
+- `409 no_positive_scenario`: restoring the operation would add no step.
 - `404 quick_test_not_found` (quick path) or `409 postman_generation_incomplete` (guided path).
 
 ## Readiness and runs

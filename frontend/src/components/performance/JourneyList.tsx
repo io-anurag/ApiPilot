@@ -9,7 +9,7 @@ import type { Result } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
-import { AUTH_LABEL, AUTH_SHORT_LABEL, choiceNote } from "./performanceViewModel";
+import { AUTH_LABEL, AUTH_SHORT_LABEL, choiceNote, environmentValuesOf, variablesFor } from "./performanceViewModel";
 import { StepRequestPreview } from "./StepRequestPreview";
 import { WrappingPath } from "./WrappingPath";
 
@@ -61,17 +61,6 @@ function isGroupedJourney(journey: PerformanceJourney): boolean {
 
 function rowLabel({ journey, journeyIndex, stepIndex }: InventoryRow): string {
   return isGroupedJourney(journey) ? `J${journeyIndex + 1}.${stepIndex + 1}` : `J${journeyIndex + 1}`;
-}
-
-function environmentValuesOf(step: PerformanceStep): string[] {
-  return step.requiredValues.filter((name) => name !== "baseUrl");
-}
-
-function variablesFor(step: PerformanceStep): string[] {
-  return [
-    ...step.variableBindings.map((binding) => `${binding.role} ${binding.variable}`),
-    ...environmentValuesOf(step).map((name) => `needs ${name}`),
-  ];
 }
 
 function ExpectedStatusEditor({
@@ -223,7 +212,6 @@ function RemoveByMethodMenu({
 export function JourneyList({
   journeys,
   busy,
-  announcement,
   onExpectedStatuses,
   onRemoveOperations,
   onRemoveMethod,
@@ -234,7 +222,6 @@ export function JourneyList({
 }: Readonly<{
   journeys: PerformanceJourney[];
   busy: boolean;
-  announcement: string;
   loadPreview: (stepId: string) => Promise<Result<{ request: Preview }>>;
   onExpectedStatuses: (stepId: string, codes: string[]) => void;
   onRemoveOperations: (operationKeys: string[], success: string) => void;
@@ -480,9 +467,6 @@ export function JourneyList({
 
   return (
     <div className="space-y-3">
-      <p aria-live="polite" className="sr-only">
-        {announcement}
-      </p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="min-w-52 flex-1">
           <span className="sr-only">Search operations in the performance plan</span>

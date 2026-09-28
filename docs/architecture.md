@@ -778,7 +778,12 @@ beside the write list and target (AP-032 FR-011, AP-029 FR-025). The two run com
 survive switching tabs, and starting a run switches to Runs & reports, whose live view repeats the
 target. `JourneyList` shows one line per step and opens a step's details in a row
 under it; filters, row selection and the "Remove by method" menu are local UI state, and every
-removal is still one `PUT /plan` of `excludedOperationKeys`. The write lists never collapse
+removal is still one `PUT /plan` of `excludedOperationKeys`. The table's Removed and Left out
+views are `OtherOperationsTable`; a removed row loads `GET /plan/removed-operation`, which
+rebuilds the plan with that operation restored through the same `applyPlanUpdate` a Restore uses,
+reads the step and its request preview, and discards the rebuilt plan, so the preview can never
+change the plan or its fingerprint and always matches what Restore would produce
+(`performance/plan/removedOperationPreview.ts`, specs/032 FR-024a). The write lists never collapse
 (AP-032 SC-002); `CountedOperationList`'s `columns` layout uses a container query so the same
 list reads as two columns in the operations panel and one in the setup column. Within the
 guided workflow, the page composition root

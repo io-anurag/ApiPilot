@@ -74,6 +74,22 @@ export class StepNotFoundError extends Error {
   }
 }
 
+/** AP-032 `404 operation_not_removed`: the removed-operation preview for a key not in the removed list. */
+export class OperationNotRemovedError extends Error {
+  constructor(public readonly operationKey: string) {
+    super(`'${operationKey}' is not a removed operation of this plan.`);
+    this.name = "OperationNotRemovedError";
+  }
+}
+
+/** AP-032 `409 no_positive_scenario`: a removed operation that would still build no step if restored. */
+export class NoPositiveScenarioError extends Error {
+  constructor(public readonly operationKey: string) {
+    super(`'${operationKey}' has no positive scenario, so restoring it would add no step.`);
+    this.name = "NoPositiveScenarioError";
+  }
+}
+
 /** AP-032 `409 quick_test_exists`: a new upload while a quick test exists and replacing was not confirmed (FR-021). */
 export class QuickTestExistsError extends Error {
   constructor() {

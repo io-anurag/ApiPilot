@@ -41,6 +41,19 @@ export const AUTH_LABEL: Record<StepAuthKind, string> = {
   none: "No authentication",
 };
 
+/** The environment values a step needs, other than the base URL every step needs. */
+export function environmentValuesOf(step: Pick<PerformanceStep, "requiredValues">): string[] {
+  return step.requiredValues.filter((name) => name !== "baseUrl");
+}
+
+/** A step's variables in words: what it produces or consumes, and the values it needs. */
+export function variablesFor(step: Pick<PerformanceStep, "variableBindings" | "requiredValues">): string[] {
+  return [
+    ...step.variableBindings.map((binding) => `${binding.role} ${binding.variable}`),
+    ...environmentValuesOf(step).map((name) => `needs ${name}`),
+  ];
+}
+
 /** The table's one-line form of AUTH_LABEL; the full label is shown in the step's details. */
 export const AUTH_SHORT_LABEL: Record<StepAuthKind, string> = {
   "oauth2-client-credentials": "OAuth2 client",

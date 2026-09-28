@@ -81,6 +81,7 @@ describe("quick performance test routes", () => {
       await agent.post(`${QUICK_BASE}/plan/reset`),
       await agent.get(`${QUICK_BASE}/plan/values?environmentId=x`),
       await agent.get(`${QUICK_BASE}/plan/steps/s_x/request`),
+      await agent.get(`${QUICK_BASE}/plan/removed-operation?operationKey=GET%20%2Fx`),
       await agent.post(`${QUICK_BASE}/script`),
       await agent.get(`${QUICK_BASE}/script/download?file=script`),
       await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: "x" }),
@@ -110,6 +111,41 @@ describe("quick performance test routes", () => {
     const unknown = await agent.get(`${QUICK_BASE}/plan/steps/s_nope/request`);
     expect(unknown.status).toBe(404);
     expect(unknown.body.error).toBe("step_not_found");
+  });
+
+  it("previews a removed operation as it would be if restored, without changing the plan (FR-024a)", async () => {
+    const { agent } = await quickAgent();
+    const plan = (await uploadQuick(agent)).body.quickTest.plan;
+    const key = (operationKey: string) => encodeURIComponent(operationKey);
+
+    // The login starts removed as a credential producer.
+    const login = await agent.get(`${QUICK_BASE}/plan/removed-operation?operationKey=${key("POST /auth/login")}`);
+    expect(login.status).toBe(200);
+    expect(login.body.step).toMatchObject({ operationKey: "POST /auth/login", method: "POST", path: "/auth/login" });
+    expect(login.body.request).toMatchObject({ stepId: login.body.step.id, method: "POST", pathTemplate: "/auth/login" });
+
+    // An operation removed by the user previews like the step it was.
+    const target = quickSteps(plan).find((candidate) => candidate.operationKey === "GET /orders/{orderId}")!;
+    const removed = await agent.put(`${QUICK_BASE}/plan`).send({ excludedOperationKeys: [...plan.excludedOperationKeys, target.operationKey] });
+    expect(removed.status).toBe(200);
+    const preview = await agent.get(`${QUICK_BASE}/plan/removed-operation?operationKey=${key(target.operationKey)}`);
+    expect(preview.status).toBe(200);
+    expect(preview.body.step).toEqual(target);
+    expect(preview.body.request).toMatchObject({ stepId: target.id, method: "GET", pathTemplate: "/orders/{orderId}" });
+
+    // Reading a preview never changes the plan.
+    expect((await agent.get(`${QUICK_BASE}/plan`)).body.plan).toEqual(removed.body.plan);
+  });
+
+  it("refuses a removed-operation preview for an operation that is not removed, or with no key", async () => {
+    const { agent } = await quickAgent();
+    await uploadQuick(agent);
+    const inPlan = await agent.get(`${QUICK_BASE}/plan/removed-operation?operationKey=${encodeURIComponent("GET /orders/{orderId}")}`);
+    expect(inPlan.status).toBe(404);
+    expect(inPlan.body.error).toBe("operation_not_removed");
+    const missing = await agent.get(`${QUICK_BASE}/plan/removed-operation`);
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toBe("invalid_request");
   });
 
   it("registers the readiness and run routes for the quick path", async () => {
