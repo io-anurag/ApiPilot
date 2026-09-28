@@ -405,8 +405,8 @@ The database location is configurable via `APIPILOT_DB_PATH` (default
 running instance uses.
 
 Later features added session-owned tables to the same database and the same eviction rule:
-`uploaded_collections` and `uploaded_collection_runs` (specs/026), and `failure_analyses`
-(specs/030). The last holds one row per analyzed result, keyed by session, run, and result index,
+`uploaded_collections` and `uploaded_collection_runs` (specs/026), `failure_analyses`
+(specs/030), and `performance_runs` (specs/031, with `plan_source` added by specs/032). The last holds one row per analyzed result, keyed by session, run, and result index,
 with the whole analysis encrypted by the same cipher. Re-analysis is a single upsert on that key,
 so a reader never sees a half-replaced analysis. `CREATE TABLE IF NOT EXISTS` adds each table to an
 existing database without a schema-version change.
@@ -661,6 +661,54 @@ approved TestModel + approved IntegrationWorkflows + selection
   embedded HTML, granted no permissions, with every string escaped and a Content-Security-Policy
   that lets it load nothing.
 
+### Quick performance test (AP-032)
+
+AP-032 (`specs/032-quick-performance-test`) builds the same `PerformancePlan` straight from an
+uploaded specification, as a standalone route family (`/api/quick-performance`) like Import & Run.
+It never reads or writes `TestGenerationWorkflow`.
+
+```text
+upload → parseYaml / validateSpec / buildApiModel (unchanged)
+  → testDesign/generatePositiveScenarios   the three positive rules + deduplicate, no AI
+  → performance/quick/quickScenarioIds     q<rank>-<sha256>: content-derived, happy path lowest
+  → plan/buildPlan (source "quick")        single-step journeys, credential producers removed
+  → the shared plan, script and run routes (same code as the guided stage)
+```
+
+- **One route implementation, two plan sources.** `api/performanceRoutes.ts` registers the plan,
+  script, step-preview, readiness and run routes over a `PerformancePlanSource` adapter: the guided
+  source (`api/performanceTesting.ts`) wraps the workflow's plan, `scriptStore` and stage
+  transitions; the quick source (`api/quickPerformance.ts`) wraps the quick store. There is one
+  `POST /runs`, so the XVII exception's conditions, as extended to AP-032 in constitution v2.4.0,
+  are enforced in one place. Error mapping and request logging live in `api/performanceHttp.ts`.
+- **State.** `performance/quick/quickTestStore.ts` holds one quick test per session in memory (the
+  analyzed model, the positive scenarios, the plan and the generated script), cleared on session
+  expiry and lost on restart, like the guided plan. Its context has no workflows, relationships or
+  selection, so nothing is chained and every operation is in scope.
+- **Determinism.** Generated scenario ids are random UUIDs, and the plan chooses the lowest id, so
+  the quick path re-identifies its scenarios by content, ranked by rule. Two uploads of one
+  specification with the same edits give byte-identical scripts and templates.
+- **Credential producers.** `planAuth` records the operation each chained-login token source calls
+  (`TokenSource.producerOperationKey`); the plan exposes them as the derived
+  `credentialProducerOperationKeys`, and a quick plan starts with them excluded. Token acquisition
+  reads all operations, so excluding the login does not affect it.
+- **Step request preview.** `plan/planStepRequest.ts` (`stepRequestFor`) computes each step's
+  request with its workflow substitutions and unique-value tokens; the renderer and
+  `plan/requestPreview.ts` both call it, so `GET <base>/plan/steps/:stepId/request` shows exactly
+  what the script sends. The preview is derived on request and never stored, so run snapshots stay
+  free of bodies. It shows environment values by name only and never reads an environment.
+- **Write visibility.** `summarizeWriteOperations` (shared-domain) derives the write summary shown
+  above the journeys and next to the run trigger; the list never collapses there.
+- **Environments.** The three environments routes pass `requireEnvironmentAccess()`: Postman
+  generation complete, or a quick test in the session. Environments stay one encrypted set per
+  session, shared by both paths; the functional execution routes still require Postman generation.
+- **Runs** record `planSource` (`performance_runs.plan_source`, added with `ensureColumn`, default
+  `guided`). Each path's `GET /runs` lists its own runs; run-by-id routes accept any run of the
+  session. A quick run's report states that its scenarios were generated and not reviewed.
+- **Scope.** The guided plan no longer has a `scope` choice (AP-032 FR-022): it covers the API
+  review selection, or every operation when there is none, and `PUT /plan` with `scope` returns
+  `400 invalid_request`.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -683,8 +731,10 @@ approved TestModel + approved IntegrationWorkflows + selection
   authorization to execute it.
 - A second narrow exception runs an ApiPilot-generated k6 script, unmodified and verified by hash,
   with a k6 the user installed, only on the user's explicit per-run trigger (AP-029, constitution
-  v2.3.0 XVII exception of 2026-09-24; see "k6 performance testing"). k6's stderr is counted and
-  never logged, and its output stays local.
+  v2.3.0 XVII exception of 2026-09-24; see "k6 performance testing"). v2.4.0 extends it to AP-032's
+  quick plans, whose scenarios no one reviewed; for them the exception rests on every write
+  operation being listed on the plan and at the run trigger. The uploaded specification is only
+  analyzed, never executed. k6's stderr is counted and never logged, and its output stays local.
 - AI failure analysis redacts captured request/response content before it reaches the prompt or
   storage and stores analyses encrypted. Target-controlled response text still reaches the model,
   so prompt injection is a known, bounded risk: the answer is limited to a closed cause set,
@@ -710,9 +760,12 @@ approved TestModel + approved IntegrationWorkflows + selection
 ## Frontend architecture
 
 The frontend is a React/Vite technical workspace, not a set of independent stage pages. `App.tsx`
-switches between two top-level views — the guided workflow and the collection import/editing/
-execution page (specs/026, specs/028) — without discarding either one's state when the other is
-active (see "External collection import & execution" above for the mounting rules). Within the
+switches between three top-level views — the guided workflow, the collection import/editing/
+execution page (specs/026, specs/028), and the quick performance test (specs/032,
+`pages/QuickPerformancePage.tsx`) — without discarding any one's state when another is active
+(see "External collection import & execution" above for the mounting rules). The guided
+Performance Testing stage and the quick page render the one `PerformancePlanScreen`, each with a
+`PerformanceClient` from `createPerformanceClient(base)` for its own route family. Within the
 guided workflow, the page composition root
 renders the active guided stage and its shared progress/state. Components own
 presentation, interaction, local UI state, accessible names, keyboard behavior, and visible focus.
@@ -823,6 +876,14 @@ The repository has no checked-in deployment manifest (the former `vercel.json` w
 backend compiles to `backend/dist` and the frontend builds a Vite distribution under
 `frontend/dist`. Locally, `npm run dev` starts both services and the Vite development proxy keeps
 browser API calls same-origin.
+
+The runtime baseline is Node.js 24 LTS. `.nvmrc` is the single pin: CI reads it through
+`actions/setup-node`, the root `engines` field requires `>=24.0.0`, and `backend/src/server.ts`
+refuses to start on an older major. `@types/node` is pinned to `^24` in the backend so type
+checking matches the runtime rather than whichever version transitive dependencies hoist. The
+backend suppresses exactly one warning, DEP0176, which `newman@6.2.2` triggers by reading
+`fs.F_OK` as it loads; npm 11's `allowScripts` lists the install scripts ApiPilot relies on
+(`better-sqlite3`, `onnxruntime-node`, `esbuild`, `protobufjs`), pinned to reviewed versions.
 
 Primary verification commands run from repository root:
 

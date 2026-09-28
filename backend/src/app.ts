@@ -22,6 +22,7 @@ import {
 import { externalCollectionsRouter } from "./api/externalCollections";
 import { createFailureAnalysisRouter, failureAnalysisRouter } from "./api/failureAnalysis";
 import { createPerformanceTestingRouter, type PerformanceTestingDependencies } from "./api/performanceTesting";
+import { createQuickPerformanceRouter } from "./api/quickPerformance";
 import { createK6Probe } from "./performance/k6/readiness";
 import { createK6Runner } from "./performance/k6/runner";
 import { versionRouter } from "./api/version";
@@ -130,7 +131,12 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   app.use("/api", externalCollectionsRouter);
   // AP-029: k6 performance testing. A run starts only on POST .../performance/runs, the user's
   // explicit per-run trigger (constitution XVII exception of 2026-09-24).
-  app.use("/api", createPerformanceTestingRouter({ ...defaultPerformanceDependencies(), ...options?.performance }));
+  const performanceDependencies = { ...defaultPerformanceDependencies(), ...options?.performance };
+  app.use("/api", createPerformanceTestingRouter(performanceDependencies));
+  // AP-032: the quick performance test, a standalone route family like Import & Run (no guided
+  // workflow required). Its runs start only on POST /api/quick-performance/runs, under the same
+  // XVII exception as extended on 2026-09-27, and share the one runner and probe above.
+  app.use("/api", createQuickPerformanceRouter(performanceDependencies));
   // AP-031: reads recorded AP-026 results only; never executes a request (specs/030 FR-009).
   app.use(
     "/api",

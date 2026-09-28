@@ -1,16 +1,9 @@
-import type { ApiOperation, PerformancePlan, TestScenario, WorkflowVariable } from "@apipilot/shared-domain";
+import type { PerformancePlan } from "@apipilot/shared-domain";
 import { workflowVariableName } from "../../postman/workflowRendering";
 import { compareCodeUnits } from "../../postman/ordering";
 import { sha256Hex } from "../plan/identifiers";
-import {
-  buildStepRequest,
-  operationKeyOf,
-  planAuth,
-  UNIQUE_TOKEN_PREFIX,
-  type PerformanceContext,
-  type RequestTemplate,
-  type TokenSource,
-} from "../plan/stepRequest";
+import { stepRequestFor, uniqueTokensOf } from "../plan/planStepRequest";
+import { planAuth, type PerformanceContext, type RequestTemplate, type TokenSource } from "../plan/stepRequest";
 
 /**
  * Renders a Performance Plan as a k6 script and an environment template
@@ -64,23 +57,6 @@ function formatDuration(ms: number): string {
   return ms % 1000 === 0 ? `${ms / 1000}s` : `${ms}ms`;
 }
 
-function originalValue(body: unknown, fieldPath: string): string {
-  let current: unknown = body;
-  for (const part of fieldPath.split(".")) {
-    if (current === null || typeof current !== "object") return "";
-    current = (current as Record<string, unknown>)[part];
-  }
-  return typeof current === "string" ? current : "";
-}
-
-function stepPositionsOf(workflow: PerformanceContext["workflows"][number]): Map<string, number> {
-  return new Map(
-    [...workflow.steps]
-      .sort((a, b) => a.position - b.position)
-      .map((step, index) => [`${step.operationMethod.toUpperCase()} ${step.operationPath}`, index]),
-  );
-}
-
 export function renderScript(plan: PerformancePlan, context: PerformanceContext): RenderedScript {
   const auth = planAuth(context);
   const valueIndex: Record<string, number> = {};
@@ -88,43 +64,13 @@ export function renderScript(plan: PerformancePlan, context: PerformanceContext)
     valueIndex[value.name] = index;
   });
 
-  const operations = new Map<string, ApiOperation>(context.apiModel.operations.map((op) => [operationKeyOf(op), op]));
-  const scenarios = new Map<string, TestScenario>(context.approvedScenarios.map((scenario) => [scenario.id, scenario]));
-
-  const unique = plan.uniqueValueFields.map((field, index) => {
-    const step = plan.journeys.flatMap((journey) => journey.steps).find((candidate) => candidate.id === field.stepId);
-    const scenario = step ? scenarios.get(step.scenarioId) : undefined;
-    return {
-      token: `${UNIQUE_TOKEN_PREFIX}${index}`,
-      stepId: field.stepId,
-      fieldPath: field.fieldPath,
-      format: field.format,
-      original: originalValue(scenario?.request.body, field.fieldPath),
-    };
-  });
+  const unique = uniqueTokensOf(plan, context);
 
   const usedSchemes = new Set<string>();
-  const journeys: RenderedJourney[] = plan.journeys.map((journey) => {
-    const workflow =
-      journey.source.kind === "workflow"
-        ? context.workflows.find((candidate) => candidate.id === (journey.source as { workflowId: string }).workflowId)
-        : undefined;
-    const positions = workflow ? stepPositionsOf(workflow) : new Map<string, number>();
-    return {
-      id: journey.id,
+  const journeys: RenderedJourney[] = plan.journeys.map((journey) => ({
+    id: journey.id,
       steps: journey.steps.map((step): RenderedStep => {
-        const operation = operations.get(step.operationKey);
-        const scenario = scenarios.get(step.scenarioId);
-        if (!operation || !scenario) throw new Error(`The plan's step ${step.id} no longer matches the approvals.`);
-        const position = positions.get(step.operationKey);
-        const variables: WorkflowVariable[] = workflow?.variables ?? [];
-        const consumes = position === undefined ? [] : variables.filter((variable) => variable.consumerStepIndex === position);
-        const produces = position === undefined ? [] : variables.filter((variable) => variable.producerStepIndex === position);
-        const built = buildStepRequest(context, auth, operation, scenario, {
-          workflowId: workflow?.id,
-          consumes,
-          uniqueFields: unique.filter((entry) => entry.stepId === step.id).map((entry) => ({ fieldPath: entry.fieldPath, token: entry.token })),
-        });
+        const { built, produces, workflow } = stepRequestFor(plan, context, auth, step.id, unique);
         const tokenScheme =
           built.schemeName && auth.tokenSources.has(built.schemeName) && (built.authKind === "oauth2-client-credentials" || built.authKind === "chained-login")
             ? built.schemeName
@@ -149,8 +95,7 @@ export function renderScript(plan: PerformancePlan, context: PerformanceContext)
           tokenScheme,
         };
       }),
-    };
-  });
+  }));
 
   const tokenSources: RenderedTokenSource[] = [...usedSchemes].sort(compareCodeUnits).map((scheme) => {
     const source = auth.tokenSources.get(scheme)!;

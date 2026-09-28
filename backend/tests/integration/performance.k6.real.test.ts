@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
 import { createK6Probe } from "../../src/performance/k6/readiness";
 import { buildChildEnv, buildK6Args, createK6Runner } from "../../src/performance/k6/runner";
 import { parseMetricsLine } from "../../src/performance/k6/metricsStream";
@@ -11,6 +13,7 @@ import { applyPlanUpdate } from "../../src/performance/plan/planUpdate";
 import { createAggregate } from "../../src/performance/report/aggregate";
 import { performanceContext } from "../fixtures/performance/context";
 import { TargetServer } from "../fixtures/execution/targetServer";
+import { QUICK_BASE, quickSteps, uploadQuick } from "../fixtures/performance/quickAgent";
 
 /**
  * Opt-in real-k6 check (specs/031-k6-performance-testing research D24, quickstart scenario 9,
@@ -27,6 +30,9 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
   beforeAll(async () => {
     target.configure("POST", "/oauth/token", { status: 200, body: { access_token: "real-k6-token", expires_in: 5 } });
     target.configure("POST", "/orders", { status: 201, body: { orderId: "00000000-0000-4000-8000-000000000001" } });
+    // AP-032 quick-performance.yaml: the login issues the bearer token; POST /products answers 201.
+    target.configure("POST", "/auth/login", { status: 200, body: { accessToken: "real-k6-login-token" } });
+    target.configure("POST", "/products", { status: 201, body: {} });
     baseUrl = await target.start();
     workDir = mkdtempSync(path.join(tmpdir(), "apipilot-k6-real-"));
   });
@@ -112,4 +118,32 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     expect(exit.cancelled).toBe(true);
     expect(Date.now() - cancelledAt).toBeLessThan(10_000);
   }, 60_000);
+
+  it("runs a quick performance test end to end through its routes, and records it as a quick run (AP-032 FR-020, quickstart 9)", async () => {
+    const agent = request.agent(createApp());
+    expect((await uploadQuick(agent)).status).toBe(200);
+    const plan = (await agent.get(`${QUICK_BASE}/plan`)).body.plan;
+    const status = quickSteps(plan).find((step) => step.operationKey === "GET /status")!;
+    await agent.put(`${QUICK_BASE}/plan`).send({
+      expectedStatuses: { [status.id]: ["200"] },
+      loadProfile: { kind: "smoke", stages: [{ durationMs: 5_000, targetVirtualUsers: 1 }] },
+    });
+    expect((await agent.post(`${QUICK_BASE}/script`)).status).toBe(200);
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "quick-real",
+      tier: "local",
+      baseUrl,
+      variableValues: { username: "u", password: "p", orderId: "o-1", productId: "p-1" },
+    });
+    const started = await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: environment.body.environment.id });
+    expect(started.status).toBe(200);
+    let run = started.body.run;
+    for (let attempt = 0; attempt < 120 && run.status === "in-progress"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      run = (await agent.get(`${QUICK_BASE}/runs/${run.id}`)).body.run;
+    }
+    expect(run.status).toBe("completed");
+    expect(run.planSource).toBe("quick");
+    expect(run.result.totals.requests).toBeGreaterThan(0);
+  }, 120_000);
 });

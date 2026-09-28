@@ -58,10 +58,9 @@ export function applyPlanUpdate(plan: PerformancePlan, update: unknown, context:
   const steps = plan.journeys.flatMap((journey) => journey.steps);
   const stepIds = new Set(steps.map((step) => step.id));
 
-  if ("scope" in body) {
-    if (body.scope !== "selection" && body.scope !== "all") throw new InvalidPlanUpdateError("scope must be 'selection' or 'all'.");
-    choices.scope = body.scope;
-  }
+  // AP-032 FR-022: the scope choice was removed. Refused rather than ignored, so a stale client is
+  // told at once (research Q7).
+  if ("scope" in body) throw new InvalidPlanUpdateError("The operations in scope follow the API review selection.");
   if ("excludedOperationKeys" in body) {
     const keys = body.excludedOperationKeys;
     if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string")) {

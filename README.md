@@ -5,7 +5,7 @@
 <h1 align="center">ApiPilot</h1>
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
 [![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 [![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
@@ -66,7 +66,8 @@ The following capabilities are implemented in the current repository:
 - OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, resource-qualified path-parameter variables (`/users/{id}` → `{{user_id}}`), automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
 - Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP, where a request whose data prerequisite failed is held back as "dependency not met" and every result records its processing stage.
 - On-demand AI failure analysis of one failed request in an Import & Run Collection run (*implementation complete, AI evaluation pending*; see [Limitations](#limitations-and-roadmap)). Deterministic rules decide the likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", with a fixed High or Moderate strength and the rule that decided it. The local AI adds only a plain-language summary and suggested next steps, labelled as an inference. The redacted evidence behind the cause is shown, and if the AI is unavailable the cause and evidence are still shown and stored. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
-- k6 performance testing from the approved scenarios and workflows (*implementation complete, real-k6 validation pending*; see [Limitations](#limitations-and-roadmap)): an editable plan of journeys with per-step expected statuses, a load profile and user-set thresholds; a byte-identical k6 script with no secrets; runs on the user's explicit trigger with a k6 they installed, with live progress and cancel; and a self-contained HTML report with percentiles, a timeline, fixed-rule findings and per-step provenance.
+- k6 performance testing from the approved scenarios and workflows (*implementation complete, manual browser walkthrough pending*; see [Limitations](#limitations-and-roadmap)): an editable plan of journeys with per-step expected statuses, a load profile and user-set thresholds; a byte-identical k6 script with no secrets; runs on the user's explicit trigger with a k6 they installed, with live progress and cancel; and a self-contained HTML report with percentiles, a timeline, fixed-rule findings and per-step provenance. The plan lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes operations per method or all writes at once, and previews each step's request.
+- A quick performance test straight from an uploaded specification (`specs/032-quick-performance-test`, *implementation complete, manual browser walkthrough pending*): positive rule-generated scenarios only, one single-step journey per operation with no chaining, and login operations found by the credential producers removed by default. It uses the same plan, script, runs and report as the guided stage, and the same session environments, without a guided workflow.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
@@ -247,7 +248,7 @@ Specification context is attached only when the failed request's Postman item id
 
 ### Requirements
 
-- Node.js 22 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
+- Node.js 24 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
 - npm.
 - For local AI: disk space for the selected model, free memory for inference, and network access only for the initial model download. No GPU is required.
 - For deterministic-only use and routine tests: set `AI_PROVIDER_MODE=mock`; no model download is needed.
@@ -364,20 +365,28 @@ The environment and execution endpoints above are retained as an API-only path (
 
 ### Performance testing endpoints
 
-Under `/api/test-generation-workflow/performance` (`specs/031-k6-performance-testing/contracts/performance-api.md`). The plan and script routes and `POST /runs` require Postman generation to be complete; the other run routes do not, so a started run stays visible and cancellable.
+Under `/api/test-generation-workflow/performance` (`specs/031-k6-performance-testing/contracts/performance-api.md`). The plan and script routes and `POST /runs` require Postman generation to be complete; the other run routes do not, so a started run stays visible and cancellable. The same routes are served for the quick performance test under `/api/quick-performance`, gated on the session having a quick test (`404 quick_test_not_found`) instead (`specs/032-quick-performance-test/contracts/quick-performance-api.md`).
 
 | Method | Endpoint | Purpose |
 | ------ | -------- | ------- |
 | `GET` | `/readiness` | k6 readiness; `?recheck=true` probes again. |
-| `GET` / `PUT` | `/plan` | Read the plan (the first read builds it and enters the stage), or update scope, removed operations, order, think time, load profile, thresholds and expected statuses. |
+| `GET` / `PUT` | `/plan` | Read the plan (the first read builds it and enters the stage), or update removed operations, order, think time, load profile, thresholds and expected statuses. The operations in scope follow the API review selection; `scope` is refused with `400 invalid_request`. |
 | `POST` | `/plan/reset` | Rebuild the proposed plan, keeping the profile, thresholds and surviving expected statuses. |
 | `GET` | `/plan/values?environmentId=` | Which user-supplied values an environment has, as booleans only. |
+| `GET` | `/plan/steps/:stepId/request` | The view-only request one step sends; environment values by name only. |
 | `POST` | `/script` | Generate the script and environment template (`422 expected_status_missing` while a step has none). |
 | `GET` | `/script/download?file=script\|environment-template` | Download either file. |
 | `POST` | `/runs` | Start a run on `{ environmentId }`: the only way a run starts. |
-| `GET` | `/runs`, `/runs/:runId` | List runs, or read one with progress and result. |
+| `GET` | `/runs`, `/runs/:runId` | List this path's runs, or read any run of the session with progress and result. |
 | `POST` | `/runs/:runId/cancel` | Stop a run in progress (`202`). |
 | `GET` | `/runs/:runId/report` | The self-contained HTML report; `?download=true` adds `Content-Disposition`. |
+
+Quick performance test only, under `/api/quick-performance`:
+
+| Method | Endpoint | Purpose |
+| ------ | -------- | ------- |
+| `POST` | `/` | Upload a specification (multipart `file`) and build the quick plan; `409 quick_test_exists` unless `?replaceExisting=true`. |
+| `GET` | `/` | The session's quick test: specification summary, plan and script status. |
 
 ### External collection endpoints
 
@@ -500,6 +509,10 @@ npm run test -w frontend
 
 `npm test` runs Vitest across the workspace, including backend unit/integration tests, frontend jsdom/React tests, and shared-domain tests. Ordinary tests use mock or scripted providers and do not download a model. `test:ai-real`, `test:ai-real:failure-analysis` (the AP-031 evaluation corpus, recorded in `specs/030-ai-failure-analysis/evaluation.md`), and `ai:benchmark` are opt-in and may load or download local models. `test:k6-real` (`K6_TEST_REAL=1`) is opt-in and needs a k6 1.0.0 or later that you installed; `perf:stub` starts a local stub target for AP-029's manual quickstart. Neither is part of `npm test`.
 
+The backend's `dev` and `start` scripts, and its Vitest workers, run Node with `--disable-warning=DEP0176`. On Node 24, `newman@6.2.2` (the latest release) reads the deprecated `fs.F_OK` constant as it loads, which prints a DeprecationWarning that has no functional effect. Only that warning code is silenced. If you run `backend/dist/server.js` directly with `node`, pass the same flag to keep the log clean.
+
+npm 11, bundled with Node 24, skips dependency install scripts that the root `allowScripts` field does not list. `better-sqlite3` (native build) and `onnxruntime-node` (runtime binaries) need theirs, so their entries are pinned to the installed versions. After upgrading either package, run `npm install-scripts ls` and approve the new version with `npm install-scripts approve <pkg>` once you have reviewed it.
+
 The repository has no checked-in Dockerfile, docker-compose file, or deployment manifest. The backend and frontend do have independent production build scripts: the backend compiles to `backend/dist`, and the frontend builds a Vite distribution under `frontend/dist`.
 
 ## Limitations and roadmap
@@ -514,7 +527,7 @@ Current intentional limitations include:
 - AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), explains one failed request in an Import & Run Collection run: fixed rules decide the likely cause from the recorded evidence, and the local AI adds a labelled summary and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*. On the 12-case synthetic evaluation corpus the rules match every label, and the default `Qwen2.5-0.5B-Instruct` wrote a usable explanation for all 12 with no contradictions (`specs/030-ai-failure-analysis/evaluation.md`, run 5). It is not recorded as Implemented until the corpus also contains at least 4 real, redacted recorded failures. The cause is a likely cause, not a confirmed root cause; a failure no rule covers is reported as "insufficient evidence". It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
 - Dependency-aware holding of requests (`specs/029-execution-gap-closure`) applies to the guided workflow's API-only execution path. Uploaded-collection runs execute every selected request in collection order, and a request that depends on a failed one records its own outcome.
-- AP-029, k6 performance testing (`specs/031-k6-performance-testing`), is *implementation complete, real-k6 validation pending*. Automated tests replay k6's metrics output and run the generated script's own runtime in a sandbox, but `npm run test:k6-real -w backend` has not yet been run against a real k6 binary, and the quickstart's browser walkthrough has not been performed. It needs a k6 1.0.0 or later that you install yourself. Runs apply no limit on virtual users or duration, include write operations by default, and never clean up what they create.
+- AP-029, k6 performance testing (`specs/031-k6-performance-testing`), and AP-032, the quick performance test (`specs/032-quick-performance-test`), are *implementation complete, manual browser walkthrough pending*. `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows (2026-09-28), but the quickstarts' browser walkthroughs have not been performed. The quick performance test sends generated requests that no one reviewed and never chains requests. It needs a k6 1.0.0 or later that you install yourself. Runs apply no limit on virtual users or duration, include write operations by default, and never clean up what they create.
 
 The implementation status for AP-001 through AP-031 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 

@@ -14,20 +14,21 @@ import {
 } from "../performance/performanceRunStore";
 import { renderHtmlReport } from "../performance/report/renderHtmlReport";
 import { cancelLiveRun, startPerformanceRun } from "../performance/runPerformanceTest";
-import { getGeneratedScript } from "../performance/scriptStore";
 import { getSessionId } from "../session/sessionContext";
-import type { PerformanceTestingDependencies } from "./performanceTesting";
-import { currentPlan, fail, handleKnownError, requirePostmanGenerationComplete } from "./performanceTesting";
+import { fail, handleKnownError } from "./performanceHttp";
+import type { PerformancePlanSource, PerformanceTestingDependencies } from "./performanceRoutes";
 
 const logger = createLogger("api.performanceRuns");
 
 /**
  * Readiness, run and report routes (contracts/performance-api.md "Runs"). `POST /runs` is the only
- * way a run starts (FR-024; constitution XVII exception of 2026-09-24). Only it is stage-gated: a
- * run already started stays visible, cancellable and reportable even if an upstream revision
- * later makes Postman generation stale (contract "Stage gating").
+ * way a run starts (FR-024; constitution XVII exception of 2026-09-24, extended 2026-09-27 to
+ * AP-032's quick plans). Only it is gated by the plan source: a run already started stays
+ * visible, cancellable and reportable even if an upstream revision later makes Postman generation
+ * stale, or its quick test is replaced (contract "Stage gating"). `GET /runs` lists the source's
+ * own runs; the run-by-id routes accept any run of the session (specs/032 research Q12).
  */
-export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTestingDependencies, base: string): void {
+export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTestingDependencies, base: string, source: PerformancePlanSource): void {
   router.get(`${base}/readiness`, async (req, res, next) => {
     try {
       const { readiness } = await deps.probe({ recheck: req.query.recheck === "true" });
@@ -40,11 +41,11 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
   router.post(`${base}/runs`, async (req, res, next) => {
     const startedAt = Date.now();
     try {
-      // 1. The stage gate.
-      const workflow = requirePostmanGenerationComplete();
+      // 1. The plan source's gate (guided: Postman generation complete; quick: a quick test exists).
+      const handle = source.require();
       // 2. A script exists and is current (FR-023).
-      const plan = currentPlan(workflow);
-      const script = getGeneratedScript();
+      const plan = handle.plan();
+      const script = handle.script();
       if (!script) return fail(req, res, startedAt, 409, "script_not_generated", "Generate the script before running it.");
       if (script.planFingerprint !== plan.fingerprint) {
         return fail(req, res, startedAt, 409, "script_out_of_date", "The plan changed after the script was generated. Regenerate it first.");
@@ -67,6 +68,7 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
         status: "in-progress",
         environment: { id: environment.id, name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl },
         planSnapshot: plan,
+        planSource: source.kind,
         scriptSha256: script.scriptSha256,
         k6Version: probe.readiness.version,
         plannedDurationMs: plan.loadProfile.plannedDurationMs,
@@ -97,7 +99,7 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
   });
 
   router.get(`${base}/runs`, (_req, res) => {
-    res.status(200).json({ runs: listPerformanceRuns() });
+    res.status(200).json({ runs: listPerformanceRuns(source.kind) });
   });
 
   router.get(`${base}/runs/:runId`, (req, res) => {

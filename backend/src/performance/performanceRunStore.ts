@@ -1,4 +1,4 @@
-import type { PerformanceRun, PerformanceRunSummary } from "@apipilot/shared-domain";
+import type { PerformancePlanSourceKind, PerformanceRun, PerformanceRunSummary } from "@apipilot/shared-domain";
 import { getPerformanceRunRepository } from "../persistence/performanceRunRepository";
 import { getSessionId } from "../session/sessionContext";
 import { onExpire } from "../session/sessionRegistry";
@@ -31,9 +31,9 @@ export function getPerformanceRun(runId: string): PerformanceRun {
   return run;
 }
 
-/** Newest first. */
-export function listPerformanceRuns(): PerformanceRunSummary[] {
-  return getPerformanceRunRepository().listBySession(getSessionId());
+/** One path's runs, newest first (AP-032 research Q12). Run-by-id lookups stay source-agnostic. */
+export function listPerformanceRuns(source: PerformancePlanSourceKind): PerformanceRunSummary[] {
+  return getPerformanceRunRepository().listBySessionAndSource(getSessionId(), source);
 }
 
 export function requestPerformanceCancel(runId: string): PerformanceRun {

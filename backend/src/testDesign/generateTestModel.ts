@@ -14,10 +14,17 @@ import { stringBoundaryScenarios } from "./rules/stringBoundaryScenarios";
 
 const logger = createLogger("testDesign.generateTestModel");
 
-const RULES: ((operation: ApiOperation) => TestScenario[])[] = [
-  positiveScenario,
-  enumPositiveScenarios,
-  minimalPositiveScenario,
+type Rule = (operation: ApiOperation) => TestScenario[];
+
+/**
+ * The positive-category rules, in generation order. AP-032's quick performance test runs only
+ * these (specs/032-quick-performance-test FR-004, research Q3); the order is also the rank of the
+ * quick path's scenario ids (research Q4), so it has this one definition.
+ */
+export const POSITIVE_RULES: readonly Rule[] = [positiveScenario, enumPositiveScenarios, minimalPositiveScenario];
+
+const RULES: readonly Rule[] = [
+  ...POSITIVE_RULES,
   requiredFieldScenarios,
   invalidTypeScenarios,
   invalidFormatScenarios,
@@ -47,4 +54,25 @@ export function generateTestModel(apiModel: ApiModel): TestModel {
     durationMs: Date.now() - startedAt,
   });
   return { scenarios: deduped };
+}
+
+/**
+ * Positive scenarios only, for every operation (AP-032 FR-004): the same rules and deduplication
+ * as `generateTestModel`, without generating any negative scenario.
+ */
+export function generatePositiveScenarios(apiModel: ApiModel): TestScenario[] {
+  const startedAt = Date.now();
+  const scenarios: TestScenario[] = [];
+  for (const operation of apiModel.operations) {
+    for (const rule of POSITIVE_RULES) {
+      scenarios.push(...rule(operation));
+    }
+  }
+  const deduped = deduplicate(scenarios);
+  logger.info("positive_generation_complete", {
+    operationCount: apiModel.operations.length,
+    scenarioCount: deduped.length,
+    durationMs: Date.now() - startedAt,
+  });
+  return deduped;
 }

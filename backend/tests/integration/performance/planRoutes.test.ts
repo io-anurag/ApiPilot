@@ -179,4 +179,14 @@ describe("performance plan and script routes", () => {
     expect(reset.body.plan.stepsNeedingExpectedStatus).toEqual([]);
     expect(reset.body.plan.journeys.map((journey: { id: string }) => journey.id)).toEqual(plan.journeys.map((journey: { id: string }) => journey.id));
   }, 30_000);
+
+  it("rejects a scope field and leaves the plan unchanged (AP-032 FR-022; specs/032 tasks T059)", async () => {
+    const { agent } = await performanceAgent({ runner: createFakeRunner({ lines: [] }) });
+    const before = (await agent.get(`${BASE}/plan`)).body.plan;
+    expect("scope" in before).toBe(false);
+    const rejected = await agent.put(`${BASE}/plan`).send({ scope: "all" });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error).toBe("invalid_request");
+    expect((await agent.get(`${BASE}/plan`)).body.plan).toEqual(before);
+  }, 30_000);
 });

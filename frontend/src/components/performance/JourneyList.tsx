@@ -1,9 +1,11 @@
 import { useState } from "react";
-import type { PerformanceJourney, PerformanceStep } from "@apipilot/shared-domain";
+import { writeEffectLabelOf, type PerformanceJourney, type PerformanceStep, type StepRequestPreview as Preview } from "@apipilot/shared-domain";
+import type { Result } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
 import { AUTH_LABEL, choiceNote } from "./performanceViewModel";
+import { StepRequestPreview } from "./StepRequestPreview";
 
 /**
  * The plan's journeys and steps (FR-004 to FR-007, FR-012, FR-039). Reorder and removal requests go
@@ -94,16 +96,21 @@ export function JourneyList({
   onRemoveOperation,
   onStepOrder,
   onJourneyOrder,
+  loadPreview,
 }: Readonly<{
   journeys: PerformanceJourney[];
   busy: boolean;
   announcement: string;
+  /** AP-032 FR-008: the step request preview, loaded on first open. */
+  loadPreview: (stepId: string) => Promise<Result<{ request: Preview }>>;
   onExpectedStatuses: (stepId: string, codes: string[]) => void;
   onRemoveOperation: (operationKey: string) => void;
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
 }>) {
   const journeyIds = journeys.map((journey) => journey.id);
+  const stepLabel = (stepId: string) =>
+    journeys.flatMap((journey) => journey.steps).find((candidate) => candidate.id === stepId)?.operationKey ?? stepId;
   return (
     <div className="space-y-5">
       <p aria-live="polite" className="sr-only">
@@ -165,14 +172,17 @@ export function JourneyList({
                     const stepIds = journey.steps.map((candidate) => candidate.id);
                     const rowTone = step.expectedStatuses.length === 0 ? "bg-warning-50 dark:bg-warning-500/10" : "";
                     const note = choiceNote(step);
+                    const effect = writeEffectLabelOf(step.method);
                     return (
                       <tr key={step.id} className={`border-t border-border align-top ${rowTone}`}>
                         <td className="px-3 py-2.5 font-mono text-xs text-muted">{stepIndex + 1}</td>
                         <td className="whitespace-nowrap px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <HttpMethodBadge method={step.method} />
+                            {effect && <StatusBadge label={effect} tone="warning" />}
                             <span className="font-mono text-xs">{step.path}</span>
                           </div>
+                          <StepRequestPreview stepId={step.id} operationKey={step.operationKey} stepLabel={stepLabel} loadPreview={loadPreview} />
                         </td>
                         <td className="px-3 py-2.5">
                           <div>{step.scenarioDescription}</div>

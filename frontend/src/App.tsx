@@ -6,15 +6,18 @@ import { Tabs } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { TestGenerationWorkflowPage } from "./pages/TestGenerationWorkflowPage";
 import { ExternalCollectionsPage } from "./pages/ExternalCollectionsPage";
+import { QuickPerformancePage } from "./pages/QuickPerformancePage";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 
 type ActiveTab = EntryChoice;
 
-/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: two views do
- * not warrant a routing dependency, mirroring AP-009's own original decision. */
+/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: three views do
+ * not warrant a routing dependency, mirroring AP-009's own original decision. AP-032 adds the
+ * quick performance test as the third. */
 const TABS: Array<{ id: ActiveTab; label: string }> = [
   { id: "guided-workflow", label: "Guided Workflow" },
   { id: "import-collection", label: "Import & Run Collection" },
+  { id: "quick-performance", label: "Quick Performance Test" },
 ];
 
 export function App() {
@@ -33,6 +36,9 @@ export function App() {
   // Same idea for "Import & Run Collection": once reached it stays mounted, so "Back to start"
   // keeps its in-memory state (selection, per-run order, an in-progress run's view).
   const [importCollectionMounted, setImportCollectionMounted] = useState(false);
+  // AP-032: the quick performance test, like Import & Run, stays mounted once reached so "Back to
+  // start" keeps its plan on screen (FR-025); its state also lives on the server for the session.
+  const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
   const [importPreload, setImportPreload] = useState<ImportPreload | null>(null);
   const importPreloadTokenRef = useRef(0);
 
@@ -50,12 +56,18 @@ export function App() {
     };
   }, []);
 
+  function mount(view: ActiveTab) {
+    if (view === "guided-workflow") setGuidedWorkflowMounted(true);
+    else if (view === "import-collection") setImportCollectionMounted(true);
+    else setQuickPerformanceMounted(true);
+  }
+
   function handleSelect(choice: EntryChoice) {
     setStarted(true);
     setActiveTab(choice);
-    setTabsVisible(choice === "import-collection");
-    if (choice === "guided-workflow") setGuidedWorkflowMounted(true);
-    else setImportCollectionMounted(true);
+    // Both standalone paths are self-contained, so the tab menu stays visible on them.
+    setTabsVisible(choice !== "guided-workflow");
+    mount(choice);
   }
 
   /** The "Back to start" control on both views (requirement: an escape hatch while the guided
@@ -70,8 +82,7 @@ export function App() {
 
   function handleTabChange(tab: ActiveTab) {
     setActiveTab(tab);
-    if (tab === "guided-workflow") setGuidedWorkflowMounted(true);
-    else setImportCollectionMounted(true);
+    mount(tab);
   }
 
   /** Fired once the guided workflow's Postman collection has been generated: the old, duplicate
@@ -123,6 +134,11 @@ export function App() {
         {importCollectionMounted && (
           <div hidden={!started || activeTab !== "import-collection"}>
             <ExternalCollectionsPage preload={importPreload} onExit={handleExitToStart} />
+          </div>
+        )}
+        {quickPerformanceMounted && (
+          <div hidden={!started || activeTab !== "quick-performance"}>
+            <QuickPerformancePage onExit={handleExitToStart} />
           </div>
         )}
       </div>

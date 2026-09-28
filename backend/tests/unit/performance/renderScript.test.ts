@@ -5,13 +5,14 @@ import { describe, expect, it } from "vitest";
 import { renderScript, SYSTEM_TAGS } from "../../../src/performance/k6/renderScript";
 import { buildPlan } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
-import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
+import { stepRequestFor } from "../../../src/performance/plan/planStepRequest";
+import { planAuth, type PerformanceContext } from "../../../src/performance/plan/stepRequest";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { percentEncode } from "../../../src/postman/parameterSerialization";
 import { generateTestModel } from "../../../src/testDesign/generateTestModel";
 import { operationsWithDiscoverableProducer, twoBearerSchemes } from "../../fixtures/postman/credentialFixtures";
 import { SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { performanceContext } from "../../fixtures/performance/context";
+import { performanceContext, quickContext } from "../../fixtures/performance/context";
 import { loadScript, type SandboxRequest, type SandboxResponse } from "../../fixtures/performance/k6Sandbox";
 
 /** FR-009, FR-010, FR-011, FR-014 to FR-016, FR-020, FR-021 (research D7, D8, D11 to D14, D25, D26; tasks T030, T063, T083). */
@@ -23,6 +24,14 @@ async function readyPlan(update: Record<string, unknown> = {}): Promise<{ plan: 
   const context = await performanceContext();
   let plan = buildPlan(context);
   plan = applyPlanUpdate(plan, { expectedStatuses: { [plan.journeys[1].steps[0].id]: ["200"] }, ...update }, context);
+  return { plan, context };
+}
+
+async function quickReadyPlan(): Promise<{ plan: PerformancePlan; context: PerformanceContext }> {
+  const context = await quickContext();
+  let plan = buildPlan(context);
+  const status = plan.journeys.flatMap((journey) => journey.steps).find((step) => step.operationKey === "GET /status")!;
+  plan = applyPlanUpdate(plan, { expectedStatuses: { [status.id]: ["200"] } }, context);
   return { plan, context };
 }
 
@@ -50,6 +59,27 @@ describe("renderScript", () => {
     const rendered = renderScript(plan, context);
     expect(rendered.script).toBe(readFileSync(path.join(GOLDEN, "script.js"), "utf-8"));
     expect(rendered.environmentTemplate).toBe(readFileSync(path.join(GOLDEN, "environment-template.json"), "utf-8"));
+  });
+
+  it("matches the golden files once line endings are normalized (AP-032 T019: the stepRequestFor refactor changed no byte)", async () => {
+    const { plan, context } = await readyPlan();
+    const rendered = renderScript(plan, context);
+    const lf = (text: string) => text.replace(/\r\n/g, "\n");
+    expect(rendered.script).toBe(lf(readFileSync(path.join(GOLDEN, "script.js"), "utf-8")));
+    expect(rendered.environmentTemplate).toBe(lf(readFileSync(path.join(GOLDEN, "environment-template.json"), "utf-8")));
+  });
+
+  it("embeds, for every step, exactly the request stepRequestFor builds (AP-032 FR-008: the preview shows what is sent)", async () => {
+    for (const { plan, context } of [await readyPlan(), await quickReadyPlan()]) {
+      const script = renderScript(plan, context).script;
+      const match = /^const JOURNEYS = ([\s\S]*?);\n\n/m.exec(script);
+      expect(match).not.toBeNull();
+      const rendered = JSON.parse(match![1]) as { steps: { id: string; request: unknown }[] }[];
+      const auth = planAuth(context);
+      for (const journey of rendered) {
+        for (const step of journey.steps) expect(step.request).toEqual(stepRequestFor(plan, context, auth, step.id).built.template);
+      }
+    }
   });
 
   it("renders byte-identical output 10 times from an unchanged plan (SC-001)", async () => {
@@ -281,7 +311,7 @@ describe("renderScript with chained login and distinct per-role credentials (FR-
       securitySchemes: twoBearerSchemes,
       summary: { operationCount: 4, schemaCount: 0, securitySchemeCount: 2, issues: [] },
     };
-    return { apiModel, approvedScenarios: generateTestModel(apiModel).scenarios.map((s, i) => ({ ...s, id: `c${String(i).padStart(3, "0")}` })), workflows: [], relationships: [] };
+    return { apiModel, approvedScenarios: generateTestModel(apiModel).scenarios.map((s, i) => ({ ...s, id: `c${String(i).padStart(3, "0")}` })), workflows: [], relationships: [], source: "guided" };
   }
 
   it("gets the chained-login token from its producer in setup, and a static token from the environment", async () => {

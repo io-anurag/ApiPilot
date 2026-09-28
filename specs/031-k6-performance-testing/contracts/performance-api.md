@@ -36,6 +36,15 @@ pre-fetch.
 
 ## Plan
 
+> **Changed by AP-032 (2026-09-28).** `PerformancePlan.scope` is removed: the plan covers the API
+> review selection, or every operation when none was made, and `PUT /plan` with `scope` returns
+> `400 invalid_request`. The plan gains `source` and the derived `credentialProducerOperationKeys`;
+> runs and run summaries gain `planSource`; `GET /runs` lists only `guided` runs; and
+> `GET /plan/steps/:stepId/request` is added. The same routes also serve AP-032's
+> `/api/quick-performance`. See
+> [specs/032-quick-performance-test/contracts/changes-to-existing-apis.md](../../032-quick-performance-test/contracts/changes-to-existing-apis.md).
+> The text below is AP-029's contract as written.
+
 ### `GET /plan`
 
 - `200 {plan: PerformancePlan, script: ScriptStatus | null}`. It builds the proposed plan on

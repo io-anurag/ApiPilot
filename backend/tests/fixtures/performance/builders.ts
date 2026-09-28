@@ -53,7 +53,7 @@ export function smokeProfile(): LoadProfile {
 
 export function planFixture(overrides: Partial<PerformancePlan> = {}): PerformancePlan {
   return {
-    scope: "all",
+    source: "guided",
     excludedOperationKeys: [],
     omitted: [],
     journeys: [journeyFixture()],
@@ -65,6 +65,7 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     fingerprint: "fingerprint-fixture",
     upstreamFingerprint: "upstream-fixture",
     stepsNeedingExpectedStatus: [],
+    credentialProducerOperationKeys: [],
     ...overrides,
   };
 }
@@ -88,6 +89,7 @@ export function runFixture(overrides: Partial<PerformanceRun> = {}): Performance
     status: "in-progress",
     environment: { id: environment.id, name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl },
     planSnapshot: planFixture(),
+    planSource: "guided",
     scriptSha256: "a".repeat(64),
     // Any version the readiness gate accepts (≥ 1.0.0, research D9). ApiPilot pins no k6 version:
     // a real run records whatever k6 the user installed. A fixed value keeps tests deterministic.

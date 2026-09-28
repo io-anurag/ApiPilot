@@ -1,0 +1,210 @@
+# AP-032 Quick Performance Test fixture (specs/032-quick-performance-test, tasks T001; quickstart
+# prerequisites). Loaded through the quick path, it exercises:
+# - POST /auth/login        the one unauthenticated operation whose path contains the `LoginAuth`
+#                           scheme's stem ("login"), with one plausible string credential field in
+#                           its response (`accessToken`), so findCredentialProducers and
+#                           buildAuthCredentialRelationships make it the chained-login producer
+#                           (FR-003a). It starts removed from a quick plan.
+# - POST /auth/logout       secured and not a producer: it stays in the plan (spec Edge Cases).
+# - GET /orders             an enum query parameter, so the operation has several positive
+#                           scenarios and the lowest quick id must pick the full happy path.
+# - POST /orders            a write with a `format: email` body field (a unique-per-iteration value).
+# - /orders/{orderId}       GET, PUT, PATCH and DELETE; no operation produces `orderId`, and the
+#                           quick path never chains, so it is a user-supplied value.
+# - /products...            more reads and writes, for counts per method.
+# - GET /status             documents no 2xx response: its step needs an expected status.
+# Documented success statuses match what backend/scripts/perfStubTarget.ts answers.
+openapi: 3.0.3
+info:
+  title: Quick Performance Fixture
+  version: "1.0"
+servers:
+  - url: https://example.invalid/api
+security:
+  - LoginAuth: []
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Exchange credentials for an access token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken]
+                properties:
+                  accessToken:
+                    type: string
+  /auth/logout:
+    post:
+      operationId: endSession
+      summary: End the current session.
+      responses:
+        "200":
+          description: Ended
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, closed]
+      responses:
+        "200":
+          description: Orders
+    post:
+      operationId: createOrder
+      summary: Create an order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerEmail, quantity]
+              properties:
+                customerEmail:
+                  type: string
+                  format: email
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reference:
+                    type: string
+                    format: uuid
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getOrder
+      summary: Fetch one order.
+      responses:
+        "200":
+          description: Order
+    put:
+      operationId: replaceOrder
+      summary: Replace one order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Replaced
+    patch:
+      operationId: updateOrder
+      summary: Update one order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Updated
+    delete:
+      operationId: deleteOrder
+      summary: Delete one order.
+      responses:
+        "200":
+          description: Deleted
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products.
+      responses:
+        "200":
+          description: Products
+    post:
+      operationId: createProduct
+      summary: Create a product.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+      responses:
+        "201":
+          description: Created
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProduct
+      summary: Fetch one product.
+      responses:
+        "200":
+          description: Product
+    delete:
+      operationId: deleteProduct
+      summary: Delete one product.
+      responses:
+        "200":
+          description: Deleted
+  /status:
+    get:
+      operationId: getStatus
+      summary: Service status.
+      responses:
+        "503":
+          description: Unavailable
+        default:
+          description: Any other outcome
+components:
+  securitySchemes:
+    LoginAuth:
+      type: http
+      scheme: bearer

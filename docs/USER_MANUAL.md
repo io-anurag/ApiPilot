@@ -23,6 +23,11 @@ Postman, received from a teammate, or hand-authored — you can instead import a
 directly, without uploading an OpenAPI specification at all. See
 [section 4](#4-importing-and-running-your-own-postman-collection).
 
+If you only want to know how an API behaves under load, the **Quick performance test** takes
+an uploaded specification straight to a k6 load-test plan, with no review stages. Every
+operation becomes a step with a generated request that no one reviews, so every write it will
+send is listed before you run. See [section 5](#5-quick-performance-test).
+
 Nothing is ever sent to a cloud AI service, and no request is made against the API
 described by your specification until you explicitly start an execution run. The one
 exception is your own imported collection's requests and scripts, which you separately
@@ -43,14 +48,15 @@ explicitly, ApiPilot follows your operating system's light/dark preference.
 
 ## 3. The guided workflow
 
-The start screen offers two paths: **Guided Workflow** (described in this section, including
-the optional k6 performance test in section 3.11) and
-**Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)).
+The start screen offers three paths: **Guided Workflow** (described in this section, including
+the optional k6 performance test in section 3.11),
+**Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection))
+and **Quick performance test** (described in [section 5](#5-quick-performance-test)).
 While the guided workflow is in progress the tab bar is hidden so you can finish it; use
 **← Back to start** to return to the start screen at any time. Nothing is discarded —
 choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
-are in **Import & Run Collection**, which has its own **← Back to start** too, and switching
-between the two views never discards either one's state.
+are in **Import & Run Collection** or the **Quick performance test**, each of which has its own
+**← Back to start** too, and switching between the views never discards any one's state.
 
 Within the guided workflow, every step below is reached in this fixed order, and a
 completed step can be revisited read-only (or, for the two review stages, reopened) by
@@ -286,7 +292,10 @@ opens once the Postman collection has been generated (section 3.9), whether or n
 it: choose **Set up a performance test** on the Execution notice, or the **Performance
 Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
 
-**The plan.** ApiPilot proposes one journey per approved workflow, with its steps in
+**The plan.** The operations in scope are the ones you selected in API Review, or every
+operation when you selected none; there is no choice to widen them here. To include other
+operations, widen the selection in API Review and regenerate, or use the quick performance
+test (section 5). ApiPilot proposes one journey per approved workflow, with its steps in
 dependency order, and one single-step journey for each other operation in scope. Every
 virtual user runs every journey, in order, on each iteration. For each step you see its
 method and path, the one positive scenario used and, when there was a choice, why (a
@@ -295,6 +304,27 @@ variables it produces or needs. Each step sends that scenario's generated reques
 same way as the Postman collection: its headers, query parameters and body come from the
 scenario and are not edited here. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
 DELETE) are included by default: choose **Remove** on any operation you do not want sent.
+
+- **What the writes will do.** Above the journeys, a summary states how many write
+  operations will be sent, the count per method, and each one by method and path, with the
+  reminder that every virtual user sends each of them on every iteration for the whole run and
+  that ApiPilot does not clean up afterwards. Each write step carries a text marker
+  (**Creates**, **Replaces**, **Updates** or **Deletes**) beside its method. The same list is
+  shown next to the run trigger. A plan with no writes says it sends only read requests.
+- **Removing in bulk.** **Remove all write operations** removes every write in one action,
+  and **Remove all <METHOD> operations** removes every operation of one method. Removed
+  operations are listed with a **Restore** button each, plus **Restore all**. When every
+  operation is removed, the plan says so and the script cannot be generated until you
+  restore one.
+- **The request a step sends.** Choose **Request** under a step to see what it sends: the
+  method, the path template, each path, query and header parameter with its generated value
+  or the environment value it needs, the authentication, and the body. Values that come from
+  the environment are shown by name only, and secrets are marked, never shown. The preview is
+  view only.
+- **Long lists.** Removed operations, operations left out (no positive scenario), and steps
+  that still need an expected status are counted lists, one operation per line, collapsed
+  when they have more than ten entries. Each entry of the expected-status list takes you to
+  that step's editor.
 
 - **Expected status.** Each step starts with the success statuses the specification
   documents, labelled "from specification". You can add codes (an exact code such as `201`,
@@ -321,6 +351,37 @@ is reported as missing data, and the steps that depend on it are reported as not
 you can download and run elsewhere. The same plan always produces the same bytes, and neither
 file ever contains a value. Any change to the plan marks the script **Out of date** until you
 regenerate it.
+
+**Running the script outside ApiPilot.** The two downloads are `apipilot-performance.js` (the
+script) and `apipilot-performance-environment.json` (the template). The template lists each
+value the plan needs, the environment variable that carries it, and whether it is a secret. The
+names and numbers depend on the plan, and a changed plan can renumber them, so always take them
+from the template downloaded with the script you run. For example:
+
+```json
+{
+  "baseUrl": { "env": "APIPILOT_V_0", "secret": false, "value": "" },
+  "clientSecret": { "env": "APIPILOT_V_1", "secret": true, "value": "" }
+}
+```
+
+k6 does not read the template. The script takes each value only from its `APIPILOT_V_<n>`
+environment variable, so install k6 1.0.0 or later on the machine that will generate the load,
+set those variables, and run the script unmodified:
+
+```powershell
+$env:APIPILOT_V_0 = "https://staging.example.com"
+$env:APIPILOT_V_1 = "<client secret>"
+k6 run apipilot-performance.js
+```
+
+On Linux or macOS, use `export APIPILOT_V_0=...` instead. `k6 run -e APIPILOT_V_0=...` also works,
+but it leaves secrets in shell history and the process list, so prefer environment variables for
+anything the template marks `"secret": true`. Do not type real secrets into the template and keep
+it on disk: the files are value-free by design. A variable left unset behaves as a missing value
+does in ApiPilot: that step is not sent, and the steps depending on it are not attempted. A run
+outside ApiPilot prints k6's own end-of-test summary; ApiPilot's report, findings and run history
+are produced only for runs started from the panel.
 
 **Running.** You need k6 1.0.0 or later installed yourself on the machine running the
 ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration). ApiPilot
@@ -553,7 +614,53 @@ Treat the result as a starting point for your own investigation.
   request no longer exists, your edit is discarded rather than silently reapplied to a
   different request.
 
-## 5. Sessions
+## 5. Quick performance test
+
+Choose **Quick performance test** on the start screen (or its tab, once the tab bar is visible)
+to load-test an API straight from its OpenAPI specification. It skips API Review, scenario
+review, AI enhancement, workflow review and Postman generation, and it never reads or changes a
+guided workflow you have in progress; both can exist side by side.
+
+**Upload.** Upload one OpenAPI 3.x YAML file. The same checks as the guided workflow apply
+(size limit, YAML, OpenAPI version), with the same error messages, and nothing is created when
+the file is rejected. ApiPilot then generates positive scenarios only, with its fixed rules and
+no AI, and opens the performance plan. Uploading the same file again gives the same plan, and
+the same edits give a byte-identical script.
+
+**What the plan contains.** Every operation that has a positive scenario is its own single-step
+journey, using the operation's full happy-path request. Requests are not chained: a path
+parameter such as `orderId` is a value you supply in the environment, and the guided workflow is
+the way to chain requests. Operations with no positive scenario are listed as left out, with
+the reason. When the specification secures its operations with a token from a login operation
+(for example `POST /auth/login`), that login is placed in the removed list as "used to acquire
+the run's credentials": the token is still obtained once for the run, but the login itself is
+not sent by every virtual user on every iteration. You can restore it. Nothing else is removed
+by name; a logout or revoke operation stays in the plan, where the write summary shows it.
+
+**Everything else is the performance plan of section 3.11**: the write summary and effect
+markers, bulk removal, the request preview, expected statuses, order and think time, the load
+profile, thresholds, the script and its download, and the out-of-date marking. Because no one
+reviewed these scenarios, read the write summary before you run. It lists every write operation
+the run will send, above the journeys and again next to the run trigger.
+
+**Environments and values.** You can create, edit and choose target environments from the quick
+plan without starting a guided workflow. Environments are one set per browser session: one you
+create here is also available in the guided workflow, and the other way round. The values
+checklist works as in section 3.11.
+
+**Running.** Runs work exactly as in section 3.11: your own k6, a trigger that names the
+target, live progress, cancel, and the report. They share the one-run-at-a-time slot with
+functional and guided performance runs. The report of a quick run states that the plan came
+from the quick performance test with generated scenarios that were not reviewed. The run list
+on this page shows quick runs only.
+
+**Starting again.** **New specification** replaces the current quick test after you confirm.
+Runs and reports already made are kept. **← Back to start** returns to the start screen and
+keeps the quick test for your session. Like the guided workflow's plan, the quick test lives in
+memory: a backend restart loses it (runs, reports and environments are kept), and you upload the
+specification again.
+
+## 6. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
 random cookie), so two people working from different browsers never see or affect each
@@ -570,7 +677,7 @@ past results just because the server restarted. That saved data is still tied to
 session: if your session times out from inactivity, it is removed along with it.
 Variable and credential values are encrypted before being stored.
 
-## 6. AI behavior you should know about
+## 7. AI behavior you should know about
 
 - AI runs entirely on your own machine (Transformers.js); nothing about your
   specification, scenarios, or results is ever sent to an external service.
@@ -588,7 +695,7 @@ Variable and credential values are encrypted before being stored.
   likely cause comes from fixed rules, not the AI; only the explanation is AI output, and it
   is labelled as an inference. Neither ever changes a run's recorded results.
 
-## 7. Limitations to keep in mind
+## 8. Limitations to keep in mind
 
 - Only a single OpenAPI 3.x YAML file is supported per workflow (max 10 MB). Swagger 2.0
   and JSON OpenAPI input are not supported.
@@ -625,10 +732,13 @@ Variable and credential values are encrypted before being stored.
   it through the hand-off (section 3.10).
 - Headers added by authentication are previewed only for bearer tokens and API keys sent
   in a header (section 4.3).
-- Performance testing (section 3.11) needs k6 1.0.0 or later that you install yourself.
-  Its status is *implementation complete, real-k6 validation pending*: automated tests
-  replay recorded k6 output, but the run path has not yet been checked against a real k6
-  binary.
+- The quick performance test (section 5) sends generated requests that no one reviewed, never
+  chains requests, and uses each operation's full happy-path scenario only. Valid boundary
+  variants and negative scenarios are not generated.
+- Performance testing (section 3.11) and the quick performance test (section 5) need k6
+  1.0.0 or later that you install yourself. The run path has been checked against a real k6
+  (v2.3.0 on Windows, 2026-09-28); the manual browser walkthrough of both features is still
+  outstanding.
 - Performance runs apply no limit and no warning on virtual users or duration, include write
   operations by default, and never clean up what they create. Load comes from the machine
   running the backend, so a heavy profile can be limited by that machine; the report shows it.
@@ -641,7 +751,7 @@ Variable and credential values are encrypted before being stored.
   performance test uses the rule-generated one, while the Postman collection's choice ignores
   the origin, so the two can send different requests for that operation.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
@@ -667,11 +777,14 @@ Variable and credential values are encrypted before being stored.
 | Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
 | "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
 | **Generate script** stays disabled | A step has no expected status (its specification documents no success status) | Add an expected status to the listed step |
+| **Generate script** is disabled with "The plan has no operations" | Every operation was removed | Restore at least one operation from the removed list |
+| Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; runs and reports are kept |
+| Quick performance test: the login operation is in the removed list | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |
 
-## 9. Where to look next
+## 10. Where to look next
 
 - [README](../README.md) — installation, configuration, AI model selection, and full
   scope/limitations.

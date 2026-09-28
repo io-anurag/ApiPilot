@@ -1,15 +1,11 @@
-import type {
-  PerformancePlan,
-  PerformanceScope,
-  PerformanceThreshold,
-  TestGenerationWorkflow,
-} from "@apipilot/shared-domain";
+import type { PerformancePlan, PerformanceThreshold, TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { createLogger } from "../../logger";
-import { buildJourneys, operationsInScope } from "./buildJourneys";
+import { compareCodeUnits } from "../../postman/ordering";
+import { buildJourneys } from "./buildJourneys";
 import { stepsNeedingExpectedStatus, withSources, prefillExpectedStatuses } from "./expectedStatuses";
 import { canonicalJson, sha256Hex } from "./identifiers";
 import { startingProfile } from "./loadProfiles";
-import { operationKeyOf, planAuth, type PerformanceContext } from "./stepRequest";
+import { operationKeyOf, planAuth, type AuthPlan, type PerformanceContext } from "./stepRequest";
 import { listUserSuppliedValues } from "./userSuppliedValues";
 
 const logger = createLogger("performancePlan");
@@ -31,6 +27,7 @@ export function contextFromWorkflow(workflow: TestGenerationWorkflow): Performan
     workflows: (workflow.dependencyAnalysis?.workflows ?? []).filter((candidate) => approved.has(candidate.id)),
     relationships: workflow.dependencyAnalysis?.graph.relationships ?? [],
     selectedOperationKeys: workflow.selectedOperationKeys,
+    source: "guided",
   };
 }
 
@@ -52,12 +49,14 @@ export function upstreamFingerprint(context: PerformanceContext): string {
 /**
  * The out-of-date check (FR-023): every plan field that changes the script, plus the upstream
  * fingerprint, so a revised scenario with an unchanged id still makes a script out of date.
- * `stepsNeedingExpectedStatus` is derived and excluded.
+ * `stepsNeedingExpectedStatus` and `credentialProducerOperationKeys` are derived and excluded.
  */
-export function planFingerprint(plan: Omit<PerformancePlan, "fingerprint" | "stepsNeedingExpectedStatus">): string {
+export function planFingerprint(
+  plan: Omit<PerformancePlan, "fingerprint" | "stepsNeedingExpectedStatus" | "credentialProducerOperationKeys">,
+): string {
   return sha256Hex(
     canonicalJson({
-      scope: plan.scope,
+      source: plan.source,
       excludedOperationKeys: plan.excludedOperationKeys,
       omitted: plan.omitted,
       journeys: plan.journeys,
@@ -81,7 +80,6 @@ export function finalizePlan(plan: Omit<PerformancePlan, "fingerprint" | "stepsN
 }
 
 export interface PlanChoices {
-  scope: PerformanceScope;
   excludedOperationKeys: string[];
   thinkTimeMs: number;
   loadProfile: PerformancePlan["loadProfile"];
@@ -93,10 +91,22 @@ export interface PlanChoices {
   stepOrder?: Map<string, string[]>;
 }
 
+/**
+ * AP-032 FR-003a (specs/032-quick-performance-test research Q5): the login operations the plan's
+ * chained-login token sources call, as the existing credential producers identify them. Nothing is
+ * guessed by name or path.
+ */
+function credentialProducerOperationKeys(auth: AuthPlan): string[] {
+  const keys = [...auth.tokenSources.values()].flatMap((source) => (source.producerOperationKey ? [source.producerOperationKey] : []));
+  return [...new Set(keys)].sort(compareCodeUnits);
+}
+
 function defaultChoices(context: PerformanceContext): PlanChoices {
   return {
-    scope: context.selectedOperationKeys ? "selection" : "all",
-    excludedOperationKeys: [],
+    // A quick plan starts with its credential producers removed, so a login is not sent by every
+    // virtual user on every iteration; the user can restore it (FR-003a, FR-014). A guided plan
+    // starts with nothing removed, as in AP-029.
+    excludedOperationKeys: context.source === "quick" ? credentialProducerOperationKeys(planAuth(context)) : [],
     thinkTimeMs: 0,
     loadProfile: startingProfile("smoke"),
     thresholds: [],
@@ -109,8 +119,8 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   const auth = planAuth(context);
   const knownKeys = new Set(context.apiModel.operations.map((operation) => operationKeyOf(operation)));
   const excludedOperationKeys = [...new Set(choices.excludedOperationKeys.filter((key) => knownKeys.has(key)))].sort();
-  const built = buildJourneys(context, auth, choices.scope, new Set(excludedOperationKeys));
-  const operationsByKey = new Map(operationsInScope(context, "all").map((operation) => [operationKeyOf(operation), operation]));
+  const built = buildJourneys(context, auth, new Set(excludedOperationKeys));
+  const operationsByKey = new Map(context.apiModel.operations.map((operation) => [operationKeyOf(operation), operation]));
 
   let journeys = built.journeys.map((journey) => ({
     ...journey,
@@ -140,7 +150,7 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   const stepIds = new Set(journeys.flatMap((journey) => journey.steps.map((step) => step.id)));
   const thresholds = choices.thresholds.filter((threshold) => threshold.scope.kind === "run" || stepIds.has(threshold.scope.stepId));
   const plan = finalizePlan({
-    scope: choices.scope,
+    source: context.source,
     excludedOperationKeys,
     omitted: built.omitted,
     journeys,
@@ -150,8 +160,10 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
     userSuppliedValues: listUserSuppliedValues(journeys, built.requests, auth),
     uniqueValueFields: built.uniqueValueFields.filter((field) => stepIds.has(field.stepId)),
     upstreamFingerprint: upstreamFingerprint(context),
+    credentialProducerOperationKeys: credentialProducerOperationKeys(auth),
   });
   logger.info("performance_plan_built", {
+    planSource: plan.source,
     journeyCount: plan.journeys.length,
     stepCount: plan.journeys.reduce((total, journey) => total + journey.steps.length, 0),
   });
@@ -169,7 +181,6 @@ export function rebuildPlan(previous: PerformancePlan, context: PerformanceConte
     previous.journeys.flatMap((journey) => journey.steps.map((step) => [step.id, step.expectedStatuses.map((status) => status.code)] as const)),
   );
   return assemblePlan(context, {
-    scope: previous.scope,
     excludedOperationKeys: previous.excludedOperationKeys,
     thinkTimeMs: previous.thinkTimeMs,
     loadProfile: previous.loadProfile,
@@ -187,7 +198,6 @@ export function rebuildPlan(previous: PerformancePlan, context: PerformanceConte
 /** The choices a plan currently carries, for re-assembly after an edit. */
 export function choicesOf(plan: PerformancePlan): PlanChoices {
   return {
-    scope: plan.scope,
     excludedOperationKeys: plan.excludedOperationKeys,
     thinkTimeMs: plan.thinkTimeMs,
     loadProfile: plan.loadProfile,

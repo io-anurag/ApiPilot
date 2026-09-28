@@ -1,10 +1,10 @@
 {
   "name": "apipilot",
-  "version": "19.5.2",
+  "version": "19.6.0",
   "private": true,
   "description": "ApiPilot monorepo: backend, frontend, and shared domain packages.",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=24.0.0"
   },
   "workspaces": [
     "backend",
@@ -37,9 +37,9 @@
     "adm-zip": "0.6.1"
   },
   "allowScripts": {
-    "esbuild@0.21.5": true,
     "esbuild@0.28.2": true,
-    "onnxruntime-node@1.24.3": true,
-    "protobufjs@7.6.6": true
+    "protobufjs@7.6.6": true,
+    "better-sqlite3@13.0.3": true,
+    "onnxruntime-node@1.30.0": true
   }
 }

@@ -2,8 +2,9 @@ import type { TestScenario } from "@apipilot/shared-domain";
 import { assembleWorkflows } from "../../../src/dependencies/assembleWorkflows";
 import { computeDeterministicRelationships } from "../../../src/dependencies/deterministicMatching";
 import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
-import { generateTestModel } from "../../../src/testDesign/generateTestModel";
-import { loadPerformanceApiModel } from "./specification";
+import { withQuickScenarioIds } from "../../../src/performance/quick/quickScenarioIds";
+import { generatePositiveScenarios, generateTestModel } from "../../../src/testDesign/generateTestModel";
+import { loadPerformanceApiModel, loadQuickApiModel } from "./specification";
 
 /**
  * A `PerformanceContext` for `performance.yaml` built with the real analysis, deterministic
@@ -26,5 +27,21 @@ export async function performanceContext(
   if (overrides.mutateScenarios) scenarios = overrides.mutateScenarios(scenarios);
   const relationships = computeDeterministicRelationships(apiModel);
   const { workflows } = assembleWorkflows(relationships);
-  return { apiModel, approvedScenarios: scenarios, workflows, relationships };
+  return { apiModel, approvedScenarios: scenarios, workflows, relationships, source: "guided" };
+}
+
+/**
+ * AP-032: a `PerformanceContext` for `quick-performance.yaml` as the quick path builds it (specs/032
+ * research Q1, Q3, Q4): positive scenarios only, quick ids, no workflows or relationships, and every
+ * operation in scope. `source: "guided"` gives the same inputs with the guided path's defaults.
+ */
+export async function quickContext(source: "quick" | "guided" = "quick"): Promise<PerformanceContext> {
+  const apiModel = await loadQuickApiModel();
+  return {
+    apiModel,
+    approvedScenarios: withQuickScenarioIds(generatePositiveScenarios(apiModel)),
+    workflows: [],
+    relationships: [],
+    source,
+  };
 }

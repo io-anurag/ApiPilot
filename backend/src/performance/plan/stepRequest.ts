@@ -4,6 +4,7 @@ import type {
   ApiOperation,
   ArtifactVariable,
   IntegrationWorkflow,
+  PerformancePlanSourceKind,
   PostmanAuth,
   PostmanRequestItem,
   StepAuthKind,
@@ -58,6 +59,11 @@ export interface TokenSource {
   responseField: string;
   /** User-supplied names the token request itself needs. */
   envNames: string[];
+  /**
+   * AP-032 FR-003a: for `chained-login`, the login operation the token request calls. Absent for
+   * OAuth2 client credentials, whose token request goes to the scheme's `tokenUrl`, not an operation.
+   */
+  producerOperationKey?: string;
 }
 
 /** Everything plan building and rendering read from the approved workflow state. */
@@ -69,6 +75,8 @@ export interface PerformanceContext {
   relationships: ApiDependencyRelationship[];
   /** Absent means every analyzed operation (as `TestGenerationWorkflow.selectedOperationKeys`). */
   selectedOperationKeys?: string[];
+  /** AP-032: the guided workflow's approvals, or a quick test's generated, unreviewed scenarios. */
+  source: PerformancePlanSourceKind;
 }
 
 export interface AuthPlan {
@@ -204,6 +212,7 @@ export function planAuth(context: PerformanceContext): AuthPlan {
       request: built.template,
       responseField: relationship.producer.field,
       envNames: built.envNames,
+      producerOperationKey: operationKeyOf(operation),
     });
   }
   return { schemePlan, tokenSources };

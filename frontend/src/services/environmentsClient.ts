@@ -2,9 +2,10 @@ import type { Environment, EnvironmentTier } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 
 /**
- * The guided workflow's environments (AP-017 contracts/execution-api.md), restored for AP-029's
- * performance stage, which keeps its user-supplied values in environments (FR-013). The routes
- * require Postman generation to be complete, the same point the performance stage opens.
+ * The session's environments (AP-017 contracts/execution-api.md), shared by the guided workflow's
+ * performance stage and AP-032's quick performance test, which keep their user-supplied values in
+ * environments (AP-029 FR-013, AP-032 FR-017). The routes open once Postman generation is complete
+ * or the session has a quick performance test (AP-032 FR-016 to FR-018).
  */
 
 const logger = createLogger("environmentsClient");

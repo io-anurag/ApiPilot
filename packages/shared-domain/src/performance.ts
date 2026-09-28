@@ -8,8 +8,12 @@
  * `PerformanceFailureCategory`, since `FailureCategory` belongs to AP-017's `execution.ts`).
  */
 
-/** FR-001: the API review's selection, or every analyzed operation. */
-export type PerformanceScope = "selection" | "all";
+/**
+ * Where a plan was built (AP-032, specs/032-quick-performance-test data-model.md): the guided
+ * workflow's Performance Testing stage, or the quick performance test straight from an uploaded
+ * specification, whose scenarios were generated and not reviewed (FR-013).
+ */
+export type PerformancePlanSourceKind = "guided" | "quick";
 
 /** An operation in scope that contributes no step (FR-005). */
 export interface OmittedOperation {
@@ -195,7 +199,8 @@ export interface UniqueValueField {
 
 /** What will be tested and how (data-model.md `PerformancePlan`). Holds no values. */
 export interface PerformancePlan {
-  scope: PerformanceScope;
+  /** AP-032: where the plan was built. Fingerprinted. Absent on snapshots recorded before AP-032, read as `guided`. */
+  source: PerformancePlanSourceKind;
   excludedOperationKeys: string[];
   omitted: OmittedOperation[];
   journeys: PerformanceJourney[];
@@ -210,6 +215,54 @@ export interface PerformancePlan {
   upstreamFingerprint: string;
   /** Derived, not fingerprinted: step ids with no expected status, in plan order (FR-012a). */
   stepsNeedingExpectedStatus: string[];
+  /**
+   * Derived, not fingerprinted (AP-032 FR-003a): the login operations the plan's chained-login
+   * token sources call, sorted. A quick plan starts with them removed; a removed operation listed
+   * here is shown as "used to acquire the run's credentials".
+   */
+  credentialProducerOperationKeys: string[];
+}
+
+/**
+ * AP-032 FR-008 (specs/032-quick-performance-test data-model "StepRequestPreview"): one `{{name}}`
+ * a step's request uses, by where its value comes from at run time. Never carries a value.
+ */
+export type PreviewReference =
+  | { kind: "environment"; name: string; secret: boolean }
+  | { kind: "workflow-variable"; name: string; variable: string; producerStepId: string | null }
+  | { kind: "unique-per-iteration"; name: string; format: UniqueValueField["format"] }
+  | { kind: "credential"; name: string; schemeName: string };
+
+/** A parameter or header value: generated text, one reference, or text that mixes both. */
+export type PreviewValue =
+  | { kind: "generated"; text: string }
+  | { kind: "template"; text: string; references: PreviewReference[] }
+  | PreviewReference;
+
+export interface PreviewParameter {
+  location: "path" | "query" | "header";
+  name: string;
+  value: PreviewValue;
+}
+
+export interface PreviewAuth {
+  kind: StepAuthKind;
+  schemeName: string | null;
+  location: "header" | "query" | null;
+  references: PreviewReference[];
+}
+
+/** The view-only request of one step, derived from the request the script sends (FR-008). */
+export interface StepRequestPreview {
+  stepId: string;
+  operationKey: string;
+  method: string;
+  pathTemplate: string;
+  /** Path, then query, then header parameters, each in request order. */
+  parameters: PreviewParameter[];
+  auth: PreviewAuth;
+  /** `text` is the body as sent, with each reference left as `{{name}}`. */
+  body: { contentType: "json" | "text"; text: string; references: PreviewReference[] } | null;
 }
 
 /** What the frontend knows about a generated script. Never the script text. */
@@ -218,6 +271,16 @@ export interface ScriptStatus {
   scriptSha256: string;
   stepCount: number;
   outOfDate: boolean;
+}
+
+/**
+ * AP-032 contracts/quick-performance-api.md: the session's quick performance test as the client sees
+ * it. No script text, no scenario body outside the step preview, no environment value.
+ */
+export interface QuickPerformanceTestView {
+  specification: { filename: string; info?: { title: string; version: string }; operationCount: number };
+  plan: PerformancePlan;
+  script: ScriptStatus | null;
 }
 
 export type K6UnavailableReason =
@@ -393,6 +456,8 @@ export interface PerformanceRun {
   failure?: { category: PerformanceRunFailureCategory };
   environment: PerformanceRunEnvironment;
   planSnapshot: PerformancePlan;
+  /** AP-032: copied from `planSnapshot.source`; `guided` for every run recorded before AP-032. */
+  planSource: PerformancePlanSourceKind;
   scriptSha256: string;
   k6Version: string;
   plannedDurationMs: number;
@@ -405,3 +470,70 @@ export interface PerformanceRun {
 
 /** `GET /runs` rows: no plan snapshot, progress or result. */
 export type PerformanceRunSummary = Omit<PerformanceRun, "planSnapshot" | "progress" | "result">;
+
+/** AP-032 FR-009, FR-010: the write methods, in the fixed summary order. */
+export type WriteMethod = "POST" | "PUT" | "PATCH" | "DELETE";
+
+export type WriteEffect = "creates" | "replaces" | "updates" | "deletes";
+
+const WRITE_METHODS: readonly WriteMethod[] = ["POST", "PUT", "PATCH", "DELETE"];
+
+const WRITE_EFFECTS: Readonly<Record<WriteMethod, WriteEffect>> = { POST: "creates", PUT: "replaces", PATCH: "updates", DELETE: "deletes" };
+
+/** The text marker each write step carries beside its method badge (FR-010): never colour alone. */
+export const WRITE_EFFECT_LABELS: Readonly<Record<WriteMethod, string>> = { POST: "Creates", PUT: "Replaces", PATCH: "Updates", DELETE: "Deletes" };
+
+/** Exact, upper-case match; callers normalize first. */
+export function isWriteMethod(method: string): method is WriteMethod {
+  return (WRITE_METHODS as readonly string[]).includes(method);
+}
+
+/** The effect of a request with this method, or `null` for a read. */
+export function writeEffectOf(method: string): WriteEffect | null {
+  const normalized = method.toUpperCase();
+  return isWriteMethod(normalized) ? WRITE_EFFECTS[normalized] : null;
+}
+
+/** The FR-010 text marker for this method ("Creates", …), or `null` for a read. */
+export function writeEffectLabelOf(method: string): string | null {
+  const normalized = method.toUpperCase();
+  return isWriteMethod(normalized) ? WRITE_EFFECT_LABELS[normalized] : null;
+}
+
+export interface WriteOperationEntry {
+  operationKey: string;
+  method: WriteMethod;
+  path: string;
+  effect: WriteEffect;
+  /** More than one only when an operation appears in several guided workflow journeys. */
+  stepIds: string[];
+}
+
+/** Derived from a plan's steps on every change; never stored (specs/032 data-model.md). */
+export interface WriteOperationSummary {
+  /** Distinct write operations, not steps. */
+  total: number;
+  /** Methods with a count over 0, in the order POST, PUT, PATCH, DELETE. */
+  byMethod: { method: WriteMethod; count: number }[];
+  /** In plan order, by first appearance. */
+  operations: WriteOperationEntry[];
+}
+
+/** AP-032 FR-009 to FR-012: what the plan's write operations are, for the plan screen and the run trigger. */
+export function summarizeWriteOperations(journeys: readonly PerformanceJourney[]): WriteOperationSummary {
+  const entries = new Map<string, WriteOperationEntry>();
+  for (const journey of journeys) {
+    for (const step of journey.steps) {
+      const method = step.method.toUpperCase();
+      if (!isWriteMethod(method)) continue;
+      const existing = entries.get(step.operationKey);
+      if (existing) existing.stepIds.push(step.id);
+      else entries.set(step.operationKey, { operationKey: step.operationKey, method, path: step.path, effect: WRITE_EFFECTS[method], stepIds: [step.id] });
+    }
+  }
+  const operations = [...entries.values()];
+  const byMethod = WRITE_METHODS.map((method) => ({ method, count: operations.filter((entry) => entry.method === method).length })).filter(
+    (entry) => entry.count > 0,
+  );
+  return { total: operations.length, byMethod, operations };
+}

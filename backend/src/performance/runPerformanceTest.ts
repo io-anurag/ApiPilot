@@ -72,6 +72,7 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
     touch(sessionId);
     logger.info("performance_run_settled", {
       runId: run.id,
+      planSource: run.planSource,
       status: settled.status,
       cancelReason: settled.cancelReason ?? "",
       requestCount: result?.totals.requests ?? 0,
@@ -125,6 +126,7 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
     liveHandles.set(run.id, handle);
     logger.info("performance_run_started", {
       runId: run.id,
+      planSource: run.planSource,
       environmentTier: run.environment.tier,
       stepCount: run.planSnapshot.journeys.reduce((total, journey) => total + journey.steps.length, 0),
       plannedDurationMs: run.plannedDurationMs,
