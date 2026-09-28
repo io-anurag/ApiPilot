@@ -155,35 +155,76 @@ describe("PerformancePlanScreen operations table", () => {
   });
 });
 
-describe("PerformancePlanScreen run setup", () => {
-  it("summarises each setup item's state in text", async () => {
-    stubFetch(routes(quickPlan()));
-    renderScreen();
-    const setup = await screen.findByRole("complementary", { name: "Run setup" });
-    expect(setup).toHaveTextContent("7 steps · 5 writes · 1 without an expected status");
-    expect(setup).toHaveTextContent("Smoke · 1 stage · 01:00 · peak 1 VU");
-    expect(setup).toHaveTextContent("None set, so the report gives no pass/fail verdict.");
-    expect(setup).toHaveTextContent("perf-local · every value present");
-    expect(setup).toHaveTextContent("Waiting: every step needs an expected status.");
-  });
-
-  it("switches to the Runs tab when a run starts, where the live run names its target (AP-029 FR-025)", async () => {
-    const ready = quickPlan({
+describe("PerformancePlanScreen pending bar and Run setup", () => {
+  const readyPlan = () =>
+    quickPlan({
       stepsNeedingExpectedStatus: [],
       journeys: quickPlan().journeys.filter((journey) => journey.steps[0].operationKey !== "GET /status"),
     });
+  const pendingBar = () => screen.getByRole("region", { name: "What still blocks a run" });
+
+  it("lists what still blocks a run above the tabs, each with its action, and counts the setup items on the tab", async () => {
+    stubFetch(routes(quickPlan()));
+    renderScreen();
+    await screen.findByRole("button", { name: "Details of GET /orders" });
+    const bar = pendingBar();
+    expect(bar).toHaveTextContent("Before you can run: 2 things left");
+    expect(bar).toHaveTextContent("1 step needs an expected status before the script can be generated.");
+    expect(bar).toHaveTextContent("The k6 script has not been generated.");
+    expect(within(bar).getByRole("button", { name: "Generate the k6 script" })).toBeDisabled();
+    // The environment is chosen (perf-local), so it is not pending; missing values never block.
+    expect(bar).not.toHaveTextContent("target environment");
+    expect(screen.getByRole("button", { name: "Run setup (1 to do)" })).toBeInTheDocument();
+  });
+
+  it("shows the steps needing a status in the Plan tab from the pending bar", async () => {
+    stubFetch(routes(quickPlan()));
+    renderScreen();
+    await screen.findByRole("button", { name: "Details of GET /orders" });
+    fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
+    fireEvent.click(within(pendingBar()).getByRole("button", { name: "Show the steps that need an expected status" }));
+    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Needs expected status · 1" })).toHaveAttribute("aria-pressed", "true");
+    const table = screen.getByRole("table", { name: "Performance plan operations" });
+    expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(1);
+  });
+
+  it("says a missing environment is pending and takes you to it", async () => {
+    stubFetch({ ...routes(quickPlan()), "GET /api/test-generation-workflow/environments": () => [200, { environments: [] }] });
+    renderScreen();
+    await screen.findByRole("button", { name: "Details of GET /orders" });
+    expect(pendingBar()).toHaveTextContent("No target environment yet.");
+    expect(screen.getByRole("button", { name: "Run setup (2 to do)" })).toBeInTheDocument();
+    fireEvent.click(within(pendingBar()).getByRole("button", { name: "Set up the target environment" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Target environment and values" }));
+  });
+
+  it("says the plan is ready and where to run it, without a trigger of its own (FR-011)", async () => {
+    stubFetch({ ...routes(readyPlan()), [`GET ${QUICK}/plan`]: () => [200, { plan: readyPlan(), script: script() }] });
+    renderScreen();
+    const bar = await screen.findByText(/Ready to run on perf-local \(local\)/);
+    expect(bar).toHaveTextContent("5 write operations will be sent");
+    expect(within(pendingBar()).queryByRole("button", { name: /^Run on/ })).not.toBeInTheDocument();
+    fireEvent.click(within(pendingBar()).getByRole("button", { name: "Go to run →" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Run" }));
+    expect(screen.getByRole("button", { name: "Run on perf-local (local)" })).toBeEnabled();
+  });
+
+  it("switches to the Runs tab when a run starts, where the live run names its target (AP-029 FR-025)", async () => {
     stubFetch({
-      ...routes(ready),
-      [`GET ${QUICK}/plan`]: () => [200, { plan: ready, script: script() }],
+      ...routes(readyPlan()),
+      [`GET ${QUICK}/plan`]: () => [200, { plan: readyPlan(), script: script() }],
       [`POST ${QUICK}/runs`]: () => [200, { run: runFixture({ planSource: "quick" }) }],
       [`GET ${QUICK}/runs/run-12345678`]: () => [200, { run: runFixture({ planSource: "quick" }) }],
     });
     renderScreen();
+    fireEvent.click(await screen.findByRole("button", { name: /^Run setup/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Run on perf-local (local)" }));
     expect(await screen.findByRole("heading", { name: /Run run-1234/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Runs & reports/ })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("live-run-target")).toHaveTextContent("perf-local");
     expect(screen.getByTestId("live-run-target")).toHaveTextContent("Tier: local");
+    expect(pendingBar()).toHaveTextContent("Run in progress");
     expect(screen.queryByRole("table", { name: "Performance plan operations" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Plan" }));
     expect(screen.getByRole("table", { name: "Performance plan operations" })).toBeInTheDocument();

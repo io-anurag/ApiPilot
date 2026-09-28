@@ -66,7 +66,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34 |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
-| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 (Next Actions #39) |
+| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -2854,3 +2854,29 @@ Implementation
     - Docs: USER_MANUAL §3.11 (screen layout, table, removal, order controls, Runs tab);
       architecture.md "Frontend architecture".
     - Version bumped to 19.7.0 (root, backend, frontend, shared-domain).
+
+40. **Performance plan: pending bar and Run setup tab; version 19.8.0 (2026-09-28).**
+    - Feedback on 19.7.0: the sticky run-setup column hid the Run button below its own scroll, the
+      steps missing an expected status were reported in four places, and the text before the table
+      was long. The screen now shows a pending bar above three tabs, in the order a test is
+      prepared: **Plan** (the operations table at full width), **Run setup** (environment and
+      values, load profile, thresholds, script, beside the run trigger) and **Runs & reports**.
+    - The pending bar lists only what blocks a run, each with the action that fixes it: steps
+      needing an expected status (**Show them** filters the table; the counted list of those steps,
+      each reachable, now lives here), no environment (**Create one** opens Run setup and focuses
+      the section), a missing or out-of-date script (**Generate**), k6 unavailable. When nothing is
+      left it reads "Ready to run on <environment>" with the write count and **Go to run →**. It
+      never holds the trigger, which stays beside the write list and target (AP-032 FR-011, AP-029
+      FR-025). Missing environment values are a note, not a blocker (AP-029 FR-014).
+    - The Run setup tab label counts its open items ("Run setup (2 to do)"). The Journey column is
+      left out when every journey has one step (the quick path); single-step journeys move with
+      **Move up** / **Move down**. The trigger's "See the plan's list" link was dropped, since that
+      list is on another tab and the trigger lists every write itself.
+    - Validation: `npm test` 1,953 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser (dev servers, mock AI provider, PayPal
+      Invoicing fixture, quick path) at 1600 px and at 390 px, where neither tab scrolls the page
+      sideways. Not done: a live run started from the browser.
+    - Docs: USER_MANUAL §3.11 (the pending bar, the three tabs, table and order controls);
+      architecture.md "Frontend architecture".
+    - Version bumped to 19.8.0 (root, backend, frontend, shared-domain).

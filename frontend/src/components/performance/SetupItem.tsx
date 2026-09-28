@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 /**
- * One line of the plan's run-setup checklist: its state (as text and a mark), a one-line summary,
- * and its controls. A `collapsible` item keeps its editor behind a native `<details>` so the
- * checklist stays short; the summary line still says where the item stands. The mark is never the
- * only signal: each state has a screen-reader label beside it.
+ * One section of the Run setup tab (load profile, thresholds, environment, script), headed by its
+ * state as a mark and a screen-reader label, and a one-line summary. The heading takes focus
+ * (`tabIndex={-1}`) so the pending bar can take the user straight to the section to fix. The mark
+ * is never the only signal: each state has a text label beside it.
  */
 export type SetupItemState = "done" | "attention" | "todo" | "optional";
 
@@ -23,7 +23,7 @@ const MARK: Record<SetupItemState, { symbol: string; label: string; className: s
   optional: { symbol: "–", label: "Optional", className: "border border-dashed border-muted text-muted" },
 };
 
-function Mark({ state }: Readonly<{ state: SetupItemState }>) {
+export function StateMark({ state }: Readonly<{ state: SetupItemState }>) {
   const mark = MARK[state];
   return (
     <>
@@ -43,52 +43,26 @@ export function SetupItem({
   title,
   titleId,
   summary,
-  collapsible = false,
-  actionLabel = "Edit",
   children,
 }: Readonly<{
   state: SetupItemState;
   title: string;
   titleId: string;
-  summary: ReactNode;
-  collapsible?: boolean;
-  /** The collapsible item's visible cue that it opens. */
-  actionLabel?: string;
+  summary?: ReactNode;
   children?: ReactNode;
 }>) {
-  const heading = (
-    <span className="min-w-0 flex-1">
-      <span id={titleId} className="block text-sm font-medium">
-        {title}
-      </span>
-      <span className="block text-xs text-muted">{summary}</span>
-    </span>
-  );
-
-  if (collapsible) {
-    return (
-      <li className="px-4 py-3">
-        <details className="group">
-          <summary className="flex cursor-pointer list-none items-start gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden">
-            <Mark state={state} />
-            {heading}
-            <span className="shrink-0 text-sm font-medium text-brand-700 dark:text-brand-300">
-              <span className="group-open:hidden">{actionLabel}</span>
-              <span className="hidden group-open:inline">Close</span>
-            </span>
-          </summary>
-          <div className="mt-3 space-y-3">{children}</div>
-        </details>
-      </li>
-    );
-  }
   return (
-    <li className="space-y-3 px-4 py-3" aria-labelledby={titleId}>
+    <section aria-labelledby={titleId} className="space-y-3 rounded-lg border border-border bg-surface p-4">
       <div className="flex items-start gap-3">
-        <Mark state={state} />
-        {heading}
+        <StateMark state={state} />
+        <div className="min-w-0 flex-1">
+          <h3 id={titleId} tabIndex={-1} className="rounded text-base font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+            {title}
+          </h3>
+          {summary && <p className="text-xs text-muted">{summary}</p>}
+        </div>
       </div>
       {children}
-    </li>
+    </section>
   );
 }

@@ -18,6 +18,11 @@ function operationInventory() {
   return screen.getByRole("table", { name: "Performance plan operations" });
 }
 
+/** The environment, load profile, thresholds, script and run trigger are on the Run setup tab. */
+async function openRunSetup() {
+  fireEvent.click(await screen.findByRole("button", { name: /^Run setup/ }));
+}
+
 function baseRoutes(
   plan = planFixture(),
   extra: Record<string, Parameters<typeof stubFetch>[0][string]> = {},
@@ -98,13 +103,14 @@ describe("PerformanceTestingStage", () => {
         "The specification documents no success status. Set at least one.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(screen.getByRole("region", { name: "What still blocks a run" })).toHaveTextContent(
       "1 step needs an expected status before the script can be generated.",
     );
-    // AP-032 FR-024: a counted list with one step per line, each reachable from it.
+    // AP-032 edge case: a counted list with one step per line, each reachable from it.
     const list = screen.getByTestId("performance-needs-status-list");
     expect(list).toHaveTextContent("1 step to set");
     expect(list).toHaveTextContent("/status");
+    await openRunSetup();
     expect(screen.getByRole("button", { name: "Generate script" })).toBeDisabled();
     expect(screen.getByTestId("performance-generate-blocked")).toHaveTextContent(
       "Every step needs an expected status.",
@@ -126,13 +132,12 @@ describe("PerformanceTestingStage", () => {
       target: { value: "200" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Generate script" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByText("set by you")).toBeInTheDocument());
     expect(calls.find((call) => call.method === "PUT")?.body).toEqual({
       expectedStatuses: { "s-status": ["200"] },
     });
-    expect(screen.getByText("set by you")).toBeInTheDocument();
+    await openRunSetup();
+    expect(screen.getByRole("button", { name: "Generate script" })).toBeEnabled();
   });
 
   it("removes an operation by sending excludedOperationKeys (FR-004)", async () => {
@@ -173,6 +178,7 @@ describe("PerformanceTestingStage", () => {
   it("shows each needed value with who needs it, secret, and present or missing as text, never a value (FR-013)", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
+    await openRunSetup();
     const table = await screen.findByRole("table", {
       name: "Values the plan needs from the environment",
     });
@@ -191,6 +197,7 @@ describe("PerformanceTestingStage", () => {
       [`GET ${PLAN}`]: () => [200, { plan: readyPlan(), script: script() }],
     });
     const { unmount } = render(<PerformanceTestingStage />);
+    await openRunSetup();
     expect(await screen.findByRole("link", { name: "Download script" })).toHaveAttribute(
       "href",
       `${PLAN.replace("/plan", "")}/script/download?file=script`,
@@ -269,7 +276,8 @@ describe("PerformanceTestingStage", () => {
     fireEvent.click(
       within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Move journey 2 down" }));
+    // A single-step journey's move names its operation.
+    fireEvent.click(screen.getByRole("button", { name: "Move GET /status down" }));
     await waitFor(() =>
       expect(calls.filter((call) => call.method === "PUT")).toHaveLength(2),
     );

@@ -292,13 +292,22 @@ opens once the Postman collection has been generated (section 3.9), whether or n
 it: choose **Set up a performance test** on the Execution notice, or the **Performance
 Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
 
-**The screen.** The **Plan** tab shows the operations table on the left and **Run setup** on
-the right. Run setup stays in view while you scroll the table and lists what a run needs, each
-line with its state: the operations (and how many still need an expected status), the load
-profile, the thresholds (optional), the target environment and its values, and the k6 script,
-with the run trigger at the bottom. The load profile and thresholds open for editing from their
-line. The **Runs & reports** tab holds a run's live progress, its report and the session's runs;
-starting a run switches to it. On a narrow window, Run setup follows the table.
+**The screen.** Above the tabs, a bar lists what still blocks a run, each item with the button
+that fixes it: steps without an expected status (**Show them**), no target environment (**Create
+one**), a script not generated or out of date (**Generate**), or k6 not available. Items disappear
+as you finish them. When nothing is left, the bar says **Ready to run on** the chosen
+environment, how many write operations will be sent, and **Go to run →**. The bar never starts a
+run itself. Missing environment values are noted in the bar but do not block a run.
+
+The tabs follow the order in which you prepare a test:
+
+- **Plan**: the operations table, at full width.
+- **Run setup**: the target environment and its values, the load profile, the thresholds
+  (optional) and the k6 script, beside the run trigger. The tab label counts what is still to do
+  there, for example **Run setup (2 to do)**. **Next: Run setup →** at the foot of the Plan tab
+  goes to it.
+- **Runs & reports**: a run's live progress, its report and the session's runs. Starting a run
+  switches to it.
 
 **The plan.** The operations in scope are the ones you selected in API Review, or every
 operation when you selected none; there is no choice to widen them here. To include other
@@ -314,8 +323,10 @@ scenario and are not edited here. Negative scenarios are never run under load. W
 DELETE) are included by default: remove any operation you do not want sent (see **Removing**
 below).
 
-- **The operations table.** One line per step: its journey number (`J3`, or `J2.1` for the
-  first step of a workflow journey, whose steps are grouped under a **Workflow** row), its method
+- **The operations table.** One line per step: its journey number when some journey has more
+  than one step (`J2.1` is the first step of journey 2, whose steps are grouped under a
+  **Workflow** row; with only single-step journeys, as in the quick test, the column is left
+  out), its method
   and path, the write marker, its expected status, a short authentication label, and the
   environment values it needs. Filter by method, by **Writes** or by **Needs expected status**
   (each chip shows its count), and search by method, path or scenario. Select a step's path to
@@ -343,17 +354,19 @@ below).
   view only.
 - **Long lists.** Removed operations, operations left out (no positive scenario), and steps
   that still need an expected status are counted lists, one operation per line, collapsed
-  when they have more than ten entries. The write list is never collapsed. The expected-status
-  list is in the k6 script line of Run setup; each entry opens that step and puts the cursor in
-  its editor, and **Needs status · Set** in the table does the same for its row.
+  when they have more than ten entries. The write list is never collapsed. The steps that need an
+  expected status are counted in the bar above the tabs; open **steps to set** there, and each
+  entry opens that step in the table and puts the cursor in its editor. **Needs status · Set** in
+  the table does the same for its row.
 
 - **Expected status.** Each step starts with the success statuses the specification
   documents, labelled "from specification". You can add codes (an exact code such as `201`,
   or a range such as `2XX`) or remove them; yours are labelled "set by you". Any other
   response counts as a failure. A step whose specification documents no success status
   starts empty, and the script cannot be generated until you set one.
-- **Order and think time.** In a step's details, **Move journey up** and **Move journey down**
-  reorder journeys, and **Move step up** and **Move step down** reorder a workflow journey's steps.
+- **Order and think time.** In a step's details, **Move up** and **Move down** move a single-step
+  journey, **Move journey up** and **Move journey down** move a workflow journey, and **Move step
+  up** and **Move step down** reorder a workflow journey's steps.
   A move that would run a step before the step producing a value it needs is refused, and
   the message names the value. **Think time** pauses between requests.
 - **Load profile.** Pick Smoke, Load, Stress, Spike or Soak and edit its stages (duration and

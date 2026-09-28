@@ -31,11 +31,13 @@ const EXPECTED_STATUS_HINT_ID = "performance-expected-status-hint";
 const WRITES = "WRITES";
 const ALL = "ALL";
 
-/** Asks the list to open a step and focus its expected-status editor; `nonce` repeats a request. */
-export interface FocusRequest {
-  readonly stepId: string;
-  readonly nonce: number;
-}
+/**
+ * Asks the list, from outside it, to show every step still needing an expected status, or to open
+ * one step and focus its expected-status editor. A new `nonce` repeats the same request.
+ */
+export type ListRequest =
+  | { readonly kind: "show-needs-status"; readonly nonce: number }
+  | { readonly kind: "set-status"; readonly stepId: string; readonly nonce: number };
 
 type InventoryRow = {
   readonly journey: PerformanceJourney;
@@ -226,7 +228,7 @@ export function JourneyList({
   onStepOrder,
   onJourneyOrder,
   loadPreview,
-  focusRequest,
+  listRequest,
 }: Readonly<{
   journeys: PerformanceJourney[];
   busy: boolean;
@@ -237,7 +239,7 @@ export function JourneyList({
   onRemoveMethod: (method: string) => void;
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
-  focusRequest: FocusRequest | null;
+  listRequest: ListRequest | null;
 }>) {
   const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState(ALL);
@@ -246,22 +248,28 @@ export function JourneyList({
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const handledFocus = useRef<number | null>(null);
+  const handledRequest = useRef<number | null>(null);
 
-  // A focus request clears the filters and turns to the step's page, so its row is on screen.
+  // A request from outside the table (the pending bar) resets the filters so what it asks for is
+  // on screen: either every step still needing a status, or one step's editor, on its page.
   useEffect(() => {
-    if (!focusRequest || handledFocus.current === focusRequest.nonce) return;
-    handledFocus.current = focusRequest.nonce;
-    const index = journeys
-      .flatMap((journey) => journey.steps)
-      .findIndex((step) => step.id === focusRequest.stepId);
+    if (!listRequest || handledRequest.current === listRequest.nonce) return;
+    handledRequest.current = listRequest.nonce;
     setQuery("");
     setMethodFilter(ALL);
+    if (listRequest.kind === "show-needs-status") {
+      setNeedsStatusOnly(true);
+      setPage(0);
+      return;
+    }
+    const index = journeys
+      .flatMap((journey) => journey.steps)
+      .findIndex((step) => step.id === listRequest.stepId);
     setNeedsStatusOnly(false);
     setPage(Math.max(0, Math.floor(index / PAGE_SIZE)));
-    setExpandedStepId(focusRequest.stepId);
-    setPendingFocus(focusRequest.stepId);
-  }, [focusRequest, journeys]);
+    setExpandedStepId(listRequest.stepId);
+    setPendingFocus(listRequest.stepId);
+  }, [listRequest, journeys]);
   useEffect(() => {
     if (!pendingFocus) return;
     const input = document.getElementById(`expected-${pendingFocus}`);
@@ -271,6 +279,10 @@ export function JourneyList({
     }
   });
 
+  // The journey number only means something once a journey has more than one step; with only
+  // single-step journeys (the quick path) the column is left out.
+  const showJourneyColumn = journeys.some(isGroupedJourney);
+  const columnCount = showJourneyColumn ? 6 : 5;
   const rows: InventoryRow[] = journeys.flatMap((journey, journeyIndex) =>
     journey.steps.map((step, stepIndex) => ({ journey, journeyIndex, step, stepIndex })),
   );
@@ -342,7 +354,7 @@ export function JourneyList({
       body.push(
         <tr key={`group-${journey.id}`} className="border-t border-border bg-chrome dark:bg-white/5">
           <td className="px-3 py-1.5" />
-          <th scope="colgroup" colSpan={5} className="px-2 py-1.5 text-left text-xs font-normal">
+          <th scope="colgroup" colSpan={columnCount - 1} className="px-2 py-1.5 text-left text-xs font-normal">
             <span className="font-mono font-semibold">J{journeyIndex + 1}</span>{" "}
             <span className="font-semibold">Workflow</span>{" "}
             <span className="text-muted">
@@ -371,7 +383,9 @@ export function JourneyList({
             className="accent-brand-600"
           />
         </td>
-        <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap text-muted">{rowLabel(row)}</td>
+        {showJourneyColumn && (
+          <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap text-muted">{rowLabel(row)}</td>
+        )}
         <td className="px-2 py-1.5">
           <button
             type="button"
@@ -428,7 +442,7 @@ export function JourneyList({
     if (expanded) {
       body.push(
         <tr key={`${step.id}-details`} id={`performance-step-details-${step.id}`}>
-          <td colSpan={6} className="border-t border-border bg-chrome px-4 py-4 dark:bg-white/5">
+          <td colSpan={columnCount} className="border-t border-border bg-chrome px-4 py-4 dark:bg-white/5">
             <OperationInspector
               row={row}
               busy={busy}
@@ -544,9 +558,11 @@ export function JourneyList({
                   className="accent-brand-600"
                 />
               </th>
-              <th scope="col" className="w-14 px-2 py-2 font-semibold">
-                Journey
-              </th>
+              {showJourneyColumn && (
+                <th scope="col" className="w-14 px-2 py-2 font-semibold">
+                  Journey
+                </th>
+              )}
               <th scope="col" className="w-1/2 px-2 py-2 font-semibold">
                 Request
               </th>
@@ -622,6 +638,7 @@ function OperationInspector({
 }>) {
   const { journey, journeyIndex, step, stepIndex } = row;
   const stepIds = journey.steps.map((candidate) => candidate.id);
+  const grouped = isGroupedJourney(journey);
   const variables = variablesFor(step);
   const note = choiceNote(step);
   return (
@@ -692,23 +709,24 @@ function OperationInspector({
             </button>
           </>
         )}
+        {/* A single-step journey is just the operation, so its move names the operation. */}
         <button
           type="button"
           className={ROW_ACTION}
           disabled={busy || journeyIndex === 0}
-          aria-label={`Move journey ${journeyIndex + 1} up`}
+          aria-label={grouped ? `Move journey ${journeyIndex + 1} up` : `Move ${step.operationKey} up`}
           onClick={() => onJourneyOrder(move(journeyIds, journeyIndex, -1))}
         >
-          Move journey up
+          {grouped ? "Move journey up" : "Move up"}
         </button>
         <button
           type="button"
           className={ROW_ACTION}
           disabled={busy || journeyIndex === journeyIds.length - 1}
-          aria-label={`Move journey ${journeyIndex + 1} down`}
+          aria-label={grouped ? `Move journey ${journeyIndex + 1} down` : `Move ${step.operationKey} down`}
           onClick={() => onJourneyOrder(move(journeyIds, journeyIndex, 1))}
         >
-          Move journey down
+          {grouped ? "Move journey down" : "Move down"}
         </button>
         <button
           type="button"
