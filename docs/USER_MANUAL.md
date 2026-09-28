@@ -292,6 +292,14 @@ opens once the Postman collection has been generated (section 3.9), whether or n
 it: choose **Set up a performance test** on the Execution notice, or the **Performance
 Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
 
+**The screen.** The **Plan** tab shows the operations table on the left and **Run setup** on
+the right. Run setup stays in view while you scroll the table and lists what a run needs, each
+line with its state: the operations (and how many still need an expected status), the load
+profile, the thresholds (optional), the target environment and its values, and the k6 script,
+with the run trigger at the bottom. The load profile and thresholds open for editing from their
+line. The **Runs & reports** tab holds a run's live progress, its report and the session's runs;
+starting a run switches to it. On a narrow window, Run setup follows the table.
+
 **The plan.** The operations in scope are the ones you selected in API Review, or every
 operation when you selected none; there is no choice to widen them here. To include other
 operations, widen the selection in API Review and regenerate, or use the quick performance
@@ -303,7 +311,17 @@ rule-generated scenario is preferred over an AI-enhanced one), its authenticatio
 variables it produces or needs. Each step sends that scenario's generated request, built the
 same way as the Postman collection: its headers, query parameters and body come from the
 scenario and are not edited here. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
-DELETE) are included by default: choose **Remove** on any operation you do not want sent.
+DELETE) are included by default: remove any operation you do not want sent (see **Removing**
+below).
+
+- **The operations table.** One line per step: its journey number (`J3`, or `J2.1` for the
+  first step of a workflow journey, whose steps are grouped under a **Workflow** row), its method
+  and path, the write marker, its expected status, a short authentication label, and the
+  environment values it needs. Filter by method, by **Writes** or by **Needs expected status**
+  (each chip shows its count), and search by method, path or scenario. Select a step's path to
+  open its details in a row directly under it: the scenario and why it was chosen, the request
+  preview, the expected-status editor, the full authentication, the variables, the order
+  controls and **Remove from plan**. More than 50 steps are split into pages.
 
 - **What the writes will do.** Above the journeys, a summary states how many write
   operations will be sent, the count per method, and each one by method and path, with the
@@ -311,27 +329,31 @@ DELETE) are included by default: choose **Remove** on any operation you do not w
   that ApiPilot does not clean up afterwards. Each write step carries a text marker
   (**Creates**, **Replaces**, **Updates** or **Deletes**) beside its method. The same list is
   shown next to the run trigger. A plan with no writes says it sends only read requests.
-- **Removing in bulk.** **Remove all write operations** removes every write in one action,
-  and **Remove all <METHOD> operations** removes every operation of one method. Removed
+- **Removing.** **Remove all write operations** removes every write in one action, and
+  **Remove by method** offers **Remove all <METHOD> operations** for each method in the plan.
+  To remove a few operations, tick their rows and choose **Remove from plan**, or use
+  **Remove from plan** in one step's details. Removed
   operations are listed with a **Restore** button each, plus **Restore all**. When every
   operation is removed, the plan says so and the script cannot be generated until you
   restore one.
-- **The request a step sends.** Choose **Request** under a step to see what it sends: the
+- **The request a step sends.** In a step's details, choose **Request** to see what it sends: the
   method, the path template, each path, query and header parameter with its generated value
   or the environment value it needs, the authentication, and the body. Values that come from
   the environment are shown by name only, and secrets are marked, never shown. The preview is
   view only.
 - **Long lists.** Removed operations, operations left out (no positive scenario), and steps
   that still need an expected status are counted lists, one operation per line, collapsed
-  when they have more than ten entries. Each entry of the expected-status list takes you to
-  that step's editor.
+  when they have more than ten entries. The write list is never collapsed. The expected-status
+  list is in the k6 script line of Run setup; each entry opens that step and puts the cursor in
+  its editor, and **Needs status · Set** in the table does the same for its row.
 
 - **Expected status.** Each step starts with the success statuses the specification
   documents, labelled "from specification". You can add codes (an exact code such as `201`,
   or a range such as `2XX`) or remove them; yours are labelled "set by you". Any other
   response counts as a failure. A step whose specification documents no success status
   starts empty, and the script cannot be generated until you set one.
-- **Order and think time.** Use ↑ and ↓ to reorder journeys, or steps within a journey.
+- **Order and think time.** In a step's details, **Move journey up** and **Move journey down**
+  reorder journeys, and **Move step up** and **Move step down** reorder a workflow journey's steps.
   A move that would run a step before the step producing a value it needs is refused, and
   the message names the value. **Think time** pauses between requests.
 - **Load profile.** Pick Smoke, Load, Stress, Spike or Soak and edit its stages (duration and
@@ -388,7 +410,8 @@ ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration).
 never downloads or installs k6; the panel shows whether k6 is ready, and **Check again**
 re-checks. The trigger names its target, for example **Run on perf-local (local)**, next to
 the environment's tier and base URL and the statement that load comes from the machine
-running the backend. There is no extra confirmation on any tier, production included. While
+running the backend. There is no extra confirmation on any tier, production included. Starting a run opens the
+**Runs & reports** tab, which repeats the target for as long as the run lasts. While
 it runs you see elapsed time against the plan, virtual users, requests, failures, journeys
 cut short, token refreshes, and a per-step table. **Cancel run** stops load within about 10
 seconds and keeps what was measured. A run carries on if you close the page, and it keeps

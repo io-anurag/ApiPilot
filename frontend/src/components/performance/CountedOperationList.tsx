@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { HttpMethodBadge } from "../HttpMethodBadge";
+import { WrappingPath } from "./WrappingPath";
 
 /**
  * A counted list of operations, one per line with its method badge and path (AP-032 FR-024,
@@ -7,7 +8,9 @@ import { HttpMethodBadge } from "../HttpMethodBadge";
  * on both paths. A list longer than `collapseAbove` starts collapsed as a native
  * `<details>`/`<summary>`, which is keyboard and screen-reader accessible and shows the count while
  * collapsed (constitution XXXII). `collapseAbove={Infinity}` renders a plain list that never
- * collapses, as the write lists must (SC-002).
+ * collapses, as the write lists must (SC-002). `columns` drops the per-row borders and flows a long
+ * list into two or three columns sized by the list's own container (not the viewport), so it stays
+ * fully readable in less height in the wide operations panel and the narrow run-setup column alike.
  */
 export interface CountedOperationEntry {
   operationKey: string;
@@ -24,23 +27,31 @@ export function CountedOperationList({
   label,
   entries,
   collapseAbove = 10,
+  columns = false,
   testId,
 }: Readonly<{
   label: (count: number) => string;
   entries: readonly CountedOperationEntry[];
   collapseAbove?: number;
+  columns?: boolean;
   testId: string;
 }>) {
   if (entries.length === 0) return null;
   const list = (
-    <ul className="divide-y divide-border rounded-md border border-border">
+    <ul className={columns ? "grid gap-x-4 gap-y-1 @xl:grid-cols-2 @5xl:grid-cols-3" : "divide-y divide-border rounded-md border border-border"}>
       {entries.map((entry) => {
         const { method, path } = splitOperationKey(entry.operationKey);
         return (
-          <li key={entry.operationKey} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm">
-            {method && <HttpMethodBadge method={method} />}
-            <span className="break-all font-mono text-xs">{path}</span>
-            {entry.detail && <span className="text-xs text-muted">{entry.detail}</span>}
+          <li key={entry.operationKey} className={columns ? "flex min-w-0 items-start gap-2 py-0.5 text-sm" : "flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm"}>
+            {method && (
+              <span className="shrink-0">
+                <HttpMethodBadge method={method} />
+              </span>
+            )}
+            <span className="min-w-0">
+              <WrappingPath path={path} />
+            </span>
+            {entry.detail && <span className="shrink-0 text-xs text-muted">{entry.detail}</span>}
             {entry.action && <span className="ml-auto">{entry.action}</span>}
           </li>
         );
@@ -49,7 +60,7 @@ export function CountedOperationList({
   );
   if (entries.length <= collapseAbove) {
     return (
-      <div data-testid={testId} className="space-y-1.5">
+      <div data-testid={testId} className={columns ? "@container space-y-1.5" : "space-y-1.5"}>
         <p className="text-sm font-semibold">{label(entries.length)}</p>
         {list}
       </div>

@@ -119,22 +119,23 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
     else void upload(file, false);
   }
 
-  const backToStart = onExit && (
-    <div className="flex justify-start">
-      <button
-        type="button"
-        aria-label="Exit the quick performance test and return to the start screen"
-        onClick={onExit}
-        className={BUTTON_STYLES.ghost}
-      >
-        ← Back to start
-      </button>
-    </div>
+  const backButton = onExit && (
+    <button
+      type="button"
+      aria-label="Exit the quick performance test and return to the start screen"
+      onClick={onExit}
+      className={BUTTON_STYLES.ghost}
+    >
+      ← Back to start
+    </button>
   );
 
   return (
-    <div className="space-y-5" data-testid="quick-performance-page">
-      {backToStart}
+    <div className="space-y-4" data-testid="quick-performance-page">
+      {/* Once a plan exists, "Back to start" joins the specification bar instead of its own row. */}
+      {state.kind !== "ready" && backButton && (
+        <div className="flex justify-start">{backButton}</div>
+      )}
       {state.kind === "loading" && (
         <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />
       )}
@@ -247,8 +248,14 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
 
       {state.kind === "ready" && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              {backButton && (
+                <>
+                  {backButton}
+                  <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+                </>
+              )}
               <span className="font-semibold">
                 {state.quickTest.specification.info?.title ??
                   state.quickTest.specification.filename}

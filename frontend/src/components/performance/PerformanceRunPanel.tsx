@@ -1,12 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  Environment,
-  K6Readiness,
-  PerformancePlan,
-  PerformanceRun,
-  PerformanceRunSummary,
-  ScriptStatus,
-} from "@apipilot/shared-domain";
+import type { Environment, K6Readiness, PerformancePlan, PerformanceRun, ScriptStatus } from "@apipilot/shared-domain";
 import { summarizeWriteOperations } from "@apipilot/shared-domain";
 import type { PerformanceClient } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
@@ -15,141 +7,93 @@ import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
 import { PerformanceReportFrame } from "./PerformanceReportFrame";
 import { READINESS_REASON, TIER_TONE, formatDuration, runStatusLabel } from "./performanceViewModel";
+import type { PerformanceRuns } from "./usePerformanceRuns";
 import { WriteOperationSummary } from "./WriteOperationSummary";
 
 /**
- * Readiness, the run trigger, live progress and cancel, and run history (FR-024 to FR-031,
- * FR-034a, FR-035). The trigger names its target, and the target, load origin and every write
- * operation the run sends (AP-032 FR-011) stay on screen throughout the run. No confirmation step
- * is added on any tier (FR-025).
+ * The run trigger and the run activity (FR-024 to FR-031, FR-034a, FR-035), both driven by one
+ * `usePerformanceRuns` state. The trigger sits in the plan's run-setup column and names its target;
+ * the target, load origin and every write operation the run sends (AP-032 FR-011) are shown beside
+ * it, and the live run repeats the target for as long as it runs. No confirmation step is added on
+ * any tier (FR-025).
  */
-export const RUN_POLL_INTERVAL_MS = 2_000;
+const LOAD_ORIGIN = "Load is generated from the machine running the ApiPilot backend.";
 
-export function PerformanceRunPanel({
-  client,
+/** Why the trigger is disabled, or `null` when a run can start. */
+function runBlockedReason(script: ScriptStatus | null, environment: Environment | null, readiness: K6Readiness | null, inProgress: boolean): string | null {
+  if (!script) return "Generate the script first.";
+  if (script.outOfDate) return "The plan changed after the script was generated. Regenerate it to run.";
+  if (!environment) return "Choose a target environment.";
+  if (readiness?.state !== "ready") return "k6 is not available.";
+  if (inProgress) return "A run is in progress.";
+  return null;
+}
+
+function ReadinessBadge({ readiness }: Readonly<{ readiness: K6Readiness | null }>) {
+  if (readiness === null) return <StatusBadge label="Checking k6…" />;
+  if (readiness.state !== "ready") return <StatusBadge label="k6 unavailable" tone="danger" />;
+  return (
+    <>
+      <StatusBadge label="k6 ready" tone="success" />
+      <span className="font-mono text-xs">v{readiness.version}</span>
+    </>
+  );
+}
+
+function runTarget(run: PerformanceRun | null, environment: Environment | null) {
+  return run?.environment ?? (environment ? { name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl } : null);
+}
+
+export function PerformanceRunTrigger({
+  runs,
   plan,
   script,
   environment,
   writeListId,
+  onStarted,
+  onViewRuns,
 }: Readonly<{
-  client: PerformanceClient;
+  runs: PerformanceRuns;
   plan: PerformancePlan;
   script: ScriptStatus | null;
   environment: Environment | null;
   /** The plan screen's write list, for the trigger's link back to it. */
   writeListId?: string;
+  onStarted?: () => void;
+  /** Offered while a run is in progress, to show its live progress. */
+  onViewRuns?: () => void;
 }>) {
-  const { cancelRun, fetchReadiness, fetchRun, fetchRuns, startRun } = client;
-  const [readiness, setReadiness] = useState<K6Readiness | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [run, setRun] = useState<PerformanceRun | null>(null);
-  const [runs, setRuns] = useState<PerformanceRunSummary[]>([]);
-  const [reportRunId, setReportRunId] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const refreshRuns = useCallback(async () => {
-    const result = await fetchRuns();
-    if (result.ok) setRuns(result.runs);
-  }, [fetchRuns]);
-
-  const checkReadiness = useCallback(async (recheck: boolean) => {
-    setChecking(true);
-    const result = await fetchReadiness(recheck);
-    setChecking(false);
-    setReadiness(result.ok ? result.readiness : null);
-  }, [fetchReadiness]);
-
-  useEffect(() => {
-    void checkReadiness(false);
-    void refreshRuns().then(async () => {
-      const list = await fetchRuns();
-      const live = list.ok ? list.runs.find((candidate) => candidate.status === "in-progress") : undefined;
-      if (live) {
-        const detail = await fetchRun(live.id);
-        if (detail.ok) setRun(detail.run);
-      }
-    });
-  }, [checkReadiness, refreshRuns, fetchRuns, fetchRun]);
-
-  useEffect(() => {
-    if (run?.status !== "in-progress") return undefined;
-    pollTimer.current = setTimeout(async () => {
-      const result = await fetchRun(run.id);
-      if (!result.ok) return;
-      setRun(result.run);
-      if (result.run.status !== "in-progress") {
-        setCancelling(false);
-        setReportRunId(result.run.id);
-        void refreshRuns();
-      }
-    }, RUN_POLL_INTERVAL_MS);
-    return () => {
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, [run, refreshRuns, fetchRun]);
-
-  const inProgress = run?.status === "in-progress";
-  const blockedReason = !script
-    ? "Generate the script first."
-    : script.outOfDate
-      ? "The plan changed after the script was generated. Regenerate it to run."
-      : !environment
-        ? "Choose a target environment."
-        : readiness?.state !== "ready"
-          ? "k6 is not available."
-          : inProgress
-            ? "A run is in progress."
-            : null;
+  const { readiness, checking, checkReadiness, run, inProgress, starting, error, start } = runs;
+  const blockedReason = runBlockedReason(script, environment, readiness, inProgress);
+  const target = runTarget(run, environment);
+  const stages = plan.loadProfile.stages;
+  const peak = Math.max(0, ...stages.map((stage) => stage.targetVirtualUsers));
 
   async function handleStart() {
     if (!environment) return;
-    setStarting(true);
-    setError(null);
-    const result = await startRun(environment.id);
-    setStarting(false);
-    if (!result.ok) {
-      setError(result.error === "execution_in_progress" ? "Another run is in progress in this session. Nothing was sent." : result.message);
-      if (result.readiness) setReadiness(result.readiness);
-      return;
-    }
-    setReportRunId(null);
-    setRun(result.run);
-    void refreshRuns();
+    if (await start(environment.id)) onStarted?.();
   }
 
-  async function handleCancel() {
-    if (!run) return;
-    setCancelling(true);
-    const result = await cancelRun(run.id);
-    if (result.ok) setRun(result.run);
-    else setCancelling(false);
-  }
+  let triggerLabel = "Run performance test";
+  if (starting) triggerLabel = "Starting…";
+  else if (target) triggerLabel = `Run on ${target.name} (${target.tier})`;
 
-  const stepsById = new Map(plan.journeys.flatMap((journey, journeyIndex) => journey.steps.map((step, stepIndex) => [step.id, { step, where: `J${journeyIndex + 1} · ${stepIndex + 1}` }])));
-  const target = run?.environment ?? (environment ? { name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl } : null);
-  const stages = plan.loadProfile.stages;
-  const peak = Math.max(0, ...stages.map((stage) => stage.targetVirtualUsers));
-  const progress = run?.progress;
-  const elapsedMs = progress?.elapsedMs ?? 0;
-  const plannedMs = run?.plannedDurationMs ?? plan.loadProfile.plannedDurationMs;
+  const trigger = (
+    <>
+      {/* AP-032 FR-011: every write operation this run sends, next to the trigger that names the target. */}
+      <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" listId={writeListId} />
+      <button type="button" className={`${BUTTON_STYLES.primary} w-full py-2`} disabled={blockedReason !== null || starting} onClick={() => void handleStart()}>
+        {triggerLabel}
+      </button>
+      {blockedReason && <p className="text-center text-xs text-muted">{blockedReason}</p>}
+    </>
+  );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {readiness === null ? (
-          <StatusBadge label="Checking k6…" />
-        ) : readiness.state === "ready" ? (
-          <>
-            <StatusBadge label="k6 ready" tone="success" />
-            <span className="font-mono text-xs">v{readiness.version}</span>
-          </>
-        ) : (
-          <StatusBadge label="k6 unavailable" tone="danger" />
-        )}
-        <button type="button" className={BUTTON_STYLES.ghost} disabled={checking} onClick={() => void checkReadiness(true)}>
+        <ReadinessBadge readiness={readiness} />
+        <button type="button" className={`${BUTTON_STYLES.ghost} ml-auto`} disabled={checking} onClick={() => void checkReadiness(true)}>
           {checking ? "Checking…" : "Check again"}
         </button>
       </div>
@@ -159,33 +103,56 @@ export function PerformanceRunPanel({
         </ErrorState>
       )}
 
-      {target && (
-        <section aria-label="Run target" className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-brand-500 bg-brand-50 p-4 dark:bg-brand-500/10">
-          <div className="space-y-1.5">
+      {target ? (
+        <section aria-label="Run target" className="space-y-3 rounded-md border border-brand-500 bg-brand-50 p-3 dark:bg-brand-500/10">
+          <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-muted">TARGET</span>
-              <span className="text-lg font-semibold">{target.name}</span>
+              <span className="font-semibold">{target.name}</span>
               <StatusBadge label={`Tier: ${target.tier}`} tone={TIER_TONE[target.tier]} />
-              <span className="break-all font-mono text-sm">{target.baseUrl}</span>
             </div>
-            <p className="text-sm">Load is generated from the machine running the ApiPilot backend.</p>
+            <p className="break-all font-mono text-xs">{target.baseUrl}</p>
+            <p className="text-xs">{LOAD_ORIGIN}</p>
             <p className="text-xs text-muted">
               {plan.loadProfile.kind} · {stages.length} stages · {formatDuration(plan.loadProfile.plannedDurationMs)} · peak {peak} VUs:{" "}
               {stages.map((stage) => `${stage.durationMs / 1000} s → ${stage.targetVirtualUsers}`).join(", ")}
             </p>
-            {/* AP-032 FR-011: every write operation this run sends, next to the trigger that names the target. */}
-            <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" listId={writeListId} />
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <button type="button" className={BUTTON_STYLES.primary} disabled={blockedReason !== null || starting} onClick={() => void handleStart()}>
-              {starting ? "Starting…" : `Run on ${target.name} (${target.tier})`}
-            </button>
-            {blockedReason && <span className="text-xs text-muted">{blockedReason}</span>}
-          </div>
+          {trigger}
         </section>
+      ) : (
+        <div className="space-y-3">{trigger}</div>
       )}
       {error && <ErrorState message={error} testId="performance-run-error" />}
+      {inProgress && onViewRuns && (
+        <p className="text-sm">
+          <StatusBadge label="Run in progress" tone="info" />{" "}
+          <button type="button" className={BUTTON_STYLES.ghost} onClick={onViewRuns}>
+            View progress
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
 
+export function PerformanceRunActivity({
+  runs,
+  client,
+  plan,
+}: Readonly<{
+  runs: PerformanceRuns;
+  client: PerformanceClient;
+  plan: PerformancePlan;
+}>) {
+  const { run, inProgress, runs: history, reportRunId, showReport, cancelling, cancel } = runs;
+  const stepsById = new Map(plan.journeys.flatMap((journey, journeyIndex) => journey.steps.map((step, stepIndex) => [step.id, { step, where: `J${journeyIndex + 1} · ${stepIndex + 1}` }])));
+  const progress = run?.progress;
+  const elapsedMs = progress?.elapsedMs ?? 0;
+  const plannedMs = run?.plannedDurationMs ?? plan.loadProfile.plannedDurationMs;
+
+  return (
+    <div className="space-y-5">
       {run && inProgress && (
         <section aria-labelledby="live-run-title" className="space-y-4 rounded-lg border border-border bg-surface p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -195,10 +162,18 @@ export function PerformanceRunPanel({
               </h3>
               <StatusBadge {...runStatusLabel(run)} />
             </div>
-            <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void handleCancel()}>
+            <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void cancel()}>
               {cancelling || run.cancelRequested ? "Cancelling…" : "Cancel run"}
             </button>
           </div>
+          {/* AP-029 FR-025: the target stays on screen throughout the run. */}
+          <p className="flex flex-wrap items-center gap-2 text-sm" data-testid="live-run-target">
+            <span className="text-xs font-semibold text-muted">TARGET</span>
+            <span className="font-semibold">{run.environment.name}</span>
+            <StatusBadge label={`Tier: ${run.environment.tier}`} tone={TIER_TONE[run.environment.tier]} />
+            <span className="break-all font-mono text-xs">{run.environment.baseUrl}</span>
+            <span className="text-xs text-muted">{LOAD_ORIGIN}</span>
+          </p>
           <div>
             <div className="mb-1.5 text-sm">
               <strong className="font-mono">{formatDuration(elapsedMs)}</strong> <span className="text-muted">elapsed of</span>{" "}
@@ -270,12 +245,12 @@ export function PerformanceRunPanel({
 
       {reportRunId && <PerformanceReportFrame client={client} runId={reportRunId} />}
 
-      <section aria-labelledby="performance-runs-title" className="space-y-2">
+      <section aria-labelledby="performance-runs-title" className="space-y-2 rounded-lg border border-border bg-surface p-5">
         <h3 id="performance-runs-title" className="text-base font-semibold">
           Runs in this session
         </h3>
-        {runs.length === 0 ? (
-          <p className="text-sm text-muted">No performance runs yet.</p>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted">No performance runs yet. Start one from the plan&apos;s run setup; its live progress shows here and the report opens when it ends.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -291,7 +266,7 @@ export function PerformanceRunPanel({
                 </tr>
               </thead>
               <tbody>
-                {runs.map((summary) => (
+                {history.map((summary) => (
                   <tr key={summary.id} className="border-t border-border">
                     <td className="px-3 py-2 font-mono text-xs">{summary.id.slice(0, 8)}</td>
                     <td className="px-3 py-2">
@@ -305,7 +280,7 @@ export function PerformanceRunPanel({
                       {summary.status === "in-progress" ? (
                         <span className="text-xs text-muted">After it ends</span>
                       ) : (
-                        <button type="button" className={BUTTON_STYLES.ghost} onClick={() => setReportRunId(summary.id)}>
+                        <button type="button" className={BUTTON_STYLES.ghost} onClick={() => showReport(summary.id)}>
                           View report
                         </button>
                       )}

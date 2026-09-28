@@ -765,7 +765,17 @@ execution page (specs/026, specs/028), and the quick performance test (specs/032
 `pages/QuickPerformancePage.tsx`) — without discarding any one's state when another is active
 (see "External collection import & execution" above for the mounting rules). The guided
 Performance Testing stage and the quick page render the one `PerformancePlanScreen`, each with a
-`PerformanceClient` from `createPerformanceClient(base)` for its own route family. Within the
+`PerformanceClient` from `createPerformanceClient(base)` for its own route family.
+`PerformancePlanScreen` has a Plan tab (the operations table, `JourneyList`, beside a sticky
+run-setup checklist of `SetupItem`s ending in `PerformanceRunTrigger`) and a Runs tab
+(`PerformanceRunActivity`: live progress, report, run history). The two run components share one
+`usePerformanceRuns` state held by the screen, so readiness, the current run and its 2-second poll
+survive switching tabs, and starting a run switches to the Runs tab, whose live view repeats the
+target (AP-029 FR-025). `JourneyList` shows one line per step and opens a step's details in a row
+under it; filters, row selection and the "Remove by method" menu are local UI state, and every
+removal is still one `PUT /plan` of `excludedOperationKeys`. The write lists never collapse
+(AP-032 SC-002); `CountedOperationList`'s `columns` layout uses a container query so the same
+list reads as two columns in the operations panel and one in the setup column. Within the
 guided workflow, the page composition root
 renders the active guided stage and its shared progress/state. Components own
 presentation, interaction, local UI state, accessible names, keyboard behavior, and visible focus.

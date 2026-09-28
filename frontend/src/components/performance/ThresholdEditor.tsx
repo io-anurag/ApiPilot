@@ -58,11 +58,12 @@ export function ThresholdEditor({
           ))}
         </ul>
       )}
-      <fieldset className="flex flex-wrap items-end gap-2" disabled={busy}>
+      <fieldset className="flex min-w-0 flex-wrap items-end gap-2" disabled={busy}>
         <legend className="sr-only">Add a threshold</legend>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        {/* A step's operation key can be long; the select never grows wider than its column. */}
+        <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-muted">
           Applies to
-          <select value={scope} onChange={(event) => setScope(event.target.value)} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
+          <select value={scope} onChange={(event) => setScope(event.target.value)} className="max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
             <option value="run">Whole run</option>
             {steps.map((step) => (
               <option key={step.id} value={step.id}>

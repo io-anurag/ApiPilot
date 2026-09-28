@@ -20,13 +20,21 @@ import { EmptyState } from "../EmptyState";
 import { ErrorState } from "../ErrorState";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge } from "../StatusBadge";
+import { Tabs } from "../Tabs";
 import { CountedOperationList } from "./CountedOperationList";
 import { EnvironmentPicker } from "./EnvironmentPicker";
-import { JourneyList } from "./JourneyList";
+import { JourneyList, type FocusRequest } from "./JourneyList";
 import { LoadProfileEditor } from "./LoadProfileEditor";
-import { PerformanceRunPanel } from "./PerformanceRunPanel";
+import { PerformanceRunActivity, PerformanceRunTrigger } from "./PerformanceRunPanel";
+import { SetupItem, type SetupItemState } from "./SetupItem";
 import { ThresholdEditor } from "./ThresholdEditor";
-import { OMITTED_REASON_LABEL, removalReason } from "./performanceViewModel";
+import {
+  OMITTED_REASON_LABEL,
+  formatDuration,
+  loadProfileSummary,
+  removalReason,
+} from "./performanceViewModel";
+import { usePerformanceRuns } from "./usePerformanceRuns";
 import { ValuesChecklist } from "./ValuesChecklist";
 import { WriteOperationSummary } from "./WriteOperationSummary";
 
@@ -36,8 +44,12 @@ import { WriteOperationSummary } from "./WriteOperationSummary";
  * plan source. Opening it calls `GET /plan` through `client` (on the guided path that builds the
  * plan and makes the stage active). Every edit goes to the server, which validates it; this
  * component shows the result.
+ *
+ * Layout: a Plan tab with the operations table on the left and a sticky run-setup checklist on the
+ * right (load profile, thresholds, environment, script and the run trigger, each with its state),
+ * and a Runs tab with live progress, the report and the session's runs. Starting a run switches to
+ * the Runs tab, where the live run repeats its target (AP-029 FR-025).
  */
-const PANEL = "space-y-3 rounded-lg border border-border bg-surface p-5";
 
 type LoadState =
   { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready" };
@@ -87,7 +99,9 @@ export function PerformancePlanScreen({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [focusStepId, setFocusStepId] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  const [tab, setTab] = useState<"plan" | "runs">("plan");
+  const runs = usePerformanceRuns(client);
 
   const loadValues = useCallback(
     async (id: string | null) => {
@@ -215,9 +229,6 @@ export function PerformancePlanScreen({
   else if (steps.length === 0) generateBlockedReason = "The plan has nothing to test";
   else if (needsStatus.length > 0)
     generateBlockedReason = "Every step needs an expected status";
-  const methodsPresent = [
-    ...new Set(steps.map((step) => step.method.toUpperCase())),
-  ].sort();
   const exclude = (keys: readonly string[], success: string) =>
     void apply(
       { excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] },
@@ -236,19 +247,43 @@ export function PerformancePlanScreen({
       `${keys.length} ${method} operation${keys.length === 1 ? "" : "s"} removed.`,
     );
   };
-  const focusStep = (stepId: string) => setFocusStepId(stepId);
+  const focusStep = (stepId: string) =>
+    setFocusRequest((current) => ({ stepId, nonce: (current?.nonce ?? 0) + 1 }));
+
+  // Each run-setup item's state and one-line summary, derived here rather than in JSX (§43).
+  const missingValues = values.filter((value) => !value.present).length;
+  const operationsState: SetupItemState =
+    steps.length === 0 || needsStatus.length > 0 ? "attention" : "done";
+  let environmentState: SetupItemState = "todo";
+  let environmentSummary = "None chosen yet.";
+  if (environment) {
+    environmentState = missingValues > 0 ? "attention" : "done";
+    environmentSummary =
+      missingValues > 0
+        ? `${environment.name} · ${missingValues} of ${values.length} values missing`
+        : `${environment.name} · every value present`;
+  }
+  let scriptState: SetupItemState = "todo";
+  let scriptSummary = "Not generated yet.";
+  if (generateBlockedReason) scriptSummary = `Waiting: ${generateBlockedReason.toLowerCase()}.`;
+  if (script?.outOfDate) {
+    scriptState = "attention";
+    scriptSummary = "Out of date: the plan changed after it was generated.";
+  } else if (script) {
+    scriptState = "done";
+    scriptSummary = "Current.";
+  }
+  const thresholdCount = plan.thresholds.length;
 
   return (
-    <div className="space-y-5" data-testid={testId}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold">{title}</h2>
+    <div className="space-y-4" data-testid={testId}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-lg font-semibold">{title}</h2>
           <div className="max-w-3xl text-sm text-muted">{lead}</div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge
-            label={`${plan.journeys.length} journeys · ${steps.length} steps`}
-          />
+          <StatusBadge label={`${plan.journeys.length} journeys · ${steps.length} steps`} />
           <button
             type="button"
             className={BUTTON_STYLES.secondary}
@@ -261,70 +296,34 @@ export function PerformancePlanScreen({
       </div>
       {problem && <ErrorState message={problem} testId="performance-plan-problem" />}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_28rem]">
-        <div className="space-y-5">
-          <section className={PANEL} aria-labelledby="performance-scope-title">
-            <h3 id="performance-scope-title" className="text-base font-semibold">
-              Operations in scope
+      <Tabs
+        label="Performance test"
+        tabs={[
+          { id: "plan", label: "Plan" },
+          { id: "runs", label: `Runs & reports (${runs.runs.length})` },
+        ]}
+        activeTab={tab}
+        onChange={setTab}
+      />
+
+      <div
+        hidden={tab !== "plan"}
+        className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]"
+      >
+        <section
+          className="min-w-0 space-y-3 rounded-lg border border-border bg-surface p-4"
+          aria-labelledby="performance-journeys-title"
+        >
+          <div className="space-y-1">
+            <h3 id="performance-journeys-title" className="text-base font-semibold">
+              Operations
             </h3>
             {scopeNote({ plan, busy, apply })}
             <p className="text-sm text-muted">
-              One positive scenario per operation. Negative scenarios are never run under
-              load. Write operations are included; remove any you do not want sent to the
-              target.
+              One positive scenario per operation; negative scenarios are never run under load.
+              Every virtual user runs every journey, in this order, on each iteration.
             </p>
-            <CountedOperationList
-              label={(count) => `${count} operation${count === 1 ? "" : "s"} removed`}
-              testId="performance-removed-list"
-              entries={plan.excludedOperationKeys.map((operationKey) => ({
-                operationKey,
-                detail: removalReason(operationKey, plan.credentialProducerOperationKeys),
-                action: (
-                  <button
-                    type="button"
-                    className={BUTTON_STYLES.ghost}
-                    disabled={busy}
-                    aria-label={`Restore ${operationKey}`}
-                    onClick={() =>
-                      void apply(
-                        {
-                          excludedOperationKeys: plan.excludedOperationKeys.filter(
-                            (key) => key !== operationKey,
-                          ),
-                        },
-                        `${operationKey} restored.`,
-                      )
-                    }
-                  >
-                    Restore
-                  </button>
-                ),
-              }))}
-            />
-            {plan.excludedOperationKeys.length > 1 && (
-              <button
-                type="button"
-                className={BUTTON_STYLES.ghost}
-                disabled={busy}
-                onClick={() =>
-                  void apply(
-                    { excludedOperationKeys: [] },
-                    "Every removed operation restored.",
-                  )
-                }
-              >
-                Restore all
-              </button>
-            )}
-            <CountedOperationList
-              label={(count) => `${count} operation${count === 1 ? "" : "s"} left out`}
-              testId="performance-omitted-list"
-              entries={plan.omitted.map((entry) => ({
-                operationKey: entry.operationKey,
-                detail: OMITTED_REASON_LABEL[entry.reason],
-              }))}
-            />
-          </section>
+          </div>
 
           <WriteOperationSummary
             summary={writeSummary}
@@ -349,265 +348,331 @@ export function PerformancePlanScreen({
             }
           />
 
-          <section className={PANEL} aria-labelledby="performance-journeys-title">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 id="performance-journeys-title" className="text-base font-semibold">
-                Journeys
-              </h3>
-              <span className="text-sm text-muted">
-                Every virtual user runs every journey, in this order, on each iteration.
-              </span>
-            </div>
-            {methodsPresent.length > 0 && (
-              <div
-                className="flex flex-wrap gap-2"
-                role="group"
-                aria-label="Remove by method"
-              >
-                {methodsPresent.map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    className={BUTTON_STYLES.ghost}
-                    disabled={busy}
-                    onClick={() => removeMethod(method)}
-                  >
-                    Remove all {method} operations
-                  </button>
-                ))}
-              </div>
-            )}
-            {noOperations && (
-              <EmptyState
-                message="The plan has no operations"
-                description="Every operation was removed. Restore one to generate a script."
-                testId="performance-plan-no-operations"
-              />
-            )}
-            {!noOperations &&
-              steps.length === 0 &&
-              (emptyState ?? (
-                <EmptyState
-                  message="Nothing to test"
-                  description="No operation in scope has a positive scenario."
-                  testId="performance-plan-empty"
-                />
-              ))}
-            {steps.length > 0 && (
-              <JourneyList
-                loadPreview={fetchStepRequest}
-                journeys={plan.journeys}
-                busy={busy}
-                announcement={announcement}
-                onExpectedStatuses={(stepId, codes) =>
-                  void apply({ expectedStatuses: { [stepId]: codes } })
-                }
-                onRemoveOperation={(operationKey) =>
-                  void apply(
-                    {
-                      excludedOperationKeys: [
-                        ...plan.excludedOperationKeys,
-                        operationKey,
-                      ],
-                    },
-                    `${operationKey} removed from the plan.`,
-                  )
-                }
-                onStepOrder={(journeyId, stepIds) =>
-                  void apply({ stepOrder: { [journeyId]: stepIds } }, "Step moved.")
-                }
-                onJourneyOrder={(journeyIds) =>
-                  void apply({ journeyOrder: journeyIds }, "Journey moved.")
-                }
-                focusStepId={focusStepId}
-              />
-            )}
-            <label className="flex flex-wrap items-center gap-2 text-sm text-muted">
-              Think time between steps
-              <input
-                type="number"
-                min={0}
-                step={0.5}
-                defaultValue={plan.thinkTimeMs / 1000}
-                key={plan.thinkTimeMs}
-                disabled={busy}
-                onBlur={(event) => {
-                  const ms = Math.round(Number(event.target.value) * 1000);
-                  if (Number.isFinite(ms) && ms >= 0 && ms !== plan.thinkTimeMs)
-                    void apply({ thinkTimeMs: ms });
-                }}
-                className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
-                aria-label="Think time between steps in seconds"
-              />
-              s
-            </label>
-          </section>
-        </div>
-
-        <div className="space-y-5">
-          <section className={PANEL} aria-labelledby="performance-profile-title">
-            <h3 id="performance-profile-title" className="text-base font-semibold">
-              Load profile
-            </h3>
-            <LoadProfileEditor
-              profile={plan.loadProfile}
-              startingStages={(kind) =>
-                LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))
-              }
-              busy={busy}
-              onSave={(profile) =>
-                void apply({ loadProfile: profile }, "Load profile saved.")
-              }
-            />
-          </section>
-
-          <section className={PANEL} aria-labelledby="performance-thresholds-title">
-            <h3 id="performance-thresholds-title" className="text-base font-semibold">
-              Thresholds
-            </h3>
-            <ThresholdEditor
-              thresholds={plan.thresholds}
-              steps={steps.map((step) => ({ id: step.id, label: step.operationKey }))}
-              busy={busy}
-              onSave={(thresholds) => void apply({ thresholds })}
-            />
-          </section>
-
-          <section className={PANEL} aria-labelledby="performance-environment-title">
-            <h3 id="performance-environment-title" className="text-base font-semibold">
-              Target environment and values
-            </h3>
-            {environmentError && (
-              <ErrorState
-                message="The environments could not be loaded."
-                detail={environmentError}
-                testId="performance-environments-error"
-              />
-            )}
-            <EnvironmentPicker
-              environments={environments}
-              selectedId={environmentId}
-              suggestedNames={plan.userSuppliedValues.map((value) => value.name)}
-              onSelect={(id) => {
-                setEnvironmentId(id);
-                void loadValues(id);
-              }}
-              onSaved={(saved) => {
-                setEnvironments((current) => [
-                  ...current.filter((candidate) => candidate.id !== saved.id),
-                  saved,
-                ]);
-                setEnvironmentId(saved.id);
-                void loadValues(saved.id);
-              }}
-            />
-            {environment && <ValuesChecklist values={values} stepLabel={stepLabel} />}
-          </section>
-
-          <section className={PANEL} aria-labelledby="performance-script-title">
-            <h3 id="performance-script-title" className="text-base font-semibold">
-              k6 script
-            </h3>
-            {needsStatus.length > 0 && (
-              <div
-                role="status"
-                className="space-y-2 rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-100"
-              >
-                <p>
-                  <strong>
-                    {needsStatus.length === 1
-                      ? "1 step needs"
-                      : `${needsStatus.length} steps need`}{" "}
-                    an expected status
-                  </strong>{" "}
-                  before the script can be generated.
-                </p>
-                <CountedOperationList
-                  label={(count) => `${count} step${count === 1 ? "" : "s"} to set`}
-                  testId="performance-needs-status-list"
-                  entries={plan.stepsNeedingExpectedStatus.map((stepId) => ({
-                    operationKey: stepLabel(stepId),
-                    action: (
-                      <button
-                        type="button"
-                        className={BUTTON_STYLES.ghost}
-                        onClick={() => focusStep(stepId)}
-                        aria-label={`Set the expected status of ${stepLabel(stepId)}`}
-                      >
-                        Set status
-                      </button>
-                    ),
-                  }))}
-                />
-              </div>
-            )}
-            {script?.outOfDate && (
-              <StatusBadge label="Out of date — regenerate" tone="warning" />
-            )}
-            {script && !script.outOfDate && (
-              <p className="text-sm">
-                <StatusBadge label="Script current" tone="success" />{" "}
-                <span className="font-mono text-xs">
-                  sha256 {script.scriptSha256.slice(0, 12)}…
-                </span>
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={BUTTON_STYLES.primary}
-                disabled={busy || generateBlockedReason !== null}
-                onClick={() => void handleGenerate()}
-              >
-                {script ? "Regenerate script" : "Generate script"}
-              </button>
-              {generateBlockedReason && (
-                <span
-                  data-testid="performance-generate-blocked"
-                  className="self-center text-xs text-muted"
-                >
-                  {generateBlockedReason}.
-                </span>
+          {(plan.excludedOperationKeys.length > 0 || plan.omitted.length > 0) && (
+            <div className="grid items-start gap-3 lg:grid-cols-2">
+              {plan.excludedOperationKeys.length > 0 && (
+                <div className="space-y-1.5">
+                  <CountedOperationList
+                    label={(count) => `${count} operation${count === 1 ? "" : "s"} removed`}
+                    testId="performance-removed-list"
+                    entries={plan.excludedOperationKeys.map((operationKey) => ({
+                      operationKey,
+                      detail: removalReason(operationKey, plan.credentialProducerOperationKeys),
+                      action: (
+                        <button
+                          type="button"
+                          className={BUTTON_STYLES.ghost}
+                          disabled={busy}
+                          aria-label={`Restore ${operationKey}`}
+                          onClick={() =>
+                            void apply(
+                              {
+                                excludedOperationKeys: plan.excludedOperationKeys.filter(
+                                  (key) => key !== operationKey,
+                                ),
+                              },
+                              `${operationKey} restored.`,
+                            )
+                          }
+                        >
+                          Restore
+                        </button>
+                      ),
+                    }))}
+                  />
+                  {plan.excludedOperationKeys.length > 1 && (
+                    <button
+                      type="button"
+                      className={BUTTON_STYLES.ghost}
+                      disabled={busy}
+                      onClick={() =>
+                        void apply(
+                          { excludedOperationKeys: [] },
+                          "Every removed operation restored.",
+                        )
+                      }
+                    >
+                      Restore all
+                    </button>
+                  )}
+                </div>
               )}
-              {script && !script.outOfDate && (
+              <CountedOperationList
+                label={(count) => `${count} operation${count === 1 ? "" : "s"} left out`}
+                testId="performance-omitted-list"
+                entries={plan.omitted.map((entry) => ({
+                  operationKey: entry.operationKey,
+                  detail: OMITTED_REASON_LABEL[entry.reason],
+                }))}
+              />
+            </div>
+          )}
+
+          {noOperations && (
+            <EmptyState
+              message="The plan has no operations"
+              description="Every operation was removed. Restore one to generate a script."
+              testId="performance-plan-no-operations"
+            />
+          )}
+          {!noOperations &&
+            steps.length === 0 &&
+            (emptyState ?? (
+              <EmptyState
+                message="Nothing to test"
+                description="No operation in scope has a positive scenario."
+                testId="performance-plan-empty"
+              />
+            ))}
+          {steps.length > 0 && (
+            <JourneyList
+              loadPreview={fetchStepRequest}
+              journeys={plan.journeys}
+              busy={busy}
+              announcement={announcement}
+              onExpectedStatuses={(stepId, codes) =>
+                void apply({ expectedStatuses: { [stepId]: codes } })
+              }
+              onRemoveOperations={exclude}
+              onRemoveMethod={removeMethod}
+              onStepOrder={(journeyId, stepIds) =>
+                void apply({ stepOrder: { [journeyId]: stepIds } }, "Step moved.")
+              }
+              onJourneyOrder={(journeyIds) =>
+                void apply({ journeyOrder: journeyIds }, "Journey moved.")
+              }
+              focusRequest={focusRequest}
+            />
+          )}
+          <label className="flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span>Think time between steps</span>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              defaultValue={plan.thinkTimeMs / 1000}
+              key={plan.thinkTimeMs}
+              disabled={busy}
+              onBlur={(event) => {
+                const ms = Math.round(Number(event.target.value) * 1000);
+                if (Number.isFinite(ms) && ms >= 0 && ms !== plan.thinkTimeMs)
+                  void apply({ thinkTimeMs: ms });
+              }}
+              className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
+              aria-label="Think time between steps in seconds"
+            />
+            <span>s</span>
+          </label>
+        </section>
+
+        {/* Sticky on wide screens, so what still blocks a run stays in view while the table
+            scrolls. The height is bounded to the viewport (a genuine layout value, CLAUDE.md §31)
+            so a long checklist scrolls inside itself instead of running off screen. */}
+        <aside
+          aria-labelledby="performance-setup-title"
+          className="min-w-0 rounded-lg border border-border bg-surface xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto"
+        >
+          <h3
+            id="performance-setup-title"
+            className="border-b border-border px-4 py-3 text-base font-semibold"
+          >
+            Run setup
+          </h3>
+          <ol className="divide-y divide-border">
+            <SetupItem
+              state={operationsState}
+              title="Operations"
+              titleId="performance-setup-operations"
+              summary={
                 <>
-                  <a
-                    className={BUTTON_STYLES.secondary}
-                    href={scriptDownloadUrl("script")}
-                    download
-                  >
+                  {steps.length} step{steps.length === 1 ? "" : "s"} · {writeSummary.total}{" "}
+                  write{writeSummary.total === 1 ? "" : "s"}
+                  {needsStatus.length > 0 && (
+                    <span className="font-medium text-warning-700 dark:text-warning-100">
+                      {" · "}
+                      {needsStatus.length} without an expected status
+                    </span>
+                  )}
+                </>
+              }
+            />
+            <SetupItem
+              state="done"
+              title="Load profile"
+              titleId="performance-profile-title"
+              summary={loadProfileSummary(plan.loadProfile)}
+              collapsible
+            >
+              <LoadProfileEditor
+                profile={plan.loadProfile}
+                startingStages={(kind) =>
+                  LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))
+                }
+                busy={busy}
+                onSave={(profile) => void apply({ loadProfile: profile }, "Load profile saved.")}
+              />
+            </SetupItem>
+            <SetupItem
+              state={thresholdCount > 0 ? "done" : "optional"}
+              title="Thresholds (optional)"
+              titleId="performance-thresholds-title"
+              summary={
+                thresholdCount > 0
+                  ? `${thresholdCount} threshold${thresholdCount === 1 ? "" : "s"}`
+                  : "None set, so the report gives no pass/fail verdict."
+              }
+              collapsible
+              actionLabel={thresholdCount > 0 ? "Edit" : "Add"}
+            >
+              <ThresholdEditor
+                thresholds={plan.thresholds}
+                steps={steps.map((step) => ({ id: step.id, label: step.operationKey }))}
+                busy={busy}
+                onSave={(thresholds) => void apply({ thresholds })}
+              />
+            </SetupItem>
+            <SetupItem
+              state={environmentState}
+              title="Target environment and values"
+              titleId="performance-environment-title"
+              summary={environmentSummary}
+            >
+              {environmentError && (
+                <ErrorState
+                  message="The environments could not be loaded."
+                  detail={environmentError}
+                  testId="performance-environments-error"
+                />
+              )}
+              <EnvironmentPicker
+                environments={environments}
+                selectedId={environmentId}
+                suggestedNames={plan.userSuppliedValues.map((value) => value.name)}
+                onSelect={(id) => {
+                  setEnvironmentId(id);
+                  void loadValues(id);
+                }}
+                onSaved={(saved) => {
+                  setEnvironments((current) => [
+                    ...current.filter((candidate) => candidate.id !== saved.id),
+                    saved,
+                  ]);
+                  setEnvironmentId(saved.id);
+                  void loadValues(saved.id);
+                }}
+              />
+              {environment && <ValuesChecklist values={values} stepLabel={stepLabel} />}
+            </SetupItem>
+            <SetupItem
+              state={scriptState}
+              title="k6 script"
+              titleId="performance-script-title"
+              summary={scriptSummary}
+            >
+              {needsStatus.length > 0 && (
+                <div
+                  role="status"
+                  className="space-y-2 rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-100"
+                >
+                  <p>
+                    <strong>
+                      {needsStatus.length === 1
+                        ? "1 step needs"
+                        : `${needsStatus.length} steps need`}{" "}
+                      an expected status
+                    </strong>{" "}
+                    before the script can be generated.
+                  </p>
+                  <CountedOperationList
+                    label={(count) => `${count} step${count === 1 ? "" : "s"} to set`}
+                    testId="performance-needs-status-list"
+                    entries={plan.stepsNeedingExpectedStatus.map((stepId) => ({
+                      operationKey: stepLabel(stepId),
+                      action: (
+                        <button
+                          type="button"
+                          className={BUTTON_STYLES.ghost}
+                          onClick={() => focusStep(stepId)}
+                          aria-label={`Set the expected status of ${stepLabel(stepId)}`}
+                        >
+                          Set status
+                        </button>
+                      ),
+                    }))}
+                  />
+                </div>
+              )}
+              {script?.outOfDate && <StatusBadge label="Out of date — regenerate" tone="warning" />}
+              {script && !script.outOfDate && (
+                <p className="text-sm">
+                  <StatusBadge label="Script current" tone="success" />{" "}
+                  <span className="font-mono text-xs">
+                    sha256 {script.scriptSha256.slice(0, 12)}…
+                  </span>
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={BUTTON_STYLES.primary}
+                  disabled={busy || generateBlockedReason !== null}
+                  onClick={() => void handleGenerate()}
+                >
+                  {script ? "Regenerate script" : "Generate script"}
+                </button>
+                {generateBlockedReason && (
+                  <span data-testid="performance-generate-blocked" className="text-xs text-muted">
+                    {generateBlockedReason}.
+                  </span>
+                )}
+              </div>
+              {script && !script.outOfDate && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <a className={BUTTON_STYLES.ghost} href={scriptDownloadUrl("script")} download>
                     Download script
                   </a>
                   <a
-                    className={BUTTON_STYLES.secondary}
+                    className={BUTTON_STYLES.ghost}
                     href={scriptDownloadUrl("environment-template")}
                     download
                   >
                     Download environment template
                   </a>
-                </>
+                </div>
               )}
-            </div>
+              <p className="text-xs text-muted">
+                The same plan always gives a byte-identical script. It never contains a secret;
+                values reach k6 only at run time.
+              </p>
+            </SetupItem>
+          </ol>
+          <section
+            aria-labelledby="performance-run-title"
+            className="space-y-2 border-t border-border bg-chrome px-4 py-3 dark:bg-white/5"
+          >
+            <h4 id="performance-run-title" className="text-sm font-semibold">
+              Run
+            </h4>
+            <PerformanceRunTrigger
+              runs={runs}
+              plan={plan}
+              script={script}
+              environment={environment}
+              writeListId={writeListId}
+              onStarted={() => setTab("runs")}
+              onViewRuns={() => setTab("runs")}
+            />
             <p className="text-xs text-muted">
-              The same plan always gives a byte-identical script. It never contains a
-              secret; values reach k6 only at run time.
+              Planned duration {formatDuration(plan.loadProfile.plannedDurationMs)}. Nothing is
+              sent to the target until you press Run.
             </p>
           </section>
-        </div>
+        </aside>
       </div>
 
-      <section className={PANEL} aria-labelledby="performance-run-title">
-        <h3 id="performance-run-title" className="text-base font-semibold">
-          Run
-        </h3>
-        <PerformanceRunPanel
-          client={client}
-          plan={plan}
-          script={script}
-          environment={environment}
-          writeListId={writeListId}
-        />
-      </section>
+      <div hidden={tab !== "runs"}>
+        <PerformanceRunActivity runs={runs} client={client} plan={plan} />
+      </div>
     </div>
   );
 }

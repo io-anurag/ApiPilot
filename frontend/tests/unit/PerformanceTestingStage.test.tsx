@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PerformanceTestingStage } from "../../src/components/performance/PerformanceTestingStage";
 import {
@@ -61,11 +61,12 @@ describe("PerformanceTestingStage", () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
     expect(screen.getByText("Building the performance plan…")).toBeInTheDocument();
-    await screen.findByText("Create order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     const inventory = operationInventory();
     expect(inventory).toHaveTextContent("POST");
     expect(inventory).toHaveTextContent("GET");
-    fireEvent.click(within(inventory).getByRole("button", { name: /POST \/orders/ }));
+    fireEvent.click(within(inventory).getByRole("button", { name: "Details of POST /orders" }));
+    expect(screen.getByText("Create order")).toBeInTheDocument();
     expect(screen.getByText("CONFIRMED dependency")).toBeInTheDocument();
     expect(screen.getByText("Rule-generated")).toBeInTheDocument();
     expect(screen.getByText("from specification")).toBeInTheDocument();
@@ -74,9 +75,9 @@ describe("PerformanceTestingStage", () => {
   it("explains the expected-status input and adds no choice note for an operation's only positive scenario", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
-    await screen.findByText("Service status");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: /GET \/status/ }),
+      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
     );
     expect(
       screen.getByLabelText("Add an expected status for GET /status"),
@@ -88,9 +89,9 @@ describe("PerformanceTestingStage", () => {
   it("lists the step that needs an expected status and keeps Generate disabled with the reason (FR-012a)", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
-    await screen.findByText("Service status");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: /GET \/status/ }),
+      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
     );
     expect(
       screen.getByText(
@@ -117,9 +118,9 @@ describe("PerformanceTestingStage", () => {
       }),
     );
     render(<PerformanceTestingStage />);
-    await screen.findByText("Service status");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: /GET \/status/ }),
+      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
     );
     fireEvent.change(screen.getByLabelText("Add an expected status for GET /status"), {
       target: { value: "200" },
@@ -141,13 +142,13 @@ describe("PerformanceTestingStage", () => {
       }),
     );
     render(<PerformanceTestingStage />);
-    await screen.findByText("Get warehouse");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
       within(operationInventory()).getByRole("button", {
-        name: /GET \/warehouses\/\{warehouseId\}/,
+        name: "Details of GET /warehouses/{warehouseId}",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Remove operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove from plan" }));
     await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
     expect(calls.find((call) => call.method === "PUT")?.body).toEqual({
       excludedOperationKeys: ["GET /warehouses/{warehouseId}"],
@@ -157,7 +158,7 @@ describe("PerformanceTestingStage", () => {
   it("shows the load profile's stages as editable numbers, and no thresholds until one is added (FR-017, FR-018)", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
-    await screen.findByText("Create order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.change(screen.getByLabelText("Profile"), { target: { value: "load" } });
     expect(screen.getByLabelText("Stage 1 duration in seconds")).toHaveValue(120);
     expect(screen.getByLabelText("Stage 1 target virtual users")).toHaveValue(10);
@@ -248,10 +249,10 @@ describe("PerformanceTestingStage", () => {
       }),
     );
     render(<PerformanceTestingStage />);
-    await screen.findByText("Get order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
       within(operationInventory()).getByRole("button", {
-        name: /GET \/orders\/\{orderId\}/,
+        name: "Details of GET /orders/{orderId}",
       }),
     );
     fireEvent.click(
@@ -263,10 +264,10 @@ describe("PerformanceTestingStage", () => {
     expect(calls.find((call) => call.method === "PUT")?.body).toEqual({
       stepOrder: { j1: ["s-read", "s-create"] },
     });
-    expect(operationInventory()).toHaveTextContent("Create order");
+    expect(operationInventory()).toHaveTextContent("/orders/{orderId}");
 
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: /GET \/status/ }),
+      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Move journey 2 down" }));
     await waitFor(() =>
@@ -287,7 +288,7 @@ describe("PerformanceTestingStage", () => {
       }),
     );
     render(<PerformanceTestingStage />);
-    await screen.findByText("Create order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     const input = screen.getByLabelText("Think time between steps in seconds");
     fireEvent.change(input, { target: { value: "2" } });
     fireEvent.blur(input);
@@ -312,7 +313,7 @@ describe("PerformanceTestingStage", () => {
       ],
     });
     render(<PerformanceTestingStage />);
-    await screen.findByText("Create order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.change(screen.getByLabelText("Target environment"), {
       target: { value: "env-2" },
     });
@@ -324,7 +325,7 @@ describe("PerformanceTestingStage", () => {
   it("offers no scope choice, explains how to include other operations, and shows the write summary, markers and preview (AP-032 FR-022, FR-023, FR-012a)", async () => {
     stubFetch(baseRoutes());
     render(<PerformanceTestingStage />);
-    await screen.findByText("Create order");
+    await screen.findByRole("table", { name: "Performance plan operations" });
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText("API review selection")).not.toBeInTheDocument();
     expect(screen.queryByText("All analyzed operations")).not.toBeInTheDocument();
@@ -336,7 +337,9 @@ describe("PerformanceTestingStage", () => {
     expect(screen.getByTestId("write-summary-plan")).toHaveTextContent(
       "1 write operation will be sent",
     );
-    expect(screen.getByText("Create order").closest("tr")).toHaveTextContent("Creates");
-    expect(screen.getAllByRole("button", { name: "Request" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Details of POST /orders" }).closest("tr")).toHaveTextContent("Creates");
+    // FR-008: the request preview is in each step's details.
+    fireEvent.click(screen.getByRole("button", { name: "Details of POST /orders" }));
+    expect(screen.getByRole("button", { name: "Request" })).toBeInTheDocument();
   });
 });

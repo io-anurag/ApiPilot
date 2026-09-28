@@ -44,7 +44,7 @@ describe("QuickPerformancePage", () => {
     fireEvent.change(await screen.findByLabelText("Upload OpenAPI specification for a quick performance test"), { target: { files: [specificationFile()] } });
 
     expect(await screen.findByTestId("quick-performance-plan")).toBeInTheDocument();
-    expect(await screen.findByText("GET /orders happy path")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Details of GET /orders" })).toBeInTheDocument();
     expect(screen.getByText("Quick Performance Fixture")).toBeInTheDocument();
     expect(screen.getByText(/generated requests that no one reviewed/)).toBeInTheDocument();
     expect(screen.getByText(/not chained/)).toBeInTheDocument();
