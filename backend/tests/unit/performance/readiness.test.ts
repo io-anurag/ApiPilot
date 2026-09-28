@@ -24,6 +24,7 @@ describe("k6 readiness", () => {
   it("reads the version and requires at least 1.0.0", () => {
     expect(interpretProbe(null, "k6 v1.2.3 (commit/abc, go1.22, linux/amd64)\n", AT)).toEqual({ state: "ready", version: "1.2.3", checkedAt: AT });
     expect(interpretProbe(null, "k6 v1.0.0\n", AT)).toMatchObject({ state: "ready", version: "1.0.0" });
+    expect(interpretProbe(null, "k6.exe v2.3.0 (commit/e088784614, go1.26.8, windows/amd64)\n", AT)).toMatchObject({ state: "ready", version: "2.3.0" });
     expect(interpretProbe(null, "k6 v0.49.0\n", AT)).toEqual({ state: "unavailable", reason: "unsupported-version", detail: "found 0.49.0, need ≥ 1.0.0", checkedAt: AT });
   });
 

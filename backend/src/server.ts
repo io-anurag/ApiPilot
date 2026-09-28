@@ -26,7 +26,8 @@ process.on("unhandledRejection", (reason) => {
   });
 });
 
-const MIN_SUPPORTED_NODE_MAJOR = 20;
+// Kept in step with `.nvmrc` and the root `engines` field.
+const MIN_SUPPORTED_NODE_MAJOR = 24;
 const currentMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
 if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
   logger.error("unsupported_node_version", {

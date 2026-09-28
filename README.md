@@ -5,7 +5,7 @@
 <h1 align="center">ApiPilot</h1>
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24_LTS-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.x-6BA539?logo=openapiinitiative&logoColor=white)](https://www.openapis.org/)
 [![Vitest](https://img.shields.io/badge/Vitest-testing-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev/)
 [![ESLint](https://img.shields.io/badge/ESLint-enabled-4B32C3?logo=eslint&logoColor=white)](https://eslint.org/)
@@ -247,7 +247,7 @@ Specification context is attached only when the failed request's Postman item id
 
 ### Requirements
 
-- Node.js 22 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
+- Node.js 24 LTS or newer, as specified by `.nvmrc` and the root `engines` field.
 - npm.
 - For local AI: disk space for the selected model, free memory for inference, and network access only for the initial model download. No GPU is required.
 - For deterministic-only use and routine tests: set `AI_PROVIDER_MODE=mock`; no model download is needed.
@@ -499,6 +499,10 @@ npm run test -w frontend
 ```
 
 `npm test` runs Vitest across the workspace, including backend unit/integration tests, frontend jsdom/React tests, and shared-domain tests. Ordinary tests use mock or scripted providers and do not download a model. `test:ai-real`, `test:ai-real:failure-analysis` (the AP-031 evaluation corpus, recorded in `specs/030-ai-failure-analysis/evaluation.md`), and `ai:benchmark` are opt-in and may load or download local models. `test:k6-real` (`K6_TEST_REAL=1`) is opt-in and needs a k6 1.0.0 or later that you installed; `perf:stub` starts a local stub target for AP-029's manual quickstart. Neither is part of `npm test`.
+
+The backend's `dev` and `start` scripts, and its Vitest workers, run Node with `--disable-warning=DEP0176`. On Node 24, `newman@6.2.2` (the latest release) reads the deprecated `fs.F_OK` constant as it loads, which prints a DeprecationWarning that has no functional effect. Only that warning code is silenced. If you run `backend/dist/server.js` directly with `node`, pass the same flag to keep the log clean.
+
+npm 11, bundled with Node 24, skips dependency install scripts that the root `allowScripts` field does not list. `better-sqlite3` (native build) and `onnxruntime-node` (runtime binaries) need theirs, so their entries are pinned to the installed versions. After upgrading either package, run `npm install-scripts ls` and approve the new version with `npm install-scripts approve <pkg>` once you have reviewed it.
 
 The repository has no checked-in Dockerfile, docker-compose file, or deployment manifest. The backend and frontend do have independent production build scripts: the backend compiles to `backend/dist`, and the frontend builds a Vite distribution under `frontend/dist`.
 

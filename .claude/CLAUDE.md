@@ -186,7 +186,7 @@ Respect the repository's existing technology choices.
 
 The current repository baseline includes:
 
-- Node.js 20 LTS
+- Node.js 24 LTS
 - npm
 - npm workspaces
 - TypeScript

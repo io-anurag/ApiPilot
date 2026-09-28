@@ -322,6 +322,37 @@ you can download and run elsewhere. The same plan always produces the same bytes
 file ever contains a value. Any change to the plan marks the script **Out of date** until you
 regenerate it.
 
+**Running the script outside ApiPilot.** The two downloads are `apipilot-performance.js` (the
+script) and `apipilot-performance-environment.json` (the template). The template lists each
+value the plan needs, the environment variable that carries it, and whether it is a secret. The
+names and numbers depend on the plan, and a changed plan can renumber them, so always take them
+from the template downloaded with the script you run. For example:
+
+```json
+{
+  "baseUrl": { "env": "APIPILOT_V_0", "secret": false, "value": "" },
+  "clientSecret": { "env": "APIPILOT_V_1", "secret": true, "value": "" }
+}
+```
+
+k6 does not read the template. The script takes each value only from its `APIPILOT_V_<n>`
+environment variable, so install k6 1.0.0 or later on the machine that will generate the load,
+set those variables, and run the script unmodified:
+
+```powershell
+$env:APIPILOT_V_0 = "https://staging.example.com"
+$env:APIPILOT_V_1 = "<client secret>"
+k6 run apipilot-performance.js
+```
+
+On Linux or macOS, use `export APIPILOT_V_0=...` instead. `k6 run -e APIPILOT_V_0=...` also works,
+but it leaves secrets in shell history and the process list, so prefer environment variables for
+anything the template marks `"secret": true`. Do not type real secrets into the template and keep
+it on disk: the files are value-free by design. A variable left unset behaves as a missing value
+does in ApiPilot: that step is not sent, and the steps depending on it are not attempted. A run
+outside ApiPilot prints k6's own end-of-test summary; ApiPilot's report, findings and run history
+are produced only for runs started from the panel.
+
 **Running.** You need k6 1.0.0 or later installed yourself on the machine running the
 ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration). ApiPilot
 never downloads or installs k6; the panel shows whether k6 is ready, and **Check again**

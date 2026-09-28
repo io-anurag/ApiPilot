@@ -824,6 +824,14 @@ backend compiles to `backend/dist` and the frontend builds a Vite distribution u
 `frontend/dist`. Locally, `npm run dev` starts both services and the Vite development proxy keeps
 browser API calls same-origin.
 
+The runtime baseline is Node.js 24 LTS. `.nvmrc` is the single pin: CI reads it through
+`actions/setup-node`, the root `engines` field requires `>=24.0.0`, and `backend/src/server.ts`
+refuses to start on an older major. `@types/node` is pinned to `^24` in the backend so type
+checking matches the runtime rather than whichever version transitive dependencies hoist. The
+backend suppresses exactly one warning, DEP0176, which `newman@6.2.2` triggers by reading
+`fs.F_OK` as it loads; npm 11's `allowScripts` lists the install scripts ApiPilot relies on
+(`better-sqlite3`, `onnxruntime-node`, `esbuild`, `protobufjs`), pinned to reviewed versions.
+
 Primary verification commands run from repository root:
 
 ```powershell

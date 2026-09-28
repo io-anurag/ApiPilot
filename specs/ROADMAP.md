@@ -2752,3 +2752,39 @@ Implementation
       failure is the known CRLF golden-script issue noted in entry 35. `npm run lint` and
       `npm run build` are clean.
     - Version bumped to 19.5.2 (root, backend, frontend, shared-domain).
+
+37. **Node.js 24 runtime baseline; version 19.5.3 (2026-09-28).**
+    - `.nvmrc` moves to `24` (CI reads it through `actions/setup-node`), the root `engines` field
+      to `>=24.0.0`, and `backend/src/server.ts`'s startup guard to major 24. The guard had been
+      left at 20 after the baseline moved to 22.
+    - DEP0176 (`fs.F_OK is deprecated`) came from `newman@6.2.2`, the latest release:
+      `lib/run/secure-fs.js` reads every property of `fs` as it loads. ApiPilot code does not use
+      the deprecated constants. The backend `dev` and `start` scripts and the backend Vitest
+      workers pass `--disable-warning=DEP0176`, which silences only that code. Remove it once
+      newman stops reading the constants.
+    - npm 11 (bundled with Node 24) skips dependency install scripts not listed in `allowScripts`.
+      `better-sqlite3@13.0.3` was missing and `onnxruntime-node` was pinned to 1.24.3 while 1.30.0
+      was installed, so a clean `npm ci` would have skipped both. Both are now approved at their
+      installed versions, and the unused `esbuild@0.21.5` entry is pruned. CI sets
+      `npm_config_strict_allow_scripts=true` so an unlisted install script fails the install, and
+      it prints the Node and npm versions.
+    - `@types/node@^24` is now a backend devDependency, so type checking matches the runtime; it
+      had resolved transitively to 26.x.
+    - Docs: CLAUDE.md, copilot-instructions.md, README (badge, requirements, the DEP0176 and
+      `allowScripts` notes) and architecture.md (runtime baseline). Earlier feature plans that
+      record Node 20 or 22 are left as written, since they describe the baseline at the time.
+    - Known, not changed here: `npm start -w backend` fails with `ERR_MODULE_NOT_FOUND`, because
+      `tsc` with `moduleResolution: "Bundler"` emits extensionless ESM imports that Node rejects
+      on any version. `npm audit` reports 18 advisories (1 critical), all transitive through
+      newman and postman-collection; the fixes need breaking downgrades, so none are applied.
+    - Validation: `npm test` 1,852 passed, 1 failed and 5 skipped across 249 test files; the
+      failure is the known CRLF golden-script issue noted in entry 35. No DEP0176 warnings are
+      printed. `npm run lint` and `npm run build` are clean.
+    - k6 readiness fix: on Windows `k6 version` prints `k6.exe v2.3.0 (...)`, which the readiness
+      pattern (`k6 v<x.y.z>`) did not match, so an installed, supported k6 was reported as
+      "version could not be read". `backend/src/performance/k6/readiness.ts` now accepts an
+      optional `.exe`, with a regression test using the Windows output.
+    - USER_MANUAL section 3.11 gains "Running the script outside ApiPilot": the two download
+      names, the template's `APIPILOT_V_<n>` mapping, a `k6 run` example, secret-handling advice,
+      and that outside runs get k6's summary rather than ApiPilot's report.
+    - Version bumped to 19.5.3 (root, backend, frontend, shared-domain).

@@ -14,7 +14,8 @@ const logger = createLogger("performance.k6Readiness");
  */
 export const MINIMUM_K6_VERSION = [1, 0, 0] as const;
 const CACHE_MS = 30_000;
-const VERSION_PATTERN = /k6 v(\d+)\.(\d+)\.(\d+)/;
+// Windows builds print the executable name ("k6.exe v2.3.0 (...)"), other platforms print "k6 v...".
+const VERSION_PATTERN = /k6(?:\.exe)? v(\d+)\.(\d+)\.(\d+)/;
 
 type ExecFile = (
   file: string,
