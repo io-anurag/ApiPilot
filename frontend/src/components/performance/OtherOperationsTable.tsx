@@ -255,12 +255,14 @@ export function OtherOperationsTable({
           <span className="font-medium">
             {selectedKeys.length} operation{selectedKeys.length === 1 ? "" : "s"} selected
           </span>
-          <button type="button" className={BUTTON_STYLES.secondary} disabled={busy} onClick={() => restore(selectedKeys)}>
-            Restore to the plan
-          </button>
-          <button type="button" className={`${BUTTON_STYLES.ghost} ml-auto`} onClick={() => setSelected(new Set())}>
-            Clear selection
-          </button>
+          <div className="ml-auto flex items-center gap-4">
+            <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => restore(selectedKeys)}>
+              Restore to the plan
+            </button>
+            <button type="button" className={BUTTON_STYLES.ghost} onClick={() => setSelected(new Set())}>
+              Clear selection
+            </button>
+          </div>
         </section>
       )}
 
