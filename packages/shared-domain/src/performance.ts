@@ -265,6 +265,15 @@ export interface StepRequestPreview {
   body: { contentType: "json" | "text"; text: string; references: PreviewReference[] } | null;
 }
 
+/**
+ * A removed operation as it would be if restored (AP-032 FR-024a): the step the plan would build
+ * for it and that step's request. Computed on request and never stored; the plan is unchanged.
+ */
+export interface RemovedOperationPreview {
+  step: PerformanceStep;
+  request: StepRequestPreview;
+}
+
 /** What the frontend knows about a generated script. Never the script text. */
 export interface ScriptStatus {
   planFingerprint: string;

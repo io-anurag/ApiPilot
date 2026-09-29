@@ -7,6 +7,8 @@ import {
   InvalidLoadProfileError,
   InvalidOrderError,
   InvalidThresholdError,
+  NoPositiveScenarioError,
+  OperationNotRemovedError,
   PerformanceRunNotFoundError,
   QuickTestExistsError,
   StepNotFoundError,
@@ -71,6 +73,8 @@ export function handleKnownError(req: Request, res: Response, startedAt: number,
   if (err instanceof EnvironmentNotFoundError) return fail(req, res, startedAt, 404, "environment_not_found", err.message);
   if (err instanceof PerformanceRunNotFoundError) return fail(req, res, startedAt, 404, "run_not_found", err.message);
   if (err instanceof StepNotFoundError) return fail(req, res, startedAt, 404, "step_not_found", err.message);
+  if (err instanceof OperationNotRemovedError) return fail(req, res, startedAt, 404, "operation_not_removed", err.message);
+  if (err instanceof NoPositiveScenarioError) return fail(req, res, startedAt, 409, "no_positive_scenario", err.message);
   if (err instanceof QuickTestExistsError) return fail(req, res, startedAt, 409, "quick_test_exists", err.message);
   throw err;
 }

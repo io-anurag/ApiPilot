@@ -44,7 +44,7 @@ describe("QuickPerformancePage", () => {
     fireEvent.change(await screen.findByLabelText("Upload OpenAPI specification for a quick performance test"), { target: { files: [specificationFile()] } });
 
     expect(await screen.findByTestId("quick-performance-plan")).toBeInTheDocument();
-    expect(await screen.findByText("GET /orders happy path")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Details of GET /orders" })).toBeInTheDocument();
     expect(screen.getByText("Quick Performance Fixture")).toBeInTheDocument();
     expect(screen.getByText(/generated requests that no one reviewed/)).toBeInTheDocument();
     expect(screen.getByText(/not chained/)).toBeInTheDocument();
@@ -104,9 +104,10 @@ describe("QuickPerformancePage", () => {
     stubFetch(planRoutes(empty, { [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView(empty) }] }));
     render(<QuickPerformancePage onExit={onExit} />);
     expect(await screen.findByText("Nothing can be load-tested")).toBeInTheDocument();
-    expect(screen.getByText("/a")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to start from an empty plan" }));
     expect(onExit).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Left out 1" }));
+    expect(screen.getByRole("table", { name: "Operations left out" })).toHaveTextContent("/a");
   });
 
   it("calls onExit from Back to start", async () => {
@@ -125,7 +126,8 @@ describe("QuickPerformancePage", () => {
       }),
     );
     render(<QuickPerformancePage onExit={() => undefined} />);
-    const removed = await screen.findByTestId("performance-removed-list");
+    fireEvent.click(await screen.findByRole("button", { name: "Removed 1" }));
+    const removed = screen.getByRole("table", { name: "Removed operations" });
     expect(removed).toHaveTextContent("/auth/login");
     expect(removed).toHaveTextContent("used to acquire the run's credentials");
     fireEvent.click(within(removed).getByRole("button", { name: "Restore POST /auth/login" }));
@@ -138,6 +140,8 @@ describe("QuickPerformancePage", () => {
     stubFetch(planRoutes(allRemoved, { [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView(allRemoved) }] }));
     render(<QuickPerformancePage onExit={() => undefined} />);
     expect(await screen.findByText("The plan has no operations")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "What still blocks a run" })).toHaveTextContent("Every operation was removed.");
+    fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
     expect(screen.getByRole("button", { name: "Generate script" })).toBeDisabled();
     expect(screen.getByTestId("performance-generate-blocked")).toHaveTextContent("The plan has no operations");
   });
@@ -151,6 +155,7 @@ describe("QuickPerformancePage", () => {
     render(<QuickPerformancePage onExit={() => undefined} />);
     await screen.findByTestId("quick-performance-plan");
     await waitFor(() => expect(calls.some((call) => call.url.startsWith(`${QUICK}/plan/values`))).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
     const checklist = await screen.findByRole("table", { name: "Values the plan needs from the environment" });
     expect(checklist).toHaveTextContent("password");
     expect(calls.some((call) => call.url.startsWith(`${QUICK}/readiness`))).toBe(true);

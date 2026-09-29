@@ -66,7 +66,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34 |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
-| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38 |
+| AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -2821,3 +2821,125 @@ Implementation
       architecture.md gains "Quick performance test (AP-032)"; AP-029's contract carries a pointer
       to the changed fields.
     - Version bumped to 19.6.0 (root, backend, frontend, shared-domain).
+
+39. **Performance plan screen redesign; version 19.7.0 (2026-09-28).**
+    - The shared plan screen (AP-029 stage and AP-032 quick page) was dense and long: each row
+      of the journey table wrapped to five lines, the step inspector sat below the paginated
+      table, and the run controls and run history were at the bottom of the page. It now has a
+      **Plan** tab (the operations table beside a sticky **Run setup** checklist: operations, load
+      profile, thresholds, environment and values, k6 script, then the run trigger) and a
+      **Runs & reports** tab (live progress, report, run history). Starting a run switches to
+      the Runs tab, whose live view repeats the target (AP-029 FR-025).
+    - Journey table: one line per step (journey number, method, path wrapped only at `/`, write
+      marker, expected status, short auth label, environment values); the scenario text moved into
+      the step's details, which open in a row under the step. New: filter chips with counts
+      (methods, Writes, Needs expected status), row selection with one **Remove from plan**, a
+      **Remove by method** menu (the per-method buttons of FR-014), workflow journeys grouped under
+      a header row, 50 steps per page.
+    - Unchanged by design: every write operation is still listed above the journeys and beside the
+      trigger without expanding a section (SC-002), now in two columns and one column respectively
+      via a container query; removed and left-out lists are still counted and collapse above ten
+      (FR-024); every edit is still one `PUT /plan`. No API, contract or shared-domain change.
+    - Frontend structure: `usePerformanceRuns` holds readiness, the current run and its poll;
+      `PerformanceRunPanel.tsx` now exports `PerformanceRunTrigger` and `PerformanceRunActivity`;
+      new `SetupItem` and `WrappingPath`; the quick page's "Back to start" joined its
+      specification bar.
+    - Validation: `npm test` 1,950 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser (dev servers, mock AI provider) with the PayPal
+      Invoicing fixture through the quick path, light and dark themes, at 1600 px and 390 px. The
+      390 px check found two page-level horizontal overflows, both fixed: the threshold editor's
+      step select grew to its longest operation key, and the table's screen-reader auth labels
+      escaped the table's scroll container. Not done: a live run started from the browser.
+    - Docs: USER_MANUAL §3.11 (screen layout, table, removal, order controls, Runs tab);
+      architecture.md "Frontend architecture".
+    - Version bumped to 19.7.0 (root, backend, frontend, shared-domain).
+
+40. **Performance plan: pending bar and Run setup tab; version 19.8.0 (2026-09-28).**
+    - Feedback on 19.7.0: the sticky run-setup column hid the Run button below its own scroll, the
+      steps missing an expected status were reported in four places, and the text before the table
+      was long. The screen now shows a pending bar above three tabs, in the order a test is
+      prepared: **Plan** (the operations table at full width), **Run setup** (environment and
+      values, load profile, thresholds, script, beside the run trigger) and **Runs & reports**.
+    - The pending bar lists only what blocks a run, each with the action that fixes it: steps
+      needing an expected status (**Show them** filters the table; the counted list of those steps,
+      each reachable, now lives here), no environment (**Create one** opens Run setup and focuses
+      the section), a missing or out-of-date script (**Generate**), k6 unavailable. When nothing is
+      left it reads "Ready to run on <environment>" with the write count and **Go to run →**. It
+      never holds the trigger, which stays beside the write list and target (AP-032 FR-011, AP-029
+      FR-025). Missing environment values are a note, not a blocker (AP-029 FR-014).
+    - The Run setup tab label counts its open items ("Run setup (2 to do)"). The Journey column is
+      left out when every journey has one step (the quick path); single-step journeys move with
+      **Move up** / **Move down**. The trigger's "See the plan's list" link was dropped, since that
+      list is on another tab and the trigger lists every write itself.
+    - Validation: `npm test` 1,953 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser (dev servers, mock AI provider, PayPal
+      Invoicing fixture, quick path) at 1600 px and at 390 px, where neither tab scrolls the page
+      sideways. Not done: a live run started from the browser.
+    - Docs: USER_MANUAL §3.11 (the pending bar, the three tabs, table and order controls);
+      architecture.md "Frontend architecture".
+    - Version bumped to 19.8.0 (root, backend, frontend, shared-domain).
+
+41. **Tall dialogs scroll; version 19.8.1 (2026-09-28).**
+    - The shared `Dialog` centred its panel with `items-center` in a fixed backdrop that did not
+      scroll, so a panel taller than the window (the environment form with the ~20 values of a
+      large specification) had its title and its Save and Cancel buttons pushed off screen and out
+      of reach. The backdrop now scrolls and the panel is centred with auto margins: a short dialog
+      is still centred, a tall one starts at the top and scrolls. This affects every dialog
+      (environment form, confirm, prompt, move item) and was not introduced by entries 39 and 40.
+    - Checked in a browser at 1000 x 500 px: the environment form's top is on screen and its
+      buttons are reachable by scrolling.
+    - Clarified in USER_MANUAL §3.11 why the environment form still lists a value after operations
+      are removed: a value stays while any remaining step needs it (checked against the backend: a
+      22-operation plan cut to 3 operations went from 7 values to 3).
+    - Validation: `npm test` 1,953 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean.
+    - Version bumped to 19.8.1 (root, backend, frontend, shared-domain).
+
+42. **Plan screen list and button fixes; version 19.8.2 (2026-09-28).**
+    - The removed and left-out lists used half the panel width (a two-column grid meant for both
+      lists side by side) and labelled every entry "Removed". They now take the full width, in the
+      same container-query columns as the write lists, and only an operation removed for a reason
+      of its own is labelled ("used to acquire the run's credentials"). Each entry is still on its
+      own line with its method, path and Restore (FR-024).
+    - The paths in both write lists are buttons that open the operation's details in the table,
+      switching to the Plan tab from the one beside the run trigger (`ListRequest` "open-operation").
+    - The pending bar's action buttons took the width of their labels and sat below their text; they
+      now share one width and line up with the text.
+    - Fixed: after the steps a filter showed were all removed (for example every step needing an
+      expected status), the filter's chip disappeared but the filter stayed on, so the table said
+      "No operations match these filters" with no way to clear it. A filter whose chip is gone now
+      stops applying and is cleared.
+    - Not done: a removed operation has no step in the plan, so it has no request preview to open.
+      Showing one needs a new backend route, an API contract change awaiting a decision.
+    - Validation: `npm test` 1,956 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser at 1300 px.
+    - Version bumped to 19.8.2 (root, backend, frontend, shared-domain).
+
+43. **Removed and left-out operations in the operations table, with a preview; version 19.9.0 (2026-09-28).**
+    - Product decision (spec Clarifications, Session 2026-09-28): removed and left-out operations
+      are views of the operations table (**In plan / Removed / Left out**, each with its count),
+      not separate lists, and a removed operation opens to the step and request it would have if
+      restored. FR-024 amended; FR-024a added.
+    - New route on both paths, `GET <base>/plan/removed-operation?operationKey=` →
+      `200 {step, request}` (`RemovedOperationPreview` in shared-domain), `400 invalid_request`,
+      `404 operation_not_removed`, `409 no_positive_scenario`. It rebuilds the plan with the
+      operation restored through the same `applyPlanUpdate` a Restore sends, reads it and discards
+      it, so the stored plan, its fingerprint and the script status never change
+      (`backend/src/performance/plan/removedOperationPreview.ts`). Contracts updated
+      (`quick-performance-api.md`, `changes-to-existing-apis.md`).
+    - Frontend: `OtherOperationsTable` renders both views: reason per row, Restore per row, tick to
+      restore together, Restore all, search; a removed row expands to the read-only preview with
+      **Restore to the plan**. The lists above the table are gone. The pending bar's "every
+      operation was removed" item opens the Removed view.
+    - Validation: `npm test` 1,960 passed, 1 failed and 6 skipped across 262 test files; the
+      failure is the known CRLF golden-template comparison (entry 35). `npm run lint` and
+      `npm run build` are clean. Checked in a browser with the PayPal Invoicing fixture: 16
+      removed writes in the Removed view, `POST /v2/invoicing/invoices` expanded to its request
+      with its JSON body. Not tested: `409 no_positive_scenario` (no fixture has a removed
+      operation without a positive scenario) and the guided path's copy of the route in a browser.
+    - Docs: USER_MANUAL §3.11 and troubleshooting; architecture.md "Frontend architecture".
+    - Version bumped to 19.9.0 (root, backend, frontend, shared-domain).

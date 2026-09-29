@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import type { CollectionFolderView, CollectionRequestView, CollectionView } from "@apipilot/shared-domain";
+import type {
+  CollectionFolderView,
+  CollectionRequestView,
+  CollectionView,
+} from "@apipilot/shared-domain";
 import {
   addUploadedCollectionFolder,
   addUploadedCollectionRequest,
@@ -29,6 +33,11 @@ import { ErrorState } from "../components/ErrorState";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import {
+  EntryFeatureIcon,
+  type EntryFeatureIconName,
+} from "../components/EntryFeatureIcon";
+import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 import type { ImportPreload } from "../services/importPreload";
 import type { RunOrder } from "../utils/runOrder";
 
@@ -37,7 +46,10 @@ import type { RunOrder } from "../utils/runOrder";
  * purely so the UI doesn't invite an edit attempt it already knows will be refused. */
 const LOCK_POLL_INTERVAL_MS = 2000;
 
-function findFolder(folders: CollectionFolderView[], id: string): CollectionFolderView | undefined {
+function findFolder(
+  folders: CollectionFolderView[],
+  id: string,
+): CollectionFolderView | undefined {
   for (const folder of folders) {
     if (folder.id === id) return folder;
     const nested = findFolder(folder.folders, id);
@@ -46,8 +58,14 @@ function findFolder(folders: CollectionFolderView[], id: string): CollectionFold
   return undefined;
 }
 
-function findRequest(view: CollectionView, id: string): CollectionRequestView | undefined {
-  function search(items: CollectionRequestView[], folders: CollectionFolderView[]): CollectionRequestView | undefined {
+function findRequest(
+  view: CollectionView,
+  id: string,
+): CollectionRequestView | undefined {
+  function search(
+    items: CollectionRequestView[],
+    folders: CollectionFolderView[],
+  ): CollectionRequestView | undefined {
     const direct = items.find((item) => item.id === id);
     if (direct) return direct;
     for (const folder of folders) {
@@ -60,7 +78,10 @@ function findRequest(view: CollectionView, id: string): CollectionRequestView | 
 }
 
 /** `containerId: "root"` targets `view` itself; otherwise the matching folder. */
-function containerOf(view: CollectionView, containerId: string): { items: CollectionRequestView[]; folders: CollectionFolderView[] } | undefined {
+function containerOf(
+  view: CollectionView,
+  containerId: string,
+): { items: CollectionRequestView[]; folders: CollectionFolderView[] } | undefined {
   if (containerId === "root") return view;
   return findFolder(view.folders, containerId);
 }
@@ -79,16 +100,30 @@ export function ExternalCollectionsPage({
     UploadedCollectionSummary[]
   >([]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  const [collectionView, setCollectionView] = useState<CollectionView | undefined>(undefined);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | undefined>(undefined);
+  const [collectionView, setCollectionView] = useState<CollectionView | undefined>(
+    undefined,
+  );
+  const [selectedRequestId, setSelectedRequestId] = useState<string | undefined>(
+    undefined,
+  );
   const [locked, setLocked] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
   const [mainView, setMainView] = useState<"request" | "variables">("request");
-  const [addRequestDialog, setAddRequestDialog] = useState<{ parentFolderId: string | null } | null>(null);
-  const [addFolderDialog, setAddFolderDialog] = useState<{ parentFolderId: string | null } | null>(null);
-  const [renameDialog, setRenameDialog] = useState<{ itemId: string; currentName: string } | null>(null);
+  const [addRequestDialog, setAddRequestDialog] = useState<{
+    parentFolderId: string | null;
+  } | null>(null);
+  const [addFolderDialog, setAddFolderDialog] = useState<{
+    parentFolderId: string | null;
+  } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{
+    itemId: string;
+    currentName: string;
+  } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ itemId: string } | null>(null);
-  const [moveDialog, setMoveDialog] = useState<{ itemId: string; itemName: string } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<{
+    itemId: string;
+    itemName: string;
+  } | null>(null);
   const [moveNotice, setMoveNotice] = useState<string | null>(null);
   // Each collection's per-run order (specs/028 FR-015c), kept here rather than in the run panel so
   // it lasts across runs and collection switches until the page is reloaded; never persisted.
@@ -152,7 +187,10 @@ export function ExternalCollectionsPage({
   }
 
   const selected = uploadedCollections.find((c) => c.id === selectedId);
-  const selectedRequest = collectionView && selectedRequestId ? findRequest(collectionView, selectedRequestId) : undefined;
+  const selectedRequest =
+    collectionView && selectedRequestId
+      ? findRequest(collectionView, selectedRequestId)
+      : undefined;
 
   // Deselects whichever of RequestEditorPanel/VariablePanel is currently open, returning the main
   // pane to its empty-selection placeholder — each panel's own close control, rather than a single
@@ -170,7 +208,10 @@ export function ExternalCollectionsPage({
     setCollectionView(result.collectionView);
   }
 
-  async function handleSaveRequest(requestId: string, edit: Parameters<typeof updateUploadedCollectionRequest>[2]) {
+  async function handleSaveRequest(
+    requestId: string,
+    edit: Parameters<typeof updateUploadedCollectionRequest>[2],
+  ) {
     if (!selectedId) return;
     const result = await updateUploadedCollectionRequest(selectedId, requestId, edit);
     if (!result.ok) throw new Error(result.message);
@@ -201,7 +242,10 @@ export function ExternalCollectionsPage({
     if (!selectedId || !addFolderDialog) return;
     const { parentFolderId } = addFolderDialog;
     setAddFolderDialog(null);
-    const result = await addUploadedCollectionFolder(selectedId, { parentFolderId, name });
+    const result = await addUploadedCollectionFolder(selectedId, {
+      parentFolderId,
+      name,
+    });
     if (result.ok) setCollectionView(result.collectionView);
     else setViewError(result.message);
   }
@@ -232,7 +276,11 @@ export function ExternalCollectionsPage({
     if (!selectedId || !moveDialog) return;
     const { itemId, itemName } = moveDialog;
     setMoveDialog(null);
-    const result = await moveUploadedCollectionItem(selectedId, itemId, targetContainerId);
+    const result = await moveUploadedCollectionItem(
+      selectedId,
+      itemId,
+      targetContainerId,
+    );
     if (result.ok) {
       setCollectionView(result.collectionView);
       setMoveNotice(describeMoveResult(itemName, result.carried));
@@ -243,7 +291,10 @@ export function ExternalCollectionsPage({
 
   function openMoveDialog(itemId: string) {
     if (!collectionView) return;
-    const name = findRequest(collectionView, itemId)?.name ?? findFolder(collectionView.folders, itemId)?.name ?? "item";
+    const name =
+      findRequest(collectionView, itemId)?.name ??
+      findFolder(collectionView.folders, itemId)?.name ??
+      "item";
     setMoveNotice(null);
     setMoveDialog({ itemId, itemName: name });
   }
@@ -261,7 +312,9 @@ export function ExternalCollectionsPage({
       const container = containerOf(collectionView, containerId);
       if (!container) return;
       const isFolder = container.folders.some((f) => f.id === itemId);
-      const kindIds = (isFolder ? container.folders : container.items).map((entry) => entry.id);
+      const kindIds = (isFolder ? container.folders : container.items).map(
+        (entry) => entry.id,
+      );
       const index = kindIds.indexOf(itemId);
       const swapWith = direction === "up" ? index - 1 : index + 1;
       if (swapWith < 0 || swapWith >= kindIds.length) return;
@@ -272,20 +325,32 @@ export function ExternalCollectionsPage({
       // (CollectionTreeView's own doc comment), so a collection whose original document
       // interleaved them differently is normalized to folders-then-requests the first time this
       // control is used in that container — a deliberate, documented simplification.
-      const otherKindIds = (isFolder ? container.items : container.folders).map((entry) => entry.id);
-      const orderedIds = isFolder ? [...kindIds, ...otherKindIds] : [...otherKindIds, ...kindIds];
-      const result = await reorderUploadedCollectionContainer(selectedId, containerId, orderedIds);
+      const otherKindIds = (isFolder ? container.items : container.folders).map(
+        (entry) => entry.id,
+      );
+      const orderedIds = isFolder
+        ? [...kindIds, ...otherKindIds]
+        : [...otherKindIds, ...kindIds];
+      const result = await reorderUploadedCollectionContainer(
+        selectedId,
+        containerId,
+        orderedIds,
+      );
       if (result.ok) setCollectionView(result.collectionView);
       else setViewError(result.message);
     },
     onMoveItemTo: openMoveDialog,
   };
 
-  const requestPlacements = collectionView ? flattenCollectionRequestPlacements(collectionView.items, collectionView.folders) : [];
-  const runOrderPlacements = new Map(requestPlacements.map(({ request, ...placement }) => [request.id, placement]));
+  const requestPlacements = collectionView
+    ? flattenCollectionRequestPlacements(collectionView.items, collectionView.folders)
+    : [];
+  const runOrderPlacements = new Map(
+    requestPlacements.map(({ request, ...placement }) => [request.id, placement]),
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {onExit && (
         <div className="flex justify-start">
           <button
@@ -298,45 +363,101 @@ export function ExternalCollectionsPage({
           </button>
         </div>
       )}
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div>
-          <p className="font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-            Bring your own collection
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Run an existing Postman collection and environment, without first uploading an
-            OpenAPI specification.
-          </p>
-        </div>
-      </div>
-
-      <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-        <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-        <div className="flex items-center justify-between border-b border-border bg-slate-50 dark:bg-white/5 px-5 py-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              Import a Postman collection
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              Collection + environment JSON · exported from Postman, shared by a teammate,
-              or hand-authored
-            </p>
+      <section className="relative isolate overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-500/10"
+        />
+        <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
+                <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                <span>Bring your own collection</span>
+              </p>
+              <h2 className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white">
+                Run an existing collection against your API
+              </h2>
+              <p className="max-w-2xl text-base leading-7 text-muted">
+                Import a Postman collection and environment without first uploading an
+                OpenAPI specification. Review its requests, choose an order, and
+                explicitly trigger each run.
+              </p>
+            </div>
+            <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
+              {(
+                [
+                  {
+                    label: "IMPORT",
+                    description: "Use a collection you already trust",
+                    icon: "import",
+                  },
+                  {
+                    label: "REVIEW",
+                    description: "Edit requests before execution",
+                    icon: "review",
+                  },
+                  {
+                    label: "CONTROL",
+                    description: "Choose exactly what runs",
+                    icon: "control",
+                  },
+                ] as const satisfies ReadonlyArray<{
+                  label: string;
+                  description: string;
+                  icon: EntryFeatureIconName;
+                }>
+              ).map(({ label, description, icon }, index) => (
+                <div
+                  key={label}
+                  className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}
+                >
+                  <EntryFeatureIcon name={icon} />
+                  <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">
+                    {label}
+                  </dt>
+                  <dd className="text-xs text-muted">{description}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
-        </div>
-        <div className="space-y-5 p-5 sm:p-6">
-          <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase text-muted">
-              Uploaded collections
-            </h3>
-            <ExternalCollectionList
-              uploadedCollections={uploadedCollections}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onRemoved={handleRemoved}
-            />
+          <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
+            <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
+            <div className="flex items-center justify-between border-b border-border bg-slate-50 dark:bg-white/5 px-5 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Import a Postman collection
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Collection + environment JSON · exported from Postman, shared by a
+                  teammate, or hand-authored
+                </p>
+              </div>
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+            </div>
+            <div className="space-y-5 p-5 sm:p-6">
+              <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase text-muted">
+                  Uploaded collections
+                </h3>
+                <ExternalCollectionList
+                  uploadedCollections={uploadedCollections}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onRemoved={handleRemoved}
+                />
+              </div>
+            </div>
           </div>
+          <WorkflowPathPreview
+            steps={[
+              { label: "Collection", icon: "collection" },
+              { label: "Review Requests", icon: "design" },
+              { label: "Run", icon: "run" },
+              { label: "Results", icon: "performance" },
+            ]}
+          />
         </div>
       </section>
 
@@ -349,7 +470,11 @@ export function ExternalCollectionsPage({
               className="flex items-start justify-between gap-3 rounded-md bg-info-50 px-3 py-2 text-sm text-info-700 dark:bg-info-500/15 dark:text-info-100"
             >
               <p>{moveNotice}</p>
-              <button type="button" onClick={() => setMoveNotice(null)} className={BUTTON_STYLES.ghost}>
+              <button
+                type="button"
+                onClick={() => setMoveNotice(null)}
+                className={BUTTON_STYLES.ghost}
+              >
                 Dismiss
               </button>
             </div>
@@ -401,7 +526,12 @@ export function ExternalCollectionsPage({
                 instead of stretching it past the viewport. */}
             <div className="min-w-0">
               {mainView === "variables" ? (
-                <VariablePanel variables={collectionView.variables} locked={locked} onSave={handleSaveVariables} onClose={handleClosePanel} />
+                <VariablePanel
+                  variables={collectionView.variables}
+                  locked={locked}
+                  onSave={handleSaveVariables}
+                  onClose={handleClosePanel}
+                />
               ) : selectedRequest ? (
                 // `key` forces a fresh mount per request id — RequestEditorPanel's form fields are
                 // local `useState`, initialized once from `request.raw`; without this key, selecting
@@ -432,10 +562,19 @@ export function ExternalCollectionsPage({
           requests={requestPlacements.map((placement) => placement.request)}
           placements={collectionView ? runOrderPlacements : undefined}
           runOrder={runOrders[selected.id]}
-          onRunOrderChange={collectionView ? (runOrder) => setRunOrders((current) => ({ ...current, [selected.id]: runOrder })) : undefined}
+          onRunOrderChange={
+            collectionView
+              ? (runOrder) =>
+                  setRunOrders((current) => ({ ...current, [selected.id]: runOrder }))
+              : undefined
+          }
           onConfirmed={() =>
             setUploadedCollections((current) =>
-              current.map((c) => (c.id === selected.id ? { ...c, confirmedAt: new Date().toISOString() } : c)),
+              current.map((c) =>
+                c.id === selected.id
+                  ? { ...c, confirmedAt: new Date().toISOString() }
+                  : c,
+              ),
             )
           }
         />

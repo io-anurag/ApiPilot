@@ -1,6 +1,7 @@
 import type {
   EnvironmentTier,
   K6Readiness,
+  LoadProfile,
   PerformanceRunSummary,
   PerformanceStep,
   StepAuthKind,
@@ -40,6 +41,27 @@ export const AUTH_LABEL: Record<StepAuthKind, string> = {
   none: "No authentication",
 };
 
+/** The environment values a step needs, other than the base URL every step needs. */
+export function environmentValuesOf(step: Pick<PerformanceStep, "requiredValues">): string[] {
+  return step.requiredValues.filter((name) => name !== "baseUrl");
+}
+
+/** A step's variables in words: what it produces or consumes, and the values it needs. */
+export function variablesFor(step: Pick<PerformanceStep, "variableBindings" | "requiredValues">): string[] {
+  return [
+    ...step.variableBindings.map((binding) => `${binding.role} ${binding.variable}`),
+    ...environmentValuesOf(step).map((name) => `needs ${name}`),
+  ];
+}
+
+/** The table's one-line form of AUTH_LABEL; the full label is shown in the step's details. */
+export const AUTH_SHORT_LABEL: Record<StepAuthKind, string> = {
+  "oauth2-client-credentials": "OAuth2 client",
+  "chained-login": "Login token",
+  "static-credential": "Env credential",
+  none: "None",
+};
+
 export const READINESS_REASON: Record<Extract<K6Readiness, { state: "unavailable" }>["reason"], string> = {
   "not-found": "k6 was not found. Install k6 1.0.0 or later on this machine, or set K6_BINARY_PATH. ApiPilot never downloads or installs k6.",
   "not-executable": "k6 was found but could not be started.",
@@ -63,14 +85,23 @@ export function formatDuration(ms: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** The run-setup line for a load profile, e.g. "Smoke · 1 stage · 01:00 · peak 1 VU". */
+export function loadProfileSummary(profile: LoadProfile): string {
+  const stages = profile.stages.length;
+  const peak = Math.max(0, ...profile.stages.map((stage) => stage.targetVirtualUsers));
+  const kind = profile.kind.charAt(0).toUpperCase() + profile.kind.slice(1);
+  return `${kind} · ${stages} stage${stages === 1 ? "" : "s"} · ${formatDuration(profile.plannedDurationMs)} · peak ${peak} VU${peak === 1 ? "" : "s"}`;
+}
+
 /** Stage durations are edited in whole seconds and sent as milliseconds. */
 export function secondsToMs(seconds: number): number {
   return Math.max(1, Math.round(seconds)) * 1000;
 }
 
 /** AP-032 FR-003a, FR-024: why an operation is in the removed list. Derived, never stored. */
-export function removalReason(operationKey: string, credentialProducerOperationKeys: readonly string[]): string {
-  return credentialProducerOperationKeys.includes(operationKey) ? "used to acquire the run's credentials" : "Removed";
+export function removalReason(operationKey: string, credentialProducerOperationKeys: readonly string[]): string | undefined {
+  // An operation you removed yourself needs no label: the list's heading already says "removed".
+  return credentialProducerOperationKeys.includes(operationKey) ? "used to acquire the run's credentials" : undefined;
 }
 
 /** AP-032 FR-024: why an operation contributes no step. */

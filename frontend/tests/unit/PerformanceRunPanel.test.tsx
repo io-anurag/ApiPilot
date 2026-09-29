@@ -1,10 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { PerformanceRunPanel, RUN_POLL_INTERVAL_MS } from "../../src/components/performance/PerformanceRunPanel";
+import type { Environment, PerformancePlan, ScriptStatus } from "@apipilot/shared-domain";
+import { PerformanceRunActivity, PerformanceRunTrigger } from "../../src/components/performance/PerformanceRunPanel";
+import { RUN_POLL_INTERVAL_MS, usePerformanceRuns } from "../../src/components/performance/usePerformanceRuns";
 import { guidedPerformanceClient } from "../../src/services/performanceTestingClient";
 import { environment, readyPlan, runFixture, script, stubFetch } from "./performanceFixtures";
 
-/** AP-029 US2 run panel and US3 report frame (tasks T061, T075). */
+/** AP-029 US2 run trigger and activity, and US3 report frame (tasks T061, T075). */
+
+/** The trigger and the activity sharing one run state, as the plan screen composes them. */
+function PerformanceRunPanel({ plan, script: status, environment: target }: Readonly<{ plan: PerformancePlan; script: ScriptStatus | null; environment: Environment | null }>) {
+  const runs = usePerformanceRuns(guidedPerformanceClient);
+  return (
+    <>
+      <PerformanceRunTrigger runs={runs} plan={plan} script={status} environment={target} />
+      <PerformanceRunActivity runs={runs} client={guidedPerformanceClient} plan={plan} />
+    </>
+  );
+}
 
 const BASE = "/api/test-generation-workflow/performance";
 
@@ -24,7 +37,7 @@ function routes(extra: Parameters<typeof stubFetch>[0] = {}) {
 describe("PerformanceRunPanel", () => {
   it("disables the trigger with k6's reason while k6 is unavailable, and re-checks on request (FR-027, SC-012)", async () => {
     const calls = stubFetch(routes({ [`GET ${BASE}/readiness`]: () => [200, { readiness: { state: "unavailable", reason: "not-found", checkedAt: "x" } }] }));
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script()} environment={environment()} />);
+    render(<PerformanceRunPanel plan={readyPlan()} script={script()} environment={environment()} />);
     expect(await screen.findByTestId("k6-readiness-error")).toHaveTextContent("k6 was not found.");
     expect(screen.getByText("The script can still be downloaded and run outside ApiPilot.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run on perf-local (local)" })).toBeDisabled();
@@ -36,7 +49,7 @@ describe("PerformanceRunPanel", () => {
   it("names the target and states where load comes from, with the stages exactly as entered (FR-019, FR-025, FR-028)", async () => {
     stubFetch(routes());
     const plan = { ...readyPlan(), loadProfile: { kind: "load" as const, stages: [{ durationMs: 90_000, targetVirtualUsers: 25_000 }], plannedDurationMs: 90_000 } };
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={plan} script={script()} environment={environment({ name: "payments-prod", tier: "production", baseUrl: "https://pay.example.test" })} />);
+    render(<PerformanceRunPanel plan={plan} script={script()} environment={environment({ name: "payments-prod", tier: "production", baseUrl: "https://pay.example.test" })} />);
     const target = await screen.findByRole("region", { name: "Run target" });
     expect(within(target).getByRole("button", { name: "Run on payments-prod (production)" })).toBeInTheDocument();
     expect(target).toHaveTextContent("Tier: production");
@@ -47,7 +60,7 @@ describe("PerformanceRunPanel", () => {
 
   it("lists every write operation beside the trigger that names the target (AP-032 FR-011, SC-002)", async () => {
     stubFetch(routes());
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script()} environment={environment()} />);
+    render(<PerformanceRunPanel plan={readyPlan()} script={script()} environment={environment()} />);
     const target = await screen.findByRole("region", { name: "Run target" });
     const writes = within(target).getByRole("region", { name: "Write operations this run sends" });
     expect(writes).toHaveTextContent("1 write operation will be sent");
@@ -58,7 +71,7 @@ describe("PerformanceRunPanel", () => {
 
   it("disables the trigger for an out-of-date script, with the reason", async () => {
     stubFetch(routes());
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script({ outOfDate: true })} environment={environment()} />);
+    render(<PerformanceRunPanel plan={readyPlan()} script={script({ outOfDate: true })} environment={environment()} />);
     await screen.findByText("k6 ready");
     expect(screen.getByRole("button", { name: "Run on perf-local (local)" })).toBeDisabled();
     expect(screen.getByText("The plan changed after the script was generated. Regenerate it to run.")).toBeInTheDocument();
@@ -92,7 +105,7 @@ describe("PerformanceRunPanel", () => {
       }),
     );
     try {
-      render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script()} environment={environment()} />);
+      render(<PerformanceRunPanel plan={readyPlan()} script={script()} environment={environment()} />);
       fireEvent.click(await screen.findByRole("button", { name: "Run on perf-local (local)" }));
       expect(await screen.findByRole("heading", { name: /Run run-1234/ })).toBeInTheDocument();
       expect(calls.find((call) => call.method === "POST" && call.url.endsWith("/runs"))?.body).toEqual({ environmentId: "env-1" });
@@ -120,7 +133,7 @@ describe("PerformanceRunPanel", () => {
 
   it("says another run is in progress when the slot is taken (FR-029)", async () => {
     stubFetch(routes({ [`POST ${BASE}/runs`]: () => [409, { error: "execution_in_progress", message: "busy", runId: "other" }] }));
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script()} environment={environment()} />);
+    render(<PerformanceRunPanel plan={readyPlan()} script={script()} environment={environment()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Run on perf-local (local)" }));
     expect(await screen.findByTestId("performance-run-error")).toHaveTextContent("Another run is in progress in this session. Nothing was sent.");
   });
@@ -132,7 +145,7 @@ describe("PerformanceRunPanel", () => {
         [`GET ${BASE}/runs/run-12345678/report`]: () => [500, { error: "internal_server_error" }],
       }),
     );
-    render(<PerformanceRunPanel client={guidedPerformanceClient} plan={readyPlan()} script={script()} environment={environment()} />);
+    render(<PerformanceRunPanel plan={readyPlan()} script={script()} environment={environment()} />);
     expect(await screen.findByText("Cancelled · backend restart")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View report" }));
     expect(await screen.findByTestId("performance-report-error")).toHaveTextContent("The report could not be loaded.");

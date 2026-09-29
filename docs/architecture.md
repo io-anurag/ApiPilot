@@ -765,7 +765,27 @@ execution page (specs/026, specs/028), and the quick performance test (specs/032
 `pages/QuickPerformancePage.tsx`) — without discarding any one's state when another is active
 (see "External collection import & execution" above for the mounting rules). The guided
 Performance Testing stage and the quick page render the one `PerformancePlanScreen`, each with a
-`PerformanceClient` from `createPerformanceClient(base)` for its own route family. Within the
+`PerformanceClient` from `createPerformanceClient(base)` for its own route family.
+`PerformancePlanScreen` shows a `PendingBar` above three tabs: Plan (the operations table,
+`JourneyList`, at full width), Run setup (`SetupItem` sections for environment, load profile,
+thresholds and script, beside `PerformanceRunTrigger`) and Runs & reports
+(`PerformanceRunActivity`: live progress, report, run history). The screen derives the pending
+items from the plan, script, environment and readiness it already holds; each item's action
+switches tab and moves focus, or asks `JourneyList` through a `ListRequest` to filter to the steps
+needing a status or to open one step's editor. The bar never holds the run trigger, which stays
+beside the write list and target (AP-032 FR-011, AP-029 FR-025). The two run components share one
+`usePerformanceRuns` state held by the screen, so readiness, the current run and its 2-second poll
+survive switching tabs, and starting a run switches to Runs & reports, whose live view repeats the
+target. `JourneyList` shows one line per step and opens a step's details in a row
+under it; filters, row selection and the "Remove by method" menu are local UI state, and every
+removal is still one `PUT /plan` of `excludedOperationKeys`. The table's Removed and Left out
+views are `OtherOperationsTable`; a removed row loads `GET /plan/removed-operation`, which
+rebuilds the plan with that operation restored through the same `applyPlanUpdate` a Restore uses,
+reads the step and its request preview, and discards the rebuilt plan, so the preview can never
+change the plan or its fingerprint and always matches what Restore would produce
+(`performance/plan/removedOperationPreview.ts`, specs/032 FR-024a). The write lists never collapse
+(AP-032 SC-002); `CountedOperationList`'s `columns` layout uses a container query so the same
+list reads as two columns in the operations panel and one in the setup column. Within the
 guided workflow, the page composition root
 renders the active guided stage and its shared progress/state. Components own
 presentation, interaction, local UI state, accessible names, keyboard behavior, and visible focus.

@@ -6,6 +6,7 @@ import { renderScript, scriptDigest } from "../performance/k6/renderScript";
 import type { K6Probe, PerformanceRunner } from "../performance/k6/runnerTypes";
 import { rebuildPlan } from "../performance/plan/buildPlan";
 import { applyPlanUpdate } from "../performance/plan/planUpdate";
+import { buildRemovedOperationPreview } from "../performance/plan/removedOperationPreview";
 import { buildStepRequestPreview } from "../performance/plan/requestPreview";
 import type { PerformanceContext } from "../performance/plan/stepRequest";
 import { valueStatuses } from "../performance/plan/userSuppliedValues";
@@ -71,7 +72,7 @@ function stepCountOf(plan: PerformancePlan): number {
 
 /**
  * Registers `GET/PUT <base>/plan`, `POST <base>/plan/reset`, `GET <base>/plan/values`,
- * `GET <base>/plan/steps/:stepId/request`, `POST <base>/script`, `GET <base>/script/download`,
+ * `GET <base>/plan/steps/:stepId/request`, `GET <base>/plan/removed-operation`, `POST <base>/script`, `GET <base>/script/download`,
  * and then the readiness and run routes, for one plan source (specs/031
  * contracts/performance-api.md; specs/032 contracts/quick-performance-api.md).
  */
@@ -142,6 +143,22 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     try {
       const handle = source.require();
       res.status(200).json({ request: buildStepRequestPreview(handle.plan(), handle.context, req.params.stepId) });
+      logSucceeded(req, startedAt, 200);
+    } catch (err) {
+      handleKnownError(req, res, startedAt, err);
+    }
+  });
+
+  // AP-032 FR-024a: a removed operation's step and request as they would be if it were restored.
+  // Read-only: the plan is not changed. The key is a query parameter because it holds a space and
+  // a path template.
+  router.get(`${base}/plan/removed-operation`, (req, res) => {
+    const startedAt = logReceived(req);
+    try {
+      const handle = source.require();
+      const operationKey = typeof req.query.operationKey === "string" ? req.query.operationKey : "";
+      if (!operationKey) return fail(req, res, startedAt, 400, "invalid_request", "operationKey is required.");
+      res.status(200).json(buildRemovedOperationPreview(handle.plan(), handle.context, operationKey));
       logSucceeded(req, startedAt, 200);
     } catch (err) {
       handleKnownError(req, res, startedAt, err);

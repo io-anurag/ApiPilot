@@ -27,6 +27,17 @@ function workflowWithStatuses(
 }
 
 describe("WorkflowStageTracker", () => {
+  it("shows a semantic icon for every workflow sub-stage", () => {
+    render(<WorkflowStageTracker workflow={workflowWithStatuses({})} />);
+
+    for (const stageId of WORKFLOW_STAGE_ORDER) {
+      expect(screen.getByTestId(`stage-icon-${stageId}`)).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    }
+  });
+
   it("renders every stage's status with a distinguishable, non-color-only label (FR-004)", () => {
     render(
       <WorkflowStageTracker
@@ -95,7 +106,9 @@ describe("WorkflowStageTracker", () => {
     expect(screen.queryByTestId("workflow-ai-unavailable")).not.toBeInTheDocument();
   });
 
-  function withOneAnalysisIssue(workflow: TestGenerationWorkflow): TestGenerationWorkflow {
+  function withOneAnalysisIssue(
+    workflow: TestGenerationWorkflow,
+  ): TestGenerationWorkflow {
     workflow.apiModel = {
       operations: [],
       securitySchemes: {},
@@ -176,10 +189,9 @@ describe("WorkflowStageTracker", () => {
         viewedStageId={workflow.activeStageId}
       />,
     );
-    expect(screen.getByTestId("stage-status-workflowReview").closest("li")).toHaveAttribute(
-      "aria-current",
-      "step",
-    );
+    expect(
+      screen.getByTestId("stage-status-workflowReview").closest("li"),
+    ).toHaveAttribute("aria-current", "step");
     expect(
       screen.getByTestId("stage-status-apiReview").closest("li"),
     ).not.toHaveAttribute("aria-current");
@@ -188,7 +200,11 @@ describe("WorkflowStageTracker", () => {
     // it must not stay pinned to the true active stage (workflowReview) while its content is no
     // longer what's on screen.
     rerender(
-      <WorkflowStageTracker workflow={workflow} onViewStage={() => {}} viewedStageId="apiReview" />,
+      <WorkflowStageTracker
+        workflow={workflow}
+        onViewStage={() => {}}
+        viewedStageId="apiReview"
+      />,
     );
     expect(screen.getByTestId("stage-status-apiReview").closest("li")).toHaveAttribute(
       "aria-current",
@@ -284,11 +300,17 @@ describe("WorkflowStageTracker", () => {
   it("lets the performance stage be opened once Postman Generation is complete, whatever Execution's state (AP-029 research D1)", () => {
     const onViewStage = vi.fn();
     const complete = Object.fromEntries(
-      WORKFLOW_STAGE_ORDER.slice(0, WORKFLOW_STAGE_ORDER.indexOf("postmanGeneration") + 1).map((id) => [id, "complete" as StageStatus]),
+      WORKFLOW_STAGE_ORDER.slice(
+        0,
+        WORKFLOW_STAGE_ORDER.indexOf("postmanGeneration") + 1,
+      ).map((id) => [id, "complete" as StageStatus]),
     );
     render(
       <WorkflowStageTracker
-        workflow={{ ...workflowWithStatuses({ ...complete, execution: "active" }), activeStageId: "execution" }}
+        workflow={{
+          ...workflowWithStatuses({ ...complete, execution: "active" }),
+          activeStageId: "execution",
+        }}
         onViewStage={onViewStage}
       />,
     );
@@ -297,7 +319,14 @@ describe("WorkflowStageTracker", () => {
   });
 
   it("keeps the performance stage locked until Postman Generation is complete", () => {
-    render(<WorkflowStageTracker workflow={workflowWithStatuses({ postmanGeneration: "active" })} onViewStage={vi.fn()} />);
-    expect(screen.getByTestId("stage-status-performanceTesting")).toHaveTextContent("Not yet reached — Complete Postman Generation first");
+    render(
+      <WorkflowStageTracker
+        workflow={workflowWithStatuses({ postmanGeneration: "active" })}
+        onViewStage={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("stage-status-performanceTesting")).toHaveTextContent(
+      "Not yet reached — Complete Postman Generation first",
+    );
   });
 });

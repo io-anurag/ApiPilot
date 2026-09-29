@@ -292,6 +292,23 @@ opens once the Postman collection has been generated (section 3.9), whether or n
 it: choose **Set up a performance test** on the Execution notice, or the **Performance
 Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
 
+**The screen.** Above the tabs, a bar lists what still blocks a run, each item with the button
+that fixes it: steps without an expected status (**Show them**), no target environment (**Create
+one**), a script not generated or out of date (**Generate**), or k6 not available. Items disappear
+as you finish them. When nothing is left, the bar says **Ready to run on** the chosen
+environment, how many write operations will be sent, and **Go to run →**. The bar never starts a
+run itself. Missing environment values are noted in the bar but do not block a run.
+
+The tabs follow the order in which you prepare a test:
+
+- **Plan**: the operations table, at full width.
+- **Run setup**: the target environment and its values, the load profile, the thresholds
+  (optional) and the k6 script, beside the run trigger. The tab label counts what is still to do
+  there, for example **Run setup (2 to do)**. **Next: Run setup →** at the foot of the Plan tab
+  goes to it.
+- **Runs & reports**: a run's live progress, its report and the session's runs. Starting a run
+  switches to it.
+
 **The plan.** The operations in scope are the ones you selected in API Review, or every
 operation when you selected none; there is no choice to widen them here. To include other
 operations, widen the selection in API Review and regenerate, or use the quick performance
@@ -303,35 +320,61 @@ rule-generated scenario is preferred over an AI-enhanced one), its authenticatio
 variables it produces or needs. Each step sends that scenario's generated request, built the
 same way as the Postman collection: its headers, query parameters and body come from the
 scenario and are not edited here. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
-DELETE) are included by default: choose **Remove** on any operation you do not want sent.
+DELETE) are included by default: remove any operation you do not want sent (see **Removing**
+below).
+
+- **The operations table.** One line per step: its journey number when some journey has more
+  than one step (`J2.1` is the first step of journey 2, whose steps are grouped under a
+  **Workflow** row; with only single-step journeys, as in the quick test, the column is left
+  out), its method
+  and path, the write marker, its expected status, a short authentication label, and the
+  environment values it needs. Filter by method, by **Writes** or by **Needs expected status**
+  (each chip shows its count), and search by method, path or scenario. Select a step's path to
+  open its details in a row directly under it: the scenario and why it was chosen, the request
+  preview, the expected-status editor, the full authentication, the variables, the order
+  controls and **Remove from plan**. More than 50 steps are split into pages.
 
 - **What the writes will do.** Above the journeys, a summary states how many write
   operations will be sent, the count per method, and each one by method and path, with the
   reminder that every virtual user sends each of them on every iteration for the whole run and
   that ApiPilot does not clean up afterwards. Each write step carries a text marker
   (**Creates**, **Replaces**, **Updates** or **Deletes**) beside its method. The same list is
-  shown next to the run trigger. A plan with no writes says it sends only read requests.
-- **Removing in bulk.** **Remove all write operations** removes every write in one action,
-  and **Remove all <METHOD> operations** removes every operation of one method. Removed
-  operations are listed with a **Restore** button each, plus **Restore all**. When every
-  operation is removed, the plan says so and the script cannot be generated until you
-  restore one.
-- **The request a step sends.** Choose **Request** under a step to see what it sends: the
+  shown next to the run trigger. Select an operation's path in either list to open its details
+  in the table. A plan with no writes says it sends only read requests.
+- **Removing.** **Remove all write operations** removes every write in one action, and
+  **Remove by method** offers **Remove all <METHOD> operations** for each method in the plan.
+  To remove a few operations, tick their rows and choose **Remove from plan**, or use
+  **Remove from plan** in one step's details. Removed
+  operations are in the table's **Removed** view (see below). When every operation is removed,
+  the plan says so and the script cannot be generated until you restore one.
+- **Removed and left-out operations.** Above the table, **In plan**, **Removed** and **Left out**
+  switch between the plan's steps, the operations you (or ApiPilot, for a login it uses for
+  credentials) removed, and the operations left out because they have no positive scenario. Each
+  shows its count; a view with nothing in it is not offered. In **Removed**, each row gives the
+  reason and a **Restore** button; tick several rows to restore them together, or use **Restore
+  all**. Select a removed operation's path to see, under it, the step and request it would have
+  if restored: scenario, expected status, authentication, variables and the request preview. This
+  view does not change the plan; **Restore to the plan** there adds it back. A left-out operation
+  has nothing to open or restore.
+- **The request a step sends.** In a step's details, choose **Request** to see what it sends: the
   method, the path template, each path, query and header parameter with its generated value
   or the environment value it needs, the authentication, and the body. Values that come from
   the environment are shown by name only, and secrets are marked, never shown. The preview is
   view only.
-- **Long lists.** Removed operations, operations left out (no positive scenario), and steps
-  that still need an expected status are counted lists, one operation per line, collapsed
-  when they have more than ten entries. Each entry of the expected-status list takes you to
-  that step's editor.
+- **Long lists.** The steps that still need an expected status are a counted list, collapsed.
+  The write list is never collapsed. The steps that need an
+  expected status are counted in the bar above the tabs; open **steps to set** there, and each
+  entry opens that step in the table and puts the cursor in its editor. **Needs status · Set** in
+  the table does the same for its row.
 
 - **Expected status.** Each step starts with the success statuses the specification
   documents, labelled "from specification". You can add codes (an exact code such as `201`,
   or a range such as `2XX`) or remove them; yours are labelled "set by you". Any other
   response counts as a failure. A step whose specification documents no success status
   starts empty, and the script cannot be generated until you set one.
-- **Order and think time.** Use ↑ and ↓ to reorder journeys, or steps within a journey.
+- **Order and think time.** In a step's details, **Move up** and **Move down** move a single-step
+  journey, **Move journey up** and **Move journey down** move a workflow journey, and **Move step
+  up** and **Move step down** reorder a workflow journey's steps.
   A move that would run a step before the step producing a value it needs is refused, and
   the message names the value. **Think time** pauses between requests.
 - **Load profile.** Pick Smoke, Load, Stress, Spike or Soak and edit its stages (duration and
@@ -346,6 +389,10 @@ environment, then **Edit values** or **New environment**; values are typed into 
 fields and stored encrypted. The checklist shows each value as **Present** or **Missing**
 for the chosen environment. A missing value does not block a run: that step is not sent and
 is reported as missing data, and the steps that depend on it are reported as not attempted.
+The environment form suggests one row for each value the plan still needs. Removing an
+operation drops only the values no remaining step needs: a path parameter such as `customer_id`
+stays while any remaining operation, for example `GET /customers/{id}`, uses it. The checklist's
+**Needed by** column shows which steps need each value. Rows left empty are not saved.
 
 **The script.** **Generate script** creates a k6 script and an environment template, which
 you can download and run elsewhere. The same plan always produces the same bytes, and neither
@@ -388,7 +435,8 @@ ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration).
 never downloads or installs k6; the panel shows whether k6 is ready, and **Check again**
 re-checks. The trigger names its target, for example **Run on perf-local (local)**, next to
 the environment's tier and base URL and the statement that load comes from the machine
-running the backend. There is no extra confirmation on any tier, production included. While
+running the backend. There is no extra confirmation on any tier, production included. Starting a run opens the
+**Runs & reports** tab, which repeats the target for as long as the run lasts. While
 it runs you see elapsed time against the plan, virtual users, requests, failures, journeys
 cut short, token refreshes, and a per-step table. **Cancel run** stops load within about 10
 seconds and keeps what was measured. A run carries on if you close the page, and it keeps
@@ -779,7 +827,7 @@ Variable and credential values are encrypted before being stored.
 | **Generate script** stays disabled | A step has no expected status (its specification documents no success status) | Add an expected status to the listed step |
 | **Generate script** is disabled with "The plan has no operations" | Every operation was removed | Restore at least one operation from the removed list |
 | Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; runs and reports are kept |
-| Quick performance test: the login operation is in the removed list | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
+| Quick performance test: the login operation is under Removed | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |

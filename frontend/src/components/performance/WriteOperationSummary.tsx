@@ -23,6 +23,7 @@ export function WriteOperationSummary({
   variant,
   listId,
   actions,
+  onSelect,
 }: Readonly<{
   summary: Summary;
   variant: "plan" | "trigger";
@@ -30,6 +31,8 @@ export function WriteOperationSummary({
   listId?: string;
   /** Plan variant only: bulk removal controls. */
   actions?: ReactNode;
+  /** Opens a write operation's details in the plan's table. */
+  onSelect?: (operationKey: string) => void;
 }>) {
   if (summary.total === 0) {
     return (
@@ -70,23 +73,25 @@ export function WriteOperationSummary({
         </p>
         {counts}
         <div className="max-h-48 overflow-y-auto">
-          <CountedOperationList label={() => "Write operations"} entries={entries} collapseAbove={Infinity} testId="write-summary-trigger-list" />
+          <CountedOperationList label={() => "Write operations"} entries={entries} collapseAbove={Infinity} columns onSelect={onSelect} testId="write-summary-trigger-list" />
         </div>
       </section>
     );
   }
 
   return (
-    <section id={listId} aria-labelledby="write-summary-title" data-testid="write-summary-plan" className="space-y-2 rounded-lg border border-warning-500 bg-warning-50 p-4 dark:bg-warning-500/10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id="write-summary-title" className="text-base font-semibold text-warning-700 dark:text-warning-100">
+    <section id={listId} aria-labelledby="write-summary-title" data-testid="write-summary-plan" className="rounded-md border border-warning-500 bg-warning-50 dark:bg-warning-500/10">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+        <h3 id="write-summary-title" className="text-sm font-semibold text-warning-700 dark:text-warning-100">
           <StatusBadge label="Writes" tone="warning" /> {writeCountLabel(summary.total)}
         </h3>
-        {actions}
+        {counts}
+        {actions && <div className="ml-auto">{actions}</div>}
       </div>
-      {counts}
-      <p className="text-sm">{WRITE_REPETITION_SENTENCE}</p>
-      <CountedOperationList label={(count) => `${count} write operations`} entries={entries} collapseAbove={Infinity} testId="write-summary-plan-list" />
+      <p className="border-t border-warning-500/40 px-3 py-1.5 text-xs text-warning-700 dark:text-warning-100">{WRITE_REPETITION_SENTENCE}</p>
+      <div className="border-t border-warning-500/40 px-3 py-2">
+        <CountedOperationList label={(count) => `${count} write operations`} entries={entries} collapseAbove={Infinity} columns onSelect={onSelect} testId="write-summary-plan-list" />
+      </div>
     </section>
   );
 }
