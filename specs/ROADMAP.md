@@ -63,7 +63,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-026 — External Postman Collection Import & Execution (`specs/026-external-collection-execution`) | Implemented — all 46 tasks complete (1 manual-browser-walkthrough task explicitly not performed, no browser tool available; substituted with real Supertest-driven integration coverage of every quickstart scenario). FR-004 superseded 2026-09-23: an unresolved variable no longer refuses a run, which also retires the script-set-variable limitation originally recorded here. FR-008 defect fixed 2026-09-25: runs now apply folder auth, folder scripts and collection scripts (Next Actions #31) |
 | AP-027 — Frontend Design System & Application Shell (`specs/027-frontend-design-system`) | Implemented — all 57 tasks complete |
 | AP-028 — Postman-Style Collection & Variable Editor (`specs/028-collection-editor-ui`) | Implemented — all 72 tasks complete. Generated collections are covered through the guided workflow's hand-off, which the spec records as satisfying FR-008 (Clarifications 2026-09-23; Next Actions #22). Amended 2026-09-25 (version 19.3.0): move between folders keeping inherited auth and scripts, per-request Auth and Used variables tabs, reorder and folder/method/name/path rows in the run-order list, and the Tests tab limited to the request's own scripts (Next Actions #31). Amended again 2026-09-25 (version 19.4.0): a per-run order in the run-order list across folders, and editable request auth (Next Actions #32) |
-| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34 |
+| AP-029 — k6 Performance Testing (`specs/031-k6-performance-testing`) | Implementation complete — real-k6 validation pending (constitution XXXI); not yet Implemented. 97 of 99 tasks done. An optional eleventh guided-workflow stage, open once Postman generation is complete: an editable plan (journeys from approved workflows, per-step expected statuses, load profile, user-set thresholds, values from environments), a byte-identical k6 script with no secrets, runs on the user's explicit trigger with a user-installed k6, live progress, and a self-contained HTML report. Outstanding: T099's manual quickstart walkthrough (scenarios 1 to 8), not performed. T093's real-k6 check passed on 2026-09-28 with k6 v2.3.0 (Next Actions #38). FR-001's scope choice was removed by AP-032. Version 19.5.0. See Next Actions #34. The report was amended 2026-09-30 (FR-036, FR-039; version 19.11.0, Next Actions #45) |
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 | AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
@@ -2983,3 +2983,34 @@ Implementation
       edits (AP-033)" and "Frontend architecture"; change notes in the AP-029 and AP-032
       contracts.
     - Version bumped to 19.10.0 (root, backend, frontend, shared-domain).
+
+45. **AP-029 performance report: readable timeline and per-step detail; version 19.11.0 (2026-09-30).**
+    - Request: the timeline was unreadable (virtual users, p95 and failures on one plot, two
+      similar reds, no failure scale, nothing per endpoint); the by-step table showed failure
+      statuses only; more latency figures were wanted; provenance should show each request and
+      response.
+    - Spec: `specs/031-k6-performance-testing` Clarifications 2026-09-30; FR-036 and FR-039
+      amended; data-model.md `StepResult` and totals; a change note in the contract. Request and
+      response bodies, resolved URLs and individual requests stay unrecorded (FR-040, FR-042,
+      constitution XX), so the request and response blocks show the step's template and its
+      measured outcome.
+    - Backend: `metricsStream.ts` keeps k6's six `http_req_*` phase trends, `iteration_duration`,
+      `data_sent` and `data_received`. `aggregate.ts` records `statusesReceived`,
+      `latencySummaryMs`, `phaseTimings` and a per-step `timeline`, and run-level
+      `latencySummaryMs`, `iterationDurationMs` and bytes. `LatencyHistogram.summary()` gives exact
+      min/mean/max. `renderHtmlReport.ts`: more tiles; the timeline as three single-scale panels
+      with hover columns and a table view; a per-step latency heatmap with hatched failures; a
+      Received column and min/max columns; and request and response blocks per step, with failing
+      steps open. Colors: aqua for virtual users, blue for latency, gray for requests as expected,
+      red for failures only, checked for colour-vision separation on the light and dark surfaces.
+      No script; the CSP is unchanged. No frontend change: the screen shows the same HTML in its
+      sandboxed frame.
+    - Compatibility: every new field is optional, and a run recorded earlier renders without the
+      figures it lacks, saying so. The findings ruleset stays at version 1.
+    - Validation: `npm test` 2,053 passed, 0 failed, 7 skipped; `npm run lint` and
+      `npm run build` clean; the opt-in `npm run test:k6-real -w backend` passed 4 of 4 with new
+      assertions that a real k6 v2.3.0 stream fills statuses, phases, per-step timelines and
+      bytes. A report rendered in headless Edge at 1400 px (light and dark) and in a 375 px frame
+      shows no page-level horizontal overflow.
+    - Docs: USER_MANUAL §3.11 (the report); architecture.md (`report/`).
+    - Version bumped to 19.11.0 (root, backend, frontend, shared-domain).

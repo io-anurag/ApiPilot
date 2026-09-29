@@ -615,7 +615,12 @@ approved TestModel + approved IntegrationWorkflows + selection
   workflows, reorder validation, expected statuses, user-supplied values and unique body fields.
   `k6/` is the only code that knows k6: script rendering, readiness, the process runner and the
   metrics-stream parser. `report/` is pure: histogram, aggregate, thresholds, findings and the HTML
-  renderer. The shared types in `packages/shared-domain/src/performance.ts` contain no k6 syntax.
+  renderer. Since 19.11.0 (FR-036 amended 2026-09-30) the aggregate also keeps, per step, every
+  status received, exact min/mean/max, k6's six request-phase trends and a per-step timeline, and
+  for the run, iteration duration and bytes. All are optional in `StepResult` and
+  `PerformanceResult.totals`, so earlier stored runs still render. The renderer draws the timeline
+  as three single-scale SVG panels and the per-step timeline as a CSS-grid heatmap, with hover
+  text from SVG `<title>` and `title` attributes, so the report still needs no script. The shared types in `packages/shared-domain/src/performance.ts` contain no k6 syntax.
 - **Postman reuse.** Each step's request is built by the Postman generator's own
   `buildRequestItem`, with its auth from `mapOperationAuth` and its OAuth2 token request from
   `buildOAuth2SetupFolders`, so URL, query, header and body serialization match the functional

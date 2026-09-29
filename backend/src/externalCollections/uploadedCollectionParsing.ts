@@ -10,8 +10,9 @@ import { InvalidCollectionError, InvalidEnvironmentError } from "./errors";
  * `@types/postman-collection`. The default-import form above always works because it reads the
  * whole `module.exports` object at runtime instead of relying on static named-export detection.
  */
-const CollectionCtor = (postmanCollection as unknown as { Collection: new (definition?: unknown) => Collection })
-  .Collection;
+const CollectionCtor = (
+  postmanCollection as unknown as { Collection: new (definition?: unknown) => Collection }
+).Collection;
 
 /**
  * Constructs a `postman-collection` `Collection` from JSON, without the "at least one request"
@@ -29,14 +30,18 @@ export function parseStoredCollection(raw: string): Collection {
     throw new InvalidCollectionError("the file is not valid JSON.");
   }
   if (typeof parsedJson !== "object" || parsedJson === null) {
-    throw new InvalidCollectionError("the file does not contain a Postman collection object.");
+    throw new InvalidCollectionError(
+      "the file does not contain a Postman collection object.",
+    );
   }
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postman-collection's own constructor accepts any well-formed collection JSON.
     return new CollectionCtor(parsedJson as any);
   } catch (cause) {
-    throw new InvalidCollectionError(cause instanceof Error ? cause.message : "the collection could not be parsed.");
+    throw new InvalidCollectionError(
+      cause instanceof Error ? cause.message : "the collection could not be parsed.",
+    );
   }
 }
 
@@ -55,7 +60,9 @@ export function parseUploadedCollection(raw: string): Collection {
     requestItemCount += 1;
   });
   if (requestItemCount === 0) {
-    throw new InvalidCollectionError("the collection contains no requests (directly or nested in folders).");
+    throw new InvalidCollectionError(
+      "the collection contains no requests (directly or nested in folders).",
+    );
   }
 
   return collection;
@@ -81,7 +88,11 @@ export function parseUploadedEnvironment(raw: string): ParsedEnvironmentValue[] 
   } catch {
     throw new InvalidEnvironmentError("the file is not valid JSON.");
   }
-  if (typeof parsedJson !== "object" || parsedJson === null || !("values" in parsedJson)) {
+  if (
+    typeof parsedJson !== "object" ||
+    parsedJson === null ||
+    !("values" in parsedJson)
+  ) {
     throw new InvalidEnvironmentError("the file does not have a 'values' array.");
   }
   const { values } = parsedJson as { values: unknown };
@@ -93,19 +104,81 @@ export function parseUploadedEnvironment(raw: string): ParsedEnvironmentValue[] 
     if (typeof entry !== "object" || entry === null) {
       throw new InvalidEnvironmentError(`entry ${index} is not an object.`);
     }
-    const { key, value, enabled } = entry as { key?: unknown; value?: unknown; enabled?: unknown };
+    const { key, value, enabled } = entry as {
+      key?: unknown;
+      value?: unknown;
+      enabled?: unknown;
+    };
     if (typeof key !== "string" || key.length === 0) {
       throw new InvalidEnvironmentError(`entry ${index} is missing a string 'key'.`);
     }
     const isEnabled = enabled !== false;
     if (isEnabled && typeof value !== "string") {
-      throw new InvalidEnvironmentError(`entry ${index} ('${key}') is missing a string 'value'.`);
+      throw new InvalidEnvironmentError(
+        `entry ${index} ('${key}') is missing a string 'value'.`,
+      );
     }
     return { key, value: typeof value === "string" ? value : "", enabled: isEnabled };
   });
 }
 
 const VARIABLE_TOKEN_PATTERN = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+
+/** Dynamic variables offered by the collection editor; Newman generates their values at run time. */
+const POSTMAN_DYNAMIC_VARIABLES = new Set([
+  "$guid",
+  "$timestamp",
+  "$isoTimestamp",
+  "$randomUUID",
+  "$randomAlphaNumeric",
+  "$randomBoolean",
+  "$randomInt",
+  "$randomColor",
+  "$randomHexColor",
+  "$randomAbbreviation",
+  "$randomIP",
+  "$randomIPV6",
+  "$randomMACAddress",
+  "$randomPassword",
+  "$randomLocale",
+  "$randomUserAgent",
+  "$randomProtocol",
+  "$randomSemver",
+  "$randomFirstName",
+  "$randomLastName",
+  "$randomFullName",
+  "$randomNamePrefix",
+  "$randomNameSuffix",
+  "$randomJobArea",
+  "$randomJobDescriptor",
+  "$randomJobTitle",
+  "$randomJobType",
+  "$randomPhoneNumber",
+  "$randomPhoneNumberExt",
+  "$randomCity",
+  "$randomStreetName",
+  "$randomStreetAddress",
+  "$randomCountry",
+  "$randomCountryCode",
+  "$randomLatitude",
+  "$randomLongitude",
+  "$randomDateFuture",
+  "$randomDatePast",
+  "$randomDateRecent",
+  "$randomWeekday",
+  "$randomMonth",
+  "$randomDomainName",
+  "$randomDomainSuffix",
+  "$randomDomainWord",
+  "$randomEmail",
+  "$randomExampleEmail",
+  "$randomUserName",
+  "$randomUrl",
+]);
+
+export function isPostmanDynamicVariable(name: string): boolean {
+  return POSTMAN_DYNAMIC_VARIABLES.has(name);
+}
 
 function collectVariableTokens(value: unknown, into: Set<string>): void {
   if (value === undefined || value === null) {
@@ -138,9 +211,14 @@ export function removeVariableTokens(text: string): string {
  * substituting an empty string, so an unresolved variable stays visibly a placeholder (AP-028
  * FR-002) rather than silently disappearing.
  */
-export function substituteVariables(text: string, variableValues: Record<string, string>): string {
+export function substituteVariables(
+  text: string,
+  variableValues: Record<string, string>,
+): string {
   return text.replace(VARIABLE_TOKEN_PATTERN, (match, name: string) =>
-    variableValues[name] ? variableValues[name] : match,
+    !isPostmanDynamicVariable(name) && variableValues[name]
+      ? variableValues[name]
+      : match,
   );
 }
 
@@ -160,5 +238,5 @@ export function extractReferencedVariables(collection: Collection): string[] {
     collectVariableTokens(requestJson.body, tokens);
     collectVariableTokens(item.getAuth()?.toJSON(), tokens);
   });
-  return [...tokens];
+  return [...tokens].filter((name) => !isPostmanDynamicVariable(name));
 }

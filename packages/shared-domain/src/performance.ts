@@ -438,6 +438,35 @@ export interface LatencyPercentiles {
   p99: number;
 }
 
+/** Exact extremes and arithmetic mean of a set of latencies, rounded to 0.01 ms (FR-036, amended 2026-09-30). */
+export interface LatencySummary {
+  min: number;
+  mean: number;
+  max: number;
+}
+
+/**
+ * The phases k6 times for every request (FR-036, amended 2026-09-30). `waiting` is time to first byte. The phases do not
+ * add up to the duration: `blocked`, `connecting` and `tls-handshaking` happen before it starts.
+ */
+export type RequestPhase = "blocked" | "connecting" | "tls-handshaking" | "sending" | "waiting" | "receiving";
+
+export const REQUEST_PHASES: readonly RequestPhase[] = ["blocked", "connecting", "tls-handshaking", "sending", "waiting", "receiving"];
+
+export interface RequestPhaseTiming {
+  phase: RequestPhase;
+  meanMs: number;
+  p95Ms: number;
+}
+
+/** One step's figures in one timeline bucket; only buckets in which the step sent a request (FR-036, amended 2026-09-30). */
+export interface StepTimelinePoint {
+  offsetMs: number;
+  requests: number;
+  errors: number;
+  p95Ms: number | null;
+}
+
 /**
  * Each failure gets exactly one category (D14). A response whose status is among the step's
  * expected codes is never categorized, including 401, 403 or 429.
@@ -473,6 +502,17 @@ export interface StepResult {
   checkPassRatePercent: number | null;
   notAttempted: { missingData: number; dependencyNotAttempted: number };
   missingVariables: string[];
+  /**
+   * FR-036 (2026-09-30): every response by status, expected or not, with `"0"` for no response, ordered by
+   * status. Absent on runs recorded before the FR-036 amendment of 2026-09-30, whose reports show failure statuses only.
+   */
+  statusesReceived?: { status: string; count: number; expected: boolean }[];
+  /** FR-036 (2026-09-30): `null` when the step sent no request; absent on older runs. */
+  latencySummaryMs?: LatencySummary | null;
+  /** FR-036 (2026-09-30): the timed phases of the step's requests, in `REQUEST_PHASES` order; absent on older runs. */
+  phaseTimings?: RequestPhaseTiming[];
+  /** FR-036 (2026-09-30): the step's own timeline, on the run timeline's buckets; absent on older runs. */
+  timeline?: StepTimelinePoint[];
 }
 
 export interface JourneyResult {
@@ -533,6 +573,13 @@ export interface PerformanceResult {
     journeysCutShort: number;
     throughputPerSecond: number;
     latencyMs: LatencyPercentiles | null;
+    /** FR-036 (2026-09-30); absent on older runs. */
+    latencySummaryMs?: LatencySummary | null;
+    /** FR-036 (2026-09-30): one iteration of every journey by one virtual user, think time included; absent on older runs. */
+    iterationDurationMs?: LatencyPercentiles | null;
+    /** FR-036 (2026-09-30): bytes k6 counted on the wire for the whole run, token requests included; absent on older runs. */
+    dataSentBytes?: number;
+    dataReceivedBytes?: number;
   };
   journeys: JourneyResult[];
   steps: StepResult[];

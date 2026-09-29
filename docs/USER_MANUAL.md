@@ -476,14 +476,35 @@ ApiPilot never starts, repeats or resumes a run by itself: a run interrupted by 
 restart is recorded as cancelled.
 
 **The report.** When a run ends, its report appears automatically, and **Download report
-(HTML)** saves the same file, which opens with no network access. It shows per-step p50, p90,
-p95 and p99 latency (within 1%), throughput, failures by status and category, check pass
-rate, a timeline, your thresholds with passed or failed, findings from fixed rules (such as
-the slowest step or where failures start), what the run changed on the target (write
-requests sent and succeeded), token refreshes, and each step's provenance. A step that sent a
+(HTML)** saves the same file, which opens with no network access. It shows:
+
+- Totals: requests, throughput, failure rate, p50, p95 and p99 latency (within 1%), exact
+  minimum, mean and maximum latency, iterations with their p95 duration, journeys cut short, and
+  data received and sent.
+- Your thresholds with passed or failed, and findings from fixed rules (such as the slowest step
+  or where failures start).
+- **Timeline**: three panels on one time axis, each with its own scale: virtual users, p95
+  latency of all steps (a log scale when one interval is far slower than the rest), and requests
+  per interval split into as expected and failed. Hover over an interval for its figures, or open
+  **Timeline as a table**.
+- **By step over time**: one row per step, one cell per interval, shaded by that step's p95
+  latency on a shared scale. Hatched cells had failures; hover over a cell for its figures.
+- **By step**: the expected statuses and every status **received**, each marked expected or
+  unexpected (for example `400 × 59 unexpected`), requests, throughput, failure rate, min, p50,
+  p90, p95, p99 and max latency, failure category, check pass rate and requests not sent.
+- What the run changed on the target (write requests sent and succeeded) and token refreshes.
+- **Provenance · request and response by step**: for each step, a **Request** block (method and
+  path template, authentication, values taken from earlier steps, values you supply, whether the
+  body was edited) and a **Response** block (expected and received statuses, failures, latency,
+  k6's request phases such as time to first byte, extracted values and checks), followed by why
+  the step is in its journey and which scenario it uses. Steps with failures open automatically.
+
+A run recorded before version 19.11.0 has no received statuses beyond its failures, no request
+phases and no per-step timeline; its report says so rather than showing empty figures. A step that sent a
 body you edited is marked **Body edited by you**, and the provenance says how many steps did;
 the edited body itself is not recorded. It never contains a credential, token, request or
-response body, or a resolved URL.
+response body, or a resolved URL, so the request and response blocks show each step's template
+and what was measured, not the content that was sent or received.
 
 ## 4. Importing and running your own Postman collection
 

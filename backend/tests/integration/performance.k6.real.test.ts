@@ -94,6 +94,16 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     // 5 s tokens refreshed at 70%–80% by each of 3 virtual users over 20 s: several refreshes each.
     expect(result.tokenRefreshes.count).toBeGreaterThanOrEqual(6);
     expect(result.steps.every((step) => step.errorsByCategory.every((entry) => entry.category !== "authentication"))).toBe(true);
+    // FR-036 (amended 2026-09-30): a real k6 stream gives every status, the request phases, a per-step timeline and the run's bytes.
+    const sent = result.steps.filter((step) => step.requests > 0);
+    expect(sent.length).toBeGreaterThan(0);
+    for (const step of sent) {
+      expect(step.statusesReceived!.reduce((sum, entry) => sum + entry.count, 0)).toBe(step.requests);
+      expect(step.phaseTimings!.map((timing) => timing.phase)).toContain("waiting");
+      expect(step.timeline!.reduce((sum, point) => sum + point.requests, 0)).toBe(step.requests);
+    }
+    expect(result.totals.dataReceivedBytes).toBeGreaterThan(0);
+    expect(result.totals.iterationDurationMs).not.toBeNull();
   }, 120_000);
 
   it("stops k6 within 10 seconds of a cancel (SC-008)", async () => {

@@ -47,6 +47,11 @@ export function httpReq(input: HttpReqInput): string[] {
   return [point("http_reqs", 1, tags, input.atMs), point("http_req_duration", input.durationMs, tags, input.atMs)];
 }
 
+/** Any other sample, such as a request phase (`http_req_waiting`) or `data_received`. */
+export function sample(metric: string, value: number, tags: Record<string, string>, atMs: number): string {
+  return point(metric, value, tags, atMs);
+}
+
 export function vus(count: number, atMs: number): string {
   return point("vus", count, {}, atMs);
 }

@@ -1,6 +1,6 @@
 {
   "name": "apipilot",
-  "version": "19.10.0",
+  "version": "19.11.0",
   "private": true,
   "description": "ApiPilot monorepo: backend, frontend, and shared domain packages.",
   "engines": {

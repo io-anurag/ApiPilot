@@ -210,3 +210,84 @@ describe("runs and reports of a plan with body edits", () => {
     expect(html).not.toContain("written by the engineer");
   });
 });
+
+/** FR-036 (amended 2026-09-30): readable timeline, every status received, latency detail, request and response per step. */
+describe("report detail per step", () => {
+  function amended(): PerformanceResult {
+    const base = result();
+    return {
+      ...base,
+      totals: { ...base.totals, latencySummaryMs: { min: 3.2, mean: 48.1, max: 910 }, iterationDurationMs: { p50: 150, p90: 200, p95: 220, p99: 260 }, dataSentBytes: 2_048, dataReceivedBytes: 3_145_728 },
+      timeline: { bucketMs: 5_000, points: [{ offsetMs: 0, virtualUsers: 2, requests: 60, errors: 0, p95Ms: 2 }, { offsetMs: 5_000, virtualUsers: 2, requests: 60, errors: 6, p95Ms: 900 }] },
+      steps: [
+        {
+          ...base.steps[0],
+          statusesReceived: [{ status: "201", count: 54, expected: true }, { status: "401", count: 2, expected: false }, { status: "429", count: 4, expected: false }],
+          latencySummaryMs: { min: 3.2, mean: 60.4, max: 910 },
+          phaseTimings: [{ phase: "connecting", meanMs: 0.4, p95Ms: 1.1 }, { phase: "waiting", meanMs: 55.2, p95Ms: 101.3 }],
+          timeline: [{ offsetMs: 0, requests: 30, errors: 0, p95Ms: 2 }, { offsetMs: 5_000, requests: 30, errors: 6, p95Ms: 900 }],
+        },
+        { ...base.steps[1], statusesReceived: [{ status: "200", count: 60, expected: true }], latencySummaryMs: { min: 4, mean: 30, max: 95 }, phaseTimings: [], timeline: [{ offsetMs: 0, requests: 60, errors: 0, p95Ms: 70 }] },
+      ],
+    };
+  }
+  const render = (value: PerformanceResult, planSnapshot = plan) => {
+    const run = completedRun({ planSnapshot });
+    return renderHtmlReport({ ...run, result: withReportFields(value, run) });
+  };
+
+  it("draws the timeline as three panels, each with its own scale and legend, never one shared axis", () => {
+    const html = render(amended());
+    for (const text of ["Virtual users", "p95 latency, all steps", "Requests as expected", "Failed requests", "ms, log scale", 'class="vus-line"', 'class="p95"', 'class="bar-fail"', "<title>00:05–00:10 · 2 VUs · p95 900 ms · 60 requests, 6 failed</title>", "Timeline as a table"]) {
+      expect(html).toContain(text);
+    }
+    // Only latency within 20× of itself stays linear.
+    expect(render({ ...amended(), timeline: { bucketMs: 5_000, points: [{ offsetMs: 0, virtualUsers: 1, requests: 1, errors: 0, p95Ms: 40 }] } })).not.toContain("log scale");
+  });
+
+  it("shows each step's latency per interval on one scale, hatching intervals with failures", () => {
+    const html = render(amended());
+    expect(html).toContain("By step over time");
+    expect(html).toContain("Hatched: had failures");
+    expect(html).toMatch(/class="cell h\d fail" title="POST \/orders · 00:05–00:10 · 30 requests · p95 900 ms · 6 failed"/);
+    expect(html).toContain("2 ms – ");
+  });
+
+  it("lists every status received, marked expected or unexpected, with min and max latency", () => {
+    const html = render(amended());
+    expect(html).toContain("<th>Received</th>");
+    expect(html).toMatch(/201 × 54<\/span> <span class="badge ok">expected<\/span>/);
+    expect(html).toMatch(/429 × 4<\/span> <span class="badge bad">unexpected<\/span>/);
+    expect(html).toContain("min 3.2 ms · mean 60.4 ms · max 910 ms");
+    expect(html).toContain("3 MiB");
+    expect(html).toContain("p95 220 ms each");
+  });
+
+  it("splits each step into a request block from the plan and a response block from the measurements, with no body", () => {
+    const html = render(amended());
+    for (const text of ["<h3>Request</h3>", "<h3>Response</h3>", "path template; the resolved URL is not recorded", "Waiting (time to first byte)", "55.2 ms", "orderId ← response field orderId", "Not recorded", "Why in this journey"]) {
+      expect(html).toContain(text);
+    }
+    // The failing step is open; the step without failures is not.
+    expect(html).toMatch(/<details open><summary><span class="method">POST<\/span> <code>\/orders<\/code>/);
+    expect(html).toMatch(/<details><summary><span class="method">GET<\/span>/);
+  });
+
+  it("reports a run recorded before the amendment without inventing what it did not record", () => {
+    const html = render(result());
+    expect(html).toContain("Failures only; this run predates recording every status.");
+    expect(html).toContain("This run was recorded before per-step timelines were kept.");
+    expect(html).not.toContain("Request phases");
+    expect(html).not.toContain("Data received");
+    expect(html).not.toContain("badge ok\">expected");
+  });
+
+  it("is deterministic and escapes path templates in hover text", () => {
+    const html = render(amended());
+    expect(render(amended())).toBe(html);
+    const evilTimeline = { ...amended(), steps: [amended().steps[0], { ...amended().steps[1], timeline: [{ offsetMs: 0, requests: 1, errors: 1, p95Ms: 5 }] }] };
+    const evilHtml = render(evilTimeline);
+    expect(evilHtml).not.toContain("<img src=x onerror=alert(1)>");
+    expect(evilHtml).not.toMatch(/<script|<link|<iframe|<img /i);
+  });
+});

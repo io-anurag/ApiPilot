@@ -4,11 +4,13 @@ import type {
   PerformanceFailureCategory,
   PerformancePlan,
   PerformanceResult,
+  RequestPhase,
   RunProgress,
   StepResult,
+  StepTimelinePoint,
   TimelinePoint,
 } from "@apipilot/shared-domain";
-import { PERFORMANCE_FINDINGS_RULESET_VERSION } from "@apipilot/shared-domain";
+import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES } from "@apipilot/shared-domain";
 import { statusMatches } from "../plan/expectedStatuses";
 import type { MetricsPoint } from "../k6/metricsStream";
 import { LatencyHistogram } from "./histogram";
@@ -22,6 +24,22 @@ import { LatencyHistogram } from "./histogram";
 const WRITE_METHODS: ReadonlySet<string> = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 /** k6's error code for a request that timed out. Every other status-0 error code is a connection error. */
 const K6_REQUEST_TIMEOUT = "1050";
+/** k6's per-request phase metrics (FR-036, amended 2026-09-30). */
+const PHASE_METRICS: Readonly<Record<string, RequestPhase>> = {
+  http_req_blocked: "blocked",
+  http_req_connecting: "connecting",
+  http_req_tls_handshaking: "tls-handshaking",
+  http_req_sending: "sending",
+  http_req_waiting: "waiting",
+  http_req_receiving: "receiving",
+};
+
+/** One step in one timeline bucket. */
+interface StepBucket {
+  requests: number;
+  errors: number;
+  histogram: LatencyHistogram;
+}
 
 interface StepStats {
   stepId: string;
@@ -32,6 +50,8 @@ interface StepStats {
   requests: number;
   failures: number;
   byStatus: Map<string, number>;
+  /** Every response by status, expected or not. */
+  received: Map<string, number>;
   byCategory: Map<PerformanceFailureCategory, number>;
   checksPassed: number;
   checksTotal: number;
@@ -39,6 +59,8 @@ interface StepStats {
   dependencyNotAttempted: number;
   missingVariables: Set<string>;
   histogram: LatencyHistogram;
+  phases: Map<RequestPhase, LatencyHistogram>;
+  buckets: Map<number, StepBucket>;
 }
 
 interface JourneyStats {
@@ -99,6 +121,7 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         requests: 0,
         failures: 0,
         byStatus: new Map(),
+        received: new Map(),
         byCategory: new Map(),
         checksPassed: 0,
         checksTotal: 0,
@@ -106,12 +129,16 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         dependencyNotAttempted: 0,
         missingVariables: new Set(),
         histogram: new LatencyHistogram(),
+        phases: new Map(),
+        buckets: new Map(),
       });
     }
   }
   const bucketMs = timelineBucketMs(plannedDurationMs);
   const buckets = new Map<number, Bucket>();
   const total = new LatencyHistogram();
+  const iterationDuration = new LatencyHistogram();
+  const data = { sentBytes: 0, receivedBytes: 0 };
   const writes = new Map<string, { operationKey: string; method: string; sent: number; succeeded: number }>();
   const refresh = { count: 0, failed: 0, lifetimeStated: true, buckets: new Set<number>() };
   const firstFailure = { bucket: Number.POSITIVE_INFINITY, byStep: new Map<string, number>() };
@@ -132,6 +159,14 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
     }
     return bucket;
   };
+  const stepBucketAt = (step: StepStats, index: number): StepBucket => {
+    let bucket = step.buckets.get(index);
+    if (!bucket) {
+      bucket = { requests: 0, errors: 0, histogram: new LatencyHistogram() };
+      step.buckets.set(index, bucket);
+    }
+    return bucket;
+  };
 
   function ingest(point: MetricsPoint): void {
     const { metric, tags } = point;
@@ -143,6 +178,15 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
     }
     if (metric === "iterations") {
       iterations += point.value;
+      return;
+    }
+    if (metric === "iteration_duration") {
+      iterationDuration.add(point.value);
+      return;
+    }
+    if (metric === "data_sent" || metric === "data_received") {
+      if (metric === "data_sent") data.sentBytes += point.value;
+      else data.receivedBytes += point.value;
       return;
     }
     if (metric === "apipilot_token_refresh") {
@@ -159,6 +203,16 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
     const step = tags.step ? steps.get(tags.step) : undefined;
     if (!step) return;
     const journey = journeys.get(step.journeyId)!;
+    const phase = PHASE_METRICS[metric];
+    if (phase) {
+      let histogram = step.phases.get(phase);
+      if (!histogram) {
+        histogram = new LatencyHistogram();
+        step.phases.set(phase, histogram);
+      }
+      histogram.add(point.value);
+      return;
+    }
     switch (metric) {
       case "http_reqs": {
         const status = Number(tags.status ?? "0");
@@ -168,7 +222,12 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         requests += 1;
         const bucket = bucketAt(index);
         bucket.requests += 1;
+        const stepBucket = stepBucketAt(step, index);
+        stepBucket.requests += 1;
+        const receivedKey = Number.isFinite(status) ? String(status) : "0";
+        step.received.set(receivedKey, (step.received.get(receivedKey) ?? 0) + 1);
         if (category) {
+          stepBucket.errors += 1;
           step.failures += 1;
           journey.failures += 1;
           failures += 1;
@@ -197,6 +256,7 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         journey.histogram.add(point.value);
         total.add(point.value);
         bucketAt(index).histogram.add(point.value);
+        stepBucketAt(step, index).histogram.add(point.value);
         return;
       case "checks":
         step.checksTotal += 1;
@@ -258,6 +318,18 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
       checkPassRatePercent: step.checksTotal === 0 ? null : percent(step.checksPassed, step.checksTotal),
       notAttempted: { missingData: step.missingData, dependencyNotAttempted: step.dependencyNotAttempted },
       missingVariables: [...step.missingVariables].sort(),
+      statusesReceived: [...step.received.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([status, count]) => ({ status, count, expected: status !== "0" && statusMatches(Number(status), step.expected) })),
+      latencySummaryMs: step.histogram.summary(),
+      phaseTimings: REQUEST_PHASES.flatMap((phase) => {
+        const histogram = step.phases.get(phase);
+        const summary = histogram?.summary();
+        return histogram && summary ? [{ phase, meanMs: summary.mean, p95Ms: histogram.percentile(95)! }] : [];
+      }),
+      timeline: [...step.buckets.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([index, bucket]): StepTimelinePoint => ({ offsetMs: index * bucketMs, requests: bucket.requests, errors: bucket.errors, p95Ms: bucket.histogram.percentile(95) })),
     }));
     const journeyResults: JourneyResult[] = plan.journeys.map((journey) => {
       const stats = journeys.get(journey.id)!;
@@ -293,6 +365,10 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         journeysCutShort,
         throughputPerSecond: round2(requests / seconds),
         latencyMs: total.percentiles(),
+        latencySummaryMs: total.summary(),
+        iterationDurationMs: iterationDuration.percentiles(),
+        dataSentBytes: data.sentBytes,
+        dataReceivedBytes: data.receivedBytes,
       },
       journeys: journeyResults,
       steps: stepResults,

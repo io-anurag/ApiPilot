@@ -174,7 +174,8 @@ the run (FR-014). If the script file on disk does not match `scriptSha256`, the 
 ### `GET /runs/:runId`
 
 **Success:** `200 {run: PerformanceRun}`. It includes `progress` while in progress (FR-030) and
-`result` once the run has settled. Poll every 2 seconds; SC-007 requires a refresh at least every
+`result` once the run has settled. Amended 2026-09-30: `result.steps[]` and `result.totals` gain
+optional fields (data-model.md `StepResult`); runs recorded earlier omit them. Poll every 2 seconds; SC-007 requires a refresh at least every
 5 seconds.
 
 **Error:** `404 run_not_found`.

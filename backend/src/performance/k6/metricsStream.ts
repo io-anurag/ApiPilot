@@ -19,6 +19,17 @@ export type ParsedLine =
 export const KNOWN_METRICS: ReadonlySet<string> = new Set([
   "http_reqs",
   "http_req_duration",
+  // FR-036 (amended 2026-09-30): the timed phases of each request, which carry its `step` tag, and
+  // three run-level metrics k6 emits once per iteration without it.
+  "http_req_blocked",
+  "http_req_connecting",
+  "http_req_tls_handshaking",
+  "http_req_sending",
+  "http_req_waiting",
+  "http_req_receiving",
+  "iteration_duration",
+  "data_sent",
+  "data_received",
   "vus",
   "checks",
   "iterations",
