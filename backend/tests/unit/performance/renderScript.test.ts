@@ -6,6 +6,7 @@ import { renderScript, SYSTEM_TAGS } from "../../../src/performance/k6/renderScr
 import { buildPlan } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import { stepRequestFor } from "../../../src/performance/plan/planStepRequest";
+import { buildStepRequestPreview } from "../../../src/performance/plan/requestPreview";
 import { planAuth, type PerformanceContext } from "../../../src/performance/plan/stepRequest";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { percentEncode } from "../../../src/postman/parameterSerialization";
@@ -336,5 +337,52 @@ describe("renderScript with chained login and distinct per-role credentials (FR-
     const byPath = Object.fromEntries(k6.requests.filter((r) => !r.tags.apipilot_kind).map((r) => [new URL(r.url).pathname, r.headers.Authorization]));
     expect(byPath["/orders"]).toBe("Bearer static-tok");
     expect(byPath["/reports"]).toBe("Bearer admin-tok");
+  });
+});
+
+/** AP-033 FR-006, FR-013, FR-015 (specs/033-edit-step-request-body research R3, R5; tasks T019, T034). */
+describe("renderScript with an edited body", () => {
+  async function editedPlan(body: unknown): Promise<{ plan: PerformancePlan; context: PerformanceContext; stepId: string }> {
+    const { plan, context } = await readyPlan();
+    const stepId = plan.journeys.flatMap((journey) => journey.steps).find((step) => step.operationKey === "POST /orders")!.id;
+    const edited = applyPlanUpdate(plan, { bodyEdits: { [stepId]: { kind: "json", text: JSON.stringify(body) } } }, context);
+    return { plan: edited, context, stepId };
+  }
+
+  function journeysOf(script: string): { steps: { id: string; request: { body?: string } }[] }[] {
+    return JSON.parse(/^const JOURNEYS = ([\s\S]*?);\n\n/m.exec(script)![1]);
+  }
+
+  it("embeds and sends the edited body, still varying the unique field, exactly as the preview shows", async () => {
+    const { plan, context, stepId } = await editedPlan({ customerEmail: "buyer@example.com", quantity: 5 });
+    const { script, valueIndex } = renderScript(plan, context);
+    const embedded = journeysOf(script).flatMap((journey) => journey.steps).find((step) => step.id === stepId)!;
+    expect(embedded.request).toEqual(stepRequestFor(plan, context, planAuth(context), stepId).built.template);
+    expect(embedded.request.body).toBe(buildStepRequestPreview(plan, context, stepId).body!.text);
+
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget(), vu: 3 });
+    k6.iterate(k6.setup(), 7);
+    const sent = JSON.parse(k6.requests.find((r) => r.method === "POST" && r.url.endsWith("/orders"))!.body!);
+    expect(sent.quantity).toBe(5);
+    expect(sent.customerEmail).toBe("buyer+vu3-it7@example.com");
+  });
+
+  it("renders byte-identical files for the same edits", async () => {
+    const first = await editedPlan({ customerEmail: "buyer@example.com", quantity: 5 });
+    const second = await editedPlan({ customerEmail: "buyer@example.com", quantity: 5 });
+    expect(renderScript(first.plan, first.context)).toEqual(renderScript(second.plan, second.context));
+  });
+
+  it("keeps hostile body content as data: the script still loads and sends it byte for byte (FR-013, R5)", async () => {
+    const hostile = 'q" b\\ `t` ${1} </script> */     ); throw new Error("ran"); (';
+    const { plan, context, stepId } = await editedPlan({ customerEmail: "buyer@example.com", quantity: 1, note: hostile });
+    const { script, valueIndex } = renderScript(plan, context);
+    const embedded = journeysOf(script).flatMap((journey) => journey.steps).find((step) => step.id === stepId)!;
+    expect(JSON.parse(embedded.request.body!).note).toBe(hostile);
+
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget() });
+    k6.iterate(k6.setup(), 0);
+    const sent = JSON.parse(k6.requests.find((r) => r.method === "POST" && r.url.endsWith("/orders"))!.body!);
+    expect(sent.note).toBe(hostile);
   });
 });

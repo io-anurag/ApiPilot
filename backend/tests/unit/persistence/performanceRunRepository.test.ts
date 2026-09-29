@@ -134,6 +134,23 @@ describe("performanceRunRepository", () => {
     expect(repo.get(SESSION, "done")).toMatchObject({ status: "completed", endedAt: "2026-09-27T12:05:00.000Z" });
   });
 
+  it("reads a snapshot stored before AP-033 with empty body-edit fields (AP-033 FR-014)", () => {
+    const repo = getPerformanceRunRepository();
+    const run = runFixture({ id: "run-before-ap033" });
+    repo.create(SESSION, run);
+    // Rewrite the row as a run recorded before AP-033 would have stored it.
+    const olderSnapshot: Record<string, unknown> = { ...run.planSnapshot };
+    delete olderSnapshot.bodyEdits;
+    delete olderSnapshot.bodyEditNotices;
+    delete olderSnapshot.discardedBodyEdits;
+    const db = getSharedConnection().db;
+    db.prepare("UPDATE performance_runs SET plan_snapshot = ? WHERE id = ?").run(JSON.stringify(olderSnapshot), run.id);
+    const read = repo.get(SESSION, run.id)!;
+    expect(read.planSnapshot.bodyEdits).toEqual([]);
+    expect(read.planSnapshot.bodyEditNotices).toEqual([]);
+    expect(read.planSnapshot.discardedBodyEdits).toEqual([]);
+  });
+
   it("never stores an environment's variable values in any column (FR-021)", () => {
     const repo = getPerformanceRunRepository();
     const run = runFixture();

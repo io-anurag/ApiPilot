@@ -26,6 +26,25 @@ describe("performanceTestingClient", () => {
     expect(await startRun("env-1")).toMatchObject({ ok: false, readiness: { reason: "not-found" } });
   });
 
+  it("maps AP-033 body-edit error extras", async () => {
+    stubFetch({
+      [`PUT ${BASE}/plan`]: () => [400, { error: "invalid_body", message: "Not valid JSON at line 1, column 14.", stepId: "s-1", line: 1, column: 14 }],
+    });
+    expect(await updatePlan({ bodyEdits: { "s-1": { kind: "json", text: '{"quantity": }' } } })).toEqual({
+      ok: false,
+      error: "invalid_body",
+      message: "Not valid JSON at line 1, column 14.",
+      stepId: "s-1",
+      line: 1,
+      column: 14,
+    });
+  });
+
+  it("ignores extras of the wrong type", async () => {
+    stubFetch({ [`PUT ${BASE}/plan`]: () => [400, { error: "body_secret_literal", message: "m", stepId: 3, fieldPath: "pin", line: "2" }] });
+    expect(await updatePlan({})).toEqual({ ok: false, error: "body_secret_literal", message: "m", fieldPath: "pin" });
+  });
+
   it("reports a thrown fetch as network_error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       throw new Error("offline");

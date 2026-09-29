@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   writeEffectLabelOf,
+  type BodyEditInput,
+  type BodyEditNotice,
   type PerformanceJourney,
   type PerformanceStep,
   type StepRequestPreview as Preview,
 } from "@apipilot/shared-domain";
-import type { Result } from "../../services/performanceTestingClient";
+import type { PerformanceErrorResult, Result } from "../../services/performanceTestingClient";
+import { ConfirmDialog } from "../ConfirmDialog";
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
@@ -217,6 +220,9 @@ export function JourneyList({
   onRemoveMethod,
   onStepOrder,
   onJourneyOrder,
+  onSaveBody,
+  onResetBodies,
+  bodyEditNotices = [],
   loadPreview,
   listRequest,
 }: Readonly<{
@@ -228,11 +234,19 @@ export function JourneyList({
   onRemoveMethod: (method: string) => void;
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
+  /** AP-033: saves (or, with `null`, resets) a step's body; resolves to the refusal, or `null`. */
+  onSaveBody: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  /** AP-033 FR-017: resets every given step's body in one update, after confirmation. */
+  onResetBodies: (stepIds: string[]) => void;
+  /** AP-033 FR-010: references ApiPilot applies that an edited body no longer carries. */
+  bodyEditNotices?: readonly BodyEditNotice[];
   listRequest: ListRequest | null;
 }>) {
   const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState(ALL);
   const [needsStatusOnly, setNeedsStatusOnly] = useState(false);
+  const [bodyEditedOnly, setBodyEditedOnly] = useState(false);
+  const [confirmingResetBodies, setConfirmingResetBodies] = useState(false);
   const [page, setPage] = useState(0);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
   // The id of the element to focus once the row it is in has rendered.
@@ -247,6 +261,7 @@ export function JourneyList({
     handledRequest.current = listRequest.nonce;
     setQuery("");
     setMethodFilter(ALL);
+    setBodyEditedOnly(false);
     if (listRequest.kind === "show-needs-status") {
       setNeedsStatusOnly(true);
       setPage(0);
@@ -288,6 +303,7 @@ export function JourneyList({
   const methods = [...methodCounts.keys()].sort((a, b) => a.localeCompare(b));
   const writeCount = rows.filter(({ step }) => writeEffectLabelOf(step.method)).length;
   const needsStatusCount = rows.filter(({ step }) => step.expectedStatuses.length === 0).length;
+  const bodyEditedCount = rows.filter(({ step }) => step.bodyEdited).length;
   const methodChips: { id: string; label: string; count: number }[] = [
     { id: ALL, label: "All", count: rows.length },
     ...methods.map((method) => ({ id: method, label: method, count: methodCounts.get(method) ?? 0 })),
@@ -298,19 +314,22 @@ export function JourneyList({
   // it off. The effect below also clears it, so it does not come back on when a step is restored.
   const activeMethod = methodChips.some((chip) => chip.id === methodFilter) ? methodFilter : ALL;
   const activeNeedsStatusOnly = needsStatusOnly && needsStatusCount > 0;
+  const activeBodyEditedOnly = bodyEditedOnly && bodyEditedCount > 0;
   useEffect(() => {
     if (activeMethod !== methodFilter) setMethodFilter(ALL);
     if (activeNeedsStatusOnly !== needsStatusOnly) setNeedsStatusOnly(false);
-  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly]);
+    if (activeBodyEditedOnly !== bodyEditedOnly) setBodyEditedOnly(false);
+  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly, activeBodyEditedOnly, bodyEditedOnly]);
   const filteredRows = rows.filter(({ step }) => {
     const method = step.method.toUpperCase();
     const matchesMethod =
       activeMethod === ALL ||
       (activeMethod === WRITES ? writeEffectLabelOf(method) !== null : method === activeMethod);
-    const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}`.toLowerCase();
+    const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}${step.bodyEdited ? " body edited" : ""}`.toLowerCase();
     return (
       matchesMethod &&
       (!activeNeedsStatusOnly || step.expectedStatuses.length === 0) &&
+      (!activeBodyEditedOnly || step.bodyEdited === true) &&
       text.includes(query.toLowerCase())
     );
   });
@@ -404,6 +423,7 @@ export function JourneyList({
             <HttpMethodBadge method={step.method} />
             <WrappingPath path={step.path} />
             {effect && <StatusBadge label={effect} tone="warning" />}
+            {step.bodyEdited && <StatusBadge label="Body edited" tone="info" />}
           </button>
         </td>
         <td className="px-2 py-1.5 whitespace-nowrap">
@@ -458,6 +478,8 @@ export function JourneyList({
               }
               onStepOrder={onStepOrder}
               onJourneyOrder={onJourneyOrder}
+              onSaveBody={onSaveBody}
+              notices={bodyEditNotices.filter((notice) => notice.stepId === step.id)}
             />
           </td>
         </tr>,
@@ -508,6 +530,36 @@ export function JourneyList({
           >
             Needs expected status · {needsStatusCount}
           </button>
+        )}
+        {bodyEditedCount > 0 && (
+          <>
+            <button
+              type="button"
+              aria-pressed={activeBodyEditedOnly}
+              onClick={() => {
+                setBodyEditedOnly((current) => !current);
+                resetPage();
+              }}
+              className={`${CHIP} font-sans ${activeBodyEditedOnly ? CHIP_ON : CHIP_OFF}`}
+            >
+              Body edited · {bodyEditedCount}
+            </button>
+            <button type="button" className={ROW_ACTION} disabled={busy} onClick={() => setConfirmingResetBodies(true)}>
+              Reset all edited bodies
+            </button>
+          </>
+        )}
+        {confirmingResetBodies && (
+          <ConfirmDialog
+            message="Every edited body goes back to the body generated from the specification."
+            affectedCount={bodyEditedCount}
+            confirmLabel="Reset bodies"
+            onConfirm={() => {
+              setConfirmingResetBodies(false);
+              onResetBodies(rows.filter(({ step }) => step.bodyEdited).map(({ step }) => step.id));
+            }}
+            onCancel={() => setConfirmingResetBodies(false)}
+          />
         )}
         <div className="ml-auto">
           <RemoveByMethodMenu methods={methods} busy={busy} onRemoveMethod={onRemoveMethod} />
@@ -617,6 +669,15 @@ export function JourneyList({
   );
 }
 
+/** AP-033 FR-010: a reference ApiPilot applies that this step's edited body no longer carries, in words. */
+function bodyNoticeText(notice: BodyEditNotice, step: PerformanceStep, stepLabel: (stepId: string) => string): string {
+  if (notice.kind === "unique-field-dropped") return `This step no longer sends a unique value for ${notice.name}.`;
+  const producer = step.variableBindings.find((binding) => binding.role === "consumes" && binding.variable === notice.name)?.producerStepId;
+  return producer
+    ? `This step no longer sends the value of ${notice.name} from ${stepLabel(producer)}.`
+    : `This step no longer sends the value of ${notice.name} from an earlier step.`;
+}
+
 function OperationInspector({
   row,
   busy,
@@ -627,6 +688,8 @@ function OperationInspector({
   onRemoveOperation,
   onStepOrder,
   onJourneyOrder,
+  onSaveBody,
+  notices,
 }: Readonly<{
   row: InventoryRow;
   busy: boolean;
@@ -637,6 +700,8 @@ function OperationInspector({
   onRemoveOperation: (operationKey: string) => void;
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
+  onSaveBody: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  notices: readonly BodyEditNotice[];
 }>) {
   const { journey, journeyIndex, step, stepIndex } = row;
   const stepIds = journey.steps.map((candidate) => candidate.id);
@@ -657,11 +722,20 @@ function OperationInspector({
               <StatusBadge label={`${step.dependency.confidence} dependency`} tone="success" />
             )}
           </div>
+          {notices.length > 0 && (
+            <ul className="space-y-0.5 text-xs text-warning-700 dark:text-warning-100" aria-label={`Notes on the body of ${step.operationKey}`}>
+              {notices.map((notice) => (
+                <li key={`${notice.kind}-${notice.name}`}>{bodyNoticeText(notice, step, stepLabel)}</li>
+              ))}
+            </ul>
+          )}
           <StepRequestPreview
             stepId={step.id}
             operationKey={step.operationKey}
             stepLabel={stepLabel}
             loadPreview={loadPreview}
+            onSaveBody={onSaveBody}
+            busy={busy}
           />
         </div>
         <div className="space-y-3 text-sm lg:col-span-2">

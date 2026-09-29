@@ -1,11 +1,12 @@
 import { useState } from "react";
-import type { PreviewReference, PreviewValue, StepRequestPreview as Preview } from "@apipilot/shared-domain";
-import type { Result } from "../../services/performanceTestingClient";
+import type { BodyEditInput, PreviewValue, StepBodyStatus, StepRequestPreview as Preview } from "@apipilot/shared-domain";
+import type { PerformanceErrorResult, Result } from "../../services/performanceTestingClient";
 import { CodeBlock } from "../CodeBlock";
 import { ErrorState } from "../ErrorState";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { Skeleton } from "../Skeleton";
-import { StatusBadge } from "../StatusBadge";
+import { ReferenceNote } from "./PreviewReferenceNote";
+import { StepBodyEditor } from "./StepBodyEditor";
 
 /**
  * The view-only request one step sends (AP-032 FR-008, specs/032-quick-performance-test research
@@ -14,32 +15,13 @@ import { StatusBadge } from "../StatusBadge";
  */
 type LoadState = { kind: "idle" } | { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; request: Preview };
 
-function referenceText(reference: PreviewReference, stepLabel: (stepId: string) => string): string {
-  switch (reference.kind) {
-    case "environment":
-      return `from environment: ${reference.name}`;
-    case "workflow-variable":
-      return reference.producerStepId ? `from step ${stepLabel(reference.producerStepId)}` : `from variable ${reference.variable}`;
-    case "unique-per-iteration":
-      return `unique per virtual user and iteration (${reference.format})`;
-    case "credential":
-      return `token acquired by the plan (${reference.schemeName})`;
-  }
-}
-
-function ReferenceNote({ reference, stepLabel }: Readonly<{ reference: PreviewReference; stepLabel: (stepId: string) => string }>) {
-  return (
-    <span className="text-xs text-muted">
-      {referenceText(reference, stepLabel)}
-      {reference.kind === "environment" && reference.secret && (
-        <>
-          {" "}
-          <StatusBadge label="secret" />
-        </>
-      )}
-    </span>
-  );
-}
+/** AP-033 FR-001: a step without a body says so in words, so an empty area is never mistaken for a failure. */
+const BODY_STATUS_TEXT: Record<StepBodyStatus, string | null> = {
+  sent: null,
+  "not-documented": "This request has no body.",
+  "documented-not-sent": "This operation accepts a body that this step does not send.",
+  "unsupported-content-type": "Form and multipart bodies are shown but cannot be edited.",
+};
 
 function ValueCell({ value, stepLabel }: Readonly<{ value: PreviewValue; stepLabel: (stepId: string) => string }>) {
   if (value.kind === "generated") return <span className="break-all font-mono text-xs">{value.text}</span>;
@@ -63,11 +45,19 @@ export function StepRequestPreview({
   operationKey,
   stepLabel,
   loadPreview,
+  onSaveBody,
+  busy = false,
 }: Readonly<{
   stepId: string;
   operationKey: string;
   stepLabel: (stepId: string) => string;
   loadPreview: (stepId: string) => Promise<Result<{ request: Preview }>>;
+  /**
+   * AP-033: present for a step in the plan, so its body can be edited (FR-003). Left out for a
+   * removed operation's read-only preview. Resolves to `null` when saved, or to the refusal.
+   */
+  onSaveBody?: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  busy?: boolean;
 }>) {
   const [state, setState] = useState<LoadState>({ kind: "idle" });
   const [open, setOpen] = useState(false);
@@ -148,7 +138,30 @@ export function StepRequestPreview({
                 ))}
               </div>
             )}
-            <p className="text-muted">View only. Secret values are never shown.</p>
+            {BODY_STATUS_TEXT[state.request.bodyStatus] && <p className="text-muted">{BODY_STATUS_TEXT[state.request.bodyStatus]}</p>}
+            {onSaveBody && state.request.bodyEdit && (
+              <StepBodyEditor
+                key={`${state.request.bodyEdit.edited}-${state.request.bodyEdit.text}`}
+                stepId={stepId}
+                operationKey={operationKey}
+                model={state.request.bodyEdit}
+                stepLabel={stepLabel}
+                busy={busy}
+                onSave={async (input) => {
+                  const refusal = await onSaveBody(stepId, input);
+                  if (!refusal) void load();
+                  return refusal;
+                }}
+                onReset={async () => {
+                  const refusal = await onSaveBody(stepId, null);
+                  if (!refusal) void load();
+                  return refusal;
+                }}
+              />
+            )}
+            <p className="text-muted">
+              {onSaveBody && state.request.bodyEdit ? "Parameters and headers are view only." : "View only."} Secret values are never shown.
+            </p>
           </>
         )}
       </div>

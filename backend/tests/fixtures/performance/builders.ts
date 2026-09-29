@@ -66,6 +66,9 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     upstreamFingerprint: "upstream-fixture",
     stepsNeedingExpectedStatus: [],
     credentialProducerOperationKeys: [],
+    bodyEdits: [],
+    bodyEditNotices: [],
+    discardedBodyEdits: [],
     ...overrides,
   };
 }

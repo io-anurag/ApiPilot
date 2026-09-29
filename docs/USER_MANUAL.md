@@ -328,8 +328,8 @@ below).
   **Workflow** row; with only single-step journeys, as in the quick test, the column is left
   out), its method
   and path, the write marker, its expected status, a short authentication label, and the
-  environment values it needs. Filter by method, by **Writes** or by **Needs expected status**
-  (each chip shows its count), and search by method, path or scenario. Select a step's path to
+  environment values it needs. Filter by method, by **Writes**, by **Needs expected status** or
+  by **Body edited** (each chip shows its count), and search by method, path or scenario. Select a step's path to
   open its details in a row directly under it: the scenario and why it was chosen, the request
   preview, the expected-status editor, the full authentication, the variables, the order
   controls and **Remove from plan**. More than 50 steps are split into pages.
@@ -359,8 +359,39 @@ below).
 - **The request a step sends.** In a step's details, choose **Request** to see what it sends: the
   method, the path template, each path, query and header parameter with its generated value
   or the environment value it needs, the authentication, and the body. Values that come from
-  the environment are shown by name only, and secrets are marked, never shown. The preview is
-  view only.
+  the environment are shown by name only, and secrets are marked, never shown. A step without a
+  body says **This request has no body.**; an operation that accepts a body this step does not
+  send says so; form and multipart bodies are shown but cannot be edited. Parameters, headers
+  and authentication are view only.
+- **Editing a step's body.** For a JSON or text body, choose **Edit body** (or **Add a body**)
+  under the request, change it, and **Save body**; **Cancel** leaves it as it was. You edit the
+  body before ApiPilot fills in its own values: under **Replaced at run time**, the editor lists
+  each field ApiPilot fills when the test runs (a value unique per virtual user and iteration, a
+  value from an earlier workflow step, or a token) and where it comes from. Keep the field to
+  keep that value; remove the field and ApiPilot stops filling it, and the step's details say so.
+  - To use a value from the target environment, write `{{name}}` inside a JSON string (or
+    anywhere in a text body). The name is then listed with the plan's other values, in the
+    environment template and in the checklist. Names ApiPilot uses for its own values are
+    refused.
+  - **Secrets.** Values you type are written into the script. Reference secrets from the
+    environment as `{{name}}` instead. A field the specification marks `format: password` must
+    hold a `{{name}}` reference whenever you save the body, even if you changed another field;
+    such a reference is marked secret. ApiPilot cannot recognise a secret typed into any other
+    field, so do not type one.
+  - A JSON body must be valid JSON; if not, the editor shows the line and column. A body that
+    differs from the specification (a missing required field, a wrong type, a value outside the
+    documented values, format or bounds) is saved with a **Differs from the specification**
+    warning listing each difference; it never blocks the script. A body is at most 64 KiB.
+  - An edited step shows **Body edited** in the table; the **Body edited** chip lists them, and
+    **Reset all edited bodies** puts every one back to the generated body after you confirm.
+    **Reset to generated body** in a step's details does the same for one step.
+  - Saving or resetting a body marks the script **Out of date**. Editing a performance step's
+    body never changes the approved test model, the Postman collection or the functional tests.
+  - An edit stays with its step while the plan exists. It is kept while the operation is removed
+    (the **Removed** view shows it, read only) and comes back when you restore it, and **Reset
+    plan** keeps it. If the guided workflow's approvals change the step's scenario, the edit is
+    discarded and the plan names the operation. Starting a new quick test replaces the plan and
+    its edits.
 - **Long lists.** The steps that still need an expected status are a counted list, collapsed.
   The write list is never collapsed. The steps that need an
   expected status are counted in the bar above the tabs; open **steps to set** there, and each
@@ -449,8 +480,10 @@ restart is recorded as cancelled.
 p95 and p99 latency (within 1%), throughput, failures by status and category, check pass
 rate, a timeline, your thresholds with passed or failed, findings from fixed rules (such as
 the slowest step or where failures start), what the run changed on the target (write
-requests sent and succeeded), token refreshes, and each step's provenance. It never contains
-a credential, token, request or response body, or a resolved URL.
+requests sent and succeeded), token refreshes, and each step's provenance. A step that sent a
+body you edited is marked **Body edited by you**, and the provenance says how many steps did;
+the edited body itself is not recorded. It never contains a credential, token, request or
+response body, or a resolved URL.
 
 ## 4. Importing and running your own Postman collection
 

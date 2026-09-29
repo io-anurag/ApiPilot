@@ -94,6 +94,11 @@ export interface PerformanceStep {
   auth: StepAuth;
   /** Names of the user-supplied values this step needs (FR-013). */
   requiredValues: string[];
+  /**
+   * AP-033 FR-008, FR-014: present, and `true`, only when the step sends a body the engineer
+   * edited. Kept in run snapshots, which carry no body content (specs/033 research R11).
+   */
+  bodyEdited?: true;
 }
 
 export type PerformanceJourneySource =
@@ -174,7 +179,12 @@ export interface PerformanceThreshold {
   limit: number;
 }
 
-export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url";
+/**
+ * `body-reference` (AP-033, specs/033 research R4): named only by a `{{name}}` the engineer wrote in
+ * an edited body. Secret only when that reference fills a `format: password` field, or when the name
+ * is secret elsewhere in the plan.
+ */
+export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url" | "body-reference";
 
 /** A value the specification cannot produce (FR-013). The value itself lives in an environment. */
 export interface UserSuppliedValueRequirement {
@@ -195,6 +205,72 @@ export interface UniqueValueField {
   location: "body";
   fieldPath: string;
   format: "email" | "uuid";
+}
+
+/**
+ * AP-033 (specs/033-edit-step-request-body data-model `BodyEdit`, research R1, R2): the engineer's
+ * replacement for one step's base body, the body before ApiPilot's substitutions. A JSON edit holds
+ * the parsed value, so formatting never changes the script; a text edit holds the string.
+ */
+export type BodyEdit = {
+  stepId: string;
+  /** Keeps the edit while the operation is removed (FR-018). */
+  operationKey: string;
+  /** The step's scenario when the edit was saved; a rebuild that changes it discards the edit. */
+  scenarioId: string;
+} & ({ kind: "json"; json: unknown } | { kind: "text"; text: string });
+
+/** What `PUT /plan` accepts per step in `bodyEdits`; `null` resets the step (FR-017). */
+export interface BodyEditInput {
+  kind: "json" | "text";
+  text: string;
+}
+
+/** AP-033 FR-010: a reference ApiPilot applies that an edited body no longer carries. */
+export interface BodyEditNotice {
+  stepId: string;
+  kind: "workflow-variable-dropped" | "unique-field-dropped";
+  /** The workflow variable's name, or the unique field's path. */
+  name: string;
+}
+
+export type BodyMismatchRule =
+  | "required"
+  | "type"
+  | "enum"
+  | "format"
+  | "minimum"
+  | "maximum"
+  | "minLength"
+  | "maxLength"
+  | "minItems"
+  | "maxItems";
+
+/** AP-033 FR-005: one difference between an edited JSON body and the request schema. Never blocks. */
+export interface BodyMismatch {
+  /** Dotted, with `[n]` for array items; `""` for the body itself. */
+  fieldPath: string;
+  rule: BodyMismatchRule;
+  message: string;
+}
+
+/** What body a step sends (AP-033 FR-001). */
+export type StepBodyStatus = "sent" | "not-documented" | "documented-not-sent" | "unsupported-content-type";
+
+/** The editor's model for one step (AP-033 data-model `StepBodyEditModel`). */
+export interface StepBodyEditModel {
+  kind: "json" | "text";
+  /** The base body to edit: the edit, or the generated body; `""` when the step sends none. */
+  text: string;
+  edited: boolean;
+  /** Empty unless the step has a JSON edit. */
+  mismatches: BodyMismatch[];
+  /**
+   * AP-033 FR-009: the JSON body fields ApiPilot fills at run time (workflow variables, unique
+   * values, credentials), found by comparing the body as sent with the base body. The engineer's
+   * own `{{name}}` references are not listed. Empty for text bodies.
+   */
+  replacements: { fieldPath: string; reference: PreviewReference }[];
 }
 
 /** What will be tested and how (data-model.md `PerformancePlan`). Holds no values. */
@@ -221,6 +297,18 @@ export interface PerformancePlan {
    * here is shown as "used to acquire the run's credentials".
    */
   credentialProducerOperationKeys: string[];
+  /**
+   * AP-033: the engineer's body edits, sorted by `stepId`. Fingerprinted only when not empty, so a
+   * plan without edits keeps its fingerprint (specs/033 research R10). Emptied in run snapshots.
+   */
+  bodyEdits: BodyEdit[];
+  /** Derived, not fingerprinted (AP-033 FR-010). */
+  bodyEditNotices: BodyEditNotice[];
+  /**
+   * Not fingerprinted (AP-033 FR-018): operations whose edit the last rebuild discarded because the
+   * step's scenario changed. Cleared by the next plan edit or rebuild.
+   */
+  discardedBodyEdits: string[];
 }
 
 /**
@@ -263,6 +351,10 @@ export interface StepRequestPreview {
   auth: PreviewAuth;
   /** `text` is the body as sent, with each reference left as `{{name}}`. */
   body: { contentType: "json" | "text"; text: string; references: PreviewReference[] } | null;
+  /** AP-033 FR-001. */
+  bodyStatus: StepBodyStatus;
+  /** AP-033: `null` when the body cannot be edited (`not-documented`, `unsupported-content-type`). */
+  bodyEdit: StepBodyEditModel | null;
 }
 
 /**

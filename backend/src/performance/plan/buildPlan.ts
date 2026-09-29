@@ -1,6 +1,7 @@
-import type { PerformancePlan, PerformanceThreshold, TestGenerationWorkflow } from "@apipilot/shared-domain";
+import type { BodyEdit, PerformancePlan, PerformanceThreshold, TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { createLogger } from "../../logger";
 import { compareCodeUnits } from "../../postman/ordering";
+import { bodyEditNoticesOf } from "./bodyEdits";
 import { buildJourneys } from "./buildJourneys";
 import { stepsNeedingExpectedStatus, withSources, prefillExpectedStatuses } from "./expectedStatuses";
 import { canonicalJson, sha256Hex } from "./identifiers";
@@ -49,10 +50,15 @@ export function upstreamFingerprint(context: PerformanceContext): string {
 /**
  * The out-of-date check (FR-023): every plan field that changes the script, plus the upstream
  * fingerprint, so a revised scenario with an unchanged id still makes a script out of date.
- * `stepsNeedingExpectedStatus` and `credentialProducerOperationKeys` are derived and excluded.
+ * `stepsNeedingExpectedStatus` and `credentialProducerOperationKeys` are derived and excluded, as
+ * are AP-033's `bodyEditNotices` and `discardedBodyEdits`. `bodyEdits` counts only when it is not
+ * empty, so a plan without edits keeps the fingerprint it had before AP-033 (specs/033 research R10).
  */
 export function planFingerprint(
-  plan: Omit<PerformancePlan, "fingerprint" | "stepsNeedingExpectedStatus" | "credentialProducerOperationKeys">,
+  plan: Omit<
+    PerformancePlan,
+    "fingerprint" | "stepsNeedingExpectedStatus" | "credentialProducerOperationKeys" | "bodyEditNotices" | "discardedBodyEdits"
+  >,
 ): string {
   return sha256Hex(
     canonicalJson({
@@ -66,6 +72,7 @@ export function planFingerprint(
       userSuppliedValues: plan.userSuppliedValues,
       uniqueValueFields: plan.uniqueValueFields,
       upstreamFingerprint: plan.upstreamFingerprint,
+      ...(plan.bodyEdits.length > 0 ? { bodyEdits: plan.bodyEdits } : {}),
     }),
   );
 }
@@ -89,6 +96,21 @@ export interface PlanChoices {
   /** Journey and step order the user chose, kept where the same ids still exist (US4). */
   journeyOrder?: string[];
   stepOrder?: Map<string, string[]>;
+  /** AP-033: the engineer's body edits (specs/033 research R2, R9). */
+  bodyEdits: BodyEdit[];
+  /** AP-033 FR-018: carried until the next plan edit or rebuild. */
+  discardedBodyEdits?: string[];
+}
+
+/**
+ * AP-033 FR-018 (specs/033 research R9): an edit is kept while its step exists with the scenario it
+ * was made for, or while its operation is removed. Step ids are content-derived, so a restored
+ * operation gets the same step id, and its edit, back.
+ */
+function keptBodyEdits(bodyEdits: readonly BodyEdit[], editedStepIds: ReadonlySet<string>, excluded: ReadonlySet<string>): BodyEdit[] {
+  return bodyEdits
+    .filter((edit) => editedStepIds.has(edit.stepId) || excluded.has(edit.operationKey))
+    .sort((a, b) => compareCodeUnits(a.stepId, b.stepId));
 }
 
 /**
@@ -111,6 +133,7 @@ function defaultChoices(context: PerformanceContext): PlanChoices {
     loadProfile: startingProfile("smoke"),
     thresholds: [],
     expectedStatusCodes: new Map(),
+    bodyEdits: [],
   };
 }
 
@@ -119,7 +142,12 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   const auth = planAuth(context);
   const knownKeys = new Set(context.apiModel.operations.map((operation) => operationKeyOf(operation)));
   const excludedOperationKeys = [...new Set(choices.excludedOperationKeys.filter((key) => knownKeys.has(key)))].sort();
-  const built = buildJourneys(context, auth, new Set(excludedOperationKeys));
+  const built = buildJourneys(
+    context,
+    auth,
+    new Set(excludedOperationKeys),
+    new Map(choices.bodyEdits.map((edit) => [edit.stepId, edit])),
+  );
   const operationsByKey = new Map(context.apiModel.operations.map((operation) => [operationKeyOf(operation), operation]));
 
   let journeys = built.journeys.map((journey) => ({
@@ -148,7 +176,9 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   }
 
   const stepIds = new Set(journeys.flatMap((journey) => journey.steps.map((step) => step.id)));
+  const editedStepIds = new Set(journeys.flatMap((journey) => journey.steps.filter((step) => step.bodyEdited).map((step) => step.id)));
   const thresholds = choices.thresholds.filter((threshold) => threshold.scope.kind === "run" || stepIds.has(threshold.scope.stepId));
+  const uniqueValueFields = built.uniqueValueFields.filter((field) => stepIds.has(field.stepId));
   const plan = finalizePlan({
     source: context.source,
     excludedOperationKeys,
@@ -158,14 +188,18 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
     loadProfile: choices.loadProfile,
     thresholds,
     userSuppliedValues: listUserSuppliedValues(journeys, built.requests, auth),
-    uniqueValueFields: built.uniqueValueFields.filter((field) => stepIds.has(field.stepId)),
+    uniqueValueFields,
     upstreamFingerprint: upstreamFingerprint(context),
     credentialProducerOperationKeys: credentialProducerOperationKeys(auth),
+    bodyEdits: keptBodyEdits(choices.bodyEdits, editedStepIds, new Set(excludedOperationKeys)),
+    bodyEditNotices: bodyEditNoticesOf(journeys, built.requests, uniqueValueFields, built.generatedUniqueFields),
+    discardedBodyEdits: choices.discardedBodyEdits ?? [],
   });
   logger.info("performance_plan_built", {
     planSource: plan.source,
     journeyCount: plan.journeys.length,
     stepCount: plan.journeys.reduce((total, journey) => total + journey.steps.length, 0),
+    bodyEditCount: plan.bodyEdits.length,
   });
   return plan;
 }
@@ -180,12 +214,13 @@ export function rebuildPlan(previous: PerformancePlan, context: PerformanceConte
   const expectedStatusCodes = new Map(
     previous.journeys.flatMap((journey) => journey.steps.map((step) => [step.id, step.expectedStatuses.map((status) => status.code)] as const)),
   );
-  return assemblePlan(context, {
+  const rebuilt = assemblePlan(context, {
     excludedOperationKeys: previous.excludedOperationKeys,
     thinkTimeMs: previous.thinkTimeMs,
     loadProfile: previous.loadProfile,
     thresholds: previous.thresholds,
     expectedStatusCodes: new Map([...expectedStatusCodes].filter(([, codes]) => codes.length > 0)),
+    bodyEdits: previous.bodyEdits,
     ...(options.keepOrder
       ? {
           journeyOrder: previous.journeys.map((journey) => journey.id),
@@ -193,6 +228,11 @@ export function rebuildPlan(previous: PerformancePlan, context: PerformanceConte
         }
       : {}),
   });
+  // AP-033 FR-018: name the operations whose edit could not be kept, because their step is gone or
+  // now uses a different scenario. Not fingerprinted, so it is set after assembly.
+  const kept = new Set(rebuilt.bodyEdits.map((edit) => edit.stepId));
+  const discarded = [...new Set(previous.bodyEdits.filter((edit) => !kept.has(edit.stepId)).map((edit) => edit.operationKey))].sort(compareCodeUnits);
+  return { ...rebuilt, discardedBodyEdits: discarded };
 }
 
 /** The choices a plan currently carries, for re-assembly after an edit. */
@@ -209,5 +249,7 @@ export function choicesOf(plan: PerformancePlan): PlanChoices {
     ),
     journeyOrder: plan.journeys.map((journey) => journey.id),
     stepOrder: new Map(plan.journeys.map((journey) => [journey.id, journey.steps.map((step) => step.id)])),
+    bodyEdits: plan.bodyEdits,
+    discardedBodyEdits: plan.discardedBodyEdits,
   };
 }

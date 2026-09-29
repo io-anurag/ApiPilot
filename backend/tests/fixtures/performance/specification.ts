@@ -37,3 +37,17 @@ export async function loadQuickApiModel(): Promise<ApiModel> {
 export function openApiFixtureBuffer(filename: string): Buffer {
   return readFileSync(path.join(__dirname, "..", "openapi", filename));
 }
+
+/** The AP-033 body-edit fixture (`tests/fixtures/openapi/body-edits.yaml`, specs/033 tasks T001). */
+export const BODY_EDITS_SPECIFICATION_FILENAME = "body-edits.yaml";
+
+const bodyEditsFixturePath = path.join(__dirname, "..", "openapi", BODY_EDITS_SPECIFICATION_FILENAME);
+
+export function bodyEditsSpecificationBuffer(): Buffer {
+  return readFileSync(bodyEditsFixturePath);
+}
+
+export async function loadBodyEditsApiModel(): Promise<ApiModel> {
+  const { document, issues } = await validateSpec(yaml.load(readFileSync(bodyEditsFixturePath, "utf-8")));
+  return buildApiModel(document, issues);
+}

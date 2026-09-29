@@ -3,6 +3,7 @@ import { EnvironmentNotFoundError } from "../execution/errors";
 import { createLogger } from "../logger";
 import {
   DependencyOrderViolationError,
+  InvalidBodyEditError,
   InvalidExpectedStatusError,
   InvalidLoadProfileError,
   InvalidOrderError,
@@ -68,6 +69,7 @@ export function handleKnownError(req: Request, res: Response, startedAt: number,
   if (err instanceof InvalidLoadProfileError) return fail(req, res, startedAt, 400, "invalid_load_profile", err.message);
   if (err instanceof InvalidThresholdError) return fail(req, res, startedAt, 400, "invalid_threshold", err.message);
   if (err instanceof InvalidExpectedStatusError) return fail(req, res, startedAt, 400, "invalid_expected_status", err.message, { stepId: err.stepId });
+  if (err instanceof InvalidBodyEditError) return fail(req, res, startedAt, 400, err.code, err.message, { stepId: err.stepId, ...err.extra });
   if (err instanceof UnknownOperationError) return fail(req, res, startedAt, 400, "unknown_operation", err.message);
   if (err instanceof InvalidPlanUpdateError) return fail(req, res, startedAt, 400, "invalid_request", err.message);
   if (err instanceof EnvironmentNotFoundError) return fail(req, res, startedAt, 404, "environment_not_found", err.message);

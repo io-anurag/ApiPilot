@@ -96,6 +96,12 @@ export interface BuiltStepRequest {
   secretNames: Set<string>;
   authKind: StepAuthKind;
   schemeName: string | null;
+  /** AP-033 FR-010: workflow variables not applied because the edited body no longer has their field. */
+  droppedBodyConsumers?: string[];
+  /** AP-033 (research R4): names only a `{{name}}` the engineer wrote in the edited body refers to. */
+  bodyReferenceNames?: string[];
+  /** AP-033: of those, the ones that are the whole value of a `format: password` field. */
+  bodySecretReferenceNames?: string[];
 }
 
 export const UNIQUE_TOKEN_PREFIX = "apipilot_unique_";
@@ -227,6 +233,18 @@ export interface StepRequestOptions {
   consumes?: WorkflowVariable[];
   /** FR-016: body fields replaced by a per-iteration token. */
   uniqueFields?: { fieldPath: string; token: string }[];
+  /** AP-033: the scenario carries the engineer's edited body (research R4). */
+  bodyEdited?: boolean;
+}
+
+/** True when `body` has an object field at the dotted path (arrays are not entered, as in `setDotted`). */
+function hasDottedField(body: unknown, fieldPath: string): boolean {
+  let current: unknown = body;
+  for (const part of fieldPath.split(".")) {
+    if (current === null || typeof current !== "object" || Array.isArray(current) || !(part in current)) return false;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return true;
 }
 
 /** Builds one step's request template with the Postman request builder (FR-011). */
@@ -238,9 +256,15 @@ export function buildStepRequest(
   options: StepRequestOptions,
 ): BuiltStepRequest {
   const consumes = options.consumes ?? [];
+  // AP-033 (research R4): a body consumer whose field the engineer removed is not applied, because
+  // `applyWorkflowSubstitutions` would create the field again. Unedited steps keep every consumer.
+  const applied = options.bodyEdited
+    ? consumes.filter((variable) => variable.consumerLocation !== "body" || hasDottedField(scenario.request.body, variable.consumerField))
+    : consumes;
+  const droppedBodyConsumers = consumes.filter((variable) => !applied.includes(variable)).map((variable) => variable.name);
   let effective =
-    options.workflowId !== undefined && consumes.length > 0
-      ? applyWorkflowSubstitutions(scenario, options.workflowId, consumes)
+    options.workflowId !== undefined && applied.length > 0
+      ? applyWorkflowSubstitutions(scenario, options.workflowId, applied)
       : scenario;
 
   // Spec US1 AS3: a path parameter no workflow step produces is a user-supplied value. Removing
@@ -295,5 +319,6 @@ export function buildStepRequest(
     secretNames: new Set(variables.filter((variable) => variable.secret).map((variable) => variable.name)),
     authKind,
     schemeName: authKind === "none" ? null : schemeName,
+    ...(droppedBodyConsumers.length > 0 ? { droppedBodyConsumers } : {}),
   };
 }

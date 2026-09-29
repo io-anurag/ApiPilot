@@ -88,8 +88,16 @@ function toSummary(row: Omit<PerformanceRunRow, "plan_snapshot" | "progress" | "
   return summary;
 }
 
+/** A snapshot recorded before AP-033 has no body-edit fields; they read as empty. */
+const BODY_EDIT_DEFAULTS: Pick<PerformancePlan, "bodyEdits" | "bodyEditNotices" | "discardedBodyEdits"> = {
+  bodyEdits: [],
+  bodyEditNotices: [],
+  discardedBodyEdits: [],
+};
+
 function toRun(row: PerformanceRunRow): PerformanceRun {
-  const run: PerformanceRun = { ...toSummary(row), planSnapshot: JSON.parse(row.plan_snapshot) as PerformancePlan };
+  const planSnapshot: PerformancePlan = { ...BODY_EDIT_DEFAULTS, ...(JSON.parse(row.plan_snapshot) as PerformancePlan) };
+  const run: PerformanceRun = { ...toSummary(row), planSnapshot };
   if (row.progress) run.progress = JSON.parse(row.progress) as RunProgress;
   if (row.result) run.result = JSON.parse(row.result) as PerformanceResult;
   return run;

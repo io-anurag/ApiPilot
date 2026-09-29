@@ -134,6 +134,15 @@ about the plan.
   run-time `fill` escapes values as JSON-string content. The name goes into `envNames` and so into
   `requiredValues`, `userSuppliedValues`, the environment template and the checklist (FR-011) with
   no new code.
+- **Classification of engineer-written references** (decided by the user, 2026-09-29, at the start
+  of `/speckit-implement`). Today `listUserSuppliedValues` gives any name that is not the base URL,
+  a path parameter or an OAuth2 client value the source `credential` and `secret: true`, which is
+  right for generated bodies, where `{{name}}` only comes from credential substitution. A name that
+  appears only in a `{{name}}` the engineer wrote in an edited body gets a new source,
+  `body-reference`. It is secret when the reference is the whole value of a `format: password`
+  field (R8), or when the same name is secret elsewhere in the plan, and otherwise not secret.
+  `BuiltStepRequest` gains the set of such names, computed in `buildStepRequest` from the edit's
+  text before substitutions.
 - **Reserved names.** A reference whose name starts with `apipilot_unique_`, or equals a workflow
   variable name of the plan or the token variable of a token source, is refused with
   `reserved_reference`. It would otherwise be resolved as something the engineer did not mean.
@@ -175,6 +184,10 @@ The error names the step:
    the schema's is a mismatch (R7), not a refusal. (Amended 2026-09-29 by `/speckit-analyze`
    findings U1 and U2: a former check refused non-object top-level values, and the position was
    optional.)
+   A parsed value nested deeper than `MAX_TRAVERSAL_DEPTH` (50) levels is also `invalid_body`
+   ("nested deeper than 50 levels"). The depth is measured iteratively before any recursive
+   comparison or serialization, so a 64 KiB body of nested brackets cannot exhaust the stack. The
+   offset scanner is iterative for the same reason. (Added during implementation, 2026-09-29.)
 5. No reserved reference (R4): `reserved_reference`, naming the reference.
 6. No literal value in a sensitive field (R8): `body_secret_literal`, naming the field.
 

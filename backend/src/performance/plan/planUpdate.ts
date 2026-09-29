@@ -4,7 +4,8 @@ import type {
   PerformanceThresholdMetric,
   PerformanceThresholdScope,
 } from "@apipilot/shared-domain";
-import { InvalidOrderError, InvalidThresholdError, UnknownOperationError } from "../errors";
+import { InvalidOrderError, InvalidPlanUpdateError, InvalidThresholdError, UnknownOperationError } from "../errors";
+import { validateBodyEdits } from "./bodyEdits";
 import { assemblePlan, choicesOf } from "./buildPlan";
 import { normalizeExpectedStatuses, prefillExpectedStatuses } from "./expectedStatuses";
 import { canonicalJson, thresholdIdFor } from "./identifiers";
@@ -15,13 +16,10 @@ import { validateJourneyOrder, validateStepOrder } from "./validateOrder";
 /**
  * `PUT /plan` (contracts/performance-api.md). Every field sent is validated before any is
  * applied, so a rejected update leaves the plan exactly as it was. Fields not sent are unchanged.
+ * `InvalidPlanUpdateError` lives in `../errors` (so `bodyEdits.ts` can throw it without an import
+ * cycle) and is re-exported here for existing callers.
  */
-export class InvalidPlanUpdateError extends Error {
-  constructor(reason: string) {
-    super(reason);
-    this.name = "InvalidPlanUpdateError";
-  }
-}
+export { InvalidPlanUpdateError };
 
 const METRICS: ReadonlySet<string> = new Set(["p50", "p90", "p95", "p99", "error-rate"]);
 
@@ -103,6 +101,10 @@ export function applyPlanUpdate(plan: PerformancePlan, update: unknown, context:
     }
   }
   if ("journeyOrder" in body) choices.journeyOrder = validateJourneyOrder(plan, body.journeyOrder);
+  // AP-033 (specs/033 research R6): validated against the plan as it is, with the other fields.
+  if ("bodyEdits" in body) choices.bodyEdits = validateBodyEdits(plan, context, body.bodyEdits);
+  // AP-033 FR-018: a rebuild's discarded-edits notice lasts until the next plan edit (research R9).
+  choices.discardedBodyEdits = [];
 
   return assemblePlan(context, choices);
 }

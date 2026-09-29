@@ -74,6 +74,7 @@ What the editor needs for one step.
 | `text` | `string` | The base body to edit: the edit if there is one, otherwise the generated base body. JSON is formatted with `JSON.stringify(value, null, 2)`. It is empty when the step sends no body (`documented-not-sent`). |
 | `edited` | `boolean` | Whether an edit is stored for the step. |
 | `mismatches` | `BodyMismatch[]` | Empty unless `edited` and `kind` is `json`. |
+| `replacements` | `{ fieldPath; reference: PreviewReference }[]` | FR-009: the JSON fields ApiPilot fills at run time (workflow variable, unique value, credential), found by comparing the body as sent with the base body. The engineer's own `{{name}}` references are not listed. Empty for text bodies. (Added during implementation, 2026-09-29.) |
 
 ## Changed types
 
@@ -84,6 +85,12 @@ What the editor needs for one step.
 | `bodyEdits: BodyEdit[]` | New. It is fingerprinted only when not empty (R10), and emptied in run snapshots (R11). |
 | `bodyEditNotices: BodyEditNotice[]` | New, derived by `assemblePlan`, not fingerprinted. |
 | `discardedBodyEdits: string[]` | New. Operation keys whose edits a rebuild discarded (R9). Not fingerprinted; cleared by the next `PUT /plan` or rebuild. |
+
+### `UserSuppliedValueSource`
+
+Gains `"body-reference"`: a value referenced only by a `{{name}}` the engineer wrote in an edited
+body. `secret` is true when that reference fills a `format: password` field, or when the name is
+secret elsewhere in the plan (research R4).
 
 ### `PerformanceStep`
 

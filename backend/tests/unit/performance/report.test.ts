@@ -1,7 +1,8 @@
 import type { PerformanceResult, PerformanceRun, PerformanceThreshold } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { deriveFindings } from "../../../src/performance/report/findings";
-import { escapeHtml, formatCount, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
+import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
+import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
@@ -171,5 +172,41 @@ describe("HTML report (D17)", () => {
   it("formats numbers without the locale", () => {
     expect(formatCount(1234567)).toBe("1,234,567");
     expect(formatCount(1234.5)).toBe("1,234.5");
+  });
+});
+
+/** AP-033 FR-014 (specs/033-edit-step-request-body research R11; tasks T020). */
+describe("runs and reports of a plan with body edits", () => {
+  const BODY_MARKER = "EDITED-BODY-MARKER-4c1e";
+  const editedCreate = { ...create, bodyEdited: true as const };
+  const editedPlan = planFixture({
+    journeys: [journeyFixture({ id: "j1", steps: [editedCreate, evil] })],
+    bodyEdits: [{ stepId: "s-create", operationKey: "POST /orders", scenarioId: "sc-create", kind: "json", json: { note: BODY_MARKER } }],
+    discardedBodyEdits: ["GET /gone"],
+  });
+
+  it("stores a snapshot without body content, keeping which steps were edited", () => {
+    const snapshot = planSnapshotForRun(editedPlan);
+    expect(snapshot.bodyEdits).toEqual([]);
+    expect(snapshot.discardedBodyEdits).toEqual([]);
+    expect(snapshot.journeys[0].steps[0].bodyEdited).toBe(true);
+    expect(JSON.stringify(snapshot)).not.toContain(BODY_MARKER);
+    expect(editedPlan.bodyEdits).toHaveLength(1);
+  });
+
+  it("marks each edited step and counts them in provenance, with no body content", () => {
+    const run = completedRun({ planSnapshot: planSnapshotForRun(editedPlan) });
+    const html = renderHtmlReport({ ...run, result: withReportFields(result(), run) });
+    expect(html).toContain(BODY_EDITED_MARKER);
+    expect(html).toContain(escapeHtml(bodyEditProvenance(1)));
+    expect(bodyEditProvenance(1)).toBe("1 step sent a body written by the engineer, not generated from the specification.");
+    expect(bodyEditProvenance(3)).toBe("3 steps sent a body written by the engineer, not generated from the specification.");
+    expect(html).not.toContain(BODY_MARKER);
+  });
+
+  it("adds nothing to the report of a plan without edits", () => {
+    const html = renderHtmlReport(completedRun());
+    expect(html).not.toContain(BODY_EDITED_MARKER);
+    expect(html).not.toContain("written by the engineer");
   });
 });

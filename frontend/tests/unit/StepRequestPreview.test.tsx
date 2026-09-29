@@ -24,6 +24,8 @@ const PREVIEW: Preview = {
     text: '{"customerEmail":"{{apipilot_unique_0}}"}',
     references: [{ kind: "unique-per-iteration", name: "apipilot_unique_0", format: "email" }],
   },
+  bodyStatus: "sent",
+  bodyEdit: { kind: "json", text: '{\n  "customerEmail": "user@example.com"\n}', edited: false, mismatches: [], replacements: [] },
 };
 
 describe("StepRequestPreview", () => {
@@ -57,6 +59,37 @@ describe("StepRequestPreview", () => {
     render(<StepRequestPreview stepId="s-1" operationKey="GET /x" stepLabel={(id) => id} loadPreview={load} />);
     fireEvent.click(screen.getByText("Request"));
     expect(await screen.findByText("Not in this plan.")).toBeInTheDocument();
+  });
+
+  describe("says what body the step sends (AP-033 FR-001, tasks T012)", () => {
+    async function open(request: Preview) {
+      const load = vi.fn(async () => ({ ok: true as const, request }));
+      render(<StepRequestPreview stepId="s-1" operationKey={request.operationKey} stepLabel={(id) => id} loadPreview={load} />);
+      fireEvent.click(screen.getByText("Request"));
+      await screen.findByText(request.pathTemplate);
+    }
+
+    it("states that a request has no body", async () => {
+      await open({ ...PREVIEW, parameters: [], body: null, bodyStatus: "not-documented", bodyEdit: null });
+      expect(screen.getByText("This request has no body.")).toBeInTheDocument();
+      expect(screen.queryByTestId("code-block")).not.toBeInTheDocument();
+    });
+
+    it("states that the operation accepts a body this step does not send", async () => {
+      await open({ ...PREVIEW, parameters: [], body: null, bodyStatus: "documented-not-sent", bodyEdit: { kind: "json", text: "", edited: false, mismatches: [], replacements: [] } });
+      expect(screen.getByText("This operation accepts a body that this step does not send.")).toBeInTheDocument();
+    });
+
+    it("states that a form or multipart body cannot be edited", async () => {
+      await open({ ...PREVIEW, parameters: [], body: null, bodyStatus: "unsupported-content-type", bodyEdit: null });
+      expect(screen.getByText("Form and multipart bodies are shown but cannot be edited.")).toBeInTheDocument();
+    });
+
+    it("still shows a sent body with its reference notes", async () => {
+      await open(PREVIEW);
+      expect(screen.getByTestId("code-block")).toHaveTextContent('{"customerEmail":"{{apipilot_unique_0}}"}');
+      expect(screen.queryByText("This request has no body.")).not.toBeInTheDocument();
+    });
   });
 
   it("never renders a value for an environment entry", async () => {

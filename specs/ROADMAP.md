@@ -67,6 +67,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 | AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
+| AP-033 — Edit a Performance Step's Request Body *(post-MVP)* (`specs/033-edit-step-request-body`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 59 of 60 tasks done. On both performance paths, a step's request preview states its body or that it has none, and the engineer can edit a JSON or text body: ApiPilot still applies its own workflow variables, unique values and credentials to the edited base body, a `{{name}}` the engineer writes becomes a needed value (`body-reference`), `format: password` fields must hold a reference, schema differences are warnings, and edits can be reset one by one or all at once. Edits are kept while an operation is removed and discarded, with a note, when a rebuild changes the scenario. Runs store only a `bodyEdited` flag per step; the report marks those steps. Constitution v2.5.0 amended XVII for plan inputs the user edits. Real-k6 check passed (k6 v2.3.0). Version 19.10.0. See Next Actions #44 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -2735,6 +2736,7 @@ Implementation
       unrelated to this change: with `core.autocrlf=true` the golden fixtures in
       `backend/tests/fixtures/performance/golden/` are checked out with CRLF line endings while
       the renderer emits LF. `npm run lint` and `npm run build` are clean.
+    - Closed 2026-09-29: a root `.gitattributes` (`backend/tests/fixtures/**/golden/** text eol=lf`) pins the golden fixtures to LF on every checkout, so the comparison passes on Windows with `core.autocrlf=true`. CI (ubuntu-latest) never saw the failure because Linux checkouts keep LF. See entry 44.
     - Version bumped to 19.5.1 (root, backend, frontend, shared-domain).
 
 36. **Performance plan readability fixes; version 19.5.2 (2026-09-27).**
@@ -2943,3 +2945,41 @@ Implementation
       operation without a positive scenario) and the guided path's copy of the route in a browser.
     - Docs: USER_MANUAL §3.11 and troubleshooting; architecture.md "Frontend architecture".
     - Version bumped to 19.9.0 (root, backend, frontend, shared-domain).
+
+44. **AP-033 Edit a Performance Step's Request Body implemented; version 19.10.0 (2026-09-29).**
+    - Governance: constitution v2.5.0 (MINOR) amends XVII. A plan input the user edits, such as a
+      step's request body, is part of the approved plan, not an edit to the script. It adds three
+      conditions: edited content is written into the script only as data; secrets only as
+      `{{name}}` references, with literals refused in `format: password` fields; and edited steps
+      are marked in the plan, run snapshot and report without their content.
+      `specs/constitution.md` is resynced.
+    - Spec, plan, research (R1 to R14), data model, contracts, quickstart and tasks in
+      `specs/033-edit-step-request-body`. `/speckit-analyze` findings C1, I1, U1, U2, G1 and G2 were
+      resolved before implementation. During implementation the user chose the `body-reference`
+      classification for engineer-written references.
+    - Backend (`backend/src/performance/plan/`):
+      - `bodyEdits.ts`: `effectiveScenario`, the single place an edit is applied, used by
+        `buildJourneys` and `stepRequestFor`; `validateBodyEdits` with checks 1 to 6; the iterative
+        `jsonErrorOffset`; reserved names; the password-field check; engineer references; notices.
+      - `bodySchemaMismatches.ts`: schema-only warnings; `pattern` is never evaluated.
+      - `runSnapshot.ts`: `planSnapshotForRun`.
+      - Other changes: `PUT /plan {bodyEdits}` with six 400 refusals; the preview gains
+        `bodyStatus` and `bodyEdit` (the base body, mismatches and fields replaced at run time);
+        the report marks edited steps.
+      - The plan fingerprint and golden files are unchanged for plans without edits.
+    - Frontend: `StepBodyEditor` in the step's request preview (save, cancel, add, reset with
+      confirmation, refusals in place, fields replaced at run time, mismatch warnings). The table
+      shows a **Body edited** badge and chip and **Reset all edited bodies**. Notices appear in the
+      step details and the pending bar, a note names discarded edits, and the Removed view shows
+      kept edits read-only.
+    - Validation: `npm test` 2,043 passed, 0 failed, 7 skipped across 266 test files. The CRLF
+      failure of entry 35 is gone. `npm run lint` and `npm run build` are clean. The opt-in
+      `npm run test:k6-real -w backend` passed 4 of 4, including an edited-body run whose target
+      received the edited body with the unique email still varied. Outstanding: quickstart
+      scenarios 1 to 8 in a browser (`validation.md`).
+    - Also in this change: the selection bars of the operations table (**Remove from plan**,
+      **Restore to the plan**) are link-styled and sit next to **Clear selection**.
+    - Docs: USER_MANUAL §3.11 (editing a step's body; report marker); architecture.md "Step body
+      edits (AP-033)" and "Frontend architecture"; change notes in the AP-029 and AP-032
+      contracts.
+    - Version bumped to 19.10.0 (root, backend, frontend, shared-domain).

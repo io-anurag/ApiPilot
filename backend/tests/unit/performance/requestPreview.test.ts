@@ -4,7 +4,7 @@ import { StepNotFoundError } from "../../../src/performance/errors";
 import { buildPlan } from "../../../src/performance/plan/buildPlan";
 import { buildStepRequestPreview, previewValueOf } from "../../../src/performance/plan/requestPreview";
 import { SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { performanceContext, quickContext } from "../../fixtures/performance/context";
+import { bodyEditsContext, performanceContext, quickContext } from "../../fixtures/performance/context";
 
 /** AP-032 FR-008, US1 AS7 (specs/032-quick-performance-test research Q8, tasks T018). */
 
@@ -78,5 +78,60 @@ describe("buildStepRequestPreview", () => {
     const previews = plan.journeys.flatMap((journey) => journey.steps).map((step) => buildStepRequestPreview(plan, context, step.id));
     expect(JSON.stringify(previews)).not.toContain(SEEDED_CLIENT_SECRET);
     expect(previews).toHaveLength(plan.journeys.length);
+  });
+});
+
+/** AP-033 FR-001 (specs/033-edit-step-request-body research R12, tasks T011). */
+describe("the body a step sends", () => {
+  async function bodyPreviewOf(operationKey: string, context?: Awaited<ReturnType<typeof bodyEditsContext>>): Promise<StepRequestPreview> {
+    return previewOf(operationKey, context ?? (await bodyEditsContext()));
+  }
+
+  it("says an operation without a documented body has none, and offers no editor", async () => {
+    const preview = await bodyPreviewOf("GET /errors/conflict");
+    expect(preview.bodyStatus).toBe("not-documented");
+    expect(preview.body).toBeNull();
+    expect(preview.bodyEdit).toBeNull();
+  });
+
+  it("gives the editor the generated base body, before ApiPilot's substitutions", async () => {
+    const context = await bodyEditsContext();
+    const preview = await bodyPreviewOf("POST /orders", context);
+    const scenario = context.approvedScenarios.find((candidate) => candidate.operationPath === "/orders")!;
+    expect(preview.bodyStatus).toBe("sent");
+    expect(preview.body?.text).toContain("{{apipilot_unique_0}}");
+    expect(preview.bodyEdit).toEqual({
+      kind: "json",
+      text: JSON.stringify(scenario.request.body, null, 2),
+      edited: false,
+      mismatches: [],
+      replacements: [{ fieldPath: "customerEmail", reference: { kind: "unique-per-iteration", name: "apipilot_unique_0", format: "email" } }],
+    });
+    expect(preview.bodyEdit?.text).not.toContain("{{apipilot_unique_0}}");
+  });
+
+  it("says an operation with a documented body that this step does not send, with an empty editor", async () => {
+    const context = await bodyEditsContext({
+      mutateScenarios: (scenarios) =>
+        scenarios.map((scenario) =>
+          scenario.operationPath === "/profiles/{profileId}" ? { ...scenario, request: { ...scenario.request, body: undefined } } : scenario,
+        ),
+    });
+    const preview = await bodyPreviewOf("PATCH /profiles/{profileId}", context);
+    expect(preview.bodyStatus).toBe("documented-not-sent");
+    expect(preview.body).toBeNull();
+    expect(preview.bodyEdit).toEqual({ kind: "json", text: "", edited: false, mismatches: [], replacements: [] });
+  });
+
+  it("does not offer to edit a form or multipart body", async () => {
+    const preview = await bodyPreviewOf("POST /uploads");
+    expect(preview.bodyStatus).toBe("unsupported-content-type");
+    expect(preview.bodyEdit).toBeNull();
+  });
+
+  it("edits a text/* body as text", async () => {
+    const preview = await bodyPreviewOf("POST /notes");
+    expect(preview.bodyStatus).toBe("sent");
+    expect(preview.bodyEdit).toMatchObject({ kind: "text", text: "a", edited: false });
   });
 });

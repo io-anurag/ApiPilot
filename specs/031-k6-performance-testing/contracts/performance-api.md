@@ -43,6 +43,12 @@ pre-fetch.
 > `GET /plan/steps/:stepId/request` is added. The same routes also serve AP-032's
 > `/api/quick-performance`. See
 > [specs/032-quick-performance-test/contracts/changes-to-existing-apis.md](../../032-quick-performance-test/contracts/changes-to-existing-apis.md).
+>
+> **Changed by AP-033 (2026-09-29).** `PUT /plan` accepts `bodyEdits` and returns six new `400`
+> refusals. The plan gains `bodyEdits`, `bodyEditNotices` and `discardedBodyEdits`, and steps gain
+> an optional `bodyEdited`. The step preview gains `bodyStatus` and `bodyEdit`. Run snapshots store
+> no body. See
+> [specs/033-edit-step-request-body/contracts/](../../033-edit-step-request-body/contracts/).
 > The text below is AP-029's contract as written.
 
 ### `GET /plan`

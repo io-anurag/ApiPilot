@@ -1,0 +1,136 @@
+# AP-033 Edit a Performance Step's Request Body fixture (specs/033-edit-step-request-body, tasks
+# T001; quickstart prerequisites). Loaded through the quick path, it exercises:
+# - GET /errors/conflict        no request body: the preview says so and offers no editor (FR-001).
+# - POST /orders                a JSON body with a required integer `quantity` (minimum 1), a
+#                               `status` enum, a `format: email` field (unique per iteration), a
+#                               nested required `shipping.city`, an `items` array (maxItems 3) of
+#                               objects with a `sku` (maxLength 12), and a `note` with a `pattern`
+#                               that the mismatch checker must never evaluate (research R7).
+# - POST /accounts              a `pin` of `format: password`: a literal is refused (FR-012a).
+# - POST /notes                 a `text/plain` body, edited as text (no JSON checks).
+# - POST /uploads               `multipart/form-data`: shown but not editable.
+# - PATCH /profiles/{profileId} an optional JSON body. Its positive scenario does send one
+#                               (checked 2026-09-29), so `documented-not-sent` is covered by removing
+#                               the body from that scenario in the tests that need it.
+openapi: 3.0.3
+info:
+  title: Body Edits Fixture
+  version: "1.0"
+servers:
+  - url: https://example.invalid/api
+paths:
+  /errors/conflict:
+    get:
+      operationId: getConflict
+      responses:
+        "200":
+          description: OK
+  /orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, customerEmail, shipping]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                status:
+                  type: string
+                  enum: [new, paid]
+                customerEmail:
+                  type: string
+                  format: email
+                shipping:
+                  type: object
+                  required: [city]
+                  properties:
+                    city:
+                      type: string
+                items:
+                  type: array
+                  maxItems: 3
+                  items:
+                    type: object
+                    properties:
+                      sku:
+                        type: string
+                        maxLength: 12
+                note:
+                  type: string
+                  pattern: "^(a+)+$"
+      responses:
+        "201":
+          description: Created
+  /accounts:
+    post:
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, pin]
+              properties:
+                name:
+                  type: string
+                pin:
+                  type: string
+                  format: password
+      responses:
+        "201":
+          description: Created
+  /notes:
+    post:
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        "201":
+          description: Created
+  /uploads:
+    post:
+      operationId: upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Created
+  /profiles/{profileId}:
+    patch:
+      operationId: updateProfile
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+      responses:
+        "200":
+          description: Updated

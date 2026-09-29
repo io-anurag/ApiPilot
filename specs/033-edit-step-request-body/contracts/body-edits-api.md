@@ -62,10 +62,16 @@ saved if any field fails.
     "edited": true,
     "mismatches": [
       { "fieldPath": "quantity", "rule": "minimum", "message": "`quantity` is below the documented minimum of 1." }
+    ],
+    "replacements": [
+      { "fieldPath": "customerEmail", "reference": { "kind": "unique-per-iteration", "name": "apipilot_unique_0", "format": "email" } }
     ]
   }
 }
 ```
+
+- `bodyEdit.replacements` lists the JSON fields ApiPilot fills at run time, for the editor's
+  "Replaced at run time" list (FR-009). The engineer's own `{{name}}` references are not listed.
 
 - `bodyStatus` is `not-documented` (and `body` and `bodyEdit` are `null`) when the operation
   documents no request body.

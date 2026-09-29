@@ -1,11 +1,17 @@
 import type {
+  ApiOperation,
   PerformancePlan,
+  PerformanceStep,
   PreviewAuth,
   PreviewParameter,
   PreviewReference,
   PreviewValue,
   StepRequestPreview,
+  TestScenario,
 } from "@apipilot/shared-domain";
+import { MAX_TRAVERSAL_DEPTH, primaryRequestBodySchema } from "../../testDesign/requestHelpers";
+import { baseBodyText, bodyEditFor, bodyKindOf } from "./bodyEdits";
+import { bodySchemaMismatches, isOnlyReference } from "./bodySchemaMismatches";
 import { BASE_URL_VARIABLE } from "../../postman/artifactVariables";
 import { workflowVariableName } from "../../postman/workflowRendering";
 import { stepRequestFor } from "./planStepRequest";
@@ -40,7 +46,7 @@ function splitUrl(url: string): { path: string; query: string } {
 
 export function buildStepRequestPreview(plan: PerformancePlan, context: PerformanceContext, stepId: string): StepRequestPreview {
   const auth = planAuth(context);
-  const { step, operation, workflow, consumes, built } = stepRequestFor(plan, context, auth, stepId);
+  const { step, operation, scenario, workflow, consumes, built } = stepRequestFor(plan, context, auth, stepId);
   const template = built.template;
   const tokenSource = built.schemeName ? auth.tokenSources.get(built.schemeName) : undefined;
   const acquiresToken = tokenSource !== undefined && (built.authKind === "chained-login" || built.authKind === "oauth2-client-credentials");
@@ -99,5 +105,69 @@ export function buildStepRequestPreview(plan: PerformancePlan, context: Performa
       template.body === undefined
         ? null
         : { contentType: template.bodyKind ?? "text", text: template.body, references: [...new Set(templateReferences(template.body))].map(classify) },
+    ...bodyEditModel(plan, step, operation, scenario, template, classify),
+  };
+}
+
+type Replacement = { fieldPath: string; reference: PreviewReference };
+
+function childPath(fieldPath: string, name: string): string {
+  return fieldPath === "" ? name : `${fieldPath}.${name}`;
+}
+
+/** Every field whose sent value is one reference that the base body does not have (FR-009). */
+function collectReplacements(sent: unknown, base: unknown, fieldPath: string, depth: number, classify: (name: string) => PreviewReference, out: Replacement[]): void {
+  if (depth >= MAX_TRAVERSAL_DEPTH) return;
+  if (isOnlyReference(sent)) {
+    if (sent !== base) out.push({ fieldPath, reference: classify(templateReferences(sent)[0]) });
+    return;
+  }
+  if (Array.isArray(sent)) {
+    const items: unknown[] = Array.isArray(base) ? base : [];
+    sent.forEach((item, index) => collectReplacements(item, items[index], `${fieldPath}[${index}]`, depth + 1, classify, out));
+    return;
+  }
+  if (sent === null || typeof sent !== "object") return;
+  const record = base !== null && typeof base === "object" && !Array.isArray(base) ? (base as Record<string, unknown>) : {};
+  for (const [name, value] of Object.entries(sent as Record<string, unknown>)) {
+    collectReplacements(value, record[name], childPath(fieldPath, name), depth + 1, classify, out);
+  }
+}
+
+/**
+ * AP-033 FR-009: the JSON body fields ApiPilot fills at run time. The body as sent is ApiPilot's own
+ * serialization, so it always parses; the engineer's references are equal in both and not listed.
+ */
+function bodyReplacements(sentText: string | undefined, base: unknown, classify: (name: string) => PreviewReference): Replacement[] {
+  if (sentText === undefined) return [];
+  const out: Replacement[] = [];
+  collectReplacements(JSON.parse(sentText), base, "", 0, classify, out);
+  return out;
+}
+
+/**
+ * AP-033 FR-001 (specs/033 research R12): what body the step sends, and the editor's model. The
+ * editor edits the base body, before ApiPilot's substitutions (R1), so its text is the scenario's
+ * body as sent (edit applied), never the preview's as-sent text with ApiPilot's tokens.
+ */
+function bodyEditModel(
+  plan: PerformancePlan,
+  step: PerformanceStep,
+  operation: ApiOperation,
+  scenario: TestScenario,
+  template: { body?: string; bodyKind?: "json" | "text" },
+  classify: (name: string) => PreviewReference,
+): Pick<StepRequestPreview, "bodyStatus" | "bodyEdit"> {
+  const kind = bodyKindOf(operation);
+  if (kind === "none") return { bodyStatus: "not-documented", bodyEdit: null };
+  if (kind === "unsupported") return { bodyStatus: "unsupported-content-type", bodyEdit: null };
+  const edit = bodyEditFor(plan, step);
+  const schema = primaryRequestBodySchema(operation);
+  // FR-005: warnings for a JSON edit only; a generated body conforms by construction.
+  const mismatches = edit?.kind === "json" && schema ? bodySchemaMismatches(schema, edit.json) : [];
+  const replacements = kind === "json" && template.bodyKind === "json" ? bodyReplacements(template.body, scenario.request.body, classify) : [];
+  return {
+    bodyStatus: template.body === undefined ? "documented-not-sent" : "sent",
+    bodyEdit: { kind, text: baseBodyText(kind, scenario.request.body), edited: edit !== undefined, mismatches, replacements },
   };
 }

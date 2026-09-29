@@ -4,7 +4,7 @@ import { computeDeterministicRelationships } from "../../../src/dependencies/det
 import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
 import { withQuickScenarioIds } from "../../../src/performance/quick/quickScenarioIds";
 import { generatePositiveScenarios, generateTestModel } from "../../../src/testDesign/generateTestModel";
-import { loadPerformanceApiModel, loadQuickApiModel } from "./specification";
+import { loadBodyEditsApiModel, loadPerformanceApiModel, loadQuickApiModel } from "./specification";
 
 /**
  * A `PerformanceContext` for `performance.yaml` built with the real analysis, deterministic
@@ -44,4 +44,17 @@ export async function quickContext(source: "quick" | "guided" = "quick"): Promis
     relationships: [],
     source,
   };
+}
+
+/**
+ * AP-033: a quick `PerformanceContext` for `body-edits.yaml` (specs/033 tasks T001). `mutateScenarios`
+ * lets a test remove a body, for example to cover `documented-not-sent`.
+ */
+export async function bodyEditsContext(
+  overrides: { mutateScenarios?: (scenarios: TestScenario[]) => TestScenario[] } = {},
+): Promise<PerformanceContext> {
+  const apiModel = await loadBodyEditsApiModel();
+  let scenarios = withQuickScenarioIds(generatePositiveScenarios(apiModel));
+  if (overrides.mutateScenarios) scenarios = overrides.mutateScenarios(scenarios);
+  return { apiModel, approvedScenarios: scenarios, workflows: [], relationships: [], source: "quick" };
 }

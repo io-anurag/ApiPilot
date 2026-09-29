@@ -15,28 +15,43 @@ import type { AuthPlan, BuiltStepRequest } from "./stepRequest";
  * records names only; the values are the target environment's `variableValues` (encrypted by
  * AP-025) and are judged present per environment, never returned.
  */
+function sourceOf(name: string, built: BuiltStepRequest | undefined, oauth2ClientNames: ReadonlySet<string>): UserSuppliedValueSource {
+  if (name === BASE_URL_VARIABLE) return "base-url";
+  if (built?.pathParameterNames.includes(name)) return "path-parameter";
+  if (oauth2ClientNames.has(name)) return "oauth2-client";
+  // AP-033 (specs/033 research R4): a name only the engineer's edited body refers to.
+  if (built?.bodyReferenceNames?.includes(name)) return "body-reference";
+  return "credential";
+}
+
+function isSecret(name: string, source: UserSuppliedValueSource, built: BuiltStepRequest | undefined): boolean {
+  if (source === "oauth2-client" || source === "credential") return true;
+  return (built?.secretNames.has(name) ?? false) || (built?.bodySecretReferenceNames?.includes(name) ?? false);
+}
+
+function oauth2ClientNamesOf(auth: AuthPlan): Set<string> {
+  const names = new Set<string>();
+  for (const entry of auth.schemePlan.values()) {
+    if (entry.type === "oauth2") {
+      names.add(entry.variableNames.clientId);
+      names.add(entry.variableNames.clientSecret);
+    }
+  }
+  return names;
+}
+
 export function listUserSuppliedValues(
   journeys: PerformanceJourney[],
   requests: ReadonlyMap<string, BuiltStepRequest>,
   auth: AuthPlan,
 ): UserSuppliedValueRequirement[] {
-  const oauth2ClientNames = new Set<string>();
-  for (const entry of auth.schemePlan.values()) {
-    if (entry.type === "oauth2") {
-      oauth2ClientNames.add(entry.variableNames.clientId);
-      oauth2ClientNames.add(entry.variableNames.clientSecret);
-    }
-  }
-
+  const oauth2ClientNames = oauth2ClientNamesOf(auth);
   const byName = new Map<string, UserSuppliedValueRequirement>();
   for (const step of journeys.flatMap((journey) => journey.steps)) {
     const built = requests.get(step.id);
     for (const name of step.requiredValues) {
-      let source: UserSuppliedValueSource = "credential";
-      if (name === BASE_URL_VARIABLE) source = "base-url";
-      else if (built?.pathParameterNames.includes(name)) source = "path-parameter";
-      else if (oauth2ClientNames.has(name)) source = "oauth2-client";
-      const secret = source === "oauth2-client" || source === "credential" || (built?.secretNames.has(name) ?? false);
+      const source = sourceOf(name, built, oauth2ClientNames);
+      const secret = isSecret(name, source, built);
       const existing = byName.get(name);
       if (existing) {
         if (!existing.neededBySteps.includes(step.id)) existing.neededBySteps.push(step.id);

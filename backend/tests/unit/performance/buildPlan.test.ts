@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildPlan, rebuildPlan, upstreamFingerprint } from "../../../src/performance/plan/buildPlan";
+import { assemblePlan, buildPlan, choicesOf, rebuildPlan, upstreamFingerprint } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import { valueStatuses } from "../../../src/performance/plan/userSuppliedValues";
 import { pathParameterVariableName } from "../../../src/postman/artifactVariables";
 import { InvalidLoadProfileError, InvalidThresholdError, UnknownOperationError } from "../../../src/performance/errors";
 import { STARTING_STAGES, startingProfile, validateLoadProfile } from "../../../src/performance/plan/loadProfiles";
 import { environmentFixture, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { performanceContext, quickContext } from "../../fixtures/performance/context";
+import { bodyEditsContext, performanceContext, quickContext } from "../../fixtures/performance/context";
 
 /** US1 plan building (research D4, D5, D6, D13, D26; tasks T024 to T029). */
 
@@ -250,5 +250,49 @@ describe("operations in scope follow the API review selection (AP-032 FR-022, FR
     const plan = buildPlan(context);
     expect("scope" in plan).toBe(false);
     expect(() => applyPlanUpdate(plan, { scope: "all" }, context)).toThrow("The operations in scope follow the API review selection.");
+  });
+});
+
+/** AP-033 (specs/033-edit-step-request-body research R3, R10; tasks T008). */
+describe("body edits in the plan", () => {
+  // Captured on 2026-09-29 from the unchanged code, before body edits reached plan assembly.
+  const GUIDED_FINGERPRINT_BEFORE_AP033 = "bc88539bc6a4e34e92be582a3ec63b0dbbad5bfd643ad8664c5a56c68f037298";
+  const QUICK_FINGERPRINT_BEFORE_AP033 = "bb330c7d4fa69a067705e70d4933c6f821cb1d03ec48ebb4028d5c78e218e689";
+
+  it("keeps the fingerprint of a plan without edits exactly as it was (R10)", async () => {
+    expect(buildPlan(await performanceContext()).fingerprint).toBe(GUIDED_FINGERPRINT_BEFORE_AP033);
+    expect(buildPlan(await quickContext()).fingerprint).toBe(QUICK_FINGERPRINT_BEFORE_AP033);
+  });
+
+  it("applies an edit to the step's needed values, unique fields, marker and fingerprint", async () => {
+    const context = await bodyEditsContext();
+    const plan = buildPlan(context);
+    const step = plan.journeys.flatMap((journey) => journey.steps).find((candidate) => candidate.operationKey === "POST /orders")!;
+    expect(plan.uniqueValueFields.map((field) => field.fieldPath)).toEqual(["customerEmail"]);
+    const edited = assemblePlan(context, {
+      ...choicesOf(plan),
+      bodyEdits: [
+        { stepId: step.id, operationKey: step.operationKey, scenarioId: step.scenarioId, kind: "json", json: { quantity: 2, warehouseId: "{{warehouseId}}" } },
+      ],
+    });
+    const editedStep = edited.journeys.flatMap((journey) => journey.steps).find((candidate) => candidate.id === step.id)!;
+    expect(editedStep.bodyEdited).toBe(true);
+    expect(editedStep.requiredValues).toContain("warehouseId");
+    expect(edited.uniqueValueFields).toEqual([]);
+    expect(edited.bodyEdits).toHaveLength(1);
+    expect(edited.fingerprint).not.toBe(plan.fingerprint);
+    expect(plan.journeys.flatMap((journey) => journey.steps).every((candidate) => !("bodyEdited" in candidate))).toBe(true);
+  });
+
+  it("ignores an edit made for a different scenario of the step", async () => {
+    const context = await bodyEditsContext();
+    const plan = buildPlan(context);
+    const step = plan.journeys.flatMap((journey) => journey.steps).find((candidate) => candidate.operationKey === "POST /orders")!;
+    const edited = assemblePlan(context, {
+      ...choicesOf(plan),
+      bodyEdits: [{ stepId: step.id, operationKey: step.operationKey, scenarioId: "another-scenario", kind: "json", json: { quantity: 2 } }],
+    });
+    expect(edited.bodyEdits).toEqual([]);
+    expect(edited.fingerprint).toBe(plan.fingerprint);
   });
 });

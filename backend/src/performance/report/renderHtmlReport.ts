@@ -123,9 +123,10 @@ function stepRows(plan: PerformancePlan, result: PerformanceResult): string {
         ]
           .filter(Boolean)
           .join("<br>");
+        const edited = step.bodyEdited ? " · " + BODY_EDITED_MARKER : "";
         return [
           "<tr>",
-          `<td><span class="method">${escapeHtml(step.method)}</span> <code>${escapeHtml(step.path)}</code><div class="muted small">J${journeyIndex + 1} · step ${stepIndex + 1}</div></td>`,
+          `<td><span class="method">${escapeHtml(step.method)}</span> <code>${escapeHtml(step.path)}</code><div class="muted small">J${journeyIndex + 1} · step ${stepIndex + 1}${edited}</div></td>`,
           `<td><code>${escapeHtml(step.expectedStatuses.map((status) => status.code).join(", "))}</code></td>`,
           `<td class="num">${formatCount(measured?.requests ?? 0)}</td>`,
           `<td class="num">${ms(measured?.latencyMs?.p50)}</td>`,
@@ -282,8 +283,19 @@ export function renderHtmlReport(run: PerformanceRun): string {
 /** AP-032 FR-013: a quick plan's report says its scenarios were generated and never reviewed. */
 export const QUICK_PLAN_PROVENANCE = "Plan built by the quick performance test from generated positive scenarios that were not reviewed.";
 
+/** AP-033 FR-014: the marker on a step that sent an engineer-written body. The body itself is never recorded. */
+export const BODY_EDITED_MARKER = "Body edited by you";
+
+/** AP-033 FR-014 (constitution XI, XIII): how many steps sent a body the engineer wrote. */
+export function bodyEditProvenance(count: number): string {
+  const steps = count === 1 ? "1 step" : `${count} steps`;
+  return `${steps} sent a body written by the engineer, not generated from the specification.`;
+}
+
 function provenanceSection(plan: PerformancePlan): string {
   // A snapshot recorded before AP-032 has no `source`; it came from the guided workflow.
   const quick = plan.source === "quick" ? `<p>${escapeHtml(QUICK_PLAN_PROVENANCE)}</p>` : "";
-  return `<h2>Provenance</h2>${quick}${provenance(plan)}`;
+  const editedCount = plan.journeys.reduce((total, journey) => total + journey.steps.filter((step) => step.bodyEdited).length, 0);
+  const edited = editedCount > 0 ? `<p>${escapeHtml(bodyEditProvenance(editedCount))}</p>` : "";
+  return `<h2>Provenance</h2>${quick}${edited}${provenance(plan)}`;
 }

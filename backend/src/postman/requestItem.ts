@@ -45,8 +45,9 @@ import {
  * `{{baseUrl}}` variable, never a literal host (FR-008).
  */
 
-const JSON_CONTENT_TYPE = /^application\/(json|[\w.+-]*\+json)$/i;
-const TEXT_CONTENT_TYPE = /^text\//i;
+/** Also AP-033's test of which bodies can be edited as JSON or as text (performance/plan/bodyEdits.ts). */
+export const JSON_CONTENT_TYPE = /^application\/(json|[\w.+-]*\+json)$/i;
+export const TEXT_CONTENT_TYPE = /^text\//i;
 const PATH_PARAMETER_SEGMENT = /^\{(.+)\}$/;
 const ONLY_VARIABLE_REFERENCE = /^\{\{[^}]+\}\}$/;
 
