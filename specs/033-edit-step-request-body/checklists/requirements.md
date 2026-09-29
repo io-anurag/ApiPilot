@@ -40,6 +40,14 @@
   Clarifications. FR-005 now saves a schema mismatch with a warning; FR-012a refuses literal values
   in `format: password` fields; SC-003a added. Every item passes. The governance prerequisite,
   the MINOR amendment to XVII, is done in constitution v2.5.0 (2026-09-29).
+- Iteration 3 (2026-09-29, after `/speckit-analyze`):
+  - FR-012a no longer accepts the generated value in a `format: password` field (C1).
+  - SC-003 now says "a value from an environment" (I1).
+  - FR-004 accepts any JSON value and always gives the line and column (U1, U2).
+  - The empty-text edge case is narrowed (I2), "base body" is defined in FR-009 (I4), and US4 AS3
+    points to FR-008 (D1).
+
+  Every item still passes.
 - Terms such as "JSON", "`{{name}}` reference" and "script" are product-domain vocabulary shared
   with AP-029 and AP-032, not implementation choices.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

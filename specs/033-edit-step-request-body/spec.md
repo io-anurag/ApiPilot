@@ -135,25 +135,28 @@ script was marked out of date by the edit, and that generating twice gives byte-
 
 The body a step sends can hold references that are filled in at run time: an environment value
 such as a customer id, a value produced by an earlier step of a guided workflow, a value unique
-per virtual user and iteration, or a token. The engineer can keep, move or remove them while
-editing, and can add a reference to an environment value by writing `{{name}}`. Secret values are
-never shown in the editor and never become part of the body or the script.
+per virtual user and iteration, or a token. ApiPilot applies these to their fields after the
+edit, as it does for a generated body: the engineer keeps one by keeping its field and removes it
+by removing the field. The engineer can add a reference to an environment value anywhere by
+writing `{{name}}`. Secret values are never shown in the editor and never become part of the body
+or the script.
 
 **Why this priority**: A body edit that silently drops a workflow variable breaks the chain; one
 that pastes a password into the script breaks the constitution (XVIII). Editing without these
 rules is unsafe, so this story ships with Story 2.
 
 **Independent Test**: In a guided workflow journey, edit a step whose body carries a workflow
-variable and a unique email; move one reference, remove the other, add `{{warehouseId}}`, and
-verify the preview, the values checklist, the plan's notices and the script.
+variable and a unique email; change another value, remove the unique email's field, add
+`{{warehouseId}}`, and verify the preview, the values checklist, the plan's notices and the
+script.
 
 **Acceptance Scenarios**:
 
 1. **Given** a body carrying a unique-per-iteration field and a workflow variable, **When** the
    engineer edits other values and saves, **Then** both references keep working, and the preview
    still names each one's source.
-2. **Given** the same body, **When** the engineer removes the workflow variable's reference and
-   saves, **Then** the plan states that this step no longer uses the variable produced by the
+2. **Given** the same body, **When** the engineer removes the field the workflow variable fills
+   and saves, **Then** the plan states that this step no longer uses the variable produced by the
    earlier step, before the script is generated.
 3. **Given** an edited body, **When** the engineer adds `{{warehouseId}}` inside a string value
    and saves, **Then** `warehouseId` is listed as a value the target environment must supply, is
@@ -168,7 +171,8 @@ verify the preview, the values checklist, the plan's notices and the script.
 6. **Given** a body field the request schema declares `format: password`, **When** the engineer
    enters a literal value in it and saves, **Then** the edit is refused, the field is named, and
    the editor says to reference an environment value as `{{name}}` instead; a `{{name}}`
-   reference in that field is saved.
+   reference in that field is saved. The same refusal applies when the engineer changes only
+   another field and leaves the generated value in the password field.
 
 ---
 
@@ -192,7 +196,8 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
    one action and confirms, **Then** every step sends its generated body, and the confirmation
    stated how many steps would change.
 3. **Given** a plan with edited bodies, **When** the engineer looks at the table, **Then** the
-   number of steps with an edited body is shown, and those steps can be listed with one filter.
+   number of steps with an edited body is shown, and the filter of FR-008 lists them, so each can
+   be reset.
 
 ---
 
@@ -205,8 +210,9 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
   operation accepts a body that this step does not send, and the engineer can add one.
 - **A body that is not JSON** (a documented text content type): it is edited as text, without JSON
   checks; references work the same way.
-- **An empty edit**: saving an empty JSON body is refused as not well-formed. For a text body, an
-  empty body is sent as empty and the step is marked "Body edited".
+- **An empty edit**: saving an empty JSON body is refused as not well-formed. For a text body
+  whose generated body is not empty, an empty body is sent as empty and the step is marked "Body
+  edited"; where the step sends no body, saving an empty text body leaves it with none.
 - **An edit identical to the generated body**: saving it records no edit and shows no marker.
 - **A removed operation**: its preview in the Removed view stays read-only (AP-032 FR-024a). An
   edit made before removal is kept and comes back when the operation is restored, and the Removed
@@ -243,8 +249,10 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
   be able to edit the body the step sends, save the edit, or cancel it. Steps of removed or
   left-out operations MUST NOT be editable. This applies wherever the plan is shown: the quick
   path and the guided workflow's Performance Testing stage alike (AP-032 FR-012a).
-- **FR-004**: A JSON body MUST be well-formed JSON to be saved; otherwise the reason and position
-  of the error MUST be shown and nothing MUST be saved. A text body MUST be saved as entered.
+- **FR-004**: A JSON body MUST be well-formed JSON to be saved; otherwise the reason and the line
+  and column of the error MUST be shown and nothing MUST be saved. Any JSON value is accepted; a
+  top-level value whose type differs from the schema's is a mismatch (FR-005), not a refusal. A
+  text body MUST be saved as entered.
 - **FR-005**: A well-formed body that does not match the operation's request schema (a missing
   required property, a wrong type, a value outside a documented enum, format or bound) MUST be
   saved, and the step MUST show a warning listing each mismatch by field, in words, while the
@@ -261,24 +269,36 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
 
 **References and secrets**
 
-- **FR-009**: While editing, the engineer MUST be able to keep, move or remove any reference, and
-  MUST be able to add a reference to an environment value by writing `{{name}}` inside a string
-  value. A reference MUST be recognised in the edited body exactly as in a generated one.
+- **FR-009**: The engineer edits the step's **base body**: its body before ApiPilot's
+  substitutions (the generated body, or the engineer's earlier edit). ApiPilot MUST
+  apply to the edited body the references it applies to a generated one (workflow variables,
+  per-iteration unique fields and credentials), each at its field, and the editor MUST list which
+  fields are replaced at run time and by what. The engineer MUST be able to add a reference to an
+  environment value by writing `{{name}}` inside a JSON string value, or anywhere in a text body.
+  A reference MUST be recognised in the edited body exactly as in a generated one. A reference
+  whose name ApiPilot reserves for its own substitutions MUST NOT be accepted. (Amended
+  2026-09-29 by plan research R1: previously "keep, move or remove any reference". ApiPilot's
+  own references are bound to their fields, because their names are internal and positional.)
 - **FR-010**: A per-iteration unique field or workflow variable that the edited body no longer
   carries MUST stop being applied to that step, and the plan MUST say so in words, naming the
   field or variable, before the script is generated.
 - **FR-011**: An environment value referenced only by an edited body MUST be listed in the plan's
   needed values, the environment template and the values checklist, exactly as AP-029 FR-013 and
   FR-014 list other values. A value no longer referenced by any step MUST no longer be listed.
-- **FR-012**: No secret value MUST be shown in the editor, stored with the plan, or written into
-  the script. Secrets MUST reach the script only through the run's environment (constitution
-  XVIII). The editor MUST state that literal values are written into the script and that secrets
-  must be referenced as `{{name}}`.
-- **FR-012a**: An edit that puts a literal value (anything other than a single `{{name}}`
-  reference) in a body field the request schema declares `format: password` MUST NOT be saved; the
-  field MUST be named and the engineer told to reference an environment value instead. Sensitive
-  fields MUST be identified from the schema only; ApiPilot MUST NOT guess them from field names
-  (constitution XIV).
+- **FR-012**: No value from an environment MUST be shown in the editor, stored with the plan, or
+  written into the script. Secrets MUST reach the script only through the run's environment
+  (constitution XVIII). The editor MUST state that literal values are written into the script and
+  that secrets must be referenced as `{{name}}`. (Amended 2026-09-29 by plan research R8:
+  previously "No secret value". A literal the engineer types into a field the schema does not mark
+  as sensitive cannot be recognised as a secret without guessing, which FR-012a forbids; the
+  statement in the editor is the safeguard there.)
+- **FR-012a**: An edited body that holds anything other than a single `{{name}}` reference in a
+  field the request schema declares `format: password` MUST NOT be saved, even when the engineer
+  changed only other fields; the field MUST be named and the engineer told to reference an
+  environment value instead. Sensitive fields MUST be identified from the schema only; ApiPilot
+  MUST NOT guess them from field names (constitution XIV). (Amended 2026-09-29 by
+  `/speckit-analyze` finding C1: the generated value is no longer accepted, to meet constitution
+  v2.5.0 XVII as written.)
 - **FR-013**: The content of an edited body MUST be written into the script only as data, so that
   no content of a body can run as script code.
 
@@ -307,7 +327,7 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
 
 - **Body Edit**: the engineer's replacement for one step's body: the step it belongs to, the
   scenario that step used when the edit was made, the content type (JSON or text) and the edited
-  text with its `{{name}}` references. Kept with the performance plan for the session, never in
+  body (a JSON value or text) with any `{{name}}` references the engineer wrote. Kept with the performance plan for the session, never in
   run snapshots or reports. Its provenance is USER (constitution XIII).
 - **Step Request Preview** (existing, AP-032): gains the statement that a request has no body, or
   that the operation accepts a body the step does not send, whether the body shown is edited, and
@@ -324,8 +344,8 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
   send it in under 1 minute, without leaving the plan screen.
 - **SC-002**: For 100% of steps, the body shown in the preview and the body the generated script
   sends are identical, with and without edits.
-- **SC-003**: No generated script, stored plan, run snapshot or report contains a secret value or,
-  for snapshots and reports, any body content, in 100% of runs.
+- **SC-003**: No generated script, stored plan, run snapshot or report contains a value from an
+  environment, and no run snapshot or report contains any body content, in 100% of runs.
 - **SC-003a**: In 100% of attempts, an edit that puts a literal value in a `format: password` body
   field is refused before it is saved.
 - **SC-004**: Generating the script twice from the same plan and edits gives byte-identical files
@@ -339,9 +359,9 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
 
 - Only the body becomes editable. Headers, query and path parameters, authentication, and the
   method and path stay as generated; editing them remains out of scope.
-- Editing works on the body text as it is sent, including its `{{name}}` references, so that the
-  editor, the preview and the script describe the same thing. References are recognised inside
-  JSON string values, as they are in generated bodies today.
+- Editing works on the body before ApiPilot's substitutions (FR-009); the preview beside it shows
+  the body as sent, which is what the script sends. References are recognised inside JSON string
+  values, as they are in generated bodies today.
 - JSON and text bodies are supported because they are the content types the plan's requests use
   today. Form and multipart bodies are not edited in this feature.
 - The size limit for one edited body is 64 KiB, well above generated positive-scenario bodies; it
