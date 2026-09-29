@@ -1,6 +1,40 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.4.0 → 2.5.0 (minor: XVII's 2026-09-24 exception covers user-edited plan inputs)
+
+Trigger: the governance prerequisite for AP-033 (Edit a Performance Step's Request Body;
+specs/033-edit-step-request-body, Clarifications 2026-09-29). AP-033 lets the user edit the
+request body a performance step sends, and the generated k6 script sends the edited body. The
+exception covers "a k6 script that ApiPilot generated deterministically from a Performance Plan
+the user approved" and excludes a script "edited by a user"; whether a user-edited plan input
+falls on the permitted side was left to interpretation. The user chose an explicit amendment
+before AP-033's `/speckit-plan`, as was done for AP-029 and AP-032, over reading the wording as
+already covering it. The amendment adds conditions that apply to user-edited plan inputs, which
+is materially expanded guidance (MINOR), not a wording fix.
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: the 2026-09-24 exception now states that plan inputs
+    the user edits in the plan, including a step's request body (AP-033), are part of the
+    approved plan and not an edit to the script. Such a script is covered only when every
+    existing condition holds and, in addition: user-edited content is written into the script
+    only as data, never as code; it carries no secret value (secrets only as references resolved
+    from the run's environment, and a literal value in a `format: password` field is refused);
+    and the plan, run snapshot and report mark which steps carry user-edited content without
+    containing it. Editing the generated script itself, or supplying script code in a plan input,
+    stays excluded. The rationale records the reason. The 2026-09-20 exception is unchanged.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none.
+
+Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version in
+the same change.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.3.0 → 2.4.0 (minor: XVII's 2026-09-24 exception extended to AP-032)
 
 Trigger: the governance prerequisite for AP-032 (Quick Performance Test from a Specification;
@@ -417,12 +451,12 @@ verified by ApiPilot. It does not apply to ApiPilot-generated artifacts, AI outp
 OpenAPI specifications, and MUST NOT be cited to justify executing any other uploaded or
 generated content elsewhere in the system.
 
-**Exception (2026-09-24 amendment, extended 2026-09-27)**: A performance-testing feature (AP-029,
-k6 Performance Testing, and AP-032, Quick Performance Test from a Specification) MAY execute a k6
-script that ApiPilot generated deterministically (XVI) from a Performance Plan the user approved,
-only when all of the following hold. For AP-032, whose plan is built directly from an uploaded
-specification with generated positive scenarios that no one reviewed, "approved" means the user
-reviewed that plan, with every write operation it will send listed on the plan and at the run
+**Exception (2026-09-24 amendment, extended 2026-09-27 and 2026-09-29)**: A performance-testing
+feature (AP-029, k6 Performance Testing, and AP-032, Quick Performance Test from a Specification)
+MAY execute a k6 script that ApiPilot generated deterministically (XVI) from a Performance Plan
+the user approved, only when all of the following hold. For AP-032, whose plan is built directly
+from an uploaded specification with generated positive scenarios that no one reviewed,
+"approved" means the user reviewed that plan, with every write operation it will send listed on the plan and at the run
 trigger (specs/032-quick-performance-test FR-009, FR-011), and then triggered the run; the
 conditions are the same for both features:
 - the run starts only on the user's explicit action within ApiPilot for that run, and that
@@ -440,6 +474,21 @@ conditions are the same for both features:
   AI in script generation, execution or reporting;
 - the user interface states that load is generated from the machine running the ApiPilot
   backend.
+
+A Performance Plan's inputs that the user edits in the plan, including a request body edited
+for one step (AP-033, specs/033-edit-step-request-body), are part of the plan the user approved,
+not an edit to the script. A script generated from such a plan is still the script ApiPilot
+generated, and falls under this exception only when every condition above holds and, in
+addition:
+- ApiPilot writes user-edited content into the script only as data, never as script code;
+- user-edited content carries no secret value: secrets reach it only as references resolved from
+  the run's environment (XVIII), and a literal value in a field the request schema declares
+  sensitive (`format: password`) is refused before it is saved;
+- the plan marks each step that carries user-edited content, and the run's snapshot and report
+  record which steps did (XIII) without containing that content.
+
+Editing the generated script itself, or supplying script code in any plan input, remains
+excluded.
 
 This exception does not apply to AI output, uploaded OpenAPI specifications, uploaded, imported
 or user-edited scripts, or any other generated artifact, and MUST NOT be cited to justify
@@ -459,7 +508,12 @@ reach the runner, and the per-run trigger keeps load generation a deliberate hum
 local-only and no-secrets conditions preserve the privacy boundary. The 2026-09-27 extension to
 AP-032 keeps that footing: the script is still deterministic output from a plan the user
 reviewed. What AP-032 lacks is scenario review (XI), so the extension rests on the plan making
-every write operation visible before the run rather than on any loosened condition.
+every write operation visible before the run rather than on any loosened condition. The
+2026-09-29 clarification for AP-033 keeps the same footing again: what the user edits is an input
+to the plan they review, ApiPilot still generates every byte of the script, and writing edited
+content only as data keeps arbitrary content from reaching the runner as code. Stating this
+explicitly, rather than reading "edited by a user" as covering only the script, removes an
+ambiguity the exception would otherwise carry into every future plan edit.
 
 ### XVIII. Secrets Must Never Be Part of Generated Artifacts
 
@@ -680,4 +734,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.4.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-27
+**Version**: 2.5.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-29
