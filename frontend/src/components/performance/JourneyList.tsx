@@ -8,12 +8,21 @@ import {
   type PerformanceStep,
   type StepRequestPreview as Preview,
 } from "@apipilot/shared-domain";
-import type { PerformanceErrorResult, Result } from "../../services/performanceTestingClient";
+import type {
+  PerformanceErrorResult,
+  Result,
+} from "../../services/performanceTestingClient";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
-import { AUTH_LABEL, AUTH_SHORT_LABEL, choiceNote, environmentValuesOf, variablesFor } from "./performanceViewModel";
+import {
+  AUTH_LABEL,
+  AUTH_SHORT_LABEL,
+  choiceNote,
+  environmentValuesOf,
+  variablesFor,
+} from "./performanceViewModel";
 import { StepRequestPreview } from "./StepRequestPreview";
 import { WrappingPath } from "./WrappingPath";
 
@@ -30,10 +39,13 @@ const ROW_ACTION =
 const CHIP =
   "rounded-full border px-2.5 py-1 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 const CHIP_ON = "border-brand-600 bg-brand-600 text-white hover:bg-brand-700";
-const CHIP_OFF = "border-border bg-surface text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10";
+const CHIP_OFF =
+  "border-border bg-surface text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10";
 const EXPECTED_STATUS_HINT_ID = "performance-expected-status-hint";
 const WRITES = "WRITES";
 const ALL = "ALL";
+type DetailTab =
+  "request" | "parameters" | "expected-status" | "authentication" | "variables";
 
 /**
  * Asks the list, from outside it, to show every step still needing an expected status, to open one
@@ -43,7 +55,11 @@ const ALL = "ALL";
 export type ListRequest =
   | { readonly kind: "show-needs-status"; readonly nonce: number }
   | { readonly kind: "set-status"; readonly stepId: string; readonly nonce: number }
-  | { readonly kind: "open-operation"; readonly operationKey: string; readonly nonce: number };
+  | {
+      readonly kind: "open-operation";
+      readonly operationKey: string;
+      readonly nonce: number;
+    };
 
 type InventoryRow = {
   readonly journey: PerformanceJourney;
@@ -64,7 +80,9 @@ function isGroupedJourney(journey: PerformanceJourney): boolean {
 }
 
 function rowLabel({ journey, journeyIndex, stepIndex }: InventoryRow): string {
-  return isGroupedJourney(journey) ? `J${journeyIndex + 1}.${stepIndex + 1}` : `J${journeyIndex + 1}`;
+  return isGroupedJourney(journey)
+    ? `J${journeyIndex + 1}.${stepIndex + 1}`
+    : `J${journeyIndex + 1}`;
 }
 
 function ExpectedStatusEditor({
@@ -93,7 +111,10 @@ function ExpectedStatusEditor({
           The specification documents no success status. Set at least one.
         </p>
       )}
-      <ul className="flex flex-wrap gap-1.5" aria-label={`Expected status codes for ${step.operationKey}`}>
+      <ul
+        className="flex flex-wrap gap-1.5"
+        aria-label={`Expected status codes for ${step.operationKey}`}
+      >
         {step.expectedStatuses.map((status) => (
           <li
             key={status.code}
@@ -133,13 +154,18 @@ function ExpectedStatusEditor({
           placeholder="201 or 2XX"
           className="w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-100"
         />
-        <button type="button" disabled={disabled || !draft.trim()} onClick={add} className={ROW_ACTION}>
+        <button
+          type="button"
+          disabled={disabled || !draft.trim()}
+          onClick={add}
+          className={ROW_ACTION}
+        >
           Add
         </button>
       </div>
       <p id={EXPECTED_STATUS_HINT_ID} className="text-xs text-muted">
-        Expected status: a response with any other status counts as a failure. Add an exact code
-        such as 201, or a range such as 2XX for any 2xx.
+        Expected status: a response with any other status counts as a failure. Add an
+        exact code such as 201, or a range such as 2XX for any 2xx.
       </p>
     </div>
   );
@@ -238,13 +264,19 @@ export function JourneyList({
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
   /** AP-033: saves (or, with `null`, resets) a step's body; resolves to the refusal, or `null`. */
-  onSaveBody: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  onSaveBody: (
+    stepId: string,
+    input: BodyEditInput | null,
+  ) => Promise<PerformanceErrorResult | null>;
   /** AP-033 FR-017: resets every given step's body in one update, after confirmation. */
   onResetBodies: (stepIds: string[]) => void;
   /** AP-033 FR-010: references ApiPilot applies that an edited body no longer carries. */
   bodyEditNotices?: readonly BodyEditNotice[];
   /** AP-033 FR-020 (amended 2026-09-30): saves (or, with `null`, resets) a step's parameters. */
-  onSaveParameters: (stepId: string, input: ParameterEditInput | null) => Promise<PerformanceErrorResult | null>;
+  onSaveParameters: (
+    stepId: string,
+    input: ParameterEditInput | null,
+  ) => Promise<PerformanceErrorResult | null>;
   /**
    * AP-033 FR-023: per step id, the statuses it did not expect in the session's latest finished run,
    * as text (for example "400 × 7,422"). Absent when there is no finished run.
@@ -260,6 +292,7 @@ export function JourneyList({
   const [confirmingResetBodies, setConfirmingResetBodies] = useState(false);
   const [page, setPage] = useState(0);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
+  const [expandedTab, setExpandedTab] = useState<DetailTab>("request");
   // The id of the element to focus once the row it is in has rendered.
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -288,7 +321,10 @@ export function JourneyList({
     setNeedsStatusOnly(false);
     setPage(Math.floor(index / PAGE_SIZE));
     setExpandedStepId(stepId);
-    setPendingFocus(listRequest.kind === "set-status" ? `expected-${stepId}` : `step-toggle-${stepId}`);
+    setExpandedTab(listRequest.kind === "set-status" ? "expected-status" : "request");
+    setPendingFocus(
+      listRequest.kind === "set-status" ? `expected-${stepId}` : `step-toggle-${stepId}`,
+    );
   }, [listRequest, journeys]);
   useEffect(() => {
     if (!pendingFocus) return;
@@ -313,18 +349,28 @@ export function JourneyList({
   }
   const methods = [...methodCounts.keys()].sort((a, b) => a.localeCompare(b));
   const writeCount = rows.filter(({ step }) => writeEffectLabelOf(step.method)).length;
-  const needsStatusCount = rows.filter(({ step }) => step.expectedStatuses.length === 0).length;
+  const needsStatusCount = rows.filter(
+    ({ step }) => step.expectedStatuses.length === 0,
+  ).length;
   const bodyEditedCount = rows.filter(({ step }) => step.bodyEdited).length;
-  const failedLastRunCount = rows.filter(({ step }) => lastRunUnexpected?.has(step.id)).length;
+  const failedLastRunCount = rows.filter(({ step }) =>
+    lastRunUnexpected?.has(step.id),
+  ).length;
   const methodChips: { id: string; label: string; count: number }[] = [
     { id: ALL, label: "All", count: rows.length },
-    ...methods.map((method) => ({ id: method, label: method, count: methodCounts.get(method) ?? 0 })),
+    ...methods.map((method) => ({
+      id: method,
+      label: method,
+      count: methodCounts.get(method) ?? 0,
+    })),
     ...(writeCount > 0 ? [{ id: WRITES, label: "Writes", count: writeCount }] : []),
   ];
   // A filter whose chip is gone (its last matching step was removed from the plan, or given a
   // status) stops applying. Otherwise it would hide every remaining step, with no chip left to turn
   // it off. The effect below also clears it, so it does not come back on when a step is restored.
-  const activeMethod = methodChips.some((chip) => chip.id === methodFilter) ? methodFilter : ALL;
+  const activeMethod = methodChips.some((chip) => chip.id === methodFilter)
+    ? methodFilter
+    : ALL;
   const activeNeedsStatusOnly = needsStatusOnly && needsStatusCount > 0;
   const activeBodyEditedOnly = bodyEditedOnly && bodyEditedCount > 0;
   const activeFailedLastRunOnly = failedLastRunOnly && failedLastRunCount > 0;
@@ -333,13 +379,25 @@ export function JourneyList({
     if (activeNeedsStatusOnly !== needsStatusOnly) setNeedsStatusOnly(false);
     if (activeBodyEditedOnly !== bodyEditedOnly) setBodyEditedOnly(false);
     if (activeFailedLastRunOnly !== failedLastRunOnly) setFailedLastRunOnly(false);
-  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly, activeBodyEditedOnly, bodyEditedOnly, activeFailedLastRunOnly, failedLastRunOnly]);
+  }, [
+    activeMethod,
+    methodFilter,
+    activeNeedsStatusOnly,
+    needsStatusOnly,
+    activeBodyEditedOnly,
+    bodyEditedOnly,
+    activeFailedLastRunOnly,
+    failedLastRunOnly,
+  ]);
   const filteredRows = rows.filter(({ step }) => {
     const method = step.method.toUpperCase();
     const matchesMethod =
       activeMethod === ALL ||
-      (activeMethod === WRITES ? writeEffectLabelOf(method) !== null : method === activeMethod);
-    const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}${step.bodyEdited ? " body edited" : ""}${step.parametersEdited ? " parameters edited" : ""}`.toLowerCase();
+      (activeMethod === WRITES
+        ? writeEffectLabelOf(method) !== null
+        : method === activeMethod);
+    const text =
+      `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}${step.bodyEdited ? " body edited" : ""}${step.parametersEdited ? " parameters edited" : ""}`.toLowerCase();
     return (
       matchesMethod &&
       (!activeNeedsStatusOnly || step.expectedStatuses.length === 0) &&
@@ -350,14 +408,18 @@ export function JourneyList({
   });
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
-  const visibleRows = filteredRows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const visibleRows = filteredRows.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
   const journeyIds = journeys.map((journey) => journey.id);
   const stepLabel = (stepId: string) =>
     rows.find(({ step }) => step.id === stepId)?.step.operationKey ?? stepId;
   const presentKeys = new Set(rows.map(({ step }) => step.operationKey));
   const selectedKeys = [...selected].filter((key) => presentKeys.has(key));
   const visibleKeys = [...new Set(visibleRows.map(({ step }) => step.operationKey))];
-  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selected.has(key));
+  const allVisibleSelected =
+    visibleKeys.length > 0 && visibleKeys.every((key) => selected.has(key));
   const someVisibleSelected = visibleKeys.some((key) => selected.has(key));
 
   const resetPage = () => setPage(0);
@@ -379,6 +441,7 @@ export function JourneyList({
     });
   const openForStatus = (stepId: string) => {
     setExpandedStepId(stepId);
+    setExpandedTab("expected-status");
     setPendingFocus(`expected-${stepId}`);
   };
 
@@ -388,13 +451,21 @@ export function JourneyList({
     const { journey, journeyIndex, step } = row;
     if (isGroupedJourney(journey) && journey.id !== previousJourneyId) {
       body.push(
-        <tr key={`group-${journey.id}`} className="border-t border-border bg-chrome dark:bg-white/5">
+        <tr
+          key={`group-${journey.id}`}
+          className="border-t border-border bg-chrome dark:bg-white/5"
+        >
           <td className="px-3 py-1.5" />
-          <th scope="colgroup" colSpan={columnCount - 1} className="px-2 py-1.5 text-left text-xs font-normal">
+          <th
+            scope="colgroup"
+            colSpan={columnCount - 1}
+            className="px-2 py-1.5 text-left text-xs font-normal"
+          >
             <span className="font-mono font-semibold">J{journeyIndex + 1}</span>{" "}
             <span className="font-semibold">Workflow</span>{" "}
             <span className="text-muted">
-              · {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}, run in this order
+              · {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}, run in
+              this order
             </span>
           </th>
         </tr>,
@@ -407,7 +478,9 @@ export function JourneyList({
     const values = environmentValuesOf(step);
     let rowTone = "hover:bg-slate-50 dark:hover:bg-white/5";
     if (expanded) rowTone = "bg-brand-50 dark:bg-brand-500/10";
-    else if (needsStatus) rowTone = "bg-warning-50 hover:bg-warning-100 dark:bg-warning-500/5 dark:hover:bg-warning-500/10";
+    else if (needsStatus)
+      rowTone =
+        "bg-warning-50 hover:bg-warning-100 dark:bg-warning-500/5 dark:hover:bg-warning-500/10";
     body.push(
       <tr key={step.id} className={`border-t border-border ${rowTone}`}>
         <td className="px-3 py-1.5">
@@ -420,12 +493,17 @@ export function JourneyList({
           />
         </td>
         {showJourneyColumn && (
-          <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap text-muted">{rowLabel(row)}</td>
+          <td className="px-2 py-1.5 font-mono text-xs whitespace-nowrap text-muted">
+            {rowLabel(row)}
+          </td>
         )}
         <td className="px-2 py-1.5">
           <button
             type="button"
-            onClick={() => setExpandedStepId(expanded ? null : step.id)}
+            onClick={() => {
+              setExpandedStepId(expanded ? null : step.id);
+              if (!expanded) setExpandedTab("request");
+            }}
             aria-expanded={expanded}
             aria-controls={expanded ? `performance-step-details-${step.id}` : undefined}
             id={`step-toggle-${step.id}`}
@@ -439,8 +517,12 @@ export function JourneyList({
             <WrappingPath path={step.path} />
             {effect && <StatusBadge label={effect} tone="warning" />}
             {step.bodyEdited && <StatusBadge label="Body edited" tone="info" />}
-            {step.parametersEdited && <StatusBadge label="Parameters edited" tone="info" />}
-            {lastRunUnexpected?.has(step.id) && <StatusBadge label="Failed last run" tone="danger" />}
+            {step.parametersEdited && (
+              <StatusBadge label="Parameters edited" tone="info" />
+            )}
+            {lastRunUnexpected?.has(step.id) && (
+              <StatusBadge label="Failed last run" tone="danger" />
+            )}
           </button>
         </td>
         <td className="px-2 py-1.5 whitespace-nowrap">
@@ -468,7 +550,10 @@ export function JourneyList({
           {values.length > 0 ? (
             <span className="flex max-w-56 flex-wrap gap-1">
               {values.map((name) => (
-                <span key={name} className="rounded bg-slate-100 px-1 font-mono text-xs dark:bg-white/10">
+                <span
+                  key={name}
+                  className="rounded bg-slate-100 px-1 font-mono text-xs dark:bg-white/10"
+                >
                   {name}
                 </span>
               ))}
@@ -482,7 +567,10 @@ export function JourneyList({
     if (expanded) {
       body.push(
         <tr key={`${step.id}-details`} id={`performance-step-details-${step.id}`}>
-          <td colSpan={columnCount} className="border-t border-border bg-chrome px-4 py-4 dark:bg-white/5">
+          <td
+            colSpan={columnCount}
+            className="border-t border-border bg-chrome px-4 py-4 dark:bg-white/5"
+          >
             <OperationInspector
               row={row}
               busy={busy}
@@ -491,7 +579,10 @@ export function JourneyList({
               loadPreview={loadPreview}
               onExpectedStatuses={onExpectedStatuses}
               onRemoveOperation={(operationKey) =>
-                onRemoveOperations([operationKey], `${operationKey} removed from the plan.`)
+                onRemoveOperations(
+                  [operationKey],
+                  `${operationKey} removed from the plan.`,
+                )
               }
               onStepOrder={onStepOrder}
               onJourneyOrder={onJourneyOrder}
@@ -499,6 +590,8 @@ export function JourneyList({
               onSaveParameters={onSaveParameters}
               lastRunUnexpected={lastRunUnexpected?.get(step.id)}
               notices={bodyEditNotices.filter((notice) => notice.stepId === step.id)}
+              activeTab={expandedTab}
+              onTabChange={setExpandedTab}
             />
           </td>
         </tr>,
@@ -521,7 +614,11 @@ export function JourneyList({
             className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-100"
           />
         </label>
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Filter operations by method">
+        <div
+          className="flex flex-wrap gap-1"
+          role="group"
+          aria-label="Filter operations by method"
+        >
           {methodChips.map((chip) => (
             <button
               key={chip.id}
@@ -576,7 +673,12 @@ export function JourneyList({
             >
               Body edited · {bodyEditedCount}
             </button>
-            <button type="button" className={ROW_ACTION} disabled={busy} onClick={() => setConfirmingResetBodies(true)}>
+            <button
+              type="button"
+              className={ROW_ACTION}
+              disabled={busy}
+              onClick={() => setConfirmingResetBodies(true)}
+            >
               Reset all edited bodies
             </button>
           </>
@@ -588,13 +690,19 @@ export function JourneyList({
             confirmLabel="Reset bodies"
             onConfirm={() => {
               setConfirmingResetBodies(false);
-              onResetBodies(rows.filter(({ step }) => step.bodyEdited).map(({ step }) => step.id));
+              onResetBodies(
+                rows.filter(({ step }) => step.bodyEdited).map(({ step }) => step.id),
+              );
             }}
             onCancel={() => setConfirmingResetBodies(false)}
           />
         )}
         <div className="ml-auto">
-          <RemoveByMethodMenu methods={methods} busy={busy} onRemoveMethod={onRemoveMethod} />
+          <RemoveByMethodMenu
+            methods={methods}
+            busy={busy}
+            onRemoveMethod={onRemoveMethod}
+          />
         </div>
       </div>
 
@@ -621,7 +729,11 @@ export function JourneyList({
             >
               Remove from plan
             </button>
-            <button type="button" className={BUTTON_STYLES.ghost} onClick={() => setSelected(new Set())}>
+            <button
+              type="button"
+              className={BUTTON_STYLES.ghost}
+              onClick={() => setSelected(new Set())}
+            >
               Clear selection
             </button>
           </div>
@@ -629,7 +741,10 @@ export function JourneyList({
       )}
 
       <div className="overflow-x-auto rounded-md border border-border bg-surface">
-        <table aria-label="Performance plan operations" className="w-full min-w-180 border-collapse text-sm">
+        <table
+          aria-label="Performance plan operations"
+          className="w-full min-w-180 border-collapse text-sm"
+        >
           <thead className="bg-chrome text-left text-xs text-muted dark:bg-white/5">
             <tr>
               <th scope="col" className="w-8 px-3 py-2">
@@ -638,7 +753,8 @@ export function JourneyList({
                   aria-label="Select every operation shown"
                   checked={allVisibleSelected}
                   ref={(element) => {
-                    if (element) element.indeterminate = someVisibleSelected && !allVisibleSelected;
+                    if (element)
+                      element.indeterminate = someVisibleSelected && !allVisibleSelected;
                   }}
                   onChange={(event) => setVisibleSelected(event.target.checked)}
                   className="accent-brand-600"
@@ -666,7 +782,9 @@ export function JourneyList({
           <tbody>{body}</tbody>
         </table>
         {visibleRows.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted">No operations match these filters.</p>
+          <p className="p-6 text-center text-sm text-muted">
+            No operations match these filters.
+          </p>
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
@@ -702,9 +820,16 @@ export function JourneyList({
 }
 
 /** AP-033 FR-010: a reference ApiPilot applies that this step's edited body no longer carries, in words. */
-function bodyNoticeText(notice: BodyEditNotice, step: PerformanceStep, stepLabel: (stepId: string) => string): string {
-  if (notice.kind === "unique-field-dropped") return `This step no longer sends a unique value for ${notice.name}.`;
-  const producer = step.variableBindings.find((binding) => binding.role === "consumes" && binding.variable === notice.name)?.producerStepId;
+function bodyNoticeText(
+  notice: BodyEditNotice,
+  step: PerformanceStep,
+  stepLabel: (stepId: string) => string,
+): string {
+  if (notice.kind === "unique-field-dropped")
+    return `This step no longer sends a unique value for ${notice.name}.`;
+  const producer = step.variableBindings.find(
+    (binding) => binding.role === "consumes" && binding.variable === notice.name,
+  )?.producerStepId;
   return producer
     ? `This step no longer sends the value of ${notice.name} from ${stepLabel(producer)}.`
     : `This step no longer sends the value of ${notice.name} from an earlier step.`;
@@ -724,6 +849,8 @@ function OperationInspector({
   onSaveParameters,
   lastRunUnexpected,
   notices,
+  activeTab,
+  onTabChange,
 }: Readonly<{
   row: InventoryRow;
   busy: boolean;
@@ -734,76 +861,159 @@ function OperationInspector({
   onRemoveOperation: (operationKey: string) => void;
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
-  onSaveBody: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
-  onSaveParameters: (stepId: string, input: ParameterEditInput | null) => Promise<PerformanceErrorResult | null>;
+  onSaveBody: (
+    stepId: string,
+    input: BodyEditInput | null,
+  ) => Promise<PerformanceErrorResult | null>;
+  onSaveParameters: (
+    stepId: string,
+    input: ParameterEditInput | null,
+  ) => Promise<PerformanceErrorResult | null>;
   /** AP-033 FR-023: the statuses this step did not expect in the latest finished run. */
   lastRunUnexpected?: string;
   notices: readonly BodyEditNotice[];
+  activeTab: DetailTab;
+  onTabChange: (tab: DetailTab) => void;
 }>) {
   const { journey, journeyIndex, step, stepIndex } = row;
   const stepIds = journey.steps.map((candidate) => candidate.id);
   const grouped = isGroupedJourney(journey);
   const variables = variablesFor(step);
   const note = choiceNote(step);
+  const tabs: ReadonlyArray<{ id: DetailTab; label: string }> = [
+    { id: "request", label: "Request" },
+    { id: "parameters", label: "Parameters" },
+    { id: "expected-status", label: "Expected status" },
+    { id: "authentication", label: "Authentication" },
+    { id: "variables", label: "Variables" },
+  ];
+  const tabId = (tab: DetailTab) => `performance-step-${step.id}-${tab}-tab`;
+  const panelId = (tab: DetailTab) => `performance-step-${step.id}-${tab}-panel`;
   return (
     <section aria-label={`Details for ${step.operationKey}`} className="space-y-3">
-      <div className="grid gap-5 lg:grid-cols-5">
-        <div className="min-w-0 space-y-2 lg:col-span-3">
-          <p className="text-sm">
-            <span className="text-xs font-medium text-muted">Scenario</span>{" "}
-            <span>{step.scenarioDescription}</span>
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {note && <span className="text-xs text-muted">{note}</span>}
-            {step.dependency && (
-              <StatusBadge label={`${step.dependency.confidence} dependency`} tone="success" />
-            )}
-          </div>
-          {notices.length > 0 && (
-            <ul className="space-y-0.5 text-xs text-warning-700 dark:text-warning-100" aria-label={`Notes on the body of ${step.operationKey}`}>
-              {notices.map((notice) => (
-                <li key={`${notice.kind}-${notice.name}`}>{bodyNoticeText(notice, step, stepLabel)}</li>
-              ))}
-            </ul>
+      <div className="space-y-2">
+        <p className="text-sm">
+          <span className="text-xs font-medium text-muted">Scenario</span>{" "}
+          <span>{step.scenarioDescription}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {note && <span className="text-xs text-muted">{note}</span>}
+          {step.dependency && (
+            <StatusBadge
+              label={`${step.dependency.confidence} dependency`}
+              tone="success"
+            />
           )}
-          {lastRunUnexpected && (
-            <p role="note" className="rounded-md border border-danger-500 bg-danger-50 px-3 py-2 text-xs text-danger-700 dark:bg-danger-500/10 dark:text-danger-100">
-              <span className="font-semibold">Failed last run:</span> the server answered {lastRunUnexpected}, which this step does not expect. Open{" "}
-              <span className="font-semibold">Request</span> to check the parameters, headers and body it sends, and edit them there.
-            </p>
-          )}
-          <StepRequestPreview
-            stepId={step.id}
-            operationKey={step.operationKey}
-            stepLabel={stepLabel}
-            loadPreview={loadPreview}
-            onSaveBody={onSaveBody}
-            onSaveParameters={onSaveParameters}
-            busy={busy}
-          />
         </div>
-        <div className="space-y-3 text-sm lg:col-span-2">
-          <div>
-            <p className="mb-1 text-xs font-medium text-muted">Expected status</p>
+        {notices.length > 0 && (
+          <ul
+            className="space-y-0.5 text-xs text-warning-700 dark:text-warning-100"
+            aria-label={`Notes on the body of ${step.operationKey}`}
+          >
+            {notices.map((notice) => (
+              <li key={`${notice.kind}-${notice.name}`}>
+                {bodyNoticeText(notice, step, stepLabel)}
+              </li>
+            ))}
+          </ul>
+        )}
+        {lastRunUnexpected && (
+          <p
+            role="note"
+            className="rounded-md border border-danger-500 bg-danger-50 px-3 py-2 text-xs text-danger-700 dark:bg-danger-500/10 dark:text-danger-100"
+          >
+            <span className="font-semibold">Failed last run:</span> the server answered{" "}
+            {lastRunUnexpected}, which this step does not expect.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <div
+          role="tablist"
+          aria-label={`Step details for ${step.operationKey}`}
+          className="flex overflow-x-auto border-b border-border"
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              id={tabId(tab.id)}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={panelId(tab.id)}
+              onClick={() => onTabChange(tab.id)}
+              className={`shrink-0 border-b-2 px-3 py-2 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${activeTab === tab.id ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div
+          id={panelId(activeTab)}
+          role="tabpanel"
+          aria-labelledby={tabId(activeTab)}
+          className="min-h-36 py-4 text-sm"
+        >
+          {activeTab === "request" && (
+            <StepRequestPreview
+              stepId={step.id}
+              operationKey={step.operationKey}
+              stepLabel={stepLabel}
+              loadPreview={loadPreview}
+              onSaveBody={onSaveBody}
+              onSaveParameters={onSaveParameters}
+              busy={busy}
+              section="request"
+              autoLoad
+            />
+          )}
+          {activeTab === "parameters" && (
+            <StepRequestPreview
+              stepId={step.id}
+              operationKey={step.operationKey}
+              stepLabel={stepLabel}
+              loadPreview={loadPreview}
+              onSaveBody={onSaveBody}
+              onSaveParameters={onSaveParameters}
+              busy={busy}
+              section="parameters"
+              autoLoad
+            />
+          )}
+          {activeTab === "expected-status" && (
             <ExpectedStatusEditor
               step={step}
               disabled={busy}
               onChange={(codes) => onExpectedStatuses(step.id, codes)}
             />
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <dt className="text-muted">Authentication</dt>
-              <dd className="mt-1">
+          )}
+          {activeTab === "authentication" && (
+            <div className="space-y-3">
+              <p>
                 {AUTH_LABEL[step.auth.kind]}
                 {step.auth.schemeName && ` · ${step.auth.schemeName}`}
-              </dd>
+              </p>
+              <StepRequestPreview
+                stepId={step.id}
+                operationKey={step.operationKey}
+                stepLabel={stepLabel}
+                loadPreview={loadPreview}
+                onSaveBody={onSaveBody}
+                onSaveParameters={onSaveParameters}
+                busy={busy}
+                section="authentication"
+                autoLoad
+              />
             </div>
-            <div>
-              <dt className="text-muted">Variables</dt>
-              <dd className="mt-1">{variables.length > 0 ? variables.join(", ") : "None"}</dd>
-            </div>
-          </dl>
+          )}
+          {activeTab === "variables" && (
+            <p>
+              {variables.length > 0
+                ? variables.join(", ")
+                : "No environment or workflow variables are used by this request."}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
@@ -834,7 +1044,11 @@ function OperationInspector({
           type="button"
           className={ROW_ACTION}
           disabled={busy || journeyIndex === 0}
-          aria-label={grouped ? `Move journey ${journeyIndex + 1} up` : `Move ${step.operationKey} up`}
+          aria-label={
+            grouped
+              ? `Move journey ${journeyIndex + 1} up`
+              : `Move ${step.operationKey} up`
+          }
           onClick={() => onJourneyOrder(move(journeyIds, journeyIndex, -1))}
         >
           {grouped ? "Move journey up" : "Move up"}
@@ -843,7 +1057,11 @@ function OperationInspector({
           type="button"
           className={ROW_ACTION}
           disabled={busy || journeyIndex === journeyIds.length - 1}
-          aria-label={grouped ? `Move journey ${journeyIndex + 1} down` : `Move ${step.operationKey} down`}
+          aria-label={
+            grouped
+              ? `Move journey ${journeyIndex + 1} down`
+              : `Move ${step.operationKey} down`
+          }
           onClick={() => onJourneyOrder(move(journeyIds, journeyIndex, 1))}
         >
           {grouped ? "Move journey down" : "Move down"}

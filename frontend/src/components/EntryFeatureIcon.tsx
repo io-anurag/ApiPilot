@@ -1,7 +1,10 @@
 export type EntryFeatureIconName =
   "direct" | "visible" | "local" | "import" | "review" | "control";
 
-export function EntryFeatureIcon({ name }: Readonly<{ name: EntryFeatureIconName }>) {
+export function EntryFeatureIcon({
+  name,
+  tone = "brand",
+}: Readonly<{ name: EntryFeatureIconName; tone?: "brand" | "inverse" }>) {
   const paths: Record<EntryFeatureIconName, React.ReactNode> = {
     direct: <path d="m5 12 5 5L20 7" />,
     visible: (
@@ -42,7 +45,7 @@ export function EntryFeatureIcon({ name }: Readonly<{ name: EntryFeatureIconName
       fill="none"
       stroke="currentColor"
       strokeWidth={1.75}
-      className="h-4 w-4 text-brand-700 dark:text-brand-300"
+      className={`h-4 w-4 ${tone === "inverse" ? "text-white" : "text-brand-700 dark:text-brand-300"}`}
       aria-hidden="true"
     >
       {paths[name]}

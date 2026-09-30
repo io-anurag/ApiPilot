@@ -70,10 +70,13 @@ describe("PerformanceTestingStage", () => {
     const inventory = operationInventory();
     expect(inventory).toHaveTextContent("POST");
     expect(inventory).toHaveTextContent("GET");
-    fireEvent.click(within(inventory).getByRole("button", { name: "Details of POST /orders" }));
+    fireEvent.click(
+      within(inventory).getByRole("button", { name: "Details of POST /orders" }),
+    );
     expect(screen.getByText("Create order")).toBeInTheDocument();
     expect(screen.getByText("CONFIRMED dependency")).toBeInTheDocument();
     expect(screen.getByText("Rule-generated")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Expected status" }));
     expect(screen.getByText("from specification")).toBeInTheDocument();
   });
 
@@ -82,8 +85,11 @@ describe("PerformanceTestingStage", () => {
     render(<PerformanceTestingStage />);
     await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
+      within(operationInventory()).getByRole("button", {
+        name: "Details of GET /status",
+      }),
     );
+    fireEvent.click(screen.getByRole("tab", { name: "Expected status" }));
     expect(
       screen.getByLabelText("Add an expected status for GET /status"),
     ).toHaveAccessibleDescription(
@@ -96,14 +102,19 @@ describe("PerformanceTestingStage", () => {
     render(<PerformanceTestingStage />);
     await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
+      within(operationInventory()).getByRole("button", {
+        name: "Details of GET /status",
+      }),
     );
+    fireEvent.click(screen.getByRole("tab", { name: "Expected status" }));
     expect(
       screen.getByText(
         "The specification documents no success status. Set at least one.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "What still blocks a run" })).toHaveTextContent(
+    expect(
+      screen.getByRole("region", { name: "What still blocks a run" }),
+    ).toHaveTextContent(
       "1 step needs an expected status before the script can be generated.",
     );
     // AP-032 edge case: a counted list with one step per line, each reachable from it.
@@ -126,8 +137,11 @@ describe("PerformanceTestingStage", () => {
     render(<PerformanceTestingStage />);
     await screen.findByRole("table", { name: "Performance plan operations" });
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
+      within(operationInventory()).getByRole("button", {
+        name: "Details of GET /status",
+      }),
     );
+    fireEvent.click(screen.getByRole("tab", { name: "Expected status" }));
     fireEvent.change(screen.getByLabelText("Add an expected status for GET /status"), {
       target: { value: "200" },
     });
@@ -274,7 +288,9 @@ describe("PerformanceTestingStage", () => {
     expect(operationInventory()).toHaveTextContent("/orders/{orderId}");
 
     fireEvent.click(
-      within(operationInventory()).getByRole("button", { name: "Details of GET /status" }),
+      within(operationInventory()).getByRole("button", {
+        name: "Details of GET /status",
+      }),
     );
     // A single-step journey's move names its operation.
     fireEvent.click(screen.getByRole("button", { name: "Move GET /status down" }));
@@ -345,9 +361,13 @@ describe("PerformanceTestingStage", () => {
     expect(screen.getByTestId("write-summary-plan")).toHaveTextContent(
       "1 write operation will be sent",
     );
-    expect(screen.getByRole("button", { name: "Details of POST /orders" }).closest("tr")).toHaveTextContent("Creates");
+    expect(
+      screen.getByRole("button", { name: "Details of POST /orders" }).closest("tr"),
+    ).toHaveTextContent("Creates");
     // FR-008: the request preview is in each step's details.
     fireEvent.click(screen.getByRole("button", { name: "Details of POST /orders" }));
-    expect(screen.getByRole("button", { name: "Request" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Request", selected: true }),
+    ).toBeInTheDocument();
   });
 });

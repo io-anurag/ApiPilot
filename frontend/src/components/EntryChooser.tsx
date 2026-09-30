@@ -105,11 +105,11 @@ export function EntryChooser({
             type="button"
             aria-label="Guided Workflow"
             onClick={() => onSelect("guided-workflow")}
-            className="group grid gap-5 border-2 border-brand-600 bg-brand-50 p-5 text-left transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
+            className="group grid gap-5 border-2 border-brand-600 bg-brand-50 p-5 text-left shadow-md transition-[background-color,box-shadow] hover:bg-brand-100 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
           >
             <div className="flex items-start justify-between gap-4">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-brand-600 text-white">
-                <EntryFeatureIcon name="review" />
+                <EntryFeatureIcon name="review" tone="inverse" />
               </span>
               <span className="font-mono text-xs font-semibold uppercase text-brand-800 dark:text-brand-200">
                 Recommended
@@ -137,7 +137,7 @@ export function EntryChooser({
                 type="button"
                 aria-label={path.title}
                 onClick={() => onSelect(path.choice)}
-                className="group flex min-h-48 flex-col items-start border border-border bg-surface p-5 text-left transition-colors hover:border-brand-500 hover:bg-chrome focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                className="group flex min-h-48 flex-col items-start border border-border bg-surface p-5 text-left shadow-md transition-[border-color,background-color,box-shadow] hover:border-brand-500 hover:bg-chrome hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
               >
                 <span className="flex h-8 w-8 items-center justify-center border border-border bg-chrome">
                   <EntryFeatureIcon name={path.icon} />

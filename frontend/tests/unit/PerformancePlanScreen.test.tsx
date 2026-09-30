@@ -3,7 +3,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { PerformancePlan } from "@apipilot/shared-domain";
 import { PerformancePlanScreen } from "../../src/components/performance/PerformancePlanScreen";
 import { quickPerformanceClient } from "../../src/services/quickPerformanceClient";
-import { environment, quickPlan, quickStep, runFixture, script, stubFetch } from "./performanceFixtures";
+import {
+  environment,
+  quickPlan,
+  quickStep,
+  runFixture,
+  script,
+  stubFetch,
+} from "./performanceFixtures";
 
 /** AP-032 US2 and US5 on the shared plan screen (specs/032-quick-performance-test tasks T042, T068). */
 
@@ -12,29 +19,59 @@ const QUICK = "/api/quick-performance";
 function routes(plan: PerformancePlan, onPut?: (body: unknown) => PerformancePlan) {
   return {
     [`GET ${QUICK}/plan`]: () => [200, { plan, script: null }] as [number, unknown],
-    [`PUT ${QUICK}/plan`]: (call: { body: unknown }) => [200, { plan: onPut ? onPut(call.body) : plan, script: null }] as [number, unknown],
-    "GET /api/test-generation-workflow/environments": () => [200, { environments: [environment()] }] as [number, unknown],
-    [`GET ${QUICK}/plan/values`]: () => [200, { environment: { id: "env-1", name: "perf-local", tier: "local", baseUrl: "http://x" }, values: [] }] as [number, unknown],
-    [`GET ${QUICK}/readiness`]: () => [200, { readiness: { state: "ready", version: "1.2.0", checkedAt: "x" } }] as [number, unknown],
+    [`PUT ${QUICK}/plan`]: (call: { body: unknown }) =>
+      [200, { plan: onPut ? onPut(call.body) : plan, script: null }] as [number, unknown],
+    "GET /api/test-generation-workflow/environments": () =>
+      [200, { environments: [environment()] }] as [number, unknown],
+    [`GET ${QUICK}/plan/values`]: () =>
+      [
+        200,
+        {
+          environment: {
+            id: "env-1",
+            name: "perf-local",
+            tier: "local",
+            baseUrl: "http://x",
+          },
+          values: [],
+        },
+      ] as [number, unknown],
+    [`GET ${QUICK}/readiness`]: () =>
+      [200, { readiness: { state: "ready", version: "1.2.0", checkedAt: "x" } }] as [
+        number,
+        unknown,
+      ],
     [`GET ${QUICK}/runs`]: () => [200, { runs: [] }] as [number, unknown],
   };
 }
 
 function renderScreen() {
-  return render(<PerformancePlanScreen client={quickPerformanceClient} title="Quick performance test" lead="lead" scopeNote={() => null} testId="plan-screen" />);
+  return render(
+    <PerformancePlanScreen
+      client={quickPerformanceClient}
+      title="Quick performance test"
+      lead="lead"
+      scopeNote={() => null}
+      testId="plan-screen"
+    />,
+  );
 }
 
 function withoutKeys(plan: PerformancePlan, keys: readonly string[]): PerformancePlan {
   return {
     ...plan,
-    journeys: plan.journeys.filter((journey) => !journey.steps.some((step) => keys.includes(step.operationKey))),
+    journeys: plan.journeys.filter(
+      (journey) => !journey.steps.some((step) => keys.includes(step.operationKey)),
+    ),
     excludedOperationKeys: [...plan.excludedOperationKeys, ...keys],
   };
 }
 
-const detailsButton = (operationKey: string) => screen.getByRole("button", { name: `Details of ${operationKey}` });
+const detailsButton = (operationKey: string) =>
+  screen.getByRole("button", { name: `Details of ${operationKey}` });
 const rowOf = (operationKey: string) => detailsButton(operationKey).closest("tr")!;
-const puts = <T extends { method: string }>(calls: T[]): T[] => calls.filter((call) => call.method === "PUT");
+const puts = <T extends { method: string }>(calls: T[]): T[] =>
+  calls.filter((call) => call.method === "PUT");
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -47,22 +84,32 @@ describe("PerformancePlanScreen write visibility (US2)", () => {
     expect(rowOf("PUT /orders/{orderId}")).toHaveTextContent("Replaces");
     expect(rowOf("PATCH /orders/{orderId}")).toHaveTextContent("Updates");
     expect(rowOf("DELETE /orders/{orderId}")).toHaveTextContent("Deletes");
-    expect(rowOf("GET /orders")).not.toHaveTextContent(/Creates|Replaces|Updates|Deletes/);
+    expect(rowOf("GET /orders")).not.toHaveTextContent(
+      /Creates|Replaces|Updates|Deletes/,
+    );
   });
 
   it("shows the write summary above the journeys and next to the run trigger", async () => {
     stubFetch(routes(quickPlan()));
     renderScreen();
-    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent("5 write operations will be sent");
-    expect(await screen.findByTestId("write-summary-trigger")).toHaveTextContent("5 write operations will be sent");
+    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent(
+      "5 write operations will be sent",
+    );
+    expect(await screen.findByTestId("write-summary-trigger")).toHaveTextContent(
+      "5 write operations will be sent",
+    );
   });
 
   it("removes every DELETE operation in one action, and then every write operation in one action (FR-014, SC-003)", async () => {
     const plan = quickPlan();
     const calls = stubFetch(
       routes(plan, (body) => {
-        const excluded = (body as { excludedOperationKeys: string[] }).excludedOperationKeys;
-        return withoutKeys(plan, excluded.filter((key) => !plan.excludedOperationKeys.includes(key)));
+        const excluded = (body as { excludedOperationKeys: string[] })
+          .excludedOperationKeys;
+        return withoutKeys(
+          plan,
+          excluded.filter((key) => !plan.excludedOperationKeys.includes(key)),
+        );
       }),
     );
     renderScreen();
@@ -72,17 +119,33 @@ describe("PerformancePlanScreen write visibility (US2)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove all DELETE operations" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
     expect(puts(calls)[0].body).toEqual({
-      excludedOperationKeys: ["POST /auth/login", "DELETE /orders/{orderId}", "DELETE /products/{productId}"],
+      excludedOperationKeys: [
+        "POST /auth/login",
+        "DELETE /orders/{orderId}",
+        "DELETE /products/{productId}",
+      ],
     });
-    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent("3 write operations will be sent");
+    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent(
+      "3 write operations will be sent",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Removed 3" }));
-    expect(screen.getByRole("table", { name: "Removed operations" })).toHaveTextContent("/products/{productId}");
+    expect(screen.getByRole("table", { name: "Removed operations" })).toHaveTextContent(
+      "/products/{productId}",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Remove all write operations" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(2));
     const second = puts(calls)[1].body as { excludedOperationKeys: string[] };
-    expect(second.excludedOperationKeys).toEqual(expect.arrayContaining(["POST /orders", "PUT /orders/{orderId}", "PATCH /orders/{orderId}"]));
-    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent("This plan sends only read requests.");
+    expect(second.excludedOperationKeys).toEqual(
+      expect.arrayContaining([
+        "POST /orders",
+        "PUT /orders/{orderId}",
+        "PATCH /orders/{orderId}",
+      ]),
+    );
+    expect(await screen.findByTestId("write-summary-plan")).toHaveTextContent(
+      "This plan sends only read requests.",
+    );
   });
 
   it("removes every operation of a read method in one action too (FR-014 covers every method present)", async () => {
@@ -94,7 +157,9 @@ describe("PerformancePlanScreen write visibility (US2)", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(screen.getByRole("button", { name: "Remove all GET operations" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
-    expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login", "GET /orders", "GET /status"] });
+    expect(puts(calls)[0].body).toEqual({
+      excludedOperationKeys: ["POST /auth/login", "GET /orders", "GET /status"],
+    });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 });
@@ -108,17 +173,31 @@ describe("PerformancePlanScreen operations table", () => {
 
     fireEvent.click(within(filters).getByRole("button", { name: "Writes 5" }));
     const table = screen.getByRole("table", { name: "Performance plan operations" });
-    expect(within(table).queryByRole("button", { name: "Details of GET /orders" })).not.toBeInTheDocument();
-    expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(5);
+    expect(
+      within(table).queryByRole("button", { name: "Details of GET /orders" }),
+    ).not.toBeInTheDocument();
+    expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(
+      5,
+    );
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Select POST /orders" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select PUT /orders/{orderId}" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Select PUT /orders/{orderId}" }),
+    );
     const selection = screen.getByRole("region", { name: "Selected operations" });
     expect(selection).toHaveTextContent("2 operations selected");
     fireEvent.click(within(selection).getByRole("button", { name: "Remove from plan" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
-    expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login", "POST /orders", "PUT /orders/{orderId}"] });
-    expect(screen.queryByRole("region", { name: "Selected operations" })).not.toBeInTheDocument();
+    expect(puts(calls)[0].body).toEqual({
+      excludedOperationKeys: [
+        "POST /auth/login",
+        "POST /orders",
+        "PUT /orders/{orderId}",
+      ],
+    });
+    expect(
+      screen.queryByRole("region", { name: "Selected operations" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows only the steps needing an expected status when that filter is on (FR-024)", async () => {
@@ -129,15 +208,23 @@ describe("PerformancePlanScreen operations table", () => {
     fireEvent.click(filter);
     expect(filter).toHaveAttribute("aria-pressed", "true");
     const table = screen.getByRole("table", { name: "Performance plan operations" });
-    expect(within(table).getAllByRole("button", { name: /^Details of / }).map((button) => button.getAttribute("aria-label"))).toEqual(["Details of GET /status"]);
+    expect(
+      within(table)
+        .getAllByRole("button", { name: /^Details of / })
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Details of GET /status"]);
   });
 
   it("still lists the remaining steps after the steps a filter shows are all removed", async () => {
     const plan = quickPlan();
     const calls = stubFetch(
       routes(plan, (body) => {
-        const excluded = (body as { excludedOperationKeys: string[] }).excludedOperationKeys;
-        const removed = withoutKeys(plan, excluded.filter((key) => !plan.excludedOperationKeys.includes(key)));
+        const excluded = (body as { excludedOperationKeys: string[] })
+          .excludedOperationKeys;
+        const removed = withoutKeys(
+          plan,
+          excluded.filter((key) => !plan.excludedOperationKeys.includes(key)),
+        );
         return { ...removed, stepsNeedingExpectedStatus: [] };
       }),
     );
@@ -145,12 +232,25 @@ describe("PerformancePlanScreen operations table", () => {
     await screen.findByRole("button", { name: "Details of GET /orders" });
     fireEvent.click(screen.getByRole("button", { name: "Needs expected status · 1" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /status" }));
-    fireEvent.click(within(screen.getByRole("region", { name: "Selected operations" })).getByRole("button", { name: "Remove from plan" }));
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Selected operations" })).getByRole(
+        "button",
+        { name: "Remove from plan" },
+      ),
+    );
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
     // The filter's chip is gone with its last step, so the filter no longer hides the other six.
-    const table = await screen.findByRole("table", { name: "Performance plan operations" });
-    await waitFor(() => expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(6));
-    expect(screen.queryByRole("button", { name: /^Needs expected status/ })).not.toBeInTheDocument();
+    const table = await screen.findByRole("table", {
+      name: "Performance plan operations",
+    });
+    await waitFor(() =>
+      expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(
+        6,
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: /^Needs expected status/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("6 of 6 steps shown")).toBeInTheDocument();
   });
 
@@ -166,65 +266,146 @@ describe("PerformancePlanScreen operations table", () => {
     expect(details).toHaveTextContent("POST /orders happy path");
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("region", { name: "Details for POST /orders" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Details for POST /orders" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("separates an expanded step's request data into navigable tabs", async () => {
+    stubFetch(routes(quickPlan()));
+    renderScreen();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Details of POST /orders" }),
+    );
+
+    const tabs = screen.getByRole("tablist", { name: "Step details for POST /orders" });
+    expect(within(tabs).getByRole("tab", { name: "Request" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(tabs).getByRole("tab", { name: "Parameters" })).toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("tab", { name: "Expected status" }),
+    ).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Authentication" })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Variables" })).toBeInTheDocument();
+
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Expected status" }));
+    expect(
+      screen.getByLabelText("Add an expected status for POST /orders"),
+    ).toBeInTheDocument();
   });
 
   it("opens an operation's details in the table from the write list, including the one beside the trigger", async () => {
     stubFetch(routes(quickPlan()));
     renderScreen();
     const list = await screen.findByTestId("write-summary-plan-list");
-    fireEvent.click(within(list).getByRole("button", { name: "Show PATCH /orders/{orderId} in the plan" }));
-    expect(detailsButton("PATCH /orders/{orderId}")).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(
+      within(list).getByRole("button", {
+        name: "Show PATCH /orders/{orderId} in the plan",
+      }),
+    );
+    expect(detailsButton("PATCH /orders/{orderId}")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     expect(document.activeElement).toBe(detailsButton("PATCH /orders/{orderId}"));
 
     fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
     const trigger = screen.getByTestId("write-summary-trigger-list");
-    fireEvent.click(within(trigger).getByRole("button", { name: "Show DELETE /products/{productId} in the plan" }));
-    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(
+      within(trigger).getByRole("button", {
+        name: "Show DELETE /products/{productId} in the plan",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(document.activeElement).toBe(detailsButton("DELETE /products/{productId}"));
   });
 
   it("lists removed operations in the table's Removed view, each with its reason (FR-024)", async () => {
-    stubFetch(routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] })));
+    stubFetch(
+      routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] })),
+    );
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Removed 2" }));
     const table = screen.getByRole("table", { name: "Removed operations" });
-    const rowOfKey = (key: string) => within(table).getByRole("button", { name: `Details of ${key}` }).closest("tr")!;
-    expect(rowOfKey("POST /auth/login")).toHaveTextContent("used to acquire the run's credentials");
+    const rowOfKey = (key: string) =>
+      within(table)
+        .getByRole("button", { name: `Details of ${key}` })
+        .closest("tr")!;
+    expect(rowOfKey("POST /auth/login")).toHaveTextContent(
+      "used to acquire the run's credentials",
+    );
     expect(rowOfKey("GET /orders")).toHaveTextContent("Removed by you");
-    expect(screen.queryByRole("table", { name: "Performance plan operations" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("table", { name: "Performance plan operations" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a removed operation's step and request as they would be if restored, and restores it (FR-024a)", async () => {
-    const plan = quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders"] });
+    const plan = quickPlan({
+      excludedOperationKeys: ["POST /auth/login", "GET /orders"],
+    });
     const restoredStep = quickStep("GET", "/orders");
     const calls = stubFetch({
       ...routes(plan),
       [`GET ${QUICK}/plan/removed-operation`]: () =>
-        [200, {
-          step: restoredStep,
-          request: { stepId: restoredStep.id, operationKey: "GET /orders", method: "GET", pathTemplate: "/orders", parameters: [], auth: { kind: "none", schemeName: null, location: null, references: [] }, body: null, bodyStatus: "not-documented", bodyEdit: null, parameterEdit: null },
-        }] as [number, unknown],
+        [
+          200,
+          {
+            step: restoredStep,
+            request: {
+              stepId: restoredStep.id,
+              operationKey: "GET /orders",
+              method: "GET",
+              pathTemplate: "/orders",
+              parameters: [],
+              auth: { kind: "none", schemeName: null, location: null, references: [] },
+              body: null,
+              bodyStatus: "not-documented",
+              bodyEdit: null,
+              parameterEdit: null,
+            },
+          },
+        ] as [number, unknown],
     });
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Removed 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Details of GET /orders" }));
-    const details = await screen.findByRole("region", { name: "Details for GET /orders" });
+    const details = await screen.findByRole("region", {
+      name: "Details for GET /orders",
+    });
     await waitFor(() => expect(details).toHaveTextContent("GET /orders happy path"));
     expect(details).toHaveTextContent("This is what Restore would add back.");
-    expect(calls.find((call) => call.url.includes("/plan/removed-operation"))?.url).toBe(`${QUICK}/plan/removed-operation?operationKey=GET%20%2Forders`);
+    expect(calls.find((call) => call.url.includes("/plan/removed-operation"))?.url).toBe(
+      `${QUICK}/plan/removed-operation?operationKey=GET%20%2Forders`,
+    );
     fireEvent.click(within(details).getByRole("button", { name: "Restore to the plan" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
     expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login"] });
   });
 
   it("restores the ticked removed operations together", async () => {
-    const calls = stubFetch(routes(quickPlan({ excludedOperationKeys: ["POST /auth/login", "GET /orders", "GET /status"] })));
+    const calls = stubFetch(
+      routes(
+        quickPlan({
+          excludedOperationKeys: ["POST /auth/login", "GET /orders", "GET /status"],
+        }),
+      ),
+    );
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: "Removed 3" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /orders" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Select GET /status" }));
-    fireEvent.click(within(screen.getByRole("region", { name: "Selected operations" })).getByRole("button", { name: "Restore to the plan" }));
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Selected operations" })).getByRole(
+        "button",
+        { name: "Restore to the plan" },
+      ),
+    );
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
     expect(puts(calls)[0].body).toEqual({ excludedOperationKeys: ["POST /auth/login"] });
   });
@@ -232,9 +413,17 @@ describe("PerformancePlanScreen operations table", () => {
   it("opens the step and focuses its editor from the row's own status button", async () => {
     stubFetch(routes(quickPlan()));
     renderScreen();
-    const table = await screen.findByRole("table", { name: "Performance plan operations" });
-    fireEvent.click(within(table).getByRole("button", { name: "Set the expected status of GET /status" }));
-    expect(document.activeElement).toBe(screen.getByLabelText("Add an expected status for GET /status"));
+    const table = await screen.findByRole("table", {
+      name: "Performance plan operations",
+    });
+    fireEvent.click(
+      within(table).getByRole("button", {
+        name: "Set the expected status of GET /status",
+      }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Add an expected status for GET /status"),
+    );
   });
 });
 
@@ -242,9 +431,12 @@ describe("PerformancePlanScreen pending bar and Run setup", () => {
   const readyPlan = () =>
     quickPlan({
       stepsNeedingExpectedStatus: [],
-      journeys: quickPlan().journeys.filter((journey) => journey.steps[0].operationKey !== "GET /status"),
+      journeys: quickPlan().journeys.filter(
+        (journey) => journey.steps[0].operationKey !== "GET /status",
+      ),
     });
-  const pendingBar = () => screen.getByRole("region", { name: "What still blocks a run" });
+  const pendingBar = () =>
+    screen.getByRole("region", { name: "What still blocks a run" });
 
   it("lists what still blocks a run above the tabs, each with its action, and counts the setup items on the tab", async () => {
     stubFetch(routes(quickPlan()));
@@ -252,12 +444,18 @@ describe("PerformancePlanScreen pending bar and Run setup", () => {
     await screen.findByRole("button", { name: "Details of GET /orders" });
     const bar = pendingBar();
     expect(bar).toHaveTextContent("Before you can run: 2 things left");
-    expect(bar).toHaveTextContent("1 step needs an expected status before the script can be generated.");
+    expect(bar).toHaveTextContent(
+      "1 step needs an expected status before the script can be generated.",
+    );
     expect(bar).toHaveTextContent("The k6 script has not been generated.");
-    expect(within(bar).getByRole("button", { name: "Generate the k6 script" })).toBeDisabled();
+    expect(
+      within(bar).getByRole("button", { name: "Generate the k6 script" }),
+    ).toBeDisabled();
     // The environment is chosen (perf-local), so it is not pending; missing values never block.
     expect(bar).not.toHaveTextContent("target environment");
-    expect(screen.getByRole("button", { name: "Run setup (1 to do)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Run setup (1 to do)" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the steps needing a status in the Plan tab from the pending bar", async () => {
@@ -265,32 +463,59 @@ describe("PerformancePlanScreen pending bar and Run setup", () => {
     renderScreen();
     await screen.findByRole("button", { name: "Details of GET /orders" });
     fireEvent.click(screen.getByRole("button", { name: /^Run setup/ }));
-    fireEvent.click(within(pendingBar()).getByRole("button", { name: "Show the steps that need an expected status" }));
-    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("button", { name: "Needs expected status · 1" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(
+      within(pendingBar()).getByRole("button", {
+        name: "Show the steps that need an expected status",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Plan" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(
+      screen.getByRole("button", { name: "Needs expected status · 1" }),
+    ).toHaveAttribute("aria-pressed", "true");
     const table = screen.getByRole("table", { name: "Performance plan operations" });
-    expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(1);
+    expect(within(table).getAllByRole("button", { name: /^Details of / })).toHaveLength(
+      1,
+    );
   });
 
   it("says a missing environment is pending and takes you to it", async () => {
-    stubFetch({ ...routes(quickPlan()), "GET /api/test-generation-workflow/environments": () => [200, { environments: [] }] });
+    stubFetch({
+      ...routes(quickPlan()),
+      "GET /api/test-generation-workflow/environments": () => [200, { environments: [] }],
+    });
     renderScreen();
     await screen.findByRole("button", { name: "Details of GET /orders" });
     expect(pendingBar()).toHaveTextContent("No target environment yet.");
-    expect(screen.getByRole("button", { name: "Run setup (2 to do)" })).toBeInTheDocument();
-    fireEvent.click(within(pendingBar()).getByRole("button", { name: "Set up the target environment" }));
-    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Target environment and values" }));
+    expect(
+      screen.getByRole("button", { name: "Run setup (2 to do)" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(pendingBar()).getByRole("button", { name: "Set up the target environment" }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Target environment and values" }),
+    );
   });
 
   it("says the plan is ready and where to run it, without a trigger of its own (FR-011)", async () => {
-    stubFetch({ ...routes(readyPlan()), [`GET ${QUICK}/plan`]: () => [200, { plan: readyPlan(), script: script() }] });
+    stubFetch({
+      ...routes(readyPlan()),
+      [`GET ${QUICK}/plan`]: () => [200, { plan: readyPlan(), script: script() }],
+    });
     renderScreen();
     const bar = await screen.findByText(/Ready to run on perf-local \(local\)/);
     expect(bar).toHaveTextContent("5 write operations will be sent");
-    expect(within(pendingBar()).queryByRole("button", { name: /^Run on/ })).not.toBeInTheDocument();
+    expect(
+      within(pendingBar()).queryByRole("button", { name: /^Run on/ }),
+    ).not.toBeInTheDocument();
     fireEvent.click(within(pendingBar()).getByRole("button", { name: "Go to run →" }));
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Run" }));
-    expect(screen.getByRole("button", { name: "Run on perf-local (local)" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Run on perf-local (local)" }),
+    ).toBeEnabled();
   });
 
   it("switches to the Runs tab when a run starts, where the live run names its target (AP-029 FR-025)", async () => {
@@ -298,27 +523,47 @@ describe("PerformancePlanScreen pending bar and Run setup", () => {
       ...routes(readyPlan()),
       [`GET ${QUICK}/plan`]: () => [200, { plan: readyPlan(), script: script() }],
       [`POST ${QUICK}/runs`]: () => [200, { run: runFixture({ planSource: "quick" }) }],
-      [`GET ${QUICK}/runs/run-12345678`]: () => [200, { run: runFixture({ planSource: "quick" }) }],
+      [`GET ${QUICK}/runs/run-12345678`]: () => [
+        200,
+        { run: runFixture({ planSource: "quick" }) },
+      ],
     });
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: /^Run setup/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Run on perf-local (local)" }));
-    expect(await screen.findByRole("heading", { name: /Run run-1234/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Runs & reports/ })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Run on perf-local (local)" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: /Run run-1234/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Runs & reports/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByTestId("live-run-target")).toHaveTextContent("perf-local");
     expect(screen.getByTestId("live-run-target")).toHaveTextContent("Tier: local");
     expect(pendingBar()).toHaveTextContent("Run in progress");
-    expect(screen.queryByRole("table", { name: "Performance plan operations" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("table", { name: "Performance plan operations" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Plan" }));
-    expect(screen.getByRole("table", { name: "Performance plan operations" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "Performance plan operations" }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("PerformancePlanScreen lists at scale (US5)", () => {
   it("counts the steps needing an expected status, and each row moves focus to that step's editor (FR-024)", async () => {
-    const steps = Array.from({ length: 60 }, (_, index) => quickStep("GET", `/s${index}`, { expectedStatuses: [] }));
+    const steps = Array.from({ length: 60 }, (_, index) =>
+      quickStep("GET", `/s${index}`, { expectedStatuses: [] }),
+    );
     const plan = quickPlan({
-      journeys: steps.map((step) => ({ id: `j-${step.id}`, source: { kind: "operation" as const }, steps: [step] })),
+      journeys: steps.map((step) => ({
+        id: `j-${step.id}`,
+        source: { kind: "operation" as const },
+        steps: [step],
+      })),
       stepsNeedingExpectedStatus: steps.map((step) => step.id),
     });
     stubFetch(routes(plan));
@@ -326,22 +571,37 @@ describe("PerformancePlanScreen lists at scale (US5)", () => {
     const list = await screen.findByTestId("performance-needs-status-list");
     expect(list.tagName).toBe("DETAILS");
     expect(within(list).getByText("60 steps to set")).toBeInTheDocument();
-    fireEvent.click(within(list).getByRole("button", { name: "Set the expected status of GET /s7" }));
-    expect(document.activeElement).toBe(screen.getByLabelText("Add an expected status for GET /s7"));
+    fireEvent.click(
+      within(list).getByRole("button", { name: "Set the expected status of GET /s7" }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Add an expected status for GET /s7"),
+    );
     // A step on the second page of the table is brought on screen too.
-    fireEvent.click(within(list).getByRole("button", { name: "Set the expected status of GET /s55" }));
+    fireEvent.click(
+      within(list).getByRole("button", { name: "Set the expected status of GET /s55" }),
+    );
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
-    expect(document.activeElement).toBe(screen.getByLabelText("Add an expected status for GET /s55"));
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Add an expected status for GET /s55"),
+    );
   });
 
   it("counts left-out operations on their view, hidden until chosen, one per row with its reason (FR-024, US5 AS1)", async () => {
-    const omitted = Array.from({ length: 30 }, (_, index) => ({ operationKey: `GET /left${String(index).padStart(2, "0")}`, reason: "no-positive-scenario" as const }));
+    const omitted = Array.from({ length: 30 }, (_, index) => ({
+      operationKey: `GET /left${String(index).padStart(2, "0")}`,
+      reason: "no-positive-scenario" as const,
+    }));
     stubFetch(routes(quickPlan({ omitted })));
     renderScreen();
     const view = await screen.findByRole("button", { name: "Left out 30" });
-    expect(screen.queryByRole("table", { name: "Operations left out" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("table", { name: "Operations left out" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(view);
-    const rows = within(screen.getByRole("table", { name: "Operations left out" })).getAllByRole("row").slice(1);
+    const rows = within(screen.getByRole("table", { name: "Operations left out" }))
+      .getAllByRole("row")
+      .slice(1);
     expect(rows).toHaveLength(30);
     expect(rows[0]).toHaveTextContent("/left00");
     expect(rows[0]).toHaveTextContent("No positive scenario");
@@ -356,7 +616,11 @@ describe("PerformancePlanScreen body edits", () => {
       ...plan,
       journeys: plan.journeys.map((journey) => ({
         ...journey,
-        steps: journey.steps.map((step) => (step.operationKey === "POST /orders" ? { ...step, bodyEdited: true as const } : step)),
+        steps: journey.steps.map((step) =>
+          step.operationKey === "POST /orders"
+            ? { ...step, bodyEdited: true as const }
+            : step,
+        ),
       })),
     };
   }
@@ -371,7 +635,13 @@ describe("PerformancePlanScreen body edits", () => {
     auth: { kind: "none", schemeName: null, location: null, references: [] },
     body: { contentType: "json", text: '{\n  "quantity": 1\n}', references: [] },
     bodyStatus: "sent",
-    bodyEdit: { kind: "json", text: '{\n  "quantity": 1\n}', edited: false, mismatches: [], replacements: [] },
+    bodyEdit: {
+      kind: "json",
+      text: '{\n  "quantity": 1\n}',
+      edited: false,
+      mismatches: [],
+      replacements: [],
+    },
     parameterEdit: null,
   };
 
@@ -380,13 +650,21 @@ describe("PerformancePlanScreen body edits", () => {
     renderScreen();
     await screen.findByRole("button", { name: "Details of POST /orders" });
     expect(within(rowOf("POST /orders")).getByText("Body edited")).toBeInTheDocument();
-    expect(within(rowOf("GET /orders")).queryByText("Body edited")).not.toBeInTheDocument();
+    expect(
+      within(rowOf("GET /orders")).queryByText("Body edited"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Body edited · 1" }));
-    expect(screen.getByRole("button", { name: "Details of POST /orders" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Details of GET /orders" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Details of POST /orders" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Details of GET /orders" }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Body edited · 1" }));
-    expect(screen.getByRole("button", { name: "Details of GET /orders" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Details of GET /orders" }),
+    ).toBeInTheDocument();
   });
 
   it("shows no chip when no body is edited", async () => {
@@ -399,51 +677,107 @@ describe("PerformancePlanScreen body edits", () => {
   it("saves a body from the step's request, and shows the script out of date", async () => {
     const calls = stubFetch({
       ...routes(quickPlan()),
-      [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () => [200, { request: ordersPreview }] as [number, unknown],
-      [`PUT ${QUICK}/plan`]: () => [200, { plan: editedPlan(), script: script({ outOfDate: true }) }] as [number, unknown],
+      [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () =>
+        [200, { request: ordersPreview }] as [number, unknown],
+      [`PUT ${QUICK}/plan`]: () =>
+        [200, { plan: editedPlan(), script: script({ outOfDate: true }) }] as [
+          number,
+          unknown,
+        ],
     });
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Details of POST /orders" }));
-    const details = await screen.findByRole("region", { name: "Details for POST /orders" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Details of POST /orders" }),
+    );
+    const details = await screen.findByRole("region", {
+      name: "Details for POST /orders",
+    });
     fireEvent.click(within(details).getByText("Request"));
     fireEvent.click(await within(details).findByRole("button", { name: "Edit body" }));
-    fireEvent.change(within(details).getByRole("textbox", { name: "Body of POST /orders" }), { target: { value: '{"quantity": 3}' } });
+    fireEvent.change(
+      within(details).getByRole("textbox", { name: "Body of POST /orders" }),
+      { target: { value: '{"quantity": 3}' } },
+    );
     fireEvent.click(within(details).getByRole("button", { name: "Save body" }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
-    expect(puts(calls)[0].body).toEqual({ bodyEdits: { [ordersStep.id]: { kind: "json", text: '{"quantity": 3}' } } });
+    expect(puts(calls)[0].body).toEqual({
+      bodyEdits: { [ordersStep.id]: { kind: "json", text: '{"quantity": 3}' } },
+    });
     expect(await screen.findByText("Out of date — regenerate")).toBeInTheDocument();
   });
 
   it("says in the step's details which applied values an edited body no longer sends, and notes it above the tabs (FR-010)", async () => {
-    const plan = { ...editedPlan(), bodyEditNotices: [{ stepId: ordersStep.id, kind: "unique-field-dropped" as const, name: "customerEmail" }] };
-    stubFetch({ ...routes(plan), [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () => [200, { request: ordersPreview }] as [number, unknown] });
+    const plan = {
+      ...editedPlan(),
+      bodyEditNotices: [
+        {
+          stepId: ordersStep.id,
+          kind: "unique-field-dropped" as const,
+          name: "customerEmail",
+        },
+      ],
+    };
+    stubFetch({
+      ...routes(plan),
+      [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () =>
+        [200, { request: ordersPreview }] as [number, unknown],
+    });
     renderScreen();
-    expect(await screen.findByText(/An edited body no longer sends a value ApiPilot fills in\./)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        /An edited body no longer sends a value ApiPilot fills in\./,
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Details of POST /orders" }));
-    const details = await screen.findByRole("region", { name: "Details for POST /orders" });
-    expect(within(details).getByRole("list", { name: "Notes on the body of POST /orders" })).toHaveTextContent("This step no longer sends a unique value for customerEmail.");
+    const details = await screen.findByRole("region", {
+      name: "Details for POST /orders",
+    });
+    expect(
+      within(details).getByRole("list", { name: "Notes on the body of POST /orders" }),
+    ).toHaveTextContent("This step no longer sends a unique value for customerEmail.");
   });
 
   it("resets every edited body in one confirmed update (FR-017, SC-006)", async () => {
     const plan = editedPlan();
-    const twoEdited = { ...plan, journeys: plan.journeys.map((journey) => ({ ...journey, steps: journey.steps.map((step) => (step.operationKey === "GET /orders" ? { ...step, bodyEdited: true as const } : step)) })) };
+    const twoEdited = {
+      ...plan,
+      journeys: plan.journeys.map((journey) => ({
+        ...journey,
+        steps: journey.steps.map((step) =>
+          step.operationKey === "GET /orders"
+            ? { ...step, bodyEdited: true as const }
+            : step,
+        ),
+      })),
+    };
     const calls = stubFetch(routes(twoEdited));
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Reset all edited bodies" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reset all edited bodies" }),
+    );
     const dialog = screen.getByTestId("confirm-dialog");
-    expect(dialog).toHaveTextContent("Every edited body goes back to the body generated from the specification.");
+    expect(dialog).toHaveTextContent(
+      "Every edited body goes back to the body generated from the specification.",
+    );
     expect(dialog).toHaveTextContent("2 items will be affected.");
     fireEvent.click(within(dialog).getByRole("button", { name: /Reset bodies/ }));
     await waitFor(() => expect(puts(calls)).toHaveLength(1));
-    const ids = twoEdited.journeys.flatMap((journey) => journey.steps).filter((step) => step.bodyEdited).map((step) => step.id);
-    expect(puts(calls)[0].body).toEqual({ bodyEdits: Object.fromEntries(ids.map((id) => [id, null])) });
+    const ids = twoEdited.journeys
+      .flatMap((journey) => journey.steps)
+      .filter((step) => step.bodyEdited)
+      .map((step) => step.id);
+    expect(puts(calls)[0].body).toEqual({
+      bodyEdits: Object.fromEntries(ids.map((id) => [id, null])),
+    });
   });
 
   it("names the operations whose edits a rebuild discarded (FR-018)", async () => {
     stubFetch(routes({ ...quickPlan(), discardedBodyEdits: ["POST /orders"] }));
     renderScreen();
     const note = await screen.findByTestId("performance-discarded-body-edits");
-    expect(note).toHaveTextContent("The body edit of 1 operation was discarded because its scenario changed");
+    expect(note).toHaveTextContent(
+      "The body edit of 1 operation was discarded because its scenario changed",
+    );
     expect(note).toHaveTextContent("/orders");
   });
 
@@ -451,34 +785,73 @@ describe("PerformancePlanScreen body edits", () => {
     const plan = withoutKeys(quickPlan(), ["POST /orders"]);
     stubFetch({
       ...routes(plan),
-      [`GET ${QUICK}/plan/removed-operation`]: () => [200, { step: { ...ordersStep, bodyEdited: true }, request: { ...ordersPreview, bodyEdit: { ...ordersPreview.bodyEdit, edited: true } } }] as [number, unknown],
+      [`GET ${QUICK}/plan/removed-operation`]: () =>
+        [
+          200,
+          {
+            step: { ...ordersStep, bodyEdited: true },
+            request: {
+              ...ordersPreview,
+              bodyEdit: { ...ordersPreview.bodyEdit, edited: true },
+            },
+          },
+        ] as [number, unknown],
     });
     renderScreen();
     fireEvent.click(await screen.findByRole("button", { name: /^Removed/ }));
     fireEvent.click(screen.getByRole("button", { name: "Details of POST /orders" }));
-    const details = await screen.findByRole("region", { name: "Details for POST /orders" });
+    const details = await screen.findByRole("region", {
+      name: "Details for POST /orders",
+    });
     expect(await within(details).findByText("Body edited")).toBeInTheDocument();
     fireEvent.click(within(details).getByText("Request"));
     await within(details).findByTestId("code-block");
-    expect(within(details).queryByRole("button", { name: "Edit body" })).not.toBeInTheDocument();
+    expect(
+      within(details).queryByRole("button", { name: "Edit body" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a refusal in the editor, not as a screen-wide problem", async () => {
     stubFetch({
       ...routes(quickPlan()),
-      [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () => [200, { request: ordersPreview }] as [number, unknown],
+      [`GET ${QUICK}/plan/steps/${ordersStep.id}/request`]: () =>
+        [200, { request: ordersPreview }] as [number, unknown],
       [`PUT ${QUICK}/plan`]: () =>
-        [400, { error: "invalid_body", message: "Not valid JSON at line 1, column 14.", stepId: ordersStep.id, line: 1, column: 14 }] as [number, unknown],
+        [
+          400,
+          {
+            error: "invalid_body",
+            message: "Not valid JSON at line 1, column 14.",
+            stepId: ordersStep.id,
+            line: 1,
+            column: 14,
+          },
+        ] as [number, unknown],
     });
     renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Details of POST /orders" }));
-    const details = await screen.findByRole("region", { name: "Details for POST /orders" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Details of POST /orders" }),
+    );
+    const details = await screen.findByRole("region", {
+      name: "Details for POST /orders",
+    });
     fireEvent.click(within(details).getByText("Request"));
     fireEvent.click(await within(details).findByRole("button", { name: "Edit body" }));
-    fireEvent.change(within(details).getByRole("textbox", { name: "Body of POST /orders" }), { target: { value: '{"quantity": }' } });
+    fireEvent.change(
+      within(details).getByRole("textbox", { name: "Body of POST /orders" }),
+      { target: { value: '{"quantity": }' } },
+    );
     fireEvent.click(within(details).getByRole("button", { name: "Save body" }));
-    expect(await within(details).findByRole("alert")).toHaveTextContent("Not valid JSON at line 1, column 14.");
-    expect(screen.getAllByText("Not valid JSON at line 1, column 14.").filter((node) => !details.contains(node) && node.getAttribute("aria-live") === null)).toHaveLength(0);
+    expect(await within(details).findByRole("alert")).toHaveTextContent(
+      "Not valid JSON at line 1, column 14.",
+    );
+    expect(
+      screen
+        .getAllByText("Not valid JSON at line 1, column 14.")
+        .filter(
+          (node) => !details.contains(node) && node.getAttribute("aria-live") === null,
+        ),
+    ).toHaveLength(0);
   });
 });
 
@@ -509,22 +882,33 @@ describe("steps that failed the last run", () => {
         },
       ],
     };
-    const finished = runFixture({ id: "run-done", status: "completed", endedAt: "2026-09-29T14:04:07.779Z", planSnapshot: plan });
+    const finished = runFixture({
+      id: "run-done",
+      status: "completed",
+      endedAt: "2026-09-29T14:04:07.779Z",
+      planSnapshot: plan,
+    });
     stubFetch({
       ...routes(plan),
-      [`GET ${QUICK}/runs`]: () => [200, { runs: [{ ...finished, planSnapshot: undefined }] }] as [number, unknown],
-      [`GET ${QUICK}/runs/run-done`]: () => [200, { run: { ...finished, result } }] as [number, unknown],
+      [`GET ${QUICK}/runs`]: () =>
+        [200, { runs: [{ ...finished, planSnapshot: undefined }] }] as [number, unknown],
+      [`GET ${QUICK}/runs/run-done`]: () =>
+        [200, { run: { ...finished, result } }] as [number, unknown],
     });
     renderScreen();
 
     const chip = await screen.findByRole("button", { name: "Failed last run · 1" });
-    expect(within(rowOf(failing.operationKey)).getByText("Failed last run")).toBeInTheDocument();
+    expect(
+      within(rowOf(failing.operationKey)).getByText("Failed last run"),
+    ).toBeInTheDocument();
     expect(within(rowOf("POST /orders")).queryByText("Failed last run")).toBeNull();
 
     fireEvent.click(chip);
     expect(screen.queryByRole("button", { name: "Details of POST /orders" })).toBeNull();
 
     fireEvent.click(detailsButton(failing.operationKey));
-    expect(await screen.findByRole("note")).toHaveTextContent("the server answered 400 × 7,422, which this step does not expect");
+    expect(await screen.findByRole("note")).toHaveTextContent(
+      "the server answered 400 × 7,422, which this step does not expect",
+    );
   });
 });
