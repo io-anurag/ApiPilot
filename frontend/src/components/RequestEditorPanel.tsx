@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CollectionRequestView, ImpliedAuthHeader } from "@apipilot/shared-domain";
 import type { RequestEdit } from "../services/externalCollectionsClient";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -6,6 +6,7 @@ import { ErrorState } from "./ErrorState";
 import { CodeBlock } from "./CodeBlock";
 import { VariableHighlightedText } from "./VariableHighlightedText";
 import { RequestAuthEditor, RequestVariablesSection } from "./RequestAuthSections";
+import { PostmanDynamicVariablePicker } from "./PostmanDynamicVariablePicker";
 import { initialAuthDraft, toRequestAuthEdit, type AuthDraft } from "../utils/authDraft";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -24,6 +25,22 @@ function toHeaderRows(headers: Array<{ key: string; value: string }>): HeaderRow
   return headers.length > 0 ? headers.map((h) => ({ ...h })) : [{ key: "", value: "" }];
 }
 
+function insertDynamicVariable(
+  element: HTMLInputElement | HTMLTextAreaElement | null,
+  value: string,
+  variable: string,
+  setValue: (next: string) => void,
+) {
+  const token = `{{${variable}}}`;
+  const start = element?.selectionStart ?? value.length;
+  const end = element?.selectionEnd ?? value.length;
+  setValue(`${value.slice(0, start)}${token}${value.slice(end)}`);
+  queueMicrotask(() => {
+    element?.focus();
+    element?.setSelectionRange(start + token.length, start + token.length);
+  });
+}
+
 /** Where the auth behind `impliedAuthHeader` is defined, for the Headers tab note (FR-002a). */
 function impliedAuthSourceText(request: CollectionRequestView): string {
   const source = request.auth?.source;
@@ -34,8 +51,12 @@ function impliedAuthSourceText(request: CollectionRequestView): string {
 }
 
 /** The auth header's value, or a hidden-literal marker: a literal token never reaches the browser (FR-002a). */
-function ImpliedAuthValue({ header, value }: Readonly<{ header: ImpliedAuthHeader; value: string }>) {
-  if (header.hiddenLiteral) return <span className="font-sans italic text-muted">hidden literal value</span>;
+function ImpliedAuthValue({
+  header,
+  value,
+}: Readonly<{ header: ImpliedAuthHeader; value: string }>) {
+  if (header.hiddenLiteral)
+    return <span className="font-sans italic text-muted">hidden literal value</span>;
   return <VariableHighlightedText text={value} />;
 }
 
@@ -73,19 +94,28 @@ export function RequestEditorPanel({
 }>) {
   const [method, setMethod] = useState(request.raw.method);
   const [url, setUrl] = useState(request.raw.url);
-  const [headerRows, setHeaderRows] = useState<HeaderRow[]>(() => toHeaderRows(request.raw.headers));
+  const [headerRows, setHeaderRows] = useState<HeaderRow[]>(() =>
+    toHeaderRows(request.raw.headers),
+  );
   const [body, setBody] = useState(request.raw.body ?? "");
   const [testScript, setTestScript] = useState(request.testScript ?? "");
-  const [authDraft, setAuthDraft] = useState<AuthDraft>(() => initialAuthDraft(request.auth));
+  const [authDraft, setAuthDraft] = useState<AuthDraft>(() =>
+    initialAuthDraft(request.auth),
+  );
   // Auth is sent only once edited, so saving other fields never rewrites it (FR-002c).
   const [authEdited, setAuthEdited] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Headers");
   const [previewTab, setPreviewTab] = useState<PreviewTab>("Request");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const urlInput = useRef<HTMLInputElement>(null);
+  const bodyInput = useRef<HTMLTextAreaElement>(null);
+  const headerValueInputs = useRef<Array<HTMLInputElement | null>>([]);
 
   function updateHeaderRow(index: number, patch: Partial<HeaderRow>) {
-    setHeaderRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setHeaderRows((current) =>
+      current.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
   }
 
   function removeHeaderRow(index: number) {
@@ -98,7 +128,9 @@ export function RequestEditorPanel({
     const edit: RequestEdit = {
       method,
       url: url.trim(),
-      headers: headerRows.filter((row) => row.key.trim().length > 0).map((row) => ({ key: row.key.trim(), value: row.value })),
+      headers: headerRows
+        .filter((row) => row.key.trim().length > 0)
+        .map((row) => ({ key: row.key.trim(), value: row.value })),
       body: body.length > 0 ? body : undefined,
       testScript,
       ...(authEdited ? { auth: toRequestAuthEdit(authDraft) } : {}),
@@ -115,12 +147,20 @@ export function RequestEditorPanel({
   const activeHeaderCount = headerRows.filter((row) => row.key.trim().length > 0).length;
 
   return (
-    <div data-testid="request-editor-panel" className="rounded-md border border-border bg-surface">
+    <div
+      data-testid="request-editor-panel"
+      className="rounded-md border border-border bg-surface"
+    >
       <div className="space-y-3 border-b border-border p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase text-muted">{request.name}</h3>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={handleSave} disabled={locked || saving} className={BUTTON_STYLES.primary}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={locked || saving}
+              className={BUTTON_STYLES.primary}
+            >
               {saving ? "Saving…" : "Save"}
             </button>
             <button type="button" onClick={onClose} className={BUTTON_STYLES.secondary}>
@@ -151,16 +191,28 @@ export function RequestEditorPanel({
           <input
             id="request-editor-url"
             type="text"
+            ref={urlInput}
             value={url}
             disabled={locked}
             onChange={(event) => setUrl(event.target.value)}
             className="flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
+        <PostmanDynamicVariablePicker
+          fieldLabel="URL"
+          disabled={locked}
+          onInsert={(variable) =>
+            insertDynamicVariable(urlInput.current, url, variable, setUrl)
+          }
+        />
         {error && <ErrorState message={error} />}
       </div>
 
-      <div role="tablist" aria-label="Request editor sections" className="flex border-b border-border px-2">
+      <div
+        role="tablist"
+        aria-label="Request editor sections"
+        className="flex border-b border-border px-2"
+      >
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -171,12 +223,19 @@ export function RequestEditorPanel({
             className={`${TAB_BUTTON} ${activeTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
           >
             {tab}
-            {tab === "Headers" && activeHeaderCount > 0 && <span className="ml-1 text-[10px] text-muted">({activeHeaderCount})</span>}
+            {tab === "Headers" && activeHeaderCount > 0 && (
+              <span className="ml-1 text-[10px] text-muted">({activeHeaderCount})</span>
+            )}
             {tab === "Used variables" && request.variableReferences.length > 0 && (
-              <span className="ml-1 text-[10px] text-muted">({request.variableReferences.length})</span>
+              <span className="ml-1 text-[10px] text-muted">
+                ({request.variableReferences.length})
+              </span>
             )}
             {tab === "Tests" && testScript.trim().length > 0 && (
-              <span aria-label="Has tests" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-brand-500 align-middle" />
+              <span
+                aria-label="Has tests"
+                className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-brand-500 align-middle"
+              />
             )}
           </button>
         ))}
@@ -186,22 +245,41 @@ export function RequestEditorPanel({
         {activeTab === "Headers" && (
           <div className="space-y-2">
             {headerRows.map((row, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={index} className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   placeholder="header name"
                   value={row.key}
                   disabled={locked}
-                  onChange={(event) => updateHeaderRow(index, { key: event.target.value })}
+                  onChange={(event) =>
+                    updateHeaderRow(index, { key: event.target.value })
+                  }
                   className="w-48 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <input
                   type="text"
                   placeholder="value"
+                  ref={(element) => {
+                    headerValueInputs.current[index] = element;
+                  }}
                   value={row.value}
                   disabled={locked}
-                  onChange={(event) => updateHeaderRow(index, { value: event.target.value })}
+                  onChange={(event) =>
+                    updateHeaderRow(index, { value: event.target.value })
+                  }
                   className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <PostmanDynamicVariablePicker
+                  fieldLabel={`header ${index + 1} value`}
+                  disabled={locked}
+                  onInsert={(variable) =>
+                    insertDynamicVariable(
+                      headerValueInputs.current[index],
+                      row.value,
+                      variable,
+                      (value) => updateHeaderRow(index, { value }),
+                    )
+                  }
                 />
                 <button
                   type="button"
@@ -217,7 +295,9 @@ export function RequestEditorPanel({
             <button
               type="button"
               disabled={locked}
-              onClick={() => setHeaderRows((current) => [...current, { key: "", value: "" }])}
+              onClick={() =>
+                setHeaderRows((current) => [...current, { key: "", value: "" }])
+              }
               className={BUTTON_STYLES.ghost}
             >
               + Add header
@@ -225,14 +305,27 @@ export function RequestEditorPanel({
             {request.impliedAuthHeader && (
               <div className="space-y-1 rounded-md border border-border bg-slate-50 px-3 py-2 dark:bg-white/5">
                 <p className="text-sm wrap-anywhere">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">Auth adds:</span>{" "}
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    Auth adds:
+                  </span>{" "}
                   <span className="font-mono">
-                    {request.impliedAuthHeader.key}: <ImpliedAuthValue header={request.impliedAuthHeader} value={request.impliedAuthHeader.rawValue} />
+                    {request.impliedAuthHeader.key}:{" "}
+                    <ImpliedAuthValue
+                      header={request.impliedAuthHeader}
+                      value={request.impliedAuthHeader.rawValue}
+                    />
                   </span>
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                  <span>{impliedAuthSourceText(request)} It comes from the auth, not a header row.</span>
-                  <button type="button" onClick={() => setActiveTab("Auth")} className={BUTTON_STYLES.ghost}>
+                  <span>
+                    {impliedAuthSourceText(request)} It comes from the auth, not a header
+                    row.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("Auth")}
+                    className={BUTTON_STYLES.ghost}
+                  >
                     Edit auth
                   </button>
                 </div>
@@ -253,48 +346,74 @@ export function RequestEditorPanel({
           />
         )}
 
-        {activeTab === "Used variables" && <RequestVariablesSection references={request.variableReferences} />}
+        {activeTab === "Used variables" && (
+          <RequestVariablesSection references={request.variableReferences} />
+        )}
 
         {activeTab === "Body" && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="request-editor-body" className="text-xs font-medium text-muted">
+            <label
+              htmlFor="request-editor-body"
+              className="text-xs font-medium text-muted"
+            >
               Raw body
             </label>
             <textarea
               id="request-editor-body"
               rows={10}
+              ref={bodyInput}
               value={body}
               disabled={locked}
               onChange={(event) => setBody(event.target.value)}
               className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <PostmanDynamicVariablePicker
+              fieldLabel="body"
+              disabled={locked}
+              onInsert={(variable) =>
+                insertDynamicVariable(bodyInput.current, body, variable, setBody)
+              }
             />
           </div>
         )}
 
         {activeTab === "Tests" && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="request-editor-test-script" className="text-xs font-medium text-muted">
-              Test script (runs after the response, same as Postman&apos;s own <code>pm.test(...)</code> checks)
+            <label
+              htmlFor="request-editor-test-script"
+              className="text-xs font-medium text-muted"
+            >
+              Test script (runs after the response, same as Postman&apos;s own{" "}
+              <code>pm.test(...)</code> checks)
             </label>
             <textarea
               id="request-editor-test-script"
               rows={10}
               value={testScript}
               disabled={locked}
-              placeholder={'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});'}
+              placeholder={
+                'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});'
+              }
               onChange={(event) => setTestScript(event.target.value)}
               className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <p className="text-xs text-muted">
-              This is what a run's pass/fail results are checked against. Clearing it removes every test from this request.
-              Test scripts on its folders or on the collection also run, but they are not shown or saved here.
+              This is what a run's pass/fail results are checked against. Clearing it
+              removes every test from this request. Test scripts on its folders or on the
+              collection also run, but they are not shown or saved here.
             </p>
           </div>
         )}
 
         <div className="mt-4 border-t border-border pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase text-muted">Resolved preview</p>
-          <div role="tablist" aria-label="Resolved preview sections" className="flex border-b border-border">
+          <p className="mb-2 text-xs font-semibold uppercase text-muted">
+            Resolved preview
+          </p>
+          <div
+            role="tablist"
+            aria-label="Resolved preview sections"
+            className="flex border-b border-border"
+          >
             {PREVIEW_TABS.map((tab) => (
               <button
                 key={tab}
@@ -312,7 +431,9 @@ export function RequestEditorPanel({
             {previewTab === "Request" && (
               <>
                 <p className="text-sm wrap-anywhere">
-                  <span className="font-mono font-semibold">{request.resolved.method}</span>{" "}
+                  <span className="font-mono font-semibold">
+                    {request.resolved.method}
+                  </span>{" "}
                   <span className="font-mono">
                     <VariableHighlightedText text={request.resolved.url} />
                   </span>
@@ -327,8 +448,13 @@ export function RequestEditorPanel({
                     {request.impliedAuthHeader && (
                       <li className="font-mono text-muted">
                         {request.impliedAuthHeader.key}:{" "}
-                        <ImpliedAuthValue header={request.impliedAuthHeader} value={request.impliedAuthHeader.resolvedValue} />{" "}
-                        <span className="text-[10px] font-sans uppercase">(from auth)</span>
+                        <ImpliedAuthValue
+                          header={request.impliedAuthHeader}
+                          value={request.impliedAuthHeader.resolvedValue}
+                        />{" "}
+                        <span className="text-[10px] font-sans uppercase">
+                          (from auth)
+                        </span>
                       </li>
                     )}
                   </ul>
@@ -338,7 +464,11 @@ export function RequestEditorPanel({
               </>
             )}
             {previewTab === "Body" &&
-              (request.resolved.body ? <CodeBlock label="Body" content={request.resolved.body} /> : <p className="text-xs text-muted">No body.</p>)}
+              (request.resolved.body ? (
+                <CodeBlock label="Body" content={request.resolved.body} />
+              ) : (
+                <p className="text-xs text-muted">No body.</p>
+              ))}
             {previewTab === "Tests" &&
               (testScript.trim().length > 0 ? (
                 <CodeBlock label="Test script" content={testScript} />

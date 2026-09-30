@@ -21,7 +21,12 @@ function nestedCollectionJson(): string {
           },
           {
             name: "Nested",
-            item: [{ name: "Deep request", request: { method: "GET", url: "{{baseUrl}}/deep" } }],
+            item: [
+              {
+                name: "Deep request",
+                request: { method: "GET", url: "{{baseUrl}}/deep" },
+              },
+            ],
           },
         ],
       },
@@ -31,7 +36,12 @@ function nestedCollectionJson(): string {
 
 describe("buildCollectionView", () => {
   it("reproduces the collection's own folder/request order and nesting", () => {
-    const view = buildCollectionView("uc-1", parseUploadedCollection(nestedCollectionJson()), nestedCollectionJson(), {});
+    const view = buildCollectionView(
+      "uc-1",
+      parseUploadedCollection(nestedCollectionJson()),
+      nestedCollectionJson(),
+      {},
+    );
     expect(view.items.map((i) => i.name)).toEqual(["Root request"]);
     expect(view.folders.map((f) => f.name)).toEqual(["Widgets"]);
     expect(view.folders[0].items.map((i) => i.name)).toEqual(["Get widget"]);
@@ -40,9 +50,14 @@ describe("buildCollectionView", () => {
   });
 
   it("substitutes a supplied variable value into resolved fields, and marks it unresolved when absent", () => {
-    const view = buildCollectionView("uc-1", parseUploadedCollection(nestedCollectionJson()), nestedCollectionJson(), {
-      baseUrl: "https://api.example.com",
-    });
+    const view = buildCollectionView(
+      "uc-1",
+      parseUploadedCollection(nestedCollectionJson()),
+      nestedCollectionJson(),
+      {
+        baseUrl: "https://api.example.com",
+      },
+    );
     const request = view.folders[0].items[0];
     expect(request.raw.url).toBe("{{baseUrl}}/widgets/{{widgetId}}");
     expect(request.resolved.url).toBe("https://api.example.com/widgets/{{widgetId}}");
@@ -51,25 +66,75 @@ describe("buildCollectionView", () => {
     expect(request.unresolvedVariables.sort()).toEqual(["token", "widgetId"]);
   });
 
-  it("reports a variableValues-only key with no reference as referenced: false", () => {
-    const view = buildCollectionView("uc-1", parseUploadedCollection(nestedCollectionJson()), nestedCollectionJson(), {
-      baseUrl: "https://api.example.com",
-      unusedKey: "some-value",
+  it("keeps a Postman dynamic variable for runtime generation without treating it as an environment variable", () => {
+    const raw = JSON.stringify({
+      info: { name: "c" },
+      item: [
+        {
+          id: "item-1",
+          name: "Create user",
+          request: {
+            method: "POST",
+            url: "https://example.test/users",
+            body: { mode: "raw", raw: '{"email":"{{$randomEmail}}"}' },
+          },
+        },
+      ],
     });
+
+    const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {
+      $randomEmail: "must-not-replace",
+    });
+
+    expect(view.items[0].raw.body).toBe('{"email":"{{$randomEmail}}"}');
+    expect(view.items[0].resolved.body).toBe('{"email":"{{$randomEmail}}"}');
+    expect(view.items[0].unresolvedVariables).toEqual([]);
+    expect(view.items[0].variableReferences).toEqual([]);
+    expect(view.variables).toEqual([]);
+  });
+
+  it("reports a variableValues-only key with no reference as referenced: false", () => {
+    const view = buildCollectionView(
+      "uc-1",
+      parseUploadedCollection(nestedCollectionJson()),
+      nestedCollectionJson(),
+      {
+        baseUrl: "https://api.example.com",
+        unusedKey: "some-value",
+      },
+    );
     const unused = view.variables.find((v) => v.name === "unusedKey");
-    expect(unused).toMatchObject({ source: "environment", resolved: true, referenced: false });
+    expect(unused).toMatchObject({
+      source: "environment",
+      resolved: true,
+      referenced: false,
+    });
   });
 
   it("reports a collection-declared-default-only key as source: 'collection-default', resolved: true", () => {
-    const view = buildCollectionView("uc-1", parseUploadedCollection(nestedCollectionJson()), nestedCollectionJson(), {});
+    const view = buildCollectionView(
+      "uc-1",
+      parseUploadedCollection(nestedCollectionJson()),
+      nestedCollectionJson(),
+      {},
+    );
     const widgetId = view.variables.find((v) => v.name === "widgetId");
-    expect(widgetId).toMatchObject({ source: "collection-default", value: "default-widget", resolved: true });
+    expect(widgetId).toMatchObject({
+      source: "collection-default",
+      value: "default-widget",
+      resolved: true,
+    });
   });
 
   it("environment always wins over a same-named collection default (research.md D8)", () => {
-    const view = buildCollectionView("uc-1", parseUploadedCollection(nestedCollectionJson()), nestedCollectionJson(), {
-      widgetId: "overridden-widget",
-    });
+    const view = buildCollectionView(
+      "uc-1",
+      parseUploadedCollection(nestedCollectionJson()),
+      nestedCollectionJson(),
+      {
+        widgetId: "overridden-widget",
+      },
+    );
     const widgetId = view.variables.find((v) => v.name === "widgetId");
     expect(widgetId).toMatchObject({ source: "environment", value: "overridden-widget" });
   });
@@ -85,37 +150,72 @@ describe("buildCollectionView", () => {
           event: [
             {
               listen: "test",
-              script: { type: "text/javascript", exec: ["pm.test(\"Status code is 200\", function () {", "  pm.response.to.have.status(200);", "});"] },
+              script: {
+                type: "text/javascript",
+                exec: [
+                  'pm.test("Status code is 200", function () {',
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                ],
+              },
             },
           ],
         },
-        { id: "item-2", name: "Without tests", request: { method: "GET", url: "https://example.test" } },
+        {
+          id: "item-2",
+          name: "Without tests",
+          request: { method: "GET", url: "https://example.test" },
+        },
       ],
     });
     const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
     expect(view.items.find((i) => i.name === "With tests")?.testScript).toBe(
       'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});',
     );
-    expect(view.items.find((i) => i.name === "Without tests")?.testScript).toBeUndefined();
+    expect(
+      view.items.find((i) => i.name === "Without tests")?.testScript,
+    ).toBeUndefined();
   });
 
   it("reads only the request's own test scripts, never its folders' or the collection's", () => {
     const raw = JSON.stringify({
       info: { name: "c" },
-      event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('collection', () => {});"] } }],
+      event: [
+        {
+          listen: "test",
+          script: { type: "text/javascript", exec: ["pm.test('collection', () => {});"] },
+        },
+      ],
       item: [
         {
           id: "folder-1",
           name: "Orders",
-          event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('folder', () => {});"] } }],
+          event: [
+            {
+              listen: "test",
+              script: { type: "text/javascript", exec: ["pm.test('folder', () => {});"] },
+            },
+          ],
           item: [
             {
               id: "item-1",
               name: "Own tests",
               request: { method: "GET", url: "https://example.test" },
-              event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('own', () => {});"] } }],
+              event: [
+                {
+                  listen: "test",
+                  script: {
+                    type: "text/javascript",
+                    exec: ["pm.test('own', () => {});"],
+                  },
+                },
+              ],
             },
-            { id: "item-2", name: "No own tests", request: { method: "GET", url: "https://example.test" } },
+            {
+              id: "item-2",
+              name: "No own tests",
+              request: { method: "GET", url: "https://example.test" },
+            },
           ],
         },
       ],
@@ -129,8 +229,17 @@ describe("buildCollectionView", () => {
     const raw = JSON.stringify({
       info: { name: "c" },
       item: [
-        { id: "item-1", name: "Edited", _apipilotEdited: true, request: { method: "GET", url: "https://example.test" } },
-        { id: "item-2", name: "Not edited", request: { method: "GET", url: "https://example.test" } },
+        {
+          id: "item-1",
+          name: "Edited",
+          _apipilotEdited: true,
+          request: { method: "GET", url: "https://example.test" },
+        },
+        {
+          id: "item-2",
+          name: "Not edited",
+          request: { method: "GET", url: "https://example.test" },
+        },
       ],
     });
     const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
@@ -142,13 +251,24 @@ describe("buildCollectionView", () => {
     function collectionWithAuth(auth: unknown): string {
       return JSON.stringify({
         info: { name: "c" },
-        item: [{ id: "item-1", name: "Request", request: { method: "GET", url: "https://example.test", auth } }],
+        item: [
+          {
+            id: "item-1",
+            name: "Request",
+            request: { method: "GET", url: "https://example.test", auth },
+          },
+        ],
       });
     }
 
     it("surfaces a bearer auth as an Authorization header, unresolved in raw and substituted in resolved", () => {
-      const raw = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
-      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { token: "abc123" });
+      const raw = collectionWithAuth({
+        type: "bearer",
+        bearer: [{ key: "token", value: "{{token}}", type: "string" }],
+      });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {
+        token: "abc123",
+      });
       const request = view.items[0];
       expect(request.impliedAuthHeader).toEqual({
         key: "Authorization",
@@ -170,7 +290,9 @@ describe("buildCollectionView", () => {
           { key: "in", value: "header", type: "string" },
         ],
       });
-      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { apiKeyValue: "secret" });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {
+        apiKeyValue: "secret",
+      });
       expect(view.items[0].impliedAuthHeader).toEqual({
         key: "X-API-Key",
         rawValue: "{{apiKeyValue}}",
@@ -180,8 +302,14 @@ describe("buildCollectionView", () => {
     });
 
     it("hides a literal bearer token or API key value, so it never reaches the browser (FR-002a)", () => {
-      const bearer = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "eyJliteral", type: "string" }] });
-      expect(buildCollectionView("uc-1", parseUploadedCollection(bearer), bearer, {}).items[0].impliedAuthHeader).toEqual({
+      const bearer = collectionWithAuth({
+        type: "bearer",
+        bearer: [{ key: "token", value: "eyJliteral", type: "string" }],
+      });
+      expect(
+        buildCollectionView("uc-1", parseUploadedCollection(bearer), bearer, {}).items[0]
+          .impliedAuthHeader,
+      ).toEqual({
         key: "Authorization",
         rawValue: "",
         resolvedValue: "",
@@ -196,8 +324,15 @@ describe("buildCollectionView", () => {
           { key: "in", value: "header", type: "string" },
         ],
       });
-      const view = buildCollectionView("uc-1", parseUploadedCollection(apikey), apikey, { suffix: "s" });
-      expect(view.items[0].impliedAuthHeader).toEqual({ key: "X-API-Key", rawValue: "", resolvedValue: "", hiddenLiteral: true });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(apikey), apikey, {
+        suffix: "s",
+      });
+      expect(view.items[0].impliedAuthHeader).toEqual({
+        key: "X-API-Key",
+        rawValue: "",
+        resolvedValue: "",
+        hiddenLiteral: true,
+      });
       expect(JSON.stringify(view)).not.toContain("prefix-");
     });
 
@@ -229,14 +364,23 @@ describe("buildCollectionView", () => {
     it("omits impliedAuthHeader entirely when the request has no auth", () => {
       const raw = JSON.stringify({
         info: { name: "c" },
-        item: [{ id: "item-1", name: "Request", request: { method: "GET", url: "https://example.test" } }],
+        item: [
+          {
+            id: "item-1",
+            name: "Request",
+            request: { method: "GET", url: "https://example.test" },
+          },
+        ],
       });
       const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
       expect(view.items[0].impliedAuthHeader).toBeUndefined();
     });
 
     it("counts an auth-only variable as unresolved when it has no value", () => {
-      const raw = collectionWithAuth({ type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] });
+      const raw = collectionWithAuth({
+        type: "bearer",
+        bearer: [{ key: "token", value: "{{token}}", type: "string" }],
+      });
       const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
       expect(view.items[0].unresolvedVariables).toEqual(["token"]);
     });
@@ -248,17 +392,36 @@ describe("buildCollectionView", () => {
         info: { name: "c" },
         ...(collectionAuth ? { auth: collectionAuth } : {}),
         item: [
-          { id: "root-req", name: "Root", request: { method: "GET", url: "{{baseUrl}}/root" } },
+          {
+            id: "root-req",
+            name: "Root",
+            request: { method: "GET", url: "{{baseUrl}}/root" },
+          },
           {
             id: "orders",
             name: "Orders",
-            auth: { type: "bearer", bearer: [{ key: "token", value: "{{token}}", type: "string" }] },
-            event: [{ listen: "test", script: { type: "text/javascript", exec: ["pm.test('folder', () => {});"] } }],
+            auth: {
+              type: "bearer",
+              bearer: [{ key: "token", value: "{{token}}", type: "string" }],
+            },
+            event: [
+              {
+                listen: "test",
+                script: {
+                  type: "text/javascript",
+                  exec: ["pm.test('folder', () => {});"],
+                },
+              },
+            ],
             item: [
               {
                 id: "order-get",
                 name: "Get order",
-                request: { method: "GET", url: "{{baseUrl}}/orders", header: [{ key: "X-Trace", value: "{{traceId}}" }] },
+                request: {
+                  method: "GET",
+                  url: "{{baseUrl}}/orders",
+                  header: [{ key: "X-Trace", value: "{{traceId}}" }],
+                },
               },
               {
                 id: "own-basic",
@@ -287,7 +450,9 @@ describe("buildCollectionView", () => {
       expect(view.folders[0].items[0].auth).toEqual({
         type: "bearer",
         source: { kind: "folder", folderId: "orders", folderName: "Orders" },
-        fields: expect.arrayContaining([{ key: "token", value: "{{token}}", hiddenLiteral: false }]),
+        fields: expect.arrayContaining([
+          { key: "token", value: "{{token}}", hiddenLiteral: false },
+        ]),
       });
     });
 
@@ -313,20 +478,32 @@ describe("buildCollectionView", () => {
           { key: "value", value: "literal-key-123", type: "string" },
         ],
       });
-      const view = buildCollectionView("uc-1", parseUploadedCollection(withCollectionAuth), withCollectionAuth, {});
+      const view = buildCollectionView(
+        "uc-1",
+        parseUploadedCollection(withCollectionAuth),
+        withCollectionAuth,
+        {},
+      );
       expect(view.items[0].auth?.source).toEqual({ kind: "collection" });
       expect(view.items[0].auth?.fields).toEqual(
         expect.arrayContaining([{ key: "value", value: "", hiddenLiteral: true }]),
       );
 
       const withoutAuth = folderAuthCollection();
-      const plain = buildCollectionView("uc-1", parseUploadedCollection(withoutAuth), withoutAuth, {});
+      const plain = buildCollectionView(
+        "uc-1",
+        parseUploadedCollection(withoutAuth),
+        withoutAuth,
+        {},
+      );
       expect(plain.items[0].auth).toBeUndefined();
     });
 
     it("lists every variable a request uses, where, and whether it is set and by which source", () => {
       const raw = folderAuthCollection();
-      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, { baseUrl: "https://api.test" });
+      const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {
+        baseUrl: "https://api.test",
+      });
       expect(view.folders[0].items[0].variableReferences).toEqual([
         { name: "baseUrl", usedIn: ["url"], resolved: true, source: "environment" },
         { name: "traceId", usedIn: ["headers"], resolved: false },
@@ -347,12 +524,22 @@ describe("buildCollectionView", () => {
                 listen: "test",
                 script: {
                   type: "text/javascript",
-                  exec: ['// Copied by ApiPilot from folder "Orders" (id: orders) when this item was moved.', "pm.test();"],
+                  exec: [
+                    '// Copied by ApiPilot from folder "Orders" (id: orders) when this item was moved.',
+                    "pm.test();",
+                  ],
                 },
               },
             ],
           },
-          { id: "orders", name: "Orders", event: [{ listen: "prerequest", script: { exec: ["pm.variables.set('a', 1);"] } }], item: [] },
+          {
+            id: "orders",
+            name: "Orders",
+            event: [
+              { listen: "prerequest", script: { exec: ["pm.variables.set('a', 1);"] } },
+            ],
+            item: [],
+          },
         ],
       });
       const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});

@@ -9,6 +9,8 @@ import type {
   WorkflowVariable,
 } from "@apipilot/shared-domain";
 import { StepNotFoundError } from "../errors";
+import { bodyEditFor, effectiveScenario } from "./bodyEdits";
+import { applyParameterEdit, editedPathParameters, parameterEditFor } from "./parameterEdits";
 import { buildStepRequest, operationKeyOf, UNIQUE_TOKEN_PREFIX, type AuthPlan, type BuiltStepRequest, type PerformanceContext } from "./stepRequest";
 
 /**
@@ -31,7 +33,10 @@ export interface PlanStepRequest {
   journey: PerformanceJourney;
   step: PerformanceStep;
   operation: ApiOperation;
+  /** The scenario as sent: with the step's body and parameter edits applied, if it has them (AP-033). */
   scenario: TestScenario;
+  /** The approved scenario itself, before any edit. */
+  generated: TestScenario;
   workflow: IntegrationWorkflow | undefined;
   consumes: WorkflowVariable[];
   produces: WorkflowVariable[];
@@ -63,7 +68,9 @@ export function uniqueTokensOf(plan: PerformancePlan, context: PerformanceContex
   const steps = plan.journeys.flatMap((journey) => journey.steps);
   return plan.uniqueValueFields.map((field, index) => {
     const step = steps.find((candidate) => candidate.id === field.stepId);
-    const scenario = step ? scenarios.get(step.scenarioId) : undefined;
+    const generated = step ? scenarios.get(step.scenarioId) : undefined;
+    // AP-033: the value the script varies comes from the body the step sends (research R3).
+    const scenario = step && generated ? effectiveScenario(generated, bodyEditFor(plan, step)) : generated;
     return {
       token: `${UNIQUE_TOKEN_PREFIX}${index}`,
       stepId: field.stepId,
@@ -86,8 +93,12 @@ export function stepRequestFor(
   if (!journey || !step) throw new StepNotFoundError(stepId);
 
   const operation = context.apiModel.operations.find((candidate) => operationKeyOf(candidate) === step.operationKey);
-  const scenario = context.approvedScenarios.find((candidate) => candidate.id === step.scenarioId);
-  if (!operation || !scenario) throw new Error(`The plan's step ${step.id} no longer matches the approvals.`);
+  const generated = context.approvedScenarios.find((candidate) => candidate.id === step.scenarioId);
+  if (!operation || !generated) throw new Error(`The plan's step ${step.id} no longer matches the approvals.`);
+  // AP-033 (research R3): the one place, with `buildJourneys`, where a body edit is applied.
+  const edit = bodyEditFor(plan, step);
+  const parameterEdit = parameterEditFor(plan, step);
+  const scenario = applyParameterEdit(effectiveScenario(generated, edit), parameterEdit);
 
   const source = journey.source;
   const workflow = source.kind === "workflow" ? context.workflows.find((candidate) => candidate.id === source.workflowId) : undefined;
@@ -100,6 +111,8 @@ export function stepRequestFor(
     workflowId: workflow?.id,
     consumes,
     uniqueFields: stepUnique.map((entry) => ({ fieldPath: entry.fieldPath, token: entry.token })),
+    bodyEdited: edit !== undefined,
+    editedPathParameters: editedPathParameters(parameterEdit),
   });
-  return { journey, step, operation, scenario, workflow, consumes, produces, unique: stepUnique, built };
+  return { journey, step, operation, scenario, generated, workflow, consumes, produces, unique: stepUnique, built };
 }

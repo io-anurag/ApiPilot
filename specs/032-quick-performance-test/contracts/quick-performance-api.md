@@ -50,6 +50,11 @@ Replacing keeps every run and report (FR-021). It does not affect a run in progr
 
 ## Plan and script
 
+> **Changed by AP-033 (2026-09-29).** On both paths, `PUT /plan` accepts `bodyEdits`, and the step
+> preview (`GET /plan/steps/:stepId/request`, and the removed-operation preview) gains `bodyStatus`
+> and `bodyEdit`. The request body is no longer view only. See
+> [specs/033-edit-step-request-body/contracts/](../../033-edit-step-request-body/contracts/).
+
 These routes have the same request bodies, validation, errors and responses as AP-029's routes of
 the same name, applied to the quick plan. Only the differences are listed.
 

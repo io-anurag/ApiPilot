@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
+  BodyEditInput,
+  ParameterEditInput,
   Environment,
   PerformancePlan,
   ScriptStatus,
@@ -35,6 +37,7 @@ import {
   formatDuration,
   loadProfileSummary,
   removalReason,
+  unexpectedStatusesByStep,
 } from "./performanceViewModel";
 import { usePerformanceRuns } from "./usePerformanceRuns";
 import { ValuesChecklist } from "./ValuesChecklist";
@@ -66,7 +69,8 @@ type LoadState =
 export interface PlanScopeContext {
   plan: PerformancePlan;
   busy: boolean;
-  apply: (update: PlanUpdate, success?: string) => Promise<void>;
+  /** Resolves to the refusal, or `null` when the update was saved. */
+  apply: (update: PlanUpdate, success?: string) => Promise<PerformanceErrorResult | null>;
 }
 
 export function PerformancePlanScreen({
@@ -115,6 +119,8 @@ export function PerformancePlanScreen({
   // A heading to move focus to once the tab it is on is shown (the pending bar's actions).
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const runs = usePerformanceRuns(client);
+  // AP-033 FR-023: steps the latest finished run answered with a status they do not expect.
+  const lastRunUnexpected = useMemo(() => unexpectedStatusesByStep(runs.latestFinished?.result), [runs.latestFinished]);
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -175,22 +181,34 @@ export function PerformancePlanScreen({
     return result.message;
   }
 
-  async function apply(update: PlanUpdate, success?: string) {
+  /**
+   * Applies one plan update. Resolves to the refusal, or `null` when saved. A body edit's refusal
+   * (AP-033) is shown by the step's editor, next to the text it is about, not in the screen banner.
+   */
+  async function apply(update: PlanUpdate, success?: string, options: { refusalShownByCaller?: boolean } = {}): Promise<PerformanceErrorResult | null> {
     setBusy(true);
     setProblem(null);
     const result = await updatePlan(update);
     setBusy(false);
     if (!result.ok) {
-      setProblem(explain(result));
+      if (!options.refusalShownByCaller) setProblem(explain(result));
       setAnnouncement(explain(result));
-      return;
+      return result;
     }
     setPlan(result.plan);
     setScript(result.script);
     if (success) setAnnouncement(success);
     void loadValues(environmentId);
     onAdvanced?.();
+    return null;
   }
+
+  const saveBody = (stepId: string, input: BodyEditInput | null) =>
+    apply({ bodyEdits: { [stepId]: input } }, input ? "Body saved." : "Body reset to the generated body.", { refusalShownByCaller: true });
+  const saveParameters = (stepId: string, input: ParameterEditInput | null) =>
+    apply({ parameterEdits: { [stepId]: input } }, input ? "Parameters saved." : "Parameters reset to the generated parameters.", {
+      refusalShownByCaller: true,
+    });
 
   async function handleGenerate() {
     setBusy(true);
@@ -416,8 +434,9 @@ export function PerformancePlanScreen({
           action: { label: "Go to run →", onClick: () => goTo("setup", RUN_TITLE_ID) },
         }
       : null;
-  const notes =
-    environment && missingValues > 0
+  const bodyNoticeCount = plan.bodyEditNotices.length;
+  const notes = [
+    ...(environment && missingValues > 0
       ? [
           <>
             {missingValues} of {values.length} values are missing in {environment.name}. Those steps
@@ -431,7 +450,19 @@ export function PerformancePlanScreen({
             </button>
           </>,
         ]
-      : [];
+      : []),
+    // AP-033 FR-010: informational; nothing is blocked.
+    ...(bodyNoticeCount > 0
+      ? [
+          <>
+            {bodyNoticeCount === 1
+              ? "An edited body no longer sends a value ApiPilot fills in."
+              : `Edited bodies no longer send ${bodyNoticeCount} values ApiPilot fills in.`}{" "}
+            Each step&apos;s details say which.
+          </>,
+        ]
+      : []),
+  ];
 
   return (
     <div className="space-y-4" data-testid={testId}>
@@ -572,6 +603,36 @@ export function PerformancePlanScreen({
               testId="performance-plan-empty"
             />
           ))}
+        {plan.discardedBodyEdits.length > 0 && (
+          // AP-033 FR-018: shown after a rebuild until the next plan edit.
+          <div className="rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm dark:bg-warning-500/10">
+            <CountedOperationList
+              label={(count) =>
+                count === 1
+                  ? "The body edit of 1 operation was discarded because its scenario changed"
+                  : `The body edits of ${count} operations were discarded because their scenarios changed`
+              }
+              collapseAbove={10}
+              testId="performance-discarded-body-edits"
+              entries={plan.discardedBodyEdits.map((operationKey) => ({ operationKey }))}
+            />
+          </div>
+        )}
+        {plan.discardedParameterEdits.length > 0 && (
+          // AP-033 FR-020 (amended 2026-09-30): as for body edits, shown until the next plan edit.
+          <div className="rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm dark:bg-warning-500/10">
+            <CountedOperationList
+              label={(count) =>
+                count === 1
+                  ? "The parameter edits of 1 operation were discarded because its scenario changed"
+                  : `The parameter edits of ${count} operations were discarded because their scenarios changed`
+              }
+              collapseAbove={10}
+              testId="performance-discarded-parameter-edits"
+              entries={plan.discardedParameterEdits.map((operationKey) => ({ operationKey }))}
+            />
+          </div>
+        )}
         {activeScope === "plan" && steps.length > 0 && (
           <JourneyList
             loadPreview={fetchStepRequest}
@@ -588,6 +649,16 @@ export function PerformancePlanScreen({
             onJourneyOrder={(journeyIds) =>
               void apply({ journeyOrder: journeyIds }, "Journey moved.")
             }
+            onSaveBody={saveBody}
+            onSaveParameters={saveParameters}
+            lastRunUnexpected={lastRunUnexpected}
+            onResetBodies={(stepIds) =>
+              void apply(
+                { bodyEdits: Object.fromEntries(stepIds.map((stepId) => [stepId, null])) },
+                stepIds.length === 1 ? "1 body reset to the generated body." : `${stepIds.length} bodies reset to the generated body.`,
+              )
+            }
+            bodyEditNotices={plan.bodyEditNotices}
             listRequest={listRequest}
           />
         )}

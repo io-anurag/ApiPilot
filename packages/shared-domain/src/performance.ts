@@ -94,6 +94,16 @@ export interface PerformanceStep {
   auth: StepAuth;
   /** Names of the user-supplied values this step needs (FR-013). */
   requiredValues: string[];
+  /**
+   * AP-033 FR-008, FR-014: present, and `true`, only when the step sends a body the engineer
+   * edited. Kept in run snapshots, which carry no body content (specs/033 research R11).
+   */
+  bodyEdited?: true;
+  /**
+   * AP-033 FR-022 (amended 2026-09-30): present, and `true`, only when the step sends parameters
+   * the engineer edited. Kept in run snapshots, which carry no parameter values.
+   */
+  parametersEdited?: true;
 }
 
 export type PerformanceJourneySource =
@@ -174,7 +184,12 @@ export interface PerformanceThreshold {
   limit: number;
 }
 
-export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url";
+/**
+ * `body-reference` (AP-033, specs/033 research R4): named only by a `{{name}}` the engineer wrote in
+ * an edited body. Secret only when that reference fills a `format: password` field, or when the name
+ * is secret elsewhere in the plan.
+ */
+export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url" | "body-reference" | "parameter-reference";
 
 /** A value the specification cannot produce (FR-013). The value itself lives in an environment. */
 export interface UserSuppliedValueRequirement {
@@ -195,6 +210,124 @@ export interface UniqueValueField {
   location: "body";
   fieldPath: string;
   format: "email" | "uuid";
+}
+
+/**
+ * AP-033 (specs/033-edit-step-request-body data-model `BodyEdit`, research R1, R2): the engineer's
+ * replacement for one step's base body, the body before ApiPilot's substitutions. A JSON edit holds
+ * the parsed value, so formatting never changes the script; a text edit holds the string.
+ */
+export type BodyEdit = {
+  stepId: string;
+  /** Keeps the edit while the operation is removed (FR-018). */
+  operationKey: string;
+  /** The step's scenario when the edit was saved; a rebuild that changes it discards the edit. */
+  scenarioId: string;
+} & ({ kind: "json"; json: unknown } | { kind: "text"; text: string });
+
+/** What `PUT /plan` accepts per step in `bodyEdits`; `null` resets the step (FR-017). */
+export interface BodyEditInput {
+  kind: "json" | "text";
+  text: string;
+}
+
+export type EditableParameterLocation = "path" | "query" | "header";
+
+/**
+ * AP-033 FR-020 (amended 2026-09-30): one documented parameter the engineer changed. `set` sends
+ * `value` (text, which may hold `{{name}}` references to environment values); `omit` leaves an
+ * optional parameter out of the request.
+ */
+export type ParameterEditEntry = { location: EditableParameterLocation; name: string } & ({ action: "set"; value: string } | { action: "omit" });
+
+/**
+ * AP-033 FR-020: the engineer's parameter changes for one step, kept and discarded exactly as a
+ * `BodyEdit` is. `parameters` is sorted by location (path, query, header), then name.
+ */
+export interface ParameterEdit {
+  stepId: string;
+  operationKey: string;
+  scenarioId: string;
+  parameters: ParameterEditEntry[];
+}
+
+/** What `PUT /plan` accepts per step in `parameterEdits`: the step's full set of changes; `null` resets it. */
+export interface ParameterEditInput {
+  parameters: ParameterEditEntry[];
+}
+
+/** Why a documented parameter cannot be edited in the plan (AP-033 FR-021). */
+export type ParameterNotEditableReason = "filled-at-run-time" | "structured-value";
+
+/** One documented parameter in the step's parameter editor (AP-033 FR-020). */
+export interface StepParameterEditRow {
+  location: EditableParameterLocation;
+  name: string;
+  required: boolean;
+  /** The schema's type, format and enum, for display only; `null` when the schema states none. */
+  type: string | null;
+  format: string | null;
+  enum: string[] | null;
+  /** The value the generated scenario sends, as text; `null` when it does not send this parameter. */
+  generated: string | null;
+  /** The engineer's change, or `null` when the parameter is as generated. */
+  edit: { action: "set"; value: string } | { action: "omit" } | null;
+  /** `null` when the parameter can be edited. */
+  notEditable: ParameterNotEditableReason | null;
+  /** A literal typed here is refused: the schema declares it `format: password` (FR-021). */
+  secret: boolean;
+}
+
+export interface StepParameterEditModel {
+  rows: StepParameterEditRow[];
+  edited: boolean;
+}
+
+/** AP-033 FR-010: a reference ApiPilot applies that an edited body no longer carries. */
+export interface BodyEditNotice {
+  stepId: string;
+  kind: "workflow-variable-dropped" | "unique-field-dropped";
+  /** The workflow variable's name, or the unique field's path. */
+  name: string;
+}
+
+export type BodyMismatchRule =
+  | "required"
+  | "type"
+  | "enum"
+  | "format"
+  | "minimum"
+  | "maximum"
+  | "minLength"
+  | "maxLength"
+  | "minItems"
+  | "maxItems";
+
+/** AP-033 FR-005: one difference between an edited JSON body and the request schema. Never blocks. */
+export interface BodyMismatch {
+  /** Dotted, with `[n]` for array items; `""` for the body itself. */
+  fieldPath: string;
+  rule: BodyMismatchRule;
+  message: string;
+}
+
+/** What body a step sends (AP-033 FR-001). */
+export type StepBodyStatus = "sent" | "not-documented" | "documented-not-sent" | "unsupported-content-type";
+
+/** The editor's model for one step (AP-033 data-model `StepBodyEditModel`). */
+export interface StepBodyEditModel {
+  kind: "json" | "text";
+  /** The base body to edit: the edit, or the generated body; `""` when the step sends none. */
+  text: string;
+  edited: boolean;
+  /** Empty unless the step has a JSON edit. */
+  mismatches: BodyMismatch[];
+  /**
+   * AP-033 FR-009: the JSON body fields ApiPilot fills at run time (workflow variables, unique
+   * values, credentials), found by comparing the body as sent with the base body. The engineer's
+   * own `{{name}}` references are not listed. Empty for text bodies.
+   */
+  replacements: { fieldPath: string; reference: PreviewReference }[];
 }
 
 /** What will be tested and how (data-model.md `PerformancePlan`). Holds no values. */
@@ -221,6 +354,25 @@ export interface PerformancePlan {
    * here is shown as "used to acquire the run's credentials".
    */
   credentialProducerOperationKeys: string[];
+  /**
+   * AP-033: the engineer's body edits, sorted by `stepId`. Fingerprinted only when not empty, so a
+   * plan without edits keeps its fingerprint (specs/033 research R10). Emptied in run snapshots.
+   */
+  bodyEdits: BodyEdit[];
+  /** Derived, not fingerprinted (AP-033 FR-010). */
+  bodyEditNotices: BodyEditNotice[];
+  /**
+   * Not fingerprinted (AP-033 FR-018): operations whose edit the last rebuild discarded because the
+   * step's scenario changed. Cleared by the next plan edit or rebuild.
+   */
+  discardedBodyEdits: string[];
+  /**
+   * AP-033 FR-020 (amended 2026-09-30): the engineer's parameter edits, sorted by `stepId`.
+   * Fingerprinted only when not empty. Emptied in run snapshots.
+   */
+  parameterEdits: ParameterEdit[];
+  /** Not fingerprinted: operations whose parameter edit the last rebuild discarded (as `discardedBodyEdits`). */
+  discardedParameterEdits: string[];
 }
 
 /**
@@ -263,6 +415,12 @@ export interface StepRequestPreview {
   auth: PreviewAuth;
   /** `text` is the body as sent, with each reference left as `{{name}}`. */
   body: { contentType: "json" | "text"; text: string; references: PreviewReference[] } | null;
+  /** AP-033 FR-001. */
+  bodyStatus: StepBodyStatus;
+  /** AP-033: `null` when the body cannot be edited (`not-documented`, `unsupported-content-type`). */
+  bodyEdit: StepBodyEditModel | null;
+  /** AP-033 FR-020: `null` when the operation documents no path, query or header parameter. */
+  parameterEdit: StepParameterEditModel | null;
 }
 
 /**
@@ -346,6 +504,35 @@ export interface LatencyPercentiles {
   p99: number;
 }
 
+/** Exact extremes and arithmetic mean of a set of latencies, rounded to 0.01 ms (FR-036, amended 2026-09-30). */
+export interface LatencySummary {
+  min: number;
+  mean: number;
+  max: number;
+}
+
+/**
+ * The phases k6 times for every request (FR-036, amended 2026-09-30). `waiting` is time to first byte. The phases do not
+ * add up to the duration: `blocked`, `connecting` and `tls-handshaking` happen before it starts.
+ */
+export type RequestPhase = "blocked" | "connecting" | "tls-handshaking" | "sending" | "waiting" | "receiving";
+
+export const REQUEST_PHASES: readonly RequestPhase[] = ["blocked", "connecting", "tls-handshaking", "sending", "waiting", "receiving"];
+
+export interface RequestPhaseTiming {
+  phase: RequestPhase;
+  meanMs: number;
+  p95Ms: number;
+}
+
+/** One step's figures in one timeline bucket; only buckets in which the step sent a request (FR-036, amended 2026-09-30). */
+export interface StepTimelinePoint {
+  offsetMs: number;
+  requests: number;
+  errors: number;
+  p95Ms: number | null;
+}
+
 /**
  * Each failure gets exactly one category (D14). A response whose status is among the step's
  * expected codes is never categorized, including 401, 403 or 429.
@@ -381,6 +568,17 @@ export interface StepResult {
   checkPassRatePercent: number | null;
   notAttempted: { missingData: number; dependencyNotAttempted: number };
   missingVariables: string[];
+  /**
+   * FR-036 (2026-09-30): every response by status, expected or not, with `"0"` for no response, ordered by
+   * status. Absent on runs recorded before the FR-036 amendment of 2026-09-30, whose reports show failure statuses only.
+   */
+  statusesReceived?: { status: string; count: number; expected: boolean }[];
+  /** FR-036 (2026-09-30): `null` when the step sent no request; absent on older runs. */
+  latencySummaryMs?: LatencySummary | null;
+  /** FR-036 (2026-09-30): the timed phases of the step's requests, in `REQUEST_PHASES` order; absent on older runs. */
+  phaseTimings?: RequestPhaseTiming[];
+  /** FR-036 (2026-09-30): the step's own timeline, on the run timeline's buckets; absent on older runs. */
+  timeline?: StepTimelinePoint[];
 }
 
 export interface JourneyResult {
@@ -441,6 +639,13 @@ export interface PerformanceResult {
     journeysCutShort: number;
     throughputPerSecond: number;
     latencyMs: LatencyPercentiles | null;
+    /** FR-036 (2026-09-30); absent on older runs. */
+    latencySummaryMs?: LatencySummary | null;
+    /** FR-036 (2026-09-30): one iteration of every journey by one virtual user, think time included; absent on older runs. */
+    iterationDurationMs?: LatencyPercentiles | null;
+    /** FR-036 (2026-09-30): bytes k6 counted on the wire for the whole run, token requests included; absent on older runs. */
+    dataSentBytes?: number;
+    dataReceivedBytes?: number;
   };
   journeys: JourneyResult[];
   steps: StepResult[];

@@ -12,6 +12,7 @@ import {
   listPerformanceRuns,
   requestPerformanceCancel,
 } from "../performance/performanceRunStore";
+import { planSnapshotForRun } from "../performance/plan/runSnapshot";
 import { renderHtmlReport } from "../performance/report/renderHtmlReport";
 import { cancelLiveRun, startPerformanceRun } from "../performance/runPerformanceTest";
 import { getSessionId } from "../session/sessionContext";
@@ -67,7 +68,7 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
         id: randomUUID(),
         status: "in-progress",
         environment: { id: environment.id, name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl },
-        planSnapshot: plan,
+        planSnapshot: planSnapshotForRun(plan),
         planSource: source.kind,
         scriptSha256: script.scriptSha256,
         k6Version: probe.readiness.version,

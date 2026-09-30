@@ -79,6 +79,11 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     upstreamFingerprint: "up-1",
     stepsNeedingExpectedStatus: ["s-status"],
     credentialProducerOperationKeys: [],
+    bodyEdits: [],
+    bodyEditNotices: [],
+    discardedBodyEdits: [],
+    parameterEdits: [],
+    discardedParameterEdits: [],
     ...overrides,
   };
 }

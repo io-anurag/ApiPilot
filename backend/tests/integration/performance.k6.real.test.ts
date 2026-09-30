@@ -94,6 +94,16 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     // 5 s tokens refreshed at 70%–80% by each of 3 virtual users over 20 s: several refreshes each.
     expect(result.tokenRefreshes.count).toBeGreaterThanOrEqual(6);
     expect(result.steps.every((step) => step.errorsByCategory.every((entry) => entry.category !== "authentication"))).toBe(true);
+    // FR-036 (amended 2026-09-30): a real k6 stream gives every status, the request phases, a per-step timeline and the run's bytes.
+    const sent = result.steps.filter((step) => step.requests > 0);
+    expect(sent.length).toBeGreaterThan(0);
+    for (const step of sent) {
+      expect(step.statusesReceived!.reduce((sum, entry) => sum + entry.count, 0)).toBe(step.requests);
+      expect(step.phaseTimings!.map((timing) => timing.phase)).toContain("waiting");
+      expect(step.timeline!.reduce((sum, point) => sum + point.requests, 0)).toBe(step.requests);
+    }
+    expect(result.totals.dataReceivedBytes).toBeGreaterThan(0);
+    expect(result.totals.iterationDurationMs).not.toBeNull();
   }, 120_000);
 
   it("stops k6 within 10 seconds of a cancel (SC-008)", async () => {
@@ -145,5 +155,77 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     expect(run.status).toBe("completed");
     expect(run.planSource).toBe("quick");
     expect(run.result.totals.requests).toBeGreaterThan(0);
+  }, 120_000);
+
+  it("sends an edited body through a real k6 run (AP-033 FR-006, quickstart 9)", async () => {
+    const agent = request.agent(createApp());
+    expect((await uploadQuick(agent, { replaceExisting: true })).status).toBe(200);
+    const plan = (await agent.get(`${QUICK_BASE}/plan`)).body.plan;
+    const status = quickSteps(plan).find((step) => step.operationKey === "GET /status")!;
+    const orders = quickSteps(plan).find((step) => step.operationKey === "POST /orders")!;
+    const saved = await agent.put(`${QUICK_BASE}/plan`).send({
+      expectedStatuses: { [status.id]: ["200"] },
+      loadProfile: { kind: "smoke", stages: [{ durationMs: 3_000, targetVirtualUsers: 1 }] },
+      bodyEdits: { [orders.id]: { kind: "json", text: JSON.stringify({ customerEmail: "edited@example.com", quantity: 9, note: "AP-033 edited" }) } },
+    });
+    expect(saved.status).toBe(200);
+    expect((await agent.post(`${QUICK_BASE}/script`)).status).toBe(200);
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "quick-real-edited",
+      tier: "local",
+      baseUrl,
+      variableValues: { username: "u", password: "p", orderId: "o-1", productId: "p-1" },
+    });
+    const received = target.requests.length;
+    const started = await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: environment.body.environment.id });
+    expect(started.status).toBe(200);
+    let run = started.body.run;
+    for (let attempt = 0; attempt < 120 && run.status === "in-progress"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      run = (await agent.get(`${QUICK_BASE}/runs/${run.id}`)).body.run;
+    }
+    expect(run.status).toBe("completed");
+    const sent = target.requests.slice(received).filter((entry) => entry.method === "POST" && entry.path.endsWith("/orders"));
+    expect(sent.length).toBeGreaterThan(0);
+    for (const entry of sent) {
+      expect(entry.body).toMatchObject({ quantity: 9, note: "AP-033 edited" });
+      // The unique field is still varied per virtual user and iteration.
+      expect((entry.body as { customerEmail: string }).customerEmail).toMatch(/^edited\+vu\d+-it\d+@example\.com$/);
+    }
+  }, 120_000);
+
+  it("sends edited query parameters through a real k6 run (AP-033 FR-020, amended 2026-09-30)", async () => {
+    const agent = request.agent(createApp());
+    expect((await uploadQuick(agent, { replaceExisting: true })).status).toBe(200);
+    const plan = (await agent.get(`${QUICK_BASE}/plan`)).body.plan;
+    const status = quickSteps(plan).find((step) => step.operationKey === "GET /status")!;
+    const orders = quickSteps(plan).find((step) => step.operationKey === "GET /orders")!;
+    const saved = await agent.put(`${QUICK_BASE}/plan`).send({
+      expectedStatuses: { [status.id]: ["200"] },
+      loadProfile: { kind: "smoke", stages: [{ durationMs: 3_000, targetVirtualUsers: 1 }] },
+      parameterEdits: { [orders.id]: { parameters: [{ location: "query", name: "state", action: "set", value: "closed" }] } },
+    });
+    expect(saved.status).toBe(200);
+    expect((await agent.post(`${QUICK_BASE}/script`)).status).toBe(200);
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "quick-real-parameters",
+      tier: "local",
+      baseUrl,
+      variableValues: { username: "u", password: "p", orderId: "o-1", productId: "p-1" },
+    });
+    const received = target.requests.length;
+    const started = await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: environment.body.environment.id });
+    expect(started.status).toBe(200);
+    let run = started.body.run;
+    for (let attempt = 0; attempt < 120 && run.status === "in-progress"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      run = (await agent.get(`${QUICK_BASE}/runs/${run.id}`)).body.run;
+    }
+    expect(run.status).toBe("completed");
+    const sent = target.requests.slice(received).filter((entry) => entry.method === "GET" && entry.path.endsWith("/orders"));
+    expect(sent.length).toBeGreaterThan(0);
+    for (const entry of sent) expect(entry.query).toBe("state=closed");
+    expect(run.planSnapshot.parameterEdits).toEqual([]);
+    expect(quickSteps(run.planSnapshot).find((step: { id: string }) => step.id === orders.id)).toMatchObject({ parametersEdited: true });
   }, 120_000);
 });

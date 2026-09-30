@@ -335,7 +335,7 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
 
       {pendingReplacement && (
         <ConfirmDialog
-          message="Replace the current quick test with the new specification? Runs and reports are kept."
+          message="Replace the current quick test with the new specification? Its plan, including any edited request bodies, is replaced. Runs and reports are kept."
           affectedCount={1}
           confirmLabel="Replace"
           onCancel={() => setPendingReplacement(null)}

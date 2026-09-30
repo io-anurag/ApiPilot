@@ -58,6 +58,13 @@ function RemovedDetails({
         <div className="min-w-0 space-y-2 lg:col-span-3">
           <p className="text-sm">
             <span className="text-xs font-medium text-muted">Scenario</span> <span>{step.scenarioDescription}</span>
+            {/* AP-033 FR-018: an edit is kept while the operation is removed, and comes back on restore. */}
+            {step.bodyEdited && (
+              <>
+                {" "}
+                <StatusBadge label="Body edited" tone="info" />
+              </>
+            )}
           </p>
           {note && <p className="text-xs text-muted">{note}</p>}
           <StepRequestPreview

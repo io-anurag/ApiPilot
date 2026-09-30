@@ -72,6 +72,8 @@ describe("QuickPerformancePage", () => {
     fireEvent.change(screen.getByLabelText("Upload a new specification for the quick performance test"), { target: { files: [specificationFile("other.yaml")] } });
     const dialog = await screen.findByTestId("confirm-dialog");
     expect(dialog).toHaveTextContent("Runs and reports are kept.");
+    // AP-033 research R9 (tasks T044): body edits go with the replaced plan.
+    expect(dialog).toHaveTextContent("including any edited request bodies");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument());
     expect(uploads(calls)).toHaveLength(0);

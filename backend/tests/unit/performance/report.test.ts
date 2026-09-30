@@ -1,7 +1,8 @@
 import type { PerformanceResult, PerformanceRun, PerformanceThreshold } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { deriveFindings } from "../../../src/performance/report/findings";
-import { escapeHtml, formatCount, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
+import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
+import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, PARAMETERS_EDITED_MARKER, parameterEditProvenance, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP, UNEXPECTED_STATUS_HINT } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
@@ -171,5 +172,142 @@ describe("HTML report (D17)", () => {
   it("formats numbers without the locale", () => {
     expect(formatCount(1234567)).toBe("1,234,567");
     expect(formatCount(1234.5)).toBe("1,234.5");
+  });
+});
+
+/** AP-033 FR-014 (specs/033-edit-step-request-body research R11; tasks T020). */
+describe("runs and reports of a plan with body edits", () => {
+  const BODY_MARKER = "EDITED-BODY-MARKER-4c1e";
+  const editedCreate = { ...create, bodyEdited: true as const };
+  const editedPlan = planFixture({
+    journeys: [journeyFixture({ id: "j1", steps: [editedCreate, evil] })],
+    bodyEdits: [{ stepId: "s-create", operationKey: "POST /orders", scenarioId: "sc-create", kind: "json", json: { note: BODY_MARKER } }],
+    discardedBodyEdits: ["GET /gone"],
+  });
+
+  it("stores a snapshot without body content, keeping which steps were edited", () => {
+    const snapshot = planSnapshotForRun(editedPlan);
+    expect(snapshot.bodyEdits).toEqual([]);
+    expect(snapshot.discardedBodyEdits).toEqual([]);
+    expect(snapshot.journeys[0].steps[0].bodyEdited).toBe(true);
+    expect(JSON.stringify(snapshot)).not.toContain(BODY_MARKER);
+    expect(editedPlan.bodyEdits).toHaveLength(1);
+  });
+
+  it("marks each edited step and counts them in provenance, with no body content", () => {
+    const run = completedRun({ planSnapshot: planSnapshotForRun(editedPlan) });
+    const html = renderHtmlReport({ ...run, result: withReportFields(result(), run) });
+    expect(html).toContain(BODY_EDITED_MARKER);
+    expect(html).toContain(escapeHtml(bodyEditProvenance(1)));
+    expect(bodyEditProvenance(1)).toBe("1 step sent a body written by the engineer, not generated from the specification.");
+    expect(bodyEditProvenance(3)).toBe("3 steps sent a body written by the engineer, not generated from the specification.");
+    expect(html).not.toContain(BODY_MARKER);
+  });
+
+  it("adds nothing to the report of a plan without edits", () => {
+    const html = renderHtmlReport(completedRun());
+    expect(html).not.toContain(BODY_EDITED_MARKER);
+    expect(html).not.toContain("written by the engineer");
+  });
+});
+
+/** FR-036 (amended 2026-09-30): readable timeline, every status received, latency detail, request and response per step. */
+describe("report detail per step", () => {
+  function amended(): PerformanceResult {
+    const base = result();
+    return {
+      ...base,
+      totals: { ...base.totals, latencySummaryMs: { min: 3.2, mean: 48.1, max: 910 }, iterationDurationMs: { p50: 150, p90: 200, p95: 220, p99: 260 }, dataSentBytes: 2_048, dataReceivedBytes: 3_145_728 },
+      timeline: { bucketMs: 5_000, points: [{ offsetMs: 0, virtualUsers: 2, requests: 60, errors: 0, p95Ms: 2 }, { offsetMs: 5_000, virtualUsers: 2, requests: 60, errors: 6, p95Ms: 900 }] },
+      steps: [
+        {
+          ...base.steps[0],
+          statusesReceived: [{ status: "201", count: 54, expected: true }, { status: "401", count: 2, expected: false }, { status: "429", count: 4, expected: false }],
+          latencySummaryMs: { min: 3.2, mean: 60.4, max: 910 },
+          phaseTimings: [{ phase: "connecting", meanMs: 0.4, p95Ms: 1.1 }, { phase: "waiting", meanMs: 55.2, p95Ms: 101.3 }],
+          timeline: [{ offsetMs: 0, requests: 30, errors: 0, p95Ms: 2 }, { offsetMs: 5_000, requests: 30, errors: 6, p95Ms: 900 }],
+        },
+        { ...base.steps[1], statusesReceived: [{ status: "200", count: 60, expected: true }], latencySummaryMs: { min: 4, mean: 30, max: 95 }, phaseTimings: [], timeline: [{ offsetMs: 0, requests: 60, errors: 0, p95Ms: 70 }] },
+      ],
+    };
+  }
+  const render = (value: PerformanceResult, planSnapshot = plan) => {
+    const run = completedRun({ planSnapshot });
+    return renderHtmlReport({ ...run, result: withReportFields(value, run) });
+  };
+
+  it("draws the timeline as three panels, each with its own scale and legend, never one shared axis", () => {
+    const html = render(amended());
+    for (const text of ["Virtual users", "p95 latency, all steps", "Requests as expected", "Failed requests", "ms, log scale", 'class="vus-line"', 'class="p95"', 'class="bar-fail"', "<title>00:05–00:10 · 2 VUs · p95 900 ms · 60 requests, 6 failed</title>", "Timeline as a table"]) {
+      expect(html).toContain(text);
+    }
+    // Only latency within 20× of itself stays linear.
+    expect(render({ ...amended(), timeline: { bucketMs: 5_000, points: [{ offsetMs: 0, virtualUsers: 1, requests: 1, errors: 0, p95Ms: 40 }] } })).not.toContain("log scale");
+  });
+
+  it("shows each step's latency per interval on one scale, hatching intervals with failures", () => {
+    const html = render(amended());
+    expect(html).toContain("By step over time");
+    expect(html).toContain("Hatched: had failures");
+    expect(html).toMatch(/class="cell h\d fail" title="POST \/orders · 00:05–00:10 · 30 requests · p95 900 ms · 6 failed"/);
+    expect(html).toContain("2 ms – ");
+  });
+
+  it("lists every status received, marked expected or unexpected, with min and max latency", () => {
+    const html = render(amended());
+    expect(html).toContain("<th>Received</th>");
+    expect(html).toMatch(/201 × 54<\/span> <span class="badge ok">expected<\/span>/);
+    expect(html).toMatch(/429 × 4<\/span> <span class="badge bad">unexpected<\/span>/);
+    expect(html).toContain("min 3.2 ms · mean 60.4 ms · max 910 ms");
+    expect(html).toContain("3 MiB");
+    expect(html).toContain("p95 220 ms each");
+  });
+
+  it("splits each step into a request block from the plan and a response block from the measurements, with no body", () => {
+    const html = render(amended());
+    for (const text of ["<h3>Request</h3>", "<h3>Response</h3>", "path template; the resolved URL is not recorded", "Waiting (time to first byte)", "55.2 ms", "orderId ← response field orderId", "Not recorded", "Why in this journey"]) {
+      expect(html).toContain(text);
+    }
+    // The failing step is open; the step without failures is not.
+    expect(html).toMatch(/<details open><summary><span class="method">POST<\/span> <code>\/orders<\/code>/);
+    expect(html).toMatch(/<details><summary><span class="method">GET<\/span>/);
+  });
+
+  it("reports a run recorded before the amendment without inventing what it did not record", () => {
+    const html = render(result());
+    expect(html).toContain("Failures only; this run predates recording every status.");
+    expect(html).toContain("This run was recorded before per-step timelines were kept.");
+    expect(html).not.toContain("Request phases");
+    expect(html).not.toContain("Data received");
+    expect(html).not.toContain("badge ok\">expected");
+  });
+
+  it("is deterministic and escapes path templates in hover text", () => {
+    const html = render(amended());
+    expect(render(amended())).toBe(html);
+    const evilTimeline = { ...amended(), steps: [amended().steps[0], { ...amended().steps[1], timeline: [{ offsetMs: 0, requests: 1, errors: 1, p95Ms: 5 }] }] };
+    const evilHtml = render(evilTimeline);
+    expect(evilHtml).not.toContain("<img src=x onerror=alert(1)>");
+    expect(evilHtml).not.toMatch(/<script|<link|<iframe|<img /i);
+  });
+});
+
+/** AP-033 FR-022 (amended 2026-09-30): parameter edits and failing steps in the report. */
+describe("parameter edits and unexpected statuses in the report", () => {
+  it("marks a step that sent edited parameters, counts it, and records no value", () => {
+    const edited = planFixture({ journeys: [journeyFixture({ id: "j1", steps: [{ ...create, parametersEdited: true as const }] }), journeyFixture({ id: "j2", steps: [evil] })], thresholds });
+    const run = completedRun({ planSnapshot: edited });
+    const html = renderHtmlReport({ ...run, result: withReportFields(result(), run) });
+    expect(html).toContain(`J1 · step 1 · ${PARAMETERS_EDITED_MARKER}`);
+    expect(html).toContain(`${PARAMETERS_EDITED_MARKER} · their values are not recorded`);
+    expect(html).toContain(escapeHtml(parameterEditProvenance(1)));
+    expect(parameterEditProvenance(2)).toBe("2 steps sent parameters edited by the engineer, not generated from the specification.");
+    expect(renderHtmlReport(completedRun())).not.toContain(PARAMETERS_EDITED_MARKER);
+  });
+
+  it("points a step with unexpected statuses to its request in the plan, and says nothing for a step without them", () => {
+    const html = renderHtmlReport(completedRun());
+    // s-create received 429 and 401, which it does not expect; s-evil received none.
+    expect(html.split(escapeHtml(UNEXPECTED_STATUS_HINT)).length - 1).toBe(1);
   });
 });

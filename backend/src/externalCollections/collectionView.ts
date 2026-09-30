@@ -1,4 +1,11 @@
-import type { Collection, Event, Item, ItemGroup, RequestAuth, Variable } from "postman-collection";
+import type {
+  Collection,
+  Event,
+  Item,
+  ItemGroup,
+  RequestAuth,
+  Variable,
+} from "postman-collection";
 import type {
   CollectionFolderView,
   CollectionRequestFields,
@@ -9,9 +16,19 @@ import type {
   RequestVariableReference,
   VariableBinding,
 } from "@apipilot/shared-domain";
-import { extractReferencedVariables, findVariableTokens, removeVariableTokens, substituteVariables } from "./uploadedCollectionParsing";
+import {
+  extractReferencedVariables,
+  findVariableTokens,
+  isPostmanDynamicVariable,
+  removeVariableTokens,
+  substituteVariables,
+} from "./uploadedCollectionParsing";
 import { findEditedItemIds } from "./editedItems";
-import { copiedScriptSourceFolderId, inheritedAuth, ownAuth } from "./collectionStructure";
+import {
+  copiedScriptSourceFolderId,
+  inheritedAuth,
+  ownAuth,
+} from "./collectionStructure";
 
 type Folder = ItemGroup<Item>;
 
@@ -31,7 +48,9 @@ function bodyToText(body: Item["request"]["body"]): string | undefined {
 }
 
 function rawFields(item: Item): CollectionRequestFields {
-  const headers = item.request.headers.all().map((header) => ({ key: header.key, value: String(header.value ?? "") }));
+  const headers = item.request.headers
+    .all()
+    .map((header) => ({ key: header.key, value: String(header.value ?? "") }));
   return {
     method: item.request.method,
     url: item.request.url ? item.request.url.toString() : "",
@@ -50,16 +69,25 @@ function rawFields(item: Item): CollectionRequestFields {
  */
 function testScriptOf(item: Item): string | undefined {
   const events: Event[] = item.events.listenersOwn("test");
-  const sources = events.map((event) => event.script?.toSource()).filter((source): source is string => Boolean(source));
+  const sources = events
+    .map((event) => event.script?.toSource())
+    .filter((source): source is string => Boolean(source));
   return sources.length > 0 ? sources.join("\n") : undefined;
 }
 
-function resolvedFields(raw: CollectionRequestFields, variableValues: Record<string, string>): CollectionRequestFields {
+function resolvedFields(
+  raw: CollectionRequestFields,
+  variableValues: Record<string, string>,
+): CollectionRequestFields {
   return {
     method: raw.method,
     url: substituteVariables(raw.url, variableValues),
-    headers: raw.headers.map((header) => ({ key: header.key, value: substituteVariables(header.value, variableValues) })),
-    body: raw.body === undefined ? undefined : substituteVariables(raw.body, variableValues),
+    headers: raw.headers.map((header) => ({
+      key: header.key,
+      value: substituteVariables(header.value, variableValues),
+    })),
+    body:
+      raw.body === undefined ? undefined : substituteVariables(raw.body, variableValues),
   };
 }
 
@@ -79,7 +107,9 @@ function unresolvedVariablesFor(
   if (impliedAuthHeader) {
     for (const token of findVariableTokens(impliedAuthHeader.rawValue)) tokens.add(token);
   }
-  return [...tokens].filter((name) => !variableValues[name]);
+  return [...tokens].filter(
+    (name) => !isPostmanDynamicVariable(name) && !variableValues[name],
+  );
 }
 
 /**
@@ -91,7 +121,10 @@ function unresolvedVariablesFor(
  * A literal token or API key value is a secret (FR-002a): it is emptied here, like the Auth tab's
  * field, so it never reaches the browser.
  */
-function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>): ImpliedAuthHeader | undefined {
+function impliedAuthHeaderFor(
+  item: Item,
+  variableValues: Record<string, string>,
+): ImpliedAuthHeader | undefined {
   const auth = item.getAuth();
   if (!auth) return undefined;
   const params = auth.parameters();
@@ -99,7 +132,13 @@ function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>
   if (auth.type === "bearer") {
     const token = params?.get("token");
     if (typeof token !== "string" || token.length === 0) return undefined;
-    if (isHiddenLiteral(token)) return { key: "Authorization", rawValue: "", resolvedValue: "", hiddenLiteral: true };
+    if (isHiddenLiteral(token))
+      return {
+        key: "Authorization",
+        rawValue: "",
+        resolvedValue: "",
+        hiddenLiteral: true,
+      };
     return {
       key: "Authorization",
       rawValue: `Bearer ${token}`,
@@ -113,9 +152,21 @@ function impliedAuthHeaderFor(item: Item, variableValues: Record<string, string>
     if (location !== undefined && location !== "header") return undefined; // query-located: already visible in the URL
     const key = params?.get("key");
     const value = params?.get("value");
-    if (typeof key !== "string" || key.length === 0 || typeof value !== "string" || value.length === 0) return undefined;
-    if (isHiddenLiteral(value)) return { key, rawValue: "", resolvedValue: "", hiddenLiteral: true };
-    return { key, rawValue: value, resolvedValue: substituteVariables(value, variableValues), hiddenLiteral: false };
+    if (
+      typeof key !== "string" ||
+      key.length === 0 ||
+      typeof value !== "string" ||
+      value.length === 0
+    )
+      return undefined;
+    if (isHiddenLiteral(value))
+      return { key, rawValue: "", resolvedValue: "", hiddenLiteral: true };
+    return {
+      key,
+      rawValue: value,
+      resolvedValue: substituteVariables(value, variableValues),
+      hiddenLiteral: false,
+    };
   }
 
   return undefined;
@@ -169,7 +220,10 @@ interface ViewContext {
  * collection's — the same walk `Item.getAuth()` makes. Values are as stored; a secret field holding
  * a literal is emptied here, on the server, so the literal never reaches the browser.
  */
-function authViewFor(item: Item, context: ViewContext): { view: RequestAuthView; storedValues: string[] } | undefined {
+function authViewFor(
+  item: Item,
+  context: ViewContext,
+): { view: RequestAuthView; storedValues: string[] } | undefined {
   const own = ownAuth(item);
   if (own) return describeAuth(own, { kind: "request" });
   const inherited = inheritedAuth(context.collection, context.chain);
@@ -178,11 +232,18 @@ function authViewFor(item: Item, context: ViewContext): { view: RequestAuthView;
     inherited.auth,
     inherited.source === context.collection
       ? { kind: "collection" }
-      : { kind: "folder", folderId: inherited.source.id, folderName: inherited.source.name },
+      : {
+          kind: "folder",
+          folderId: inherited.source.id,
+          folderName: inherited.source.name,
+        },
   );
 }
 
-function describeAuth(auth: RequestAuth, source: RequestAuthView["source"]): { view: RequestAuthView; storedValues: string[] } {
+function describeAuth(
+  auth: RequestAuth,
+  source: RequestAuthView["source"],
+): { view: RequestAuthView; storedValues: string[] } {
   const storedValues: string[] = [];
   const fields = (auth.parameters()?.all() ?? []).map((parameter: Variable) => {
     const key = parameter.key ?? "";
@@ -203,6 +264,7 @@ function variableReferencesFor(
   const usage = new Map<string, Set<RequestVariableReference["usedIn"][number]>>();
   const record = (text: string, location: RequestVariableReference["usedIn"][number]) => {
     for (const name of findVariableTokens(text)) {
+      if (isPostmanDynamicVariable(name)) continue;
       const locations = usage.get(name) ?? new Set();
       locations.add(location);
       usage.set(name, locations);
@@ -252,7 +314,11 @@ function toRequestView(item: Item, context: ViewContext): CollectionRequestView 
     ...(testScript !== undefined ? { testScript } : {}),
     ...(impliedAuthHeader !== undefined ? { impliedAuthHeader } : {}),
     ...(auth !== undefined ? { auth: auth.view } : {}),
-    variableReferences: variableReferencesFor(raw, auth?.storedValues ?? [], context.bindings),
+    variableReferences: variableReferencesFor(
+      raw,
+      auth?.storedValues ?? [],
+      context.bindings,
+    ),
     copiedScriptFolderIds: copiedScriptFolderIdsOf(item),
   };
 }
@@ -269,9 +335,18 @@ function toFolderView(group: Folder, context: ViewContext): CollectionFolderView
     }
   });
   const scriptEvents = (["prerequest", "test"] as const).filter((listen) =>
-    group.events.listenersOwn(listen).some((event) => (event.script?.toSource() ?? "").trim().length > 0),
+    group.events
+      .listenersOwn(listen)
+      .some((event) => (event.script?.toSource() ?? "").trim().length > 0),
   );
-  return { id: group.id, name: group.name, items, folders, scriptEvents, copiedScriptFolderIds: copiedScriptFolderIdsOf(group) };
+  return {
+    id: group.id,
+    name: group.name,
+    items,
+    folders,
+    scriptEvents,
+    copiedScriptFolderIds: copiedScriptFolderIdsOf(group),
+  };
 }
 
 /**
@@ -281,19 +356,35 @@ function toFolderView(group: Folder, context: ViewContext): CollectionFolderView
  * persisted `source` tiers (research.md D8): `variableValues` always wins over a collection
  * default of the same name.
  */
-function buildVariableBindings(collection: Collection, variableValues: Record<string, string>): VariableBinding[] {
+function buildVariableBindings(
+  collection: Collection,
+  variableValues: Record<string, string>,
+): VariableBinding[] {
   const referenced = new Set(extractReferencedVariables(collection));
   const collectionDefaults = new Map<string, string>();
   collection.variables.each((variable: Variable) => {
     if (!variable.key) return;
-    collectionDefaults.set(variable.key, variable.value === undefined ? "" : String(variable.value));
+    collectionDefaults.set(
+      variable.key,
+      variable.value === undefined ? "" : String(variable.value),
+    );
   });
 
-  const names = new Set<string>([...referenced, ...collectionDefaults.keys(), ...Object.keys(variableValues)]);
+  const names = new Set<string>([
+    ...referenced,
+    ...[...collectionDefaults.keys()].filter((name) => !isPostmanDynamicVariable(name)),
+    ...Object.keys(variableValues).filter((name) => !isPostmanDynamicVariable(name)),
+  ]);
   return [...names].map((name): VariableBinding => {
     const environmentValue = variableValues[name];
     if (environmentValue) {
-      return { name, value: environmentValue, source: "environment", resolved: true, referenced: referenced.has(name) };
+      return {
+        name,
+        value: environmentValue,
+        source: "environment",
+        resolved: true,
+        referenced: referenced.has(name),
+      };
     }
     const defaultValue = collectionDefaults.get(name);
     return {

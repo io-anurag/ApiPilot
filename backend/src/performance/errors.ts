@@ -22,6 +22,14 @@ export class InvalidExpectedStatusError extends Error {
   }
 }
 
+/** `400 invalid_request`: a `PUT /plan` body or field that is not the documented shape. */
+export class InvalidPlanUpdateError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "InvalidPlanUpdateError";
+  }
+}
+
 /** `400 invalid_load_profile` (data-model.md validation rules). */
 export class InvalidLoadProfileError extends Error {
   constructor(reason: string) {
@@ -95,5 +103,61 @@ export class QuickTestExistsError extends Error {
   constructor() {
     super("This session already has a quick performance test. Confirm to replace it; runs and reports are kept.");
     this.name = "QuickTestExistsError";
+  }
+}
+
+/** AP-033 (specs/033-edit-step-request-body contracts/body-edits-api.md): why a body edit was refused. */
+export type InvalidBodyEditCode =
+  | "invalid_body_edit"
+  | "body_not_accepted"
+  | "body_too_large"
+  | "invalid_body"
+  | "reserved_reference"
+  | "body_secret_literal";
+
+/** Extra fields a body-edit refusal carries. None holds body text or a value (research R6, R14). */
+export interface InvalidBodyEditExtra {
+  limitBytes?: number;
+  line?: number;
+  column?: number;
+  reference?: string;
+  fieldPath?: string;
+}
+
+/** AP-033 FR-020 to FR-022 (amended 2026-09-30): why a parameter edit was refused. */
+export type InvalidParameterEditCode =
+  | "invalid_parameter_edit"
+  | "parameter_not_editable"
+  | "parameter_required"
+  | "parameter_too_long"
+  | "reserved_reference"
+  | "parameter_secret_literal";
+
+/**
+ * AP-033 `400 <code>`: a `PUT /plan` parameter edit that cannot be saved; nothing is applied. The
+ * extra fields name the parameter only; no message quotes the value the engineer typed.
+ */
+export class InvalidParameterEditError extends Error {
+  constructor(
+    public readonly code: InvalidParameterEditCode,
+    public readonly stepId: string,
+    message: string,
+    public readonly extra: { location?: string; name?: string; reference?: string; limitBytes?: number } = {},
+  ) {
+    super(message);
+    this.name = "InvalidParameterEditError";
+  }
+}
+
+/** AP-033 `400 <code>`: a `PUT /plan` body edit that cannot be saved; nothing is applied (research R6). */
+export class InvalidBodyEditError extends Error {
+  constructor(
+    public readonly code: InvalidBodyEditCode,
+    public readonly stepId: string,
+    message: string,
+    public readonly extra: InvalidBodyEditExtra = {},
+  ) {
+    super(message);
+    this.name = "InvalidBodyEditError";
   }
 }

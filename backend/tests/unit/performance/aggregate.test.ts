@@ -3,7 +3,7 @@ import { LineSplitter, parseMetricsLine, type MetricsPoint } from "../../../src/
 import { classifyFailure, createAggregate, timelineBucketMs } from "../../../src/performance/report/aggregate";
 import { LatencyHistogram } from "../../../src/performance/report/histogram";
 import { journeyFixture, planFixture, stepFixture } from "../../fixtures/performance/builders";
-import { check, counter, httpReq, iteration, metricDeclaration, STREAM_START_MS, tokenRefreshReq, vus } from "../../fixtures/performance/ndjson";
+import { check, counter, httpReq, iteration, metricDeclaration, sample, STREAM_START_MS, tokenRefreshReq, vus } from "../../fixtures/performance/ndjson";
 
 /** research D11, D12, D14, D25 (tasks T057, T058). */
 
@@ -29,7 +29,11 @@ describe("metrics stream", () => {
       point: { metric: "http_reqs", timeMs: STREAM_START_MS + 1000, value: 1, tags: { step: "s", journey: "j", status: "200", method: "GET" } },
     });
     expect(parseMetricsLine(metricDeclaration("http_reqs", "counter")).kind).toBe("ignored");
-    expect(parseMetricsLine(JSON.stringify({ type: "Point", metric: "data_sent", data: { time: "2026-09-27T12:00:00Z", value: 1, tags: {} } })).kind).toBe("ignored");
+    expect(parseMetricsLine(JSON.stringify({ type: "Point", metric: "http_req_failed", data: { time: "2026-09-27T12:00:00Z", value: 1, tags: {} } })).kind).toBe("ignored");
+    // FR-036 (amended 2026-09-30): the request phases and the run-level data and iteration metrics are kept.
+    for (const metric of ["http_req_waiting", "http_req_connecting", "data_sent", "data_received", "iteration_duration"]) {
+      expect(parseMetricsLine(JSON.stringify({ type: "Point", metric, data: { time: "2026-09-27T12:00:00Z", value: 1, tags: {} } })).kind).toBe("point");
+    }
     expect(parseMetricsLine("   ").kind).toBe("blank");
     expect(parseMetricsLine("{not json").kind).toBe("unreadable");
     expect(parseMetricsLine(JSON.stringify({ type: "Point", metric: "http_reqs", data: { time: "nope", value: 1 } })).kind).toBe("unreadable");
@@ -144,6 +148,47 @@ describe("aggregate", () => {
     expect(result.steps.every((step) => step.requests === 0)).toBe(true);
     expect(result.tokenRefreshes).toEqual({ count: 3, failed: 1, lifetimeStated: false, bucketOffsetsMs: [0, 10_000] });
     expect(aggregate.progress(STREAM_START_MS + 20_000).tokenRefreshesSoFar).toBe(3);
+  });
+
+  it("records every status received, exact min/mean/max, request phases and a per-step timeline (FR-036, amended 2026-09-30)", () => {
+    const tags = { step: "s-read", journey: "j1", status: "200", method: "GET" };
+    const aggregate = run([
+      ...httpReq({ step: "s-read", journey: "j1", status: 200, method: "GET", durationMs: 10, atMs: 100 }),
+      sample("http_req_waiting", 8, tags, 100),
+      sample("http_req_connecting", 1.5, tags, 100),
+      ...httpReq({ step: "s-read", journey: "j1", status: 401, method: "GET", durationMs: 30, atMs: 200 }),
+      sample("http_req_waiting", 24, { ...tags, status: "401" }, 200),
+      ...httpReq({ step: "s-read", journey: "j1", status: 503, method: "GET", durationMs: 50, atMs: 6_000 }),
+      ...httpReq({ step: "s-read", journey: "j1", status: 0, method: "GET", durationMs: 60_000, atMs: 7_000, errorCode: 1211 }),
+      sample("iteration_duration", 120, { group: "" }, 200),
+      sample("data_sent", 145, { group: "" }, 200),
+      sample("data_received", 377, { group: "" }, 200),
+      sample("data_received", 23, { group: "" }, 6_000),
+    ]);
+    const result = aggregate.toResult(STREAM_START_MS + 20_000);
+    const read = result.steps[1];
+    // 401 is among this step's expected codes (D14), so it is received as expected; 503 and no response are not.
+    expect(read.statusesReceived).toEqual([
+      { status: "0", count: 1, expected: false },
+      { status: "200", count: 1, expected: true },
+      { status: "401", count: 1, expected: true },
+      { status: "503", count: 1, expected: false },
+    ]);
+    expect(read.errorsByStatus).toEqual([{ status: "0", count: 1 }, { status: "503", count: 1 }]);
+    expect(read.latencySummaryMs).toEqual({ min: 10, mean: 15022.5, max: 60000 });
+    expect(read.phaseTimings?.map((timing) => [timing.phase, timing.meanMs])).toEqual([
+      ["connecting", 1.5],
+      ["waiting", 16],
+    ]);
+    expect(read.timeline).toEqual([
+      { offsetMs: 0, requests: 2, errors: 0, p95Ms: expect.any(Number) },
+      { offsetMs: 5_000, requests: 2, errors: 2, p95Ms: expect.any(Number) },
+    ]);
+    expect(result.steps[0]).toMatchObject({ statusesReceived: [], latencySummaryMs: null, phaseTimings: [], timeline: [] });
+    // Run-level metrics carry no step tag and never enter a step (D12).
+    expect(result.totals).toMatchObject({ dataSentBytes: 145, dataReceivedBytes: 400, latencySummaryMs: { min: 10, max: 60000 } });
+    expect(result.totals.iterationDurationMs?.p50).toBeCloseTo(120, -1);
+    expect(result.steps.reduce((sum, step) => sum + step.requests, 0)).toBe(result.totals.requests);
   });
 
   it("reports running progress that ends equal to the result's totals (FR-030)", () => {

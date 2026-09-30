@@ -5,10 +5,16 @@ import { TargetServer } from "../../fixtures/execution/targetServer";
 
 const POLL_TIMEOUT_MS = 30_000;
 
-async function pollUntilSettled(agent: ReturnType<typeof request.agent>, id: string, runId: string) {
+async function pollUntilSettled(
+  agent: ReturnType<typeof request.agent>,
+  id: string,
+  runId: string,
+) {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   for (;;) {
-    const response = await agent.get(`/api/external-collections/${id}/execution/runs/${runId}`);
+    const response = await agent.get(
+      `/api/external-collections/${id}/execution/runs/${runId}`,
+    );
     if (response.body.run.status !== "in-progress") return response;
     if (Date.now() > deadline) throw new Error(`Run ${runId} never settled.`);
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -31,10 +37,18 @@ describe("external collections: a missing variable value does not refuse the run
 
     const collection = {
       info: { name: "c" },
-      item: [{ name: "Get widget", request: { method: "GET", url: "{{baseUrl}}/widgets/{{widgetId}}" } }],
+      item: [
+        {
+          name: "Get widget",
+          request: { method: "GET", url: "{{baseUrl}}/widgets/{{widgetId}}" },
+        },
+      ],
     };
     // The environment supplies baseUrl but not the also-referenced 'widgetId'.
-    const environment = { name: "env", values: [{ key: "baseUrl", value: baseUrl, enabled: true }] };
+    const environment = {
+      name: "env",
+      values: [{ key: "baseUrl", value: baseUrl, enabled: true }],
+    };
 
     const app = createApp();
     const agent = request.agent(app);
@@ -44,14 +58,20 @@ describe("external collections: a missing variable value does not refuse the run
       .field("name", "My collection")
       .field("tier", "local")
       .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
-      .attach("environment", Buffer.from(JSON.stringify(environment)), "environment.json");
+      .attach(
+        "environment",
+        Buffer.from(JSON.stringify(environment)),
+        "environment.json",
+      );
     expect(uploadResponse.status).toBe(201);
     const id = uploadResponse.body.uploadedCollection.id;
 
     const view = await agent.get(`/api/external-collections/${id}/collection`);
     expect(view.body.collectionView.items[0].unresolvedVariables).toEqual(["widgetId"]);
 
-    const started = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true });
+    const started = await agent
+      .post(`/api/external-collections/${id}/execution/start`)
+      .send({ confirmed: true });
     expect(started.status).toBe(200);
 
     const finalResponse = await pollUntilSettled(agent, id, started.body.run.id);
@@ -59,5 +79,56 @@ describe("external collections: a missing variable value does not refuse the run
     expect(finalResponse.body.run.results).toHaveLength(1);
     expect(finalResponse.body.run.results[0].outcome).not.toBe("not-attempted");
     expect(targetServer.requests).toHaveLength(1);
+  }, 60_000);
+
+  it("generates a supported Postman dynamic value at run time without listing it as unresolved", async () => {
+    const baseUrl = await targetServer.start();
+    const collection = {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Get user",
+          request: {
+            method: "GET",
+            url: "{{baseUrl}}/users",
+            header: [{ key: "X-Generated-Email", value: "{{$randomEmail}}" }],
+          },
+        },
+      ],
+    };
+    const environment = {
+      name: "env",
+      values: [{ key: "baseUrl", value: baseUrl, enabled: true }],
+    };
+    const agent = request.agent(createApp());
+
+    const uploadResponse = await agent
+      .post("/api/external-collections")
+      .field("name", "My collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection)), "collection.json")
+      .attach(
+        "environment",
+        Buffer.from(JSON.stringify(environment)),
+        "environment.json",
+      );
+    const id = uploadResponse.body.uploadedCollection.id;
+
+    const view = await agent.get(`/api/external-collections/${id}/collection`);
+    expect(view.body.collectionView.items[0].unresolvedVariables).toEqual([]);
+    expect(
+      view.body.collectionView.variables.map(
+        (variable: { name: string }) => variable.name,
+      ),
+    ).not.toContain("$randomEmail");
+
+    const started = await agent
+      .post(`/api/external-collections/${id}/execution/start`)
+      .send({ confirmed: true });
+    const finalResponse = await pollUntilSettled(agent, id, started.body.run.id);
+    expect(finalResponse.body.run.status).toBe("completed");
+    expect(targetServer.requests[0].headers["x-generated-email"]).toEqual(
+      expect.stringMatching(/.+@.+/),
+    );
   }, 60_000);
 });

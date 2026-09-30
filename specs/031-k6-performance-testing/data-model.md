@@ -180,6 +180,23 @@ errorsByCategory: {category: FailureCategory, count}[], checkPassRatePercent, no
 `errorsByStatus` counts only failures: statuses outside `expectedStatuses`, with `"0"` for no
 response (FR-012a).
 
+Amended 2026-09-30 (FR-036). Four optional fields, absent on runs recorded before the amendment:
+
+- `statusesReceived: {status: string, count, expected: boolean}[]`: every response by status, in
+  status order, `"0"` for no response. `expected` uses the same match as D14, so the unexpected
+  entries equal `errorsByStatus`.
+- `latencySummaryMs: {min, mean, max} | null`: exact, rounded to 0.01 ms; `null` with no request.
+- `phaseTimings: {phase, meanMs, p95Ms}[]`: from k6's `http_req_blocked`, `http_req_connecting`,
+  `http_req_tls_handshaking`, `http_req_sending`, `http_req_waiting` and `http_req_receiving`,
+  which carry the request's `step` tag. Only phases with samples, in that order.
+- `timeline: {offsetMs, requests, errors, p95Ms}[]`: the step's own points on the run timeline's
+  buckets, only buckets in which it sent a request.
+
+`PerformanceResult.totals` gains, equally optional: `latencySummaryMs`, `iterationDurationMs`
+(percentiles of k6's `iteration_duration`, think time included), and `dataSentBytes` and
+`dataReceivedBytes` (k6's `data_sent` and `data_received`, which carry no step tag and include
+token requests). None of these carries a value, body or URL (FR-040).
+
 `PerformanceFailureCategory` (named so because `FailureCategory` already belongs to AP-017's `execution.ts`) `= "unexpected-status" | "connection-error" | "timeout" | "extraction-failed" |
 "missing-data" | "dependency-not-attempted" | "authentication" | "rate-limited"` (D14). A
 response whose status is among the step's expected codes is never categorized, including 401,

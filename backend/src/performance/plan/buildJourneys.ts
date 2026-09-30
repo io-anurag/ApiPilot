@@ -1,6 +1,8 @@
 import type {
   ApiOperation,
+  BodyEdit,
   OmittedOperation,
+  ParameterEdit,
   PerformanceJourney,
   PerformanceStep,
   StepDependency,
@@ -10,7 +12,9 @@ import type {
   WorkflowVariable,
 } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
+import { effectiveScenario, engineerReferences } from "./bodyEdits";
 import { withSources, prefillExpectedStatuses } from "./expectedStatuses";
+import { applyParameterEdit, editedPathParameters, parameterEditReferences } from "./parameterEdits";
 import { journeyIdFor, stepIdFor } from "./identifiers";
 import { selectPerformanceScenario, type PerformanceScenarioSelection } from "./selectScenario";
 import {
@@ -35,6 +39,24 @@ export interface BuiltJourneys {
   uniqueValueFields: UniqueValueField[];
   /** Built requests by step id, for listing user-supplied values (D6). */
   requests: Map<string, BuiltStepRequest>;
+  /** AP-033: the unique-field candidates of each edited step's generated body, for FR-010 notices. */
+  generatedUniqueFields: Map<string, string[]>;
+}
+
+/** What `makeStep` reads and fills for one `buildJourneys` call. */
+interface StepBuild {
+  bodyEdits: ReadonlyMap<string, BodyEdit>;
+  /** AP-033 FR-020 (amended 2026-09-30). */
+  parameterEdits: ReadonlyMap<string, ParameterEdit>;
+  uniqueValueFields: UniqueValueField[];
+  requests: Map<string, BuiltStepRequest>;
+  generatedUniqueFields: Map<string, string[]>;
+}
+
+/** AP-033 (specs/033 research R3, R9): an edit applies only to the step and scenario it was made for. */
+function appliedEdit<T extends { scenarioId: string }>(edits: ReadonlyMap<string, T>, stepId: string, scenario: TestScenario): T | undefined {
+  const edit = edits.get(stepId);
+  return edit?.scenarioId === scenario.id ? edit : undefined;
 }
 
 interface Candidate {
@@ -77,12 +99,14 @@ function makeStep(
   journeyId: string,
   candidate: Candidate,
   workflow: { id: string; variables: WorkflowVariable[]; stepIndex: number; stepIds: string[] } | undefined,
-  uniqueValueFields: UniqueValueField[],
-  requests: Map<string, BuiltStepRequest>,
+  build: StepBuild,
 ): PerformanceStep {
   const { operation, selection } = candidate;
   const operationKey = operationKeyOf(operation);
   const id = stepIdFor(journeyId, operationKey);
+  const edit = appliedEdit(build.bodyEdits, id, selection.scenario);
+  const parameterEdit = appliedEdit(build.parameterEdits, id, selection.scenario);
+  const scenario = applyParameterEdit(effectiveScenario(selection.scenario, edit), parameterEdit);
   const produces = workflow?.variables.filter((variable) => variable.producerStepIndex === workflow.stepIndex) ?? [];
   const consumes = workflow?.variables.filter((variable) => variable.consumerStepIndex === workflow.stepIndex) ?? [];
   const bindings: StepVariableBinding[] = [
@@ -97,13 +121,27 @@ function makeStep(
       }),
     ),
   ];
-  const built = buildStepRequest(context, auth, operation, selection.scenario, {
+  const built = buildStepRequest(context, auth, operation, scenario, {
     workflowId: workflow?.id,
     consumes,
+    bodyEdited: edit !== undefined,
+    editedPathParameters: editedPathParameters(parameterEdit),
   });
-  requests.set(id, built);
-  for (const unique of uniqueValueCandidates(operation, selection.scenario.request.body)) {
-    uniqueValueFields.push({ stepId: id, location: "body", fieldPath: unique.fieldPath, format: unique.format });
+  const bodyReferences = edit ? engineerReferences(operation, scenario.request.body) : undefined;
+  const parameterReferences = parameterEdit ? parameterEditReferences(operation, parameterEdit) : undefined;
+  build.requests.set(id, {
+    ...built,
+    ...(bodyReferences ? { bodyReferenceNames: bodyReferences.names, bodySecretReferenceNames: bodyReferences.secretNames } : {}),
+    ...(parameterReferences ? { parameterReferenceNames: parameterReferences.names, parameterSecretReferenceNames: parameterReferences.secretNames } : {}),
+  });
+  for (const unique of uniqueValueCandidates(operation, scenario.request.body)) {
+    build.uniqueValueFields.push({ stepId: id, location: "body", fieldPath: unique.fieldPath, format: unique.format });
+  }
+  if (edit) {
+    build.generatedUniqueFields.set(
+      id,
+      uniqueValueCandidates(operation, selection.scenario.request.body).map((unique) => unique.fieldPath),
+    );
   }
   const prefill = prefillExpectedStatuses(operation);
   return {
@@ -122,10 +160,19 @@ function makeStep(
     expectedStatuses: withSources(prefill, prefill),
     auth: { kind: built.authKind, schemeName: built.schemeName },
     requiredValues: built.envNames,
+    // Only present when true, so a step without an edit serializes as it did before AP-033 (R10).
+    ...(edit ? { bodyEdited: true as const } : {}),
+    ...(parameterEdit ? { parametersEdited: true as const } : {}),
   };
 }
 
-export function buildJourneys(context: PerformanceContext, auth: AuthPlan, excludedOperationKeys: ReadonlySet<string>): BuiltJourneys {
+export function buildJourneys(
+  context: PerformanceContext,
+  auth: AuthPlan,
+  excludedOperationKeys: ReadonlySet<string>,
+  bodyEdits: ReadonlyMap<string, BodyEdit> = new Map(),
+  parameterEdits: ReadonlyMap<string, ParameterEdit> = new Map(),
+): BuiltJourneys {
   const inScope = operationsInScope(context).filter((operation) => !excludedOperationKeys.has(operationKeyOf(operation)));
   const omitted: OmittedOperation[] = [];
   const candidates = new Map<string, Candidate>();
@@ -136,8 +183,7 @@ export function buildJourneys(context: PerformanceContext, auth: AuthPlan, exclu
   }
 
   const journeys: PerformanceJourney[] = [];
-  const uniqueValueFields: UniqueValueField[] = [];
-  const requests = new Map<string, BuiltStepRequest>();
+  const build: StepBuild = { bodyEdits, parameterEdits, uniqueValueFields: [], requests: new Map(), generatedUniqueFields: new Map() };
   const inWorkflowJourney = new Set<string>();
 
   for (const workflow of [...context.workflows].sort((a, b) => compareCodeUnits(a.id, b.id))) {
@@ -153,8 +199,7 @@ export function buildJourneys(context: PerformanceContext, auth: AuthPlan, exclu
         journeyId,
         candidate!,
         { id: workflow.id, variables: workflow.variables, stepIndex, stepIds },
-        uniqueValueFields,
-        requests,
+        build,
       ),
     );
     for (const candidate of stepCandidates) inWorkflowJourney.add(operationKeyOf(candidate!.operation));
@@ -169,10 +214,11 @@ export function buildJourneys(context: PerformanceContext, auth: AuthPlan, exclu
     journeys.push({
       id: journeyId,
       source: { kind: "operation" },
-      steps: [makeStep(context, auth, journeyId, candidate, undefined, uniqueValueFields, requests)],
+      steps: [makeStep(context, auth, journeyId, candidate, undefined, build)],
     });
   }
 
   omitted.sort((a, b) => compareCodeUnits(a.operationKey, b.operationKey));
-  return { journeys, omitted, uniqueValueFields, requests };
+  const { uniqueValueFields, requests, generatedUniqueFields } = build;
+  return { journeys, omitted, uniqueValueFields, requests, generatedUniqueFields };
 }

@@ -98,6 +98,29 @@ Generating the script alone does not depend on the exception.
   also shows failures, journeys cut short and token refreshes so far, and per step the requests
   sent, failures and requests not sent with their reason (FR-030).
 
+### Session 2026-09-30
+
+- Q: The report's timeline drew virtual users, p95 latency and failures on one plot, with two
+  similar reds and no scale for failures, and showed nothing per endpoint over time. How should
+  it be drawn? → A: Three panels on one time axis, each with its own scale and a legend: virtual
+  users, p95 latency of all steps (log scale once the slowest interval is 20 times the fastest),
+  and requests per interval split into as expected and failed. Below them, each step's p95 per
+  interval on one shared latency scale, with intervals that had failures hatched (FR-036).
+- Q: Should the report show the status codes a step received, not only its failures? → A: Yes.
+  Every status received, with its count and whether it was expected, so a failing step shows why
+  (FR-036).
+- Q: Which further performance figures should the report show? → A: Exact minimum, mean and
+  maximum latency per step and for the run, k6's request phases per step (blocked, connecting,
+  TLS handshake, sending, waiting as time to first byte, receiving), the iteration duration, and
+  the bytes sent and received by the run (FR-036).
+- Q: Should provenance log each request and response? → A: Each step shows a request block and a
+  response block. The request block holds what the plan sends (method, path template,
+  authentication, values from earlier steps, values the user supplies, whether the body was
+  edited); the response block holds what was measured (expected and received statuses, failure
+  categories, latency, request phases, extractions, checks). Request and response bodies,
+  resolved URLs and individual requests stay unrecorded (FR-039, FR-040, FR-042; constitution
+  XX). A run recorded before this amendment reports only what it recorded.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Build a performance test from approved scenarios and workflows (Priority: P1)
@@ -434,7 +457,11 @@ verify the new order is kept in the regenerated script.
   services.
 - **FR-036**: The report MUST show, per journey and per step, p50, p90, p95 and p99 latency,
   throughput, error rate by status and by failure category, and check pass rate, plus a timeline of
-  virtual users against latency and errors.
+  virtual users against latency and errors. Per step it MUST also show every status received with
+  its count and whether it was expected, exact minimum, mean and maximum latency, and k6's request
+  phases; for the run, exact minimum, mean and maximum latency, iteration duration and bytes sent
+  and received. The timeline MUST draw each measure on its own scale, never two scales on one
+  plot, and MUST show each step's latency and failures over time (amended 2026-09-30).
 - **FR-036a**: The system MUST NOT clean up, undo or delete anything a run created on the target.
   The report MUST list, per operation and HTTP method, how many write requests (POST, PUT, PATCH,
   DELETE) were sent and how many succeeded, so the user knows what the run changed.
@@ -446,7 +473,9 @@ verify the new order is kept in the regenerated script.
 - **FR-039**: Every step in the report MUST carry its provenance: why it is in the journey (the
   dependency relationship and its confidence), which scenario was used and why, where each variable
   came from, which authentication method was used, and its expected status codes and whether each
-  came from the specification or was set by the user. The report MUST also record the load
+  came from the specification or was set by the user. Each step's provenance MUST be presented as
+  a request block (what the plan sends) and a response block (what was measured) (amended
+  2026-09-30). The report MUST also record the load
   profile, thresholds, environment name, tier and base URL, and k6 version.
 - **FR-040**: The report MUST NOT contain credentials, tokens, request bodies or response bodies,
   and MUST identify steps by method and path template, never by resolved URL.

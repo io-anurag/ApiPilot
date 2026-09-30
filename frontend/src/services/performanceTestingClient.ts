@@ -1,4 +1,6 @@
 import type {
+  BodyEditInput,
+  ParameterEditInput,
   K6Readiness,
   PerformancePlan,
   PerformanceRun,
@@ -30,9 +32,40 @@ export interface PerformanceErrorResult {
   runId?: string;
   /** `409 k6_unavailable`. */
   readiness?: K6Readiness;
+  /** AP-033 body-edit refusals (specs/033 contracts/body-edits-api.md): the step and where. */
+  stepId?: string;
+  line?: number;
+  column?: number;
+  reference?: string;
+  fieldPath?: string;
+  limitBytes?: number;
+  /** AP-033 parameter-edit refusals (amended 2026-09-30): the parameter refused. */
+  location?: string;
+  name?: string;
 }
 
 export type Result<T> = ({ ok: true } & T) | PerformanceErrorResult;
+
+type ErrorExtras = Omit<PerformanceErrorResult, "ok" | "error" | "message">;
+
+const STRING_EXTRAS = ["variable", "runId", "stepId", "reference", "fieldPath", "location", "name"] as const;
+const NUMBER_EXTRAS = ["line", "column", "limitBytes"] as const;
+
+/** The contract's extra error fields, each copied only when it has the documented type. */
+function errorExtras(parsed: Record<string, unknown>): ErrorExtras {
+  const extras: ErrorExtras = {};
+  if (Array.isArray(parsed.stepIds)) extras.stepIds = parsed.stepIds as string[];
+  if (parsed.readiness) extras.readiness = parsed.readiness as K6Readiness;
+  for (const key of STRING_EXTRAS) {
+    const value = parsed[key];
+    if (typeof value === "string") extras[key] = value;
+  }
+  for (const key of NUMBER_EXTRAS) {
+    const value = parsed[key];
+    if (typeof value === "number") extras[key] = value;
+  }
+  return extras;
+}
 
 async function request<T>(operation: string, path: string, init: RequestInit | undefined, map: (body: Record<string, unknown>) => T): Promise<Result<T>> {
   let response: Response;
@@ -50,10 +83,7 @@ async function request<T>(operation: string, path: string, init: RequestInit | u
       ok: false,
       error,
       message: typeof parsed?.message === "string" ? parsed.message : `Request failed with status ${response.status}`,
-      ...(Array.isArray(parsed?.stepIds) ? { stepIds: parsed.stepIds as string[] } : {}),
-      ...(typeof parsed?.variable === "string" ? { variable: parsed.variable } : {}),
-      ...(typeof parsed?.runId === "string" ? { runId: parsed.runId } : {}),
-      ...(parsed?.readiness ? { readiness: parsed.readiness as K6Readiness } : {}),
+      ...errorExtras(parsed ?? {}),
     };
   }
   return { ok: true, ...map(parsed ?? {}) };
@@ -75,6 +105,10 @@ export interface PlanUpdate {
   loadProfile?: { kind: PerformancePlan["loadProfile"]["kind"]; stages: PerformancePlan["loadProfile"]["stages"] };
   thresholds?: Array<Omit<PerformancePlan["thresholds"][number], "id">>;
   expectedStatuses?: Record<string, string[]>;
+  /** AP-033: a step's new base body, or `null` to reset it to the generated body. */
+  bodyEdits?: Record<string, BodyEditInput | null>;
+  /** AP-033 FR-020 (amended 2026-09-30): a step's full set of parameter changes, or `null` to reset them. */
+  parameterEdits?: Record<string, ParameterEditInput | null>;
 }
 
 export type ValueStatusesResult = Result<{

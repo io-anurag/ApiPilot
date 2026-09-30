@@ -615,7 +615,12 @@ approved TestModel + approved IntegrationWorkflows + selection
   workflows, reorder validation, expected statuses, user-supplied values and unique body fields.
   `k6/` is the only code that knows k6: script rendering, readiness, the process runner and the
   metrics-stream parser. `report/` is pure: histogram, aggregate, thresholds, findings and the HTML
-  renderer. The shared types in `packages/shared-domain/src/performance.ts` contain no k6 syntax.
+  renderer. Since 19.11.0 (FR-036 amended 2026-09-30) the aggregate also keeps, per step, every
+  status received, exact min/mean/max, k6's six request-phase trends and a per-step timeline, and
+  for the run, iteration duration and bytes. All are optional in `StepResult` and
+  `PerformanceResult.totals`, so earlier stored runs still render. The renderer draws the timeline
+  as three single-scale SVG panels and the per-step timeline as a CSS-grid heatmap, with hover
+  text from SVG `<title>` and `title` attributes, so the report still needs no script. The shared types in `packages/shared-domain/src/performance.ts` contain no k6 syntax.
 - **Postman reuse.** Each step's request is built by the Postman generator's own
   `buildRequestItem`, with its auth from `mapOperationAuth` and its OAuth2 token request from
   `buildOAuth2SetupFolders`, so URL, query, header and body serialization match the functional
@@ -709,6 +714,61 @@ upload → parseYaml / validateSpec / buildApiModel (unchanged)
   review selection, or every operation when there is none, and `PUT /plan` with `scope` returns
   `400 invalid_request`.
 
+### Step body edits (AP-033)
+
+Amended 2026-09-30: parameter edits. `plan/parameterEdits.ts` holds `applyParameterEdit`
+(applied right after `effectiveScenario` in `buildJourneys` and `stepRequestFor`, so the preview
+is still the request the script sends), `validateParameterEdits` (`PUT /plan {parameterEdits}`,
+refusals as `InvalidParameterEditError`) and `parameterEditModel` (the preview's editor rows).
+`buildStepRequest` keeps an edited path parameter's value instead of turning it into an
+environment value. Edits are kept, discarded, fingerprinted and emptied from run snapshots as
+body edits are. The plan screen flags steps the latest finished run answered unexpectedly, from
+`usePerformanceRuns().latestFinished`.
+
+`specs/033-edit-step-request-body` lets the engineer edit the body a performance step sends, on
+both paths. Constitution v2.5.0 amended XVII so a plan input the user edits stays part of the
+approved plan, with extra conditions this design meets.
+
+- **What is edited.** The step's base body: its body before ApiPilot applies workflow variables,
+  per-iteration unique values and credential references. Those are applied to the edited body
+  exactly as to a generated one, so no positional token name (`apipilot_unique_<n>`) is ever
+  stored.
+- **Where it lives.** `PerformancePlan.bodyEdits` (the parsed JSON value, or the text), sorted by
+  step id and carrying the scenario id it was made for. It is part of the fingerprint only when
+  not empty, so a plan without edits keeps its fingerprint and script bytes.
+- **One application point.** `plan/bodyEdits.ts` `effectiveScenario` is called by
+  `buildJourneys.makeStep` (needed values, unique fields, the `bodyEdited` flag) and by
+  `stepRequestFor` (the script and the preview), so the preview stays what the script sends.
+- **Saving.** `PUT /plan {bodyEdits}` goes through `applyPlanUpdate` and `validateBodyEdits`, all
+  or nothing:
+  - the step is in the plan and its operation takes a JSON or text body;
+  - at most 64 KiB, and nested at most 50 levels;
+  - valid JSON, with the line and column from an iterative scanner (`jsonErrorOffset`), because
+    V8 messages may lack a position and quote the input;
+  - no reserved `{{name}}`;
+  - a `{{name}}` reference in every `format: password` field.
+
+  Refusals are `InvalidBodyEditError`, mapped to their 400 codes in `performanceHttp.ts`.
+- **References.** For an edited step, `buildStepRequest` skips a body consumer whose field the edit
+  removed, because `applyWorkflowSubstitutions` would create the field again. Dropped consumers and
+  unique fields become `plan.bodyEditNotices`. A name only the engineer's body refers to is listed
+  as source `body-reference`, secret when it fills a `format: password` field.
+- **Warnings.** `plan/bodySchemaMismatches.ts` lists how a JSON edit differs from the request
+  schema:
+  - required properties, type, enum, known formats, and numeric, length and item bounds;
+  - a specification's `pattern` is never evaluated;
+  - a value that is one `{{name}}` is never reported.
+
+  Warnings come back with the preview (`bodyEdit.mismatches`) and never block anything. The
+  preview also lists the fields ApiPilot fills at run time (`bodyEdit.replacements`).
+- **Carry-over.** An edit is kept while its step exists with the same scenario, or while its
+  operation is removed. Content-derived step ids give a restored operation its edit back.
+  `rebuildPlan` records discarded edits in `discardedBodyEdits`, until the next plan edit.
+- **Runs.** `POST /runs` stores `planSnapshotForRun(plan)`: `bodyEdits` emptied, `bodyEdited` flags
+  kept. `performance_runs.plan_snapshot` still holds no body, and the report marks edited steps
+  "Body edited by you". The body is embedded in the script only as a string inside
+  `JSON.stringify(journeys)`, pinned by a hostile-content test.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -783,7 +843,10 @@ views are `OtherOperationsTable`; a removed row loads `GET /plan/removed-operati
 rebuilds the plan with that operation restored through the same `applyPlanUpdate` a Restore uses,
 reads the step and its request preview, and discards the rebuilt plan, so the preview can never
 change the plan or its fingerprint and always matches what Restore would produce
-(`performance/plan/removedOperationPreview.ts`, specs/032 FR-024a). The write lists never collapse
+(`performance/plan/removedOperationPreview.ts`, specs/032 FR-024a). A step's body is edited in
+`StepBodyEditor`, which `StepRequestPreview` hosts only when given `onSaveBody` (so the Removed
+view stays read only); a save or reset is one `PUT /plan {bodyEdits}`, and a refusal comes back
+to the editor instead of the screen banner (AP-033). The write lists never collapse
 (AP-032 SC-002); `CountedOperationList`'s `columns` layout uses a container query so the same
 list reads as two columns in the operations panel and one in the setup column. Within the
 guided workflow, the page composition root
