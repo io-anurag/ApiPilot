@@ -273,7 +273,7 @@ function passwordFields(schema: SchemaConstraint | undefined, value: unknown, fi
 }
 
 /** R4: names ApiPilot uses for its own substitutions, which an engineer's `{{name}}` must not take. */
-function reservedNamesOf(context: PerformanceContext): (name: string) => boolean {
+export function reservedNamesOf(context: PerformanceContext): (name: string) => boolean {
   const names = new Set<string>();
   for (const workflow of context.workflows) {
     for (const variable of workflow.variables) names.add(workflowVariableName(workflow.id, variable.name));

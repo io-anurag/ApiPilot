@@ -67,7 +67,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-030 — Test Execution Gap Closure (`specs/029-execution-gap-closure`) | Implemented — all 24 tasks complete. Closes `specs/018` FR-007, FR-016, and FR-018 gaps found by convergence (Next Actions #25) |
 | AP-031 — AI Failure Analysis *(post-MVP, formerly AP-018)* (`specs/030-ai-failure-analysis`) | Implementation complete — AI evaluation pending (constitution XXII); not yet Implemented. 88 of 90 tasks done, including the 2026-09-24 amendment (T062 to T090): fixed rules now decide the likely cause and the local AI only explains it. On-demand analysis of one failed request in an AP-026 run, persisted through AP-025; specification context is attached by exact Postman item-id match to the current guided workflow; AP-017's API-only runs are out of scope. Evaluation run 5 (`evaluation.md`): rules match 12 of 12 labels, and the default `Qwen2.5-0.5B-Instruct` gave 12 of 12 usable explanations with no contradictions, so the default model is unchanged. Outstanding: (1) T055's 4 real, redacted evaluation cases need a real recorded run, which SC-006 requires; (2) T061's manual browser walkthrough of the quickstart scenarios was not performed (automated suites cover the same behavior). See Next Actions #26 |
 | AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
-| AP-033 — Edit a Performance Step's Request Body *(post-MVP)* (`specs/033-edit-step-request-body`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 59 of 60 tasks done. On both performance paths, a step's request preview states its body or that it has none, and the engineer can edit a JSON or text body: ApiPilot still applies its own workflow variables, unique values and credentials to the edited base body, a `{{name}}` the engineer writes becomes a needed value (`body-reference`), `format: password` fields must hold a reference, schema differences are warnings, and edits can be reset one by one or all at once. Edits are kept while an operation is removed and discarded, with a note, when a rebuild changes the scenario. Runs store only a `bodyEdited` flag per step; the report marks those steps. Constitution v2.5.0 amended XVII for plan inputs the user edits. Real-k6 check passed (k6 v2.3.0). Version 19.10.0. See Next Actions #44 |
+| AP-033 — Edit a Performance Step's Request Body *(post-MVP)* (`specs/033-edit-step-request-body`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 59 of 60 tasks done. On both performance paths, a step's request preview states its body or that it has none, and the engineer can edit a JSON or text body: ApiPilot still applies its own workflow variables, unique values and credentials to the edited base body, a `{{name}}` the engineer writes becomes a needed value (`body-reference`), `format: password` fields must hold a reference, schema differences are warnings, and edits can be reset one by one or all at once. Edits are kept while an operation is removed and discarded, with a note, when a rebuild changes the scenario. Runs store only a `bodyEdited` flag per step; the report marks those steps. Constitution v2.5.0 amended XVII for plan inputs the user edits. Real-k6 check passed (k6 v2.3.0). Version 19.10.0. See Next Actions #44. Amended 2026-09-30 (FR-020 to FR-023, version 19.12.0): documented path, query and header parameters are editable, and the plan flags steps that failed the last run (Next Actions #46) |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -3014,3 +3014,33 @@ Implementation
       shows no page-level horizontal overflow.
     - Docs: USER_MANUAL §3.11 (the report); architecture.md (`report/`).
     - Version bumped to 19.11.0 (root, backend, frontend, shared-domain).
+
+46. **AP-033 amended: edit a step's parameters; flag steps that failed the last run; version 19.12.0 (2026-09-30).**
+    - Trigger: a quick run's `GET /api/v1/posts` failed 100% with 400; the target's log showed the
+      generated query `limit=1&page=1&sort=a&userId=1`, which the report did not show and the plan
+      could not change. The user chose to amend AP-033 rather than start AP-034, and to cover
+      path, query and header parameters.
+    - Spec: `specs/033-edit-step-request-body` Clarifications 2026-09-30, FR-020 to FR-023, a
+      Parameter Edit entity, and amended Assumptions; data-model.md and contracts/body-edits-api.md
+      amendment sections. Constitution XVII already covers plan inputs the user edits; no
+      amendment.
+    - Backend: `plan/parameterEdits.ts` (apply, validate, editor model); wiring in
+      `buildJourneys`, `planStepRequest`, `stepRequest` (edited path values kept), `buildPlan`
+      (kept, discarded, fingerprinted only when not empty), `planUpdate`, `runSnapshot`,
+      `userSuppliedValues` (`parameter-reference`) and the run repository's defaults;
+      `InvalidParameterEditError` mapped to 400 with its code. The report marks "Parameters
+      edited by you", counts them, and adds a "What to check" line to steps with unexpected
+      statuses. Plans without edits keep their fingerprints and golden scripts.
+    - Frontend: `StepParameterEditor` in the step's request preview; **Parameters edited** and
+      **Failed last run** badges and a **Failed last run** chip in the plan table, with the
+      statuses in the step's details; `usePerformanceRuns` exposes `latestFinished`.
+    - Validation: `npm test` 2,075 passed, 0 failed, 7 skipped; `npm run lint` and
+      `npm run build` clean; `npm run test:k6-real -w backend` 5 of 5, including a real k6 run
+      whose target received the edited `state=closed` on every `GET /orders`. The parameter
+      editor was not checked in a browser.
+    - Docs: USER_MANUAL §3.11 (editing parameters; steps that failed the last run; report);
+      architecture.md "Step body edits (AP-033)".
+    - Not done: uploading and running a user-supplied k6 script. Constitution XVII allows only
+      scripts ApiPilot generated, byte-identical; it needs a governance amendment and its own
+      specification first.
+    - Version bumped to 19.12.0 (root, backend, frontend, shared-domain).

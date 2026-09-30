@@ -12,6 +12,7 @@ import type {
 import { MAX_TRAVERSAL_DEPTH, primaryRequestBodySchema } from "../../testDesign/requestHelpers";
 import { baseBodyText, bodyEditFor, bodyKindOf } from "./bodyEdits";
 import { bodySchemaMismatches, isOnlyReference } from "./bodySchemaMismatches";
+import { parameterEditModel } from "./parameterEdits";
 import { BASE_URL_VARIABLE } from "../../postman/artifactVariables";
 import { workflowVariableName } from "../../postman/workflowRendering";
 import { stepRequestFor } from "./planStepRequest";
@@ -46,7 +47,7 @@ function splitUrl(url: string): { path: string; query: string } {
 
 export function buildStepRequestPreview(plan: PerformancePlan, context: PerformanceContext, stepId: string): StepRequestPreview {
   const auth = planAuth(context);
-  const { step, operation, scenario, workflow, consumes, built } = stepRequestFor(plan, context, auth, stepId);
+  const { step, operation, scenario, generated, workflow, consumes, built } = stepRequestFor(plan, context, auth, stepId);
   const template = built.template;
   const tokenSource = built.schemeName ? auth.tokenSources.get(built.schemeName) : undefined;
   const acquiresToken = tokenSource !== undefined && (built.authKind === "chained-login" || built.authKind === "oauth2-client-credentials");
@@ -106,6 +107,8 @@ export function buildStepRequestPreview(plan: PerformancePlan, context: Performa
         ? null
         : { contentType: template.bodyKind ?? "text", text: template.body, references: [...new Set(templateReferences(template.body))].map(classify) },
     ...bodyEditModel(plan, step, operation, scenario, template, classify),
+    // AP-033 FR-020 (amended 2026-09-30): the documented parameters, as generated and as edited.
+    parameterEdit: parameterEditModel(plan, step, operation, generated),
   };
 }
 

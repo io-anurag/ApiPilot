@@ -102,3 +102,25 @@ Body edits are kept, like exclusions, expected statuses and thresholds. Only ord
 - `GET /runs/:runId` returns that snapshot.
 - `GET /runs/:runId/report` marks edited steps "Body edited by you" and states their count in the
   provenance section. No body content appears in any run response or report.
+
+## Amendment 2026-09-30: `PUT <base>/plan` field `parameterEdits` (FR-020 to FR-022)
+
+`parameterEdits: {[stepId]: {parameters: [{location, name, action: "set", value} | {location,
+name, action: "omit"}]} | null}`. Each step's entry replaces that step's changes; `null` resets
+it. Steps are checked in code-unit order of step id and entries by location, then name; nothing
+is applied unless every entry passes. Entries equal to the generated request are dropped.
+
+| Status | `error` | When | Extra fields |
+|---|---|---|---|
+| 400 | `invalid_request` | Not an object; an entry without `parameters`; a location other than path, query or header; a missing name | — |
+| 400 | `invalid_parameter_edit` | Unknown step; undocumented parameter; a parameter listed twice; neither `set` with a string nor `omit`; a control character | `stepId`, `location`, `name` |
+| 400 | `parameter_not_editable` | A parameter a workflow variable fills; a new value for an array or object parameter | `stepId`, `location`, `name` |
+| 400 | `parameter_required` | Leaving out a required or path parameter; an empty path parameter | `stepId`, `location`, `name` |
+| 400 | `parameter_too_long` | A value over 2,048 bytes in UTF-8 | `stepId`, `location`, `name`, `limitBytes` |
+| 400 | `reserved_reference` | A `{{name}}` ApiPilot reserves | `stepId`, `location`, `name`, `reference` |
+| 400 | `parameter_secret_literal` | Anything but one `{{name}}` in a `format: password` parameter | `stepId`, `location`, `name` |
+
+No message or field quotes the value. `GET <base>/plan/steps/:stepId/request` returns
+`parameterEdit` (data-model.md). Run snapshots have `parameterEdits: []` and
+`discardedParameterEdits: []`, their steps keep `parametersEdited`, and the report marks those
+steps "Parameters edited by you".

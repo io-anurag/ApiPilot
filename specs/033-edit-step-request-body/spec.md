@@ -30,7 +30,8 @@ AP-024), environments (AP-017, AP-025), script generation, runs and reports.
 It changes two existing decisions, each stated as a requirement below:
 - AP-032 FR-008 makes a step's request view-only, and AP-032's Assumptions put "editing a step's
   request (headers, query or body)" out of scope. This feature makes the **body** editable
-  (FR-001 to FR-008); headers, query and path parameters stay view-only.
+  (FR-001 to FR-008) and, since the amendment of 2026-09-30, the documented **path, query and
+  header parameters** (FR-020 to FR-023).
 - AP-029 keeps request bodies out of the stored plan and run snapshots (AP-029 research D20). An
   edited body has to be kept with the plan; FR-014 keeps run snapshots and reports free of body
   content.
@@ -62,6 +63,28 @@ only as data (FR-013), and a byte-identical script for the same plan and edits (
   schema marks as sensitive (`format: password`) cannot be saved; that field must hold a
   `{{name}}` reference. The editor's statement about literal values applies to every other field
   (User Story 3 AS5, FR-012).
+
+### Session 2026-09-30 (amendment: parameters)
+
+Trigger: a quick run's report showed `GET /api/v1/posts` failing with 400 on every request. The
+target's log showed `?limit=1&page=1&sort=a&userId=1`: generated, specification-conformant query
+values the server rejected. The report did not show them, and the plan offered no way to change
+them.
+
+- Q: Which parts of a step's request become editable? → A: The documented path, query and header
+  parameters: a new value for any of them, or leaving out an optional one. Authentication,
+  undocumented headers (such as `Content-Type`), the method and the path template stay as
+  generated (FR-020).
+- Q: Is a new specification (AP-034) needed? → A: No. The user chose to amend AP-033, since
+  parameter edits follow the body-edit model exactly (kept, discarded, fingerprinted, snapshotted
+  and reported the same way). Constitution XVII already covers "a Performance Plan's inputs that
+  the user edits in the plan, including a request body", so no amendment is needed; its three
+  conditions are met by FR-021 and FR-022.
+- Q: How does the engineer find the steps to fix? → A: The plan marks each step that the latest
+  finished run answered with a status it does not expect, with the statuses and a pointer to the
+  step's request, and a chip lists only those steps. The report's response block for such a step
+  says where to check and edit the request. Parameter values stay out of run snapshots and
+  reports (FR-022, FR-023).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -323,6 +346,34 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
   scenario, its edit MUST be discarded and the plan MUST name the operations whose edits were
   discarded.
 
+**Parameters (amended 2026-09-30)**
+
+- **FR-020**: For a step in the plan, the engineer MUST be able to change the value of each path,
+  query and header parameter the operation documents, and to leave out an optional query or
+  header parameter, including adding an optional parameter the generated scenario does not send.
+  The request preview MUST show each documented parameter with its schema (type, format, allowed
+  values), the generated value (or that none is sent) and what the step sends. A saved change
+  MUST be applied where a body edit is, so the preview and the script send the same request;
+  only changes that differ from the generated request are kept. Edits MUST be kept, discarded,
+  reset and fingerprinted as body edits are (FR-006, FR-007, FR-015, FR-017, FR-018), and an
+  edited path parameter MUST be sent as its value instead of an environment value.
+- **FR-021**: The following MUST be refused, naming the parameter and never quoting its value, and
+  nothing MUST be applied: an undocumented parameter; a parameter a workflow variable fills (it is
+  shown as filled at run time); a new value for an array or object parameter (it may be left
+  out); leaving out a required parameter or any path parameter; an empty path parameter; a value
+  over 2 KiB or with a control character; a `{{name}}` ApiPilot reserves; and a literal in a
+  parameter of `format: password`, which MUST hold exactly one `{{name}}` reference. A `{{name}}`
+  the engineer writes MUST be listed as a needed value (`parameter-reference`), secret in a
+  `format: password` parameter.
+- **FR-022**: A step with edited parameters MUST be marked "Parameters edited" in the plan. A run's
+  snapshot MUST keep that mark and hold no parameter edit. The report MUST mark the step
+  "Parameters edited by you", state how many steps sent edited parameters, and contain no
+  parameter value.
+- **FR-023**: The plan MUST mark each step that the session's latest finished run answered with a
+  status the step does not expect, naming the statuses, and offer a filter for those steps. The
+  report's response block of such a step MUST say that its request can be checked and edited in
+  the plan.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Body Edit**: the engineer's replacement for one step's body: the step it belongs to, the
@@ -335,6 +386,9 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
 - **Performance Plan** (existing, AP-029, AP-032): gains the step's body edits and the notices
   about references no longer applied (FR-010) and edits discarded on rebuild (FR-018).
 - **Run Report** (existing, AP-029): gains the list of operations whose body was edited.
+- **Parameter Edit** (amended 2026-09-30): one step's changed parameters (location, name, and a
+  value or "left out"), with the step and scenario it was made for. Kept with the plan like a
+  Body Edit, never in run snapshots or reports. Its provenance is USER.
 
 ## Success Criteria *(mandatory)*
 
@@ -357,8 +411,9 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
 
 ## Assumptions
 
-- Only the body becomes editable. Headers, query and path parameters, authentication, and the
-  method and path stay as generated; editing them remains out of scope.
+- The body and, since 2026-09-30, the documented path, query and header parameters become
+  editable. Authentication, undocumented headers, and the method and path template stay as
+  generated.
 - Editing works on the body before ApiPilot's substitutions (FR-009); the preview beside it shows
   the body as sent, which is what the script sends. References are recognised inside JSON string
   values, as they are in generated bodies today.
@@ -370,6 +425,7 @@ edited bodies needs a way back. The feature is usable without it, so it follows 
   AP-032 plans are.
 - An edit does not change which scenario a step uses (AP-029's selection rule), its expected
   statuses, or its authentication.
-- Out of scope: editing headers, query or path parameters; adding a body to an operation whose
+- Out of scope: editing authentication, undocumented headers or cookies; editing the value of an
+  array or object parameter; adding a body to an operation whose
   specification documents none; AI suggestions for body values; carrying performance body edits
   over to the functional tests or the Postman collection.

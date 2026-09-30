@@ -82,6 +82,8 @@ export function planFixture(overrides: Partial<PerformancePlan> = {}): Performan
     bodyEdits: [],
     bodyEditNotices: [],
     discardedBodyEdits: [],
+    parameterEdits: [],
+    discardedParameterEdits: [],
     ...overrides,
   };
 }

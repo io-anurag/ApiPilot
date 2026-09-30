@@ -7,5 +7,5 @@ import type { PerformancePlan } from "@apipilot/shared-domain";
  * report can still say which steps sent an engineer-written body.
  */
 export function planSnapshotForRun(plan: PerformancePlan): PerformancePlan {
-  return { ...plan, bodyEdits: [], discardedBodyEdits: [] };
+  return { ...plan, bodyEdits: [], discardedBodyEdits: [], parameterEdits: [], discardedParameterEdits: [] };
 }

@@ -2,6 +2,7 @@ import type {
   ApiOperation,
   BodyEdit,
   OmittedOperation,
+  ParameterEdit,
   PerformanceJourney,
   PerformanceStep,
   StepDependency,
@@ -13,6 +14,7 @@ import type {
 import { compareCodeUnits } from "../../postman/ordering";
 import { effectiveScenario, engineerReferences } from "./bodyEdits";
 import { withSources, prefillExpectedStatuses } from "./expectedStatuses";
+import { applyParameterEdit, editedPathParameters, parameterEditReferences } from "./parameterEdits";
 import { journeyIdFor, stepIdFor } from "./identifiers";
 import { selectPerformanceScenario, type PerformanceScenarioSelection } from "./selectScenario";
 import {
@@ -44,14 +46,16 @@ export interface BuiltJourneys {
 /** What `makeStep` reads and fills for one `buildJourneys` call. */
 interface StepBuild {
   bodyEdits: ReadonlyMap<string, BodyEdit>;
+  /** AP-033 FR-020 (amended 2026-09-30). */
+  parameterEdits: ReadonlyMap<string, ParameterEdit>;
   uniqueValueFields: UniqueValueField[];
   requests: Map<string, BuiltStepRequest>;
   generatedUniqueFields: Map<string, string[]>;
 }
 
 /** AP-033 (specs/033 research R3, R9): an edit applies only to the step and scenario it was made for. */
-function appliedEdit(bodyEdits: ReadonlyMap<string, BodyEdit>, stepId: string, scenario: TestScenario): BodyEdit | undefined {
-  const edit = bodyEdits.get(stepId);
+function appliedEdit<T extends { scenarioId: string }>(edits: ReadonlyMap<string, T>, stepId: string, scenario: TestScenario): T | undefined {
+  const edit = edits.get(stepId);
   return edit?.scenarioId === scenario.id ? edit : undefined;
 }
 
@@ -101,7 +105,8 @@ function makeStep(
   const operationKey = operationKeyOf(operation);
   const id = stepIdFor(journeyId, operationKey);
   const edit = appliedEdit(build.bodyEdits, id, selection.scenario);
-  const scenario = effectiveScenario(selection.scenario, edit);
+  const parameterEdit = appliedEdit(build.parameterEdits, id, selection.scenario);
+  const scenario = applyParameterEdit(effectiveScenario(selection.scenario, edit), parameterEdit);
   const produces = workflow?.variables.filter((variable) => variable.producerStepIndex === workflow.stepIndex) ?? [];
   const consumes = workflow?.variables.filter((variable) => variable.consumerStepIndex === workflow.stepIndex) ?? [];
   const bindings: StepVariableBinding[] = [
@@ -120,13 +125,15 @@ function makeStep(
     workflowId: workflow?.id,
     consumes,
     bodyEdited: edit !== undefined,
+    editedPathParameters: editedPathParameters(parameterEdit),
   });
-  if (edit) {
-    const references = engineerReferences(operation, scenario.request.body);
-    build.requests.set(id, { ...built, bodyReferenceNames: references.names, bodySecretReferenceNames: references.secretNames });
-  } else {
-    build.requests.set(id, built);
-  }
+  const bodyReferences = edit ? engineerReferences(operation, scenario.request.body) : undefined;
+  const parameterReferences = parameterEdit ? parameterEditReferences(operation, parameterEdit) : undefined;
+  build.requests.set(id, {
+    ...built,
+    ...(bodyReferences ? { bodyReferenceNames: bodyReferences.names, bodySecretReferenceNames: bodyReferences.secretNames } : {}),
+    ...(parameterReferences ? { parameterReferenceNames: parameterReferences.names, parameterSecretReferenceNames: parameterReferences.secretNames } : {}),
+  });
   for (const unique of uniqueValueCandidates(operation, scenario.request.body)) {
     build.uniqueValueFields.push({ stepId: id, location: "body", fieldPath: unique.fieldPath, format: unique.format });
   }
@@ -155,6 +162,7 @@ function makeStep(
     requiredValues: built.envNames,
     // Only present when true, so a step without an edit serializes as it did before AP-033 (R10).
     ...(edit ? { bodyEdited: true as const } : {}),
+    ...(parameterEdit ? { parametersEdited: true as const } : {}),
   };
 }
 
@@ -163,6 +171,7 @@ export function buildJourneys(
   auth: AuthPlan,
   excludedOperationKeys: ReadonlySet<string>,
   bodyEdits: ReadonlyMap<string, BodyEdit> = new Map(),
+  parameterEdits: ReadonlyMap<string, ParameterEdit> = new Map(),
 ): BuiltJourneys {
   const inScope = operationsInScope(context).filter((operation) => !excludedOperationKeys.has(operationKeyOf(operation)));
   const omitted: OmittedOperation[] = [];
@@ -174,7 +183,7 @@ export function buildJourneys(
   }
 
   const journeys: PerformanceJourney[] = [];
-  const build: StepBuild = { bodyEdits, uniqueValueFields: [], requests: new Map(), generatedUniqueFields: new Map() };
+  const build: StepBuild = { bodyEdits, parameterEdits, uniqueValueFields: [], requests: new Map(), generatedUniqueFields: new Map() };
   const inWorkflowJourney = new Set<string>();
 
   for (const workflow of [...context.workflows].sort((a, b) => compareCodeUnits(a.id, b.id))) {

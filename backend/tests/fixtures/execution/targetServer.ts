@@ -5,6 +5,8 @@ import type { Server } from "node:http";
 export interface RecordedRequest {
   method: string;
   path: string;
+  /** The raw query string after `?`, or `""`, so a test sees exactly what was sent. */
+  query: string;
   headers: Record<string, string | string[] | undefined>;
   body: unknown;
 }
@@ -36,6 +38,7 @@ export class TargetServer {
       this.requests.push({
         method: req.method,
         path: req.path,
+        query: req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?") + 1) : "",
         headers: req.headers as Record<string, string | string[] | undefined>,
         body: req.body,
       });

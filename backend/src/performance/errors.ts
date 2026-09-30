@@ -124,6 +124,31 @@ export interface InvalidBodyEditExtra {
   fieldPath?: string;
 }
 
+/** AP-033 FR-020 to FR-022 (amended 2026-09-30): why a parameter edit was refused. */
+export type InvalidParameterEditCode =
+  | "invalid_parameter_edit"
+  | "parameter_not_editable"
+  | "parameter_required"
+  | "parameter_too_long"
+  | "reserved_reference"
+  | "parameter_secret_literal";
+
+/**
+ * AP-033 `400 <code>`: a `PUT /plan` parameter edit that cannot be saved; nothing is applied. The
+ * extra fields name the parameter only; no message quotes the value the engineer typed.
+ */
+export class InvalidParameterEditError extends Error {
+  constructor(
+    public readonly code: InvalidParameterEditCode,
+    public readonly stepId: string,
+    message: string,
+    public readonly extra: { location?: string; name?: string; reference?: string; limitBytes?: number } = {},
+  ) {
+    super(message);
+    this.name = "InvalidParameterEditError";
+  }
+}
+
 /** AP-033 `400 <code>`: a `PUT /plan` body edit that cannot be saved; nothing is applied (research R6). */
 export class InvalidBodyEditError extends Error {
   constructor(

@@ -203,7 +203,7 @@ describe("PerformancePlanScreen operations table", () => {
       [`GET ${QUICK}/plan/removed-operation`]: () =>
         [200, {
           step: restoredStep,
-          request: { stepId: restoredStep.id, operationKey: "GET /orders", method: "GET", pathTemplate: "/orders", parameters: [], auth: { kind: "none", schemeName: null, location: null, references: [] }, body: null, bodyStatus: "not-documented", bodyEdit: null },
+          request: { stepId: restoredStep.id, operationKey: "GET /orders", method: "GET", pathTemplate: "/orders", parameters: [], auth: { kind: "none", schemeName: null, location: null, references: [] }, body: null, bodyStatus: "not-documented", bodyEdit: null, parameterEdit: null },
         }] as [number, unknown],
     });
     renderScreen();
@@ -372,6 +372,7 @@ describe("PerformancePlanScreen body edits", () => {
     body: { contentType: "json", text: '{\n  "quantity": 1\n}', references: [] },
     bodyStatus: "sent",
     bodyEdit: { kind: "json", text: '{\n  "quantity": 1\n}', edited: false, mismatches: [], replacements: [] },
+    parameterEdit: null,
   };
 
   it("marks an edited step in its row, in text, and counts edited steps on a filter chip (FR-008)", async () => {
@@ -478,5 +479,52 @@ describe("PerformancePlanScreen body edits", () => {
     fireEvent.click(within(details).getByRole("button", { name: "Save body" }));
     expect(await within(details).findByRole("alert")).toHaveTextContent("Not valid JSON at line 1, column 14.");
     expect(screen.getAllByText("Not valid JSON at line 1, column 14.").filter((node) => !details.contains(node) && node.getAttribute("aria-live") === null)).toHaveLength(0);
+  });
+});
+
+/** AP-033 FR-023 (amended 2026-09-30): the plan marks the steps the latest finished run answered unexpectedly. */
+describe("steps that failed the last run", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("marks each such step, filters to them, and says where to check its request", async () => {
+    const plan = quickPlan();
+    const failing = plan.journeys[0].steps[0];
+    const result = {
+      steps: [
+        {
+          stepId: failing.id,
+          operationKey: failing.operationKey,
+          method: "GET",
+          expectedStatuses: failing.expectedStatuses,
+          requests: 7_422,
+          latencyMs: null,
+          throughputPerSecond: 1,
+          errorRatePercent: 100,
+          errorsByStatus: [{ status: "400", count: 7_422 }],
+          errorsByCategory: [],
+          checkPassRatePercent: 0,
+          notAttempted: { missingData: 0, dependencyNotAttempted: 0 },
+          missingVariables: [],
+          statusesReceived: [{ status: "400", count: 7_422, expected: false }],
+        },
+      ],
+    };
+    const finished = runFixture({ id: "run-done", status: "completed", endedAt: "2026-09-29T14:04:07.779Z", planSnapshot: plan });
+    stubFetch({
+      ...routes(plan),
+      [`GET ${QUICK}/runs`]: () => [200, { runs: [{ ...finished, planSnapshot: undefined }] }] as [number, unknown],
+      [`GET ${QUICK}/runs/run-done`]: () => [200, { run: { ...finished, result } }] as [number, unknown],
+    });
+    renderScreen();
+
+    const chip = await screen.findByRole("button", { name: "Failed last run · 1" });
+    expect(within(rowOf(failing.operationKey)).getByText("Failed last run")).toBeInTheDocument();
+    expect(within(rowOf("POST /orders")).queryByText("Failed last run")).toBeNull();
+
+    fireEvent.click(chip);
+    expect(screen.queryByRole("button", { name: "Details of POST /orders" })).toBeNull();
+
+    fireEvent.click(detailsButton(failing.operationKey));
+    expect(await screen.findByRole("note")).toHaveTextContent("the server answered 400 × 7,422, which this step does not expect");
   });
 });

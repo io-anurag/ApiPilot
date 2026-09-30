@@ -26,6 +26,7 @@ const PREVIEW: Preview = {
   },
   bodyStatus: "sent",
   bodyEdit: { kind: "json", text: '{\n  "customerEmail": "user@example.com"\n}', edited: false, mismatches: [], replacements: [] },
+  parameterEdit: null,
 };
 
 describe("StepRequestPreview", () => {

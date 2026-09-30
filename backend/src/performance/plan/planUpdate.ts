@@ -6,6 +6,7 @@ import type {
 } from "@apipilot/shared-domain";
 import { InvalidOrderError, InvalidPlanUpdateError, InvalidThresholdError, UnknownOperationError } from "../errors";
 import { validateBodyEdits } from "./bodyEdits";
+import { validateParameterEdits } from "./parameterEdits";
 import { assemblePlan, choicesOf } from "./buildPlan";
 import { normalizeExpectedStatuses, prefillExpectedStatuses } from "./expectedStatuses";
 import { canonicalJson, thresholdIdFor } from "./identifiers";
@@ -103,8 +104,11 @@ export function applyPlanUpdate(plan: PerformancePlan, update: unknown, context:
   if ("journeyOrder" in body) choices.journeyOrder = validateJourneyOrder(plan, body.journeyOrder);
   // AP-033 (specs/033 research R6): validated against the plan as it is, with the other fields.
   if ("bodyEdits" in body) choices.bodyEdits = validateBodyEdits(plan, context, body.bodyEdits);
+  // AP-033 FR-020 (amended 2026-09-30): validated against the plan as it is, like body edits.
+  if ("parameterEdits" in body) choices.parameterEdits = validateParameterEdits(plan, context, body.parameterEdits);
   // AP-033 FR-018: a rebuild's discarded-edits notice lasts until the next plan edit (research R9).
   choices.discardedBodyEdits = [];
+  choices.discardedParameterEdits = [];
 
   return assemblePlan(context, choices);
 }

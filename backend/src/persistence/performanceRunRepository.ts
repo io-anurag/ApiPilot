@@ -88,11 +88,13 @@ function toSummary(row: Omit<PerformanceRunRow, "plan_snapshot" | "progress" | "
   return summary;
 }
 
-/** A snapshot recorded before AP-033 has no body-edit fields; they read as empty. */
-const BODY_EDIT_DEFAULTS: Pick<PerformancePlan, "bodyEdits" | "bodyEditNotices" | "discardedBodyEdits"> = {
+/** A snapshot recorded before AP-033, or before its 2026-09-30 amendment, lacks edit fields; they read as empty. */
+const BODY_EDIT_DEFAULTS: Pick<PerformancePlan, "bodyEdits" | "bodyEditNotices" | "discardedBodyEdits" | "parameterEdits" | "discardedParameterEdits"> = {
   bodyEdits: [],
   bodyEditNotices: [],
   discardedBodyEdits: [],
+  parameterEdits: [],
+  discardedParameterEdits: [],
 };
 
 function toRun(row: PerformanceRunRow): PerformanceRun {

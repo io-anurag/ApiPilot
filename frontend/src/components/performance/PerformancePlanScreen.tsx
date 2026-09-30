@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   BodyEditInput,
+  ParameterEditInput,
   Environment,
   PerformancePlan,
   ScriptStatus,
@@ -36,6 +37,7 @@ import {
   formatDuration,
   loadProfileSummary,
   removalReason,
+  unexpectedStatusesByStep,
 } from "./performanceViewModel";
 import { usePerformanceRuns } from "./usePerformanceRuns";
 import { ValuesChecklist } from "./ValuesChecklist";
@@ -117,6 +119,8 @@ export function PerformancePlanScreen({
   // A heading to move focus to once the tab it is on is shown (the pending bar's actions).
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const runs = usePerformanceRuns(client);
+  // AP-033 FR-023: steps the latest finished run answered with a status they do not expect.
+  const lastRunUnexpected = useMemo(() => unexpectedStatusesByStep(runs.latestFinished?.result), [runs.latestFinished]);
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -201,6 +205,10 @@ export function PerformancePlanScreen({
 
   const saveBody = (stepId: string, input: BodyEditInput | null) =>
     apply({ bodyEdits: { [stepId]: input } }, input ? "Body saved." : "Body reset to the generated body.", { refusalShownByCaller: true });
+  const saveParameters = (stepId: string, input: ParameterEditInput | null) =>
+    apply({ parameterEdits: { [stepId]: input } }, input ? "Parameters saved." : "Parameters reset to the generated parameters.", {
+      refusalShownByCaller: true,
+    });
 
   async function handleGenerate() {
     setBusy(true);
@@ -610,6 +618,21 @@ export function PerformancePlanScreen({
             />
           </div>
         )}
+        {plan.discardedParameterEdits.length > 0 && (
+          // AP-033 FR-020 (amended 2026-09-30): as for body edits, shown until the next plan edit.
+          <div className="rounded-md border border-warning-500 bg-warning-50 px-3 py-2 text-sm dark:bg-warning-500/10">
+            <CountedOperationList
+              label={(count) =>
+                count === 1
+                  ? "The parameter edits of 1 operation were discarded because its scenario changed"
+                  : `The parameter edits of ${count} operations were discarded because their scenarios changed`
+              }
+              collapseAbove={10}
+              testId="performance-discarded-parameter-edits"
+              entries={plan.discardedParameterEdits.map((operationKey) => ({ operationKey }))}
+            />
+          </div>
+        )}
         {activeScope === "plan" && steps.length > 0 && (
           <JourneyList
             loadPreview={fetchStepRequest}
@@ -627,6 +650,8 @@ export function PerformancePlanScreen({
               void apply({ journeyOrder: journeyIds }, "Journey moved.")
             }
             onSaveBody={saveBody}
+            onSaveParameters={saveParameters}
+            lastRunUnexpected={lastRunUnexpected}
             onResetBodies={(stepIds) =>
               void apply(
                 { bodyEdits: Object.fromEntries(stepIds.map((stepId) => [stepId, null])) },

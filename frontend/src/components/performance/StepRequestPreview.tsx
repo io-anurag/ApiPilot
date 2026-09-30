@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { BodyEditInput, PreviewValue, StepBodyStatus, StepRequestPreview as Preview } from "@apipilot/shared-domain";
+import type { BodyEditInput, ParameterEditInput, PreviewValue, StepBodyStatus, StepRequestPreview as Preview } from "@apipilot/shared-domain";
 import type { PerformanceErrorResult, Result } from "../../services/performanceTestingClient";
 import { CodeBlock } from "../CodeBlock";
 import { ErrorState } from "../ErrorState";
@@ -7,6 +7,7 @@ import { HttpMethodBadge } from "../HttpMethodBadge";
 import { Skeleton } from "../Skeleton";
 import { ReferenceNote } from "./PreviewReferenceNote";
 import { StepBodyEditor } from "./StepBodyEditor";
+import { StepParameterEditor } from "./StepParameterEditor";
 
 /**
  * The view-only request one step sends (AP-032 FR-008, specs/032-quick-performance-test research
@@ -46,6 +47,7 @@ export function StepRequestPreview({
   stepLabel,
   loadPreview,
   onSaveBody,
+  onSaveParameters,
   busy = false,
 }: Readonly<{
   stepId: string;
@@ -57,6 +59,8 @@ export function StepRequestPreview({
    * removed operation's read-only preview. Resolves to `null` when saved, or to the refusal.
    */
   onSaveBody?: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  /** AP-033 FR-020 (amended 2026-09-30): present for a step in the plan, so its parameters can be edited. */
+  onSaveParameters?: (stepId: string, input: ParameterEditInput | null) => Promise<PerformanceErrorResult | null>;
   busy?: boolean;
 }>) {
   const [state, setState] = useState<LoadState>({ kind: "idle" });
@@ -117,6 +121,19 @@ export function StepRequestPreview({
                 </table>
               </div>
             )}
+            {onSaveParameters && state.request.parameterEdit && (
+              <StepParameterEditor
+                key={JSON.stringify(state.request.parameterEdit.rows.map((row) => row.edit))}
+                operationKey={operationKey}
+                model={state.request.parameterEdit}
+                busy={busy}
+                onSave={async (input) => {
+                  const refusal = await onSaveParameters(stepId, input);
+                  if (!refusal) void load();
+                  return refusal;
+                }}
+              />
+            )}
             {state.request.auth.location && (
               <p>
                 <span className="font-semibold">Auth</span> ({state.request.auth.location}
@@ -160,7 +177,7 @@ export function StepRequestPreview({
               />
             )}
             <p className="text-muted">
-              {onSaveBody && state.request.bodyEdit ? "Parameters and headers are view only." : "View only."} Secret values are never shown.
+              {onSaveBody || onSaveParameters ? "Authentication and undocumented headers are view only." : "View only."} Secret values are never shown.
             </p>
           </>
         )}

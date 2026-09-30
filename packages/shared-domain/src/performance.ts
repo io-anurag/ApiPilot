@@ -99,6 +99,11 @@ export interface PerformanceStep {
    * edited. Kept in run snapshots, which carry no body content (specs/033 research R11).
    */
   bodyEdited?: true;
+  /**
+   * AP-033 FR-022 (amended 2026-09-30): present, and `true`, only when the step sends parameters
+   * the engineer edited. Kept in run snapshots, which carry no parameter values.
+   */
+  parametersEdited?: true;
 }
 
 export type PerformanceJourneySource =
@@ -184,7 +189,7 @@ export interface PerformanceThreshold {
  * an edited body. Secret only when that reference fills a `format: password` field, or when the name
  * is secret elsewhere in the plan.
  */
-export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url" | "body-reference";
+export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url" | "body-reference" | "parameter-reference";
 
 /** A value the specification cannot produce (FR-013). The value itself lives in an environment. */
 export interface UserSuppliedValueRequirement {
@@ -224,6 +229,58 @@ export type BodyEdit = {
 export interface BodyEditInput {
   kind: "json" | "text";
   text: string;
+}
+
+export type EditableParameterLocation = "path" | "query" | "header";
+
+/**
+ * AP-033 FR-020 (amended 2026-09-30): one documented parameter the engineer changed. `set` sends
+ * `value` (text, which may hold `{{name}}` references to environment values); `omit` leaves an
+ * optional parameter out of the request.
+ */
+export type ParameterEditEntry = { location: EditableParameterLocation; name: string } & ({ action: "set"; value: string } | { action: "omit" });
+
+/**
+ * AP-033 FR-020: the engineer's parameter changes for one step, kept and discarded exactly as a
+ * `BodyEdit` is. `parameters` is sorted by location (path, query, header), then name.
+ */
+export interface ParameterEdit {
+  stepId: string;
+  operationKey: string;
+  scenarioId: string;
+  parameters: ParameterEditEntry[];
+}
+
+/** What `PUT /plan` accepts per step in `parameterEdits`: the step's full set of changes; `null` resets it. */
+export interface ParameterEditInput {
+  parameters: ParameterEditEntry[];
+}
+
+/** Why a documented parameter cannot be edited in the plan (AP-033 FR-021). */
+export type ParameterNotEditableReason = "filled-at-run-time" | "structured-value";
+
+/** One documented parameter in the step's parameter editor (AP-033 FR-020). */
+export interface StepParameterEditRow {
+  location: EditableParameterLocation;
+  name: string;
+  required: boolean;
+  /** The schema's type, format and enum, for display only; `null` when the schema states none. */
+  type: string | null;
+  format: string | null;
+  enum: string[] | null;
+  /** The value the generated scenario sends, as text; `null` when it does not send this parameter. */
+  generated: string | null;
+  /** The engineer's change, or `null` when the parameter is as generated. */
+  edit: { action: "set"; value: string } | { action: "omit" } | null;
+  /** `null` when the parameter can be edited. */
+  notEditable: ParameterNotEditableReason | null;
+  /** A literal typed here is refused: the schema declares it `format: password` (FR-021). */
+  secret: boolean;
+}
+
+export interface StepParameterEditModel {
+  rows: StepParameterEditRow[];
+  edited: boolean;
 }
 
 /** AP-033 FR-010: a reference ApiPilot applies that an edited body no longer carries. */
@@ -309,6 +366,13 @@ export interface PerformancePlan {
    * step's scenario changed. Cleared by the next plan edit or rebuild.
    */
   discardedBodyEdits: string[];
+  /**
+   * AP-033 FR-020 (amended 2026-09-30): the engineer's parameter edits, sorted by `stepId`.
+   * Fingerprinted only when not empty. Emptied in run snapshots.
+   */
+  parameterEdits: ParameterEdit[];
+  /** Not fingerprinted: operations whose parameter edit the last rebuild discarded (as `discardedBodyEdits`). */
+  discardedParameterEdits: string[];
 }
 
 /**
@@ -355,6 +419,8 @@ export interface StepRequestPreview {
   bodyStatus: StepBodyStatus;
   /** AP-033: `null` when the body cannot be edited (`not-documented`, `unsupported-content-type`). */
   bodyEdit: StepBodyEditModel | null;
+  /** AP-033 FR-020: `null` when the operation documents no path, query or header parameter. */
+  parameterEdit: StepParameterEditModel | null;
 }
 
 /**

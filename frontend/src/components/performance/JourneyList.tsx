@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   writeEffectLabelOf,
   type BodyEditInput,
+  type ParameterEditInput,
   type BodyEditNotice,
   type PerformanceJourney,
   type PerformanceStep,
@@ -221,8 +222,10 @@ export function JourneyList({
   onStepOrder,
   onJourneyOrder,
   onSaveBody,
+  onSaveParameters,
   onResetBodies,
   bodyEditNotices = [],
+  lastRunUnexpected,
   loadPreview,
   listRequest,
 }: Readonly<{
@@ -240,12 +243,20 @@ export function JourneyList({
   onResetBodies: (stepIds: string[]) => void;
   /** AP-033 FR-010: references ApiPilot applies that an edited body no longer carries. */
   bodyEditNotices?: readonly BodyEditNotice[];
+  /** AP-033 FR-020 (amended 2026-09-30): saves (or, with `null`, resets) a step's parameters. */
+  onSaveParameters: (stepId: string, input: ParameterEditInput | null) => Promise<PerformanceErrorResult | null>;
+  /**
+   * AP-033 FR-023: per step id, the statuses it did not expect in the session's latest finished run,
+   * as text (for example "400 × 7,422"). Absent when there is no finished run.
+   */
+  lastRunUnexpected?: ReadonlyMap<string, string>;
   listRequest: ListRequest | null;
 }>) {
   const [query, setQuery] = useState("");
   const [methodFilter, setMethodFilter] = useState(ALL);
   const [needsStatusOnly, setNeedsStatusOnly] = useState(false);
   const [bodyEditedOnly, setBodyEditedOnly] = useState(false);
+  const [failedLastRunOnly, setFailedLastRunOnly] = useState(false);
   const [confirmingResetBodies, setConfirmingResetBodies] = useState(false);
   const [page, setPage] = useState(0);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
@@ -304,6 +315,7 @@ export function JourneyList({
   const writeCount = rows.filter(({ step }) => writeEffectLabelOf(step.method)).length;
   const needsStatusCount = rows.filter(({ step }) => step.expectedStatuses.length === 0).length;
   const bodyEditedCount = rows.filter(({ step }) => step.bodyEdited).length;
+  const failedLastRunCount = rows.filter(({ step }) => lastRunUnexpected?.has(step.id)).length;
   const methodChips: { id: string; label: string; count: number }[] = [
     { id: ALL, label: "All", count: rows.length },
     ...methods.map((method) => ({ id: method, label: method, count: methodCounts.get(method) ?? 0 })),
@@ -315,21 +327,24 @@ export function JourneyList({
   const activeMethod = methodChips.some((chip) => chip.id === methodFilter) ? methodFilter : ALL;
   const activeNeedsStatusOnly = needsStatusOnly && needsStatusCount > 0;
   const activeBodyEditedOnly = bodyEditedOnly && bodyEditedCount > 0;
+  const activeFailedLastRunOnly = failedLastRunOnly && failedLastRunCount > 0;
   useEffect(() => {
     if (activeMethod !== methodFilter) setMethodFilter(ALL);
     if (activeNeedsStatusOnly !== needsStatusOnly) setNeedsStatusOnly(false);
     if (activeBodyEditedOnly !== bodyEditedOnly) setBodyEditedOnly(false);
-  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly, activeBodyEditedOnly, bodyEditedOnly]);
+    if (activeFailedLastRunOnly !== failedLastRunOnly) setFailedLastRunOnly(false);
+  }, [activeMethod, methodFilter, activeNeedsStatusOnly, needsStatusOnly, activeBodyEditedOnly, bodyEditedOnly, activeFailedLastRunOnly, failedLastRunOnly]);
   const filteredRows = rows.filter(({ step }) => {
     const method = step.method.toUpperCase();
     const matchesMethod =
       activeMethod === ALL ||
       (activeMethod === WRITES ? writeEffectLabelOf(method) !== null : method === activeMethod);
-    const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}${step.bodyEdited ? " body edited" : ""}`.toLowerCase();
+    const text = `${step.method} ${step.path} ${step.operationKey} ${step.scenarioDescription}${step.bodyEdited ? " body edited" : ""}${step.parametersEdited ? " parameters edited" : ""}`.toLowerCase();
     return (
       matchesMethod &&
       (!activeNeedsStatusOnly || step.expectedStatuses.length === 0) &&
       (!activeBodyEditedOnly || step.bodyEdited === true) &&
+      (!activeFailedLastRunOnly || lastRunUnexpected?.has(step.id) === true) &&
       text.includes(query.toLowerCase())
     );
   });
@@ -424,6 +439,8 @@ export function JourneyList({
             <WrappingPath path={step.path} />
             {effect && <StatusBadge label={effect} tone="warning" />}
             {step.bodyEdited && <StatusBadge label="Body edited" tone="info" />}
+            {step.parametersEdited && <StatusBadge label="Parameters edited" tone="info" />}
+            {lastRunUnexpected?.has(step.id) && <StatusBadge label="Failed last run" tone="danger" />}
           </button>
         </td>
         <td className="px-2 py-1.5 whitespace-nowrap">
@@ -479,6 +496,8 @@ export function JourneyList({
               onStepOrder={onStepOrder}
               onJourneyOrder={onJourneyOrder}
               onSaveBody={onSaveBody}
+              onSaveParameters={onSaveParameters}
+              lastRunUnexpected={lastRunUnexpected?.get(step.id)}
               notices={bodyEditNotices.filter((notice) => notice.stepId === step.id)}
             />
           </td>
@@ -529,6 +548,19 @@ export function JourneyList({
             className={`rounded-full border border-warning-500 px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-warning-500 ${activeNeedsStatusOnly ? "bg-warning-600 text-white" : "bg-warning-50 text-warning-700 hover:bg-warning-100 dark:bg-warning-500/10 dark:text-warning-100"}`}
           >
             Needs expected status · {needsStatusCount}
+          </button>
+        )}
+        {failedLastRunCount > 0 && (
+          <button
+            type="button"
+            aria-pressed={activeFailedLastRunOnly}
+            onClick={() => {
+              setFailedLastRunOnly((current) => !current);
+              resetPage();
+            }}
+            className={`rounded-full border border-danger-500 px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 ${activeFailedLastRunOnly ? "bg-danger-600 text-white" : "bg-danger-50 text-danger-700 hover:bg-danger-100 dark:bg-danger-500/10 dark:text-danger-100"}`}
+          >
+            Failed last run · {failedLastRunCount}
           </button>
         )}
         {bodyEditedCount > 0 && (
@@ -689,6 +721,8 @@ function OperationInspector({
   onStepOrder,
   onJourneyOrder,
   onSaveBody,
+  onSaveParameters,
+  lastRunUnexpected,
   notices,
 }: Readonly<{
   row: InventoryRow;
@@ -701,6 +735,9 @@ function OperationInspector({
   onStepOrder: (journeyId: string, stepIds: string[]) => void;
   onJourneyOrder: (journeyIds: string[]) => void;
   onSaveBody: (stepId: string, input: BodyEditInput | null) => Promise<PerformanceErrorResult | null>;
+  onSaveParameters: (stepId: string, input: ParameterEditInput | null) => Promise<PerformanceErrorResult | null>;
+  /** AP-033 FR-023: the statuses this step did not expect in the latest finished run. */
+  lastRunUnexpected?: string;
   notices: readonly BodyEditNotice[];
 }>) {
   const { journey, journeyIndex, step, stepIndex } = row;
@@ -729,12 +766,19 @@ function OperationInspector({
               ))}
             </ul>
           )}
+          {lastRunUnexpected && (
+            <p role="note" className="rounded-md border border-danger-500 bg-danger-50 px-3 py-2 text-xs text-danger-700 dark:bg-danger-500/10 dark:text-danger-100">
+              <span className="font-semibold">Failed last run:</span> the server answered {lastRunUnexpected}, which this step does not expect. Open{" "}
+              <span className="font-semibold">Request</span> to check the parameters, headers and body it sends, and edit them there.
+            </p>
+          )}
           <StepRequestPreview
             stepId={step.id}
             operationKey={step.operationKey}
             stepLabel={stepLabel}
             loadPreview={loadPreview}
             onSaveBody={onSaveBody}
+            onSaveParameters={onSaveParameters}
             busy={busy}
           />
         </div>

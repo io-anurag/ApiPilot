@@ -2,7 +2,7 @@ import type { PerformanceResult, PerformanceRun, PerformanceThreshold } from "@a
 import { describe, expect, it } from "vitest";
 import { deriveFindings } from "../../../src/performance/report/findings";
 import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
-import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP } from "../../../src/performance/report/renderHtmlReport";
+import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, PARAMETERS_EDITED_MARKER, parameterEditProvenance, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP, UNEXPECTED_STATUS_HINT } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
@@ -289,5 +289,25 @@ describe("report detail per step", () => {
     const evilHtml = render(evilTimeline);
     expect(evilHtml).not.toContain("<img src=x onerror=alert(1)>");
     expect(evilHtml).not.toMatch(/<script|<link|<iframe|<img /i);
+  });
+});
+
+/** AP-033 FR-022 (amended 2026-09-30): parameter edits and failing steps in the report. */
+describe("parameter edits and unexpected statuses in the report", () => {
+  it("marks a step that sent edited parameters, counts it, and records no value", () => {
+    const edited = planFixture({ journeys: [journeyFixture({ id: "j1", steps: [{ ...create, parametersEdited: true as const }] }), journeyFixture({ id: "j2", steps: [evil] })], thresholds });
+    const run = completedRun({ planSnapshot: edited });
+    const html = renderHtmlReport({ ...run, result: withReportFields(result(), run) });
+    expect(html).toContain(`J1 · step 1 · ${PARAMETERS_EDITED_MARKER}`);
+    expect(html).toContain(`${PARAMETERS_EDITED_MARKER} · their values are not recorded`);
+    expect(html).toContain(escapeHtml(parameterEditProvenance(1)));
+    expect(parameterEditProvenance(2)).toBe("2 steps sent parameters edited by the engineer, not generated from the specification.");
+    expect(renderHtmlReport(completedRun())).not.toContain(PARAMETERS_EDITED_MARKER);
+  });
+
+  it("points a step with unexpected statuses to its request in the plan, and says nothing for a step without them", () => {
+    const html = renderHtmlReport(completedRun());
+    // s-create received 429 and 401, which it does not expect; s-evil received none.
+    expect(html.split(escapeHtml(UNEXPECTED_STATUS_HINT)).length - 1).toBe(1);
   });
 });

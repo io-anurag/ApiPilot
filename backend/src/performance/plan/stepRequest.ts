@@ -102,6 +102,10 @@ export interface BuiltStepRequest {
   bodyReferenceNames?: string[];
   /** AP-033: of those, the ones that are the whole value of a `format: password` field. */
   bodySecretReferenceNames?: string[];
+  /** AP-033 FR-020: names only a `{{name}}` the engineer wrote in an edited parameter refers to. */
+  parameterReferenceNames?: string[];
+  /** AP-033 FR-021: of those, the ones in a `format: password` parameter. */
+  parameterSecretReferenceNames?: string[];
 }
 
 export const UNIQUE_TOKEN_PREFIX = "apipilot_unique_";
@@ -235,6 +239,8 @@ export interface StepRequestOptions {
   uniqueFields?: { fieldPath: string; token: string }[];
   /** AP-033: the scenario carries the engineer's edited body (research R4). */
   bodyEdited?: boolean;
+  /** AP-033 FR-020: path parameters the engineer set, which keep their value instead of becoming environment values. */
+  editedPathParameters?: ReadonlySet<string>;
 }
 
 /** True when `body` has an object field at the dotted path (arrays are not entered, as in `setDotted`). */
@@ -276,6 +282,7 @@ export function buildStepRequest(
     if (!parameter) continue;
     const value = pathParameters[parameter];
     if (typeof value === "string" && ONLY_REFERENCE.test(value)) continue;
+    if (options.editedPathParameters?.has(parameter)) continue;
     delete pathParameters[parameter];
     pathParameterNames.push(pathParameterVariableName(operation.path, parameter));
   }

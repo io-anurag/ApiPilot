@@ -1,5 +1,6 @@
 import type {
   BodyEditInput,
+  ParameterEditInput,
   K6Readiness,
   PerformancePlan,
   PerformanceRun,
@@ -38,13 +39,16 @@ export interface PerformanceErrorResult {
   reference?: string;
   fieldPath?: string;
   limitBytes?: number;
+  /** AP-033 parameter-edit refusals (amended 2026-09-30): the parameter refused. */
+  location?: string;
+  name?: string;
 }
 
 export type Result<T> = ({ ok: true } & T) | PerformanceErrorResult;
 
 type ErrorExtras = Omit<PerformanceErrorResult, "ok" | "error" | "message">;
 
-const STRING_EXTRAS = ["variable", "runId", "stepId", "reference", "fieldPath"] as const;
+const STRING_EXTRAS = ["variable", "runId", "stepId", "reference", "fieldPath", "location", "name"] as const;
 const NUMBER_EXTRAS = ["line", "column", "limitBytes"] as const;
 
 /** The contract's extra error fields, each copied only when it has the documented type. */
@@ -103,6 +107,8 @@ export interface PlanUpdate {
   expectedStatuses?: Record<string, string[]>;
   /** AP-033: a step's new base body, or `null` to reset it to the generated body. */
   bodyEdits?: Record<string, BodyEditInput | null>;
+  /** AP-033 FR-020 (amended 2026-09-30): a step's full set of parameter changes, or `null` to reset them. */
+  parameterEdits?: Record<string, ParameterEditInput | null>;
 }
 
 export type ValueStatusesResult = Result<{

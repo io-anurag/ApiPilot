@@ -716,6 +716,15 @@ upload → parseYaml / validateSpec / buildApiModel (unchanged)
 
 ### Step body edits (AP-033)
 
+Amended 2026-09-30: parameter edits. `plan/parameterEdits.ts` holds `applyParameterEdit`
+(applied right after `effectiveScenario` in `buildJourneys` and `stepRequestFor`, so the preview
+is still the request the script sends), `validateParameterEdits` (`PUT /plan {parameterEdits}`,
+refusals as `InvalidParameterEditError`) and `parameterEditModel` (the preview's editor rows).
+`buildStepRequest` keeps an edited path parameter's value instead of turning it into an
+environment value. Edits are kept, discarded, fingerprinted and emptied from run snapshots as
+body edits are. The plan screen flags steps the latest finished run answered unexpectedly, from
+`usePerformanceRuns().latestFinished`.
+
 `specs/033-edit-step-request-body` lets the engineer edit the body a performance step sends, on
 both paths. Constitution v2.5.0 amended XVII so a plan input the user edits stays part of the
 approved plan, with extra conditions this design meets.

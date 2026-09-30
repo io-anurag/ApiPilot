@@ -140,3 +140,36 @@ edited ──rebuild with a different scenario──► generated (+ discardedBo
 
 Every transition into or out of `edited`, and every change of an edit, changes the plan
 fingerprint, so a generated script becomes out of date (FR-007).
+
+## Amendment 2026-09-30: parameter edits (FR-020 to FR-023)
+
+### `ParameterEdit` (stored in the plan)
+
+`{stepId, operationKey, scenarioId, parameters: ParameterEditEntry[]}`, kept and discarded
+exactly as `BodyEdit` (R9). `parameters` holds only changes from the generated request, sorted by
+location (`path`, `query`, `header`), then name.
+
+`ParameterEditEntry = {location: "path" | "query" | "header", name} & ({action: "set", value:
+string} | {action: "omit"})`.
+
+### `ParameterEditInput` (request only)
+
+`{parameters: ParameterEditEntry[]}`: the step's full set of changes; `null` resets the step.
+
+### `StepParameterEditModel` (returned with the preview as `parameterEdit`)
+
+`{rows: StepParameterEditRow[], edited: boolean}`, or `null` when the operation documents no
+path, query or header parameter. A row is `{location, name, required, type, format, enum,
+generated, edit, notEditable, secret}`: `generated` is the text the scenario sends (a path
+parameter's `{{name}}` environment reference), or `null`; `notEditable` is
+`"filled-at-run-time"` (a workflow variable fills it) or `"structured-value"` (array or object),
+or `null`; `secret` is true for `format: password`.
+
+### Changed types
+
+- `PerformancePlan` gains `parameterEdits: ParameterEdit[]` (fingerprinted only when not empty,
+  emptied in run snapshots) and `discardedParameterEdits: string[]` (not fingerprinted, cleared
+  by the next edit or rebuild). Stored run snapshots without them read them as empty.
+- `PerformanceStep` gains `parametersEdited?: true`, present only on an edited step.
+- `UserSuppliedValueSource` gains `"parameter-reference"`.
+- `StepRequestPreview` gains `parameterEdit: StepParameterEditModel | null`.

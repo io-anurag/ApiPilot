@@ -10,6 +10,7 @@ import type {
 } from "@apipilot/shared-domain";
 import { StepNotFoundError } from "../errors";
 import { bodyEditFor, effectiveScenario } from "./bodyEdits";
+import { applyParameterEdit, editedPathParameters, parameterEditFor } from "./parameterEdits";
 import { buildStepRequest, operationKeyOf, UNIQUE_TOKEN_PREFIX, type AuthPlan, type BuiltStepRequest, type PerformanceContext } from "./stepRequest";
 
 /**
@@ -32,9 +33,9 @@ export interface PlanStepRequest {
   journey: PerformanceJourney;
   step: PerformanceStep;
   operation: ApiOperation;
-  /** The scenario as sent: with the step's body edit applied, if it has one (AP-033). */
+  /** The scenario as sent: with the step's body and parameter edits applied, if it has them (AP-033). */
   scenario: TestScenario;
-  /** The approved scenario itself, before any body edit. */
+  /** The approved scenario itself, before any edit. */
   generated: TestScenario;
   workflow: IntegrationWorkflow | undefined;
   consumes: WorkflowVariable[];
@@ -96,7 +97,8 @@ export function stepRequestFor(
   if (!operation || !generated) throw new Error(`The plan's step ${step.id} no longer matches the approvals.`);
   // AP-033 (research R3): the one place, with `buildJourneys`, where a body edit is applied.
   const edit = bodyEditFor(plan, step);
-  const scenario = effectiveScenario(generated, edit);
+  const parameterEdit = parameterEditFor(plan, step);
+  const scenario = applyParameterEdit(effectiveScenario(generated, edit), parameterEdit);
 
   const source = journey.source;
   const workflow = source.kind === "workflow" ? context.workflows.find((candidate) => candidate.id === source.workflowId) : undefined;
@@ -110,6 +112,7 @@ export function stepRequestFor(
     consumes,
     uniqueFields: stepUnique.map((entry) => ({ fieldPath: entry.fieldPath, token: entry.token })),
     bodyEdited: edit !== undefined,
+    editedPathParameters: editedPathParameters(parameterEdit),
   });
   return { journey, step, operation, scenario, generated, workflow, consumes, produces, unique: stepUnique, built };
 }

@@ -21,12 +21,18 @@ function sourceOf(name: string, built: BuiltStepRequest | undefined, oauth2Clien
   if (oauth2ClientNames.has(name)) return "oauth2-client";
   // AP-033 (specs/033 research R4): a name only the engineer's edited body refers to.
   if (built?.bodyReferenceNames?.includes(name)) return "body-reference";
+  // AP-033 FR-020: a name only the engineer's edited parameters refer to.
+  if (built?.parameterReferenceNames?.includes(name)) return "parameter-reference";
   return "credential";
 }
 
 function isSecret(name: string, source: UserSuppliedValueSource, built: BuiltStepRequest | undefined): boolean {
   if (source === "oauth2-client" || source === "credential") return true;
-  return (built?.secretNames.has(name) ?? false) || (built?.bodySecretReferenceNames?.includes(name) ?? false);
+  return (
+    (built?.secretNames.has(name) ?? false) ||
+    (built?.bodySecretReferenceNames?.includes(name) ?? false) ||
+    (built?.parameterSecretReferenceNames?.includes(name) ?? false)
+  );
 }
 
 function oauth2ClientNamesOf(auth: AuthPlan): Set<string> {

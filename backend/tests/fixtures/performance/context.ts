@@ -4,7 +4,7 @@ import { computeDeterministicRelationships } from "../../../src/dependencies/det
 import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
 import { withQuickScenarioIds } from "../../../src/performance/quick/quickScenarioIds";
 import { generatePositiveScenarios, generateTestModel } from "../../../src/testDesign/generateTestModel";
-import { loadBodyEditsApiModel, loadPerformanceApiModel, loadQuickApiModel } from "./specification";
+import { loadBodyEditsApiModel, loadParameterEditsApiModel, loadPerformanceApiModel, loadQuickApiModel } from "./specification";
 
 /**
  * A `PerformanceContext` for `performance.yaml` built with the real analysis, deterministic
@@ -57,4 +57,10 @@ export async function bodyEditsContext(
   let scenarios = withQuickScenarioIds(generatePositiveScenarios(apiModel));
   if (overrides.mutateScenarios) scenarios = overrides.mutateScenarios(scenarios);
   return { apiModel, approvedScenarios: scenarios, workflows: [], relationships: [], source: "quick" };
+}
+
+/** AP-033 FR-020 (amended 2026-09-30): a quick `PerformanceContext` for `parameter-edits.yaml`. */
+export async function parameterEditsContext(): Promise<PerformanceContext> {
+  const apiModel = await loadParameterEditsApiModel();
+  return { apiModel, approvedScenarios: withQuickScenarioIds(generatePositiveScenarios(apiModel)), workflows: [], relationships: [], source: "quick" };
 }

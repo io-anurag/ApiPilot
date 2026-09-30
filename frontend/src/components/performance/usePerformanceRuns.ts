@@ -14,6 +14,11 @@ export interface PerformanceRuns {
   checking: boolean;
   checkReadiness: (recheck: boolean) => Promise<void>;
   run: PerformanceRun | null;
+  /**
+   * AP-033 FR-023 (amended 2026-09-30): the session's newest run that has ended with results, so
+   * the plan can mark the steps that received statuses they do not expect. `null` until one exists.
+   */
+  latestFinished: PerformanceRun | null;
   inProgress: boolean;
   runs: PerformanceRunSummary[];
   reportRunId: string | null;
@@ -31,6 +36,7 @@ export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
   const [readiness, setReadiness] = useState<K6Readiness | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<PerformanceRun | null>(null);
+  const [latestFinished, setLatestFinished] = useState<PerformanceRun | null>(null);
   const [runs, setRuns] = useState<PerformanceRunSummary[]>([]);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -62,6 +68,12 @@ export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
         const detail = await fetchRun(live.id);
         if (detail.ok) setRun(detail.run);
       }
+      // Newest first (contract): the first run that ended, whether completed or cancelled.
+      const ended = list.ok ? list.runs.find((candidate) => candidate.status === "completed" || candidate.status === "cancelled") : undefined;
+      if (ended) {
+        const detail = await fetchRun(ended.id);
+        if (detail.ok && detail.run.result) setLatestFinished(detail.run);
+      }
     });
   }, [checkReadiness, refreshRuns, fetchRuns, fetchRun]);
 
@@ -73,6 +85,7 @@ export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
       setRun(result.run);
       if (result.run.status !== "in-progress") {
         setCancelling(false);
+        if (result.run.result) setLatestFinished(result.run);
         setReportRunId(result.run.id);
         void refreshRuns();
       }
@@ -111,6 +124,7 @@ export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
     checking,
     checkReadiness,
     run,
+    latestFinished,
     inProgress: run?.status === "in-progress",
     runs,
     reportRunId,

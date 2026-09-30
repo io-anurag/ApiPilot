@@ -193,4 +193,39 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
       expect((entry.body as { customerEmail: string }).customerEmail).toMatch(/^edited\+vu\d+-it\d+@example\.com$/);
     }
   }, 120_000);
+
+  it("sends edited query parameters through a real k6 run (AP-033 FR-020, amended 2026-09-30)", async () => {
+    const agent = request.agent(createApp());
+    expect((await uploadQuick(agent, { replaceExisting: true })).status).toBe(200);
+    const plan = (await agent.get(`${QUICK_BASE}/plan`)).body.plan;
+    const status = quickSteps(plan).find((step) => step.operationKey === "GET /status")!;
+    const orders = quickSteps(plan).find((step) => step.operationKey === "GET /orders")!;
+    const saved = await agent.put(`${QUICK_BASE}/plan`).send({
+      expectedStatuses: { [status.id]: ["200"] },
+      loadProfile: { kind: "smoke", stages: [{ durationMs: 3_000, targetVirtualUsers: 1 }] },
+      parameterEdits: { [orders.id]: { parameters: [{ location: "query", name: "state", action: "set", value: "closed" }] } },
+    });
+    expect(saved.status).toBe(200);
+    expect((await agent.post(`${QUICK_BASE}/script`)).status).toBe(200);
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "quick-real-parameters",
+      tier: "local",
+      baseUrl,
+      variableValues: { username: "u", password: "p", orderId: "o-1", productId: "p-1" },
+    });
+    const received = target.requests.length;
+    const started = await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: environment.body.environment.id });
+    expect(started.status).toBe(200);
+    let run = started.body.run;
+    for (let attempt = 0; attempt < 120 && run.status === "in-progress"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      run = (await agent.get(`${QUICK_BASE}/runs/${run.id}`)).body.run;
+    }
+    expect(run.status).toBe("completed");
+    const sent = target.requests.slice(received).filter((entry) => entry.method === "GET" && entry.path.endsWith("/orders"));
+    expect(sent.length).toBeGreaterThan(0);
+    for (const entry of sent) expect(entry.query).toBe("state=closed");
+    expect(run.planSnapshot.parameterEdits).toEqual([]);
+    expect(quickSteps(run.planSnapshot).find((step: { id: string }) => step.id === orders.id)).toMatchObject({ parametersEdited: true });
+  }, 120_000);
 });

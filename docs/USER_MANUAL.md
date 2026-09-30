@@ -361,8 +361,28 @@ below).
   or the environment value it needs, the authentication, and the body. Values that come from
   the environment are shown by name only, and secrets are marked, never shown. A step without a
   body says **This request has no body.**; an operation that accepts a body this step does not
-  send says so; form and multipart bodies are shown but cannot be edited. Parameters, headers
-  and authentication are view only.
+  send says so; form and multipart bodies are shown but cannot be edited. Authentication and
+  undocumented headers are view only.
+- **Editing a step's parameters.** Under **Parameters**, each path, query and header
+  parameter the specification documents is listed with its type, allowed values, the generated
+  value and what the step sends. Choose **Edit parameters**, change a value or clear **Send** to
+  leave an optional parameter out (or tick it to add one the step does not send), and **Save
+  parameters**. For example, if your server rejects the generated `sort=a`, set `sort` to a value
+  it accepts, or leave it out.
+  - A parameter filled by an earlier workflow step cannot be edited. An array or object
+    parameter can be left out but not edited. A required parameter, and every path parameter, is
+    always sent; an edited path parameter is sent as the value you type instead of a value from
+    the environment.
+  - `{{name}}` in a value takes it from the target environment, as in a body. A parameter the
+    specification marks `format: password` must hold a `{{name}}` reference. A value is at most
+    2 KiB and cannot contain a line break. A refusal is shown on the parameter it is about.
+  - An edited step shows **Parameters edited**. **Reset to generated parameters** puts it back
+    after you confirm. Saving or resetting marks the script **Out of date**. Parameter edits are
+    kept, restored and discarded exactly as body edits are.
+- **Steps that failed the last run.** After a run ends, each step the server answered with a
+  status it does not expect shows **Failed last run**, and the **Failed last run** chip lists
+  only those steps. A step's details name the statuses (for example `400 × 7,422`) and point you
+  to its **Request**, where you can check and edit what it sends.
 - **Editing a step's body.** For a JSON or text body, choose **Edit body** (or **Add a body**)
   under the request, change it, and **Save body**; **Cancel** leaves it as it was. You edit the
   body before ApiPilot fills in its own values: under **Replaced at run time**, the editor lists
@@ -501,7 +521,10 @@ restart is recorded as cancelled.
 
 A run recorded before version 19.11.0 has no received statuses beyond its failures, no request
 phases and no per-step timeline; its report says so rather than showing empty figures. A step that sent a
-body you edited is marked **Body edited by you**, and the provenance says how many steps did;
+body you edited is marked **Body edited by you**, and a step whose parameters you edited is
+marked **Parameters edited by you**; the provenance says how many steps did each. A step that
+received a status it does not expect says, under **What to check**, to open its request in the
+plan;
 the edited body itself is not recorded. It never contains a credential, token, request or
 response body, or a resolved URL, so the request and response blocks show each step's template
 and what was measured, not the content that was sent or received.

@@ -370,7 +370,10 @@ function stepTableRows(rows: StepRow[]): string {
   return rows
     .map(({ step, where, measured }) => {
       const sent = measured !== undefined && measured.requests > 0;
-      const edited = step.bodyEdited ? " · " + BODY_EDITED_MARKER : "";
+      const edited = [step.bodyEdited ? BODY_EDITED_MARKER : "", step.parametersEdited ? PARAMETERS_EDITED_MARKER : ""]
+        .filter(Boolean)
+        .map((marker) => ` · ${marker}`)
+        .join("");
       return [
         `<tr${sent && measured.errorRatePercent > 0 ? ' class="failing"' : ""}>`,
         `<td class="step">${stepLabel(step)}<div class="muted small">${where}${edited}</div></td>`,
@@ -401,6 +404,8 @@ function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceS
     .filter((binding) => binding.role !== "produces")
     .map((binding) => `${binding.variable} → ${binding.location} ${binding.field}, from ${stepsById.get(binding.producerStepId ?? "")?.operationKey ?? "an earlier step"}`);
   const body = step.bodyEdited ? `${BODY_EDITED_MARKER} · its content is not recorded` : "Not recorded";
+  // AP-033 FR-022: which parameters were sent is in the plan's request preview; their values are never recorded.
+  const parameters = step.parametersEdited ? `${PARAMETERS_EDITED_MARKER} · their values are not recorded` : "As generated · values are not recorded";
   return [
     '<section class="rr-box" aria-label="Request">',
     "<h3>Request</h3>",
@@ -409,6 +414,7 @@ function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceS
     `<dt>Authentication</dt><dd>${escapeHtml(AUTH_TEXT[step.auth.kind])}${step.auth.schemeName ? ` (${escapeHtml(step.auth.schemeName)})` : ""}</dd>`,
     `<dt>Sends from earlier steps</dt><dd>${escapeHtml(sends.join("; ") || "Nothing")}</dd>`,
     `<dt>Values you supply</dt><dd>${step.requiredValues.length > 0 ? step.requiredValues.map((name) => `<code>${escapeHtml(name)}</code>`).join(", ") : "None"}</dd>`,
+    `<dt>Parameters</dt><dd>${escapeHtml(parameters)}</dd>`,
     `<dt>Body</dt><dd>${escapeHtml(body)}</dd>`,
     "</dl>",
     "</section>",
@@ -441,9 +447,24 @@ function responseBlock(step: PerformanceStep, measured: StepResult | undefined):
     `<dt>Throughput</dt><dd>${formatCount(measured.throughputPerSecond)} requests/s · ${formatCount(measured.requests)} requests</dd>`,
     `<dt>Extracts</dt><dd>${escapeHtml(extractText)}</dd>`,
     `<dt>Checks passed</dt><dd>${pct(measured.checkPassRatePercent)}</dd>`,
+    unexpectedHint(measured),
     "</dl>",
     "</section>",
   ].join("");
+}
+
+/**
+ * AP-033 FR-022: a step that received unexpected statuses points to where its request can be seen
+ * and changed. The report has no values to compare, so it says where they are, not what they were.
+ */
+export const UNEXPECTED_STATUS_HINT =
+  "The server answered with a status this step does not expect. Open the step's Request in the plan to see the parameters, headers and body it sends, and edit them there.";
+
+function unexpectedHint(measured: StepResult): string {
+  const unexpected = measured.statusesReceived
+    ? measured.statusesReceived.some((entry) => !entry.expected && entry.status !== "0")
+    : measured.errorsByStatus.some((entry) => entry.status !== "0");
+  return unexpected ? `<dt>What to check</dt><dd>${escapeHtml(UNEXPECTED_STATUS_HINT)}</dd>` : "";
 }
 
 function stepBlocks(rows: StepRow[]): string {
@@ -616,6 +637,15 @@ export const QUICK_PLAN_PROVENANCE = "Plan built by the quick performance test f
 /** AP-033 FR-014: the marker on a step that sent an engineer-written body. The body itself is never recorded. */
 export const BODY_EDITED_MARKER = "Body edited by you";
 
+/** AP-033 FR-022 (amended 2026-09-30): the marker on a step that sent parameters the engineer edited. Their values are never recorded. */
+export const PARAMETERS_EDITED_MARKER = "Parameters edited by you";
+
+/** AP-033 FR-022: how many steps sent parameters the engineer edited. */
+export function parameterEditProvenance(count: number): string {
+  const steps = count === 1 ? "1 step" : `${count} steps`;
+  return `${steps} sent parameters edited by the engineer, not generated from the specification.`;
+}
+
 /** AP-033 FR-014 (constitution XI, XIII): how many steps sent a body the engineer wrote. */
 export function bodyEditProvenance(count: number): string {
   const steps = count === 1 ? "1 step" : `${count} steps`;
@@ -627,6 +657,8 @@ function provenanceSection(plan: PerformancePlan, rows: StepRow[]): string {
   const quick = plan.source === "quick" ? `<p>${escapeHtml(QUICK_PLAN_PROVENANCE)}</p>` : "";
   const editedCount = plan.journeys.reduce((total, journey) => total + journey.steps.filter((step) => step.bodyEdited).length, 0);
   const edited = editedCount > 0 ? `<p>${escapeHtml(bodyEditProvenance(editedCount))}</p>` : "";
+  const parameterCount = plan.journeys.reduce((total, journey) => total + journey.steps.filter((step) => step.parametersEdited).length, 0);
+  const parametersEdited = parameterCount > 0 ? `<p>${escapeHtml(parameterEditProvenance(parameterCount))}</p>` : "";
   const intro = '<p class="small muted">Per step: the request as planned and the response as measured. Steps with failures are open.</p>';
-  return `<h2>Provenance · request and response by step</h2>${quick}${edited}${intro}${stepBlocks(rows)}`;
+  return `<h2>Provenance · request and response by step</h2>${quick}${edited}${parametersEdited}${intro}${stepBlocks(rows)}`;
 }

@@ -2,6 +2,7 @@ import type {
   EnvironmentTier,
   K6Readiness,
   LoadProfile,
+  PerformanceResult,
   PerformanceRunSummary,
   PerformanceStep,
   StepAuthKind,
@@ -108,3 +109,23 @@ export function removalReason(operationKey: string, credentialProducerOperationK
 export const OMITTED_REASON_LABEL: Record<"no-positive-scenario", string> = {
   "no-positive-scenario": "No positive scenario",
 };
+
+/** Groups digits with commas, independent of the browser's locale, as the report does. */
+function groupDigits(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * AP-033 FR-023 (amended 2026-09-30): per step id, the statuses a finished run received that the
+ * step does not expect, as text ("400 × 7,422"; "no response" for status 0). A run recorded before
+ * every status was kept lists its failure statuses, which are the same responses.
+ */
+export function unexpectedStatusesByStep(result: PerformanceResult | undefined): Map<string, string> {
+  const byStep = new Map<string, string>();
+  for (const step of result?.steps ?? []) {
+    const unexpected = step.statusesReceived ? step.statusesReceived.filter((entry) => !entry.expected) : step.errorsByStatus;
+    if (unexpected.length === 0) continue;
+    byStep.set(step.stepId, unexpected.map((entry) => `${entry.status === "0" ? "no response" : entry.status} × ${groupDigits(entry.count)}`).join(", "));
+  }
+  return byStep;
+}
