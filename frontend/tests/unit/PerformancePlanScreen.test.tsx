@@ -912,3 +912,47 @@ describe("steps that failed the last run", () => {
     );
   });
 });
+
+describe("PerformancePlanScreen restores a past run's settings (AP-029 FR-024b)", () => {
+  it("re-applies the run's removals and load settings to a rebuilt plan, generates the script, and leaves the run to the user", async () => {
+    // The plan a backend restart rebuilt: every operation, default load, no thresholds.
+    const rebuilt = quickPlan();
+    // The run's plan: DELETE operations removed, a load profile and a threshold set.
+    const removed = ["DELETE /orders/{orderId}", "DELETE /products/{productId}"];
+    const snapshot: PerformancePlan = {
+      ...withoutKeys(rebuilt, removed),
+      loadProfile: { kind: "load", stages: [{ durationMs: 30_000, targetVirtualUsers: 5 }], plannedDurationMs: 30_000 },
+      thresholds: [{ id: "t-1", scope: { kind: "run" }, metric: "p95", comparator: "<=", limit: 800 }],
+    };
+    const past = runFixture({ id: "run-old00001", status: "completed", planSnapshot: snapshot, scriptSha256: "feedface00000000" });
+    let current = rebuilt;
+    const calls = stubFetch({
+      ...routes(rebuilt, () => {
+        current = snapshot;
+        return current;
+      }),
+      [`GET ${QUICK}/runs`]: () => [200, { runs: [{ ...past, planSnapshot: undefined }] }] as [number, unknown],
+      [`GET ${QUICK}/runs/run-old00001`]: () => [200, { run: past }] as [number, unknown],
+      [`POST ${QUICK}/script`]: () => [200, { script: script({ scriptSha256: "feedface00000000" }) }] as [number, unknown],
+    });
+    renderScreen();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Runs & reports/ }));
+    const rerun = await screen.findByRole("region", { name: "Run again" });
+    fireEvent.click(within(rerun).getByRole("button", { name: "Restore run run-old0's settings" }));
+
+    expect(await within(rerun).findByTestId("rerun-restore-outcome")).toHaveTextContent(
+      "Restored run run-old0's removed operations, order, load profile, think time, thresholds and expected statuses.",
+    );
+    const [settings] = puts(calls);
+    expect(settings?.body).toMatchObject({
+      excludedOperationKeys: ["POST /auth/login", ...removed],
+      loadProfile: { kind: "load", stages: [{ durationMs: 30_000, targetVirtualUsers: 5 }] },
+      thresholds: [{ scope: { kind: "run" }, metric: "p95", comparator: "<=", limit: 800 }],
+    });
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/script"))).toBe(true);
+    // The script now matches the run's, so Run again is available; nothing was started.
+    await waitFor(() => expect(within(rerun).getByRole("button", { name: "Run again on perf-local (local)" })).toBeEnabled());
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/runs"))).toBe(false);
+  });
+});

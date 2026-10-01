@@ -436,8 +436,10 @@ below).
 
 **Values.** Values the specification cannot produce (the base URL, client credentials, a
 path parameter no operation produces) are the target environment's values. Choose the
-environment, then **Edit values** or **New environment**; values are typed into hidden
-fields and stored encrypted. The checklist shows each value as **Present** or **Missing**
+environment, then **Edit values** or **New environment**; values are stored encrypted. The
+dialog's title follows the name you type, and its **Save** button is named after it. The value
+rows sit in their own scrolling list, with a count of how many are filled, so the dialog stays
+within the window. The checklist shows each value as **Present** or **Missing**
 for the chosen environment. A missing value does not block a run: that step is not sent and
 is reported as missing data, and the steps that depend on it are reported as not attempted.
 The environment form suggests one row for each value the plan still needs. Removing an
@@ -494,6 +496,23 @@ seconds and keeps what was measured. A run carries on if you close the page, and
 your session alive; only one run (performance or functional) can be in progress per session.
 ApiPilot never starts, repeats or resumes a run by itself: a run interrupted by a backend
 restart is recorded as cancelled.
+
+**Running the last run again.** Once a run has ended, the **Runs & reports** tab shows **Run
+again** above the list of runs. It repeats the newest run on the same environment, for example
+**Run again on QA_Run (qa)**, next to that environment's tier and base URL as they are now and the
+write operations the run sends. Values are read from the environment as it is now. The button
+is available only while the script is identical to the one that run used; after you change the
+plan, it says so. It is also unavailable when that environment has been deleted, when k6 is not
+ready, or while another run is in progress.
+
+The plan is kept in memory only, so a backend restart, a new upload or **Reset plan** rebuilds it
+with its defaults: operations you removed come back, with any values they need, and the load
+profile and thresholds return to their starting values. When that happens, **Run again** offers
+**Restore run … 's settings**. It re-applies that run's removed operations, order, think time,
+load profile, thresholds and the expected statuses you set, then generates the script. Nothing is
+sent until you press **Run again**. A run from a different specification cannot be restored.
+Body and parameter edits are not recorded in runs, so the message names any steps that had them;
+edit those again before running. To test the current plan instead, start it from **Run setup**.
 
 **The report.** When a run ends, its report appears automatically, and **Download report
 (HTML)** saves the same file, which opens with no network access. It shows:

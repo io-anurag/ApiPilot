@@ -48,10 +48,10 @@ export function EntryChooser({
       <section className="grid gap-8 border-b border-border pb-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] lg:items-end">
         <div className="max-w-2xl space-y-4">
           <p className="flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-            <span aria-hidden="true" className="h-3 w-1 bg-brand-500" />
+            <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
             API test engineering workspace
           </p>
-          <h2 className="font-display text-4xl font-semibold text-slate-950 sm:text-5xl dark:text-white">
+          <h2 className="font-display text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl dark:text-white">
             Start with the artifact you have.
           </h2>
           <p className="max-w-xl text-base leading-7 text-muted">
@@ -91,7 +91,7 @@ export function EntryChooser({
             </p>
             <h2
               id="entry-paths-heading"
-              className="mt-1 font-display text-2xl font-semibold text-slate-950 dark:text-white"
+              className="mt-1 font-display text-2xl font-semibold tracking-tight text-slate-950 dark:text-white"
             >
               Launch a test session
             </h2>
@@ -105,10 +105,10 @@ export function EntryChooser({
             type="button"
             aria-label="Guided Workflow"
             onClick={() => onSelect("guided-workflow")}
-            className="group grid gap-5 border-2 border-brand-600 bg-brand-50 p-5 text-left shadow-md transition-[background-color,box-shadow] hover:bg-brand-100 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
+            className="group grid gap-5 rounded-xl border-2 border-brand-600 bg-brand-50 p-6 text-left shadow-[6px_6px_0_0_var(--color-border)] transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
           >
             <div className="flex items-start justify-between gap-4">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-brand-600 text-white">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
                 <EntryFeatureIcon name="review" tone="inverse" />
               </span>
               <span className="font-mono text-xs font-semibold uppercase text-brand-800 dark:text-brand-200">
@@ -116,6 +116,10 @@ export function EntryChooser({
               </span>
             </div>
             <div className="space-y-2">
+              <span
+                aria-hidden="true"
+                className="block h-1.5 w-10 rounded-full bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800"
+              />
               <span className="block font-display text-2xl font-semibold text-slate-950 dark:text-white">
                 Guided Workflow
               </span>
@@ -137,12 +141,16 @@ export function EntryChooser({
                 type="button"
                 aria-label={path.title}
                 onClick={() => onSelect(path.choice)}
-                className="group flex min-h-48 flex-col items-start border border-border bg-surface p-5 text-left shadow-md transition-[border-color,background-color,box-shadow] hover:border-brand-500 hover:bg-chrome hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                className="group flex min-h-48 flex-col items-start rounded-xl border border-slate-300 bg-surface p-6 text-left shadow-[6px_6px_0_0_var(--color-border)] transition-colors hover:border-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:border-slate-700"
               >
-                <span className="flex h-8 w-8 items-center justify-center border border-border bg-chrome">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-chrome">
                   <EntryFeatureIcon name={path.icon} />
                 </span>
-                <span className="mt-4 font-mono text-[11px] font-semibold uppercase text-muted">
+                <span
+                  aria-hidden="true"
+                  className="mt-4 h-1.5 w-10 rounded-full bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800"
+                />
+                <span className="mt-3 font-mono text-[11px] font-semibold uppercase text-muted">
                   {path.label}
                 </span>
                 <span className="mt-1 font-display text-lg font-semibold text-slate-950 dark:text-white">

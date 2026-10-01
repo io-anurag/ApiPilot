@@ -1,4 +1,5 @@
-import type { Environment, K6Readiness, PerformancePlan, PerformanceRun, ScriptStatus } from "@apipilot/shared-domain";
+import { useState } from "react";
+import type { Environment, K6Readiness, PerformancePlan, PerformanceRun, PerformanceRunSummary, ScriptStatus } from "@apipilot/shared-domain";
 import { summarizeWriteOperations } from "@apipilot/shared-domain";
 import type { PerformanceClient } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
@@ -7,6 +8,7 @@ import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
 import { PerformanceReportFrame } from "./PerformanceReportFrame";
 import { READINESS_REASON, TIER_TONE, formatDuration, runStatusLabel } from "./performanceViewModel";
+import type { RestoreOutcome } from "./restoreFromRun";
 import type { PerformanceRuns } from "./usePerformanceRuns";
 import { WriteOperationSummary } from "./WriteOperationSummary";
 
@@ -19,11 +21,28 @@ import { WriteOperationSummary } from "./WriteOperationSummary";
  */
 const LOAD_ORIGIN = "Load is generated from the machine running the ApiPilot backend.";
 
+/**
+ * A rerun promises the same test: generation is byte-deterministic (FR-020), so an equal script
+ * hash means the plan is unchanged since that run. A plan rebuilt since (for example after a
+ * backend restart, which loses the plan) has no script or a different one.
+ */
+function planChangedSince(script: ScriptStatus | null, run: PerformanceRunSummary): boolean {
+  return !script || script.outOfDate || script.scriptSha256 !== run.scriptSha256;
+}
+
 /** Why the trigger is disabled, or `null` when a run can start. */
-function runBlockedReason(script: ScriptStatus | null, environment: Environment | null, readiness: K6Readiness | null, inProgress: boolean): string | null {
+function runBlockedReason(
+  script: ScriptStatus | null,
+  environment: Environment | null,
+  readiness: K6Readiness | null,
+  inProgress: boolean,
+  rerunOf: PerformanceRunSummary | undefined,
+): string | null {
+  // Checked first, so a rebuilt plan says so rather than only asking for a script.
+  if (rerunOf && planChangedSince(script, rerunOf)) return `The plan changed since run ${rerunOf.id.slice(0, 8)}.`;
   if (!script) return "Generate the script first.";
   if (script.outOfDate) return "The plan changed after the script was generated. Regenerate it to run.";
-  if (!environment) return "Choose a target environment.";
+  if (!environment) return rerunOf ? `The environment run ${rerunOf.id.slice(0, 8)} used no longer exists.` : "Choose a target environment.";
   if (readiness?.state !== "ready") return "k6 is not available.";
   if (inProgress) return "A run is in progress.";
   return null;
@@ -40,8 +59,14 @@ function ReadinessBadge({ readiness }: Readonly<{ readiness: K6Readiness | null 
   );
 }
 
+/**
+ * The live run's recorded target while it runs, otherwise the environment the trigger starts on. An
+ * ended run's environment is never shown, so the trigger cannot name one target and start another
+ * (FR-025).
+ */
 function runTarget(run: PerformanceRun | null, environment: Environment | null) {
-  return run?.environment ?? (environment ? { name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl } : null);
+  if (run?.status === "in-progress") return run.environment;
+  return environment ? { name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl } : null;
 }
 
 export function PerformanceRunTrigger({
@@ -51,6 +76,7 @@ export function PerformanceRunTrigger({
   environment,
   onStarted,
   onSelectOperation,
+  rerunOf,
 }: Readonly<{
   runs: PerformanceRuns;
   plan: PerformancePlan;
@@ -59,9 +85,11 @@ export function PerformanceRunTrigger({
   onStarted?: () => void;
   /** Opens a write operation's details in the plan's table. */
   onSelectOperation?: (operationKey: string) => void;
+  /** The ended run this trigger repeats; it then runs only while the script is unchanged since. */
+  rerunOf?: PerformanceRunSummary;
 }>) {
   const { readiness, checking, checkReadiness, run, inProgress, starting, error, start } = runs;
-  const blockedReason = runBlockedReason(script, environment, readiness, inProgress);
+  const blockedReason = runBlockedReason(script, environment, readiness, inProgress, rerunOf);
   const target = runTarget(run, environment);
   const stages = plan.loadProfile.stages;
   const peak = Math.max(0, ...stages.map((stage) => stage.targetVirtualUsers));
@@ -73,7 +101,7 @@ export function PerformanceRunTrigger({
 
   let triggerLabel = "Run performance test";
   if (starting) triggerLabel = "Starting…";
-  else if (target) triggerLabel = `Run on ${target.name} (${target.tier})`;
+  else if (target) triggerLabel = `${rerunOf ? "Run again" : "Run"} on ${target.name} (${target.tier})`;
 
   const trigger = (
     <>
@@ -125,16 +153,95 @@ export function PerformanceRunTrigger({
   );
 }
 
+/**
+ * FR-024a, FR-024b (amended 2026-09-30): repeats the newest ended run. When the plan changed since
+ * (it is in memory only, so a backend restart rebuilds it), the run's recorded settings can be
+ * restored first; the user still starts the run.
+ */
+function RunAgain({
+  runs,
+  plan,
+  script,
+  lastRun,
+  environment,
+  onSelectOperation,
+  onRestore,
+}: Readonly<{
+  runs: PerformanceRuns;
+  plan: PerformancePlan;
+  script: ScriptStatus | null;
+  lastRun: PerformanceRunSummary;
+  environment: Environment | null;
+  onSelectOperation?: (operationKey: string) => void;
+  onRestore?: (runId: string) => Promise<RestoreOutcome>;
+}>) {
+  const [restoring, setRestoring] = useState(false);
+  const [outcome, setOutcome] = useState<RestoreOutcome | null>(null);
+  const run = lastRun.id.slice(0, 8);
+  const changed = planChangedSince(script, lastRun);
+
+  async function restore() {
+    if (!onRestore) return;
+    setRestoring(true);
+    setOutcome(await onRestore(lastRun.id));
+    setRestoring(false);
+  }
+
+  return (
+    <section aria-labelledby="rerun-title" className="space-y-3 rounded-lg border border-border bg-surface p-5">
+      <div className="space-y-1">
+        <h3 id="rerun-title" className="text-base font-semibold">
+          Run again
+        </h3>
+        <p className="text-sm text-muted">
+          Repeats run <span className="font-mono">{run}</span> with the same script (<span className="font-mono">{lastRun.scriptSha256.slice(0, 8)}</span>) on the same
+          environment. The environment&apos;s values are read as they are now.
+        </p>
+      </div>
+      {changed && onRestore && (
+        <div className="space-y-2 rounded-md border border-warning-500 bg-warning-50 p-3 text-sm dark:bg-warning-500/10">
+          <p>
+            The current plan is not the one run <span className="font-mono">{run}</span> used. A backend restart, a new upload or a reset rebuilds the plan with its
+            defaults. Restore that run&apos;s removed operations, order, load profile, think time, thresholds and expected statuses to run it again, or start the
+            current plan from Run setup.
+          </p>
+          <button type="button" className={BUTTON_STYLES.secondary} disabled={restoring} onClick={() => void restore()}>
+            {restoring ? "Restoring…" : `Restore run ${run}'s settings`}
+          </button>
+        </div>
+      )}
+      {outcome && (
+        <p role="status" data-testid="rerun-restore-outcome" className={outcome.ok ? "text-sm" : "text-sm text-danger-700 dark:text-danger-100"}>
+          {outcome.message}
+        </p>
+      )}
+      <PerformanceRunTrigger runs={runs} plan={plan} script={script} environment={environment} onSelectOperation={onSelectOperation} rerunOf={lastRun} />
+    </section>
+  );
+}
+
 export function PerformanceRunActivity({
   runs,
   client,
   plan,
+  script,
+  environments,
+  onSelectOperation,
+  onRestore,
 }: Readonly<{
   runs: PerformanceRuns;
   client: PerformanceClient;
   plan: PerformancePlan;
+  script: ScriptStatus | null;
+  /** The session's environments, to resolve the last run's environment as it is now. */
+  environments: readonly Environment[];
+  onSelectOperation?: (operationKey: string) => void;
+  /** Rebuilds a past run's settings on the current plan and generates the script (FR-024b). */
+  onRestore?: (runId: string) => Promise<RestoreOutcome>;
 }>) {
   const { run, inProgress, runs: history, reportRunId, showReport, cancelling, cancel } = runs;
+  // Newest first (contract). A rerun is the user's explicit trigger like any other (FR-024).
+  const lastRun = history[0]?.status === "in-progress" ? undefined : history[0];
   const stepsById = new Map(plan.journeys.flatMap((journey, journeyIndex) => journey.steps.map((step, stepIndex) => [step.id, { step, where: `J${journeyIndex + 1} · ${stepIndex + 1}` }])));
   const progress = run?.progress;
   const elapsedMs = progress?.elapsedMs ?? 0;
@@ -230,6 +337,19 @@ export function PerformanceRunActivity({
           )}
           <p className="text-xs text-muted">The run continues on the server if you close this page. The report opens here automatically when it ends.</p>
         </section>
+      )}
+
+      {lastRun && !inProgress && (
+        <RunAgain
+          key={lastRun.id}
+          runs={runs}
+          plan={plan}
+          script={script}
+          lastRun={lastRun}
+          environment={environments.find((candidate) => candidate.id === lastRun.environment.id) ?? null}
+          onSelectOperation={onSelectOperation}
+          onRestore={onRestore}
+        />
       )}
 
       {reportRunId && <PerformanceReportFrame client={client} runId={reportRunId} />}
