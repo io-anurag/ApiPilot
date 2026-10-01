@@ -1,15 +1,46 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ExportResult } from "@apipilot/shared-domain";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { AppHeader } from "./components/AppHeader";
 import { Tabs } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
-import { TestGenerationWorkflowPage } from "./pages/TestGenerationWorkflowPage";
-import { ExternalCollectionsPage } from "./pages/ExternalCollectionsPage";
-import { QuickPerformancePage } from "./pages/QuickPerformancePage";
-import { UserScriptPage } from "./pages/UserScriptPage";
-import { PerformancePlanScaleMockPage } from "./pages/PerformancePlanScaleMockPage";
+import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
+
+// Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
+// exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
+// pages use named exports, so each import is adapted to the `default` shape `lazy` expects.
+const TestGenerationWorkflowPage = lazy(() =>
+  import("./pages/TestGenerationWorkflowPage").then((m) => ({ default: m.TestGenerationWorkflowPage })),
+);
+const ExternalCollectionsPage = lazy(() =>
+  import("./pages/ExternalCollectionsPage").then((m) => ({ default: m.ExternalCollectionsPage })),
+);
+const QuickPerformancePage = lazy(() =>
+  import("./pages/QuickPerformancePage").then((m) => ({ default: m.QuickPerformancePage })),
+);
+const UserScriptPage = lazy(() =>
+  import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
+);
+const PerformancePlanScaleMockPage = lazy(() =>
+  import("./pages/PerformancePlanScaleMockPage").then((m) => ({ default: m.PerformancePlanScaleMockPage })),
+);
+
+/** One boundary per view, so the first load of one view never suspends (and hides) another that
+ * is already mounted. A chunk that fails to load throws to `AppErrorBoundary` (main.tsx). */
+function LazyView({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <Suspense
+      fallback={
+        <div role="status" aria-label="Loading view">
+          <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
 
 type ActiveTab = EntryChoice;
 
@@ -117,7 +148,9 @@ export function App() {
       <AppHeader health={health} />
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         {showPerformancePlanScaleMock ? (
-          <PerformancePlanScaleMockPage />
+          <LazyView>
+            <PerformancePlanScaleMockPage />
+          </LazyView>
         ) : (
           <>
             {!started && <EntryChooser onSelect={handleSelect} />}
@@ -140,28 +173,36 @@ export function App() {
              * letting them view the guided workflow again. */}
             {guidedWorkflowMounted && (
               <div hidden={!started || activeTab !== "guided-workflow"}>
-                <TestGenerationWorkflowPage
-                  onExit={handleExitToStart}
-                  onHandoffToExecution={handleHandoffToExecution}
-                />
+                <LazyView>
+                  <TestGenerationWorkflowPage
+                    onExit={handleExitToStart}
+                    onHandoffToExecution={handleHandoffToExecution}
+                  />
+                </LazyView>
               </div>
             )}
             {importCollectionMounted && (
               <div hidden={!started || activeTab !== "import-collection"}>
-                <ExternalCollectionsPage
-                  preload={importPreload}
-                  onExit={handleExitToStart}
-                />
+                <LazyView>
+                  <ExternalCollectionsPage
+                    preload={importPreload}
+                    onExit={handleExitToStart}
+                  />
+                </LazyView>
               </div>
             )}
             {quickPerformanceMounted && (
               <div hidden={!started || activeTab !== "quick-performance"}>
-                <QuickPerformancePage onExit={handleExitToStart} />
+                <LazyView>
+                  <QuickPerformancePage onExit={handleExitToStart} />
+                </LazyView>
               </div>
             )}
             {userScriptMounted && (
               <div hidden={!started || activeTab !== "user-script"}>
-                <UserScriptPage onExit={handleExitToStart} />
+                <LazyView>
+                  <UserScriptPage onExit={handleExitToStart} />
+                </LazyView>
               </div>
             )}
           </>
