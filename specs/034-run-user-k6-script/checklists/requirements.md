@@ -45,3 +45,15 @@
   option" are product-domain vocabulary: the constitution's XVII exception is written in them, and
   AP-029 uses the same terms. They are not implementation choices.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
+- 2026-10-01, planning: FR-006 gained the `handleSummary` refusal (research R3 rule 6). FR-026
+  gained the reserved k6 start-up names (research R11). The module availability in k6 1.0.x asked
+  for above is confirmed in research R3.
+- 2026-10-01, after `/speckit-analyze`:
+  - the "generated script supplied again" edge case was first changed to say such a script is
+    refused (I1). At the user's request it was amended again the same day: AP-029 FR-022a makes
+    generated scripts pass the check, so a downloaded copy is accepted and mapped automatically
+    (research R5, R12, R23);
+  - FR-035 states that k6's script-threshold outcome is for the run as a whole (A1);
+  - Key Entities name User Script Run and User Script Result, matching research R9 (I3).
+
+  All checklist items still pass.

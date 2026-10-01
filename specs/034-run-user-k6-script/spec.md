@@ -214,9 +214,13 @@ stored script is unchanged, and the unsaved text is still in the editor.
 ### Edge Cases
 
 - **A generated script supplied again**: a script ApiPilot generated (AP-029, AP-032) that the
-  engineer downloads, changes or not, and uploads is a user-supplied script. It is checked,
-  confirmed and reported as the engineer's. It reads its values as `APIPILOT_V_<n>`, so the
-  engineer maps those names to environment values (FR-026).
+  engineer downloads, changes or not, and uploads is a user-supplied script, never ApiPilot's
+  output. ApiPilot generates scripts that pass this check (AP-029 FR-022a), so an unchanged copy
+  is accepted. It is confirmed and reported as the engineer's. It reads its values as
+  `APIPILOT_V_<n>` through a literal table, so the check lists those names, and the initial mapping
+  maps each one to the environment value it stands for, with `baseUrl` mapped to the base URL. Run
+  against the same environment, it needs no manual mapping (FR-025, FR-026). Changes the engineer
+  makes are checked like any other script. (Amended 2026-10-01.)
 - **A module used indirectly**: a script that builds a function or module name at run time, runs
   code from a string (for example with `eval` or the `Function` constructor), or uses dynamic
   `import()` or `require()` is refused, because the check cannot rule out a forbidden capability
@@ -294,7 +298,8 @@ stored script is unchanged, and the unsaved text is still in the editor.
 - **FR-006**: The script MUST NOT call `open()`, use `require()` or dynamic `import()`, run code
   built from a string (for example `eval` or the `Function` constructor), or look up a global
   function by a name computed at run time. A construct the check cannot rule out MUST be refused
-  rather than accepted.
+  rather than accepted. The script MUST NOT export `handleSummary`, because k6 writes what it
+  returns to local files (amended 2026-10-01 during planning, research R3).
 - **FR-007**: A script the check cannot parse MUST be refused with the parser's line and message.
 - **FR-008**: The check MUST be deterministic: the same bytes MUST always give the same result,
   the same reasons, the same hosts found and the same names read.
@@ -365,8 +370,9 @@ stored script is unchanged, and the unsaved text is still in the editor.
   chosen environment MUST be shown as missing; the run MAY still start, and the script receives no
   value for that name.
 - **FR-026**: Only a name made of letters, digits and underscores, not starting with a digit and
-  not starting with `K6_`, MUST be accepted into the mapping. Other names MUST be refused with the
-  reason.
+  not starting with `K6_`, MUST be accepted into the mapping. Names that k6 needs to start, compared
+  without case (`PATH`, `SYSTEMROOT`, `TEMP`, `TMP`, `HOME`, `TMPDIR`), MUST also be refused (amended
+  2026-10-01 during planning, research R11). Other names MUST be refused with the reason.
 - **FR-027**: By default a run MUST use the script's own load settings, with no load option passed.
   The engineer MUST be able to choose one of the five load profiles instead and edit its stages as
   in AP-029 FR-017 and FR-019. The override MUST be unavailable, with the reason, for a script that
@@ -402,7 +408,8 @@ stored script is unchanged, and the unsaved text is still in the editor.
   scale, and per request name latency and failures over time.
 - **FR-035**: The report MUST show each ApiPilot threshold as passed or failed against the measured
   value, or say none were set, and MUST separately show the outcome k6 gives for thresholds the
-  script defines. It MUST list, per request name and method, the write requests sent and succeeded.
+  script defines: each threshold expression by metric, and k6's overall outcome (crossed or not),
+  since k6 reports that outcome for the run as a whole. It MUST list, per request name and method, the write requests sent and succeeded.
 - **FR-036**: The report MUST include plain-language findings from fixed rules on the measured data
   (such as the slowest request, where failures start, and the most frequent failing status). The
   same data MUST give the same findings. It MUST be presented in ApiPilot when the run ends and be
@@ -434,10 +441,15 @@ stored script is unchanged, and the unsaved text is still in the editor.
 - **Script Run Settings**: kept with the script: the mapping of names to environment values (names
   only), the load choice (the script's own, or a profile with stages), and the ApiPilot
   thresholds. Changing them does not clear the confirmation.
-- **Performance Run** (existing, AP-029): gains a source of "user script", with the script's name
-  and SHA-256 in place of a plan snapshot, and the load used.
-- **Performance Result** (existing, AP-029): for a user script, grouped by request name rather than
-  by journey and step, with checks, groups, custom metrics and the script's own threshold outcome.
+- **User Script Run**: one execution of a user script against one environment. It shares the run
+  states, cancel reasons, failure categories, environment snapshot and the session-wide
+  "one execution in progress" slot with AP-029's Performance Run. In place of a plan snapshot it
+  records the script's name and SHA-256, the load used, the mapped names and their sources, the k6
+  exit code and its meaning.
+- **User Script Result**: the measurements of a User Script Run, grouped by request name rather
+  than by journey and step, with checks, groups, custom metrics, hosts that received requests and
+  the script's own threshold outcome. It is kept apart from AP-029's Performance Result, whose
+  shape is step-based. (Updated 2026-10-01 to match the plan, research R9.)
 
 ## Success Criteria *(mandatory)*
 

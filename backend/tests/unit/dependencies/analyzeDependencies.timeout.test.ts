@@ -55,6 +55,16 @@ function successResponse(request: InferenceRequest): InferenceResponse {
   };
 }
 
+/**
+ * Budget for the deterministic work in the AI-pass tests below, and a provider delay well past it.
+ * The budget must leave real headroom: deterministic matching + workflow assembly is cheap but
+ * shares CPU with the rest of the parallel suite, and a 10ms budget flaked under that load. The
+ * delay must still clearly exceed the budget so a regression that charges the AI pass's
+ * wall-clock to it would throw.
+ */
+const DETERMINISTIC_BUDGET_MS = 150;
+const SLOW_AI_DELAY_MS = 400;
+
 describe("analyzeDependencies timeout guard", () => {
   it("rejects with DependencyAnalysisTimeoutError when the budget is exceeded, rather than hanging or returning a partial result", async () => {
     const largeModel = buildLargeApiModel(200);
@@ -78,12 +88,12 @@ describe("analyzeDependencies timeout guard", () => {
    * unhandled rejection and terminated the backend process mid-workflow.
    */
   it("degrades rather than throwing when a single-batch AI pass overruns the analysis budget", async () => {
-    const provider = slowProvider(40, timedOutResponse);
+    const provider = slowProvider(SLOW_AI_DELAY_MS, timedOutResponse);
 
     // Work-bounded sizing disabled (`maxOperationsPerBatch: 0`) so this stays genuinely
     // single-batch as titled, isolated from specs/014's default unit size.
     const result = await analyzeDependencies(crudChainApiModel, provider, {
-      timeoutMs: 10,
+      timeoutMs: DETERMINISTIC_BUDGET_MS,
       maxOperationsPerBatch: 0,
     });
 
@@ -95,10 +105,10 @@ describe("analyzeDependencies timeout guard", () => {
 
   /** A *successful* AI pass slower than the budget must keep its result rather than have it discarded. */
   it("keeps the result of a successful AI pass that took longer than the analysis budget", async () => {
-    const provider = slowProvider(40, successResponse);
+    const provider = slowProvider(SLOW_AI_DELAY_MS, successResponse);
 
     const result = await analyzeDependencies(crudChainApiModel, provider, {
-      timeoutMs: 10,
+      timeoutMs: DETERMINISTIC_BUDGET_MS,
       maxOperationsPerBatch: 0,
     });
 

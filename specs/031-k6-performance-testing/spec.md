@@ -419,6 +419,16 @@ verify the new order is kept in the regenerated script.
 - **FR-021**: The script and the environment template MUST contain no secret value, including one
   the user supplied. Secrets MUST reach a run only through its environment at run time.
 - **FR-022**: The script and environment template MUST be downloadable.
+- **FR-022a**: The generated script MUST pass AP-034's script check (specs/034-run-user-k6-script
+  FR-004 to FR-008), so a downloaded copy, changed or not, can be run as the engineer's own script
+  under AP-034. To that end:
+  - its run-time lookups MUST use `Map` objects, `const` literal tables, or own-field walks of a
+    response body, never property reads with keys built at run time on other objects;
+  - it MUST declare its environment variable names in a literal table mapping each value name to
+    its `APIPILOT_V_<index>` name.
+
+  Running a downloaded copy is an AP-034 run of a user-supplied script; it never changes what this
+  feature executes (FR-026) (amended 2026-10-01).
 - **FR-023**: When any plan input changes after generation, the script MUST be marked out of date
   and MUST NOT be runnable until it is regenerated.
 
@@ -446,7 +456,9 @@ verify the new order is kept in the regenerated script.
   departs, for performance runs only, from AP-017 FR-007's staging and production confirmation,
   which stays in force for functional runs.
 - **FR-026**: Only the unmodified generated script MUST be executed. The system MUST NOT execute a
-  script that was uploaded, imported, pasted or edited by a user, or any AI output.
+  script that was uploaded, imported, pasted or edited by a user, or any AI output. A user-supplied
+  script runs only under AP-034 (specs/034-run-user-k6-script), never through this feature
+  (pointer added 2026-10-01).
 - **FR-027**: The system MUST run a k6 binary the user installed, and MUST NOT bundle, download or
   install one. Whether k6 is available and usable MUST be shown as an explicit readiness state, with
   a reason when it is not. While k6 is not ready, the trigger MUST be unavailable.
