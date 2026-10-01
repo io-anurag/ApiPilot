@@ -1,43 +1,60 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { K6Readiness, PerformanceRun, PerformanceRunSummary } from "@apipilot/shared-domain";
-import type { PerformanceClient } from "../../services/performanceTestingClient";
+import type { K6Readiness, PerformanceRun, PerformanceRunStatus, PerformanceRunSummary } from "@apipilot/shared-domain";
+import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
 
 /**
  * Readiness, the current run and the session's run history for one plan source (AP-029 FR-027 to
  * FR-035). Held by the plan screen so the run trigger (in the run-setup column) and the run
  * activity (in the Runs tab) share one state and one poll, whichever of them is on screen.
+ *
+ * AP-034 (specs/034 tasks T016): generic over the run, summary and start-input types, so a user
+ * script's runs share the same polling and report hand-off. The defaults are the plan sources'
+ * types, so every AP-029 and AP-032 caller is unchanged.
  */
 export const RUN_POLL_INTERVAL_MS = 2_000;
 
-export interface PerformanceRuns {
+export interface RunRecord {
+  id: string;
+  status: PerformanceRunStatus;
+  result?: unknown;
+}
+
+export interface RunSummaryRecord {
+  id: string;
+  status: PerformanceRunStatus;
+}
+
+export interface PerformanceRuns<TRun extends RunRecord = PerformanceRun, TSummary extends RunSummaryRecord = PerformanceRunSummary, TStartInput = string> {
   readiness: K6Readiness | null;
   checking: boolean;
   checkReadiness: (recheck: boolean) => Promise<void>;
-  run: PerformanceRun | null;
+  run: TRun | null;
   /**
    * AP-033 FR-023 (amended 2026-09-30): the session's newest run that has ended with results, so
    * the plan can mark the steps that received statuses they do not expect. `null` until one exists.
    */
-  latestFinished: PerformanceRun | null;
+  latestFinished: TRun | null;
   inProgress: boolean;
-  runs: PerformanceRunSummary[];
+  runs: TSummary[];
   reportRunId: string | null;
   showReport: (runId: string) => void;
   starting: boolean;
   cancelling: boolean;
   error: string | null;
   /** Resolves to `true` when the run started. */
-  start: (environmentId: string) => Promise<boolean>;
+  start: (input: TStartInput) => Promise<boolean>;
   cancel: () => Promise<void>;
 }
 
-export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
+export function usePerformanceRuns<TRun extends RunRecord = PerformanceRun, TSummary extends RunSummaryRecord = PerformanceRunSummary, TStartInput = string>(
+  client: PerformanceRunsClient<TRun, TSummary, TStartInput>,
+): PerformanceRuns<TRun, TSummary, TStartInput> {
   const { cancelRun, fetchReadiness, fetchRun, fetchRuns, startRun } = client;
   const [readiness, setReadiness] = useState<K6Readiness | null>(null);
   const [checking, setChecking] = useState(false);
-  const [run, setRun] = useState<PerformanceRun | null>(null);
-  const [latestFinished, setLatestFinished] = useState<PerformanceRun | null>(null);
-  const [runs, setRuns] = useState<PerformanceRunSummary[]>([]);
+  const [run, setRun] = useState<TRun | null>(null);
+  const [latestFinished, setLatestFinished] = useState<TRun | null>(null);
+  const [runs, setRuns] = useState<TSummary[]>([]);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -95,10 +112,10 @@ export function usePerformanceRuns(client: PerformanceClient): PerformanceRuns {
     };
   }, [run, refreshRuns, fetchRun]);
 
-  async function start(environmentId: string): Promise<boolean> {
+  async function start(input: TStartInput): Promise<boolean> {
     setStarting(true);
     setError(null);
-    const result = await startRun(environmentId);
+    const result = await startRun(input);
     setStarting(false);
     if (!result.ok) {
       setError(result.error === "execution_in_progress" ? "Another run is in progress in this session. Nothing was sent." : result.message);

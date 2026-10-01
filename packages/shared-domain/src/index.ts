@@ -33,3 +33,4 @@ export * from "./execution";
 export * from "./externalCollections";
 export * from "./failureAnalysis";
 export * from "./performance";
+export * from "./userScript";

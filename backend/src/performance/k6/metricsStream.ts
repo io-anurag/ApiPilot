@@ -10,11 +10,35 @@ export interface MetricsPoint {
   tags: Record<string, string>;
 }
 
+export type MetricType = "counter" | "gauge" | "rate" | "trend";
+
 export type ParsedLine =
   | { kind: "point"; point: MetricsPoint }
+  /** AP-034 (`acceptAllMetrics` only): a metric's declaration, with the thresholds the script defines on it. */
+  | { kind: "declaration"; name: string; metricType: MetricType; thresholds: string[] }
   | { kind: "ignored" }
   | { kind: "blank" }
   | { kind: "unreadable" };
+
+export interface ParseOptions {
+  /**
+   * AP-034 (specs/034-run-user-k6-script research R14): a user script's custom metrics and its
+   * threshold declarations are part of its report, so every metric is kept and `Metric` lines are
+   * returned as declarations. Generated runs keep the allow-list below.
+   */
+  acceptAllMetrics?: boolean;
+}
+
+const METRIC_TYPES: ReadonlySet<string> = new Set(["counter", "gauge", "rate", "trend"]);
+
+function parseDeclaration(record: Record<string, unknown>): ParsedLine {
+  const data = record.data as Record<string, unknown> | undefined;
+  const name = typeof data?.name === "string" ? data.name : record.metric;
+  const type = data?.type;
+  if (typeof name !== "string" || typeof type !== "string" || !METRIC_TYPES.has(type)) return { kind: "unreadable" };
+  const thresholds = Array.isArray(data?.thresholds) ? data.thresholds.filter((entry): entry is string => typeof entry === "string") : [];
+  return { kind: "declaration", name, metricType: type as MetricType, thresholds };
+}
 
 export const KNOWN_METRICS: ReadonlySet<string> = new Set([
   "http_reqs",
@@ -39,7 +63,7 @@ export const KNOWN_METRICS: ReadonlySet<string> = new Set([
   "apipilot_token_refresh",
 ]);
 
-export function parseMetricsLine(line: string): ParsedLine {
+export function parseMetricsLine(line: string, options: ParseOptions = {}): ParsedLine {
   const text = line.trim();
   if (text.length === 0) return { kind: "blank" };
   let parsed: unknown;
@@ -50,9 +74,9 @@ export function parseMetricsLine(line: string): ParsedLine {
   }
   if (typeof parsed !== "object" || parsed === null) return { kind: "unreadable" };
   const record = parsed as Record<string, unknown>;
-  if (record.type === "Metric") return { kind: "ignored" };
+  if (record.type === "Metric") return options.acceptAllMetrics ? parseDeclaration(record) : { kind: "ignored" };
   if (record.type !== "Point" || typeof record.metric !== "string") return { kind: "unreadable" };
-  if (!KNOWN_METRICS.has(record.metric)) return { kind: "ignored" };
+  if (!options.acceptAllMetrics && !KNOWN_METRICS.has(record.metric)) return { kind: "ignored" };
   const data = record.data as Record<string, unknown> | undefined;
   const timeMs = typeof data?.time === "string" ? Date.parse(data.time) : Number.NaN;
   const value = data?.value;

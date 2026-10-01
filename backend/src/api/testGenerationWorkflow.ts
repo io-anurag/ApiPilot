@@ -33,9 +33,9 @@ import {
   listRuns,
   requestCancel,
 } from "../execution/executionRunStore";
-import { getInProgressRun as getUploadedInProgressRun } from "../externalCollections/uploadedCollectionExecutionStore";
-import { getPerformanceInProgressRun } from "../performance/performanceRunStore";
+import { findExecutionInProgress } from "../execution/executionSlot";
 import { hasQuickTest } from "../performance/quick/quickTestStore";
+import { hasUserScript } from "../performance/userScript/userScriptStore";
 import { missingVariableValues } from "../execution/variableCompleteness";
 import { confirmationRequirement } from "../execution/destructiveOperations";
 import { generateCollection } from "../postman/generateCollection";
@@ -162,12 +162,13 @@ function requireCompletedWorkflow(): TestGenerationWorkflow {
  * has generated its Postman collection or once the session has a quick performance test. The
  * refusal is unchanged (`409 stage_not_active`), and every other route that uses
  * `requireCompletedWorkflow()` keeps requiring Postman generation.
+ * AP-034 FR-024 (research R18): a session that holds a stored user script also opens them.
  */
 function requireEnvironmentAccess(): void {
   const workflow = getCurrentWorkflow();
-  if (workflow?.stages.postmanGeneration.status === "complete" || hasQuickTest()) return;
+  if (workflow?.stages.postmanGeneration.status === "complete" || hasQuickTest() || hasUserScript()) return;
   throw new StageNotActiveError(
-    "Environments open once the guided workflow's Postman collection is generated or a quick performance test is started.",
+    "Environments open once the guided workflow's Postman collection is generated, a quick performance test is started, or a k6 script is stored.",
   );
 }
 
@@ -790,12 +791,13 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       // FR-015 (specs/026-external-collection-execution, research.md D7): the slot is shared
       // across both run kinds, so an in-progress uploaded-collection run also refuses this start.
       // AP-029 FR-029: a k6 performance run in progress occupies the same slot.
-      const inProgress = getInProgressRun() ?? getUploadedInProgressRun() ?? getPerformanceInProgressRun();
+      // AP-034 FR-023: and a user-script run, all through the one slot helper.
+      const inProgress = findExecutionInProgress();
       if (inProgress) {
         logRequestFailed(req, startedAt, 409, "execution_in_progress");
         res
           .status(409)
-          .json({ error: "execution_in_progress", message: "An execution run is already in progress.", runId: inProgress.id });
+          .json({ error: "execution_in_progress", message: "An execution run is already in progress.", runId: inProgress.runId });
         return;
       }
 

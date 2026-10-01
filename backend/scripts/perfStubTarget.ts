@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { TargetServer } from "../tests/fixtures/execution/targetServer";
 
 /**
@@ -29,11 +30,19 @@ async function main(): Promise<void> {
 
   // Prints the request count every 5 s (quickstart scenario 4 watches it stop growing on cancel),
   // then forgets the recorded requests so a long soak run does not grow this process's memory.
+  // AP-034 (specs/034-run-user-k6-script tasks T005, quickstart 4): which `X-Api-Key` values reached
+  // the stub, printed as SHA-256 prefixes only, so a run's key can be compared without echoing it.
   let total = 0;
+  const keyPrefixes = new Set<string>();
   const report = setInterval(() => {
     total += server.requests.length;
+    for (const recorded of server.requests) {
+      const key = recorded.headers["x-api-key"];
+      if (typeof key === "string" && key !== "") keyPrefixes.add(createHash("sha256").update(key).digest("hex").slice(0, 12));
+    }
     server.requests.length = 0;
     process.stdout.write(`${new Date().toISOString()} requests so far: ${total}\n`);
+    if (keyPrefixes.size > 0) process.stdout.write(`X-Api-Key values received (SHA-256 prefixes): ${[...keyPrefixes].sort().join(", ")}\n`);
   }, 5_000);
 
   const shutdown = () => {

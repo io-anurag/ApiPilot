@@ -11,6 +11,11 @@ id in any path.
 
 Types are defined in [data-model.md](../data-model.md).
 
+A k6 script the engineer supplies runs only through AP-034's own route family, `/api/user-scripts`
+([user-scripts-api.md](../../034-run-user-k6-script/contracts/user-scripts-api.md)), never through
+these routes. Since 2026-10-01 the generated script passes AP-034's script check (spec FR-022a), so
+a downloaded copy can be run there as the engineer's own (pointer added 2026-10-01).
+
 **Stage gating** (research D1, amended 2026-09-27): the plan routes, the script routes and `POST
 /runs` return `409 postman_generation_incomplete` unless `postmanGeneration` is `complete`.
 `GET /readiness`, `GET /runs`, `GET /runs/:runId`, `POST /runs/:runId/cancel` and

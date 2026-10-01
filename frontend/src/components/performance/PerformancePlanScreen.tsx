@@ -30,6 +30,7 @@ import { LoadProfileEditor } from "./LoadProfileEditor";
 import { OtherOperationsTable } from "./OtherOperationsTable";
 import { PendingBar, type PendingItem } from "./PendingBar";
 import { PerformanceRunActivity, PerformanceRunTrigger } from "./PerformanceRunPanel";
+import { restoreOrderFromRun, restoreSettingsFromRun, type RestoreOutcome } from "./restoreFromRun";
 import { SetupItem, type SetupItemState } from "./SetupItem";
 import { ThresholdEditor } from "./ThresholdEditor";
 import {
@@ -209,6 +210,50 @@ export function PerformancePlanScreen({
     apply({ parameterEdits: { [stepId]: input } }, input ? "Parameters saved." : "Parameters reset to the generated parameters.", {
       refusalShownByCaller: true,
     });
+
+  /**
+   * AP-029 FR-024b (amended 2026-09-30): rebuilds a past run's settings on the current plan, then
+   * generates the script. Nothing is sent to a target; the user still starts the run.
+   */
+  async function restoreRun(runId: string): Promise<RestoreOutcome> {
+    if (!plan) return { ok: false, message: "The plan is not loaded." };
+    const run = runId.slice(0, 8);
+    setBusy(true);
+    setProblem(null);
+    try {
+      const detail = await client.fetchRun(runId);
+      if (!detail.ok) return { ok: false, message: detail.message };
+      const snapshot = detail.run.planSnapshot;
+      const restore = restoreSettingsFromRun(runId, snapshot, plan);
+      if (!restore.ok) return { ok: false, message: restore.reason };
+      const settled = await updatePlan(restore.settings);
+      if (!settled.ok) return { ok: false, message: explain(settled) };
+      let restored = settled;
+      const notes: string[] = [];
+      const order = restoreOrderFromRun(runId, snapshot, settled.plan);
+      if (order && "reason" in order) notes.push(order.reason);
+      else if (order) {
+        const ordered = await updatePlan(order);
+        if (ordered.ok) restored = ordered;
+        else notes.push(explain(ordered));
+      }
+      setPlan(restored.plan);
+      setScript(restored.script);
+      void loadValues(environmentId);
+      onAdvanced?.();
+      if (restore.notRestored.length > 0) {
+        notes.push(`Body and parameter edits are not recorded in runs, so these steps use their generated requests: ${restore.notRestored.join(", ")}.`);
+      }
+      const generated = await generateScript();
+      if (generated.ok) setScript(generated.script);
+      else notes.push(`The script was not generated: ${generated.message}`);
+      const message = [`Restored run ${run}'s removed operations, order, load profile, think time, thresholds and expected statuses.`, ...notes].join(" ");
+      setAnnouncement(message);
+      return { ok: true, message };
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleGenerate() {
     setBusy(true);
@@ -753,7 +798,11 @@ export function PerformancePlanScreen({
           >
             <ThresholdEditor
               thresholds={plan.thresholds}
-              steps={steps.map((step) => ({ id: step.id, label: step.operationKey }))}
+              scopeOptions={[
+                { key: "run", label: "Whole run", scope: { kind: "run" } as const },
+                ...steps.map((step) => ({ key: step.id, label: step.operationKey, scope: { kind: "step", stepId: step.id } as const })),
+              ]}
+              scopeLabel={(scope) => (scope.kind === "run" ? "Run" : (steps.find((step) => step.id === scope.stepId)?.operationKey ?? scope.stepId))}
               busy={busy}
               onSave={(thresholds) => void apply({ thresholds })}
             />
@@ -840,7 +889,7 @@ export function PerformancePlanScreen({
       </div>
 
       <div hidden={tab !== "runs"}>
-        <PerformanceRunActivity runs={runs} client={client} plan={plan} />
+        <PerformanceRunActivity runs={runs} client={client} plan={plan} script={script} environments={environments} onSelectOperation={openOperation} onRestore={restoreRun} />
       </div>
     </div>
   );

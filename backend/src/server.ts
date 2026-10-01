@@ -6,7 +6,7 @@ import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
 import { getUploadedCollectionRunRepository } from "./persistence/uploadedCollectionRunRepository";
-import { recoverPerformanceRunsAtStartup } from "./performance/startup";
+import { recoverPerformanceRunsAtStartup, recoverUserScriptRunsAtStartup } from "./performance/startup";
 
 const logger = createLogger("server");
 
@@ -71,6 +71,8 @@ getUploadedCollectionRunRepository().markInterruptedRunsCancelled();
 // Same guard for an AP-029 performance run, which is never started again after a restart
 // (specs/031-k6-performance-testing FR-032), plus removal of leftover k6 run directories.
 recoverPerformanceRunsAtStartup();
+// Same guard for an AP-034 user-script run (specs/034-run-user-k6-script FR-023).
+recoverUserScriptRunsAtStartup();
 
 const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
 

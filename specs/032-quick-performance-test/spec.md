@@ -368,7 +368,9 @@ with its method badge, and that bulk removal works on the journeys.
   same encrypted storage, tiers and presence checks (AP-017, AP-025, AP-029 FR-013).
 - **FR-018**: Opening environments to the quick path MUST NOT change what the guided workflow
   requires before its own stages use environments, and MUST NOT expose environments to any caller
-  that has neither a completed Postman generation nor a quick plan in the session.
+  that has neither a completed Postman generation nor a quick plan in the session. AP-034 FR-024
+  (specs/034-run-user-k6-script) also opens environments to a session that holds a stored user
+  script (pointer added 2026-10-01).
 - **FR-019**: Values the specification cannot produce MUST be listed and handled exactly as AP-029
   FR-013 and FR-014 define, including path parameters that, without chaining, every operation
   needs from the environment.

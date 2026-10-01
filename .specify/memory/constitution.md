@@ -1,6 +1,47 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.5.0 → 2.6.0 (minor: XVII gains a narrow exception for user-supplied k6 scripts)
+
+Trigger: the user asked to "upload a k6 script & configure & run" (2026-09-30). The 2026-09-24
+exception covers only a script ApiPilot generated, byte-identical, and states that "a script that
+was uploaded, imported, pasted or edited by a user … is never executed under this exception"; it
+MUST NOT be cited for other content. Running a user's script therefore needs its own exception,
+made before that feature's `/speckit-specify`, on the footing of the 2026-09-20 exception for
+externally-authored Postman collections. A new exception is materially expanded guidance (MINOR);
+no existing principle or exception is removed or redefined.
+
+Decisions (the user's, 2026-09-30): a confirmation per script content, bound to its SHA-256 and
+asked again on any change; a single file importing only allowlisted k6 built-in modules, with
+remote and file imports, `open()` of local files and extension modules refused; every host found
+in the script listed at the confirmation and at the run trigger, with a statement that ApiPilot
+cannot restrict where the script sends requests; and an in-app script editor, whose saved edits
+count as new content needing a new confirmation.
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: adds the 2026-09-30 exception. A user-supplied k6
+    script MAY run only when: it is one file of allowlisted k6 built-ins, checked before it is
+    stored; the user confirmed its exact bytes, with the hosts it contains and the statement that
+    they cannot be restricted; the executed bytes are the confirmed bytes, never rewritten, with
+    configuration passed only as k6 options and environment variables; each run is the user's
+    explicit trigger naming the target and repeating the hosts, never automatic; the k6 binary is
+    the user's, with local outputs only; the script is kept locally, never logged and never sent
+    to or produced by AI; and the run and report state that the script was user-supplied. A
+    generated script that the user changes and supplies again falls under this exception, not
+    the 2026-09-24 one. The rationale records the reasoning. The 2026-09-20 and 2026-09-24
+    exceptions are unchanged.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none. The module allowlist is left to the feature's specification by design.
+
+Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version in
+the same change.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.4.0 → 2.5.0 (minor: XVII's 2026-09-24 exception covers user-edited plan inputs)
 
 Trigger: the governance prerequisite for AP-033 (Edit a Performance Step's Request Body;
@@ -495,6 +536,44 @@ or user-edited scripts, or any other generated artifact, and MUST NOT be cited t
 executing any other content elsewhere in the system. A script generated from an AP-032 plan is
 ApiPilot's own output; the uploaded specification it was derived from is never itself executed.
 
+**Exception (2026-09-30 amendment)**: A user-initiated performance-testing feature that knowingly
+runs a k6 script the user supplies (uploaded, or written or edited in ApiPilot's script editor)
+MAY execute that script with k6, only when all of the following hold:
+- the script is a single file, and before it is stored ApiPilot checks that it imports only k6
+  built-in modules on an allowlist the feature's specification defines, and refuses it otherwise
+  with the reason. Remote URL imports, relative or absolute file imports, `open()` of local files,
+  extension modules (`k6/x/…`), and any module that reaches the local filesystem, starts a
+  process or starts a browser are never allowed;
+- before its first run, the user explicitly confirms that exact content. The confirmation names
+  that the script was not generated or verified by ApiPilot, lists every host ApiPilot finds in
+  the script, and states that ApiPilot cannot restrict where the script sends requests. The
+  confirmation is bound to the SHA-256 of the script's bytes; any change, whether a new upload or
+  an edit saved in ApiPilot's editor, needs a new confirmation before the next run;
+- the bytes executed are the confirmed bytes, checked at run start. ApiPilot never rewrites,
+  wraps, injects into or appends to the script. Configuration the user sets in ApiPilot (load
+  stages, virtual users, duration, thresholds, the target environment's base URL and values)
+  reaches the script only as k6 command-line options and environment variables;
+- the run starts only on the user's explicit action within ApiPilot for that run, and that
+  action names the target environment by name, tier label and base URL and repeats the hosts
+  found in the script. ApiPilot never starts or repeats a run automatically, on a schedule, or as
+  a retry;
+- execution uses a k6 binary the user installed, run with only ApiPilot's local outputs and no
+  usage report; no k6 Cloud, Grafana Cloud or other remote output is ever passed. Results stay on
+  the local machine;
+- the script is treated as potentially sensitive: kept locally, owned by the session like other
+  execution artifacts, never logged, and never sent to or produced by AI. The editor does not
+  execute the script, and the user interface states that credentials belong in environment
+  values, not in the script (XVIII), since ApiPilot cannot verify a user's script holds none;
+- the run's record and report state that the script was supplied by the user and not generated
+  by ApiPilot (XIII), identify it by its SHA-256, and report only k6's own metrics; the user
+  interface states that load is generated from the machine running the ApiPilot backend.
+
+A script ApiPilot generated that the user downloads, changes and supplies again is a
+user-supplied script under this exception, never ApiPilot's output under the 2026-09-24
+exception. This exception does not apply to AI output, uploaded OpenAPI specifications or any
+other artifact, and MUST NOT be cited to justify executing any other content elsewhere in the
+system.
+
 **Rationale**: API specifications frequently describe proprietary or sensitive systems and
 must be protected with the same rigor as any confidential customer data. The narrow exception
 above exists because a QA engineer knowingly running their own already-trusted Postman
@@ -513,7 +592,14 @@ every write operation visible before the run rather than on any loosened conditi
 to the plan they review, ApiPilot still generates every byte of the script, and writing edited
 content only as data keeps arbitrary content from reaching the runner as code. Stating this
 explicitly, rather than reading "edited by a user" as covering only the script, removes an
-ambiguity the exception would otherwise carry into every future plan edit.
+ambiguity the exception would otherwise carry into every future plan edit. The 2026-09-30
+exception returns to the footing of the 2026-09-20 one: a QA engineer knowingly running their
+own script is a user-initiated act, not the platform executing content of its own generation.
+Because ApiPilot cannot know what a user's script does, the conditions narrow what it can reach
+instead: one file of allowlisted k6 built-ins closes local file access, process and browser
+launch, extensions and remote code; binding the confirmation to the exact bytes means no edit
+or re-upload runs unconfirmed; and listing hosts while stating plainly that they cannot be
+restricted keeps the one remaining risk, where requests go, visible to the person accepting it.
 
 ### XVIII. Secrets Must Never Be Part of Generated Artifacts
 
@@ -734,4 +820,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.5.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-29
+**Version**: 2.6.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-30

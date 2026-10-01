@@ -26,8 +26,7 @@ import {
   listRuns as listUploadedRuns,
   requestCancel as requestUploadedCancel,
 } from "../externalCollections/uploadedCollectionExecutionStore";
-import { getInProgressRun as getGeneratedInProgressRun } from "../execution/executionRunStore";
-import { getPerformanceInProgressRun } from "../performance/performanceRunStore";
+import { findExecutionInProgress } from "../execution/executionSlot";
 import { runUploadedCollectionExecution } from "../externalCollections/runUploadedCollectionExecution";
 import { buildCollectionView } from "../externalCollections/collectionView";
 import { applyRequestOverride } from "../externalCollections/requestOverride";
@@ -464,13 +463,14 @@ export function createExternalCollectionsRouter(): Router {
 
       // FR-015 (research.md D7): the slot is shared across both run kinds, and, since AP-029
       // (FR-029), with a k6 performance run in progress.
-      const inProgress = getUploadedInProgressRun() ?? getGeneratedInProgressRun() ?? getPerformanceInProgressRun();
+      // AP-034 FR-023: and a user-script run, all through the one slot helper.
+      const inProgress = findExecutionInProgress();
       if (inProgress) {
         logRequestFailed(req.method, req.path, startedAt, 409, "execution_in_progress");
         res.status(409).json({
           error: "execution_in_progress",
           message: "An execution run is already in progress.",
-          runId: inProgress.id,
+          runId: inProgress.runId,
         });
         return;
       }

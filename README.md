@@ -69,6 +69,7 @@ The following capabilities are implemented in the current repository:
 - k6 performance testing from the approved scenarios and workflows (*implementation complete, manual browser walkthrough pending*; see [Limitations](#limitations-and-roadmap)): an editable plan of journeys with per-step expected statuses, a load profile and user-set thresholds; a byte-identical k6 script with no secrets; runs on the user's explicit trigger with a k6 they installed, with live progress and cancel; and a self-contained HTML report with percentiles, a timeline, fixed-rule findings and per-step provenance. The plan lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes operations per method or all writes at once, and previews each step's request.
 - Editing the request body a performance step sends (`specs/033-edit-step-request-body`, *implementation complete, manual browser walkthrough pending*), on both the guided stage and the quick test: the engineer edits the body before ApiPilot's own substitutions, so workflow variables, per-iteration unique values and tokens still apply; `{{name}}` refers to an environment value; `format: password` fields must hold a reference; differences from the request schema are warnings; and edits can be reset one by one or all at once. The script sends the edited body; runs and reports record only which steps were edited, never the body.
 - A quick performance test straight from an uploaded specification (`specs/032-quick-performance-test`, *implementation complete, manual browser walkthrough pending*): positive rule-generated scenarios only, one single-step journey per operation with no chaining, and login operations found by the credential producers removed by default. It uses the same plan, script, runs and report as the guided stage, and the same session environments, without a guided workflow.
+- Run k6 Script (`specs/034-run-user-k6-script`, *implementation complete, manual browser walkthrough pending*): upload or write a k6 script, which ApiPilot checks before storing (allowlisted k6 built-ins only, no file access, no code built from text, no `handleSummary`). Confirm its exact content (bound to its SHA-256), map the names it reads to environment values, optionally replace its load with a profile, and run it with your own k6 on an explicit trigger, with a self-contained report grouped by k6 request name. Scripts, runs and results are stored encrypted. A script downloaded from any performance plan can be run here as your own.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
@@ -391,6 +392,28 @@ Quick performance test only, under `/api/quick-performance`:
 | `POST` | `/` | Upload a specification (multipart `file`) and build the quick plan; `409 quick_test_exists` unless `?replaceExisting=true`. |
 | `GET` | `/` | The session's quick test: specification summary, plan and script status. |
 
+### Run k6 Script endpoints
+
+Under `/api/user-scripts` (`specs/034-run-user-k6-script/contracts/user-scripts-api.md`). No specification or guided workflow is required. A run starts only on `POST /:id/runs`, after the script's exact content was confirmed.
+
+| Method | Endpoint | Purpose |
+| ------ | -------- | ------- |
+| `GET` | `/` | The session's scripts. |
+| `POST` | `/upload?name=` | Upload a script as `application/octet-stream` (at most 1 MiB); `422 script_refused` with each reason by line. |
+| `POST` | `/` | Create a script from the editor (`{ name, content }`). |
+| `GET` | `/example` | ApiPilot's fixed starter script. |
+| `GET` | `/:id`, `/:id/content`, `/:id/download` | The script with its check result, settings and confirmation; its text; its exact bytes. |
+| `PUT` | `/:id/content` | A new version (JSON from the editor, or octet-stream with `?baseSha256=`); clears the confirmation. |
+| `PATCH`, `DELETE` | `/:id` | Rename (keeps the confirmation); delete (runs are kept). |
+| `POST` | `/:id/confirmation` | Confirm `{ sha256 }`, the content shown. |
+| `PUT` | `/:id/settings` | Mapping, load choice and thresholds (names only). |
+| `GET` | `/:id/values?environmentId=` | Which mapped values the environment has, never the values. |
+| `GET` | `/readiness` | k6 readiness. |
+| `POST` | `/:id/runs` | Start a run on `{ environmentId, scriptSha256 }`. |
+| `GET` | `/runs[?scriptId=]`, `/runs/:runId` | Runs, or one run with progress, result and, for a failed start, k6's message. |
+| `POST` | `/runs/:runId/cancel` | Stop a run in progress (`202`). |
+| `GET` | `/runs/:runId/report` | The self-contained HTML report; `?download=true` adds `Content-Disposition`. |
+
 ### External collection endpoints
 
 Mounted independently of the guided-workflow routes above — no active workflow is required for any endpoint below.
@@ -531,6 +554,7 @@ Current intentional limitations include:
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
 - Dependency-aware holding of requests (`specs/029-execution-gap-closure`) applies to the guided workflow's API-only execution path. Uploaded-collection runs execute every selected request in collection order, and a request that depends on a failed one records its own outcome.
 - AP-029, k6 performance testing (`specs/031-k6-performance-testing`), and AP-032, the quick performance test (`specs/032-quick-performance-test`), are *implementation complete, manual browser walkthrough pending*. `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows (2026-09-28), but the quickstarts' browser walkthroughs have not been performed. The quick performance test sends generated requests that no one reviewed and never chains requests. It needs a k6 1.0.0 or later that you install yourself. Runs apply no limit on virtual users or duration, include write operations by default, and never clean up what they create.
+- AP-034, Run k6 Script (`specs/034-run-user-k6-script`), is *implementation complete, manual browser walkthrough pending*; `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows (2026-10-01). ApiPilot checks a supplied script statically and runs only the bytes you confirmed, but it cannot restrict which hosts the script contacts, and what the script does is your responsibility. The check accepts a strict JavaScript subset: reading a property by a key built at run time is refused (use a `Map`), test data files cannot be read, and WebSocket, gRPC and browser tests are not supported.
 - AP-033, editing a performance step's request body (`specs/033-edit-step-request-body`), is *implementation complete, manual browser walkthrough pending*. `npm run test:k6-real -w backend` passed on 2026-09-29, including a run that sent an edited body. Only JSON and text bodies can be edited; headers, query and path parameters stay view only. A secret typed as a literal into a field the specification does not mark `format: password` cannot be recognised, so the editor asks for `{{name}}` references instead.
 
 The implementation status for AP-001 through AP-033 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.

@@ -23,6 +23,7 @@ import { externalCollectionsRouter } from "./api/externalCollections";
 import { createFailureAnalysisRouter, failureAnalysisRouter } from "./api/failureAnalysis";
 import { createPerformanceTestingRouter, type PerformanceTestingDependencies } from "./api/performanceTesting";
 import { createQuickPerformanceRouter } from "./api/quickPerformance";
+import { createUserScriptsRouter } from "./api/userScripts";
 import { createK6Probe } from "./performance/k6/readiness";
 import { createK6Runner } from "./performance/k6/runner";
 import { versionRouter } from "./api/version";
@@ -137,6 +138,10 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // workflow required). Its runs start only on POST /api/quick-performance/runs, under the same
   // XVII exception as extended on 2026-09-27, and share the one runner and probe above.
   app.use("/api", createQuickPerformanceRouter(performanceDependencies));
+  // AP-034: Run k6 Script, a standalone route family for scripts the engineer supplies. A run starts
+  // only on POST /api/user-scripts/:id/runs, after the engineer confirmed the script's exact bytes
+  // (constitution XVII exception of 2026-09-30); it shares the one runner and probe above.
+  app.use("/api", createUserScriptsRouter(performanceDependencies));
   // AP-031: reads recorded AP-026 results only; never executes a request (specs/030 FR-009).
   app.use(
     "/api",

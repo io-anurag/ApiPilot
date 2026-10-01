@@ -133,6 +133,18 @@
   }
 }
 
+/**
+ * A scrollbar that stays drawn. Windows 11 and macOS overlay scrollbars hide until the pointer
+ * moves over the scroll area, so a cut-off list inside a dialog gives no sign that it scrolls.
+ * Setting `scrollbar-width`/`scrollbar-color` makes the browser draw a classic, always-visible
+ * one; the gutter is reserved so content does not shift when it appears.
+ */
+@utility scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-muted) transparent;
+  scrollbar-gutter: stable;
+}
+
 @layer utilities {
   .technical-grid {
     background-image:

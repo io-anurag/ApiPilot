@@ -28,6 +28,17 @@ export function buildK6Args(runDir: string): string[] {
 const WINDOWS_INHERITED = ["SystemRoot", "TEMP", "TMP"];
 const POSIX_INHERITED = ["HOME", "TMPDIR"];
 
+/** What k6 needs to start, and nothing else of the backend's environment. Shared by both builders below. */
+function startupEnv(processEnv: NodeJS.ProcessEnv, platform: NodeJS.Platform): Record<string, string> {
+  const env: Record<string, string> = {};
+  const pathKey = Object.keys(processEnv).find((key) => key.toUpperCase() === "PATH");
+  if (pathKey && processEnv[pathKey] !== undefined) env[pathKey] = processEnv[pathKey]!;
+  for (const key of platform === "win32" ? WINDOWS_INHERITED : POSIX_INHERITED) {
+    if (processEnv[key] !== undefined) env[key] = processEnv[key]!;
+  }
+  return env;
+}
+
 /**
  * Only what k6 needs to start, plus the run's values (D7). The backend's own environment,
  * including `.env` values, is not passed on.
@@ -37,14 +48,87 @@ export function buildChildEnv(
   values: Record<string, string>,
   platform: NodeJS.Platform = process.platform,
 ): Record<string, string> {
-  const env: Record<string, string> = {};
-  const pathKey = Object.keys(processEnv).find((key) => key.toUpperCase() === "PATH");
-  if (pathKey && processEnv[pathKey] !== undefined) env[pathKey] = processEnv[pathKey]!;
-  for (const key of platform === "win32" ? WINDOWS_INHERITED : POSIX_INHERITED) {
-    if (processEnv[key] !== undefined) env[key] = processEnv[key]!;
-  }
+  const env = startupEnv(processEnv, platform);
   for (const [key, value] of Object.entries(values)) {
     if (/^APIPILOT_V_\d+$/.test(key)) env[key] = value;
+  }
+  return env;
+}
+
+/**
+ * The system tags a user script's metrics keep (specs/034-run-user-k6-script research R10). On the
+ * command line they override a script's own `systemTags`, so the report always has `name`, `url`,
+ * `method`, `status`, `group` and `check`. The raw `url` and `name` stay in the run's local metrics
+ * file and in memory; the report shows them only through the display-name rule (R14).
+ */
+export const USER_SCRIPT_SYSTEM_TAGS = [
+  "proto",
+  "subproto",
+  "status",
+  "method",
+  "url",
+  "name",
+  "group",
+  "check",
+  "error",
+  "error_code",
+  "tls_version",
+  "scenario",
+  "service",
+  "expected_response",
+  // k6 replaces a named request's `url` tag with its name, so its host is known only by the
+  // address it connected to (research R14, checked against k6 2.3.0 on 2026-10-01).
+  "ip",
+] as const;
+
+/** A load profile's stages, when the engineer chose one; absent for the script's own load (FR-027). */
+export interface UserScriptStage {
+  durationMs: number;
+  targetVirtualUsers: number;
+}
+
+/**
+ * Pinned by a unit test: any change here is a reviewed change to what ApiPilot executes for a
+ * user-supplied script (constitution XVII, 2026-09-30; research R10). No remote output, no usage
+ * report, no summary file option: `handleSummary` is refused by the script check instead, which
+ * holds for every k6 version. Stages are passed only as `--stage` options; the script is never
+ * rewritten.
+ */
+export function buildUserScriptK6Args(runDir: string, stages: readonly UserScriptStage[] | null): string[] {
+  const args = [
+    "run",
+    "--no-usage-report",
+    "--quiet",
+    "--no-color",
+    "--log-format",
+    "json",
+    "--system-tags",
+    USER_SCRIPT_SYSTEM_TAGS.join(","),
+    "--out",
+    `json=${path.join(runDir, "metrics.ndjson")}`,
+  ];
+  for (const stage of stages ?? []) {
+    args.push("--stage", `${Math.round(stage.durationMs / 1000)}s:${stage.targetVirtualUsers}`);
+  }
+  args.push(path.join(runDir, "script.js"));
+  return args;
+}
+
+/**
+ * The start-up allow-list plus each mapped name with its value (research R11). Mapped names are
+ * validated before they get here (`validateMappingName`), so none is `K6_…` or a start-up name; the
+ * filter below repeats that rule so this function is safe on its own. Values never reach argv.
+ */
+export function buildUserScriptChildEnv(
+  processEnv: NodeJS.ProcessEnv,
+  mapped: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const env = startupEnv(processEnv, platform);
+  const reserved = new Set(["PATH", "SYSTEMROOT", "TEMP", "TMP", "HOME", "TMPDIR"]);
+  for (const [key, value] of Object.entries(mapped)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || /^k6_/i.test(key) || reserved.has(key.toUpperCase())) continue;
+    env[key] = value;
   }
   return env;
 }
@@ -128,7 +212,7 @@ export function createK6Runner(dependencies: Partial<K6RunnerDependencies> = {})
 
       const poller = setInterval(drain, deps.pollIntervalMs);
       try {
-        child = deps.spawn(input.binaryPath, buildK6Args(input.runDir), {
+        child = deps.spawn(input.binaryPath, input.args ?? buildK6Args(input.runDir), {
           shell: false,
           cwd: input.runDir,
           env: input.env,

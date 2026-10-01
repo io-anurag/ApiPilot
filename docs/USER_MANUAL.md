@@ -28,10 +28,15 @@ an uploaded specification straight to a k6 load-test plan, with no review stages
 operation becomes a step with a generated request that no one reviews, so every write it will
 send is listed before you run. See [section 5](#5-quick-performance-test).
 
+If you already have a k6 script, **Run k6 Script** checks it, asks you to confirm its exact
+content, and runs it with your own k6, with the report in ApiPilot. A script downloaded from
+any performance plan can be run there too. See [section 6](#6-run-k6-script).
+
 Nothing is ever sent to a cloud AI service, and no request is made against the API
 described by your specification until you explicitly start an execution run. The one
 exception is your own imported collection's requests and scripts, which you separately
-and explicitly confirm before they run (section 4).
+and explicitly confirm before they run (section 4), and your own k6 script, whose exact content
+you confirm before it runs (section 6).
 
 ## 2. Starting ApiPilot
 
@@ -48,14 +53,15 @@ explicitly, ApiPilot follows your operating system's light/dark preference.
 
 ## 3. The guided workflow
 
-The start screen offers three paths: **Guided Workflow** (described in this section, including
+The start screen offers four paths: **Guided Workflow** (described in this section, including
 the optional k6 performance test in section 3.11),
-**Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection))
-and **Quick performance test** (described in [section 5](#5-quick-performance-test)).
+**Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)),
+**Quick performance test** (described in [section 5](#5-quick-performance-test)) and
+**Run k6 Script** (described in [section 6](#6-run-k6-script)).
 While the guided workflow is in progress the tab bar is hidden so you can finish it; use
 **← Back to start** to return to the start screen at any time. Nothing is discarded —
 choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
-are in **Import & Run Collection** or the **Quick performance test**, each of which has its own
+are in **Import & Run Collection**, the **Quick performance test** or **Run k6 Script**, each of which has its own
 **← Back to start** too, and switching between the views never discards any one's state.
 
 Within the guided workflow, every step below is reached in this fixed order, and a
@@ -436,8 +442,10 @@ below).
 
 **Values.** Values the specification cannot produce (the base URL, client credentials, a
 path parameter no operation produces) are the target environment's values. Choose the
-environment, then **Edit values** or **New environment**; values are typed into hidden
-fields and stored encrypted. The checklist shows each value as **Present** or **Missing**
+environment, then **Edit values** or **New environment**; values are stored encrypted. The
+dialog's title follows the name you type, and its **Save** button is named after it. The value
+rows sit in their own scrolling list, with a count of how many are filled, so the dialog stays
+within the window. The checklist shows each value as **Present** or **Missing**
 for the chosen environment. A missing value does not block a run: that step is not sent and
 is reported as missing data, and the steps that depend on it are reported as not attempted.
 The environment form suggests one row for each value the plan still needs. Removing an
@@ -494,6 +502,23 @@ seconds and keeps what was measured. A run carries on if you close the page, and
 your session alive; only one run (performance or functional) can be in progress per session.
 ApiPilot never starts, repeats or resumes a run by itself: a run interrupted by a backend
 restart is recorded as cancelled.
+
+**Running the last run again.** Once a run has ended, the **Runs & reports** tab shows **Run
+again** above the list of runs. It repeats the newest run on the same environment, for example
+**Run again on QA_Run (qa)**, next to that environment's tier and base URL as they are now and the
+write operations the run sends. Values are read from the environment as it is now. The button
+is available only while the script is identical to the one that run used; after you change the
+plan, it says so. It is also unavailable when that environment has been deleted, when k6 is not
+ready, or while another run is in progress.
+
+The plan is kept in memory only, so a backend restart, a new upload or **Reset plan** rebuilds it
+with its defaults: operations you removed come back, with any values they need, and the load
+profile and thresholds return to their starting values. When that happens, **Run again** offers
+**Restore run … 's settings**. It re-applies that run's removed operations, order, think time,
+load profile, thresholds and the expected statuses you set, then generates the script. Nothing is
+sent until you press **Run again**. A run from a different specification cannot be restored.
+Body and parameter edits are not recorded in runs, so the message names any steps that had them;
+edit those again before running. To test the current plan instead, start it from **Run setup**.
 
 **The report.** When a run ends, its report appears automatically, and **Download report
 (HTML)** saves the same file, which opens with no network access. It shows:
@@ -785,7 +810,107 @@ keeps the quick test for your session. Like the guided workflow's plan, the quic
 memory: a backend restart loses it (runs, reports and environments are kept), and you upload the
 specification again.
 
-## 6. Sessions
+## 6. Run k6 Script
+
+Choose **Run k6 Script** on the start screen (or its tab, once the tab bar is visible) to run a
+k6 script you supply with the k6 installed on the backend machine. It needs no specification,
+guided workflow or plan, and it never changes either of them.
+
+**Uploading or writing a script.** **Upload script** takes one UTF-8 text file of at most 1 MiB.
+**Write a new script** opens the editor on ApiPilot's example: one named request to
+`BASE_URL`, one check, no credentials. Before a script is stored, ApiPilot checks it. A refused
+script is not stored, and every reason is listed with its line and column. The check never runs
+the script.
+
+**What the check allows.** A script may import only `k6`, `k6/http`, `k6/metrics`,
+`k6/execution`, `k6/encoding`, `k6/crypto`, `k6/data`, `k6/html` and `k6/timers`. It refuses:
+
+- remote imports (for example `https://jslib.k6.io/…`): copy what you need into the script;
+- imports of other files, `k6/x/…` extensions, `k6/experimental/…`, `k6/browser`,
+  `k6/net/grpc`, `k6/ws`, `k6/websockets` and `k6/secrets`;
+- `open()`, `require()`, dynamic `import()`, `import.meta`, `eval`, the `Function`
+  constructor, `globalThis` and `Reflect`;
+- reading `constructor`, `prototype`, `__proto__` or `getPrototypeOf`. The one allowed form is
+  `Object.prototype.hasOwnProperty.call(object, key)`; `Object.hasOwn(object, key)` also works;
+- reading a property by a key built at run time, such as `obj[key]` with a string `key`. Use a
+  `Map` (`map.get(key)`), a `const` lookup table written as an object or array literal
+  (`STATUS[key]`), or a numeric index (`data[i]`, `data[i | 0]`,
+  `data[Math.floor(Math.random() * data.length)]`). Writing `obj[key] = value` and `__ENV[name]`
+  are allowed;
+- exporting `handleSummary`, which k6 uses to write files: ApiPilot produces the report instead.
+
+**What the list shows.** Each script has its name, size, SHA-256, whether its current content is
+confirmed, and its last run. Opening a script shows its content, the hosts written in it as
+absolute URLs, and the environment values it reads through `__ENV`. Values built while the
+script runs cannot be found, and the page says so.
+
+**Confirming.** A script runs only after you confirm its exact content. The confirmation says
+that ApiPilot did not write or verify the script, lists every host it found, says that hosts
+built while the script runs cannot be listed, and states that ApiPilot cannot restrict where the
+script sends requests. It is tied to the script's SHA-256: any change, whether **Replace with
+upload** or a save in the editor, needs a new confirmation. Renaming keeps it.
+
+**Run setup.**
+
+- **Target environment.** The environments are the same set as the guided and quick paths, and
+  they open as soon as you store a script.
+- **Environment values the script receives.** Each name the script reads is mapped to the
+  environment's base URL (`BASE_URL` by default) or to an environment value (the same name by
+  default). You can change a source, remove a name, or add one the script builds at run time.
+  Names may contain letters, digits and underscores, may not start with a digit, and may not
+  start with `K6_` or be one k6 needs to start (`PATH`, `SYSTEMROOT`, `TEMP`, `TMP`, `HOME`,
+  `TMPDIR`). Values are never shown: each row says whether the chosen environment has the value.
+  A missing value does not block a run; the script receives nothing for that name. Values reach
+  k6 only as its process environment for that run.
+- **Load.** By default the script's own load settings are used. Choose a load profile to pass
+  its stages to k6 as `--stage` options, which replace the script's own scenarios. A script with
+  no default function cannot take a profile and runs with its own settings.
+- **Thresholds set in ApiPilot (optional)** apply to the whole run or to one request name, and
+  are evaluated from the measurements. They are never added to the script.
+
+Changing the setup never changes the script, so the confirmation is kept.
+
+**Running.** The trigger names the environment, its tier and base URL, repeats the hosts found
+in the script, and says that load comes from the machine running the backend. A run starts only
+when you press it, never after an upload, a confirmation or a restart. It shares the
+one-run-at-a-time slot with every other run. While it runs you see elapsed time, virtual users,
+requests and failures, and you can cancel it. If k6 cannot run the script (for example, an error
+in its start-up code), the run fails and k6's message, at most 2,000 characters, is shown on the
+run's page only. The script's `console` output is never kept or shown.
+
+**The report** says the script was supplied by you and not generated by ApiPilot, with its name
+and SHA-256. It covers:
+
+- the environment, the k6 version and the load used;
+- the mapped names and their sources, never their values;
+- requests grouped by k6's request name: a request you did not name is shown by method, host
+  and path without its query string, and beyond 100 names the rest are combined into "Other
+  requests", with a note on naming requests;
+- latency, failures as k6 counts them, statuses and request phases, for each name and over
+  time;
+- the hosts that received requests: k6 replaces a named request's URL with its name, so named
+  requests are counted by the server address k6 connected to;
+- the write requests sent;
+- checks, groups and custom metrics;
+- your thresholds, and k6's outcome for the thresholds the script defines (for the run as a
+  whole);
+- plain-language findings.
+
+It downloads as one self-contained HTML file.
+
+**Running a script ApiPilot generated.** Download a script from a guided or quick performance
+plan and upload it here, changed or not. ApiPilot generates scripts that pass the check, and the
+values they read (`APIPILOT_V_0`, …) are mapped automatically to the environment values they
+stand for, with `baseUrl` mapped to the base URL. Run it against the same environment and no
+mapping is needed. It is then your script: it needs your confirmation, and the report names it
+as yours. Its requests have no names, so they are grouped by method, host and path.
+
+**Scripts and runs are kept** in the local database, encrypted, and survive a backend restart
+for as long as your session stays active. A run in progress when the backend stops is recorded
+as cancelled and is not started again. Deleting a script keeps its past runs and reports; a
+script with a run in progress cannot be deleted.
+
+## 7. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
 random cookie), so two people working from different browsers never see or affect each
@@ -802,7 +927,7 @@ past results just because the server restarted. That saved data is still tied to
 session: if your session times out from inactivity, it is removed along with it.
 Variable and credential values are encrypted before being stored.
 
-## 7. AI behavior you should know about
+## 8. AI behavior you should know about
 
 - AI runs entirely on your own machine (Transformers.js); nothing about your
   specification, scenarios, or results is ever sent to an external service.
@@ -820,7 +945,7 @@ Variable and credential values are encrypted before being stored.
   likely cause comes from fixed rules, not the AI; only the explanation is AI output, and it
   is labelled as an inference. Neither ever changes a run's recorded results.
 
-## 8. Limitations to keep in mind
+## 9. Limitations to keep in mind
 
 - Only a single OpenAPI 3.x YAML file is supported per workflow (max 10 MB). Swagger 2.0
   and JSON OpenAPI input are not supported.
@@ -860,14 +985,20 @@ Variable and credential values are encrypted before being stored.
 - The quick performance test (section 5) sends generated requests that no one reviewed, never
   chains requests, and uses each operation's full happy-path scenario only. Valid boundary
   variants and negative scenarios are not generated.
-- Performance testing (section 3.11) and the quick performance test (section 5) need k6
-  1.0.0 or later that you install yourself. The run path has been checked against a real k6
-  (v2.3.0 on Windows, 2026-09-28); the manual browser walkthrough of both features is still
-  outstanding.
+- Performance testing (section 3.11), the quick performance test (section 5) and Run k6 Script
+  (section 6) need k6 1.0.0 or later that you install yourself. The run path has been checked
+  against a real k6 (v2.3.0 on Windows, 2026-09-28; Run k6 Script on 2026-10-01); the manual
+  browser walkthrough of these features is still outstanding.
 - Performance runs apply no limit and no warning on virtual users or duration, include write
   operations by default, and never clean up what they create. Load comes from the machine
   running the backend, so a heavy profile can be limited by that machine; the report shows it.
 - Under load, each step checks its status and extracted values only, not response schemas.
+- Run k6 Script (section 6) accepts a single file of allowed k6 modules in a strict subset of
+  JavaScript: reading a property by a key built at run time is refused (use a `Map`), and test
+  data files cannot be read. ApiPilot lists the hosts written in a script but cannot restrict
+  where it sends requests; that, and what the script does, is your responsibility. A script
+  that defines only named scenarios cannot take a load profile. Saving in ApiPilot's editor
+  stores LF line endings. WebSocket, gRPC and browser tests are not supported.
 - Each virtual user refreshes its own token before its stated lifetime ends, so a run sends
   one token request per virtual user per token lifetime. A token provider that rate-limits
   token requests, or revokes older tokens when it issues a new one, can make refreshes fail;
@@ -876,7 +1007,7 @@ Variable and credential values are encrypted before being stored.
   performance test uses the rule-generated one, while the Postman collection's choice ignores
   the origin, so the two can send different requests for that operation.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
@@ -907,9 +1038,16 @@ Variable and credential values are encrypted before being stored.
 | Quick performance test: the login operation is under Removed | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
+| Run k6 Script: "Imports a module from a URL" | The script imports from `https://…`, such as jslib.k6.io | Copy the helper you need into the script; remote code is never loaded |
+| Run k6 Script: "Reads a property by a key built at run time" | The script reads `obj[key]` with a string key | Use a `Map` (`map.get(key)`), a `const` lookup table, or a numeric index; see section 6 |
+| Run k6 Script: "Exports `handleSummary`" | k6 would write the summary to files | Remove `handleSummary`; ApiPilot's report covers the run |
+| Run k6 Script: the load profile option is disabled | The script has no default function, only named scenarios | It runs with its own load settings; add a default function to use a profile |
+| Run k6 Script: the run trigger says the script has not been confirmed | The content changed (a save or a replacement upload) since it was confirmed | Choose **Review and confirm**; any change needs a new confirmation |
+| Run k6 Script: a name cannot be mapped | It starts with `K6_`, is a name k6 needs to start, or has other characters | Read the value under another name in the script |
+| Run k6 Script: a run failed with k6's message | An error in the script's start-up code, or k6 refused its options | Read the message on the run's page, fix the script, confirm it again, and run |
 | Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |
 
-## 10. Where to look next
+## 11. Where to look next
 
 - [README](../README.md) — installation, configuration, AI model selection, and full
   scope/limitations.

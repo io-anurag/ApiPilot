@@ -39,6 +39,15 @@ const MAX_UNREADABLE_LINES = 10;
 
 const liveHandles = new Map<string, RunnerHandle>();
 
+/** AP-034: a user-script run shares this registry, so `cancelLiveRun` stops either kind (specs/034 research R17). */
+export function registerLiveRun(runId: string, handle: RunnerHandle): void {
+  liveHandles.set(runId, handle);
+}
+
+export function unregisterLiveRun(runId: string): void {
+  liveHandles.delete(runId);
+}
+
 /** Stops a run in progress now, rather than on its next tick (SC-008). Returns false if not live. */
 export function cancelLiveRun(runId: string): boolean {
   const handle = liveHandles.get(runId);

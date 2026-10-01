@@ -1,3 +1,5 @@
+import type { MappingNameRefusal, ScriptProblem } from "@apipilot/shared-domain";
+
 /**
  * Typed errors for AP-029 k6 performance testing (specs/031-k6-performance-testing). Each maps to
  * one contract error code in `backend/src/api/performanceHttp.ts` or the route that throws it;
@@ -159,5 +161,73 @@ export class InvalidBodyEditError extends Error {
   ) {
     super(message);
     this.name = "InvalidBodyEditError";
+  }
+}
+
+/** AP-034 (specs/034-run-user-k6-script contracts/user-scripts-api.md): `404 script_not_found`. */
+export class UserScriptNotFoundError extends Error {
+  constructor(public readonly scriptId: string) {
+    super("No script with this id was found in this session.");
+    this.name = "UserScriptNotFoundError";
+  }
+}
+
+/** AP-034 `422 script_refused` (FR-004): nothing was stored, or the stored script no longer passes the check (research R17). */
+export class UserScriptRefusedError extends Error {
+  constructor(public readonly problems: ScriptProblem[]) {
+    super("The script was refused by ApiPilot's check. Each reason is listed with its line.");
+    this.name = "UserScriptRefusedError";
+  }
+}
+
+/** AP-034 `409 script_changed`: the SHA-256 sent is not the script's current one (research R8, R17). */
+export class UserScriptChangedError extends Error {
+  constructor() {
+    super("The script changed since it was shown. Review it again before continuing.");
+    this.name = "UserScriptChangedError";
+  }
+}
+
+/** AP-034 `409 script_not_confirmed` (FR-013). */
+export class UserScriptNotConfirmedError extends Error {
+  constructor() {
+    super("The script has not been confirmed. Confirm its current content before running it.");
+    this.name = "UserScriptNotConfirmedError";
+  }
+}
+
+/** AP-034 `409 run_in_progress`: a script with a run in progress cannot be deleted (spec Edge Cases). */
+export class UserScriptRunInProgressError extends Error {
+  constructor(public readonly runId: string) {
+    super("This script has a run in progress. Delete it once the run has ended.");
+    this.name = "UserScriptRunInProgressError";
+  }
+}
+
+/** AP-034 `409 load_override_unavailable` (FR-027). */
+export class LoadOverrideUnavailableError extends Error {
+  constructor() {
+    super("This script has no default function, so a load profile cannot replace its scenarios. It runs with its own load settings.");
+    this.name = "LoadOverrideUnavailableError";
+  }
+}
+
+/** AP-034 `400 invalid_mapping_name` (FR-026). Names the refused name only, never a value. */
+export class InvalidMappingNameError extends Error {
+  constructor(
+    public readonly mappingName: string,
+    public readonly reason: MappingNameRefusal,
+    message: string,
+  ) {
+    super(message);
+    this.name = "InvalidMappingNameError";
+  }
+}
+
+/** AP-034 `400 invalid_settings`: the settings' shape, limits or stages are invalid. */
+export class InvalidUserScriptSettingsError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "InvalidUserScriptSettingsError";
   }
 }

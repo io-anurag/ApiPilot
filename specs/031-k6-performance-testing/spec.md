@@ -120,6 +120,17 @@ Generating the script alone does not depend on the exception.
   categories, latency, request phases, extractions, checks). Request and response bodies,
   resolved URLs and individual requests stay unrecorded (FR-039, FR-040, FR-042; constitution
   XX). A run recorded before this amendment reports only what it recorded.
+- Q: Can the user run the last run again without going back to Run setup? → A: Yes. The Runs &
+  reports tab offers **Run again** for the newest run that has ended. It is the user's explicit
+  trigger like any other, names the last run's environment as it is now, and lists the write
+  operations it sends. It is available only while the current script is byte-identical to the
+  one that run used, so it repeats the same test (FR-024a).
+- Q: The plan is kept in memory only, so a backend restart rebuilt it with its defaults: removed
+  operations came back with the values they need, and the load profile and thresholds were lost.
+  How are a run's settings protected? → A: By restoring them from the run. When the plan differs
+  from the last run's, Run again offers to restore that run's removed operations, order, load
+  profile, think time, thresholds and the expected statuses the user set, and to generate the
+  script. The plan still does not survive a restart (FR-024b).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -408,6 +419,16 @@ verify the new order is kept in the regenerated script.
 - **FR-021**: The script and the environment template MUST contain no secret value, including one
   the user supplied. Secrets MUST reach a run only through its environment at run time.
 - **FR-022**: The script and environment template MUST be downloadable.
+- **FR-022a**: The generated script MUST pass AP-034's script check (specs/034-run-user-k6-script
+  FR-004 to FR-008), so a downloaded copy, changed or not, can be run as the engineer's own script
+  under AP-034. To that end:
+  - its run-time lookups MUST use `Map` objects, `const` literal tables, or own-field walks of a
+    response body, never property reads with keys built at run time on other objects;
+  - it MUST declare its environment variable names in a literal table mapping each value name to
+    its `APIPILOT_V_<index>` name.
+
+  Running a downloaded copy is an AP-034 run of a user-supplied script; it never changes what this
+  feature executes (FR-026) (amended 2026-10-01).
 - **FR-023**: When any plan input changes after generation, the script MUST be marked out of date
   and MUST NOT be runnable until it is regenerated.
 
@@ -416,13 +437,28 @@ verify the new order is kept in the regenerated script.
 - **FR-024**: Generating a script MUST NOT start a run. A run MUST start only on the user's
   explicit trigger within ApiPilot. The system MUST never start or repeat a run automatically, on a
   schedule, as a retry, or after a restart.
+- **FR-024a**: The runs view MUST offer to run the newest ended run again, on the same
+  environment, as the user's explicit trigger under FR-024 and FR-025. It MUST be unavailable,
+  with the reason, when the current script's SHA-256 differs from that run's, when that run's
+  environment no longer exists, or when FR-027 or FR-029 would refuse a run. It MUST show the
+  environment as it is now, not as the run recorded it, and the write operations beside it (AP-032
+  FR-011). An ended run's environment MUST NOT be shown on any other trigger (amended 2026-09-30).
+- **FR-024b**: When the current script is not the one the newest ended run used, the runs view MUST
+  say so and offer to restore that run's settings from its recorded plan: removed operations,
+  journey and step order, think time, load profile and stages, thresholds, and the expected
+  statuses the user set. Restoring MUST then generate the script and MUST NOT start a run. It MUST
+  be refused, with the reason, when the run was built from a different specification or scenarios.
+  Body and parameter edits are not recorded in a run (AP-033), so the steps that had them MUST be
+  named as not restored (amended 2026-09-30).
 - **FR-025**: The trigger MUST name its target environment, and the environment's name, tier as a
   text label, and base URL MUST be shown next to the trigger and throughout the run. A run on any
   tier, including production, MUST need no confirmation step beyond the trigger. This deliberately
   departs, for performance runs only, from AP-017 FR-007's staging and production confirmation,
   which stays in force for functional runs.
 - **FR-026**: Only the unmodified generated script MUST be executed. The system MUST NOT execute a
-  script that was uploaded, imported, pasted or edited by a user, or any AI output.
+  script that was uploaded, imported, pasted or edited by a user, or any AI output. A user-supplied
+  script runs only under AP-034 (specs/034-run-user-k6-script), never through this feature
+  (pointer added 2026-10-01).
 - **FR-027**: The system MUST run a k6 binary the user installed, and MUST NOT bundle, download or
   install one. Whether k6 is available and usable MUST be shown as an explicit readiness state, with
   a reason when it is not. While k6 is not ready, the trigger MUST be unavailable.

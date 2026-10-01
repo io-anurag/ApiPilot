@@ -12,6 +12,11 @@ export interface RunnerStartInput {
   binaryPath: string;
   /** Exactly the child's environment (research D7): an allow-list plus `APIPILOT_V_<n>` values. */
   env: Record<string, string>;
+  /**
+   * AP-034 (specs/034-run-user-k6-script research R10): a user-script run's pinned argument list
+   * (`buildUserScriptK6Args`). Absent for a generated run, which uses `buildK6Args(runDir)`.
+   */
+  args?: string[];
   onLine(line: string): void;
   onStderrLine(line: string): void;
 }

@@ -112,7 +112,8 @@ describe("renderScript", () => {
       expect(text).not.toContain(SEEDED_CLIENT_ID);
     }
     expect(valueIndex).toEqual({ baseUrl: 0, clientId: 1, clientSecret: 2, warehouseId: 3 });
-    expect(script).toContain('__ENV["APIPILOT_V_" + index]');
+    // AP-029 FR-022a (amended 2026-10-01): names are read through the literal VALUE_ENV table.
+    expect(script).toContain("__ENV[VALUE_ENV[name]]");
     expect(script).not.toMatch(/--env|-e /);
     expect(JSON.parse(environmentTemplate)).toEqual({
       baseUrl: { env: "APIPILOT_V_0", secret: false, value: "" },
@@ -384,5 +385,68 @@ describe("renderScript with an edited body", () => {
     k6.iterate(k6.setup(), 0);
     const sent = JSON.parse(k6.requests.find((r) => r.method === "POST" && r.url.endsWith("/orders"))!.body!);
     expect(sent.note).toBe(hostile);
+  });
+});
+
+/**
+ * AP-029 FR-022a (amended 2026-10-01; specs/034-run-user-k6-script research R23, tasks T017): the
+ * generated script passes AP-034's check, so its run-time lookups use `Map`s, `const` literal
+ * tables and an own-field response walk, with behaviour unchanged.
+ */
+describe("renderScript runtime that passes the AP-034 check", () => {
+  function withProducerField(script: string, field: string): string {
+    return script.replace('"field": "orderId"', `"field": ${JSON.stringify(field)}`);
+  }
+
+  it("declares each value's environment variable in a literal VALUE_ENV table, in plan order", async () => {
+    const { plan, context } = await readyPlan();
+    const { script } = renderScript(plan, context);
+    const match = /^const VALUE_ENV = ([\s\S]*?);\n/m.exec(script);
+    expect(match).not.toBeNull();
+    const table = JSON.parse(match![1]) as Record<string, string>;
+    expect(Object.entries(table)).toEqual(plan.userSuppliedValues.map((value, index) => [value.name, `APIPILOT_V_${index}`]));
+  });
+
+  it("reads no property by a run-time key on a non-literal object", async () => {
+    for (const { plan, context } of [await readyPlan(), await quickReadyPlan()]) {
+      const { script } = renderScript(plan, context);
+      for (const construct of ["VALUE_INDEX", "scope.vars[", "scope.tokens[", "vuTokens[", "data.tokens[", "value[part]"]) {
+        expect(script).not.toContain(construct);
+      }
+    }
+  });
+
+  it("does not count an inherited name such as toString or length as an extracted value", async () => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    for (const field of ["toString", "length"]) {
+      const k6 = loadScript(withProducerField(script, field), { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget() });
+      k6.iterate(k6.setup(), 0);
+      expect(k6.checks.filter((c) => c.name === "extraction").map((c) => c.passed)).toEqual([false]);
+      expect(k6.metrics.filter((m) => m.name === "apipilot_cut_short")).toHaveLength(1);
+      expect(k6.requests.some((r) => r.url.includes("/orders/"))).toBe(false);
+    }
+  });
+
+  it("still extracts through an array index such as items.0.id", async () => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(withProducerField(script, "items.0.id"), {
+      env: envFor(valueIndex, ALL_VALUES),
+      respond: stubTarget({ orders: { status: 201, body: { items: [{ id: "item-7" }] } } }),
+    });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.requests.some((r) => r.url.endsWith("/orders/item-7"))).toBe(true);
+  });
+
+  it("passes setup tokens to every virtual user as an array that survives k6's JSON hand-off", async () => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const vu1 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget(), vu: 1 });
+    const data = vu1.setup() as { tokens: unknown };
+    expect(Array.isArray(data.tokens)).toBe(true);
+    const vu2 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget(), vu: 2 });
+    vu2.iterate(data, 0);
+    expect(vu2.requests.filter((r) => !r.tags.apipilot_kind).every((r) => r.headers.Authorization === "Bearer tok-1")).toBe(true);
   });
 });

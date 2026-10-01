@@ -1,0 +1,170 @@
+{
+  "parse-error.js": {
+    "rule": "parse-error",
+    "line": 2
+  },
+  "commonjs-require.js": {
+    "rule": "forbidden-identifier",
+    "line": 1
+  },
+  "import-remote.js": {
+    "rule": "import-remote",
+    "line": 1
+  },
+  "import-relative.js": {
+    "rule": "import-file",
+    "line": 1
+  },
+  "import-absolute.js": {
+    "rule": "import-file",
+    "line": 1
+  },
+  "import-file-url.js": {
+    "rule": "import-file",
+    "line": 1
+  },
+  "import-extension.js": {
+    "rule": "import-extension",
+    "line": 1
+  },
+  "import-experimental.js": {
+    "rule": "import-experimental",
+    "line": 1
+  },
+  "import-browser.js": {
+    "rule": "import-forbidden-builtin",
+    "line": 1
+  },
+  "import-grpc.js": {
+    "rule": "import-forbidden-builtin",
+    "line": 1
+  },
+  "import-ws.js": {
+    "rule": "import-forbidden-builtin",
+    "line": 1
+  },
+  "import-websockets.js": {
+    "rule": "import-forbidden-builtin",
+    "line": 1
+  },
+  "import-secrets.js": {
+    "rule": "import-forbidden-builtin",
+    "line": 1
+  },
+  "import-unknown.js": {
+    "rule": "import-not-allowed",
+    "line": 1
+  },
+  "export-all-file.js": {
+    "rule": "import-file",
+    "line": 1
+  },
+  "dynamic-import.js": {
+    "rule": "dynamic-import",
+    "line": 2
+  },
+  "import-meta.js": {
+    "rule": "import-meta",
+    "line": 2
+  },
+  "open-call.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "open-alias.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "eval.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "function-call.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "new-function.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "global-this.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "reflect.js": {
+    "rule": "forbidden-identifier",
+    "line": 4
+  },
+  "constructor-dot.js": {
+    "rule": "forbidden-property",
+    "line": 2
+  },
+  "constructor-literal.js": {
+    "rule": "forbidden-property",
+    "line": 3
+  },
+  "constructor-concat.js": {
+    "rule": "computed-access",
+    "line": 3
+  },
+  "computed-key.js": {
+    "rule": "computed-access",
+    "line": 4
+  },
+  "get-prototype-of.js": {
+    "rule": "forbidden-property",
+    "line": 3
+  },
+  "proto-dot.js": {
+    "rule": "forbidden-property",
+    "line": 3
+  },
+  "destructure-constructor.js": {
+    "rule": "forbidden-property",
+    "line": 3
+  },
+  "destructure-computed.js": {
+    "rule": "computed-access",
+    "line": 4
+  },
+  "timer-string.js": {
+    "rule": "timer-string-code",
+    "line": 3
+  },
+  "handle-summary-fn.js": {
+    "rule": "handle-summary",
+    "line": 2
+  },
+  "handle-summary-alias.js": {
+    "rule": "handle-summary",
+    "line": 3
+  },
+  "shadow-function.js": {
+    "rule": "forbidden-identifier",
+    "line": 2
+  },
+  "literal-proto-key.js": {
+    "rule": "forbidden-property",
+    "line": 3
+  },
+  "proto-write.js": {
+    "rule": "forbidden-property",
+    "line": 4
+  },
+  "let-literal.js": {
+    "rule": "computed-access",
+    "line": 4
+  },
+  "non-literal-const.js": {
+    "rule": "computed-access",
+    "line": 4
+  },
+  "compound-assign.js": {
+    "rule": "computed-access",
+    "line": 4
+  },
+  "has-own-read.js": {
+    "rule": "forbidden-property",
+    "line": 2
+  }
+}
