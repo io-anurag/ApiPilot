@@ -798,7 +798,11 @@ export function PerformancePlanScreen({
           >
             <ThresholdEditor
               thresholds={plan.thresholds}
-              steps={steps.map((step) => ({ id: step.id, label: step.operationKey }))}
+              scopeOptions={[
+                { key: "run", label: "Whole run", scope: { kind: "run" } as const },
+                ...steps.map((step) => ({ key: step.id, label: step.operationKey, scope: { kind: "step", stepId: step.id } as const })),
+              ]}
+              scopeLabel={(scope) => (scope.kind === "run" ? "Run" : (steps.find((step) => step.id === scope.stepId)?.operationKey ?? scope.stepId))}
               busy={busy}
               onSave={(thresholds) => void apply({ thresholds })}
             />

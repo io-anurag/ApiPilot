@@ -1,4 +1,4 @@
-export type EntryChoice = "guided-workflow" | "import-collection" | "quick-performance";
+export type EntryChoice = "guided-workflow" | "import-collection" | "quick-performance" | "user-script";
 
 import { EntryFeatureIcon, type EntryFeatureIconName } from "./EntryFeatureIcon";
 
@@ -30,11 +30,21 @@ const DIRECT_PATHS: readonly EntryPath[] = [
     detail: "OpenAPI to k6 plan",
     icon: "control",
   },
+  {
+    choice: "user-script",
+    title: "Run k6 Script",
+    label: "Run a script you supply",
+    description:
+      "Upload or write a k6 script, confirm its exact content, and run it with the k6 installed on this machine.",
+    detail: "Your k6 script",
+    icon: "visible",
+  },
 ];
 
 /**
  * The very first thing a user sees: a choice between the guided workflow, the standalone
- * "Import & Run Collection" path, and the quick performance test (AP-032 FR-001). Shown only until
+ * "Import & Run Collection" path, the quick performance test (AP-032 FR-001) and Run k6 Script
+ * (AP-034 FR-001). Shown only until
  * a choice is made — after that the top tab menu takes over navigation between them (App.tsx).
  */
 export function EntryChooser({

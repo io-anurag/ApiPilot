@@ -28,15 +28,15 @@ export function formatCount(value: number): string {
   return fraction ? `${grouped}.${fraction}` : grouped;
 }
 
-function ms(value: number | null | undefined): string {
+export function ms(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${formatCount(Math.round(value * 10) / 10)} ms`;
 }
 
-function pct(value: number | null | undefined): string {
+export function pct(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `${value}%`;
 }
 
-function bytes(value: number): string {
+export function bytes(value: number): string {
   if (value < 1024) return `${formatCount(value)} B`;
   const units = ["KiB", "MiB", "GiB"];
   let scaled = value / 1024;
@@ -48,7 +48,7 @@ function bytes(value: number): string {
   return `${formatCount(Math.round(scaled * 10) / 10)} ${units[unit]}`;
 }
 
-function clock(offsetMs: number): string {
+export function clock(offsetMs: number): string {
   const total = Math.floor(offsetMs / 1000);
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
@@ -58,7 +58,7 @@ function round1(value: number): number {
 }
 
 /** The smallest 1, 2 or 5 × 10ⁿ at or above `value`, so an axis ends on a readable number. */
-function niceCeil(value: number): number {
+export function niceCeil(value: number): number {
   if (value <= 0) return 1;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const fraction = value / magnitude;
@@ -79,7 +79,7 @@ const AUTH_TEXT: Record<PerformanceStep["auth"]["kind"], string> = {
   none: "None",
 };
 
-const PHASE_TEXT: Record<RequestPhase, string> = {
+export const PHASE_TEXT: Record<RequestPhase, string> = {
   blocked: "Blocked (waiting for a free connection)",
   connecting: "Connecting (TCP)",
   "tls-handshaking": "TLS handshake",
@@ -123,7 +123,7 @@ function stepLabel(step: PerformanceStep): string {
 // ── Timeline ──────────────────────────────────────────────────────────────────────────────────
 
 /** A tick every 5 s, 10 s, … 1 h, whichever first gives at most seven ticks. */
-function timeTickMs(totalMs: number): number {
+export function timeTickMs(totalMs: number): number {
   const steps = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].map((seconds) => seconds * 1000);
   return steps.find((step) => totalMs / step <= 7) ?? Math.ceil(totalMs / 7 / 3_600_000) * 3_600_000;
 }
@@ -138,7 +138,7 @@ interface Scale {
  * A log scale once the slowest bucket is 20 times the fastest, so one slow endpoint cannot flatten
  * every other bucket onto the baseline; a linear scale from 0 otherwise.
  */
-function latencyScale(values: number[], top: number, bottom: number): Scale {
+export function latencyScale(values: number[], top: number, bottom: number): Scale {
   const lo = Math.min(...values);
   const hi = Math.max(...values);
   if (lo > 0 && hi / lo >= 20) {
@@ -156,13 +156,13 @@ function latencyScale(values: number[], top: number, bottom: number): Scale {
   return { y: (value) => bottom - ((bottom - top) * value) / max, ticks: [0, max / 2, max].map((value) => ({ value, label: ms(value) })), note: "ms" };
 }
 
-function countScale(max: number, top: number, bottom: number): Scale {
+export function countScale(max: number, top: number, bottom: number): Scale {
   const ceiling = niceCeil(Math.max(1, max));
   const values = Number.isInteger(ceiling / 2) ? [0, ceiling / 2, ceiling] : [0, ceiling];
   return { y: (value) => bottom - ((bottom - top) * value) / ceiling, ticks: values.map((value) => ({ value, label: formatCount(value) })), note: "" };
 }
 
-function timelineSvg(points: TimelinePoint[], bucketMs: number): string {
+export function timelineSvg(points: TimelinePoint[], bucketMs: number): string {
   if (points.length === 0) return '<p class="muted">No timeline was recorded.</p>';
   const width = 1200;
   const left = 72;
@@ -272,7 +272,7 @@ function timelineSvg(points: TimelinePoint[], bucketMs: number): string {
   return `<svg class="timeline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(summary)}">${parts.join("")}</svg>`;
 }
 
-function timelineTable(points: TimelinePoint[], bucketMs: number): string {
+export function timelineTable(points: TimelinePoint[], bucketMs: number): string {
   if (points.length === 0) return "";
   const rows = points
     .map(
@@ -421,7 +421,7 @@ function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceS
   ].join("");
 }
 
-function phaseTable(measured: StepResult): string {
+export function phaseTable(measured: StepResult): string {
   if (!measured.phaseTimings || measured.phaseTimings.length === 0) return "";
   const rows = measured.phaseTimings.map((timing) => `<tr><td>${escapeHtml(PHASE_TEXT[timing.phase])}</td><td class="num">${ms(timing.meanMs)}</td><td class="num">${ms(timing.p95Ms)}</td></tr>`).join("");
   return `<dt>Request phases</dt><dd><table class="phases"><thead><tr><th>Phase</th><th class="num">Mean</th><th class="num">p95</th></tr></thead><tbody>${rows}</tbody></table></dd>`;
@@ -543,7 +543,7 @@ function tiles(result: PerformanceResult): string {
  * color, for failures only. The heatmap is one blue ramp, lighter to darker in light mode and
  * darker to lighter in dark mode, so low latency recedes toward the surface in both.
  */
-const STYLE = `
+export const STYLE = `
 :root{--bg:#ffffff;--fg:#17231f;--muted:#56675f;--border:#d8e4df;--chrome:#f7faf8;--ok-bg:#dcfce7;--ok-fg:#15803d;--bad-bg:#fee2e2;--bad-fg:#b91c1c;--neutral-bg:#eef2f0;--neutral-fg:#334155;--vus:#1baf7a;--vus-fill:rgba(27,175,122,.16);--p95:#2a78d6;--bar-ok:#a9b6b1;--fail:#d03b3b;--baseline:#b7c6c0;--hover:rgba(23,35,31,.06);--h1:#cde2fb;--h2:#9ec5f4;--h3:#5598e7;--h4:#256abf;--h5:#104281}
 @media (prefers-color-scheme: dark){:root{--bg:#121d1a;--fg:#e4efeb;--muted:#95aaa2;--border:#263b35;--chrome:#0c1714;--ok-bg:rgba(34,197,94,.16);--ok-fg:#dcfce7;--bad-bg:rgba(239,68,68,.16);--bad-fg:#fee2e2;--neutral-bg:rgba(100,116,139,.18);--neutral-fg:#f1f5f9;--vus:#199e70;--vus-fill:rgba(25,158,112,.22);--p95:#3987e5;--bar-ok:#51625c;--fail:#e05252;--baseline:#3a524a;--hover:rgba(228,239,235,.07);--h1:#104281;--h2:#1c5cab;--h3:#2a78d6;--h4:#6da7ec;--h5:#b7d3f6}}
 *{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:14px/1.45 "IBM Plex Sans","Segoe UI",system-ui,sans-serif}

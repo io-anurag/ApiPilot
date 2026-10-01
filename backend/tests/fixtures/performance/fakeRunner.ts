@@ -17,6 +17,8 @@ export interface FakeRunnerOptions {
   /** Keep the "process" running after the last line until `cancel()` is called. */
   holdUntilCancelled?: boolean;
   spawnError?: RunnerExit["spawnError"];
+  /** AP-034: stderr lines delivered when the "process" starts (k6 --log-format json lines). */
+  stderrLines?: string[];
 }
 
 export interface FakeRunner extends PerformanceRunner {
@@ -40,6 +42,7 @@ export function createFakeRunner(options: FakeRunnerOptions): FakeRunner {
       const done = new Promise<RunnerExit>((resolve) => {
         resolveDone = resolve;
       });
+      for (const line of options.stderrLines ?? []) input.onStderrLine(line);
       const lines = runner.lines;
       let index = 0;
       let settled = false;

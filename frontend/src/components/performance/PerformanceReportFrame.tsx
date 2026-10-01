@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PerformanceClient } from "../../services/performanceTestingClient";
+import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { Skeleton } from "../Skeleton";
@@ -12,7 +12,7 @@ import { Skeleton } from "../Skeleton";
  * HTML itself is rendered by the server from the stored run, with every string escaped and a
  * Content-Security-Policy that lets it load nothing. The download link serves the same bytes.
  */
-export function PerformanceReportFrame({ client, runId }: Readonly<{ client: PerformanceClient; runId: string }>) {
+export function PerformanceReportFrame({ client, runId }: Readonly<{ client: Pick<PerformanceRunsClient, "fetchReport" | "reportDownloadUrl">; runId: string }>) {
   const { fetchReport, reportDownloadUrl } = client;
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; html: string } | { kind: "error"; message: string }>({ kind: "loading" });
 

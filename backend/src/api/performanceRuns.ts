@@ -2,12 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { Router } from "express";
 import type { PerformanceRun } from "@apipilot/shared-domain";
 import { getEnvironment } from "../execution/environmentStore";
-import { getInProgressRun } from "../execution/executionRunStore";
-import { getInProgressRun as getUploadedInProgressRun } from "../externalCollections/uploadedCollectionExecutionStore";
+import { findExecutionInProgress } from "../execution/executionSlot";
 import { createLogger } from "../logger";
 import {
   createPerformanceRun,
-  getPerformanceInProgressRun,
   getPerformanceRun,
   listPerformanceRuns,
   requestPerformanceCancel,
@@ -60,9 +58,9 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
       const body = (req.body ?? {}) as Record<string, unknown>;
       const environment = getEnvironment(typeof body.environmentId === "string" ? body.environmentId : "");
       // 5. The shared slot (FR-029). The check and the insert are synchronous, with no await between them.
-      const inProgress = getInProgressRun() ?? getUploadedInProgressRun() ?? getPerformanceInProgressRun();
+      const inProgress = findExecutionInProgress();
       if (inProgress) {
-        return fail(req, res, startedAt, 409, "execution_in_progress", "Another execution run is in progress in this session.", { runId: inProgress.id });
+        return fail(req, res, startedAt, 409, "execution_in_progress", "Another execution run is in progress in this session.", { runId: inProgress.runId });
       }
       const run: PerformanceRun = {
         id: randomUUID(),

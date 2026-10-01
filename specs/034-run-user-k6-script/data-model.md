@@ -185,13 +185,13 @@ interface UserScriptResult {
   };
   requestGroups: RequestGroupResult[];        // at most 100, in first-appearance order
   otherRequests: (RequestGroupResult & { combinedNames: number }) | null;
-  hostsReceived: { origin: string; requests: number }[]; // at most 50, sorted by origin
+  hostsReceived: { origin: string; requests: number; source: "url" | "ip" }[]; // at most 50; ip = a named request's address (R14)
   otherHostsCount: number;
   checks: { name: string; passes: number; fails: number }[];        // at most 100
   groups: { name: string; durationMs: (LatencyPercentiles & LatencySummary) | null }[];
   customMetrics: CustomMetricSummary[];       // at most 100, sorted by name
   scriptThresholds: { metric: string; expressions: string[] }[];
-  scriptThresholdsOutcome: "crossed" | "not-crossed" | "none-defined";
+  scriptThresholdsOutcome: "crossed" | "not-crossed" | "none-defined" | "not-evaluated"; // not-evaluated: k6 was stopped first
   apiPilotThresholds: { thresholdId: string; measured: number | null; passed: boolean }[];
   timeline: { bucketMs: number; points: TimelinePoint[] }; // TimelinePoint reused
   findings: UserScriptFinding[];
@@ -263,6 +263,7 @@ type UserScriptFindingRuleId =
 | `snapshot_iv` | BLOB NOT NULL | |
 | `k6_version` | TEXT NOT NULL | |
 | `k6_exit_code` | INTEGER | |
+| `exit_meaning` | TEXT | R13's meaning of the exit code. |
 | `planned_duration_ms` | INTEGER | Null for the script's own load. |
 | `started_at` | TEXT NOT NULL | |
 | `ended_at` | TEXT | |

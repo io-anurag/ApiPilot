@@ -202,6 +202,56 @@ export class SqliteConnection {
     // each path lists only its own runs. The default makes every row recorded before AP-032 a
     // guided run. Holds no value, so it is not encrypted.
     this.ensureColumn("performance_runs", "plan_source", "TEXT NOT NULL DEFAULT 'guided'");
+
+    // AP-034 (specs/034-run-user-k6-script research R7, R9): scripts the engineer supplied, and
+    // their runs. Unlike performance_runs, these tables hold content that comes from the user and
+    // can carry anything, so every such field is encrypted with the credential cipher: the
+    // script's bytes, the hosts stated at confirmation, a run's snapshot (script name, mapped
+    // names, hosts), its result (request names, hosts) and k6's error message. The plain columns
+    // hold ids, sizes, hashes, statuses, times and the settings, which are names only.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_scripts (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        content_encrypted BLOB NOT NULL,
+        content_iv BLOB NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        confirmed_sha256 TEXT,
+        confirmed_at TEXT,
+        confirmed_hosts_encrypted BLOB,
+        confirmed_hosts_iv BLOB,
+        settings TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS user_scripts_session ON user_scripts (session_id, updated_at);
+      CREATE TABLE IF NOT EXISTS user_script_runs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        script_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cancel_reason TEXT,
+        failure_category TEXT,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        environment_snapshot TEXT NOT NULL,
+        snapshot_encrypted BLOB NOT NULL,
+        snapshot_iv BLOB NOT NULL,
+        k6_version TEXT NOT NULL,
+        k6_exit_code INTEGER,
+        exit_meaning TEXT,
+        planned_duration_ms INTEGER,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        progress TEXT,
+        result_encrypted BLOB,
+        result_iv BLOB,
+        failure_message_encrypted BLOB,
+        failure_message_iv BLOB
+      );
+      CREATE INDEX IF NOT EXISTS user_script_runs_session ON user_script_runs (session_id, started_at);
+    `);
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

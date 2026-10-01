@@ -1,11 +1,34 @@
 import { useState } from "react";
-import type { PerformanceThreshold, PerformanceThresholdMetric } from "@apipilot/shared-domain";
+import type { PerformanceThresholdMetric } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
 
 /**
  * User-set pass/fail thresholds (FR-018, FR-037). Empty by default: ApiPilot proposes no targets.
+ *
+ * AP-034 (specs/034 tasks T054): the scopes a threshold can apply to are the caller's. A plan offers
+ * the whole run and its steps; a user script offers the whole run and a request name, typed by the
+ * engineer with the last run's names suggested (`customScope`).
  */
-type ThresholdInput = Omit<PerformanceThreshold, "id">;
+export interface ThresholdDraft<S> {
+  scope: S;
+  metric: PerformanceThresholdMetric;
+  comparator: "<=";
+  limit: number;
+}
+
+export interface ThresholdScopeOption<S> {
+  key: string;
+  label: string;
+  scope: S;
+}
+
+export interface CustomThresholdScope<S> {
+  /** The select option's label, for example "A request name…". */
+  optionLabel: string;
+  inputLabel: string;
+  suggestions: readonly string[];
+  toScope: (text: string) => S;
+}
 
 const METRICS: { value: PerformanceThresholdMetric; label: string }[] = [
   { value: "p50", label: "p50 latency (ms)" },
@@ -15,24 +38,33 @@ const METRICS: { value: PerformanceThresholdMetric; label: string }[] = [
   { value: "error-rate", label: "Failure rate (%)" },
 ];
 
-export function ThresholdEditor({
+const CUSTOM_KEY = "__custom__";
+
+export function ThresholdEditor<S>({
   thresholds,
-  steps,
+  scopeOptions,
+  scopeLabel,
+  customScope,
   busy,
   onSave,
 }: Readonly<{
-  thresholds: PerformanceThreshold[];
-  steps: { id: string; label: string }[];
+  thresholds: ReadonlyArray<ThresholdDraft<S> & { id: string }>;
+  scopeOptions: ReadonlyArray<ThresholdScopeOption<S>>;
+  /** The text a saved threshold's scope is listed under. */
+  scopeLabel: (scope: S) => string;
+  customScope?: CustomThresholdScope<S>;
   busy: boolean;
-  onSave: (thresholds: ThresholdInput[]) => void;
+  onSave: (thresholds: ThresholdDraft<S>[]) => void;
 }>) {
-  const [scope, setScope] = useState("run");
+  const [scopeKey, setScopeKey] = useState(scopeOptions[0]?.key ?? CUSTOM_KEY);
+  const [customText, setCustomText] = useState("");
   const [metric, setMetric] = useState<PerformanceThresholdMetric>("p95");
   const [limit, setLimit] = useState("");
-  const withoutId = (threshold: PerformanceThreshold): ThresholdInput => ({ scope: threshold.scope, metric: threshold.metric, comparator: "<=", limit: threshold.limit });
-  const stepLabel = (stepId: string) => steps.find((step) => step.id === stepId)?.label ?? stepId;
+  const withoutId = (threshold: ThresholdDraft<S> & { id: string }): ThresholdDraft<S> => ({ scope: threshold.scope, metric: threshold.metric, comparator: "<=", limit: threshold.limit });
   const limitValue = Number(limit);
-  const canAdd = limit.trim().length > 0 && Number.isFinite(limitValue);
+  const custom = scopeKey === CUSTOM_KEY;
+  const canAdd = limit.trim().length > 0 && Number.isFinite(limitValue) && (!custom || customText.trim().length > 0);
+  const chosenScope = (): S | undefined => (custom ? customScope?.toScope(customText.trim()) : scopeOptions.find((option) => option.key === scopeKey)?.scope);
 
   return (
     <div className="space-y-3">
@@ -43,8 +75,7 @@ export function ThresholdEditor({
           {thresholds.map((threshold) => (
             <li key={threshold.id} className="flex items-center justify-between gap-2">
               <span>
-                {threshold.scope.kind === "run" ? "Run" : stepLabel(threshold.scope.stepId)} · {METRICS.find((m) => m.value === threshold.metric)?.label} ≤{" "}
-                <strong className="font-mono">{threshold.limit}</strong>
+                {scopeLabel(threshold.scope)} · {METRICS.find((m) => m.value === threshold.metric)?.label} ≤ <strong className="font-mono">{threshold.limit}</strong>
               </span>
               <button
                 type="button"
@@ -63,15 +94,31 @@ export function ThresholdEditor({
         {/* A step's operation key can be long; the select never grows wider than its column. */}
         <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-muted">
           Applies to
-          <select value={scope} onChange={(event) => setScope(event.target.value)} className="max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
-            <option value="run">Whole run</option>
-            {steps.map((step) => (
-              <option key={step.id} value={step.id}>
-                {step.label}
+          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className="max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
+            {scopeOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
               </option>
             ))}
+            {customScope && <option value={CUSTOM_KEY}>{customScope.optionLabel}</option>}
           </select>
         </label>
+        {custom && customScope && (
+          <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
+            {customScope.inputLabel}
+            <input
+              list="threshold-custom-scope-suggestions"
+              value={customText}
+              onChange={(event) => setCustomText(event.target.value)}
+              className="w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 font-mono text-sm"
+            />
+            <datalist id="threshold-custom-scope-suggestions">
+              {customScope.suggestions.map((suggestion) => (
+                <option key={suggestion} value={suggestion} />
+              ))}
+            </datalist>
+          </label>
+        )}
         <label className="flex flex-col gap-1 text-xs text-muted">
           Metric
           <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
@@ -91,11 +138,11 @@ export function ThresholdEditor({
           className={BUTTON_STYLES.secondary}
           disabled={!canAdd}
           onClick={() => {
-            onSave([
-              ...thresholds.map(withoutId),
-              { scope: scope === "run" ? { kind: "run" } : { kind: "step", stepId: scope }, metric, comparator: "<=", limit: limitValue },
-            ]);
+            const scope = chosenScope();
+            if (scope === undefined) return;
+            onSave([...thresholds.map(withoutId), { scope, metric, comparator: "<=", limit: limitValue }]);
             setLimit("");
+            setCustomText("");
           }}
         >
           + Add threshold

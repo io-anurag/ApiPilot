@@ -33,6 +33,18 @@ export class LatencyHistogram {
     return this.total;
   }
 
+  /**
+   * Adds another histogram's samples to this one (AP-034 research R14: a user script's timeline
+   * doubles its bucket width by merging neighbouring buckets). Exact, because buckets are fixed.
+   */
+  merge(other: LatencyHistogram): void {
+    for (const [index, count] of other.counts) this.counts.set(index, (this.counts.get(index) ?? 0) + count);
+    this.total += other.total;
+    this.sum += other.sum;
+    this.min = Math.min(this.min, other.min);
+    this.max = Math.max(this.max, other.max);
+  }
+
   percentile(p: number): number | null {
     if (this.total === 0) return null;
     const rank = Math.max(1, Math.ceil((p / 100) * this.total));

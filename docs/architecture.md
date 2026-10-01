@@ -769,6 +769,56 @@ approved plan, with extra conditions this design meets.
   "Body edited by you". The body is embedded in the script only as a string inside
   `JSON.stringify(journeys)`, pinned by a hostile-content test.
 
+### Run k6 Script (AP-034)
+
+`specs/034-run-user-k6-script` runs a k6 script the engineer supplies, under constitution v2.6.0's
+XVII exception of 2026-09-30. It is a standalone route family (`/api/user-scripts`,
+`api/userScripts.ts`) over `performance/userScript/`, and needs no specification or plan.
+
+```text
+upload / editor save
+  → checkUserScript (acorn parse + walk; never evaluated)   allowlisted k6 built-ins, a JS subset
+  → user_scripts (content encrypted)                        check result recomputed, memoised by SHA-256
+  → POST /:id/confirmation {sha256}                         bound to the bytes the dialog showed
+  → POST /:id/runs {environmentId, scriptSha256}            check again, confirmed, k6 ready, env, slot
+  → run directory: copy → re-hash → k6 run (pinned args, allow-listed env)
+  → NDJSON → createUserScriptAggregate (by k6 request name) → renderUserScriptReport
+```
+
+- **The check** (`checkUserScript.ts`, `numericGuarantee.ts`; research R2 to R5) accepts only
+  the nine allowlisted modules and a JavaScript subset in which `open()`, `require()`, the global
+  object and the function constructor cannot be reached:
+  - no forbidden names;
+  - no reads of `constructor`, `prototype` or `__proto__`;
+  - computed reads only on `__ENV`, `const` literal tables or numeric-guaranteed keys;
+  - no `handleSummary` export.
+
+  It also lists absolute-URL hosts and `__ENV` names, including those read through a literal
+  table, which is how a generated script's `VALUE_ENV` maps itself. The rule is the same for
+  every script: AP-029's template was amended (FR-022a) to pass it rather than being exempted.
+- **Storage.** `user_scripts` holds the content and confirmed hosts encrypted.
+  `user_script_runs` holds the snapshot, result and k6 message encrypted. The settings column
+  (mapping names, load, thresholds) holds no values. Both tables are deleted with the session.
+- **Execution.** `buildUserScriptK6Args` and `buildUserScriptChildEnv` are pinned beside the
+  generated-run builders.
+  - Arguments: no remote output, no usage report and no summary option. `--log-format json`
+    separates console output from k6's errors. `--system-tags` keeps `name`, `url`, `ip`.
+    `--stage` is passed only for a chosen load profile.
+  - Environment: the start-up allow-list plus mapped names, so `K6_OUT` or `K6_CLOUD_TOKEN` on the
+    backend never reaches k6.
+  - Console output is dropped unread. k6's error text (at most 2,000 characters) is kept only for
+    a failed run's page. The exit code is interpreted from k6's codes (99 = script thresholds
+    crossed).
+- **Shared with AP-029:** the runner (with an optional `args`), probe, run directory, integrity
+  check, `liveHandles` and cancellation, restart recovery
+  (`recoverUserScriptRunsAtStartup`), the report helpers, and `usePerformanceRuns` (now generic).
+  The "one execution in progress" check is one helper, `execution/executionSlot.ts`, used by
+  every start route.
+- **Reporting.** Requests are grouped by k6's `name`, 100 at most, then "Other requests". A
+  request is named when its name is not an absolute URL; k6 replaces a named request's `url` tag
+  with the name, so named requests are counted by the `ip` address they reached. The timeline
+  doubles its bucket width when no planned duration is known.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -795,6 +845,19 @@ approved plan, with extra conditions this design meets.
   quick plans, whose scenarios no one reviewed; for them the exception rests on every write
   operation being listed on the plan and at the run trigger. The uploaded specification is only
   analyzed, never executed. k6's stderr is counted and never logged, and its output stays local.
+- A third narrow exception runs a k6 script the user supplies (AP-034, constitution v2.6.0 XVII
+  exception of 2026-09-30; see "Run k6 Script"). Every one of these must hold:
+  - a static check of allowlisted built-ins before the script is stored;
+  - a confirmation bound to the bytes' SHA-256;
+  - those exact bytes executed, never rewritten, with configuration only as k6 options and
+    environment;
+  - a per-run trigger naming the target and the hosts found;
+  - the user's k6 with local outputs only;
+  - content, snapshots, results and k6 messages encrypted at rest;
+  - nothing from the script logged, its console output never kept, and no AI.
+
+  ApiPilot cannot restrict which hosts such a script contacts, and says so at confirmation and
+  at the trigger.
 - AI failure analysis redacts captured request/response content before it reaches the prompt or
   storage and stores analyses encrypted. Target-controlled response text still reaches the model,
   so prompt injection is a known, bounded risk: the answer is limited to a closed cause set,
@@ -820,9 +883,10 @@ approved plan, with extra conditions this design meets.
 ## Frontend architecture
 
 The frontend is a React/Vite technical workspace, not a set of independent stage pages. `App.tsx`
-switches between three top-level views — the guided workflow, the collection import/editing/
-execution page (specs/026, specs/028), and the quick performance test (specs/032,
-`pages/QuickPerformancePage.tsx`) — without discarding any one's state when another is active
+switches between four top-level views — the guided workflow, the collection import/editing/
+execution page (specs/026, specs/028), the quick performance test (specs/032,
+`pages/QuickPerformancePage.tsx`) and Run k6 Script (specs/034, `pages/UserScriptPage.tsx`, with
+`components/userScript/`) — without discarding any one's state when another is active
 (see "External collection import & execution" above for the mounting rules). The guided
 Performance Testing stage and the quick page render the one `PerformancePlanScreen`, each with a
 `PerformanceClient` from `createPerformanceClient(base)` for its own route family.

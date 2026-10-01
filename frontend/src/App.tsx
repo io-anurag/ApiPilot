@@ -7,18 +7,20 @@ import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { TestGenerationWorkflowPage } from "./pages/TestGenerationWorkflowPage";
 import { ExternalCollectionsPage } from "./pages/ExternalCollectionsPage";
 import { QuickPerformancePage } from "./pages/QuickPerformancePage";
+import { UserScriptPage } from "./pages/UserScriptPage";
 import { PerformancePlanScaleMockPage } from "./pages/PerformancePlanScaleMockPage";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 
 type ActiveTab = EntryChoice;
 
-/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: three views do
- * not warrant a routing dependency, mirroring AP-009's own original decision. AP-032 adds the
- * quick performance test as the third. */
+/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
+ * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
+ * adds the quick performance test as the third, and AP-034 Run k6 Script as the fourth. */
 const TABS: Array<{ id: ActiveTab; label: string }> = [
   { id: "guided-workflow", label: "Guided Workflow" },
   { id: "import-collection", label: "Import & Run Collection" },
   { id: "quick-performance", label: "Quick Performance Test" },
+  { id: "user-script", label: "Run k6 Script" },
 ];
 
 export function App() {
@@ -42,6 +44,8 @@ export function App() {
   // AP-032: the quick performance test, like Import & Run, stays mounted once reached so "Back to
   // start" keeps its plan on screen (FR-025); its state also lives on the server for the session.
   const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
+  // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
+  const [userScriptMounted, setUserScriptMounted] = useState(false);
   const [importPreload, setImportPreload] = useState<ImportPreload | null>(null);
   const importPreloadTokenRef = useRef(0);
 
@@ -60,9 +64,13 @@ export function App() {
   }, []);
 
   function mount(view: ActiveTab) {
-    if (view === "guided-workflow") setGuidedWorkflowMounted(true);
-    else if (view === "import-collection") setImportCollectionMounted(true);
-    else setQuickPerformanceMounted(true);
+    const mounters: Record<ActiveTab, (mounted: boolean) => void> = {
+      "guided-workflow": setGuidedWorkflowMounted,
+      "import-collection": setImportCollectionMounted,
+      "quick-performance": setQuickPerformanceMounted,
+      "user-script": setUserScriptMounted,
+    };
+    mounters[view](true);
   }
 
   function handleSelect(choice: EntryChoice) {
@@ -149,6 +157,11 @@ export function App() {
             {quickPerformanceMounted && (
               <div hidden={!started || activeTab !== "quick-performance"}>
                 <QuickPerformancePage onExit={handleExitToStart} />
+              </div>
+            )}
+            {userScriptMounted && (
+              <div hidden={!started || activeTab !== "user-script"}>
+                <UserScriptPage onExit={handleExitToStart} />
               </div>
             )}
           </>

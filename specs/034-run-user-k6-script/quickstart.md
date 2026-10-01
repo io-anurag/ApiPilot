@@ -88,8 +88,8 @@ These scenarios check the feature end to end:
 
 ## 4. Mapping and a second environment (User Story 2; FR-024 to FR-026; SC-004)
 
-1. Run the script against `Stub alt`. **Expect** the stub's request log to show each run's own
-   `API_KEY`.
+1. Run the script against `Local stub`, then against `Stub alt`. **Expect** the stub's console to
+   list two different `X-Api-Key` SHA-256 prefixes, one per run (the stub never prints the key).
 2. Search the backend log (`logs/backend.log`), the report and the run page for both `API_KEY`
    values. **Expect** no match.
 3. Map `API_KEY` to a value `Stub alt` does not have. **Expect** "missing" before the run. **Expect**

@@ -228,4 +228,105 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     expect(run.planSnapshot.parameterEdits).toEqual([]);
     expect(quickSteps(run.planSnapshot).find((step: { id: string }) => step.id === orders.id)).toMatchObject({ parametersEdited: true });
   }, 120_000);
+
+  // AP-034 (specs/034-run-user-k6-script research R10, R13, R21, R23; tasks T064).
+  const USER_SCRIPT = [
+    'import http from "k6/http";',
+    'import { check, group, sleep } from "k6";',
+    'import { Counter } from "k6/metrics";',
+    'import exec from "k6/execution";',
+    'import encoding from "k6/encoding";',
+    'import crypto from "k6/crypto";',
+    'import { SharedArray } from "k6/data";',
+    'import { parseHTML } from "k6/html";',
+    'import { setTimeout } from "k6/timers";',
+    "",
+    'export const options = { vus: 1, duration: "1s", thresholds: { http_req_duration: ["p(95)<0.001"] } };',
+    'const items = new SharedArray("items", function () { return ["a", "b"]; });',
+    'const hits = new Counter("hits");',
+    "",
+    "export default function () {",
+    "  console.log(__ENV.API_KEY);",
+    '  group("items", function () {',
+    "    const res = http.get(`${__ENV.BASE_URL}/items/${items[exec.vu.idInTest % 2]}`, { headers: { \"X-Api-Key\": __ENV.API_KEY }, tags: { name: \"GET /items/{id}\" } });",
+    '    check(res, { "status 200": (r) => r.status === 200 });',
+    "  });",
+    "  http.get(`${__ENV.BASE_URL}/plain?x=1`);",
+    "  hits.add(1);",
+    '  const doc = parseHTML("<p>x</p>");',
+    '  const encoded = encoding.b64encode(crypto.sha256("x", "hex"));',
+    "  setTimeout(function () {}, 0);",
+    '  if (!doc || !encoded) console.log("unexpected");',
+    "  sleep(0.2);",
+    "}",
+    "",
+  ].join("\n");
+
+  async function settleUserScriptRun(agent: ReturnType<typeof request.agent>, runId: string) {
+    let run = (await agent.get(`/api/user-scripts/runs/${runId}`)).body.run;
+    for (let attempt = 0; attempt < 120 && run.status === "in-progress"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      run = (await agent.get(`/api/user-scripts/runs/${runId}`)).body.run;
+    }
+    return run;
+  }
+
+  it("runs a user-supplied script: every allowed module, name and url tags, --stage override, exit 99, console never stored (AP-034)", async () => {
+    target.requests.length = 0;
+    const agent = request.agent(createApp());
+    const uploaded = await agent.post("/api/user-scripts/upload?name=real").set("Content-Type", "application/octet-stream").send(Buffer.from(USER_SCRIPT));
+    expect(uploaded.status).toBe(201);
+    const script = uploaded.body.script;
+    await agent.post(`/api/user-scripts/${script.id}/confirmation`).send({ sha256: script.sha256 });
+    await agent.put(`/api/user-scripts/${script.id}/settings`).send({
+      mapping: script.settings.mapping.map(({ name, source }: { name: string; source: unknown }) => ({ name, source })),
+      removedNames: [],
+      load: { kind: "profile", profile: { kind: "smoke", stages: [{ durationMs: 1_000, targetVirtualUsers: 2 }, { durationMs: 3_000, targetVirtualUsers: 2 }] } },
+      thresholds: [],
+    });
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({ name: "user-real", tier: "local", baseUrl, variableValues: { API_KEY: "real-k6-api-key-5f1c" } });
+    const started = await agent.post(`/api/user-scripts/${script.id}/runs`).send({ environmentId: environment.body.environment.id, scriptSha256: script.sha256 });
+    expect(started.status).toBe(200);
+    const run = await settleUserScriptRun(agent, started.body.run.id);
+
+    expect(run).toMatchObject({ status: "completed", k6ExitCode: 99, exitMeaning: "script-thresholds-crossed" });
+    expect(run.result.scriptThresholdsOutcome).toBe("crossed");
+    const names = run.result.requestGroups.map((group: { displayName: string }) => group.displayName);
+    expect(names).toContain("GET /items/{id}");
+    expect(names.some((name: string) => /^GET 127\.0\.0\.1:\d+\/plain$/.test(name))).toBe(true);
+    // The script asks for 1 VU for 1 s; the --stage override holds 2 VUs for 3 s more.
+    expect(Math.max(...run.result.timeline.points.map((point: { virtualUsers: number }) => point.virtualUsers))).toBe(2);
+    expect(Date.parse(run.endedAt) - Date.parse(run.startedAt)).toBeGreaterThan(3_000);
+    expect(run.result.checks).toEqual([expect.objectContaining({ name: "status 200" })]);
+    expect(run.result.customMetrics).toEqual([expect.objectContaining({ name: "hits", type: "counter" })]);
+    expect(target.requests.some((recorded) => recorded.headers["x-api-key"] === "real-k6-api-key-5f1c")).toBe(true);
+    expect(JSON.stringify(run)).not.toContain("real-k6-api-key-5f1c");
+    expect((await agent.get(`/api/user-scripts/runs/${run.id}/report`)).text).not.toContain("real-k6-api-key-5f1c");
+  }, 120_000);
+
+  it("runs a downloaded generated quick script as a user script, mapped to the same environment (AP-029 FR-022a, AP-034 quickstart 1.5)", async () => {
+    const agent = request.agent(createApp());
+    expect((await uploadQuick(agent)).status).toBe(200);
+    const plan = (await agent.get(`${QUICK_BASE}/plan`)).body.plan;
+    const status = quickSteps(plan).find((step) => step.operationKey === "GET /status")!;
+    await agent.put(`${QUICK_BASE}/plan`).send({ expectedStatuses: { [status.id]: ["200"] }, loadProfile: { kind: "smoke", stages: [{ durationMs: 3_000, targetVirtualUsers: 1 }] } });
+    expect((await agent.post(`${QUICK_BASE}/script`)).status).toBe(200);
+    const downloaded = await agent.get(`${QUICK_BASE}/script/download`);
+    const uploaded = await agent.post("/api/user-scripts/upload?name=generated").set("Content-Type", "application/octet-stream").send(Buffer.from(downloaded.text));
+    expect(uploaded.status).toBe(201);
+    const script = uploaded.body.script;
+    expect(script.settings.mapping.find((entry: { name: string }) => entry.name === "APIPILOT_V_0").source).toEqual({ kind: "base-url" });
+    await agent.post(`/api/user-scripts/${script.id}/confirmation`).send({ sha256: script.sha256 });
+    const environment = await agent.post("/api/test-generation-workflow/environments").send({
+      name: "generated-real",
+      tier: "local",
+      baseUrl,
+      variableValues: { username: "u", password: "p", orderId: "o-1", productId: "p-1" },
+    });
+    const started = await agent.post(`/api/user-scripts/${script.id}/runs`).send({ environmentId: environment.body.environment.id, scriptSha256: script.sha256 });
+    expect(started.status).toBe(200);
+    const run = await settleUserScriptRun(agent, started.body.run.id);
+    expect(run.status).toBe("completed");
+    expect(run.result.totals.requests).toBeGreaterThan(0);
+  }, 120_000);
 });

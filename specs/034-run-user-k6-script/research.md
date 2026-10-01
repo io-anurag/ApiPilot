@@ -290,7 +290,7 @@ would also leave user-derived names unencrypted.
 **Decision**: `buildUserScriptK6Args(runDir, load)` returns:
 
 `run --no-usage-report --quiet --no-color --log-format json
---system-tags proto,subproto,status,method,url,name,group,check,error,error_code,tls_version,scenario,service,expected_response
+--system-tags proto,subproto,status,method,url,name,group,check,error,error_code,tls_version,scenario,service,expected_response,ip
 --out json=<runDir>/metrics.ndjson [--stage <d>s:<target> …] <runDir>/script.js`
 
 - `--stage` flags are added only when a load profile is chosen, one per stage, in order.
@@ -399,10 +399,16 @@ What it keeps:
   - trend: percentiles and min/mean/max.
 - **The script's threshold expressions,** from the `Metric` declarations.
 
-**Display name rule (FR-032):** if `name` equals `url`, or `name` parses as an absolute URL, the
-request was not named. Its display name is `METHOD host/path`, with user info, query and fragment
-removed. Otherwise the display name is `name` as given. The raw `url` and `name` tags are used only
-in memory and never stored.
+**Display name rule (FR-032):** a request is named exactly when its `name` is not an absolute URL.
+k6 names an unnamed request by its URL, and replaces a named request's `url` tag with its name
+(checked against k6 2.3.0 on 2026-10-01, during implementation). An unnamed request's display name
+is `METHOD host/path`, with user info, query and fragment removed; an `http.url` template keeps its
+`${}`. The raw `url` and `name` tags are used only in memory and never stored.
+
+**Hosts that received requests:** an unnamed request is counted by its URL's origin. A named request
+has no URL in its tags, so it is counted by the address k6 connected to, from the `ip` system tag
+(added to R10's list for this reason), and shown as an address. The "hosts outside the environment"
+finding compares an address only when the base URL names an address itself.
 
 **Timeline:** for the script's own load, the planned duration is unknown. Buckets therefore start
 at 5 s and double, merging pairs, whenever more than 200 would be needed. With a profile, the

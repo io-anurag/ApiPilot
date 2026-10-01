@@ -117,11 +117,28 @@ export type ValueStatusesResult = Result<{
 }>;
 
 /**
+ * The readiness, run and report calls that `usePerformanceRuns` needs (AP-034, specs/034 tasks
+ * T016). The guided and quick plan sources start a run from an environment id; AP-034's user
+ * scripts also name the script and the SHA-256 the trigger showed, so the start input, run and
+ * summary types are parameters.
+ */
+export interface PerformanceRunsClient<TRun = PerformanceRun, TSummary = PerformanceRunSummary, TStartInput = string> {
+  fetchReadiness(recheck?: boolean): Promise<Result<{ readiness: K6Readiness }>>;
+  startRun(input: TStartInput): Promise<Result<{ run: TRun }>>;
+  fetchRuns(): Promise<Result<{ runs: TSummary[] }>>;
+  fetchRun(runId: string): Promise<Result<{ run: TRun }>>;
+  cancelRun(runId: string): Promise<Result<{ run: TRun }>>;
+  /** The report HTML, for the sandboxed frame. The download link fetches the same bytes (research D17). */
+  fetchReport(runId: string): Promise<Result<{ html: string }>>;
+  reportDownloadUrl(runId: string): string;
+}
+
+/**
  * The plan, script and run calls of one plan source (AP-032, specs/032-quick-performance-test
  * research Q16): `/api/test-generation-workflow/performance` for the guided workflow's stage, or
  * `/api/quick-performance` for the quick performance test. Both share one contract.
  */
-export interface PerformanceClient {
+export interface PerformanceClient extends PerformanceRunsClient {
   /** Opens the plan: on the guided path the first call builds the plan and makes the stage active (contract). */
   fetchPlan(): Promise<PlanResult>;
   updatePlan(update: PlanUpdate): Promise<PlanResult>;
@@ -134,17 +151,10 @@ export interface PerformanceClient {
   generateScript(): Promise<Result<{ script: ScriptStatus }>>;
   /** For an `<a download>`: the browser fetches the file itself, so no script text passes through app state. */
   scriptDownloadUrl(file: "script" | "environment-template"): string;
-  fetchReadiness(recheck?: boolean): Promise<Result<{ readiness: K6Readiness }>>;
-  startRun(environmentId: string): Promise<Result<{ run: PerformanceRun }>>;
-  fetchRuns(): Promise<Result<{ runs: PerformanceRunSummary[] }>>;
-  fetchRun(runId: string): Promise<Result<{ run: PerformanceRun }>>;
-  cancelRun(runId: string): Promise<Result<{ run: PerformanceRun }>>;
-  /** The report HTML, for the sandboxed frame. The download link fetches the same bytes (research D17). */
-  fetchReport(runId: string): Promise<Result<{ html: string }>>;
-  reportDownloadUrl(runId: string): string;
 }
 
-async function fetchReportFrom(base: string, runId: string): Promise<Result<{ html: string }>> {
+/** Exported for AP-034's user-script client, whose report route has the same shape. */
+export async function fetchReportFrom(base: string, runId: string): Promise<Result<{ html: string }>> {
   const operation = "fetchReport";
   let response: Response;
   try {

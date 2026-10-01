@@ -55,6 +55,9 @@ describe("SqliteConnection", () => {
         "sqlite_sequence",
         "uploaded_collection_runs",
         "uploaded_collections",
+        // AP-034 (specs/034-run-user-k6-script research R7, R9).
+        "user_script_runs",
+        "user_scripts",
       ]);
       connection.close();
     } finally {
