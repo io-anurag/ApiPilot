@@ -1,6 +1,47 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.6.0 → 2.7.0 (minor: XVII's 2026-09-24 exception extended to AP-036)
+
+Trigger: the governance prerequisite for AP-036 (Performance Test from a Postman Collection;
+specs/036-collection-performance-test, Clarifications 2026-10-02). AP-036 builds a Performance
+Plan from a Postman collection stored in Import & Run Collection and runs the k6 script ApiPilot
+generates from it. The 2026-09-24 exception names AP-029 and AP-032, whose plans ApiPilot derives
+from a TestModel or a specification, and MUST NOT be cited for other content. A plan whose
+requests the user authored is not covered. The user chose a performance plan over handing a
+converted script to Run k6 Script under the 2026-09-30 exception (2026-10-02). The extension widens
+which plans the exception covers and adds conditions for them, which is materially expanded
+guidance (MINOR); no existing principle or exception is removed or redefined.
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: the 2026-09-24 exception now also covers AP-036. For an
+    AP-036 plan, "approved" means the user reviewed the plan's conversion (every request and its
+    source, every captured value and its script line, every request left out and statement not
+    converted, every write and every host, on the plan and at the run trigger) and then triggered
+    the run. Every existing condition applies unchanged, and in addition: building the plan never
+    executes the collection's scripts, evaluates their expressions or sends a request, and reads
+    them only as text against forms the specification enumerates; collection request content is
+    written only as data, and dynamic variables are produced by ApiPilot's own code for a fixed
+    list; no variable value or literal credential reaches the script; requests go only to the base
+    URL and to hosts written in the collection, each listed; the plan, snapshot and report name the
+    collection, state its requests were not generated or verified by ApiPilot, and record each
+    captured value's source without any value; a rebuilt plan needs a new review. The collection's
+    scripts are never executed under this exception, only under the 2026-09-20 exception. The
+    introductory sentence now says the conditions apply to every feature the exception covers.
+    The rationale records the reasoning. The 2026-09-20 and 2026-09-30 exceptions are unchanged.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none. The recognised statement forms and the dynamic-variable list are left to the
+feature's specification and plan by design.
+
+Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version in
+the same change.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.5.0 → 2.6.0 (minor: XVII gains a narrow exception for user-supplied k6 scripts)
 
 Trigger: the user asked to "upload a k6 script & configure & run" (2026-09-30). The 2026-09-24
@@ -492,14 +533,16 @@ verified by ApiPilot. It does not apply to ApiPilot-generated artifacts, AI outp
 OpenAPI specifications, and MUST NOT be cited to justify executing any other uploaded or
 generated content elsewhere in the system.
 
-**Exception (2026-09-24 amendment, extended 2026-09-27 and 2026-09-29)**: A performance-testing
-feature (AP-029, k6 Performance Testing, and AP-032, Quick Performance Test from a Specification)
-MAY execute a k6 script that ApiPilot generated deterministically (XVI) from a Performance Plan
-the user approved, only when all of the following hold. For AP-032, whose plan is built directly
+**Exception (2026-09-24 amendment, extended 2026-09-27, 2026-09-29 and 2026-10-02)**: A
+performance-testing feature (AP-029, k6 Performance Testing; AP-032, Quick Performance Test from a
+Specification; and AP-036, Performance Test from a Postman Collection) MAY execute a k6 script that
+ApiPilot generated deterministically (XVI) from a Performance Plan the user approved, only when all
+of the following hold. For AP-032, whose plan is built directly
 from an uploaded specification with generated positive scenarios that no one reviewed,
 "approved" means the user reviewed that plan, with every write operation it will send listed on the plan and at the run
-trigger (specs/032-quick-performance-test FR-009, FR-011), and then triggered the run; the
-conditions are the same for both features:
+trigger (specs/032-quick-performance-test FR-009, FR-011), and then triggered the run. For AP-036,
+"approved" has the meaning and the added conditions stated below. The following conditions apply
+to every feature this exception covers:
 - the run starts only on the user's explicit action within ApiPilot for that run, and that
   action identifies the target environment by name, tier label and base URL. Generating a
   script never starts a run, and ApiPilot never starts or repeats one automatically, on a
@@ -531,10 +574,40 @@ addition:
 Editing the generated script itself, or supplying script code in any plan input, remains
 excluded.
 
+AP-036 (specs/036-collection-performance-test) builds its plan from a Postman collection the user
+stored in ApiPilot, uploaded or handed off from the guided workflow. Its requests were therefore
+authored or edited outside ApiPilot's generators. For AP-036, "approved" means two things. First,
+the user reviewed the plan's conversion. It lists every request the plan sends and the collection
+request it came from, every value captured from a response and the script line it came from, every
+request left out, and every script statement not converted. Every write operation and every host
+the plan sends to are listed on the plan and at the run trigger. Second, the user then triggered
+the run. Every condition above applies unchanged, and in addition:
+- building the plan never executes the collection's pre-request or test scripts, evaluates any
+  expression in them, or sends any request. Scripts are read only as text, against a fixed set of
+  statement forms that the feature's specification enumerates. Nothing in them reaches the
+  generated script as code: a converted statement becomes only a variable name, a field path, a
+  header name or an expected status code;
+- the collection's request content (URLs, query parameters, headers and bodies) is written into the
+  script only as data, never as code. Postman dynamic variables are produced by code ApiPilot
+  writes, for a fixed list the specification defines, never by code taken from the collection;
+- no variable value and no literal credential reaches the script. Every variable is an environment
+  reference resolved at run time. A literal value in an auth field, or in an `Authorization`,
+  `Proxy-Authorization` or `Cookie` header, becomes a secret environment value (XVIII);
+- the script sends requests only to the target environment's base URL and to hosts written
+  literally in the collection's requests, and the plan and the run trigger list each such host;
+- the plan, the run's snapshot and the report identify the collection the plan came from. They
+  state that its requests were not generated or verified by ApiPilot, name each step's source
+  request, and record each captured value's source without containing any value (XIII);
+- a plan rebuilt after its collection changes needs a new review before its script can be
+  generated or run.
+
 This exception does not apply to AI output, uploaded OpenAPI specifications, uploaded, imported
 or user-edited scripts, or any other generated artifact, and MUST NOT be cited to justify
 executing any other content elsewhere in the system. A script generated from an AP-032 plan is
 ApiPilot's own output; the uploaded specification it was derived from is never itself executed.
+Likewise, a script generated from an AP-036 plan is ApiPilot's own output. The collection's own
+scripts are never executed under this exception; they run only in Import & Run Collection, under
+the 2026-09-20 exception.
 
 **Exception (2026-09-30 amendment)**: A user-initiated performance-testing feature that knowingly
 runs a k6 script the user supplies (uploaded, or written or edited in ApiPilot's script editor)
@@ -592,7 +665,17 @@ every write operation visible before the run rather than on any loosened conditi
 to the plan they review, ApiPilot still generates every byte of the script, and writing edited
 content only as data keeps arbitrary content from reaching the runner as code. Stating this
 explicitly, rather than reading "edited by a user" as covering only the script, removes an
-ambiguity the exception would otherwise carry into every future plan edit. The 2026-09-30
+ambiguity the exception would otherwise carry into every future plan edit. The 2026-10-02
+extension to AP-036 keeps the same footing for the script: ApiPilot still writes every byte of it,
+deterministically, from a plan the user reviewed. What differs is the origin of the requests. They
+come from a collection, so their author is the user, not ApiPilot's generators. The 2026-09-20
+exception already accepts that position for a functional run of the same collection. The
+extension also keeps out what that exception lets in: the collection's scripts, which a functional
+run executes in Postman's sandbox, are never run here. A fixed recognizer turns a narrow set of
+statements into data, and everything else is shown to the user rather than guessed (XIV, XIX).
+Requests can reach hosts written literally in the collection, outside the target environment, so
+listing them, as the 2026-09-30 exception does, keeps that risk visible to the person accepting
+it. The 2026-09-30
 exception returns to the footing of the 2026-09-20 one: a QA engineer knowingly running their
 own script is a user-initiated act, not the platform executing content of its own generation.
 Because ApiPilot cannot know what a user's script does, the conditions narrow what it can reach
@@ -820,4 +903,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.6.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-09-30
+**Version**: 2.7.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-02
