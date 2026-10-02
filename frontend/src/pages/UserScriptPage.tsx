@@ -4,12 +4,15 @@ import { userScriptClient } from "../services/userScriptClient";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
+import { EntryFeatureIcon, type EntryFeatureIconName } from "../components/EntryFeatureIcon";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
+import { StatusBadge } from "../components/StatusBadge";
 import { CREDENTIALS_NOTE, ScriptEditor } from "../components/userScript/ScriptEditor";
 import { ScriptList } from "../components/userScript/ScriptList";
 import { ScriptProblems } from "../components/userScript/ScriptProblems";
 import { ScriptWorkspace } from "../components/userScript/ScriptWorkspace";
+import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 
 /**
  * AP-034 Run k6 Script (specs/034-run-user-k6-script). Upload a k6 script or write one, see what
@@ -22,6 +25,28 @@ type ListState = { kind: "loading" } | { kind: "error"; message: string } | { ki
 type LeaveAction = { kind: "select"; scriptId: string } | { kind: "new" } | { kind: "exit" };
 
 const ACCEPT = ".js,text/javascript,application/javascript";
+
+const USER_SCRIPT_PATH_STEPS = [
+  { label: "k6 Script", icon: "upload" },
+  { label: "Check", icon: "analyze" },
+  { label: "Confirm", icon: "design" },
+  { label: "Run", icon: "run" },
+] as const;
+
+const USER_SCRIPT_FEATURES: ReadonlyArray<{ label: string; description: string; icon: EntryFeatureIconName }> = [
+  { label: "CHECKED", description: "Only allowed k6 modules", icon: "review" },
+  { label: "CONFIRMED", description: "You approve its exact content", icon: "visible" },
+  { label: "LOCAL", description: "Runs with your own k6", icon: "local" },
+];
+
+function UploadIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 14.5V19a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-4.5" />
+    </svg>
+  );
+}
 
 export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   const [list, setList] = useState<ListState>({ kind: "loading" });
@@ -108,41 +133,130 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   }
 
   const scripts = list.kind === "ready" ? list.scripts : [];
+  // Like the quick performance test: the full-height landing only while there is nothing to work
+  // on; once a script or a draft exists, a compact bar keeps the list and workspace in view.
+  const working = scripts.length > 0 || newScript !== null;
+
+  const backButton = onExit && (
+    <button type="button" aria-label="Exit Run k6 Script and return to the start screen" onClick={() => request({ kind: "exit" })} className={BUTTON_STYLES.ghost}>
+      ← Back to start
+    </button>
+  );
 
   return (
     <div className="space-y-5" data-testid="user-script-page">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          {onExit && (
-            <button type="button" aria-label="Exit Run k6 Script and return to the start screen" onClick={() => request({ kind: "exit" })} className={BUTTON_STYLES.ghost}>
-              ← Back to start
-            </button>
-          )}
-          <h2 className="font-display text-2xl font-semibold">Run k6 Script</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className={`${BUTTON_STYLES.primary} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500`}>
-            {uploading ? "Checking…" : "Upload script"}
-            <input type="file" accept={ACCEPT} aria-label="Upload a k6 script" disabled={uploading} onChange={(event) => void handleUpload(event)} className="sr-only" />
-          </label>
-          <button type="button" className={BUTTON_STYLES.secondary} onClick={() => request({ kind: "new" })}>
-            Write a new script
-          </button>
-        </div>
-      </div>
-      <p className="max-w-3xl text-sm text-muted">
-        Run a k6 script you supply with the k6 installed on this machine. ApiPilot checks that it uses only allowed k6 modules and nothing that reads local files, asks you to confirm its exact
-        content, and runs it only when you press the trigger. {CREDENTIALS_NOTE}
-      </p>
-      {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
-      {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
+      {!working && backButton && <div className="flex justify-start">{backButton}</div>}
+      {list.kind === "loading" && <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />}
 
-      {list.kind === "loading" && <Skeleton className="h-32 w-full rounded bg-slate-200 dark:bg-slate-600" />}
-      {list.kind === "error" && <ErrorState message="The scripts could not be loaded." detail={list.message} testId="user-script-list-error" />}
-      {list.kind === "ready" && scripts.length === 0 && !newScript && (
-        <EmptyState message="No scripts yet" description="Upload a k6 script, or write a new one from ApiPilot's example. Nothing runs until you confirm a script and press its trigger." testId="user-script-empty" />
+      {list.kind !== "loading" && !working && (
+        <section aria-labelledby="user-script-title" className="relative isolate overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-brand-500/10"
+          />
+          <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
+                  <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                  <span>Bring your own k6 script</span>
+                </p>
+                <h2 id="user-script-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white">
+                  Run k6 Script
+                </h2>
+                <p className="max-w-2xl text-base leading-7 text-muted">
+                  Run a k6 script you supply with the k6 installed on this machine. ApiPilot checks that it uses only allowed k6 modules and nothing that reads local files, asks you to
+                  confirm its exact content, and runs it only when you press the trigger.
+                </p>
+                <p className="max-w-2xl text-sm text-muted">{CREDENTIALS_NOTE}</p>
+              </div>
+              <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
+                {USER_SCRIPT_FEATURES.map(({ label, description, icon }, index) => (
+                  <div key={label} className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}>
+                    <EntryFeatureIcon name={icon} />
+                    <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">{label}</dt>
+                    <dd className="text-xs text-muted">{description}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
+              <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
+              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Add a k6 script</p>
+                  <p className="mt-0.5 text-xs text-muted">JavaScript · checked before it is stored</p>
+                </div>
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+              </div>
+              <div className="space-y-4 p-5 sm:p-6">
+                <label
+                  htmlFor="user-script-upload"
+                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-slate-50 opacity-60 dark:bg-white/5" : "cursor-pointer border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-white/5 dark:hover:bg-brand-500/10"}`}
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300">
+                    <UploadIcon className="h-5 w-5" />
+                  </span>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{uploading ? "Checking…" : "Upload a k6 script"}</span>
+                  <span className="text-xs text-muted">Click to browse your files</span>
+                  <input
+                    id="user-script-upload"
+                    type="file"
+                    accept={ACCEPT}
+                    aria-label="Upload a k6 script"
+                    disabled={uploading}
+                    onChange={(event) => void handleUpload(event)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  />
+                </label>
+                <button type="button" className={`${BUTTON_STYLES.secondary} w-full`} onClick={() => request({ kind: "new" })}>
+                  Write a new script
+                </button>
+                {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
+                {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold uppercase text-muted">Scripts in this session</h3>
+                  {list.kind === "error" && <ErrorState message="The scripts could not be loaded." detail={list.message} testId="user-script-list-error" />}
+                  {list.kind === "ready" && scripts.length === 0 && (
+                    <EmptyState compact message="No scripts yet." description="Nothing runs until you confirm a script and press its trigger." testId="user-script-empty" />
+                  )}
+                </div>
+              </div>
+            </div>
+            <WorkflowPathPreview steps={USER_SCRIPT_PATH_STEPS} />
+          </div>
+        </section>
       )}
-      {scripts.length > 0 && <ScriptList scripts={scripts} selectedId={selectedId} onSelect={(scriptId) => request({ kind: "select", scriptId })} />}
+
+      {working && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              {backButton && (
+                <>
+                  {backButton}
+                  <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+                </>
+              )}
+              <h2 className="font-semibold">Run k6 Script</h2>
+              <StatusBadge label={scripts.length === 1 ? "1 script in this session" : `${scripts.length} scripts in this session`} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className={`${BUTTON_STYLES.secondary} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500`}>
+                {uploading ? "Checking…" : "Upload script"}
+                <input type="file" accept={ACCEPT} aria-label="Upload a k6 script" disabled={uploading} onChange={(event) => void handleUpload(event)} className="sr-only" />
+              </label>
+              <button type="button" className={BUTTON_STYLES.secondary} onClick={() => request({ kind: "new" })}>
+                Write a new script
+              </button>
+            </div>
+          </div>
+          <p className="max-w-3xl text-sm text-muted">{CREDENTIALS_NOTE}</p>
+          {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
+          {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
+          {scripts.length > 0 && <ScriptList scripts={scripts} selectedId={selectedId} onSelect={(scriptId) => request({ kind: "select", scriptId })} />}
+        </>
+      )}
 
       {newScript && (
         <section aria-labelledby="new-script-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
