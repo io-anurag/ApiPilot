@@ -32,7 +32,13 @@ Testing stage (AP-029) and the quick performance test (AP-032). It reuses, uncha
 
 It does not change user-supplied k6 scripts (AP-034), which define their own order and extraction.
 
-It changes three existing decisions, each stated as a requirement below:
+It changes five existing decisions, each stated as a requirement below:
+- AP-029 FR-010 extracts each workflow variable and checks it, whatever status the producer
+  received, and accepts any non-empty value. Captures, including workflow variables in proposed
+  journeys, are now attempted only on an expected status and succeed only for a string, number or
+  boolean (FR-010, FR-033).
+- AP-032 FR-009 and FR-011 count each write operation once. The write-operation summary now counts
+  each step that sends one, so an operation in two journeys counts twice (FR-023).
 - AP-032 FR-006 says every operation in the quick plan is its own single-step journey and the quick
   path must not infer or apply dependency chaining. The quick path still infers nothing, but the
   engineer may now compose journeys and bind values themselves (FR-001, FR-030). The plan's note
@@ -69,6 +75,21 @@ amendment before planning continues.
   captures with every virtual user? → A: Per iteration only. A captured value is used by later steps
   of the same journey, in the same iteration, by the same virtual user. Steps that run once before
   the load (setup data) are out of scope (FR-017).
+
+### Session 2026-10-02
+
+- Q: Should captures in journeys ApiPilot proposed from approved workflows follow the same rule as
+  user-defined journeys (capture only on an expected status, scalar values only)? → A: Yes, one rule
+  for every journey; AP-029 FR-010 is amended accordingly (FR-010, FR-033).
+- Q: When an edited workflow journey is reverted, do the expected statuses and body or parameter
+  edits set on its converted steps carry back to the proposed steps? → A: Yes, for steps that came
+  from the workflow; settings on steps the engineer added are discarded, and the confirmation names
+  those steps (FR-024).
+- Q: Does an incomplete user-defined journey block script generation? → A: No; the script is
+  generated without it, the plan's pending list shows it as a note, and the run trigger names it
+  (FR-025).
+- Q: When a response repeats a header and k6 reports the values combined, what does a header
+  capture take? → A: The whole value as k6 reports it, never split (Edge Cases, "Header captures").
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -194,7 +215,9 @@ the first run's settings and check the journey, its captures and its bindings ma
    becomes a capture and a binding with the same producer field and consumer target, and the
    relationship's confidence stays visible on those bindings.
 2. **Given** an edited workflow journey, **When** the engineer chooses **Revert to proposed
-   journey** and confirms, **Then** the proposed journey replaces it.
+   journey** and confirms, **Then** the proposed journey replaces it, each step that came from the
+   workflow keeps the expected statuses and body and parameter edits set on it, and the
+   confirmation names the added steps whose settings will be discarded.
 3. **Given** a run whose plan had user-defined journeys, **When** the engineer restores that run's
    settings (AP-029 FR-024b), **Then** its journeys, steps, captures and bindings are restored.
 4. **Given** a user-defined journey, **When** the engineer deletes it and confirms, **Then** its
@@ -217,7 +240,8 @@ the first run's settings and check the journey, its captures and its bindings ma
   missing field, `null`, empty string, object or array is a failed capture. A response that is not
   JSON fails every body capture of that step.
 - **Header captures**: header names match regardless of case. When a header appears more than once,
-  the first value is used. Extracting part of a value (for example the id at the end of a
+  the capture takes the value exactly as k6 reports it for that name, even if k6 combines the
+  repeated values; ApiPilot never splits it. Extracting part of a value (for example the id at the end of a
   `Location` URL) is out of scope; the whole value is captured.
 - **Unexpected status on a producing step**: its captures are not attempted and count as failed, so
   the rest of the journey is cut short, and the step is counted as failed as before.
@@ -236,13 +260,18 @@ the first run's settings and check the journey, its captures and its bindings ma
   digit, and is unique within its journey. It may equal an environment value's name; the binding,
   not the name, decides where a value comes from.
 - **Captured secrets**: a capture may hold a token or other secret (for example from a login
-  response). It is treated as secret everywhere. Binding a capture to the step's authentication is
+  response). Its value is never shown (FR-020), and a capture bound to a header, or to a field the
+  request schema declares `format: password`, is marked "secret" in the request preview, as
+  environment secrets are. Binding a capture to the step's authentication is
   out of scope; authentication stays as AP-029 FR-009 defines it.
 - **Shared values**: captured values are not shared between virtual users, iterations or journeys
   (FR-017). There are no steps that run once before the load. A test that reads one existing record
   under load takes its id from the environment, as before.
 - **A new quick test**: uploading a new specification on the quick path replaces the plan and its
   user-defined journeys, as it replaces body and parameter edits (AP-033 FR-018).
+- **Resetting the plan**: resetting rebuilds the proposed journeys and keeps user-defined journeys,
+  re-checked against the new plan (FR-016, FR-025). A journey based on a workflow is reverted to the
+  proposed journey, as in FR-024, and the reset confirmation names it.
 - **Write volume**: a journey that ends with a DELETE removes what its POST created, but ApiPilot
   still cleans up nothing itself (AP-029 FR-036a); a journey cut short leaves its records behind.
 
@@ -283,7 +312,8 @@ the first run's settings and check the journey, its captures and its bindings ma
   blocks the script.
 - **FR-010**: At run time, a capture MUST be attempted only when the step received one of its
   expected statuses. It MUST succeed only for a string, number or boolean value, which is sent as
-  its text. Any other case MUST count as a failed capture.
+  its text. Any other case MUST count as a failed capture. This rule MUST apply to every capture
+  in the plan, including workflow variables in proposed journeys (FR-033).
 
 **Bindings**
 
@@ -332,10 +362,14 @@ the first run's settings and check the journey, its captures and its bindings ma
 - **FR-024**: On the guided path, the engineer MUST be able to edit a proposed workflow journey,
   which then becomes a user-defined journey based on that workflow, with each workflow variable
   turned into a capture and a binding and the relationship's confidence kept on the binding. The
-  engineer MUST be able to revert it to the proposed journey after confirming.
+  engineer MUST be able to revert it to the proposed journey after confirming. On revert, the
+  expected statuses, body edit and parameter edits of each step that came from the workflow MUST
+  carry back to the corresponding proposed step; those of steps the engineer added MUST be
+  discarded, and the confirmation MUST name those steps.
 - **FR-025**: A user-defined journey with a step whose operation is removed or out of scope MUST
   keep its definition, MUST NOT be run, and MUST be shown as incomplete, naming the operation, until
-  the operation is back in the plan.
+  the operation is back in the plan. It MUST NOT block script generation; it MUST be listed as a
+  note with the plan's pending items, and the run trigger MUST name each incomplete journey.
 
 **Records, report and restore**
 
@@ -361,6 +395,10 @@ the first run's settings and check the journey, its captures and its bindings ma
   engineer builds a journey, and point to **New journey**, instead of pointing to the guided
   workflow.
 - **FR-032**: No AI MUST be used to propose, build, check or explain journeys, captures or bindings.
+- **FR-033**: AP-029 FR-010 MUST read: each workflow variable MUST be extracted from its producer's
+  response and checked, only when the producer received one of its expected statuses, and MUST
+  succeed only for a string, number or boolean value. A failed or skipped extraction cuts the rest
+  of the journey short as before.
 
 ### Key Entities *(include if feature involves data)*
 
