@@ -3,6 +3,7 @@ import request from "supertest";
 import type { PerformancePlan } from "@apipilot/shared-domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerPerformanceRoutes, type PlanHandle } from "../../../src/api/performanceRoutes";
+import { openApiEngine } from "../../../src/performance/plan/openApiEngine";
 import { buildPlan, rebuildPlan } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
@@ -145,7 +146,7 @@ describe("POST /script with a binding whose target no longer exists", () => {
     let plan = planFor(context);
     const router = express.Router();
     const handle: PlanHandle = {
-      context,
+      engine: openApiEngine(context),
       plan: () => plan,
       savePlan: (next) => void (plan = next),
       script: () => undefined,

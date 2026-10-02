@@ -56,9 +56,21 @@ export function cancelLiveRun(runId: string): boolean {
   return true;
 }
 
-/** The environment variables that carry the run's values (D7). An absent or empty value is not set. */
-export function valueEnvironment(valueIndex: Record<string, number>, environment: Environment): Record<string, string> {
-  const values: Record<string, string> = {};
+/**
+ * AP-036 (specs/036-collection-performance-test research R9): the run's tag, the first 6 hex
+ * characters of SHA-256 of the run id. Derived, so nothing is stored; not secret.
+ */
+export function runTagOf(runId: string): string {
+  return sha256Hex(runId).slice(0, 6);
+}
+
+/**
+ * The environment variables that carry the run's values (D7). An absent or empty value is not set.
+ * AP-036 (research R9): every run also gets `APIPILOT_RUN_TAG`, which only the unique dynamic values
+ * read, so a second run sends new ones while the script stays byte-identical.
+ */
+export function valueEnvironment(valueIndex: Record<string, number>, environment: Environment, runId: string): Record<string, string> {
+  const values: Record<string, string> = { APIPILOT_RUN_TAG: runTagOf(runId) };
   for (const [name, index] of Object.entries(valueIndex)) {
     const value = name === "baseUrl" ? environment.baseUrl : environment.variableValues[name];
     if (value !== undefined && value !== "") values[`APIPILOT_V_${index}`] = value;
@@ -113,7 +125,7 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
       scriptPath,
       metricsPath,
       binaryPath: input.binaryPath,
-      env: buildChildEnv(process.env, valueEnvironment(input.script.valueIndex, input.environment)),
+      env: buildChildEnv(process.env, valueEnvironment(input.script.valueIndex, input.environment, run.id)),
       onLine: (line) => {
         const parsed = parseMetricsLine(line);
         if (parsed.kind === "point") {

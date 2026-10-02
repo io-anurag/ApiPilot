@@ -342,7 +342,9 @@ the first run's settings and check the journey, its captures and its bindings ma
   iteration, by the same virtual user.
 - **FR-018**: Captures and bindings MUST be written into the script only as data. The script's code
   MUST be the same for every plan, apart from that data, so that no engineer input can reach k6 as
-  code.
+  code. *(The one runtime was extended 2026-10-02 by AP-036, specs/036-collection-performance-test
+  research R10: dynamic values, multi-value token sources, several token sources per step and form
+  bodies, all read from data. It is still the same text for every plan.)*
 - **FR-019**: A failed capture MUST cut the rest of its journey short in that iteration, as AP-029
   FR-010 defines, and the virtual user MUST continue with the next journey. A step whose bound value
   was not captured MUST NOT be sent.

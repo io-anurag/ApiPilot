@@ -7,5 +7,16 @@ import type { PerformancePlan } from "@apipilot/shared-domain";
  * report can still say which steps sent an engineer-written body.
  */
 export function planSnapshotForRun(plan: PerformancePlan): PerformancePlan {
-  return { ...plan, bodyEdits: [], discardedBodyEdits: [], parameterEdits: [], discardedParameterEdits: [] };
+  return {
+    ...plan,
+    bodyEdits: [],
+    discardedBodyEdits: [],
+    parameterEdits: [],
+    discardedParameterEdits: [],
+    // AP-036 (specs/036-collection-performance-test research R16): a finding keeps its kind, owner
+    // and line, but its statement excerpt is for the plan view only and never enters a run.
+    ...(plan.collection
+      ? { collection: { ...plan.collection, findings: plan.collection.findings.map((finding) => ({ ...finding, excerpt: null })) } }
+      : {}),
+  };
 }

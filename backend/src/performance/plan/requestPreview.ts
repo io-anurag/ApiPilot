@@ -131,7 +131,7 @@ export function buildStepRequestPreview(plan: PerformancePlan, context: Performa
     body:
       template.body === undefined
         ? null
-        : { contentType: template.bodyKind ?? "text", text: template.body, references: [...new Set(templateReferences(template.body))].map(classify) },
+        : { contentType: template.bodyKind === "json" ? "json" : "text", text: template.body, references: [...new Set(templateReferences(template.body))].map(classify) },
     ...bodyEditModel(plan, step, operation, scenario, template, classify),
     // AP-033 FR-020 (amended 2026-09-30): the documented parameters, as generated and as edited.
     parameterEdit: parameterEditModel(plan, step, operation, generated),
@@ -208,7 +208,7 @@ function bodyEditModel(
   step: PerformanceStep,
   operation: ApiOperation,
   scenario: TestScenario,
-  template: { body?: string; bodyKind?: "json" | "text" },
+  template: { body?: string; bodyKind?: "json" | "text" | "form" },
   classify: (name: string) => PreviewReference,
 ): Pick<StepRequestPreview, "bodyStatus" | "bodyEdit"> {
   const kind = bodyKindOf(operation);

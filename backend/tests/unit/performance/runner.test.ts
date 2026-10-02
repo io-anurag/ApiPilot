@@ -38,6 +38,11 @@ describe("k6 invocation", () => {
     });
   });
 
+  it("passes the run tag only when it is 6 lowercase hex characters (AP-036 research R9)", () => {
+    expect(buildChildEnv({ PATH: "/bin" }, { APIPILOT_RUN_TAG: "0a1b2c" }, "linux")).toEqual({ PATH: "/bin", APIPILOT_RUN_TAG: "0a1b2c" });
+    for (const tag of ["0A1B2C", "0a1b2", "0a1b2c3", "$(x)"]) expect(buildChildEnv({ PATH: "/bin" }, { APIPILOT_RUN_TAG: tag }, "linux")).toEqual({ PATH: "/bin" });
+  });
+
   it("never puts a value in the command line", () => {
     expect(buildK6Args("/run").join(" ")).not.toMatch(/APIPILOT_V_|s3cret|-e |--env/);
   });

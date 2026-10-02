@@ -51,6 +51,12 @@ export interface PerformanceErrorResult {
   path?: string;
   target?: string;
   position?: number;
+  /** AP-036 `409 collection_plan_out_of_date`: `changed` or `deleted`. */
+  state?: string;
+  /** AP-036 `400 not_supported_for_collection_plan`: the refused `PUT /plan` field. */
+  field?: string;
+  /** AP-036 `422 too_many_requests`: how many requests were selected. */
+  count?: number;
 }
 
 export type Result<T> = ({ ok: true } & T) | PerformanceErrorResult;
@@ -71,8 +77,10 @@ const STRING_EXTRAS = [
   "journeyId",
   "path",
   "target",
+  "state",
+  "field",
 ] as const;
-const NUMBER_EXTRAS = ["line", "column", "limitBytes", "position"] as const;
+const NUMBER_EXTRAS = ["line", "column", "limitBytes", "position", "count"] as const;
 
 /** The contract's extra error fields, each copied only when it has the documented type. */
 function errorExtras(parsed: Record<string, unknown>): ErrorExtras {
@@ -90,7 +98,8 @@ function errorExtras(parsed: Record<string, unknown>): ErrorExtras {
   return extras;
 }
 
-async function request<T>(operation: string, path: string, init: RequestInit | undefined, map: (body: Record<string, unknown>) => T): Promise<Result<T>> {
+/** Exported for AP-036's collection client, whose own routes share this error contract. */
+export async function request<T>(operation: string, path: string, init: RequestInit | undefined, map: (body: Record<string, unknown>) => T): Promise<Result<T>> {
   let response: Response;
   try {
     response = await fetch(path, init);
@@ -112,7 +121,7 @@ async function request<T>(operation: string, path: string, init: RequestInit | u
   return { ok: true, ...map(parsed ?? {}) };
 }
 
-function json(method: string, body?: unknown): RequestInit {
+export function json(method: string, body?: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) };
 }
 
@@ -141,6 +150,14 @@ export interface PlanUpdate {
   /** AP-035 FR-024 (guided only). */
   editProposedJourney?: string;
   revertProposedJourney?: string;
+  /** AP-036 (collection plans only): the request ids the engineer removed. */
+  excludedRequestIds?: string[];
+  /** AP-036 FR-019: each step's full list of captures the engineer added. */
+  addedCaptures?: Record<string, { name: string; source: { kind: "body"; path: string } | { kind: "header"; name: string } }[]>;
+  /** AP-036 FR-019: each step's full list of references the engineer bound to an earlier capture. */
+  addedBindings?: Record<string, { name: string; captureStepId: string; captureName: string }[]>;
+  /** AP-036 FR-018: marks the current conversion reviewed. */
+  conversionReviewed?: true;
 }
 
 /** AP-035: one journey as `PUT /plan` takes it. A new journey or step has no id. */

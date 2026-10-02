@@ -44,7 +44,8 @@ export interface RequestTemplate {
   url: string;
   headers: { key: string; value: string }[];
   body?: string;
-  bodyKind?: "json" | "text";
+  /** AP-036 research R11: `form` is a collection `urlencoded` body, filled URL-encoded. */
+  bodyKind?: "json" | "text" | "form";
   auth: AuthTemplate;
 }
 

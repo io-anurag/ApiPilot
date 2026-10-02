@@ -161,4 +161,17 @@ describe("performanceRunRepository", () => {
     expect(stored).not.toContain(SEEDED_CLIENT_SECRET);
     expect(stored).not.toContain(SEEDED_CLIENT_ID);
   });
+
+  it("records a collection run's source, lists by source, and reads an unknown source as guided (AP-036 R1)", () => {
+    const repo = getPerformanceRunRepository();
+    const session = "session-collection-source";
+    repo.create(session, runFixture({ id: "run-collection", status: "completed", planSource: "collection" }));
+    repo.create(session, runFixture({ id: "run-quick", status: "completed", planSource: "quick" }));
+    repo.create(session, runFixture({ id: "run-guided", status: "completed", planSource: "guided" }));
+    expect(repo.get(session, "run-collection")?.planSource).toBe("collection");
+    expect(repo.listBySessionAndSource(session, "collection").map((summary) => summary.id)).toEqual(["run-collection"]);
+    expect(repo.listBySessionAndSource(session, "quick").map((summary) => summary.id)).toEqual(["run-quick"]);
+    getSharedConnection().db.prepare("UPDATE performance_runs SET plan_source = 'from-the-future' WHERE id = 'run-quick'").run();
+    expect(repo.listBySession(session).find((summary) => summary.id === "run-quick")?.planSource).toBe("guided");
+  });
 });

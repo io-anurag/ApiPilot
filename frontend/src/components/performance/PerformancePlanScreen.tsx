@@ -8,6 +8,7 @@ import type {
   UserSuppliedValueStatus,
 } from "@apipilot/shared-domain";
 import {
+  collectionStepLabel,
   LOAD_PROFILE_STARTING_STAGES,
   summarizeWriteOperations,
 } from "@apipilot/shared-domain";
@@ -24,6 +25,10 @@ import { ErrorState } from "../ErrorState";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge } from "../StatusBadge";
 import { Tabs } from "../Tabs";
+import { CollectionCapturesPanel } from "./collection/CollectionCapturesPanel";
+import { ConversionReview, REVIEW_TITLE_ID } from "./collection/ConversionReview";
+import { CredentialRequestList } from "./collection/CredentialRequestList";
+import { NewEnvironmentFromCollection } from "./collection/NewEnvironmentFromCollection";
 import { CountedOperationList } from "./CountedOperationList";
 import { EnvironmentPicker } from "./EnvironmentPicker";
 import { JourneyList, type ListRequest } from "./JourneyList";
@@ -39,6 +44,7 @@ import { journeyRefusalText } from "./userJourneysViewModel";
 import {
   OMITTED_REASON_LABEL,
   formatDuration,
+  leftOutReasonText,
   loadProfileSummary,
   removalReason,
   unexpectedStatusesByStep,
@@ -84,6 +90,7 @@ export function PerformancePlanScreen({
   scopeNote,
   emptyState,
   onAdvanced,
+  onRebuild,
   testId,
 }: Readonly<{
   client: PerformanceClient;
@@ -94,6 +101,8 @@ export function PerformancePlanScreen({
   /** Shown instead of the journey list when the plan has no journeys and nothing was removed. */
   emptyState?: ReactNode;
   onAdvanced?: () => void;
+  /** AP-036: rebuilds a collection plan whose collection changed (contract `POST /rebuild`). */
+  onRebuild?: () => void;
   testId: string;
 }>) {
   const {
@@ -164,7 +173,7 @@ export function PerformancePlanScreen({
       if (!environmentResult.ok) {
         setEnvironmentError(
           environmentResult.error === "stage_not_active"
-            ? "Environments open once a quick performance test exists or the guided workflow's Postman collection is generated."
+            ? "Environments open once a quick or collection performance test exists or the guided workflow's Postman collection is generated."
             : environmentResult.message,
         );
       }
@@ -305,16 +314,34 @@ export function PerformancePlanScreen({
 
   const steps = plan.journeys.flatMap((journey) => journey.steps);
   const editedWorkflowJourneys = (plan.userJourneys ?? []).filter((definition) => definition.origin.kind === "based-on-workflow");
+  // AP-036: a collection plan's steps and credential requests are named by folder path and request.
+  const collection = plan.collection;
+  const collectionLabels = new Map<string, string>([
+    ...steps.flatMap((step) => (step.collectionRequest ? [[step.id, collectionStepLabel(step.collectionRequest)] as const] : [])),
+    ...(collection?.credentialRequests ?? []).map((request) => [request.stepId, collectionStepLabel(request.request)] as const),
+  ]);
+  const itemLabels = new Map<string, string>([
+    ...steps.flatMap((step) => (step.collectionRequest ? [[step.collectionRequest.itemId, collectionStepLabel(step.collectionRequest)] as const] : [])),
+    ...(collection?.credentialRequests ?? []).map((request) => [request.request.itemId, collectionStepLabel(request.request)] as const),
+    ...(collection?.excludedRequests ?? []).map((request) => [request.itemId, collectionStepLabel(request)] as const),
+    ...(collection?.leftOut ?? []).map((request) => [request.itemId, collectionStepLabel(request)] as const),
+  ]);
   const stepLabel = (stepId: string) =>
-    steps.find((step) => step.id === stepId)?.operationKey ?? stepId;
+    collectionLabels.get(stepId) ?? steps.find((step) => step.id === stepId)?.operationKey ?? stepId;
   const environment =
     environments.find((candidate) => candidate.id === environmentId) ?? null;
   const needsStatus = plan.stepsNeedingExpectedStatus.map(stepLabel);
   const writeSummary = summarizeWriteOperations(plan.journeys);
   const writeListId = `${testId}-write-operations`;
-  const noOperations = steps.length === 0 && plan.excludedOperationKeys.length > 0;
+  const removedCount = collection ? collection.excludedRequestIds.length : plan.excludedOperationKeys.length;
+  const leftOutCount = collection ? collection.leftOut.length : plan.omitted.length;
+  const noOperations = steps.length === 0 && removedCount > 0;
   let generateBlockedReason: string | null = null;
-  if (noOperations) generateBlockedReason = "The plan has no operations";
+  // AP-036 (research R13, R14): a collection plan's own gates come first, as on the server.
+  if (collection?.collectionState === "changed") generateBlockedReason = "The collection changed since this plan was built";
+  else if (collection?.collectionState === "deleted") generateBlockedReason = "The collection this plan was built from was deleted";
+  else if (collection && !collection.review.reviewed) generateBlockedReason = "Review the conversion first";
+  else if (noOperations) generateBlockedReason = "The plan has no operations";
   else if (steps.length === 0) generateBlockedReason = "The plan has nothing to test";
   else if (needsStatus.length > 0)
     generateBlockedReason = "Every step needs an expected status";
@@ -322,9 +349,16 @@ export function PerformancePlanScreen({
     generateBlockedReason = "A captured value's target no longer exists";
   // AP-035 FR-025: journeys the script leaves out, shown as a note and at the run trigger.
   const incompleteJourneys = plan.journeys.filter((journey) => journey.incompleteReason && journey.source.kind === "user");
+  /** AP-036: a collection plan removes requests by item id; the table hands over operation keys or item ids. */
+  const itemIdsFor = (keys: readonly string[]) => [
+    ...steps.filter((step) => step.collectionRequest && (keys.includes(step.operationKey) || keys.includes(step.collectionRequest.itemId))).map((step) => step.collectionRequest!.itemId),
+    ...(collection?.credentialRequests ?? []).filter((request) => keys.includes(request.request.itemId)).map((request) => request.request.itemId),
+  ];
   const exclude = (keys: readonly string[], success: string) =>
     void apply(
-      { excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] },
+      collection
+        ? { excludedRequestIds: [...new Set([...collection.excludedRequestIds, ...itemIdsFor(keys)])] }
+        : { excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] },
       success,
     );
   const removeMethod = (method: string) => {
@@ -342,7 +376,9 @@ export function PerformancePlanScreen({
   };
   const restore = (keys: readonly string[], success: string) =>
     void apply(
-      { excludedOperationKeys: plan.excludedOperationKeys.filter((key) => !keys.includes(key)) },
+      collection
+        ? { excludedRequestIds: collection.excludedRequestIds.filter((id) => !keys.includes(id)) }
+        : { excludedOperationKeys: plan.excludedOperationKeys.filter((key) => !keys.includes(key)) },
       success,
     );
   // The table's views: the plan's steps, and the operations not in it. A view with nothing in it
@@ -350,10 +386,8 @@ export function PerformancePlanScreen({
   // the plan.
   const scopes: { id: OperationScope; label: string; count: number }[] = [
     { id: "plan", label: "In plan", count: steps.length },
-    ...(plan.excludedOperationKeys.length > 0
-      ? [{ id: "removed" as const, label: "Removed", count: plan.excludedOperationKeys.length }]
-      : []),
-    ...(plan.omitted.length > 0 ? [{ id: "left-out" as const, label: "Left out", count: plan.omitted.length }] : []),
+    ...(removedCount > 0 ? [{ id: "removed" as const, label: "Removed", count: removedCount }] : []),
+    ...(leftOutCount > 0 ? [{ id: "left-out" as const, label: "Left out", count: leftOutCount }] : []),
   ];
   const activeScope: OperationScope = scopes.some((option) => option.id === scope) ? scope : "plan";
   const goTo = (next: PlanTab, focusId?: string) => {
@@ -394,6 +428,27 @@ export function PerformancePlanScreen({
   const thresholdCount = plan.thresholds.length;
 
   const pending: PendingItem[] = [];
+  if (collection?.collectionState === "changed") {
+    pending.push({
+      id: "collection",
+      state: "attention",
+      text: "The collection changed since this plan was built. Rebuild the plan before generating the script or running it.",
+      ...(onRebuild ? { action: { label: "Rebuild", ariaLabel: "Rebuild the plan from the collection", onClick: onRebuild, disabled: busy } } : {}),
+    });
+  } else if (collection?.collectionState === "deleted") {
+    pending.push({
+      id: "collection",
+      state: "attention",
+      text: "The collection this plan was built from was deleted, so the plan cannot be run or rebuilt. Its runs and reports are kept.",
+    });
+  } else if (collection && !collection.review.reviewed) {
+    pending.push({
+      id: "review",
+      state: "attention",
+      text: "Review the conversion before the script can be generated.",
+      action: { label: "Review", ariaLabel: "Review the conversion", onClick: () => goTo("plan", REVIEW_TITLE_ID) },
+    });
+  }
   if (noOperations) {
     pending.push({
       id: "operations",
@@ -498,7 +553,7 @@ export function PerformancePlanScreen({
       action: { label: "See why", onClick: () => goTo("setup", RUN_TITLE_ID) },
     });
   }
-  const setupPending = pending.filter((item) => item.id !== "operations" && item.id !== "statuses" && item.id !== "bindings").length;
+  const setupPending = pending.filter((item) => item.id !== "operations" && item.id !== "statuses" && item.id !== "bindings" && item.id !== "review" && item.id !== "collection").length;
   const ready =
     pending.length === 0 && environment && runs.readiness?.state === "ready" && !runs.inProgress
       ? {
@@ -604,6 +659,16 @@ export function PerformancePlanScreen({
         onChange={setTab}
       />
 
+      {collection && tab === "plan" && (
+        <ConversionReview
+          collection={collection}
+          busy={busy}
+          stepLabel={stepLabel}
+          itemLabel={(itemId) => itemLabels.get(itemId) ?? itemId}
+          onMarkReviewed={() => void apply({ conversionReviewed: true }, "Conversion marked as reviewed.")}
+        />
+      )}
+
       <section
         hidden={tab !== "plan"}
         className="min-w-0 space-y-3 rounded-lg border border-border bg-surface p-4"
@@ -663,10 +728,17 @@ export function PerformancePlanScreen({
         {activeScope === "removed" && (
           <OtherOperationsTable
             kind="removed"
-            entries={plan.excludedOperationKeys.map((operationKey) => ({
-              operationKey,
-              reason: removalReason(operationKey, plan.credentialProducerOperationKeys),
-            }))}
+            entries={
+              collection
+                ? collection.excludedRequests.map((request) => ({
+                    operationKey: request.itemId,
+                    request: { method: request.method, path: request.path, name: collectionStepLabel(request) },
+                  }))
+                : plan.excludedOperationKeys.map((operationKey) => ({
+                    operationKey,
+                    reason: removalReason(operationKey, plan.credentialProducerOperationKeys),
+                  }))
+            }
             busy={busy}
             onRestore={restore}
             loadRemoved={fetchRemovedOperation}
@@ -675,10 +747,18 @@ export function PerformancePlanScreen({
         {activeScope === "left-out" && (
           <OtherOperationsTable
             kind="left-out"
-            entries={plan.omitted.map((entry) => ({
-              operationKey: entry.operationKey,
-              reason: OMITTED_REASON_LABEL[entry.reason],
-            }))}
+            entries={
+              collection
+                ? collection.leftOut.map((request) => ({
+                    operationKey: request.itemId,
+                    reason: leftOutReasonText(request),
+                    request: { method: request.method, path: request.path, name: collectionStepLabel(request) },
+                  }))
+                : plan.omitted.map((entry) => ({
+                    operationKey: entry.operationKey,
+                    reason: OMITTED_REASON_LABEL[entry.reason],
+                  }))
+            }
             busy={busy}
           />
         )}
@@ -730,7 +810,18 @@ export function PerformancePlanScreen({
             />
           </div>
         )}
-        {activeScope === "plan" && (steps.length > 0 || (plan.userJourneys ?? []).length > 0) && (
+        {activeScope === "plan" && collection && (
+          <CredentialRequestList
+            requests={collection.credentialRequests}
+            busy={busy}
+            stepLabel={stepLabel}
+            onExpectedStatuses={(stepId, codes) => void apply({ expectedStatuses: { [stepId]: codes } })}
+            onRemove={(itemId) => exclude([itemId], `${itemLabels.get(itemId) ?? itemId} removed from the plan.`)}
+          />
+        )}
+        {activeScope === "plan" && collection && <CollectionCapturesPanel plan={plan} busy={busy} apply={apply} loadPreview={fetchStepRequest} />}
+        {/* AP-036 FR-020: a collection plan offers no journey composer; its steps are the collection's. */}
+        {activeScope === "plan" && !collection && (steps.length > 0 || (plan.userJourneys ?? []).length > 0) && (
           <UserJourneysPanel
             plan={plan}
             busy={busy}
@@ -834,6 +925,19 @@ export function PerformancePlanScreen({
                 void loadValues(saved.id);
               }}
             />
+            {collection && (
+              <NewEnvironmentFromCollection
+                collectionName={collection.collectionName}
+                onCreated={(id) =>
+                  void fetchEnvironments().then((result) => {
+                    if (result.ok) setEnvironments(result.environments);
+                    setEnvironmentId(id);
+                    void loadValues(id);
+                    setAnnouncement("Environment created from the collection.");
+                  })
+                }
+              />
+            )}
             {environment && <ValuesChecklist values={values} stepLabel={stepLabel} />}
           </SetupItem>
 
@@ -943,6 +1047,17 @@ export function PerformancePlanScreen({
             onStarted={() => setTab("runs")}
             onSelectOperation={openOperation}
           />
+          {collection && collection.hosts.length > 0 && (
+            // AP-036 FR-016, FR-021: hosts written literally in the collection are sent to as written.
+            <p className="text-sm" data-testid="performance-run-literal-hosts">
+              Some requests are sent to hosts written in the collection, not the environment&apos;s base URL:{" "}
+              {collection.hosts.map((host) => (
+                <code key={host} className="mr-1.5 font-mono text-xs">
+                  {host}
+                </code>
+              ))}
+            </p>
+          )}
           <p className="text-xs text-muted">
             Planned duration {formatDuration(plan.loadProfile.plannedDurationMs)}. Nothing is sent
             to the target until you press Run.

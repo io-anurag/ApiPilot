@@ -70,12 +70,17 @@ interface PerformanceRunRow {
 const SUMMARY_COLUMNS =
   "id, session_id, status, cancel_reason, failure_category, cancel_requested, environment_snapshot, script_sha256, k6_version, planned_duration_ms, started_at, ended_at, plan_source";
 
+/** AP-032, AP-036: the plan source a row records; anything unknown, or a row from before AP-032, is `guided`. */
+function planSourceOf(value: string | null): PerformanceRunSummary["planSource"] {
+  return value === "quick" || value === "collection" ? value : "guided";
+}
+
 function toSummary(row: Omit<PerformanceRunRow, "plan_snapshot" | "progress" | "result">): PerformanceRunSummary {
   const summary: PerformanceRunSummary = {
     id: row.id,
     status: row.status as PerformanceRunStatus,
     environment: JSON.parse(row.environment_snapshot) as PerformanceRunEnvironment,
-    planSource: row.plan_source === "quick" ? "quick" : "guided",
+    planSource: planSourceOf(row.plan_source),
     scriptSha256: row.script_sha256,
     k6Version: row.k6_version,
     plannedDurationMs: row.planned_duration_ms,

@@ -100,7 +100,12 @@ export function loadScript(
     __ENV: { ...options.env },
     __VU: options.vu ?? 1,
     __ITER: 0,
-    Date: { now: () => clock.now },
+    // AP-036: `$isoTimestamp` constructs a date from the run's clock; `Date.now()` is the sandbox clock.
+    Date: class SandboxDate extends Date {
+      static now(): number {
+        return clock.now;
+      }
+    },
   };
   vm.createContext(sandbox);
   const code = script
@@ -118,7 +123,8 @@ export function loadScript(
     setup: () => (sandbox.setup as () => unknown)(),
     iterate(data, iteration = 0) {
       sandbox.__ITER = iteration;
-      (sandbox.__default as (d: unknown) => void)(JSON.parse(JSON.stringify(data)));
+      // AP-036: k6 passes setup data to virtual users with `undefined` written as `null`.
+      (sandbox.__default as (d: unknown) => void)(JSON.parse(JSON.stringify(data, (_key, value: unknown) => (value === undefined ? null : value))));
     },
     setVu(vu) {
       sandbox.__VU = vu;

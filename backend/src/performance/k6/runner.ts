@@ -51,6 +51,8 @@ export function buildChildEnv(
   const env = startupEnv(processEnv, platform);
   for (const [key, value] of Object.entries(values)) {
     if (/^APIPILOT_V_\d+$/.test(key)) env[key] = value;
+    // AP-036 (specs/036-collection-performance-test research R9): the run tag, never a value.
+    if (key === "APIPILOT_RUN_TAG" && /^[0-9a-f]{6}$/.test(value)) env[key] = value;
   }
   return env;
 }

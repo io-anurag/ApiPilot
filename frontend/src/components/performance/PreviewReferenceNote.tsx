@@ -18,6 +18,9 @@ export function referenceText(reference: PreviewReference, stepLabel: (stepId: s
     case "capture":
       // AP-035 FR-012: the capture's name and step, never a value.
       return `from captured value ${reference.captureName} (step ${stepLabel(reference.producerStepId)})`;
+    case "generated-value":
+      // AP-036 FR-013: a Postman dynamic variable, generated for each virtual user and iteration.
+      return `generated at run time (${reference.variable})`;
   }
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { StepRequestPreview as Preview } from "@apipilot/shared-domain";
 import { StepRequestPreview } from "../../src/components/performance/StepRequestPreview";
+import { leftOutReasonText } from "../../src/components/performance/performanceViewModel";
 import { SECRET } from "./performanceFixtures";
 
 /** AP-032 FR-008, US1 AS7 (specs/032-quick-performance-test tasks T022). */
@@ -99,5 +100,39 @@ describe("StepRequestPreview", () => {
     fireEvent.click(screen.getByText("Request"));
     await screen.findByRole("table", { name: "Request parameters for POST /orders/{orderId}" });
     expect(container.textContent).not.toContain(SECRET);
+  });
+});
+
+/** AP-036 FR-013 (research R9; tasks T052). */
+describe("StepRequestPreview of a collection step", () => {
+  it("shows a Postman dynamic variable as generated at run time, with its $name, and offers no body editor", async () => {
+    const preview: Preview = {
+      stepId: "s-create",
+      operationKey: "POST /api/v1/customers",
+      method: "POST",
+      pathTemplate: "/api/v1/customers",
+      parameters: [],
+      auth: { kind: "collection-auth", schemeName: "noauth", location: null, references: [] },
+      body: {
+        contentType: "json",
+        text: '{"name":"{{apipilot_dyn_0}}","email":"{{apipilot_dyn_1}}"}',
+        references: [
+          { kind: "generated-value", name: "apipilot_dyn_0", variable: "$randomFullName" },
+          { kind: "generated-value", name: "apipilot_dyn_1", variable: "$randomEmail" },
+        ],
+      },
+      bodyStatus: "sent",
+      bodyEdit: null,
+      parameterEdit: null,
+    };
+    render(<StepRequestPreview stepId="s-create" operationKey="POST /api/v1/customers" stepLabel={(id) => id} loadPreview={async () => ({ ok: true as const, request: preview })} autoLoad />);
+    expect(await screen.findByText("generated at run time ($randomFullName)")).toBeInTheDocument();
+    expect(screen.getByText("generated at run time ($randomEmail)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Edit body/ })).not.toBeInTheDocument();
+  });
+
+  it("explains a request left out for a variable ApiPilot cannot generate", () => {
+    expect(leftOutReasonText({ reason: "unsupported-dynamic-variable", detail: "$randomColor" })).toBe("Uses {{$randomColor}}, which ApiPilot cannot generate.");
+    expect(leftOutReasonText({ reason: "unknown-dynamic-variable", detail: "$notReal" })).toBe("Uses {{$notReal}}, which ApiPilot cannot generate.");
   });
 });

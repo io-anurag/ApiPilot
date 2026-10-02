@@ -98,8 +98,15 @@ export function planFingerprint(
       ...(plan.bodyEdits.length > 0 ? { bodyEdits: plan.bodyEdits } : {}),
       ...(plan.parameterEdits.length > 0 ? { parameterEdits: plan.parameterEdits } : {}),
       ...user,
+      // AP-036 (specs/036-collection-performance-test research R19): a collection plan's own data,
+      // without its derived state and review, so plans without it keep their fingerprint.
+      ...(plan.collection ? { collection: fingerprintedCollection(plan.collection) } : {}),
     }),
   );
+}
+
+function fingerprintedCollection(collection: NonNullable<PerformancePlan["collection"]>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(collection).filter(([key]) => key !== "review" && key !== "collectionState"));
 }
 
 /** Recomputes the derived fields after any change. */

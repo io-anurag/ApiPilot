@@ -133,13 +133,15 @@ describe("checkUserScript: scripts ApiPilot generated (AP-029 FR-022a, research 
     expect(result.hosts).toEqual([]);
     expect(result.hasDefaultFunction).toBe(true);
     expect(result.envNames).toEqual(
-      plan.userSuppliedValues
-        .map((value, index) => ({
+      [
+        // AP-036 research R9: every generated script reads the run tag, which has no suggested source.
+        { name: "APIPILOT_RUN_TAG", mappable: true },
+        ...plan.userSuppliedValues.map((value, index) => ({
           name: `APIPILOT_V_${index}`,
           mappable: true,
           suggestedSource: value.name === "baseUrl" ? { kind: "base-url" } : { kind: "environment-value", valueName: value.name },
-        }))
-        .sort((a, b) => (a.name < b.name ? -1 : 1)),
+        })),
+      ].sort((a, b) => (a.name < b.name ? -1 : 1)),
     );
   });
 

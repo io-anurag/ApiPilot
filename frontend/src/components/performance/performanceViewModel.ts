@@ -1,6 +1,11 @@
+import { collectionStepLabel } from "@apipilot/shared-domain";
 import type {
+  Capture,
   EnvironmentTier,
+  ExpectedStatus,
+  FindingKind,
   K6Readiness,
+  LeftOutRequest,
   LoadProfile,
   PerformanceJourney,
   PerformanceResult,
@@ -27,6 +32,8 @@ export const SCENARIO_CHOICE_LABEL: Record<PerformanceStep["scenarioChoice"], st
   "rule-generated": "Rule-generated",
   "only-positive": null,
   "ai-enhanced-no-rule-alternative": "AI-enhanced (no rule-generated alternative)",
+  // AP-036: a collection step is simply its collection request; its source is shown on its own.
+  "collection-request": null,
 };
 
 /** Why this scenario was chosen, or `null` when there is nothing to explain. */
@@ -41,6 +48,7 @@ export const AUTH_LABEL: Record<StepAuthKind, string> = {
   "chained-login": "Token from a login request",
   "static-credential": "Credential from the environment",
   none: "No authentication",
+  "collection-auth": "The collection's auth",
 };
 
 /** The environment values a step needs, other than the base URL every step needs. */
@@ -62,6 +70,7 @@ export const AUTH_SHORT_LABEL: Record<StepAuthKind, string> = {
   "chained-login": "Login token",
   "static-credential": "Env credential",
   none: "None",
+  "collection-auth": "Collection auth",
 };
 
 export const READINESS_REASON: Record<Extract<K6Readiness, { state: "unavailable" }>["reason"], string> = {
@@ -149,4 +158,77 @@ export const USES_CAPTURE_LABEL = "Uses captured value";
 
 export function capturesLabel(count: number): string {
   return `Captures ${count}`;
+}
+
+/** AP-036 (specs/036-collection-performance-test research R7, R20): where an expected status came from. */
+export const STATUS_SOURCE_LABEL: Record<ExpectedStatus["source"], string> = {
+  specification: "from specification",
+  user: "set by you",
+  collection: "from the collection's test",
+};
+
+/** AP-036 FR-012: what a step without an expected status says; a collection documents no status. */
+export function noExpectedStatusText(step: Pick<PerformanceStep, "collectionRequest">): string {
+  return step.collectionRequest
+    ? "The collection's tests assert no status for this request. Set at least one."
+    : "The specification documents no success status. Set at least one.";
+}
+
+/** AP-036 FR-019: a typed capture path of a collection plan, which has no specification. */
+export const NOT_DOCUMENTED_IN_A_SPECIFICATION_LABEL = "Not documented in a specification";
+
+/** AP-036 (research R16): a step's name, by its folder path and request name on a collection plan. */
+export function stepDisplayName(step: Pick<PerformanceStep, "operationKey" | "collectionRequest">): string {
+  return step.collectionRequest ? collectionStepLabel(step.collectionRequest) : step.operationKey;
+}
+
+/** AP-036 FR-004 (research R4): why a collection request is not a step, in words. */
+export function leftOutReasonText(request: Pick<LeftOutRequest, "reason" | "detail">): string {
+  switch (request.reason) {
+    case "unsupported-auth":
+      return `Its auth (${request.detail ?? "unknown"}) cannot be sent under load.`;
+    case "unsupported-body":
+      return `Its ${request.detail ?? ""} body cannot be sent under load.`;
+    case "unsupported-dynamic-variable":
+    case "unknown-dynamic-variable":
+      return `Uses {{${request.detail ?? "$…"}}}, which ApiPilot cannot generate.`;
+    case "other-host-variable":
+      return `Its URL starts with {{${request.detail ?? ""}}}, not the plan's base URL variable.`;
+    case "reserved-name":
+      return `Uses {{${request.detail ?? ""}}}, a name ApiPilot reserves.`;
+  }
+}
+
+/** AP-036 FR-010 (research R5): why a statement was not converted, or what a note says. */
+export const FINDING_KIND_LABEL: Record<FindingKind, string> = {
+  condition: "Inside a condition, or after a statement that can return or throw",
+  loop: "Inside a loop",
+  function: "Inside a function",
+  try: "Inside a try block",
+  "computed-name": "The variable's name is not a literal",
+  "computed-value": "The value is not a response field or header",
+  "send-request": "Sends a request from the script",
+  "set-next-request": "Changes the run order",
+  "skip-request": "Skips the request",
+  "iteration-data": "Reads iteration data, which a load test does not have",
+  unset: "Unsets or clears variables",
+  "assertion-not-converted": "An assertion other than a status check; not checked under load",
+  "no-effect": "Has no effect under load",
+  "unsupported-statement": "Not a statement ApiPilot recognises",
+  "unreadable-script": "The script could not be read",
+  "superseded-setter": "A later statement sets the same variable",
+  "prerequest-not-converted": "Pre-request script: not run under load",
+  "scope-precedence": "Bound to this capture; Postman would send an environment value of the same name instead, if the environment sets one",
+  "contradictory-assertions": "The status assertions cannot all pass",
+  "url-encoding": "Sent URL-encoded: a value holding more than one path segment is sent differently from Postman",
+  "credential-header": "A credential header: its value is kept out of the script",
+};
+
+/** AP-036 FR-024: where a capture came from, without its value. */
+export function captureOriginText(capture: Pick<Capture, "origin">): string | null {
+  const origin = capture.origin;
+  if (!origin) return null;
+  if (origin.kind === "user") return "set by you";
+  const owner = origin.owner.kind === "collection" ? "collection" : origin.owner.kind === "folder" ? `folder ${origin.owner.folderName}` : "request";
+  return `${owner} test script, line ${origin.line}`;
 }

@@ -150,6 +150,28 @@ describe("aggregate", () => {
     expect(aggregate.progress(STREAM_START_MS + 20_000).tokenRefreshesSoFar).toBe(3);
   });
 
+  it("collects setup failures by source and capture, and refreshes by source, apart from the refresh count (AP-036 FR-028, FR-029)", () => {
+    const aggregate = run([
+      counter("apipilot_token_refresh", { outcome: "setup-failed", scheme: "s_b", capture: "" }, 0),
+      counter("apipilot_token_refresh", { outcome: "setup-failed", scheme: "s_a", capture: "access_token" }, 0),
+      counter("apipilot_token_refresh", { outcome: "setup-failed", scheme: "s_a", capture: "access_token" }, 0),
+      counter("apipilot_token_refresh", { outcome: "ok", scheme: "s_b" }, 4_000),
+      counter("apipilot_token_refresh", { outcome: "ok", scheme: "s_a" }, 4_000),
+      counter("apipilot_token_refresh", { outcome: "failed", scheme: "s_a" }, 8_000),
+    ]);
+    const { tokenRefreshes } = aggregate.toResult(STREAM_START_MS + 20_000);
+    expect(tokenRefreshes.count).toBe(3);
+    expect(tokenRefreshes.failed).toBe(1);
+    expect(tokenRefreshes.setupFailed).toEqual([
+      { scheme: "s_a", capture: "access_token" },
+      { scheme: "s_b", capture: "" },
+    ]);
+    expect(tokenRefreshes.byScheme).toEqual([
+      { scheme: "s_a", refreshed: 1, failed: 1 },
+      { scheme: "s_b", refreshed: 1, failed: 0 },
+    ]);
+  });
+
   it("records every status received, exact min/mean/max, request phases and a per-step timeline (FR-036, amended 2026-09-30)", () => {
     const tags = { step: "s-read", journey: "j1", status: "200", method: "GET" };
     const aggregate = run([

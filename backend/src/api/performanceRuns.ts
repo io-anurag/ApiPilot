@@ -42,6 +42,8 @@ export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTe
     try {
       // 1. The plan source's gate (guided: Postman generation complete; quick: a quick test exists).
       const handle = source.require();
+      // AP-036 (research R13): the source's own gate, such as a collection plan out of date.
+      handle.gate?.("run");
       // 2. A script exists and is current (FR-023).
       const plan = handle.plan();
       const script = handle.script();
