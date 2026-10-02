@@ -99,6 +99,7 @@ export function PerformanceRunTrigger({
     if (await start(environment.id)) onStarted?.();
   }
 
+  const incomplete = plan.journeys.filter((journey) => journey.incompleteReason !== undefined);
   let triggerLabel = "Run performance test";
   if (starting) triggerLabel = "Starting…";
   else if (target) triggerLabel = `${rerunOf ? "Run again" : "Run"} on ${target.name} (${target.tier})`;
@@ -107,6 +108,13 @@ export function PerformanceRunTrigger({
     <>
       {/* AP-032 FR-011: every write operation this run sends, next to the trigger that names the target. */}
       <WriteOperationSummary summary={summarizeWriteOperations(plan.journeys)} variant="trigger" onSelect={onSelectOperation} />
+      {/* AP-035 FR-025: a journey the script leaves out is named where the run starts. */}
+      {incomplete.length > 0 && (
+        <p className="text-xs" data-testid="run-trigger-incomplete">
+          <StatusBadge label="Not run" tone="warning" />{" "}
+          {incomplete.map((journey) => `${journey.source.kind === "user" ? journey.source.name : journey.id} (incomplete: ${journey.incompleteReason!.missingOperationKeys.join(", ")} not in the plan)`).join("; ")}
+        </p>
+      )}
       <button type="button" className={`${BUTTON_STYLES.primary} w-full py-2`} disabled={blockedReason !== null || starting} onClick={() => void handleStart()}>
         {triggerLabel}
       </button>

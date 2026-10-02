@@ -12,8 +12,9 @@ import { generateCollection } from "../../../src/postman/generateCollection";
 import { percentEncode } from "../../../src/postman/parameterSerialization";
 import { generateTestModel } from "../../../src/testDesign/generateTestModel";
 import { operationsWithDiscoverableProducer, twoBearerSchemes } from "../../fixtures/postman/credentialFixtures";
-import { SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { performanceContext, quickContext } from "../../fixtures/performance/context";
+import { SEEDED_CAPTURED_ID, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
+import { lifecyclePlan, REPLACE } from "../../fixtures/performance/userJourneyPlans";
+import { performanceContext, quickContext, userJourneysContext } from "../../fixtures/performance/context";
 import { loadScript, type SandboxRequest, type SandboxResponse } from "../../fixtures/performance/k6Sandbox";
 
 /** FR-009, FR-010, FR-011, FR-014 to FR-016, FR-020, FR-021 (research D7, D8, D11 to D14, D25, D26; tasks T030, T063, T083). */
@@ -198,7 +199,7 @@ describe("renderScript", () => {
     const [producer, consumer] = plan.journeys[0].steps;
     expect(k6.requests.some((r) => r.url.includes(`/orders/`))).toBe(false);
     expect(k6.metrics.filter((m) => m.name === "apipilot_cut_short")).toEqual([
-      { name: "apipilot_cut_short", value: 1, tags: { step: producer.id, journey: plan.journeys[0].id } },
+      { name: "apipilot_cut_short", value: 1, tags: { step: producer.id, journey: plan.journeys[0].id, capture: "orderId" } },
     ]);
     expect(k6.metrics.filter((m) => m.name === "apipilot_not_attempted").map((m) => m.tags.step)).toEqual([consumer.id]);
     expect(k6.requests.filter((r) => r.url.endsWith("/status"))).toHaveLength(1);
@@ -394,8 +395,10 @@ describe("renderScript with an edited body", () => {
  * tables and an own-field response walk, with behaviour unchanged.
  */
 describe("renderScript runtime that passes the AP-034 check", () => {
+  /** Replaces the producer's rendered body path (AP-035 data shape: a list of field names and positions). */
   function withProducerField(script: string, field: string): string {
-    return script.replace('"field": "orderId"', `"field": ${JSON.stringify(field)}`);
+    const parts = field.split(".").map((part) => (/^\d+$/.test(part) ? Number(part) : part));
+    return script.replace(/"body": \[\s*"orderId"\s*\]/, `"body": ${JSON.stringify(parts)}`);
   }
 
   it("declares each value's environment variable in a literal VALUE_ENV table, in plan order", async () => {
@@ -448,5 +451,223 @@ describe("renderScript runtime that passes the AP-034 check", () => {
     const vu2 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget(), vu: 2 });
     vu2.iterate(data, 0);
     expect(vu2.requests.filter((r) => !r.tags.apipilot_kind).every((r) => r.headers.Authorization === "Bearer tok-1")).toBe(true);
+  });
+});
+
+/** AP-035 FR-010, FR-018, FR-033 (specs/035-user-defined-journeys research R7; tasks T007). */
+describe("renderScript capture rule for every journey (AP-035 FR-033)", () => {
+  function runtimeOf(script: string): string {
+    return script.slice(script.indexOf('const missingData = new Counter("apipilot_missing_data");'));
+  }
+
+  it("attempts no capture on an unexpected status, even when the field is there, and cuts the journey short", async () => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget({ orders: { status: 500, body: { orderId: ORDER_ID } } }) });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.requests.some((r) => r.url.includes(`/orders/${ORDER_ID}`))).toBe(false);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_capture").map((m) => m.tags.outcome)).toEqual(["failed"]);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_cut_short")).toHaveLength(1);
+  });
+
+  it.each([
+    ["an object", { id: 1 }],
+    ["an array", [1, 2]],
+    ["null", null],
+    ["an empty string", ""],
+  ])("fails a capture of %s", async (_label, value) => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget({ orders: { status: 201, body: { orderId: value } } }) });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.requests.some((r) => r.url.includes("/orders/") && !r.url.endsWith("/orders"))).toBe(false);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_cut_short").map((m) => m.tags.capture)).toEqual(["orderId"]);
+  });
+
+  it.each([
+    ["a number", 42, "42"],
+    ["a boolean", true, "true"],
+  ])("sends %s as its text", async (_label, value, text) => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget({ orders: { status: 201, body: { orderId: value } } }) });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.requests.some((r) => r.url.endsWith(`/orders/${text}`))).toBe(true);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_capture")).toEqual([
+      { name: "apipilot_capture", value: 1, tags: { step: plan.journeys[0].steps[0].id, journey: plan.journeys[0].id, capture: "orderId", outcome: "ok" } },
+    ]);
+  });
+
+  it("fails every body capture of a response that is not JSON", async () => {
+    const { plan, context } = await readyPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(script, { env: envFor(valueIndex, ALL_VALUES), respond: stubTarget({ orders: { status: 201, body: "<html>created</html>" } }) });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_capture").map((m) => m.tags.outcome)).toEqual(["failed"]);
+  });
+
+  it("uses the same runtime text for every plan: only the data differs (FR-018)", async () => {
+    const guided = renderScript(...Object.values(await readyPlan()) as [PerformancePlan, PerformanceContext]).script;
+    const quick = renderScript(...Object.values(await quickReadyPlan()) as [PerformancePlan, PerformanceContext]).script;
+    // The basic-auth line is the one documented per-plan variation of the runtime.
+    const normalized = (text: string) => runtimeOf(text).replace(/^ {4}headers\.Authorization = "Basic ".*$/m, "    // Basic auth is not used by this plan.");
+    expect(normalized(guided)).toBe(normalized(quick));
+    expect(runtimeOf(guided).length).toBeGreaterThan(1000);
+  });
+
+  it("still passes AP-034's script check (AP-029 FR-022a)", async () => {
+    const { checkUserScript } = await import("../../../src/performance/userScript/checkUserScript");
+    for (const { plan, context } of [await readyPlan(), await quickReadyPlan()]) {
+      const result = checkUserScript(Buffer.from(renderScript(plan, context).script, "utf-8"));
+      expect(result.accepted ? [] : result.problems).toEqual([]);
+      expect(result.accepted).toBe(true);
+    }
+  });
+});
+
+/** AP-035 FR-017 to FR-021, SC-002 to SC-005 (specs/035-user-defined-journeys; tasks T019). */
+describe("renderScript with a user-defined journey (AP-035)", () => {
+  const BASE = "http://127.0.0.1:4600";
+
+  async function lifecycle() {
+    const { plan, context } = await lifecyclePlan();
+    const rendered = renderScript(plan, context);
+    return { plan, context, ...rendered, env: envFor(rendered.valueIndex, { baseUrl: BASE }) };
+  }
+
+  /** A target whose create returns `id`, numbered per virtual user and iteration, or nothing when `drop` says so. */
+  function customers(vuOf: () => number, iterationOf: () => number, drop: (n: number) => boolean = () => false) {
+    let created = 0;
+    return (request: SandboxRequest): SandboxResponse => {
+      if (request.method === "POST" && request.url.endsWith("/api/v1/customers")) {
+        created += 1;
+        return { status: 201, body: drop(created) ? { name: "x" } : { id: `vu${vuOf()}-it${iterationOf()}`, name: "x" }, headers: { Location: `/api/v1/customers/vu${vuOf()}` } };
+      }
+      return { status: request.method === "DELETE" ? 204 : 200, body: {} };
+    };
+  }
+
+  it("sends each virtual user's own id from the same iteration to the bound steps (FR-017, SC-002)", async () => {
+    const { script, env } = await lifecycle();
+    for (const vu of [1, 2]) {
+      let iteration = 0;
+      const k6 = loadScript(script, { env, vu, respond: customers(() => vu, () => iteration) });
+      const data = k6.setup();
+      for (iteration = 0; iteration < 3; iteration++) k6.iterate(data, iteration);
+      const bound = k6.requests.filter((r) => r.method === "PUT" || r.method === "DELETE");
+      expect(bound).toHaveLength(6);
+      bound.forEach((request, index) => expect(request.url).toBe(`${BASE}/api/v1/customers/vu${vu}-it${Math.floor(index / 2)}`));
+    }
+  });
+
+  it("sends no bound step after a failed capture and counts the journey as cut short by the capture (FR-019, SC-003)", async () => {
+    const { plan, script, env } = await lifecycle();
+    const journey = plan.journeys.find((candidate) => candidate.source.kind === "user")!;
+    const k6 = loadScript(script, { env, respond: customers(() => 1, () => 0, () => true) });
+    k6.iterate(k6.setup(), 0);
+    expect(k6.requests.some((r) => r.method === "PUT" || r.method === "DELETE")).toBe(false);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_cut_short")).toEqual([
+      { name: "apipilot_cut_short", value: 1, tags: { step: journey.steps[0].id, journey: journey.id, capture: "customer_id" } },
+    ]);
+    expect(k6.metrics.filter((m) => m.name === "apipilot_capture").map((m) => m.tags)).toEqual([
+      { step: journey.steps[0].id, journey: journey.id, capture: "customer_id", outcome: "failed" },
+    ]);
+  });
+
+  it("keeps a captured value out of every tag, check and the script, apart from the bound requests (SC-005, FR-020)", async () => {
+    const { script, env } = await lifecycle();
+    const k6 = loadScript(script, {
+      env,
+      respond: (request) =>
+        request.method === "POST" && request.url.endsWith("/customers") ? { status: 201, body: { id: SEEDED_CAPTURED_ID } } : { status: 200, body: {} },
+    });
+    k6.iterate(k6.setup(), 0);
+    expect(script).not.toContain(SEEDED_CAPTURED_ID);
+    expect(JSON.stringify(k6.metrics)).not.toContain(SEEDED_CAPTURED_ID);
+    expect(JSON.stringify(k6.checks)).not.toContain(SEEDED_CAPTURED_ID);
+    const carrying = k6.requests.filter((r) => JSON.stringify(r).includes(SEEDED_CAPTURED_ID));
+    expect(carrying.map((r) => r.method)).toEqual(["PUT", "DELETE"]);
+    expect(carrying.every((r) => r.url.endsWith(`/${SEEDED_CAPTURED_ID}`) && !JSON.stringify(r.tags).includes(SEEDED_CAPTURED_ID))).toBe(true);
+  });
+
+  it("leaves an incomplete journey out of the script (FR-025)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    const incomplete = applyPlanUpdate(plan, { excludedOperationKeys: [REPLACE] }, context);
+    const journey = incomplete.journeys.find((candidate) => candidate.source.kind === "user")!;
+    expect(renderScript(incomplete, context).script).not.toContain(journey.id);
+  });
+
+  it("renders byte-identical files 10 times and matches the reviewed golden script (SC-004)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    const first = renderScript(plan, context);
+    for (let index = 0; index < 9; index++) expect(renderScript(plan, context)).toEqual(first);
+    expect(first.script).toBe(readFileSync(path.join(GOLDEN, "user-journeys-script.js"), "utf-8"));
+  });
+});
+
+/** AP-035 User Story 2: header captures and body, query and header bindings (FR-007, FR-011, FR-013; research R8; tasks T039). */
+describe("renderScript with captures from headers and bindings anywhere", () => {
+  const BASE = "http://127.0.0.1:4600";
+
+  async function ordersPlan() {
+    const context = await userJourneysContext();
+    const plan = applyPlanUpdate(
+      buildPlan(context),
+      {
+        userJourneys: [
+          {
+            name: "Orders",
+            steps: [
+              {
+                operationKey: "POST /api/v1/customers",
+                captures: [
+                  { name: "customer_id", source: { kind: "body", path: "id" } },
+                  { name: "customer_url", source: { kind: "header", name: "LOCATION" } },
+                ],
+              },
+              { operationKey: "POST /api/v1/orders", bindings: [{ target: { kind: "body", fieldPath: "customerId" }, captureStepIndex: 0, captureName: "customer_id" }] },
+              { operationKey: "GET /api/v1/orders/{id}", bindings: [{ target: { kind: "query", name: "customer" }, captureStepIndex: 0, captureName: "customer_id" }, { target: { kind: "path", name: "id" }, captureStepIndex: 0, captureName: "customer_url" }] },
+            ],
+          },
+        ],
+      },
+      context,
+    );
+    return { plan, context };
+  }
+
+  it("matches a header regardless of case and takes the whole value; fills body and query targets, escaped (R8, FR-011)", async () => {
+    const { plan, context } = await ordersPlan();
+    const { script, valueIndex } = renderScript(plan, context);
+    const k6 = loadScript(script, {
+      env: envFor(valueIndex, { baseUrl: BASE }),
+      respond: (request) =>
+        request.method === "POST" && request.url.endsWith("/api/v1/customers")
+          ? { status: 201, body: { id: 'c "1"/ü' }, headers: { Location: "/api/v1/customers/c1, /api/v1/customers/c2" } }
+          : { status: request.url.includes("/orders/") ? 200 : 201, body: {} },
+    });
+    k6.iterate(k6.setup(), 0);
+    const order = k6.requests.find((r) => r.method === "POST" && r.url.endsWith("/api/v1/orders"))!;
+    expect(JSON.parse(order.body!)).toMatchObject({ customerId: 'c "1"/ü' });
+    const read = k6.requests.find((r) => r.method === "GET" && r.url.includes("/api/v1/orders/"))!;
+    expect(read.url).toBe(`${BASE}/api/v1/orders/${encodeURIComponent("/api/v1/customers/c1, /api/v1/customers/c2")}?customer=${encodeURIComponent('c "1"/ü')}`);
+  });
+
+  it("lists a bound body field under \"Replaced at run time\" with the capture as its source (FR-013)", async () => {
+    const { plan, context } = await ordersPlan();
+    const order = plan.journeys.find((journey) => journey.source.kind === "user")!.steps[1];
+    const preview = buildStepRequestPreview(plan, context, order.id);
+    expect(preview.bodyEdit!.replacements).toEqual([
+      { fieldPath: "customerId", reference: expect.objectContaining({ kind: "capture", captureName: "customer_id", producerStepId: plan.journeys.find((journey) => journey.source.kind === "user")!.steps[0].id }) },
+    ]);
+  });
+
+  it("counts a repeated operation as its own step in the script (FR-002)", async () => {
+    const context = await userJourneysContext();
+    const plan = applyPlanUpdate(buildPlan(context), { userJourneys: [{ name: "Twice", steps: [{ operationKey: "GET /api/v1/customers/{id}" }, { operationKey: "GET /api/v1/customers/{id}" }] }] }, context);
+    const { script } = renderScript(plan, context);
+    const journey = plan.journeys.find((candidate) => candidate.source.kind === "user")!;
+    expect(journey.steps).toHaveLength(2);
+    for (const step of journey.steps) expect(script).toContain(`"id": "${step.id}"`);
   });
 });

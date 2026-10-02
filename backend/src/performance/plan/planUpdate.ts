@@ -12,6 +12,8 @@ import { normalizeExpectedStatuses, prefillExpectedStatuses } from "./expectedSt
 import { canonicalJson, thresholdIdFor } from "./identifiers";
 import { validateLoadProfile, validateThinkTime } from "./loadProfiles";
 import { operationKeyOf, type PerformanceContext } from "./stepRequest";
+import { convertWorkflowJourney, revertWorkflowJourney } from "./convertWorkflowJourney";
+import { validateAlsoStandalone, validateUserJourneys } from "./userJourneys";
 import { validateJourneyOrder, validateStepOrder } from "./validateOrder";
 
 /**
@@ -98,7 +100,17 @@ export function applyPlanUpdate(plan: PerformancePlan, update: unknown, context:
     for (const [journeyId, order] of Object.entries(orders as Record<string, unknown>)) {
       const journey = plan.journeys.find((candidate) => candidate.id === journeyId);
       if (!journey) throw new InvalidOrderError(`'${journeyId}' is not a journey in this plan.`);
-      choices.stepOrder!.set(journeyId, validateStepOrder(journey, order));
+      const ids = validateStepOrder(journey, order);
+      choices.stepOrder!.set(journeyId, ids);
+      // AP-035: a user journey's order is its definition's (FR-004, FR-015).
+      if (journey.source.kind === "user") {
+        const rank = new Map(ids.map((id, index) => [id, index]));
+        choices.userJourneys = choices.userJourneys.map((definition) =>
+          definition.id !== journeyId
+            ? definition
+            : { ...definition, steps: [...definition.steps].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)) },
+        );
+      }
     }
   }
   if ("journeyOrder" in body) choices.journeyOrder = validateJourneyOrder(plan, body.journeyOrder);
@@ -106,6 +118,27 @@ export function applyPlanUpdate(plan: PerformancePlan, update: unknown, context:
   if ("bodyEdits" in body) choices.bodyEdits = validateBodyEdits(plan, context, body.bodyEdits);
   // AP-033 FR-020 (amended 2026-09-30): validated against the plan as it is, like body edits.
   if ("parameterEdits" in body) choices.parameterEdits = validateParameterEdits(plan, context, body.parameterEdits);
+  // AP-035 FR-024 (research R14): editing or reverting a proposed workflow journey is its own action.
+  const journeyFields = ["userJourneys", "editProposedJourney", "revertProposedJourney"].filter((field) => field in body);
+  if (journeyFields.length > 1) throw new InvalidPlanUpdateError(`Send one of ${journeyFields.join(", ")} at a time.`);
+  if ("editProposedJourney" in body) convertWorkflowJourney(plan, body.editProposedJourney, context, choices);
+  if ("revertProposedJourney" in body) revertWorkflowJourney(choices, body.revertProposedJourney);
+  // AP-035 (contracts/plan-journeys-api.md): validated against the edits this same update makes, so
+  // binding an edited parameter can be sent with the edit that drops it (FR-014).
+  if ("userJourneys" in body) {
+    const restoring =
+      "nextUserJourneyNumber" in body && Number.isInteger(body.nextUserJourneyNumber) && (body.nextUserJourneyNumber as number) >= 1
+        ? { nextUserJourneyNumber: body.nextUserJourneyNumber as number }
+        : null;
+    const validated = validateUserJourneys(body.userJourneys, plan, context, { bodyEdits: choices.bodyEdits, parameterEdits: choices.parameterEdits }, restoring);
+    choices.userJourneys = validated.userJourneys;
+    choices.nextUserJourneyNumber = validated.nextUserJourneyNumber;
+    if (!("alsoStandalone" in body)) {
+      const inJourneys = new Set(choices.userJourneys.flatMap((definition) => definition.steps.map((step) => step.operationKey)));
+      choices.alsoStandalone = choices.alsoStandalone.filter((key) => inJourneys.has(key));
+    }
+  }
+  if ("alsoStandalone" in body) choices.alsoStandalone = validateAlsoStandalone(body.alsoStandalone, choices.userJourneys);
   // AP-033 FR-018: a rebuild's discarded-edits notice lasts until the next plan edit (research R9).
   choices.discardedBodyEdits = [];
   choices.discardedParameterEdits = [];

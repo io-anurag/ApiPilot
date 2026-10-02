@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchPlan, fetchReport, generateScript, startRun, updatePlan } from "../../src/services/performanceTestingClient";
+import { fetchPlan, fetchReport, generateScript, guidedPerformanceClient, startRun, updatePlan } from "../../src/services/performanceTestingClient";
 import { planFixture, stubFetch } from "./performanceFixtures";
 
 /** AP-029 contract client (tasks T032). */
@@ -56,5 +56,29 @@ describe("performanceTestingClient", () => {
   it("returns the report as text", async () => {
     stubFetch({ [`GET ${BASE}/runs/r1/report`]: () => [200, "<!doctype html>"] });
     expect(await fetchReport("r1")).toEqual({ ok: true, html: "<!doctype html>" });
+  });
+});
+
+/** AP-035 contracts/plan-journeys-api.md (tasks T016). */
+describe("performanceTestingClient user journeys", () => {
+  it("sends the journey fields and maps the journey refusals' extras", async () => {
+    const calls = stubFetch({
+      [`PUT ${BASE}/plan`]: () => [400, { error: "capture_path_invalid", message: "m", path: "items[*]", position: 6 }],
+    });
+    const journeys = [{ name: "J", steps: [{ operationKey: "POST /a", captures: [], bindings: [] }] }];
+    expect(await updatePlan({ userJourneys: journeys, alsoStandalone: ["POST /a"] })).toEqual({ ok: false, error: "capture_path_invalid", message: "m", path: "items[*]", position: 6 });
+    expect(calls[0].body).toEqual({ userJourneys: journeys, alsoStandalone: ["POST /a"] });
+  });
+
+  it("maps capture_in_use and parameter_edited extras", async () => {
+    stubFetch({ [`PUT ${BASE}/plan`]: () => [400, { error: "capture_in_use", message: "m", capture: "customer_id", stepIds: ["s-2", "s-3"] }] });
+    expect(await updatePlan({})).toEqual({ ok: false, error: "capture_in_use", message: "m", capture: "customer_id", stepIds: ["s-2", "s-3"] });
+  });
+
+  it("fetches documented response fields by operation key", async () => {
+    stubFetch({
+      [`GET ${BASE}/plan/response-fields`]: () => [200, { fields: [{ path: "id", type: "string", statusCodes: ["201"] }], truncated: false }],
+    });
+    expect(await guidedPerformanceClient.fetchResponseFields("POST /a")).toEqual({ ok: true, fields: [{ path: "id", type: "string", statusCodes: ["201"] }], truncated: false });
   });
 });

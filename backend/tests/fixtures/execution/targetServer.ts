@@ -20,6 +20,12 @@ export interface RouteConfig {
 }
 
 /**
+ * AP-035 (specs/035-user-defined-journeys tasks T004): a computed response, for a stateful target.
+ * Consulted before the configured routes; returning `undefined` falls through to them.
+ */
+export type RequestHandler = (request: RecordedRequest) => { status: number; body?: unknown; headers?: Record<string, string> } | undefined;
+
+/**
  * A small local HTTP server standing in for "the target API" in execution integration tests
  * (constitution XXI — no test may depend on real external network access). Requests are recorded
  * for assertions, and per-route status/body/delay can be configured; anything unconfigured
@@ -29,19 +35,28 @@ export class TargetServer {
   readonly requests: RecordedRequest[] = [];
   private readonly app = express();
   private readonly routes = new Map<string, RouteConfig>();
+  private handler: RequestHandler | undefined;
   private server: Server | undefined;
   private port = 0;
 
   constructor() {
     this.app.use(express.json());
     this.app.use((req, res) => {
-      this.requests.push({
+      const recorded: RecordedRequest = {
         method: req.method,
         path: req.path,
         query: req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?") + 1) : "",
         headers: req.headers as Record<string, string | string[] | undefined>,
         body: req.body,
-      });
+      };
+      this.requests.push(recorded);
+      const handled = this.handler?.(recorded);
+      if (handled) {
+        for (const [name, value] of Object.entries(handled.headers ?? {})) res.setHeader(name, value);
+        if (handled.body === undefined) res.status(handled.status).end();
+        else res.status(handled.status).json(handled.body);
+        return;
+      }
       const config = this.routes.get(`${req.method.toUpperCase()} ${req.path}`);
       const status = config?.status ?? 200;
       const body = config?.body ?? {};
@@ -57,6 +72,11 @@ export class TargetServer {
   /** Configures how this server responds to one `method path` pair (e.g. `"POST", "/pets"`). */
   configure(method: string, path: string, config: RouteConfig): void {
     this.routes.set(`${method.toUpperCase()} ${path}`, config);
+  }
+
+  /** AP-035: computes responses before the configured routes (see `RequestHandler`). */
+  handle(handler: RequestHandler): void {
+    this.handler = handler;
   }
 
   /**

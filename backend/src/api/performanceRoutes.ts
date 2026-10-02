@@ -1,14 +1,17 @@
 import type { Router } from "express";
-import type { PerformancePlan, PerformancePlanSourceKind, ScriptStatus } from "@apipilot/shared-domain";
+import { runnableJourneys, type PerformancePlan, type PerformancePlanSourceKind, type ScriptStatus } from "@apipilot/shared-domain";
 import { getEnvironment } from "../execution/environmentStore";
 import { createLogger } from "../logger";
 import { renderScript, scriptDigest } from "../performance/k6/renderScript";
 import type { K6Probe, PerformanceRunner } from "../performance/k6/runnerTypes";
 import { rebuildPlan } from "../performance/plan/buildPlan";
+import { revertAllWorkflowJourneys } from "../performance/plan/convertWorkflowJourney";
 import { applyPlanUpdate } from "../performance/plan/planUpdate";
 import { buildRemovedOperationPreview } from "../performance/plan/removedOperationPreview";
 import { buildStepRequestPreview } from "../performance/plan/requestPreview";
-import type { PerformanceContext } from "../performance/plan/stepRequest";
+import { documentedResponseFields } from "../performance/plan/responseFields";
+import { operationKeyOf, type PerformanceContext } from "../performance/plan/stepRequest";
+import { BindingTargetMissingError, UnknownOperationError } from "../performance/errors";
 import { valueStatuses } from "../performance/plan/userSuppliedValues";
 import type { GeneratedScript } from "../performance/scriptStore";
 import { fail, handleKnownError, logReceived, logSucceeded } from "./performanceHttp";
@@ -66,8 +69,9 @@ export function scriptStatus(plan: PerformancePlan, script: GeneratedScript | un
   };
 }
 
+/** The steps the script runs: an incomplete user journey is not run (AP-035 FR-025). */
 function stepCountOf(plan: PerformancePlan): number {
-  return plan.journeys.reduce((total, journey) => total + journey.steps.length, 0);
+  return runnableJourneys(plan.journeys).reduce((total, journey) => total + journey.steps.length, 0);
 }
 
 /**
@@ -111,7 +115,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     const startedAt = logReceived(req);
     try {
       const handle = source.require();
-      const plan = rebuildPlan(handle.plan(), handle.context, { keepOrder: false });
+      const plan = rebuildPlan(handle.plan(), handle.context, { keepOrder: false, revertWorkflowJourneys: revertAllWorkflowJourneys });
       handle.savePlan(plan);
       handle.onPlanReset(plan);
       res.status(200).json({ plan, script: scriptStatus(plan, handle.script()) });
@@ -165,6 +169,23 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     }
   });
 
+  // AP-035 FR-009 (contracts/plan-journeys-api.md): the response fields the specification documents,
+  // for the capture picker. Names and types only, never an example value.
+  router.get(`${base}/plan/response-fields`, (req, res) => {
+    const startedAt = logReceived(req);
+    try {
+      const handle = source.require();
+      const operationKey = typeof req.query.operationKey === "string" ? req.query.operationKey : "";
+      if (!operationKey) return fail(req, res, startedAt, 400, "invalid_request", "operationKey is required.");
+      const operation = handle.context.apiModel.operations.find((candidate) => operationKeyOf(candidate) === operationKey);
+      if (!operation) throw new UnknownOperationError(operationKey);
+      res.status(200).json(documentedResponseFields(operation));
+      logSucceeded(req, startedAt, 200);
+    } catch (err) {
+      handleKnownError(req, res, startedAt, err);
+    }
+  });
+
   router.post(`${base}/script`, (req, res) => {
     const startedAt = logReceived(req);
     try {
@@ -177,6 +198,8 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
           stepIds: plan.stepsNeedingExpectedStatus,
         });
       }
+      // AP-035 FR-016: a captured value whose target no longer exists blocks the script.
+      if ((plan.bindingsNeedingAttention ?? []).length > 0) throw new BindingTargetMissingError(plan.bindingsNeedingAttention!);
       const rendered = renderScript(plan, handle.context);
       const scriptSha256 = scriptDigest(rendered.script);
       handle.saveScript({

@@ -21,6 +21,7 @@ import {
   planAuth,
   templateReferences,
   UNIQUE_TOKEN_PREFIX,
+  CAPTURE_KEY_PREFIX,
   type BuiltStepRequest,
   type PerformanceContext,
 } from "./stepRequest";
@@ -279,7 +280,8 @@ export function reservedNamesOf(context: PerformanceContext): (name: string) => 
     for (const variable of workflow.variables) names.add(workflowVariableName(workflow.id, variable.name));
   }
   for (const source of planAuth(context).tokenSources.values()) names.add(source.tokenVariable);
-  return (name) => name.startsWith(UNIQUE_TOKEN_PREFIX) || names.has(name);
+  // AP-035 research R5: a capture's script key, so an engineer's `{{name}}` cannot reach a captured value.
+  return (name) => name.startsWith(UNIQUE_TOKEN_PREFIX) || name.startsWith(CAPTURE_KEY_PREFIX) || names.has(name);
 }
 
 /**

@@ -19,8 +19,13 @@ import { StatusBadge } from "../StatusBadge";
 import {
   AUTH_LABEL,
   AUTH_SHORT_LABEL,
+  capturesLabel,
   choiceNote,
   environmentValuesOf,
+  INCOMPLETE_LABEL,
+  journeyOriginLabel,
+  TARGET_MISSING_LABEL,
+  USES_CAPTURE_LABEL,
   variablesFor,
 } from "./performanceViewModel";
 import { StepRequestPreview } from "./StepRequestPreview";
@@ -76,7 +81,7 @@ function move<T>(items: readonly T[], index: number, delta: number): T[] {
 }
 
 function isGroupedJourney(journey: PerformanceJourney): boolean {
-  return journey.source.kind === "workflow" || journey.steps.length > 1;
+  return journey.source.kind === "workflow" || journey.source.kind === "user" || journey.steps.length > 1;
 }
 
 function rowLabel({ journey, journeyIndex, stepIndex }: InventoryRow): string {
@@ -462,11 +467,21 @@ export function JourneyList({
             className="px-2 py-1.5 text-left text-xs font-normal"
           >
             <span className="font-mono font-semibold">J{journeyIndex + 1}</span>{" "}
-            <span className="font-semibold">Workflow</span>{" "}
-            <span className="text-muted">
-              · {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}, run in
-              this order
-            </span>
+            <span className="font-semibold">{journeyOriginLabel(journey.source)}</span>{" "}
+            {journey.source.kind === "user" && <span className="font-semibold">{journey.source.name}</span>}{" "}
+            {journey.incompleteReason ? (
+              <>
+                <StatusBadge label={INCOMPLETE_LABEL} tone="warning" />{" "}
+                <span className="text-muted">
+                  · not run: {journey.incompleteReason.missingOperationKeys.join(", ")} is not in the plan
+                </span>
+              </>
+            ) : (
+              <span className="text-muted">
+                · {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}, run in
+                this order
+              </span>
+            )}
           </th>
         </tr>,
       );
@@ -519,6 +534,15 @@ export function JourneyList({
             {step.bodyEdited && <StatusBadge label="Body edited" tone="info" />}
             {step.parametersEdited && (
               <StatusBadge label="Parameters edited" tone="info" />
+            )}
+            {step.captures && step.captures.length > 0 && (
+              <StatusBadge label={capturesLabel(step.captures.length)} tone="info" />
+            )}
+            {step.bindings && step.bindings.length > 0 && (
+              <StatusBadge label={USES_CAPTURE_LABEL} tone="info" />
+            )}
+            {step.bindings?.some((binding) => binding.state === "target-missing") && (
+              <StatusBadge label={TARGET_MISSING_LABEL} tone="danger" />
             )}
             {lastRunUnexpected?.has(step.id) && (
               <StatusBadge label="Failed last run" tone="danger" />

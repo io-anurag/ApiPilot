@@ -769,6 +769,34 @@ approved plan, with extra conditions this design meets.
   "Body edited by you". The body is embedded in the script only as a string inside
   `JSON.stringify(journeys)`, pinned by a hostile-content test.
 
+### User-defined journeys and captured values (AP-035)
+
+AP-035 (`specs/035-user-defined-journeys`) lets the engineer compose journeys on both plan
+sources and pass a value one step captures to later steps.
+
+- **Definitions are plan choices.** `PerformancePlan.userJourneys` (with `alsoStandalone` and
+  `nextUserJourneyNumber`) is carried by `choicesOf` and re-resolved by `assemblePlan` on every
+  assembly (`plan/buildJourneys.ts`): a step whose operation is missing makes the journey
+  incomplete (not rendered), a vanished target marks a binding `target-missing` (blocks
+  `POST /script`), and an operation in a user journey loses its single-step journey. One
+  `PUT /plan { userJourneys }` carries the full list; `plan/userJourneys.ts` validates it as a
+  whole and assigns ids from stored sequence numbers (`identifiers.ts`), never randomly.
+- **One substitution path.** A binding becomes a `ConsumedValue` (`plan/stepRequest.ts`) with the
+  key `apipilot_c_<step>_<capture>`, written as `{{key}}` exactly where a workflow variable would
+  be, so the request builder, preview, environment-value accounting and order check are shared.
+  `stepRequestFor` reads consumes and captures from the step itself for every journey kind.
+- **One runtime.** The fixed k6 runtime (`k6/renderScript.ts`) attempts captures only on an
+  expected status, accepts scalars only, reads body paths as stored segments or headers
+  case-insensitively, and counts outcomes in `apipilot_capture`; captures and bindings are data in
+  `JOURNEYS`, never code. `report/aggregate.ts` and `findings.ts` (ruleset 2) read the counter and
+  the cut-short `capture` tag.
+- **Pure helpers.** `plan/capturePath.ts` (the closed field-path grammar), `responseFields.ts`
+  (documented fields for the picker, `GET /plan/response-fields`) and
+  `convertWorkflowJourney.ts` (edit, revert and reset of proposed workflow journeys).
+- **Frontend.** `components/performance/UserJourneysPanel.tsx` with `CaptureEditor`,
+  `BindingSourceControl` and `AddStepDialog`; edits are composed by
+  `userJourneysViewModel.ts` and sent through the shared plan screen's `apply`.
+
 ### Run k6 Script (AP-034)
 
 `specs/034-run-user-k6-script` runs a k6 script the engineer supplies, under constitution v2.6.0's

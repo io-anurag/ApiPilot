@@ -554,6 +554,58 @@ the edited body itself is not recorded. It never contains a credential, token, r
 response body, or a resolved URL, so the request and response blocks show each step's template
 and what was measured, not the content that was sent or received.
 
+### 3.12 Your own journeys and captured values
+
+On both performance paths (this stage and the quick performance test of section 5) you can
+compose your own journeys, for example so that a `PUT` or `DELETE` runs after the `POST` that
+creates the record, and pass the id the `POST` returned to them. ApiPilot never builds a journey
+for you: every journey, step, capture and binding is one you add.
+
+**Composing a journey.** Under **Your journeys**, choose **New journey**, name it and pick its
+first step from the plan's operations. **+ Add step** adds more, in the order you want; the same
+operation can be added more than once, and each occurrence is its own step with its own expected
+status and edits. A journey holds up to 20 steps. When an operation joins a journey it no longer
+runs as its own single-step journey; tick **Also run … on its own** to keep that too. Steps move
+with ↑ and ↓; **Delete** returns the journey's operations to single-step journeys.
+
+**Capturing a value.** Open **Capture or use a value** on a step and add a capture: a name
+(letters, digits and underscores, not starting with a digit) and either a response body field
+(such as `id` or `data.items[0].id`) or a response header (such as `Location`). The fields the
+specification documents for the operation's success responses are offered, and a field whose
+name matches a later step's parameter is marked. A path you type that the specification does not
+document is accepted with "Not documented in the specification". Wildcards, filters and code are
+refused. A step holds up to 10 captures.
+
+**Using it later.** On a later step, choose a target (a path, query or header parameter the step
+sends, or a field of its body) and **Value captured by an earlier step**. Only captures of
+earlier steps of the same journey are offered. The value is no longer one the environment must
+provide, and the request preview shows the capture's name and step instead of a value. Binding a
+parameter that has an edited value asks first and drops that edit. A move or removal that would
+leave a step without the capture it uses is refused, naming the capture.
+
+**At run time.** Each virtual user captures its own value on each iteration and uses it only in
+the same journey run; captured values are never stored, shown, logged or reported. A capture is
+attempted only when the step received one of its expected statuses, and succeeds only for a
+string, number or boolean. A missing field, an empty or `null` value, an object, an array, or a
+response that is not JSON is a failed capture: the rest of that journey is not sent in that
+iteration and the journey is counted as cut short, naming the capture. The same rule applies to
+the workflow variables of proposed journeys. A header capture matches the name regardless of
+case and takes the value exactly as k6 reports it, even when a header is repeated; ApiPilot never
+splits it, and taking part of a value (such as the id at the end of a URL) is not supported.
+
+**What can change it.** Removing an operation that a journey uses keeps the journey but marks it
+**Incomplete**: it is not run, the plan notes it, and the run trigger names it. A rebuild that
+removes a bound target marks the binding **Target no longer exists**, which blocks the script
+until you remove or re-target it. On the guided path, **Edit journey** turns a proposed workflow
+journey into one you can change, marked **Based on workflow**; **Revert to proposed journey**
+brings the proposed one back, keeping the expected statuses and edits of the workflow's steps and
+discarding those of steps you added. **Reset plan** keeps your own journeys and reverts edited
+workflow journeys, after asking. **Restore** of a past run brings back its journeys too.
+
+**The report** shows, for each step, where each bound value came from (capture, step, response
+field or header), how many times each capture succeeded and failed, and whether the step is in a
+proposed journey or one defined by you. The write summary counts every step that sends a write.
+
 ## 4. Importing and running your own Postman collection
 
 Choose **Import & Run Collection** on the start screen (or its tab, once the tab bar is
@@ -778,9 +830,10 @@ no AI, and opens the performance plan. Uploading the same file again gives the s
 the same edits give a byte-identical script.
 
 **What the plan contains.** Every operation that has a positive scenario is its own single-step
-journey, using the operation's full happy-path request. Requests are not chained: a path
-parameter such as `orderId` is a value you supply in the environment, and the guided workflow is
-the way to chain requests. Operations with no positive scenario are listed as left out, with
+journey, using the operation's full happy-path request. Requests are not chained unless you build
+a journey: a path parameter such as `orderId` is a value you supply in the environment. To run
+operations in order and pass a value from one response to later requests, use **New journey**
+(section 3.12). Operations with no positive scenario are listed as left out, with
 the reason. When the specification secures its operations with a token from a login operation
 (for example `POST /auth/login`), that login is placed in the removed list as "used to acquire
 the run's credentials": the token is still obtained once for the run, but the login itself is

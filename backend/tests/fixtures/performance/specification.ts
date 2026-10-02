@@ -65,3 +65,17 @@ export async function loadParameterEditsApiModel(): Promise<ApiModel> {
   const { document, issues } = await validateSpec(yaml.load(readFileSync(parameterEditsFixturePath, "utf-8")));
   return buildApiModel(document, issues);
 }
+
+/** The AP-035 user-journeys fixture (`tests/fixtures/openapi/user-journeys.yaml`, specs/035 tasks T001). */
+export const USER_JOURNEYS_SPECIFICATION_FILENAME = "user-journeys.yaml";
+
+const userJourneysFixturePath = path.join(__dirname, "..", "openapi", USER_JOURNEYS_SPECIFICATION_FILENAME);
+
+export function userJourneysSpecificationBuffer(): Buffer {
+  return readFileSync(userJourneysFixturePath);
+}
+
+export async function loadUserJourneysApiModel(): Promise<ApiModel> {
+  const { document, issues } = await validateSpec(yaml.load(readFileSync(userJourneysFixturePath, "utf-8")));
+  return buildApiModel(document, issues);
+}

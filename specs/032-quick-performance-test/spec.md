@@ -322,7 +322,9 @@ with its method badge, and that bulk removal works on the journeys.
   (lowest scenario identifier among rule-generated scenarios) and record the choice. An operation
   with no positive scenario MUST be left out and listed with its method, path and reason.
 - **FR-006**: Every operation in the quick plan MUST be its own single-step journey. The quick path
-  MUST NOT infer or apply dependency chaining between operations.
+  MUST NOT infer or apply dependency chaining between operations. *(Amended 2026-10-02 by AP-035
+  FR-030, specs/035-user-defined-journeys: every operation starts as its own single-step journey;
+  the engineer MAY compose journeys and bind captured values. The quick path still infers nothing.)*
 - **FR-007**: The same specification and the same plan edits MUST produce the same plan, and the
   same script and environment template byte for byte (constitution XVI).
 
@@ -340,6 +342,9 @@ with its method badge, and that bulk removal works on the journeys.
 - **FR-010**: Each write step MUST carry a text marker naming its effect ("Creates" for POST,
   "Replaces" for PUT, "Updates" for PATCH, "Deletes" for DELETE) in addition to its method badge.
   The marker MUST NOT rely on colour alone.
+  *(FR-009 and FR-011 amended 2026-10-02 by AP-035 FR-023: the counts are per step that sends a
+  write operation, so an operation in two journeys counts twice, and each is named with its
+  journey.)*
 - **FR-011**: The write-operation summary MUST also be shown next to the run trigger: the count per
   method and each write operation by method and path, readable without expanding a section,
   together with the target environment's name, tier and base URL that AP-029 already shows there.

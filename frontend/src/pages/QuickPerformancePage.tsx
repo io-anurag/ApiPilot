@@ -304,9 +304,10 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
             }
             scopeNote={() => (
               <p className="text-sm">
-                Every analyzed operation is in scope, each as its own single-step journey.
-                Requests are not chained: a value such as a path parameter comes from the
-                target environment. To chain requests, use the guided workflow.
+                Every analyzed operation is in scope, and starts as its own single-step journey.
+                Requests are not chained unless you build a journey: a value such as a path
+                parameter comes from the target environment. To run operations in an order and
+                pass a value from one response to later requests, choose New journey.
               </p>
             )}
             emptyState={

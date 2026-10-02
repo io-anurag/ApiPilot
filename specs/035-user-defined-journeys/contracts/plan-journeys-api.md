@@ -53,6 +53,18 @@ Field rules:
     derives them, or keeps them from the stored definition.
   - A binding's `captureStepId` may name a new step only by its position. That form is
     `"captureStepIndex": 0` in place of `captureStepId`, and is resolved to the assigned id.
+- **Restore (research R12).** When the same request also sends `nextUserJourneyNumber` (an
+  integer of at least 1), the definitions of a past run are accepted with their own ids: a journey
+  id must match `^j_[0-9a-f]{16}$` and a step id `^s_[0-9a-f]{16}$`, neither used by a proposed or
+  single-step journey of the plan, and a restored journey's `nextStepNumber` is kept. The plan's
+  sequence numbers become the larger of the plan's and the run's, so no new id repeats a restored
+  one. Without `nextUserJourneyNumber`, an id the plan does not hold is refused.
+- **Kept bindings.** A binding sent back unchanged (same step, target, capture) is not checked
+  against its target again: if a rebuild removed the target, the plan marks it
+  `target-missing` (FR-016) instead of refusing every other edit.
+- **Documented path parameters.** A path target is documented when the operation declares it or
+  when its path template has `{name}`: the analysis reads operation-level parameters only, so one
+  declared on the path item is found through the template.
 - **`alsoStandalone`** replaces the list. Each key must be an operation in a user journey.
 - **`editProposedJourney`** names a proposed workflow journey, on the guided path only. It
   converts that journey into a `based-on-workflow` definition (R14).

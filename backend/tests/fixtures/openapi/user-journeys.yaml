@@ -1,0 +1,149 @@
+# AP-035 User-Defined Journeys fixture (specs/035-user-defined-journeys, tasks T001; quickstart
+# prerequisites). Loaded through the quick path, it exercises:
+# - POST /api/v1/customers         creates a customer and returns its `id` in the body and a
+#                                  `Location` header: the producer of a captured value.
+# - GET/PUT/DELETE /customers/{id} consume `{id}`; on their own each reads it from the environment
+#                                  (as `customer_id`), and under load they fail once it is gone.
+# - POST /api/v1/orders            takes `customerId` in its body (a body binding target).
+# - GET /api/v1/orders/{id}        takes `customer` as a query parameter (a query binding target).
+# No security scheme and no oneOf, anyOf or allOf. Statuses match backend/scripts/perfStubTarget.ts
+# in customers mode.
+openapi: 3.0.3
+info:
+  title: User Journeys Fixture
+  version: "1.0"
+servers:
+  - url: https://example.invalid
+paths:
+  /api/v1/customers:
+    post:
+      operationId: createCustomer
+      summary: Create a customer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+  /api/v1/customers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getCustomer
+      summary: Read a customer.
+      responses:
+        "200":
+          description: Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+        "404":
+          description: Not found
+    put:
+      operationId: replaceCustomer
+      summary: Replace a customer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Replaced
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCustomer
+      summary: Delete a customer.
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+  /api/v1/orders:
+    post:
+      operationId: createOrder
+      summary: Create an order for a customer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId, items]
+              properties:
+                customerId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [sku]
+                    properties:
+                      sku:
+                        type: string
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: string
+  /api/v1/orders/{id}:
+    get:
+      operationId: getOrder
+      summary: Read an order.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: customer
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Found

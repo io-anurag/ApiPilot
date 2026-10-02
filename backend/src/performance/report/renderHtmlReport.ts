@@ -1,4 +1,4 @@
-import type { PerformancePlan, PerformanceResult, PerformanceRun, PerformanceStep, RequestPhase, StepResult, TimelinePoint } from "@apipilot/shared-domain";
+import { runnableJourneys, type PerformancePlan, type PerformanceResult, type PerformanceRun, type PerformanceStep, type RequestPhase, type StepResult, type TimelinePoint } from "@apipilot/shared-domain";
 
 /**
  * The self-contained performance report (FR-035 to FR-040; specs/031-k6-performance-testing
@@ -107,12 +107,15 @@ interface StepRow {
   step: PerformanceStep;
   where: string;
   measured: StepResult | undefined;
+  /** AP-035 FR-029: the journey's origin, for the step's provenance. */
+  journey: PerformancePlan["journeys"][number];
 }
 
 function stepRowsOf(plan: PerformancePlan, result: PerformanceResult | undefined): StepRow[] {
   const byId = new Map((result?.steps ?? []).map((step) => [step.stepId, step]));
-  return plan.journeys.flatMap((journey, journeyIndex) =>
-    journey.steps.map((step, stepIndex) => ({ step, where: `J${journeyIndex + 1} · step ${stepIndex + 1}`, measured: byId.get(step.id) })),
+  // AP-035 FR-025: an incomplete user journey was not run, so it has no step in the report.
+  return runnableJourneys(plan.journeys).flatMap((journey, journeyIndex) =>
+    journey.steps.map((step, stepIndex) => ({ step, journey, where: `J${journeyIndex + 1} · step ${stepIndex + 1}`, measured: byId.get(step.id) })),
   );
 }
 
@@ -399,10 +402,23 @@ function stepTableRows(rows: StepRow[]): string {
 
 // ── Request and response by step (provenance) ────────────────────────────────────────────────
 
+/** AP-035 FR-029: where a capture's value comes from, by field path or header name. Never the value. */
+function captureSourceText(source: NonNullable<PerformanceStep["captures"]>[number]["source"]): string {
+  return source.kind === "body" ? `response field ${source.path}` : `response header ${source.name}`;
+}
+
 function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceStep>): string {
-  const sends = step.variableBindings
-    .filter((binding) => binding.role !== "produces")
-    .map((binding) => `${binding.variable} → ${binding.location} ${binding.field}, from ${stepsById.get(binding.producerStepId ?? "")?.operationKey ?? "an earlier step"}`);
+  const sends = step.bindings
+    ? step.bindings.map((binding) => {
+        const producer = stepsById.get(binding.captureStepId);
+        const capture = producer?.captures?.find((candidate) => candidate.name === binding.captureName);
+        const target = binding.target.kind === "body" ? `body ${binding.target.fieldPath}` : `${binding.target.kind} ${binding.target.name}`;
+        const missing = binding.state === "target-missing" ? " (target no longer exists)" : "";
+        return `${target} ← captured ${binding.captureName}, from ${producer?.operationKey ?? "an earlier step"}${capture ? ` (${captureSourceText(capture.source)})` : ""}${missing}`;
+      })
+    : step.variableBindings
+        .filter((binding) => binding.role !== "produces")
+        .map((binding) => `${binding.variable} → ${binding.location} ${binding.field}, from ${stepsById.get(binding.producerStepId ?? "")?.operationKey ?? "an earlier step"}`);
   const body = step.bodyEdited ? `${BODY_EDITED_MARKER} · its content is not recorded` : "Not recorded";
   // AP-033 FR-022: which parameters were sent is in the plan's request preview; their values are never recorded.
   const parameters = step.parametersEdited ? `${PARAMETERS_EDITED_MARKER} · their values are not recorded` : "As generated · values are not recorded";
@@ -429,7 +445,14 @@ export function phaseTable(measured: StepResult): string {
 
 function responseBlock(step: PerformanceStep, measured: StepResult | undefined): string {
   const expected = step.expectedStatuses.map((status) => `${status.code} (${status.source === "specification" ? "from specification" : "set by you"})`).join(", ");
-  const extracts = step.variableBindings.filter((binding) => binding.role === "produces").map((binding) => `${binding.variable} ← response field ${binding.field}`);
+  const counts = new Map((measured?.captures ?? []).map((entry) => [entry.name, entry]));
+  const countText = (name: string) => {
+    const entry = counts.get(name);
+    return entry ? ` (captured × ${formatCount(entry.succeeded)}, failed × ${formatCount(entry.failed)})` : "";
+  };
+  const extracts = step.captures
+    ? step.captures.map((capture) => `${capture.name} ← ${captureSourceText(capture.source)}${countText(capture.name)}`)
+    : step.variableBindings.filter((binding) => binding.role === "produces").map((binding) => `${binding.variable} ← response field ${binding.field}${countText(binding.variable)}`);
   const extractionFailed = measured?.errorsByCategory.find((entry) => entry.category === "extraction-failed")?.count ?? 0;
   const head = ['<section class="rr-box" aria-label="Response">', "<h3>Response</h3>", "<dl>", `<dt>Expected status</dt><dd>${escapeHtml(expected || "None")}</dd>`];
   const extractText = extracts.length === 0 ? "Nothing" : `${extracts.join("; ")}${extractionFailed > 0 ? ` · extraction failed × ${formatCount(extractionFailed)}` : ""}`;
@@ -474,10 +497,17 @@ function stepBlocks(rows: StepRow[]): string {
   const anyFailing = rows.some(failing);
   return rows
     .map((row, index) => {
-      const { step, measured } = row;
-      const why = step.dependency
-        ? `${step.produces.length > 0 ? `Produces ${step.produces.join(", ")}` : `Consumes ${step.consumes.join(", ")}`} · relationships ${step.dependency.relationshipIds.map((id) => id.slice(0, 12)).join(", ")} (${step.dependency.confidence})`
-        : "A single operation in scope";
+      const { step, measured, journey } = row;
+      const relationships = step.dependency
+        ? ` · relationships ${step.dependency.relationshipIds.map((id) => id.slice(0, 12)).join(", ")} (${step.dependency.confidence})`
+        : "";
+      // AP-035 FR-029 (AP-029 FR-039): whether the step is in a proposed or a user-defined journey.
+      const why =
+        journey.source.kind === "user"
+          ? `${journey.source.basedOnWorkflowId ? `In a journey based on workflow ${journey.source.basedOnWorkflowId.slice(0, 12)}, edited by you` : "In a journey defined by you"}: ${journey.source.name}${relationships}`
+          : step.dependency
+            ? `${step.produces.length > 0 ? `Produces ${step.produces.join(", ")}` : `Consumes ${step.consumes.join(", ")}`}${relationships}`
+            : "A single operation in scope";
       const received = measured?.statusesReceived?.map((entry) => `${statusText(entry.status)} × ${formatCount(entry.count)}`).join(", ");
       const glance = measured && measured.requests > 0 ? `${received ? `${received} · ` : ""}p95 ${ms(measured.latencyMs?.p95)} · ${pct(measured.errorRatePercent)} failed` : "not sent";
       const open = anyFailing ? failing(row) : index === 0;

@@ -437,8 +437,9 @@ ApiPilot's inference with the engineer's choices, which XIII and XV require to s
 - Incomplete journeys are excluded, because they are not run.
 - The function stays in `shared-domain` and is pure.
 - **AP-032 FR-009 and FR-011 amendment.** "count each write operation" now means each step that
-  sends one. This only differs from today when an operation occurs in more than one step, which
-  was impossible before this feature.
+  sends one. This differs from before only when an operation occurs in more than one step. On
+  the guided path that was already possible when two approved workflow journeys share an
+  operation, so such a plan's count rises too (corrected during implementation, 2026-10-02).
 
 **Rationale**: FR-023 asks for it, and the write summary is the AP-032 basis for the constitution
 exception ("every write operation it will send listed"). Counting sends rather than operations is

@@ -14,6 +14,9 @@ import { createAggregate } from "../../src/performance/report/aggregate";
 import { performanceContext } from "../fixtures/performance/context";
 import { TargetServer } from "../fixtures/execution/targetServer";
 import { QUICK_BASE, quickSteps, uploadQuick } from "../fixtures/performance/quickAgent";
+import { customersTarget } from "../fixtures/execution/customersTarget";
+import { SEEDED_CAPTURED_ID } from "../fixtures/performance/builders";
+import { lifecyclePlan } from "../fixtures/performance/userJourneyPlans";
 
 /**
  * Opt-in real-k6 check (specs/031-k6-performance-testing research D24, quickstart scenario 9,
@@ -328,5 +331,74 @@ describe.runIf(REAL_K6_ENABLED)("real k6", () => {
     const run = await settleUserScriptRun(agent, started.body.run.id);
     expect(run.status).toBe("completed");
     expect(run.result.totals.requests).toBeGreaterThan(0);
+  }, 120_000);
+});
+
+/**
+ * AP-035 opt-in real-k6 check (specs/035-user-defined-journeys quickstart 8; SC-002, SC-003, SC-005;
+ * research R8; tasks T056). A create, replace and delete journey against a stateful customers target.
+ */
+describe.runIf(REAL_K6_ENABLED)("real k6 with a user-defined journey", () => {
+  let workDir = "";
+  beforeAll(() => {
+    workDir = mkdtempSync(path.join(tmpdir(), "apipilot-k6-journeys-"));
+  });
+  afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+
+  async function run(options: { dropIdEvery?: number }) {
+    const server = new TargetServer();
+    const customers = customersTarget({ ...options, idPrefix: SEEDED_CAPTURED_ID });
+    server.handle(customers.handler);
+    const url = await server.start();
+    try {
+      const { plan, context } = await lifecyclePlan();
+      const timed = applyPlanUpdate(plan, { loadProfile: { kind: "load", stages: [{ durationMs: 10_000, targetVirtualUsers: 2 }] } }, context);
+      const rendered = renderScript(timed, context);
+      const probe = await createK6Probe()({ recheck: true });
+      const runDir = mkdtempSync(path.join(workDir, "run-"));
+      const scriptPath = path.join(runDir, "script.js");
+      writeFileSync(scriptPath, rendered.script);
+      const lines: string[] = [];
+      const handle = createK6Runner().start({
+        runDir,
+        scriptPath,
+        metricsPath: path.join(runDir, "metrics.ndjson"),
+        binaryPath: probe.binaryPath!,
+        env: buildChildEnv(process.env, { [`APIPILOT_V_${rendered.valueIndex.baseUrl}`]: url }),
+        onLine: (line) => lines.push(line),
+        onStderrLine: () => undefined,
+      });
+      expect((await handle.done).exitCode).toBe(0);
+      const aggregate = createAggregate(timed, 10_000, Date.now() - 15_000);
+      for (const line of lines) {
+        const parsed = parseMetricsLine(line);
+        if (parsed.kind === "point") aggregate.ingest(parsed.point);
+      }
+      return { customers, result: aggregate.toResult(Date.now()), script: rendered.script, lines };
+    } finally {
+      await server.stop();
+    }
+  }
+
+  it("sends each virtual user's own id to the bound steps: no request is answered 404 (SC-002)", async () => {
+    const { customers, result, script, lines } = await run({});
+    expect(customers.counts.creates).toBeGreaterThan(0);
+    expect(customers.counts.notFound).toBe(0);
+    expect(customers.counts.replaces).toBe(customers.counts.creates);
+    expect(customers.counts.deletes).toBe(customers.counts.creates);
+    const createStep = result.steps.find((step) => step.operationKey === "POST /api/v1/customers")!;
+    expect(createStep.captures).toEqual([{ name: "customer_id", succeeded: customers.counts.creates, failed: 0 }]);
+    // SC-005: the ids the target issued appear in no script and no metric.
+    expect(script).not.toContain(SEEDED_CAPTURED_ID);
+    expect(lines.join("\n")).not.toContain(SEEDED_CAPTURED_ID);
+  }, 120_000);
+
+  it("sends no bound step after a dropped id, and records the journey as cut short by the capture (SC-003)", async () => {
+    const { customers, result } = await run({ dropIdEvery: 3 });
+    const dropped = Math.floor(customers.counts.creates / 3);
+    expect(customers.counts.notFound).toBe(0);
+    expect(customers.counts.replaces).toBe(customers.counts.creates - dropped);
+    const journey = result.journeys.find((candidate) => candidate.runsCutShort > 0)!;
+    expect(journey.cutShortByCapture).toEqual({ customer_id: dropped });
   }, 120_000);
 });

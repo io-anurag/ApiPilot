@@ -99,11 +99,15 @@ const JOURNEYS = [
           "clientSecret"
         ],
         "dependsOn": [],
-        "produces": [
+        "captures": [
           {
             "key": "08990a6a9ecbc73665c27e863f6d395ad98167cf6353a62af54f5a170662387c_orderId",
-            "variable": "orderId",
-            "field": "orderId"
+            "name": "orderId",
+            "source": {
+              "body": [
+                "orderId"
+              ]
+            }
           }
         ],
         "tokenScheme": "OrdersAuth"
@@ -131,7 +135,7 @@ const JOURNEYS = [
         "dependsOn": [
           "s_f1faedcc7af8a36d"
         ],
-        "produces": [],
+        "captures": [],
         "tokenScheme": "OrdersAuth"
       }
     ]
@@ -160,7 +164,7 @@ const JOURNEYS = [
           "clientSecret"
         ],
         "dependsOn": [],
-        "produces": [],
+        "captures": [],
         "tokenScheme": "OrdersAuth"
       }
     ]
@@ -190,7 +194,7 @@ const JOURNEYS = [
           "warehouseId"
         ],
         "dependsOn": [],
-        "produces": [],
+        "captures": [],
         "tokenScheme": "OrdersAuth"
       }
     ]
@@ -201,6 +205,7 @@ const missingData = new Counter("apipilot_missing_data");
 const notAttempted = new Counter("apipilot_not_attempted");
 const cutShort = new Counter("apipilot_cut_short");
 const tokenRefresh = new Counter("apipilot_token_refresh");
+const captureOutcome = new Counter("apipilot_capture");
 const REFERENCE = /\{\{([^{}]+)\}\}/g;
 const SOURCE_BY_SCHEME = {};
 for (const source of TOKEN_SOURCES) SOURCE_BY_SCHEME[source.scheme] = source;
@@ -277,6 +282,47 @@ function jsonField(response, path) {
     if (!found) return undefined;
   }
   return value;
+}
+
+function bodyValue(response, path) {
+  let value;
+  try {
+    value = response.json();
+  } catch (error) {
+    return undefined;
+  }
+  for (const part of path) {
+    if (value === null || typeof value !== "object") return undefined;
+    if (typeof part === "number" && !Array.isArray(value)) return undefined;
+    const name = String(part);
+    let found = false;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === name) {
+        value = child;
+        found = true;
+        break;
+      }
+    }
+    if (!found) return undefined;
+  }
+  return value;
+}
+
+function headerValue(response, name) {
+  const headers = response.headers;
+  if (headers === null || typeof headers !== "object") return undefined;
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name) return value;
+  }
+  return undefined;
+}
+
+function captured(response, source) {
+  const value = source.header !== undefined ? headerValue(response, source.header) : bodyValue(response, source.body);
+  if (typeof value === "string") return value === "" ? undefined : value;
+  if (typeof value === "number") return isFinite(value) ? String(value) : undefined;
+  if (typeof value === "boolean") return String(value);
+  return undefined;
 }
 
 function statusOk(status, expected) {
@@ -370,20 +416,22 @@ function runJourney(journey, run) {
     const response = http.request(request.method, request.url, request.body, {
       headers: request.headers,
       tags: tags,
-      responseType: step.produces.length > 0 ? "text" : "none",
+      responseType: step.captures.length > 0 ? "text" : "none",
     });
     run.sent += 1;
+    const expectedStatus = statusOk(response.status, step.expected);
     check(response, { status: function (r) { return statusOk(r.status, step.expected); } }, tags);
-    let extracted = true;
-    for (const produce of step.produces) {
-      const value = jsonField(response, produce.field);
-      const ok = value !== undefined && value !== null && String(value) !== "";
+    let failedCapture = null;
+    for (const capture of step.captures) {
+      const value = expectedStatus ? captured(response, capture.source) : undefined;
+      const ok = value !== undefined;
       check(response, { extraction: function () { return ok; } }, tags);
-      if (ok) scope.vars.set(produce.key, String(value));
-      else extracted = false;
+      captureOutcome.add(1, { step: step.id, journey: journey.id, capture: capture.name, outcome: ok ? "ok" : "failed" });
+      if (ok) scope.vars.set(capture.key, value);
+      else if (failedCapture === null) failedCapture = capture.name;
     }
-    if (!extracted) {
-      cutShort.add(1, { step: step.id, journey: journey.id });
+    if (failedCapture !== null) {
+      cutShort.add(1, { step: step.id, journey: journey.id, capture: failedCapture });
       for (const rest of journey.steps.slice(index + 1)) notAttempted.add(1, { step: rest.id, journey: journey.id, reason: "cut-short" });
       return;
     }

@@ -19,6 +19,23 @@ export function stepIdFor(journeyId: string, operationKey: string): string {
   return `s_${shortDigest("apipilot/performance/step", `${journeyId} ${operationKey}`)}`;
 }
 
+/**
+ * AP-035 research R2: a user-defined journey's id, from a per-plan sequence number the server
+ * assigns on creation and keeps in the plan, so it never changes on rename or reorder.
+ */
+export function userJourneyIdFor(sequence: number): string {
+  return `j_${shortDigest("apipilot/performance/journey", `user:${sequence}`)}`;
+}
+
+/**
+ * AP-035 research R2: a user journey step's id, from a per-journey sequence number assigned when
+ * the step is added, so the same operation can appear more than once and each occurrence keeps its
+ * own settings.
+ */
+export function userJourneyStepIdFor(journeyId: string, sequence: number): string {
+  return `s_${shortDigest("apipilot/performance/step", `${journeyId}:${sequence}`)}`;
+}
+
 export function thresholdIdFor(content: string): string {
   return `t_${shortDigest("apipilot/performance/threshold", content)}`;
 }

@@ -1,8 +1,7 @@
-import type { PerformancePlan } from "@apipilot/shared-domain";
-import { workflowVariableName } from "../../postman/workflowRendering";
+import { runnableJourneys, type PerformancePlan } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
 import { sha256Hex } from "../plan/identifiers";
-import { stepRequestFor, uniqueTokensOf } from "../plan/planStepRequest";
+import { stepRequestFor, uniqueTokensOf, type StepCapture } from "../plan/planStepRequest";
 import { planAuth, type PerformanceContext, type RequestTemplate, type TokenSource } from "../plan/stepRequest";
 
 /**
@@ -35,7 +34,8 @@ interface RenderedStep {
   expected: string[];
   needs: string[];
   dependsOn: string[];
-  produces: { key: string; variable: string; field: string }[];
+  /** AP-035 research R7: what the step captures, as data only (FR-018). */
+  captures: StepCapture[];
   tokenScheme: string | null;
 }
 
@@ -67,10 +67,11 @@ export function renderScript(plan: PerformancePlan, context: PerformanceContext)
   const unique = uniqueTokensOf(plan, context);
 
   const usedSchemes = new Set<string>();
-  const journeys: RenderedJourney[] = plan.journeys.map((journey) => ({
+  // AP-035 FR-025: an incomplete user-defined journey is not run.
+  const journeys: RenderedJourney[] = runnableJourneys(plan.journeys).map((journey) => ({
     id: journey.id,
       steps: journey.steps.map((step): RenderedStep => {
-        const { built, produces, workflow } = stepRequestFor(plan, context, auth, step.id, unique);
+        const { built, captures } = stepRequestFor(plan, context, auth, step.id, unique);
         const tokenScheme =
           built.schemeName && auth.tokenSources.has(built.schemeName) && (built.authKind === "oauth2-client-credentials" || built.authKind === "chained-login")
             ? built.schemeName
@@ -87,11 +88,7 @@ export function renderScript(plan: PerformancePlan, context: PerformanceContext)
               step.variableBindings.flatMap((binding) => (binding.role === "consumes" && binding.producerStepId ? [binding.producerStepId] : [])),
             ),
           ],
-          produces: produces.map((variable) => ({
-            key: workflowVariableName(workflow!.id, variable.name),
-            variable: variable.name,
-            field: variable.producerField,
-          })),
+          captures,
           tokenScheme,
         };
       }),
@@ -176,11 +173,19 @@ const BASIC_UNSUPPORTED = "    // Basic auth is not used by this plan.";
  * tokens over as an array (k6 passes setup data to virtual users as JSON), and a response field is
  * found by walking the body's own fields, so an inherited name such as `toString` never counts as
  * extracted.
+ *
+ * AP-035 FR-010, FR-033 (specs/035 research R7, R8, R13): one capture rule for every step, workflow
+ * variables included. A step's captures are attempted only when it received an expected status, and
+ * succeed only for a string, a finite number or a boolean, sent as its text. A body capture walks
+ * stored field names and array positions; a header capture matches the name regardless of case and
+ * takes the value exactly as k6 reports it, never split. Each outcome is counted by capture name in
+ * `apipilot_capture`; the first failed capture is named on `apipilot_cut_short`. No value is tagged.
  */
 const RUNTIME = String.raw`const missingData = new Counter("apipilot_missing_data");
 const notAttempted = new Counter("apipilot_not_attempted");
 const cutShort = new Counter("apipilot_cut_short");
 const tokenRefresh = new Counter("apipilot_token_refresh");
+const captureOutcome = new Counter("apipilot_capture");
 const REFERENCE = /\{\{([^{}]+)\}\}/g;
 const SOURCE_BY_SCHEME = {};
 for (const source of TOKEN_SOURCES) SOURCE_BY_SCHEME[source.scheme] = source;
@@ -257,6 +262,47 @@ function jsonField(response, path) {
     if (!found) return undefined;
   }
   return value;
+}
+
+function bodyValue(response, path) {
+  let value;
+  try {
+    value = response.json();
+  } catch (error) {
+    return undefined;
+  }
+  for (const part of path) {
+    if (value === null || typeof value !== "object") return undefined;
+    if (typeof part === "number" && !Array.isArray(value)) return undefined;
+    const name = String(part);
+    let found = false;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === name) {
+        value = child;
+        found = true;
+        break;
+      }
+    }
+    if (!found) return undefined;
+  }
+  return value;
+}
+
+function headerValue(response, name) {
+  const headers = response.headers;
+  if (headers === null || typeof headers !== "object") return undefined;
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name) return value;
+  }
+  return undefined;
+}
+
+function captured(response, source) {
+  const value = source.header !== undefined ? headerValue(response, source.header) : bodyValue(response, source.body);
+  if (typeof value === "string") return value === "" ? undefined : value;
+  if (typeof value === "number") return isFinite(value) ? String(value) : undefined;
+  if (typeof value === "boolean") return String(value);
+  return undefined;
 }
 
 function statusOk(status, expected) {
@@ -350,20 +396,22 @@ function runJourney(journey, run) {
     const response = http.request(request.method, request.url, request.body, {
       headers: request.headers,
       tags: tags,
-      responseType: step.produces.length > 0 ? "text" : "none",
+      responseType: step.captures.length > 0 ? "text" : "none",
     });
     run.sent += 1;
+    const expectedStatus = statusOk(response.status, step.expected);
     check(response, { status: function (r) { return statusOk(r.status, step.expected); } }, tags);
-    let extracted = true;
-    for (const produce of step.produces) {
-      const value = jsonField(response, produce.field);
-      const ok = value !== undefined && value !== null && String(value) !== "";
+    let failedCapture = null;
+    for (const capture of step.captures) {
+      const value = expectedStatus ? captured(response, capture.source) : undefined;
+      const ok = value !== undefined;
       check(response, { extraction: function () { return ok; } }, tags);
-      if (ok) scope.vars.set(produce.key, String(value));
-      else extracted = false;
+      captureOutcome.add(1, { step: step.id, journey: journey.id, capture: capture.name, outcome: ok ? "ok" : "failed" });
+      if (ok) scope.vars.set(capture.key, value);
+      else if (failedCapture === null) failedCapture = capture.name;
     }
-    if (!extracted) {
-      cutShort.add(1, { step: step.id, journey: journey.id });
+    if (failedCapture !== null) {
+      cutShort.add(1, { step: step.id, journey: journey.id, capture: failedCapture });
       for (const rest of journey.steps.slice(index + 1)) notAttempted.add(1, { step: rest.id, journey: journey.id, reason: "cut-short" });
       return;
     }

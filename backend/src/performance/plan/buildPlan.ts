@@ -1,4 +1,12 @@
-import type { BodyEdit, ParameterEdit, PerformancePlan, PerformanceThreshold, TestGenerationWorkflow } from "@apipilot/shared-domain";
+import {
+  runnableJourneys,
+  type BodyEdit,
+  type ParameterEdit,
+  type PerformancePlan,
+  type PerformanceThreshold,
+  type TestGenerationWorkflow,
+  type UserJourneyDefinition,
+} from "@apipilot/shared-domain";
 import { createLogger } from "../../logger";
 import { compareCodeUnits } from "../../postman/ordering";
 import { bodyEditNoticesOf } from "./bodyEdits";
@@ -64,8 +72,17 @@ export function planFingerprint(
     | "bodyEditNotices"
     | "discardedBodyEdits"
     | "discardedParameterEdits"
+    | "bindingsNeedingAttention"
   >,
 ): string {
+  // AP-035 research R17: user journeys count only when there are any, so a plan without them keeps
+  // the fingerprint it had before AP-035.
+  const userJourneys = plan.userJourneys ?? [];
+  const alsoStandalone = plan.alsoStandalone ?? [];
+  const user =
+    userJourneys.length > 0 || alsoStandalone.length > 0
+      ? { userJourneys, alsoStandalone, nextUserJourneyNumber: plan.nextUserJourneyNumber ?? 1 }
+      : {};
   return sha256Hex(
     canonicalJson({
       source: plan.source,
@@ -80,6 +97,7 @@ export function planFingerprint(
       upstreamFingerprint: plan.upstreamFingerprint,
       ...(plan.bodyEdits.length > 0 ? { bodyEdits: plan.bodyEdits } : {}),
       ...(plan.parameterEdits.length > 0 ? { parameterEdits: plan.parameterEdits } : {}),
+      ...user,
     }),
   );
 }
@@ -89,7 +107,8 @@ export function finalizePlan(plan: Omit<PerformancePlan, "fingerprint" | "stepsN
   return {
     ...plan,
     fingerprint: planFingerprint(plan),
-    stepsNeedingExpectedStatus: stepsNeedingExpectedStatus(plan.journeys),
+    // AP-035 FR-025: an incomplete user journey is not run, so it needs no expected status.
+    stepsNeedingExpectedStatus: stepsNeedingExpectedStatus(runnableJourneys(plan.journeys)),
   };
 }
 
@@ -110,6 +129,12 @@ export interface PlanChoices {
   /** AP-033 FR-020 (amended 2026-09-30): kept and discarded as body edits are. */
   parameterEdits: ParameterEdit[];
   discardedParameterEdits?: string[];
+  /** AP-035 research R1: the engineer's journeys, re-resolved on every assembly. */
+  userJourneys: UserJourneyDefinition[];
+  /** AP-035 FR-003. */
+  alsoStandalone: string[];
+  /** AP-035 research R2. */
+  nextUserJourneyNumber: number;
 }
 
 /**
@@ -145,6 +170,9 @@ function defaultChoices(context: PerformanceContext): PlanChoices {
     expectedStatusCodes: new Map(),
     bodyEdits: [],
     parameterEdits: [],
+    userJourneys: [],
+    alsoStandalone: [],
+    nextUserJourneyNumber: 1,
   };
 }
 
@@ -159,6 +187,7 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
     new Set(excludedOperationKeys),
     new Map(choices.bodyEdits.map((edit) => [edit.stepId, edit])),
     new Map(choices.parameterEdits.map((edit) => [edit.stepId, edit])),
+    { userJourneys: choices.userJourneys, alsoStandalone: choices.alsoStandalone },
   );
   const operationsByKey = new Map(context.apiModel.operations.map((operation) => [operationKeyOf(operation), operation]));
 
@@ -173,6 +202,8 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   }));
   if (choices.stepOrder) {
     journeys = journeys.map((journey) => {
+      // AP-035: a user journey's step order is its definition's, which `PUT /plan` keeps current.
+      if (journey.source.kind === "user") return journey;
       const order = choices.stepOrder?.get(journey.id);
       if (!order || order.length !== journey.steps.length) return journey;
       const byId = new Map(journey.steps.map((step) => [step.id, step]));
@@ -188,6 +219,8 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
   }
 
   const stepIds = new Set(journeys.flatMap((journey) => journey.steps.map((step) => step.id)));
+  const runnable = runnableJourneys(journeys);
+  const userInPlan = built.userJourneys.length > 0 || choices.alsoStandalone.length > 0;
   const editedStepIds = new Set(journeys.flatMap((journey) => journey.steps.filter((step) => step.bodyEdited).map((step) => step.id)));
   const parameterEditedStepIds = new Set(journeys.flatMap((journey) => journey.steps.filter((step) => step.parametersEdited).map((step) => step.id)));
   const thresholds = choices.thresholds.filter((threshold) => threshold.scope.kind === "run" || stepIds.has(threshold.scope.stepId));
@@ -200,15 +233,26 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
     thinkTimeMs: choices.thinkTimeMs,
     loadProfile: choices.loadProfile,
     thresholds,
-    userSuppliedValues: listUserSuppliedValues(journeys, built.requests, auth),
+    userSuppliedValues: listUserSuppliedValues(runnable, built.requests, auth),
     uniqueValueFields,
     upstreamFingerprint: upstreamFingerprint(context),
     credentialProducerOperationKeys: credentialProducerOperationKeys(auth),
     bodyEdits: keptEdits(choices.bodyEdits, editedStepIds, new Set(excludedOperationKeys)),
-    bodyEditNotices: bodyEditNoticesOf(journeys, built.requests, uniqueValueFields, built.generatedUniqueFields),
+    bodyEditNotices: [...bodyEditNoticesOf(journeys, built.requests, uniqueValueFields, built.generatedUniqueFields), ...built.droppedBindingNotices].sort(
+      (a, b) => compareCodeUnits(a.stepId, b.stepId) || compareCodeUnits(a.name, b.name),
+    ),
     discardedBodyEdits: choices.discardedBodyEdits ?? [],
     parameterEdits: keptEdits(choices.parameterEdits, parameterEditedStepIds, new Set(excludedOperationKeys)),
     discardedParameterEdits: choices.discardedParameterEdits ?? [],
+    // AP-035: present only when the plan has user journeys, so other plans serialize as before.
+    ...(userInPlan
+      ? {
+          userJourneys: built.userJourneys,
+          alsoStandalone: [...new Set(choices.alsoStandalone)].sort(compareCodeUnits),
+          nextUserJourneyNumber: choices.nextUserJourneyNumber,
+          bindingsNeedingAttention: built.bindingsNeedingAttention,
+        }
+      : {}),
   });
   logger.info("performance_plan_built", {
     planSource: plan.source,
@@ -216,6 +260,7 @@ export function assemblePlan(context: PerformanceContext, choices: PlanChoices):
     stepCount: plan.journeys.reduce((total, journey) => total + journey.steps.length, 0),
     bodyEditCount: plan.bodyEdits.length,
     parameterEditCount: plan.parameterEdits.length,
+    userJourneyCount: plan.userJourneys?.length ?? 0,
   });
   return plan;
 }
@@ -225,12 +270,20 @@ export function buildPlan(context: PerformanceContext): PerformancePlan {
   return assemblePlan(context, defaultChoices(context));
 }
 
-/** Rebuilds from the current approvals, keeping the user's choices that still apply (D26). */
-export function rebuildPlan(previous: PerformancePlan, context: PerformanceContext, options: { keepOrder: boolean }): PerformancePlan {
+/**
+ * Rebuilds from the current approvals, keeping the user's choices that still apply (D26).
+ * `revertWorkflowJourneys` (AP-035 spec Edge Cases, "Resetting the plan"): a reset brings back the
+ * proposed journeys, so each edited workflow journey is reverted; the engineer's own are kept.
+ */
+export function rebuildPlan(
+  previous: PerformancePlan,
+  context: PerformanceContext,
+  options: { keepOrder: boolean; revertWorkflowJourneys?: (choices: PlanChoices) => void },
+): PerformancePlan {
   const expectedStatusCodes = new Map(
     previous.journeys.flatMap((journey) => journey.steps.map((step) => [step.id, step.expectedStatuses.map((status) => status.code)] as const)),
   );
-  const rebuilt = assemblePlan(context, {
+  const choices: PlanChoices = {
     excludedOperationKeys: previous.excludedOperationKeys,
     thinkTimeMs: previous.thinkTimeMs,
     loadProfile: previous.loadProfile,
@@ -238,13 +291,18 @@ export function rebuildPlan(previous: PerformancePlan, context: PerformanceConte
     expectedStatusCodes: new Map([...expectedStatusCodes].filter(([, codes]) => codes.length > 0)),
     bodyEdits: previous.bodyEdits,
     parameterEdits: previous.parameterEdits ?? [],
+    userJourneys: previous.userJourneys ?? [],
+    alsoStandalone: previous.alsoStandalone ?? [],
+    nextUserJourneyNumber: previous.nextUserJourneyNumber ?? 1,
     ...(options.keepOrder
       ? {
           journeyOrder: previous.journeys.map((journey) => journey.id),
           stepOrder: new Map(previous.journeys.map((journey) => [journey.id, journey.steps.map((step) => step.id)])),
         }
       : {}),
-  });
+  };
+  options.revertWorkflowJourneys?.(choices);
+  const rebuilt = assemblePlan(context, choices);
   // AP-033 FR-018: name the operations whose edit could not be kept, because their step is gone or
   // now uses a different scenario. Not fingerprinted, so it is set after assembly.
   const kept = new Set(rebuilt.bodyEdits.map((edit) => edit.stepId));
@@ -275,5 +333,9 @@ export function choicesOf(plan: PerformancePlan): PlanChoices {
     // A plan held from before the amendment has no parameter-edit fields.
     parameterEdits: plan.parameterEdits ?? [],
     discardedParameterEdits: plan.discardedParameterEdits ?? [],
+    // A plan held from before AP-035 has no user journeys.
+    userJourneys: plan.userJourneys ?? [],
+    alsoStandalone: plan.alsoStandalone ?? [],
+    nextUserJourneyNumber: plan.nextUserJourneyNumber ?? 1,
   };
 }

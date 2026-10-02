@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { customersTarget } from "../tests/fixtures/execution/customersTarget";
 import { TargetServer } from "../tests/fixtures/execution/targetServer";
 
 /**
@@ -9,6 +10,10 @@ import { TargetServer } from "../tests/fixtures/execution/targetServer";
  * covers `GET /orders/{orderId}`, `GET /warehouses/{warehouseId}` and `GET /status`.
  *
  * Run with `npm run perf:stub -w backend`. The port is `PERF_STUB_PORT`, or 4600.
+ *
+ * AP-035 (specs/035-user-defined-journeys tasks T004): `PERF_STUB_MODE=customers` adds the stateful
+ * customers API of `user-journeys.yaml` (new id per create, 404 for an unknown id), and
+ * `PERF_STUB_DROP_ID_EVERY=<n>` omits `id` from every n-th create. It prints counts, never ids.
  */
 const ORDER_ID = "00000000-0000-4000-8000-000000000001";
 const port = Number(process.env.PERF_STUB_PORT ?? "4600");
@@ -25,6 +30,11 @@ async function main(): Promise<void> {
   // path it documents (reads, PUT/PATCH/DELETE, logout) answers the unconfigured `200 {}`.
   server.configure("POST", "/auth/login", { status: 200, body: { accessToken: "stub-login-token" } });
   server.configure("POST", "/products", { status: 201, body: {} });
+  const customers =
+    process.env.PERF_STUB_MODE === "customers"
+      ? customersTarget(process.env.PERF_STUB_DROP_ID_EVERY ? { dropIdEvery: Number(process.env.PERF_STUB_DROP_ID_EVERY) } : {})
+      : undefined;
+  if (customers) server.handle(customers.handler);
   const baseUrl = await server.start(port);
   process.stdout.write(`Performance stub target listening on ${baseUrl}\n`);
 
@@ -42,6 +52,10 @@ async function main(): Promise<void> {
     }
     server.requests.length = 0;
     process.stdout.write(`${new Date().toISOString()} requests so far: ${total}\n`);
+    if (customers) {
+      const { creates, reads, replaces, deletes, notFound } = customers.counts;
+      process.stdout.write(`customers: created ${creates}, read ${reads}, replaced ${replaces}, deleted ${deletes}, 404 ${notFound}\n`);
+    }
     if (keyPrefixes.size > 0) process.stdout.write(`X-Api-Key values received (SHA-256 prefixes): ${[...keyPrefixes].sort().join(", ")}\n`);
   }, 5_000);
 

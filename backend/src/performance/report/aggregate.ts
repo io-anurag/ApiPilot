@@ -10,7 +10,7 @@ import type {
   StepTimelinePoint,
   TimelinePoint,
 } from "@apipilot/shared-domain";
-import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES } from "@apipilot/shared-domain";
+import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES, runnableJourneys } from "@apipilot/shared-domain";
 import { statusMatches } from "../plan/expectedStatuses";
 import type { MetricsPoint } from "../k6/metricsStream";
 import { LatencyHistogram } from "./histogram";
@@ -61,6 +61,8 @@ interface StepStats {
   histogram: LatencyHistogram;
   phases: Map<RequestPhase, LatencyHistogram>;
   buckets: Map<number, StepBucket>;
+  /** AP-035 FR-029: outcomes per capture name, in the step's capture order. */
+  captures: Map<string, { succeeded: number; failed: number }>;
 }
 
 interface JourneyStats {
@@ -70,6 +72,8 @@ interface JourneyStats {
   checksTotal: number;
   runsCutShort: number;
   cutShortAt: Map<string, number>;
+  /** AP-035 FR-029: journeys cut short per failed capture name. */
+  cutShortByCapture: Map<string, number>;
   histogram: LatencyHistogram;
 }
 
@@ -109,8 +113,18 @@ export interface PerformanceAggregate {
 export function createAggregate(plan: PerformancePlan, plannedDurationMs: number, runStartMs: number): PerformanceAggregate {
   const steps = new Map<string, StepStats>();
   const journeys = new Map<string, JourneyStats>();
-  for (const journey of plan.journeys) {
-    journeys.set(journey.id, { requests: 0, failures: 0, checksPassed: 0, checksTotal: 0, runsCutShort: 0, cutShortAt: new Map(), histogram: new LatencyHistogram() });
+  // AP-035 FR-025: an incomplete user journey was not in the script, so it has no figures.
+  for (const journey of runnableJourneys(plan.journeys)) {
+    journeys.set(journey.id, {
+      requests: 0,
+      failures: 0,
+      checksPassed: 0,
+      checksTotal: 0,
+      runsCutShort: 0,
+      cutShortAt: new Map(),
+      cutShortByCapture: new Map(),
+      histogram: new LatencyHistogram(),
+    });
     for (const step of journey.steps) {
       steps.set(step.id, {
         stepId: step.id,
@@ -131,6 +145,7 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         histogram: new LatencyHistogram(),
         phases: new Map(),
         buckets: new Map(),
+        captures: new Map((step.captures?.map((capture) => capture.name) ?? step.produces).map((name) => [name, { succeeded: 0, failed: 0 }])),
       });
     }
   }
@@ -278,8 +293,17 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
       case "apipilot_cut_short":
         journey.runsCutShort += 1;
         journey.cutShortAt.set(step.stepId, (journey.cutShortAt.get(step.stepId) ?? 0) + 1);
+        if (tags.capture) journey.cutShortByCapture.set(tags.capture, (journey.cutShortByCapture.get(tags.capture) ?? 0) + 1);
         journeysCutShort += 1;
         return;
+      case "apipilot_capture": {
+        if (!tags.capture) return;
+        const outcome = step.captures.get(tags.capture) ?? { succeeded: 0, failed: 0 };
+        if (tags.outcome === "ok") outcome.succeeded += point.value;
+        else outcome.failed += point.value;
+        step.captures.set(tags.capture, outcome);
+        return;
+      }
       default:
         return;
     }
@@ -330,8 +354,9 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
       timeline: [...step.buckets.entries()]
         .sort(([a], [b]) => a - b)
         .map(([index, bucket]): StepTimelinePoint => ({ offsetMs: index * bucketMs, requests: bucket.requests, errors: bucket.errors, p95Ms: bucket.histogram.percentile(95) })),
+      ...(step.captures.size > 0 ? { captures: [...step.captures.entries()].map(([name, outcome]) => ({ name, ...outcome })) } : {}),
     }));
-    const journeyResults: JourneyResult[] = plan.journeys.map((journey) => {
+    const journeyResults: JourneyResult[] = runnableJourneys(plan.journeys).map((journey) => {
       const stats = journeys.get(journey.id)!;
       const cutShortAt = [...stats.cutShortAt.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       return {
@@ -343,6 +368,7 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         checkPassRatePercent: stats.checksTotal === 0 ? null : percent(stats.checksPassed, stats.checksTotal),
         runsCutShort: stats.runsCutShort,
         ...(cutShortAt ? { cutShortAtStepId: cutShortAt } : {}),
+        ...(stats.cutShortByCapture.size > 0 ? { cutShortByCapture: Object.fromEntries([...stats.cutShortByCapture.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) } : {}),
       };
     });
     const points: TimelinePoint[] = [...buckets.entries()]

@@ -64,7 +64,7 @@ and checked on its own.
 
 **Purpose**: Fixtures and the stub target used by tests and the quickstart.
 
-- [ ] T001 [P] Add `backend/tests/fixtures/openapi/user-journeys.yaml` (OpenAPI 3.0), documenting:
+- [X] T001 [P] Add `backend/tests/fixtures/openapi/user-journeys.yaml` (OpenAPI 3.0), documenting:
   - `POST /api/v1/customers`: request body `{name}`. Response 201 with body `{id: string, name:
     string}` and a `Location` header.
   - `GET`, `PUT` and `DELETE /api/v1/customers/{id}`: `id` is a required string path parameter.
@@ -74,14 +74,14 @@ and checked on its own.
   - `GET /api/v1/orders/{id}`: query parameter `customer`. Response 200.
 
   Use no `oneOf`, `anyOf` or `allOf`, and no security scheme.
-- [ ] T002 [P] Add `userJourneysContext()` to `backend/tests/fixtures/performance/context.ts`, so
+- [X] T002 [P] Add `userJourneysContext()` to `backend/tests/fixtures/performance/context.ts`, so
   tests can build a quick-path `PerformanceContext` from `user-journeys.yaml`. Model it on the
   existing quick context loader, with stable scenario ids.
-- [ ] T003 [P] Add builders to `backend/tests/fixtures/performance/builders.ts`:
+- [X] T003 [P] Add builders to `backend/tests/fixtures/performance/builders.ts`:
   - `userJourneyFixture(...)`, `captureFixture(...)` and `bindingFixture(...)`, producing the
     data-model.md shapes;
   - a seeded value `SEEDED-CAPTURED-ID-5e2d`, which tests search every artifact for (SC-005).
-- [ ] T004 [P] Add a stateful customers mode to `backend/scripts/perfStubTarget.ts`
+- [X] T004 [P] Add a stateful customers mode to `backend/scripts/perfStubTarget.ts`
   (`PERF_STUB_MODE=customers`):
   - each `POST /api/v1/customers` returns 201 with a new id (a counter, never random) and a
     `Location: /api/v1/customers/<id>` header;
@@ -104,18 +104,18 @@ the one runtime change every story depends on.
 
 ### Tests for the foundation (write first, confirm they fail)
 
-- [ ] T005 [P] Write `backend/tests/unit/performance/capturePath.test.ts` (R6). It must cover:
+- [X] T005 [P] Write `backend/tests/unit/performance/capturePath.test.ts` (R6). It must cover:
   - **Accepted:** `id`, `data.items[0].id`, `a-b.$c_d`, `x[12]`.
   - **Canonical segments:** for example `[{field:"data"},{field:"items"},{index:0},{field:"id"}]`.
   - **Refused, with the position:** `*`, `?`, `..`, `[]`, quotes, `items[*]`, `a[?(@.x)]`,
     `f()`, an empty segment, a leading `.`, an index over 6 digits, a path over 256 characters,
     and more than 16 segments.
-- [ ] T006 [P] Write `backend/tests/unit/performance/userJourneyNames.test.ts` (R11, FR-026, R8):
+- [X] T006 [P] Write `backend/tests/unit/performance/userJourneyNames.test.ts` (R11, FR-026, R8):
   - capture names must match `^[A-Za-z_][A-Za-z0-9_]{0,63}$` (accept `customer_id`, `_x`;
     refuse `1st`, `a-b`, `é`, and 65 characters);
   - journey names are "trimmed, 1 to 100 characters, no control characters";
   - header names are an RFC 9110 token "1 to 128 characters", stored lowercased.
-- [ ] T007 [P] Extend `backend/tests/unit/performance/renderScript.test.ts` (FR-033, R7), using
+- [X] T007 [P] Extend `backend/tests/unit/performance/renderScript.test.ts` (FR-033, R7), using
   `k6Sandbox`:
   - **Proposed workflow journey:**
     - a producer that returns an unexpected status attempts no capture, counts its captures as
@@ -128,7 +128,7 @@ the one runtime change every story depends on.
 
 ### Implementation for the foundation
 
-- [ ] T008 Add the types of data-model.md to `packages/shared-domain/src/performance.ts` and
+- [X] T008 Add the types of data-model.md to `packages/shared-domain/src/performance.ts` and
   export them from `packages/shared-domain/src/index.ts`. Every change is additive:
   - **New types:** `BodyPathSegment`, `CaptureSource`, `Capture` (without `id`), `BindingTarget`,
     `ValueBinding`, `UserJourneyStepDefinition` (with `fromProposedStepId?`) and
@@ -141,17 +141,17 @@ the one runtime change every story depends on.
   - **`BodyEditNotice` kind:** gains `"capture-binding-dropped"`.
   - **`PreviewReference`:** gains the `kind: "capture"` variant.
   - **Result fields:** `StepResult.captures?` and `JourneyResult.cutShortByCapture?`.
-- [ ] T009 [P] Implement `backend/src/performance/plan/capturePath.ts` (R6): `parseCapturePath(text)`
+- [X] T009 [P] Implement `backend/src/performance/plan/capturePath.ts` (R6): `parseCapturePath(text)`
   and `formatCapturePath(segments)`. It is pure, and returns a typed refusal `{code:
   "capture_path_invalid", position}`. Make T005 pass.
-- [ ] T010 [P] Implement the name rules of T006 in
+- [X] T010 [P] Implement the name rules of T006 in
   `backend/src/performance/plan/userJourneyNames.ts` (pure). Make T006 pass.
 
-- [ ] T011 [P] Implement the pure function `laterStepParameterMatches(field, laterParameterNames)` in
+- [X] T011 [P] Implement the pure function `laterStepParameterMatches(field, laterParameterNames)` in
   `packages/shared-domain/src/performance.ts` (R9, FR-009): a field matches when its last segment
   equals a parameter name of a later step in the same journey. It binds nothing (FR-006). Test it in
   `packages/shared-domain/tests/unit/userJourneyMatches.test.ts`.
-- [ ] T012 Plumb user journeys through `backend/src/performance/plan/buildPlan.ts`, with no
+- [X] T012 Plumb user journeys through `backend/src/performance/plan/buildPlan.ts`, with no
   behaviour yet:
   - `PlanChoices` and `defaultChoices` (`userJourneys: []`, `alsoStandalone: []`,
     `nextUserJourneyNumber: 1`), and `choicesOf`;
@@ -163,12 +163,12 @@ the one runtime change every story depends on.
 
   Assert in `backend/tests/unit/performance/buildPlan.test.ts` that an existing plan's journey
   ids, step ids and fingerprint are unchanged.
-- [ ] T013 Refactor `backend/src/performance/plan/planStepRequest.ts` so that `stepRequestFor`
+- [X] T013 Refactor `backend/src/performance/plan/planStepRequest.ts` so that `stepRequestFor`
   reads consumes from `step.variableBindings` and produces from the step's captures, instead of
   recomputing both from the workflow by position (R5). Workflow variables are expressed as captures
   whose key is the existing `workflowVariableName` key. The existing request-preview and plan tests
   must pass unchanged.
-- [ ] T014 Change `backend/src/performance/k6/renderScript.ts` (R7, R13, FR-033). This depends on
+- [X] T014 Change `backend/src/performance/k6/renderScript.ts` (R7, R13, FR-033). This depends on
   T013.
   - **Rendered data:** `RenderedStep.produces` becomes `captures: {key, name, source: {body:
     (string | number)[]} | {header: string}}`.
@@ -187,7 +187,7 @@ the one runtime change every story depends on.
     its diff in the review summary.
 
   Make T007 pass.
-- [ ] T015 Add the error classes of contracts/plan-journeys-api.md to
+- [X] T015 Add the error classes of contracts/plan-journeys-api.md to
   `backend/src/performance/errors.ts`, and map them in `backend/src/api/performanceHttp.ts`, each
   `400` with the listed extras:
   - `invalid_user_journey`, `journey_too_long`, `too_many_captures`;
@@ -197,7 +197,7 @@ the one runtime change every story depends on.
   - `parameter_edited`, `invalid_standalone`, `not_a_proposed_journey`, `not_based_on_workflow`.
 
   Also map `binding_target_missing` as `422`. No message quotes a value.
-- [ ] T016 [P] Extend `frontend/src/services/performanceTestingClient.ts`:
+- [X] T016 [P] Extend `frontend/src/services/performanceTestingClient.ts`:
   - `PlanUpdate` gains `userJourneys`, `alsoStandalone`, `editProposedJourney` and
     `revertProposedJourney`;
   - `PerformanceClient` gains `fetchResponseFields(operationKey)` (`GET
@@ -226,7 +226,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
 ### Tests for User Story 1 ⚠️ (write first, confirm they fail)
 
-- [ ] T017 [P] [US1] Write `backend/tests/unit/performance/userJourneys.test.ts` for validation
+- [X] T017 [P] [US1] Write `backend/tests/unit/performance/userJourneys.test.ts` for validation
   (R10, R11).
   - **Limits:** "at most 20 steps" (`journey_too_long`) and "at most 10 captures" per step
     (`too_many_captures`).
@@ -240,7 +240,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
     and `stepIds`.
   - **Input:** an unknown journey or step id is refused, and a client-sent `origin` or
     `fromProposedStepId` is ignored.
-- [ ] T018 [P] [US1] Extend `backend/tests/unit/performance/buildPlan.test.ts` for assembly (R2,
+- [X] T018 [P] [US1] Extend `backend/tests/unit/performance/buildPlan.test.ts` for assembly (R2,
   R4).
   - **Ids:** sequence-based ids are stable across rename and reorder. The same operation twice in
     one journey gives two distinct step ids.
@@ -256,7 +256,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   - **Out of scope:** a guided rebuild in which an operation leaves scope (approvals or API review
     selection) makes the journey incomplete, naming the operation, rather than shortening it (spec
     Edge Cases).
-- [ ] T019 [P] [US1] Extend `backend/tests/unit/performance/renderScript.test.ts` for user
+- [X] T019 [P] [US1] Extend `backend/tests/unit/performance/renderScript.test.ts` for user
   journeys, using `k6Sandbox`:
   - **Isolation:** with two virtual users and three iterations, every PUT and DELETE uses that
     virtual user's own POST id from that iteration (FR-017, SC-002).
@@ -269,7 +269,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   - **Seeded value:** the sandbox's POST returns `SEEDED-CAPTURED-ID-5e2d` as `id`. Assert that it
     reaches the bound PUT and DELETE requests, and appears in no metric tag, check name, `JOURNEYS`
     data or recorded output other than those request URLs (SC-005, FR-020).
-- [ ] T020 [P] [US1] Write `backend/tests/unit/performance/responseFields.test.ts` (R9). It
+- [X] T020 [P] [US1] Write `backend/tests/unit/performance/responseFields.test.ts` (R9). It
   covers:
   - scalar fields of 2xx `application/json` and `+json` schemas, as R6 paths, with `[0]` for
     arrays;
@@ -277,7 +277,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   - `statusCodes` per field;
   - depth 8 and 300-field caps with `truncated`;
   - empty constraints contribute nothing.
-- [ ] T021 [P] [US1] Extend `backend/tests/unit/performance/aggregate.test.ts`,
+- [X] T021 [P] [US1] Extend `backend/tests/unit/performance/aggregate.test.ts`,
   `backend/tests/unit/performance/report/` findings tests and
   `backend/tests/unit/performance/report.test.ts` (R13, FR-029):
   - **Aggregate:** `apipilot_capture` produces `StepResult.captures`, and the `capture` tag
@@ -287,7 +287,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   - **HTML report:** it shows each bound value's capture, producing step and field, and "In a
     journey defined by you".
   - **Older runs:** a run without these fields renders as before.
-- [ ] T022 [P] [US1] Write `backend/tests/integration/performance/userJourneyRoutes.test.ts`
+- [X] T022 [P] [US1] Write `backend/tests/integration/performance/userJourneyRoutes.test.ts`
   (Supertest, both bases):
   - **`PUT /plan { userJourneys }`:** success returns assigned ids and an updated
     `script.outOfDate`. Each T017 refusal leaves the plan unchanged.
@@ -298,7 +298,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
     present.
   - **Seeded value:** `SEEDED-CAPTURED-ID-5e2d` appears in no response body, run record or report
     (SC-005).
-- [ ] T023 [P] [US1] Write the frontend tests in
+- [X] T023 [P] [US1] Write the frontend tests in
   `frontend/tests/unit/UserJourneys.test.tsx`, using `performanceFixtures.ts` and `stubFetch`:
   - **New journey:** it asks for a name. **Add step** picks from the plan's operations.
   - **Group header:** "Defined by you" is shown in text.
@@ -319,7 +319,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
 ### Implementation for User Story 1
 
-- [ ] T024 [US1] Implement validation and id assignment in
+- [X] T024 [US1] Implement validation and id assignment in
   `backend/src/performance/plan/userJourneys.ts` (pure).
   - **`validateUserJourneys(input, plan, context)`:** applies T010's rules and T009's parser.
     `operationKey` must be in the analysis (`unknown_operation`). Bindings are validated against
@@ -331,11 +331,11 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
     from input.
 
   Make T017 pass.
-- [ ] T025 [US1] Implement `documentedResponseFields(operation)` in
+- [X] T025 [US1] Implement `documentedResponseFields(operation)` in
   `backend/src/performance/plan/responseFields.ts` (R9), using `SchemaConstraint` `properties` and
   `items`. It is pure. Make T020 pass.
 
-- [ ] T026 [US1] Implement `resolveUserJourneys(definitions, choices, context)` in
+- [X] T026 [US1] Implement `resolveUserJourneys(definitions, choices, context)` in
   `backend/src/performance/plan/userJourneys.ts`, and call it from `assemblePlan` in
   `backend/src/performance/plan/buildPlan.ts` (R4, R5). It builds journeys in this order:
   1. proposed journeys;
@@ -346,25 +346,25 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   `apipilot_c_<producer step id without "s_">_<capture name>`. Mark steps `userDefined: true`.
   Re-derive `documented` for body captures through T025's function. Append new journeys to the
   journey order. Make T018 pass.
-- [ ] T027 [US1] Add the `apipilot_c_` prefix to `reservedNamesOf` in
+- [X] T027 [US1] Add the `apipilot_c_` prefix to `reservedNamesOf` in
   `backend/src/performance/plan/bodyEdits.ts`, so an engineer's `{{name}}` cannot reach a capture
   key. Add a case to `backend/tests/unit/performance/bodyEdits.test.ts`.
-- [ ] T028 [US1] Wire `PUT /plan` in `backend/src/performance/plan/planUpdate.ts`:
+- [X] T028 [US1] Wire `PUT /plan` in `backend/src/performance/plan/planUpdate.ts`:
   - `userJourneys` and `alsoStandalone` (refuse `invalid_standalone` for a key in no user
     journey);
   - validate everything before applying anything;
   - `stepOrder` and `expectedStatuses` accept user step ids.
 
   Add `GET /plan/response-fields` to `backend/src/api/performanceRoutes.ts` (thin, calls T025).
-- [ ] T029 [US1] Extend `backend/src/performance/plan/requestPreview.ts` so a bound target shows
+- [X] T029 [US1] Extend `backend/src/performance/plan/requestPreview.ts` so a bound target shows
   `{reference: {kind: "capture", captureName, producerStepId, source}}` and never a value (FR-012).
   A capture bound to a header, or to a field the request schema declares `format: password`, has
   `secret: true` on its reference (spec Edge Cases, "Captured secrets").
-- [ ] T030 [US1] Keep `userJourneys`, `alsoStandalone` and `nextUserJourneyNumber` in
+- [X] T030 [US1] Keep `userJourneys`, `alsoStandalone` and `nextUserJourneyNumber` in
   `backend/src/performance/plan/runSnapshot.ts`. Read a missing value as `[]`, `[]` and `1` in
   `backend/src/persistence/performanceRunRepository.ts` (the `BODY_EDIT_DEFAULTS` pattern) (R12,
   FR-027). Extend `backend/tests/unit/persistence/performanceRunRepository.test.ts`.
-- [ ] T031 [US1] Implement the report changes (R13, FR-029):
+- [X] T031 [US1] Implement the report changes (R13, FR-029):
   - **Aggregate:** read `apipilot_capture` and the `capture` tag in
     `backend/src/performance/report/aggregate.ts`.
   - **Findings:** name the capture in `cut-short-journeys` and bump
@@ -374,7 +374,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
     response blocks and provenance in `backend/src/performance/report/renderHtmlReport.ts`.
 
   Make T021 pass. Run T019 and T022 to confirm the end-to-end path.
-- [ ] T032 [P] [US1] Add labels to `frontend/src/components/performance/performanceViewModel.ts`:
+- [X] T032 [P] [US1] Add labels to `frontend/src/components/performance/performanceViewModel.ts`:
   - journey origin: "Proposed from workflow", "Defined by you", "Based on workflow";
   - "Incomplete";
   - "Uses captured value";
@@ -384,7 +384,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
   "from captured value {captureName} (step {stepLabel})".
 
   Show a "secret" badge for a capture reference with `secret: true`, as for environment secrets.
-- [ ] T033 [US1] Create `frontend/src/components/performance/UserJourneyControls.tsx` and
+- [X] T033 [US1] Create `frontend/src/components/performance/UserJourneyControls.tsx` and
   `frontend/src/components/performance/AddStepDialog.tsx`:
   - **New journey:** uses `PromptDialog`.
   - **Rename:** uses `PromptDialog`.
@@ -395,7 +395,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
   Every control is a `<button>` with an accessible name. Each change composes the full
   `userJourneys` list and calls `apply()` in `PerformancePlanScreen.tsx`.
-- [ ] T034 [US1] Create `frontend/src/components/performance/CaptureEditor.tsx`, the inspector's
+- [X] T034 [US1] Create `frontend/src/components/performance/CaptureEditor.tsx`, the inspector's
   Captures tab:
   - **Adding:** a name input, and a body field picker from `fetchResponseFields` with the
     later-step match marked as text.
@@ -404,7 +404,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
   Create `frontend/src/components/performance/BindingSourceControl.tsx`: for a path parameter row,
   "Value captured by an earlier step" with only captures of earlier steps in the same journey.
-- [ ] T035 [US1] Update `frontend/src/components/performance/JourneyList.tsx`:
+- [X] T035 [US1] Update `frontend/src/components/performance/JourneyList.tsx`:
   - **Group header:** replace the hard-coded "Workflow" with the origin label, and treat
     user journeys as grouped.
   - **Badges:** show "Incomplete" with `missingOperationKeys`, and the step badges.
@@ -414,7 +414,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
   Wire `BindingSourceControl` into `frontend/src/components/performance/StepParameterEditor.tsx`
   for path parameter rows.
-- [ ] T036 [US1] Update `frontend/src/components/performance/PerformancePlanScreen.tsx`:
+- [X] T036 [US1] Update `frontend/src/components/performance/PerformancePlanScreen.tsx`:
   - **Messages:** `explain()` maps `capture_in_use` to "{capture} is used by step(s) {labels}.
     Remove those bindings first." and keeps the order message for `dependency_order_violation`.
   - **Single-step notice:** shown when an operation first joins a journey (FR-003).
@@ -422,7 +422,7 @@ capturing `customer_id` from `id` and binding `{id}` on PUT and DELETE. Then che
 
   In `frontend/src/components/performance/PerformanceRunPanel.tsx`, the run trigger names each
   incomplete journey that will not run (FR-025).
-- [ ] T037 [US1] Change the scope note in `frontend/src/pages/QuickPerformancePage.tsx`: requests
+- [X] T037 [US1] Change the scope note in `frontend/src/pages/QuickPerformancePage.tsx`: requests
   are not chained unless the engineer builds a journey, with **New journey** named, and no pointer
   to the guided workflow (FR-031). Update `frontend/tests/unit/QuickPerformancePage.test.tsx`.
   Make T023 pass.
@@ -445,7 +445,7 @@ Bind `customer_id` to a body field, a query parameter and a header, and repeat a
 
 ### Tests for User Story 2 ⚠️ (write first, confirm they fail)
 
-- [ ] T038 [P] [US2] Extend `backend/tests/unit/performance/userJourneys.test.ts`:
+- [X] T038 [P] [US2] Extend `backend/tests/unit/performance/userJourneys.test.ts`:
   - **Header captures:** `capture_header_invalid` for an invalid header capture.
   - **Targets:**
     - query, header and body targets resolve;
@@ -458,7 +458,7 @@ Bind `customer_id` to a body field, a query parameter and a header, and repeat a
     `bindingsNeedingAttention` (FR-016).
   - **Documented flag:** an undocumented body path gives `documented: false`. Header captures give
     `documented: null`.
-- [ ] T039 [P] [US2] Extend `backend/tests/unit/performance/renderScript.test.ts` and
+- [X] T039 [P] [US2] Extend `backend/tests/unit/performance/renderScript.test.ts` and
   `backend/tests/unit/performance/bodyEdits.test.ts`:
   - **Header capture:** matches regardless of case, and takes the whole value as reported.
   - **Body binding:** fills the field with JSON escaping.
@@ -467,18 +467,18 @@ Bind `customer_id` to a body field, a query parameter and a header, and repeat a
     notice (FR-013).
   - **Body editor model:** `StepBodyEditModel.replacements` lists bound fields with a `capture`
     reference.
-- [ ] T040 [P] [US2] Extend `packages/shared-domain` tests (or
+- [X] T040 [P] [US2] Extend `packages/shared-domain` tests (or
   `frontend/tests/unit/WriteOperationSummary.test.tsx`) for `summarizeWriteOperations` (R15,
   FR-023):
   - `total` and `byMethod` count steps;
   - each entry lists `steps` with `journeyLabel`;
   - incomplete journeys are excluded;
   - a plan with each operation in one step gives today's numbers.
-- [ ] T041 [P] [US2] Extend `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
+- [X] T041 [P] [US2] Extend `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
   `POST /script` returns `422 binding_target_missing {stepIds}` after a guided rebuild removes a
   bound field. The refusal order is `nothing_to_test`, `expected_status_missing`,
   `binding_target_missing`.
-- [ ] T042 [P] [US2] Extend `frontend/tests/unit/UserJourneys.test.tsx`:
+- [X] T042 [P] [US2] Extend `frontend/tests/unit/UserJourneys.test.tsx`:
   - **Header captures:** can be added by name.
   - **Binding sources:** offered for query and header rows, and for body fields.
   - **Body editor:** "Replaced at run time" lists bound fields with the capture.
@@ -492,7 +492,7 @@ Bind `customer_id` to a body field, a query parameter and a header, and repeat a
 
 ### Implementation for User Story 2
 
-- [ ] T043 [US2] Extend `validateUserJourneys` and `resolveUserJourneys` in
+- [X] T043 [US2] Extend `validateUserJourneys` and `resolveUserJourneys` in
   `backend/src/performance/plan/userJourneys.ts`:
   - **Header captures:** use T010's header rule.
   - **Targets:** query and header parameters the specification documents, excluding headers the
@@ -502,21 +502,21 @@ Bind `customer_id` to a body field, a query parameter and a header, and repeat a
   - **Rebuild:** `target-missing` on rebuild, and fill `bindingsNeedingAttention`.
 
   Make T038 pass.
-- [ ] T044 [US2] In `backend/src/performance/plan/bodyEdits.ts`:
+- [X] T044 [US2] In `backend/src/performance/plan/bodyEdits.ts`:
   - drop bindings whose body field an edit removed, with a `capture-binding-dropped` notice;
   - list bound fields in `replacements`;
   - make bound parameter rows `notEditable: "filled-at-run-time"` in the parameter edit model, so
     AP-033 FR-021 refuses edits to them.
 
   Make T039 pass.
-- [ ] T045 [US2] Add the `binding_target_missing` refusal to `POST /script` in
+- [X] T045 [US2] Add the `binding_target_missing` refusal to `POST /script` in
   `backend/src/api/performanceRoutes.ts`, after the existing two (FR-016). Make T041 pass.
-- [ ] T046 [P] [US2] Change `summarizeWriteOperations` in `packages/shared-domain/src/performance.ts`
+- [X] T046 [P] [US2] Change `summarizeWriteOperations` in `packages/shared-domain/src/performance.ts`
   (R15). Keep `stepIds` for compatibility. Update
   `frontend/src/components/performance/WriteOperationSummary.tsx` and the run trigger's counts in
   `frontend/src/components/performance/PerformanceRunPanel.tsx` to show per-step counts with
   journey names. Make T040 pass.
-- [ ] T047 [US2] Frontend:
+- [X] T047 [US2] Frontend:
   - **Header captures:** add them in `CaptureEditor.tsx`.
   - **Binding source:** extend `BindingSourceControl.tsx` to query and header rows in
     `StepParameterEditor.tsx`, and to body fields in
@@ -543,7 +543,7 @@ journeys, captures and bindings match.
 
 ### Tests for User Story 3 ⚠️ (write first, confirm they fail)
 
-- [ ] T048 [P] [US3] Write `backend/tests/unit/performance/convertWorkflowJourney.test.ts` (R14).
+- [X] T048 [P] [US3] Write `backend/tests/unit/performance/convertWorkflowJourney.test.ts` (R14).
   - **Conversion:**
     - one step per workflow step, each with `fromProposedStepId`;
     - each `WorkflowVariable` becomes a capture and binding, with `relationshipId` and
@@ -556,14 +556,14 @@ journeys, captures and bindings match.
     - settings of converted steps return to the proposed step ids;
     - settings of added steps are discarded;
     - an edit whose `scenarioId` no longer matches is discarded, as usual (FR-024).
-- [ ] T049 [P] [US3] Extend `frontend/tests/unit/restoreFromRun.test.ts` and
+- [X] T049 [P] [US3] Extend `frontend/tests/unit/restoreFromRun.test.ts` and
   `frontend/tests/unit/PerformancePlanScreen.test.tsx` (R12, FR-028):
   - **Restore:** sends the snapshot's `userJourneys` and `alsoStandalone`.
   - **Order:** `restoreOrderFromRun` restores the order of user journeys.
   - **Message:** names each step that came back incomplete or with a missing target as not
     restored.
   - **Older runs:** a snapshot without `userJourneys` restores as before.
-- [ ] T050 [P] [US3] Extend `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
+- [X] T050 [P] [US3] Extend `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
   - **`editProposedJourney`:** succeeds on the guided base. It gives `not_a_proposed_journey` on
     the quick base, or for a single-step journey.
   - **`revertProposedJourney`:** succeeds, and gives `not_based_on_workflow` for a defined
@@ -573,7 +573,7 @@ journeys, captures and bindings match.
     captures and bindings (SC-007).
   - **Sequence numbers:** `nextUserJourneyNumber` and `nextStepNumber` end at least one above the
     restored maxima.
-- [ ] T051 [P] [US3] Extend `frontend/tests/unit/UserJourneys.test.tsx`:
+- [X] T051 [P] [US3] Extend `frontend/tests/unit/UserJourneys.test.tsx`:
   - **Edit journey:** on a proposed workflow journey, it produces "Based on workflow" with the
     confidence shown on bindings.
   - **Revert to proposed journey:** confirms first, naming added steps whose settings are
@@ -582,11 +582,11 @@ journeys, captures and bindings match.
 
 ### Implementation for User Story 3
 
-- [ ] T052 [US3] Implement `convertWorkflowJourney(journey, plan, workflow)` and
+- [X] T052 [US3] Implement `convertWorkflowJourney(journey, plan, workflow)` and
   `revertWorkflowJourney(definition, choices)` in
   `backend/src/performance/plan/convertWorkflowJourney.ts` (pure). In `assemblePlan`, suppress
   the proposed journey for each `based-on-workflow` definition. Make T048 pass.
-- [ ] T053 [US3] Wire `editProposedJourney` and `revertProposedJourney` in
+- [X] T053 [US3] Wire `editProposedJourney` and `revertProposedJourney` in
   `backend/src/performance/plan/planUpdate.ts`:
   - guided only;
   - mutually exclusive with each other and with `userJourneys` (`invalid_request`);
@@ -595,7 +595,7 @@ journeys, captures and bindings match.
   On restore of explicit ids, set the sequence numbers to at least one above the maxima. Make T050
   pass.
 
-- [ ] T054 [US3] Extend `POST /plan/reset` (contracts/plan-journeys-api.md, spec Edge Cases "Resetting
+- [X] T054 [US3] Extend `POST /plan/reset` (contracts/plan-journeys-api.md, spec Edge Cases "Resetting
   the plan"):
   - in `backend/src/api/performanceRoutes.ts` and `backend/src/performance/plan/buildPlan.ts`, keep
     `defined` definitions and `alsoStandalone` through `choicesOf`, and revert each
@@ -605,7 +605,7 @@ journeys, captures and bindings match.
   - test it in `backend/tests/integration/performance/userJourneyRoutes.test.ts`: a defined journey
     survives reset, re-resolved, and a based-on-workflow journey is reverted with its settings
     carried back.
-- [ ] T055 [US3] Frontend:
+- [X] T055 [US3] Frontend:
   - **Edit journey and Revert to proposed journey:** add both to `UserJourneyControls.tsx` (guided
     only). Revert's `ConfirmDialog` names the added steps whose settings will be discarded.
   - **Confidence:** show it on converted bindings in `BindingSourceControl.tsx` and the
@@ -621,7 +621,7 @@ journeys, captures and bindings match.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T056 [P] Extend `backend/tests/integration/performance.k6.real.test.ts` (opt-in,
+- [X] T056 [P] Extend `backend/tests/integration/performance.k6.real.test.ts` (opt-in,
   `K6_TEST_REAL=1`, never in `npm test`), against a `TargetServer` in customers mode:
   - the create, update and delete journey has 0 not-found responses (SC-002);
   - with ids dropped, no PUT or DELETE is sent for those iterations, and they are cut short
@@ -629,26 +629,26 @@ journeys, captures and bindings match.
   - a repeated `Set-Cookie`-style header capture equals the value k6 reports, and the test records
     its form for the manual (R8);
   - the seeded id is absent from all artifacts and captured logs (SC-005).
-- [ ] T057 [P] Add amendment pointers:
+- [X] T057 [P] Add amendment pointers:
   - in `specs/031-k6-performance-testing/spec.md` at FR-010 (amended by AP-035 FR-033) and FR-024b
     (extended by AP-035 FR-028);
   - in `specs/032-quick-performance-test/spec.md` at FR-006 (AP-035 FR-030), and at FR-009 and
     FR-011 (counts are per step, AP-035 FR-023);
   - in `specs/031-k6-performance-testing/contracts/performance-api.md` at `PUT /plan`, pointing to
     `specs/035-user-defined-journeys/contracts/plan-journeys-api.md`;
-- [ ] T058 [P] Document the feature:
+- [X] T058 [P] Document the feature:
   - `docs/USER_MANUAL.md`: a new subsection on journeys and captured values, covering the
     capture rule (FR-033), the header value as k6 reports it, and incomplete journeys.
   - `docs/architecture.md`: definitions in plan choices, and the one substitution path.
   - `README.md`: the feature list, if it lists performance features.
-- [ ] T059 Add a log check to `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
+- [X] T059 Add a log check to `backend/tests/integration/performance/userJourneyRoutes.test.ts`:
   logs captured during the route tests contain no capture name, field path, header name or seeded
   value (contract Logging, XX).
-- [ ] T060 Update `specs/ROADMAP.md`: add an AP-035 row and a Next Actions entry, following the
+- [X] T060 Update `specs/ROADMAP.md`: add an AP-035 row and a Next Actions entry, following the
   AP-034 entries.
-- [ ] T061 Run `npm run version:bump -- feature` (19.15.0 → 19.16.0). This updates the 4
+- [X] T061 Run `npm run version:bump -- feature` (19.15.0 → 19.16.0). This updates the 4
   `package.json` files and `package-lock.json` through npm.
-- [ ] T062 Run `npm test`, `npm run lint` and `npm run build`. Record the results in
+- [X] T062 Run `npm test`, `npm run lint` and `npm run build`. Record the results in
   `specs/035-user-defined-journeys/validation.md`, exactly as run, including any failures.
 - [ ] T063 Walk through quickstart.md scenarios 1 to 7 in the browser with k6 installed, and record
   each outcome in `specs/035-user-defined-journeys/validation.md`. If this cannot be done, leave
@@ -732,6 +732,17 @@ Task: "T032 labels in frontend/src/components/performance/performanceViewModel.t
 ---
 
 ## Notes
+
+- **Implementation record (2026-10-02).**
+  - **Done:** 62 of 63 tasks.
+  - **T056:** the opt-in real-k6 cases passed with k6 v2.3.0 on 2026-10-02.
+  - **T063:** the browser walkthrough has not been performed.
+  - **UI placement (T035, T047):** the capture editor and the "Value captured by an earlier step"
+    control live in the **Your journeys** panel (`UserJourneysPanel.tsx`) on the Plan tab, not in a
+    Captures tab of the operations table's inspector. The table shows the origin, "Incomplete",
+    "Captures n", "Uses captured value" and "Target no longer exists" markers. The body editor's
+    "Replaced at run time" list shows bound fields through the request preview.
+  - **Details:** see `validation.md`.
 
 - **No commits.** Leave every change uncommitted for the user's review.
 - **Security-relevant tasks.** Flag these in the review summary:

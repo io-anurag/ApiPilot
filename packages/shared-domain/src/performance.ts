@@ -104,11 +104,90 @@ export interface PerformanceStep {
    * the engineer edited. Kept in run snapshots, which carry no parameter values.
    */
   parametersEdited?: true;
+  /** AP-035 FR-007: the values this step captures from its response. Present only when not empty. */
+  captures?: Capture[];
+  /** AP-035 FR-011: the request targets this step fills from earlier captures. Present only when not empty. */
+  bindings?: ValueBinding[];
+  /** AP-035 FR-022: present, and `true`, only on a step of a user-defined journey. */
+  userDefined?: true;
+}
+
+/**
+ * AP-035 (specs/035-user-defined-journeys data-model.md): one segment of a response body field
+ * path, an object field name or an array position. Parsed on the server from text such as
+ * `data.items[0].id`; never an expression (FR-008).
+ */
+export type BodyPathSegment = { field: string } | { index: number };
+
+/** AP-035 FR-007: where a capture takes its value from. `path` is the canonical text of `segments`. */
+export type CaptureSource =
+  | { kind: "body"; path: string; segments: BodyPathSegment[] }
+  | { kind: "header"; name: string };
+
+/**
+ * AP-035 FR-007: a named value a step takes from its response. Holds no value (FR-020): the value
+ * exists only in one virtual user's memory during one journey run.
+ */
+export interface Capture {
+  /** `^[A-Za-z_][A-Za-z0-9_]{0,63}$`, unique within its journey (FR-026). */
+  name: string;
+  source: CaptureSource;
+  /**
+   * Derived on assembly (FR-009): `false` adds the "Not documented in the specification" warning,
+   * which never blocks. `null` for header captures, which the analysis cannot list (research R9).
+   */
+  documented: boolean | null;
+  /** Present only on a capture converted from a workflow variable (FR-024). */
+  relationshipId?: string;
+}
+
+/** AP-035 FR-011: a request target of a step that a capture of an earlier step fills. */
+export type BindingTarget =
+  | { kind: "path" | "query" | "header"; name: string }
+  | { kind: "body"; fieldPath: string };
+
+export interface ValueBinding {
+  target: BindingTarget;
+  /** A step before this one in the same journey (FR-011, FR-015). */
+  captureStepId: string;
+  captureName: string;
+  /** Derived on assembly (FR-016): `target-missing` blocks script generation. */
+  state: "active" | "target-missing";
+  /** Present only when converted from a workflow (FR-024). */
+  confidence?: "CONFIRMED" | "LIKELY";
+  relationshipId?: string;
+}
+
+export interface UserJourneyStepDefinition {
+  id: string;
+  operationKey: string;
+  /** Server-set on conversion from a proposed workflow journey (FR-024); used on revert. */
+  fromProposedStepId?: string;
+  /** At most 10 (FR-007). */
+  captures: Capture[];
+  /** Sorted by target kind, then name or field path. */
+  bindings: ValueBinding[];
+}
+
+export type UserJourneyOrigin = { kind: "defined" } | { kind: "based-on-workflow"; workflowId: string };
+
+/** AP-035 FR-001: a journey the engineer composed. Holds no values (FR-020). */
+export interface UserJourneyDefinition {
+  id: string;
+  /** Trimmed, 1 to 100 characters, no control characters. */
+  name: string;
+  origin: UserJourneyOrigin;
+  /** 1 to 20 (FR-002). */
+  steps: UserJourneyStepDefinition[];
+  /** Server-maintained sequence for new step ids (research R2). */
+  nextStepNumber: number;
 }
 
 export type PerformanceJourneySource =
   | { kind: "workflow"; workflowId: string }
-  | { kind: "operation" };
+  | { kind: "operation" }
+  /** AP-035 FR-022, FR-027: a user-defined journey, or one based on a workflow. */
+  | { kind: "user"; userJourneyId: string; name: string; basedOnWorkflowId?: string };
 
 /** An ordered sequence of steps run by every virtual user on each iteration (FR-006a). */
 export interface PerformanceJourney {
@@ -116,6 +195,16 @@ export interface PerformanceJourney {
   id: string;
   source: PerformanceJourneySource;
   steps: PerformanceStep[];
+  /**
+   * AP-035 FR-025: present only on a user-defined journey with a step whose operation is removed,
+   * out of scope or without a positive scenario. Such a journey is not run.
+   */
+  incompleteReason?: { missingOperationKeys: string[] };
+}
+
+/** AP-035 FR-025: the journeys a script runs. An incomplete user-defined journey is left out. */
+export function runnableJourneys<T extends Pick<PerformanceJourney, "incompleteReason">>(journeys: readonly T[]): T[] {
+  return journeys.filter((journey) => journey.incompleteReason === undefined);
 }
 
 export type LoadProfileKind = "smoke" | "load" | "stress" | "spike" | "soak";
@@ -286,7 +375,7 @@ export interface StepParameterEditModel {
 /** AP-033 FR-010: a reference ApiPilot applies that an edited body no longer carries. */
 export interface BodyEditNotice {
   stepId: string;
-  kind: "workflow-variable-dropped" | "unique-field-dropped";
+  kind: "workflow-variable-dropped" | "unique-field-dropped" | "capture-binding-dropped";
   /** The workflow variable's name, or the unique field's path. */
   name: string;
 }
@@ -373,6 +462,18 @@ export interface PerformancePlan {
   parameterEdits: ParameterEdit[];
   /** Not fingerprinted: operations whose parameter edit the last rebuild discarded (as `discardedBodyEdits`). */
   discardedParameterEdits: string[];
+  /**
+   * AP-035 (research R1): the engineer's journeys. Fingerprinted, with `alsoStandalone` and
+   * `nextUserJourneyNumber`, only when this or `alsoStandalone` is not empty (research R17).
+   * Absent on plans and snapshots from before AP-035, read as empty.
+   */
+  userJourneys?: UserJourneyDefinition[];
+  /** AP-035 FR-003: operations in a user journey that also keep their single-step journey. */
+  alsoStandalone?: string[];
+  /** AP-035 research R2: the sequence number of the next user journey's id. */
+  nextUserJourneyNumber?: number;
+  /** Derived, not fingerprinted (FR-016): step ids with a `target-missing` binding. Blocks the script. */
+  bindingsNeedingAttention?: string[];
 }
 
 /**
@@ -383,7 +484,9 @@ export type PreviewReference =
   | { kind: "environment"; name: string; secret: boolean }
   | { kind: "workflow-variable"; name: string; variable: string; producerStepId: string | null }
   | { kind: "unique-per-iteration"; name: string; format: UniqueValueField["format"] }
-  | { kind: "credential"; name: string; schemeName: string };
+  | { kind: "credential"; name: string; schemeName: string }
+  /** AP-035 FR-012: a value captured by an earlier step of the same journey. Never the value. */
+  | { kind: "capture"; name: string; captureName: string; producerStepId: string; source: CaptureSource; secret: boolean };
 
 /** A parameter or header value: generated text, one reference, or text that mixes both. */
 export type PreviewValue =
@@ -579,6 +682,8 @@ export interface StepResult {
   phaseTimings?: RequestPhaseTiming[];
   /** FR-036 (2026-09-30): the step's own timeline, on the run timeline's buckets; absent on older runs. */
   timeline?: StepTimelinePoint[];
+  /** AP-035 FR-029: each capture's outcomes, in the step's capture order; absent on older runs. */
+  captures?: { name: string; succeeded: number; failed: number }[];
 }
 
 export interface JourneyResult {
@@ -591,6 +696,8 @@ export interface JourneyResult {
   runsCutShort: number;
   /** The step whose failed extraction cut this journey short most often (research D16 rule 4). */
   cutShortAtStepId?: string;
+  /** AP-035 FR-029: journeys cut short per failed capture name; absent on older runs. */
+  cutShortByCapture?: Record<string, number>;
 }
 
 export interface TimelinePoint {
@@ -620,7 +727,8 @@ export interface PerformanceFinding {
   values: Record<string, number | string>;
 }
 
-export const PERFORMANCE_FINDINGS_RULESET_VERSION = 1;
+/** 2 since AP-035: the cut-short finding names the capture (FR-029). */
+export const PERFORMANCE_FINDINGS_RULESET_VERSION = 2;
 
 export interface ThresholdOutcome {
   thresholdId: string;
@@ -719,35 +827,59 @@ export interface WriteOperationEntry {
   method: WriteMethod;
   path: string;
   effect: WriteEffect;
-  /** More than one only when an operation appears in several guided workflow journeys. */
+  /** More than one when an operation appears in several journeys, or more than once in one. */
   stepIds: string[];
+  /** AP-035 FR-023: each step that sends this operation, with the journey it belongs to. */
+  steps: { stepId: string; journeyId: string; journeyLabel: string }[];
 }
 
 /** Derived from a plan's steps on every change; never stored (specs/032 data-model.md). */
 export interface WriteOperationSummary {
-  /** Distinct write operations, not steps. */
+  /** AP-035 FR-023: steps that send a write operation, so an operation in two journeys counts twice. */
   total: number;
-  /** Methods with a count over 0, in the order POST, PUT, PATCH, DELETE. */
+  /** Steps per method over 0, in the order POST, PUT, PATCH, DELETE. */
   byMethod: { method: WriteMethod; count: number }[];
   /** In plan order, by first appearance. */
   operations: WriteOperationEntry[];
 }
 
-/** AP-032 FR-009 to FR-012: what the plan's write operations are, for the plan screen and the run trigger. */
+/** AP-035 FR-023: how a journey is named in the write summary: its own name, or its place in the plan. */
+export function journeyLabelOf(journey: Pick<PerformanceJourney, "source">, index: number): string {
+  return journey.source.kind === "user" ? `J${index + 1} ${journey.source.name}` : `J${index + 1}`;
+}
+
+/**
+ * AP-032 FR-009 to FR-012, amended by AP-035 FR-023: what the plan's write operations are, for the
+ * plan screen and the run trigger. Counts steps, so an operation sent by two steps counts twice;
+ * an incomplete user journey is not run, so its steps are not counted (FR-025).
+ */
 export function summarizeWriteOperations(journeys: readonly PerformanceJourney[]): WriteOperationSummary {
   const entries = new Map<string, WriteOperationEntry>();
-  for (const journey of journeys) {
+  journeys.forEach((journey, index) => {
+    if (journey.incompleteReason) return;
     for (const step of journey.steps) {
       const method = step.method.toUpperCase();
       if (!isWriteMethod(method)) continue;
-      const existing = entries.get(step.operationKey);
-      if (existing) existing.stepIds.push(step.id);
-      else entries.set(step.operationKey, { operationKey: step.operationKey, method, path: step.path, effect: WRITE_EFFECTS[method], stepIds: [step.id] });
+      const entry = entries.get(step.operationKey) ?? { operationKey: step.operationKey, method, path: step.path, effect: WRITE_EFFECTS[method], stepIds: [], steps: [] };
+      entry.stepIds.push(step.id);
+      entry.steps.push({ stepId: step.id, journeyId: journey.id, journeyLabel: journeyLabelOf(journey, index) });
+      entries.set(step.operationKey, entry);
     }
-  }
+  });
   const operations = [...entries.values()];
-  const byMethod = WRITE_METHODS.map((method) => ({ method, count: operations.filter((entry) => entry.method === method).length })).filter(
-    (entry) => entry.count > 0,
-  );
-  return { total: operations.length, byMethod, operations };
+  const byMethod = WRITE_METHODS.map((method) => ({
+    method,
+    count: operations.filter((entry) => entry.method === method).reduce((total, entry) => total + entry.steps.length, 0),
+  })).filter((entry) => entry.count > 0);
+  return { total: operations.reduce((total, entry) => total + entry.steps.length, 0), byMethod, operations };
+}
+
+/**
+ * AP-035 FR-009 (specs/035-user-defined-journeys research R9): whether a documented response field
+ * is worth pointing out for a later step of the same journey, because its last field name equals
+ * one of that step's parameter names. A presentation hint only: it binds nothing (FR-006).
+ */
+export function laterStepParameterMatches(fieldPath: string, laterParameterNames: readonly string[]): boolean {
+  const last = /([A-Za-z0-9_$-]+)(?:\[\d+\])*$/.exec(fieldPath)?.[1];
+  return last !== undefined && laterParameterNames.includes(last);
 }

@@ -1,10 +1,14 @@
 import type {
+  Capture,
   Environment,
   LoadProfile,
   PerformanceJourney,
   PerformancePlan,
   PerformanceRun,
   PerformanceStep,
+  UserJourneyDefinition,
+  UserJourneyStepDefinition,
+  ValueBinding,
 } from "@apipilot/shared-domain";
 
 /**
@@ -15,6 +19,9 @@ import type {
 /** Seeded secrets: every SC-003 test searches every artifact for these two exact strings. */
 export const SEEDED_CLIENT_SECRET = "SEEDED-SECRET-CLIENT-9f1c";
 export const SEEDED_CLIENT_ID = "SEEDED-SECRET-ID-77ab";
+
+/** AP-035 SC-005: a value a test server returns as a captured id; every artifact is searched for it. */
+export const SEEDED_CAPTURED_ID = "SEEDED-CAPTURED-ID-5e2d";
 
 export function stepFixture(overrides: Partial<PerformanceStep> = {}): PerformanceStep {
   return {
@@ -104,4 +111,22 @@ export function runFixture(overrides: Partial<PerformanceRun> = {}): Performance
     cancelRequested: false,
     ...overrides,
   };
+}
+
+/** AP-035 (specs/035-user-defined-journeys data-model.md): a body capture by default. */
+export function captureFixture(overrides: Partial<Capture> = {}): Capture {
+  return { name: "customer_id", source: { kind: "body", path: "id", segments: [{ field: "id" }] }, documented: true, ...overrides };
+}
+
+/** AP-035: a binding of a path parameter `id` to `customer_id` by default. */
+export function bindingFixture(overrides: Partial<ValueBinding> & { captureStepId: string }): ValueBinding {
+  return { target: { kind: "path", name: "id" }, captureName: "customer_id", state: "active", ...overrides };
+}
+
+/** AP-035: a user-defined journey of the given steps; ids are fixed strings. */
+export function userJourneyFixture(
+  steps: UserJourneyStepDefinition[],
+  overrides: Partial<UserJourneyDefinition> = {},
+): UserJourneyDefinition {
+  return { id: "j_user0000000001", name: "Customer lifecycle", origin: { kind: "defined" }, steps, nextStepNumber: steps.length + 1, ...overrides };
 }

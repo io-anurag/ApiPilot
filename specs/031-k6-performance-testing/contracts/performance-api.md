@@ -81,6 +81,11 @@ The body holds any subset of the following fields; the fields not sent are uncha
 }
 ```
 
+AP-035 (2026-10-02) adds `userJourneys`, `nextUserJourneyNumber`, `alsoStandalone`,
+`editProposedJourney` and `revertProposedJourney`, `GET /plan/response-fields` and the
+`422 binding_target_missing` script refusal: see
+`specs/035-user-defined-journeys/contracts/plan-journeys-api.md`.
+
 `expectedStatuses` replaces the lists of the steps it names. Other steps keep theirs. The client
 sends codes only. The server computes each code's `source` (FR-012, FR-039, research D26).
 

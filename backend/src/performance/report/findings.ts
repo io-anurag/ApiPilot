@@ -76,11 +76,17 @@ export function deriveFindings(result: PerformanceResult, plan: PerformancePlan)
   for (const journey of result.journeys) {
     if (journey.runsCutShort === 0) continue;
     const at = journey.cutShortAtStepId;
+    // AP-035 FR-029 (ruleset 2): the capture that cut the most runs short, ties by name. A run
+    // recorded before AP-035 names no capture and keeps the message it had.
+    const capture = Object.entries(journey.cutShortByCapture ?? {}).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0]?.[0];
     findings.push({
       ruleId: "cut-short-journeys",
       stepIds: at ? [at] : [],
-      message: `${journey.runsCutShort} runs of a journey stopped early because ${at ? operationKeyOf(at) : "a step"} returned no value to pass on.`,
-      values: { journeyId: journey.journeyId, runsCutShort: journey.runsCutShort },
+      message:
+        capture === undefined
+          ? `${journey.runsCutShort} runs of a journey stopped early because ${at ? operationKeyOf(at) : "a step"} returned no value to pass on.`
+          : `${journey.runsCutShort} runs of a journey stopped early because ${at ? operationKeyOf(at) : "a step"} returned no value for ${capture} to pass on.`,
+      values: { journeyId: journey.journeyId, runsCutShort: journey.runsCutShort, ...(capture === undefined ? {} : { capture }) },
     });
   }
 

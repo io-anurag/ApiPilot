@@ -48,6 +48,9 @@ describe("QuickPerformancePage", () => {
     expect(screen.getByText("Quick Performance Fixture")).toBeInTheDocument();
     expect(screen.getByText(/generated requests that no one reviewed/)).toBeInTheDocument();
     expect(screen.getByText(/not chained/)).toBeInTheDocument();
+    // AP-035 FR-031: the note points to New journey, not to the guided workflow.
+    expect(screen.getByText(/not chained unless you build a journey/)).toHaveTextContent("choose New journey");
+    expect(screen.queryByText(/use the guided workflow/)).not.toBeInTheDocument();
     for (const stage of ["API Review", "Scenario Review", "AI Enhancement", "Workflow Review", "Postman Generation"]) {
       expect(screen.queryByText(stage)).not.toBeInTheDocument();
     }

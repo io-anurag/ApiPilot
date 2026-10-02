@@ -18,6 +18,7 @@ import type {
   PlanUpdate,
 } from "../../services/performanceTestingClient";
 import { BUTTON_STYLES } from "../controlStyles";
+import { ConfirmDialog } from "../ConfirmDialog";
 import { EmptyState } from "../EmptyState";
 import { ErrorState } from "../ErrorState";
 import { Skeleton } from "../Skeleton";
@@ -30,9 +31,11 @@ import { LoadProfileEditor } from "./LoadProfileEditor";
 import { OtherOperationsTable } from "./OtherOperationsTable";
 import { PendingBar, type PendingItem } from "./PendingBar";
 import { PerformanceRunActivity, PerformanceRunTrigger } from "./PerformanceRunPanel";
-import { restoreOrderFromRun, restoreSettingsFromRun, type RestoreOutcome } from "./restoreFromRun";
+import { journeyStepsNotRestored, restoreOrderFromRun, restoreSettingsFromRun, type RestoreOutcome } from "./restoreFromRun";
 import { SetupItem, type SetupItemState } from "./SetupItem";
 import { ThresholdEditor } from "./ThresholdEditor";
+import { UserJourneysPanel } from "./UserJourneysPanel";
+import { journeyRefusalText } from "./userJourneysViewModel";
 import {
   OMITTED_REASON_LABEL,
   formatDuration,
@@ -97,6 +100,7 @@ export function PerformancePlanScreen({
     fetchPlan,
     fetchValueStatuses,
     fetchStepRequest,
+    fetchResponseFields,
     fetchRemovedOperation,
     generateScript,
     resetPlan,
@@ -113,6 +117,7 @@ export function PerformancePlanScreen({
   const [values, setValues] = useState<UserSuppliedValueStatus[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [listRequest, setListRequest] = useState<ListRequest | null>(null);
   const [tab, setTab] = useState<PlanTab>("plan");
@@ -176,10 +181,8 @@ export function PerformancePlanScreen({
   }, [loadValues, onAdvanced, fetchPlan]);
 
   function explain(result: PerformanceErrorResult): string {
-    if (result.error === "dependency_order_violation" && result.variable) {
-      return `That order would run a step before the step that produces ${result.variable}. The order is unchanged.`;
-    }
-    return result.message;
+    const stepName = (stepId: string) => plan?.journeys.flatMap((journey) => journey.steps).find((step) => step.id === stepId)?.operationKey ?? stepId;
+    return journeyRefusalText(result, stepName) ?? result.message;
   }
 
   /**
@@ -241,13 +244,16 @@ export function PerformancePlanScreen({
       setScript(restored.script);
       void loadValues(environmentId);
       onAdvanced?.();
+      const journeySteps = journeyStepsNotRestored(restored.plan);
+      if (journeySteps.length > 0) notes.push(`These journey steps were not restored, because their operation or target no longer exists: ${journeySteps.join(", ")}.`);
       if (restore.notRestored.length > 0) {
         notes.push(`Body and parameter edits are not recorded in runs, so these steps use their generated requests: ${restore.notRestored.join(", ")}.`);
       }
       const generated = await generateScript();
       if (generated.ok) setScript(generated.script);
       else notes.push(`The script was not generated: ${generated.message}`);
-      const message = [`Restored run ${run}'s removed operations, order, load profile, think time, thresholds and expected statuses.`, ...notes].join(" ");
+      const what = (snapshot.userJourneys ?? []).length > 0 ? "removed operations, journeys, order" : "removed operations, order";
+      const message = [`Restored run ${run}'s ${what}, load profile, think time, thresholds and expected statuses.`, ...notes].join(" ");
       setAnnouncement(message);
       return { ok: true, message };
     } finally {
@@ -298,6 +304,7 @@ export function PerformancePlanScreen({
   }
 
   const steps = plan.journeys.flatMap((journey) => journey.steps);
+  const editedWorkflowJourneys = (plan.userJourneys ?? []).filter((definition) => definition.origin.kind === "based-on-workflow");
   const stepLabel = (stepId: string) =>
     steps.find((step) => step.id === stepId)?.operationKey ?? stepId;
   const environment =
@@ -311,6 +318,10 @@ export function PerformancePlanScreen({
   else if (steps.length === 0) generateBlockedReason = "The plan has nothing to test";
   else if (needsStatus.length > 0)
     generateBlockedReason = "Every step needs an expected status";
+  else if ((plan.bindingsNeedingAttention ?? []).length > 0)
+    generateBlockedReason = "A captured value's target no longer exists";
+  // AP-035 FR-025: journeys the script leaves out, shown as a note and at the run trigger.
+  const incompleteJourneys = plan.journeys.filter((journey) => journey.incompleteReason && journey.source.kind === "user");
   const exclude = (keys: readonly string[], success: string) =>
     void apply(
       { excludedOperationKeys: [...new Set([...plan.excludedOperationKeys, ...keys])] },
@@ -432,6 +443,22 @@ export function PerformancePlanScreen({
       ),
     });
   }
+  if ((plan.bindingsNeedingAttention ?? []).length > 0) {
+    // AP-035 FR-016: blocks the script until each binding is removed or re-targeted.
+    pending.push({
+      id: "bindings",
+      state: "attention",
+      text: `${plan.bindingsNeedingAttention!.length === 1 ? "1 step fills" : `${plan.bindingsNeedingAttention!.length} steps fill`} a value whose target no longer exists. Remove or re-target each binding marked "Target no longer exists".`,
+      detail: (
+        <CountedOperationList
+          label={(count) => `${count} step${count === 1 ? "" : "s"} to fix`}
+          collapseAbove={0}
+          testId="performance-bindings-list"
+          entries={plan.bindingsNeedingAttention!.map((stepId) => ({ operationKey: stepLabel(stepId) }))}
+        />
+      ),
+    });
+  }
   if (!environment) {
     pending.push({
       id: "environment",
@@ -471,7 +498,7 @@ export function PerformancePlanScreen({
       action: { label: "See why", onClick: () => goTo("setup", RUN_TITLE_ID) },
     });
   }
-  const setupPending = pending.filter((item) => item.id !== "operations" && item.id !== "statuses").length;
+  const setupPending = pending.filter((item) => item.id !== "operations" && item.id !== "statuses" && item.id !== "bindings").length;
   const ready =
     pending.length === 0 && environment && runs.readiness?.state === "ready" && !runs.inProgress
       ? {
@@ -493,6 +520,18 @@ export function PerformancePlanScreen({
             >
               Review values
             </button>
+          </>,
+        ]
+      : []),
+    // AP-035 FR-025: not blocking; the script leaves these journeys out.
+    ...(incompleteJourneys.length > 0
+      ? [
+          <>
+            {incompleteJourneys.length === 1 ? "1 journey is" : `${incompleteJourneys.length} journeys are`} incomplete and will not run:{" "}
+            {incompleteJourneys
+              .map((journey) => `${journey.source.kind === "user" ? journey.source.name : journey.id} (${journey.incompleteReason!.missingOperationKeys.join(", ")} not in the plan)`)
+              .join("; ")}
+            .
           </>,
         ]
       : []),
@@ -522,13 +561,26 @@ export function PerformancePlanScreen({
             type="button"
             className={BUTTON_STYLES.secondary}
             disabled={busy}
-            onClick={() => void handleReset()}
+            onClick={() => (editedWorkflowJourneys.length > 0 ? setConfirmReset(true) : void handleReset())}
           >
             Reset plan
           </button>
         </div>
       </div>
       {problem && <ErrorState message={problem} testId="performance-plan-problem" />}
+      {confirmReset && (
+        // AP-035 spec Edge Cases ("Resetting the plan"): name the edited workflow journeys it reverts.
+        <ConfirmDialog
+          message={`Reset the plan? Your own journeys are kept. These edited workflow journeys go back to the proposed journeys: ${editedWorkflowJourneys.map((definition) => definition.name).join(", ")}.`}
+          affectedCount={editedWorkflowJourneys.length}
+          confirmLabel="Reset plan"
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => {
+            setConfirmReset(false);
+            void handleReset();
+          }}
+        />
+      )}
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -677,6 +729,16 @@ export function PerformancePlanScreen({
               entries={plan.discardedParameterEdits.map((operationKey) => ({ operationKey }))}
             />
           </div>
+        )}
+        {activeScope === "plan" && (steps.length > 0 || (plan.userJourneys ?? []).length > 0) && (
+          <UserJourneysPanel
+            plan={plan}
+            busy={busy}
+            apply={apply}
+            guided={plan.source === "guided"}
+            loadFields={fetchResponseFields}
+            loadPreview={fetchStepRequest}
+          />
         )}
         {activeScope === "plan" && steps.length > 0 && (
           <JourneyList
