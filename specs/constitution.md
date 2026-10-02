@@ -1,6 +1,63 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 2.7.0 → 2.8.0 (minor: XVII's 2026-09-24 exception extended to AP-037)
+
+Trigger: the governance prerequisite for AP-037 (Request-Chain Performance Plans;
+specs/037-request-chain-performance, Governance and Clarifications 2026-10-02). AP-037 replaces
+the derived AP-029, AP-032, AP-033 and AP-036 performance plans, in phases, with a request-chain
+plan whose steps the user owns, seeded once and never re-derived, with saved plans and CSV data
+sets. The exception names its plans by feature and MUST NOT be cited for other content. Its
+meanings of "approved" (a derived plan, a reviewed AP-032 plan, a reviewed AP-036 conversion) do
+not fit a plan the user authors. Its conditions route every value through the run's environment,
+which a data set does not use.
+
+Bump reasoning: the old plans keep running until AP-037's second phase retires them, so their
+meanings and conditions are left unchanged and request-chain plans are added beside them with one
+self-contained set of conditions. This is materially expanded guidance (MINOR). No existing
+principle or exception is removed or redefined. The user's request to consolidate the k6
+exceptions is met for request-chain plans now. Removing the legacy paragraphs is deferred to the
+amendment that accompanies AP-037's retirement phase (see Deferred TODOs).
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: the 2026-09-24 exception now also covers AP-037. For a
+    request-chain plan, "approved" means the user reviewed the plan at the run trigger, which
+    lists every chain and its step count, every write step, every host and every data set, and
+    then triggered the run. The paragraphs on AP-032, user-edited inputs and AP-036 do not apply
+    to it. Every first-list condition applies, except that data set values have one added route.
+    In addition: seeding never executes, evaluates or sends anything, and reads scripts only as
+    text against enumerated forms; step content, statuses, extractors and checks are written only
+    as data for the one fixed runtime, with no expression, pattern, filter or function; dynamic
+    variables come from ApiPilot's own code for a fixed list; no environment value, data set value
+    or literal credential reaches the plan, script or template, and literal credentials become
+    secret environment values; extracted values stay in virtual-user memory; data set values are
+    encrypted at rest and reach k6 only at run time, through the environment or a per-run copy
+    read by a fixed name and removed afterwards, with no other file read and no script bytes
+    depending on the content; requests go only to the base URL and literal hosts, each listed,
+    and a host from another variable is refused; the plan, snapshot and report name each step's
+    seed source or that the user added it, mark changed steps, and state that the content is the
+    user's and unverified, with no content or value; saved plans are local, session-owned,
+    secret-free and never logged, sent to AI or produced by AI. The closing exclusion paragraph
+    and the rationale record the reasoning. The 2026-09-20 and 2026-09-30 exceptions are
+    unchanged.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs:
+  - TODO(XVII_LEGACY_PLAN_TEXT): when AP-037's second phase (FR-036) retires the AP-029, AP-032,
+    AP-033 and AP-036 plan models, amend XVII to remove their paragraphs and meanings of
+    "approved", leaving request-chain plans as the one k6 plan rule. Removing guidance is
+    expected to be a MAJOR bump.
+  - The enumerated check forms, statement forms and dynamic-variable list stay in the feature's
+    specification and plan by design.
+
+Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version in
+the same change.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.6.0 → 2.7.0 (minor: XVII's 2026-09-24 exception extended to AP-036)
 
 Trigger: the governance prerequisite for AP-036 (Performance Test from a Postman Collection;
@@ -533,9 +590,10 @@ verified by ApiPilot. It does not apply to ApiPilot-generated artifacts, AI outp
 OpenAPI specifications, and MUST NOT be cited to justify executing any other uploaded or
 generated content elsewhere in the system.
 
-**Exception (2026-09-24 amendment, extended 2026-09-27, 2026-09-29 and 2026-10-02)**: A
-performance-testing feature (AP-029, k6 Performance Testing; AP-032, Quick Performance Test from a
-Specification; and AP-036, Performance Test from a Postman Collection) MAY execute a k6 script that
+**Exception (2026-09-24 amendment, extended 2026-09-27, 2026-09-29 and 2026-10-02 for AP-036 and
+AP-037)**: A performance-testing feature (AP-029, k6 Performance Testing; AP-032, Quick Performance
+Test from a Specification; AP-036, Performance Test from a Postman Collection; and AP-037,
+Request-Chain Performance Plans) MAY execute a k6 script that
 ApiPilot generated deterministically (XVI) from a Performance Plan the user approved, only when all
 of the following hold. For AP-032, whose plan is built directly
 from an uploaded specification with generated positive scenarios that no one reviewed,
@@ -601,13 +659,56 @@ the run. Every condition above applies unchanged, and in addition:
 - a plan rebuilt after its collection changes needs a new review before its script can be
   generated or run.
 
+AP-037 (specs/037-request-chain-performance) replaces these derived plans, in phases, with a
+request-chain plan. Such a plan holds chains of steps the user owns. Each step is a concrete
+request with expected statuses, extractors, checks and a setting for how often it runs. A plan is
+seeded once from a specification, from approved workflows or from a stored collection, or built
+from nothing, and is never re-derived from its source. Whatever it was seeded from, every step is
+content the user authored, which ApiPilot does not verify. Until AP-037's second phase retires
+them, AP-029, AP-032, AP-033 and AP-036 plans keep the meanings and conditions above unchanged.
+For a request-chain plan, the paragraphs above on AP-032, on user-edited plan inputs and on AP-036
+do not apply. Instead, "approved" means the user reviewed the plan at the run trigger, which lists
+every chain and its number of steps, every write step, every host the plan sends to and every data
+set, and then triggered the run. Every condition in the first list above applies unchanged, except
+that data set values may also reach the script by the route stated below, and in addition:
+- seeding never executes a collection's pre-request or test scripts, evaluates any expression in
+  them, or sends any request. Scripts are read only as text, against the fixed statement forms
+  the specification enumerates;
+- step content (URLs, query parameters, headers and bodies), expected statuses, extractors and
+  checks are written into the script only as data that ApiPilot's one fixed runtime interprets,
+  never as code. An extractor is only a name with a field path or a header name. A check is only
+  one of the forms the feature's specification enumerates. No expression, pattern, filter or
+  function is accepted. Dynamic variables are produced by code ApiPilot writes, for a fixed list
+  the specification defines;
+- no environment value, data set value or literal credential reaches the plan, the script or the
+  environment template. A literal value in an `Authorization`, `Proxy-Authorization` or `Cookie`
+  header, or in a field the request schema declares sensitive (`format: password`), becomes a
+  secret environment value when the step is saved, and the step keeps only the reference (XVIII);
+- values extracted during a run exist only in the virtual user's memory during that run. They are
+  never stored, shown, logged or reported;
+- data set values, from a CSV file the user uploads to the plan, are encrypted at rest with the
+  same protection as environment values. They reach k6 only at run time, through the run's
+  environment or through a copy that ApiPilot writes for that run alone. The script reads that
+  copy by a fixed name ApiPilot chose, and ApiPilot removes the copy when the run ends. The script
+  reads no other file, and its bytes do not depend on a data set's content;
+- every step URL starts with the target environment's base URL or with a literal scheme and host.
+  The script sends requests only to those hosts, and the plan and the run trigger list each one.
+  A URL whose host comes from any other variable is refused before the script is generated;
+- the plan, the run's snapshot and the report name each step's seed source, or state that the
+  user added it, mark each step the user changed since seeding, and state that step content is
+  authored by the user and not verified by ApiPilot. They contain no step content and no value
+  (XIII);
+- saved plans are kept locally, owned by the session and removed with it, hold no secret value,
+  and are never logged, sent to AI or produced by AI.
+
 This exception does not apply to AI output, uploaded OpenAPI specifications, uploaded, imported
 or user-edited scripts, or any other generated artifact, and MUST NOT be cited to justify
 executing any other content elsewhere in the system. A script generated from an AP-032 plan is
 ApiPilot's own output; the uploaded specification it was derived from is never itself executed.
 Likewise, a script generated from an AP-036 plan is ApiPilot's own output. The collection's own
 scripts are never executed under this exception; they run only in Import & Run Collection, under
-the 2026-09-20 exception.
+the 2026-09-20 exception. A script generated from a request-chain plan is also ApiPilot's own
+output: the user's steps reach it only as data, and a data set reaches it only at run time.
 
 **Exception (2026-09-30 amendment)**: A user-initiated performance-testing feature that knowingly
 runs a k6 script the user supplies (uploaded, or written or edited in ApiPilot's script editor)
@@ -675,7 +776,15 @@ run executes in Postman's sandbox, are never run here. A fixed recognizer turns 
 statements into data, and everything else is shown to the user rather than guessed (XIV, XIX).
 Requests can reach hosts written literally in the collection, outside the target environment, so
 listing them, as the 2026-09-30 exception does, keeps that risk visible to the person accepting
-it. The 2026-09-30
+it. The second 2026-10-02 extension, for AP-037, keeps AP-036's footing: ApiPilot writes every
+byte of the script, deterministically, from a plan the user reviewed, while the requests are the
+user's. A request-chain plan is not re-derived from its source, so there is no conversion to
+review again. Approval instead rests on the run trigger, which makes every chain, write, host and
+data set visible before the run. Seeding inherits AP-036's rule that scripts are read only as text
+and never run. Data sets add one route by which values enter a run, a file, and the conditions
+narrow it: one copy per run, read by a fixed name, removed afterwards, with no other file read.
+This lets ApiPilot's own runtime read its own data without opening file access to user-supplied
+scripts, which the 2026-09-30 exception keeps closed. The 2026-09-30
 exception returns to the footing of the 2026-09-20 one: a QA engineer knowingly running their
 own script is a user-initiated act, not the platform executing content of its own generation.
 Because ApiPilot cannot know what a user's script does, the conditions narrow what it can reach
@@ -903,4 +1012,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 2.7.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-02
+**Version**: 2.8.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-02
