@@ -19,6 +19,8 @@ export interface SandboxRequest {
 export interface SandboxResponse {
   status: number;
   body?: unknown;
+  /** AP-035: response headers, keyed as k6 reports them (canonical case). */
+  headers?: Record<string, string>;
 }
 
 export interface SandboxMetric {
@@ -70,6 +72,7 @@ export function loadScript(
       return {
         status: response.status,
         body: text,
+        headers: { ...(response.headers ?? {}) },
         json() {
           return JSON.parse(text);
         },

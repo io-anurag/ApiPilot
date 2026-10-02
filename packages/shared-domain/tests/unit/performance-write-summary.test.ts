@@ -48,14 +48,24 @@ describe("summarizeWriteOperations", () => {
     ]);
   });
 
-  it("lists each operation once in plan order, with every step it appears in", () => {
+  it("lists each operation once in plan order, with every step it appears in and that step's journey", () => {
     const summary = summarizeWriteOperations([
       { id: "wf1", source: { kind: "workflow", workflowId: "w1" }, steps: [step("a", "POST", "/orders"), step("b", "GET", "/orders/{id}")] },
       { id: "wf2", source: { kind: "workflow", workflowId: "w2" }, steps: [step("c", "POST", "/orders"), step("d", "PATCH", "/orders/{id}")] },
     ]);
     expect(summary.operations).toEqual([
-      { operationKey: "POST /orders", method: "POST", path: "/orders", effect: "creates", stepIds: ["a", "c"] },
-      { operationKey: "PATCH /orders/{id}", method: "PATCH", path: "/orders/{id}", effect: "updates", stepIds: ["d"] },
+      {
+        operationKey: "POST /orders",
+        method: "POST",
+        path: "/orders",
+        effect: "creates",
+        stepIds: ["a", "c"],
+        steps: [
+          { stepId: "a", journeyId: "wf1", journeyLabel: "J1" },
+          { stepId: "c", journeyId: "wf2", journeyLabel: "J2" },
+        ],
+      },
+      { operationKey: "PATCH /orders/{id}", method: "PATCH", path: "/orders/{id}", effect: "updates", stepIds: ["d"], steps: [{ stepId: "d", journeyId: "wf2", journeyLabel: "J2" }] },
     ]);
   });
 
@@ -68,5 +78,30 @@ describe("summarizeWriteOperations", () => {
     expect(WRITE_EFFECT_LABELS).toEqual({ POST: "Creates", PUT: "Replaces", PATCH: "Updates", DELETE: "Deletes" });
     expect(writeEffectOf("put")).toBe("replaces");
     expect(writeEffectOf("GET")).toBeNull();
+  });
+});
+
+/** AP-035 FR-023 (specs/035-user-defined-journeys research R15; tasks T040). */
+describe("summarizeWriteOperations counts steps (AP-035 FR-023)", () => {
+  it("counts each step that sends a write, names its journey, and leaves out an incomplete journey", () => {
+    const summary = summarizeWriteOperations([
+      { id: "u1", source: { kind: "user", userJourneyId: "u1", name: "Lifecycle" }, steps: [step("a", "POST", "/customers"), step("b", "PUT", "/customers/{id}"), step("c", "PUT", "/customers/{id}")] },
+      journey("j2", [step("d", "POST", "/customers")]),
+      { id: "u3", source: { kind: "user", userJourneyId: "u3", name: "Half" }, steps: [step("e", "DELETE", "/customers/{id}")], incompleteReason: { missingOperationKeys: ["GET /x"] } },
+    ]);
+    expect(summary.total).toBe(4);
+    expect(summary.byMethod).toEqual([
+      { method: "POST", count: 2 },
+      { method: "PUT", count: 2 },
+    ]);
+    expect(summary.operations[0].steps).toEqual([
+      { stepId: "a", journeyId: "u1", journeyLabel: "J1 Lifecycle" },
+      { stepId: "d", journeyId: "j2", journeyLabel: "J2" },
+    ]);
+  });
+
+  it("gives today's numbers for a plan with each operation in one step", () => {
+    const summary = summarizeWriteOperations([journey("j1", [step("a", "POST", "/a")]), journey("j2", [step("b", "DELETE", "/a/{id}")])]);
+    expect(summary.total).toBe(2);
   });
 });

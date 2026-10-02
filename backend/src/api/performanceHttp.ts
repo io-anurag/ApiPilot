@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { EnvironmentNotFoundError } from "../execution/errors";
 import { createLogger } from "../logger";
 import {
+  BindingTargetMissingError,
   DependencyOrderViolationError,
   InvalidBodyEditError,
   InvalidParameterEditError,
@@ -15,6 +16,7 @@ import {
   QuickTestExistsError,
   StepNotFoundError,
   UnknownOperationError,
+  UserJourneyRefusedError,
 } from "../performance/errors";
 import { InvalidPlanUpdateError } from "../performance/plan/planUpdate";
 
@@ -72,7 +74,9 @@ export function handleKnownError(req: Request, res: Response, startedAt: number,
   if (err instanceof InvalidExpectedStatusError) return fail(req, res, startedAt, 400, "invalid_expected_status", err.message, { stepId: err.stepId });
   if (err instanceof InvalidBodyEditError) return fail(req, res, startedAt, 400, err.code, err.message, { stepId: err.stepId, ...err.extra });
   if (err instanceof InvalidParameterEditError) return fail(req, res, startedAt, 400, err.code, err.message, { stepId: err.stepId, ...err.extra });
-  if (err instanceof UnknownOperationError) return fail(req, res, startedAt, 400, "unknown_operation", err.message);
+  if (err instanceof UnknownOperationError) return fail(req, res, startedAt, 400, "unknown_operation", err.message, { operationKey: err.operationKey });
+  if (err instanceof UserJourneyRefusedError) return fail(req, res, startedAt, 400, err.code, err.message, err.extra);
+  if (err instanceof BindingTargetMissingError) return fail(req, res, startedAt, 422, "binding_target_missing", err.message, { stepIds: err.stepIds });
   if (err instanceof InvalidPlanUpdateError) return fail(req, res, startedAt, 400, "invalid_request", err.message);
   if (err instanceof EnvironmentNotFoundError) return fail(req, res, startedAt, 404, "environment_not_found", err.message);
   if (err instanceof PerformanceRunNotFoundError) return fail(req, res, startedAt, 404, "run_not_found", err.message);

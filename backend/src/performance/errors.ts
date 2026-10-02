@@ -231,3 +231,44 @@ export class InvalidUserScriptSettingsError extends Error {
     this.name = "InvalidUserScriptSettingsError";
   }
 }
+
+/**
+ * AP-035 (specs/035-user-defined-journeys contracts/plan-journeys-api.md): why a `PUT /plan` user
+ * journey change was refused. The plan is unchanged. Extras name journeys, steps, captures and
+ * targets only, never a value.
+ */
+export type UserJourneyRefusalCode =
+  | "invalid_user_journey"
+  | "journey_too_long"
+  | "too_many_captures"
+  | "capture_name_invalid"
+  | "capture_name_taken"
+  | "capture_path_invalid"
+  | "capture_header_invalid"
+  | "binding_capture_unknown"
+  | "capture_in_use"
+  | "binding_target_unknown"
+  | "binding_target_taken"
+  | "parameter_edited"
+  | "invalid_standalone"
+  | "not_a_proposed_journey"
+  | "not_based_on_workflow";
+
+export class UserJourneyRefusedError extends Error {
+  constructor(
+    public readonly code: UserJourneyRefusalCode,
+    message: string,
+    public readonly extra: Record<string, string | number | string[] | Record<string, string>> = {},
+  ) {
+    super(message);
+    this.name = "UserJourneyRefusedError";
+  }
+}
+
+/** AP-035 FR-016 `422 binding_target_missing`: a captured value's target no longer exists. */
+export class BindingTargetMissingError extends Error {
+  constructor(public readonly stepIds: string[]) {
+    super("A captured value's target no longer exists. Remove or re-target each binding marked \"Target no longer exists\".");
+    this.name = "BindingTargetMissingError";
+  }
+}

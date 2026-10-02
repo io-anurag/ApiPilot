@@ -367,7 +367,9 @@ verify the new order is kept in the regenerated script.
 - **FR-010**: Each workflow variable MUST be extracted from its producer's response and checked.
   When an extraction fails, the rest of that journey MUST NOT be attempted in that iteration, and it
   MUST be recorded as cut short. The virtual user MUST then continue with the next journey in the
-  same iteration.
+  same iteration. *(Amended 2026-10-02 by AP-035 FR-033, specs/035-user-defined-journeys: a
+  variable is extracted only when its producer received one of its expected statuses, and only a
+  string, number or boolean value succeeds.)*
 - **FR-011**: Requests MUST be built with the same parameter serialization as the functional
   tests, so that a performance request matches its Postman equivalent for the same scenario.
 - **FR-012**: Every step MUST have one or more expected status codes. They MUST start as the success
@@ -448,6 +450,8 @@ verify the new order is kept in the regenerated script.
   journey and step order, think time, load profile and stages, thresholds, and the expected
   statuses the user set. Restoring MUST then generate the script and MUST NOT start a run. It MUST
   be refused, with the reason, when the run was built from a different specification or scenarios.
+  *(Extended 2026-10-02 by AP-035 FR-028: restoring also restores the run's user-defined journeys,
+  captures and bindings.)*
   Body and parameter edits are not recorded in a run (AP-033), so the steps that had them MUST be
   named as not restored (amended 2026-09-30).
 - **FR-025**: The trigger MUST name its target environment, and the environment's name, tier as a

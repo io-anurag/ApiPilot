@@ -60,6 +60,7 @@ export const KNOWN_METRICS: ReadonlySet<string> = new Set([
   "apipilot_missing_data",
   "apipilot_not_attempted",
   "apipilot_cut_short",
+  "apipilot_capture",
   "apipilot_token_refresh",
 ]);
 

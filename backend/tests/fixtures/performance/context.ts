@@ -4,7 +4,7 @@ import { computeDeterministicRelationships } from "../../../src/dependencies/det
 import type { PerformanceContext } from "../../../src/performance/plan/stepRequest";
 import { withQuickScenarioIds } from "../../../src/performance/quick/quickScenarioIds";
 import { generatePositiveScenarios, generateTestModel } from "../../../src/testDesign/generateTestModel";
-import { loadBodyEditsApiModel, loadParameterEditsApiModel, loadPerformanceApiModel, loadQuickApiModel } from "./specification";
+import { loadBodyEditsApiModel, loadParameterEditsApiModel, loadPerformanceApiModel, loadQuickApiModel, loadUserJourneysApiModel } from "./specification";
 
 /**
  * A `PerformanceContext` for `performance.yaml` built with the real analysis, deterministic
@@ -62,5 +62,15 @@ export async function bodyEditsContext(
 /** AP-033 FR-020 (amended 2026-09-30): a quick `PerformanceContext` for `parameter-edits.yaml`. */
 export async function parameterEditsContext(): Promise<PerformanceContext> {
   const apiModel = await loadParameterEditsApiModel();
+  return { apiModel, approvedScenarios: withQuickScenarioIds(generatePositiveScenarios(apiModel)), workflows: [], relationships: [], source: "quick" };
+}
+
+/**
+ * AP-035 (specs/035-user-defined-journeys tasks T002): a quick `PerformanceContext` for
+ * `user-journeys.yaml`, with quick scenario ids, no workflows and no relationships, so every
+ * operation starts as a single-step journey and any chaining comes from user-defined journeys.
+ */
+export async function userJourneysContext(): Promise<PerformanceContext> {
+  const apiModel = await loadUserJourneysApiModel();
   return { apiModel, approvedScenarios: withQuickScenarioIds(generatePositiveScenarios(apiModel)), workflows: [], relationships: [], source: "quick" };
 }

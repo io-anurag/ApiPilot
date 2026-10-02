@@ -52,9 +52,20 @@ export function WriteOperationSummary({
       ))}
     </ul>
   );
+  // AP-035 FR-023: an operation sent by several steps says how many and in which journeys.
   const entries = summary.operations.map((operation) => ({
     operationKey: operation.operationKey,
-    detail: <StatusBadge label={WRITE_EFFECT_LABELS[operation.method]} tone="warning" />,
+    detail: (
+      <>
+        <StatusBadge label={WRITE_EFFECT_LABELS[operation.method]} tone="warning" />
+        {operation.steps.length > 1 && (
+          <span className="text-xs text-muted">
+            {" "}
+            × {operation.steps.length} steps: {operation.steps.map((step) => step.journeyLabel).join(", ")}
+          </span>
+        )}
+      </>
+    ),
   }));
 
   if (variant === "trigger") {

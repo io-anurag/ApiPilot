@@ -2,6 +2,7 @@ import type {
   EnvironmentTier,
   K6Readiness,
   LoadProfile,
+  PerformanceJourney,
   PerformanceResult,
   PerformanceRunSummary,
   PerformanceStep,
@@ -128,4 +129,24 @@ export function unexpectedStatusesByStep(result: PerformanceResult | undefined):
     byStep.set(step.stepId, unexpected.map((entry) => `${entry.status === "0" ? "no response" : entry.status} × ${groupDigits(entry.count)}`).join(", "));
   }
   return byStep;
+}
+
+/**
+ * AP-035 FR-022 (specs/035-user-defined-journeys research R16): how a journey's origin is shown,
+ * always as text. A proposed journey came from an approved workflow; a user-defined one is the
+ * engineer's, or based on a workflow they edited.
+ */
+export function journeyOriginLabel(source: PerformanceJourney["source"]): string {
+  if (source.kind === "workflow") return "Proposed from workflow";
+  if (source.kind === "user") return source.basedOnWorkflowId ? "Based on workflow" : "Defined by you";
+  return "Single operation";
+}
+
+export const INCOMPLETE_LABEL = "Incomplete";
+export const TARGET_MISSING_LABEL = "Target no longer exists";
+export const NOT_DOCUMENTED_LABEL = "Not documented in the specification";
+export const USES_CAPTURE_LABEL = "Uses captured value";
+
+export function capturesLabel(count: number): string {
+  return `Captures ${count}`;
 }

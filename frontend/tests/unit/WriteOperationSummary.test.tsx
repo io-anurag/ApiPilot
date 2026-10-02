@@ -51,3 +51,18 @@ describe("WriteOperationSummary", () => {
     expect(screen.getByTestId("write-summary-trigger")).toHaveTextContent("This plan sends only read requests.");
   });
 });
+
+/** AP-035 FR-023 (specs/035-user-defined-journeys research R15). */
+describe("WriteOperationSummary with an operation in several steps", () => {
+  it("counts each step and names the journeys of an operation sent more than once", () => {
+    const post = quickStep("POST", "/orders");
+    const journeys: PerformanceJourney[] = [
+      { id: "j-user", source: { kind: "user", userJourneyId: "j-user", name: "Lifecycle" }, steps: [post, { ...post, id: "s-again" }] },
+      { id: "j-single", source: { kind: "operation" }, steps: [{ ...post, id: "s-single" }] },
+    ];
+    render(<WriteOperationSummary summary={summarizeWriteOperations(journeys)} variant="plan" listId="writes" />);
+    const summary = screen.getByTestId("write-summary-plan");
+    expect(summary).toHaveTextContent("3 write operations will be sent");
+    expect(summary).toHaveTextContent("× 3 steps: J1 Lifecycle, J1 Lifecycle, J2");
+  });
+});

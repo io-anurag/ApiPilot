@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PerformancePlan } from "@apipilot/shared-domain";
-import { restoreOrderFromRun, restoreSettingsFromRun } from "../../src/components/performance/restoreFromRun";
+import { journeyStepsNotRestored, restoreOrderFromRun, restoreSettingsFromRun } from "../../src/components/performance/restoreFromRun";
 import { planFixture, readyPlan } from "./performanceFixtures";
 
 /** AP-029 FR-024b (amended 2026-09-30): a past run's settings, rebuilt on the current plan. */
@@ -69,5 +69,56 @@ describe("restoreOrderFromRun", () => {
     expect(restoreOrderFromRun("run-12345678", snapshot(), readyPlan())).toEqual({
       reason: "The plan's journeys differ from run run-1234's, so its order was not restored.",
     });
+  });
+});
+
+/** AP-035 FR-028 (specs/035-user-defined-journeys research R12; tasks T049). */
+describe("restoring a run's user-defined journeys", () => {
+  const definition = {
+    id: "j-user",
+    name: "Lifecycle",
+    origin: { kind: "defined" as const },
+    nextStepNumber: 3,
+    steps: [
+      { id: "s-1", operationKey: "POST /orders", captures: [{ name: "order_id", source: { kind: "body" as const, path: "orderId", segments: [{ field: "orderId" }] }, documented: true }], bindings: [] },
+      { id: "s-2", operationKey: "GET /orders/{orderId}", captures: [], bindings: [{ target: { kind: "path" as const, name: "orderId" }, captureStepId: "s-1", captureName: "order_id", state: "active" as const }] },
+    ],
+  };
+
+  it("sends the run's journeys with their own ids, sequence numbers and standalone operations", () => {
+    const run = { ...snapshot(), userJourneys: [definition], nextUserJourneyNumber: 4, alsoStandalone: ["POST /orders"] };
+    const restore = restoreSettingsFromRun("run-12345678", run, planFixture());
+    expect(restore.ok && restore.settings).toMatchObject({
+      userJourneys: [
+        {
+          id: "j-user",
+          name: "Lifecycle",
+          nextStepNumber: 3,
+          steps: [
+            { id: "s-1", operationKey: "POST /orders", captures: [{ name: "order_id", source: { kind: "body", path: "orderId" } }], bindings: [] },
+            { id: "s-2", operationKey: "GET /orders/{orderId}", captures: [], bindings: [{ target: { kind: "path", name: "orderId" }, captureStepId: "s-1", captureName: "order_id" }] },
+          ],
+        },
+      ],
+      nextUserJourneyNumber: 4,
+      alsoStandalone: ["POST /orders"],
+    });
+  });
+
+  it("clears today's journeys when the run had none, and leaves a plan from before AP-035 as it was", () => {
+    const now = { ...planFixture(), userJourneys: [definition] };
+    expect(restoreSettingsFromRun("run-12345678", snapshot(), now)).toMatchObject({ ok: true, settings: { userJourneys: [] } });
+    const older = restoreSettingsFromRun("run-12345678", snapshot(), planFixture());
+    expect(older.ok && "userJourneys" in older.settings).toBe(false);
+  });
+
+  it("names the journey steps that came back incomplete or with a missing target", () => {
+    const restored = {
+      ...planFixture(),
+      journeys: [
+        { id: "j-user", source: { kind: "user" as const, userJourneyId: "j-user", name: "Lifecycle" }, steps: [], incompleteReason: { missingOperationKeys: ["POST /orders"] } },
+      ],
+    };
+    expect(journeyStepsNotRestored(restored)).toEqual(["Lifecycle: POST /orders"]);
   });
 });

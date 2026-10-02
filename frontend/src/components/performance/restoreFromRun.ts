@@ -1,5 +1,6 @@
 import type { PerformancePlan } from "@apipilot/shared-domain";
 import type { PlanUpdate } from "../../services/performanceTestingClient";
+import { journeysInputOf } from "./userJourneysViewModel";
 
 /**
  * AP-029 FR-024b (amended 2026-09-30): rebuild a past run's plan settings on the current plan, so a
@@ -38,6 +39,14 @@ export function restoreSettingsFromRun(runId: string, snapshot: PerformancePlan,
     thresholds: snapshot.thresholds.map(({ scope, metric, comparator, limit }) => ({ scope, metric, comparator, limit })),
   };
   if (Object.keys(expectedStatuses).length > 0) settings.expectedStatuses = expectedStatuses;
+  // AP-035 FR-028 (research R12): the run's journeys, captures and bindings, with their own ids. A
+  // step whose operation or target no longer exists comes back incomplete or marked, never refused.
+  const userJourneys = snapshot.userJourneys ?? [];
+  if (userJourneys.length > 0 || (current.userJourneys ?? []).length > 0) {
+    settings.userJourneys = journeysInputOf(userJourneys).map((journey, index) => ({ ...journey, nextStepNumber: userJourneys[index].nextStepNumber }));
+    settings.nextUserJourneyNumber = snapshot.nextUserJourneyNumber ?? 1;
+    settings.alsoStandalone = [...(snapshot.alsoStandalone ?? [])];
+  }
   const notRestored = snapshotSteps.filter((step) => step.bodyEdited || step.parametersEdited).map((step) => step.operationKey);
   return { ok: true, settings, notRestored };
 }
@@ -72,4 +81,20 @@ function sameSequence(a: readonly string[], b: readonly string[]): boolean {
 function sameMembers(a: readonly string[], b: readonly string[]): boolean {
   const members = new Set(b);
   return a.length === b.length && members.size === b.length && a.every((id) => members.has(id));
+}
+
+/**
+ * AP-035 FR-028: the steps of the restored journeys that could not come back as they ran, because
+ * their operation or a bound target no longer exists, named for the restore message.
+ */
+export function journeyStepsNotRestored(restored: PerformancePlan): string[] {
+  const named: string[] = [];
+  for (const journey of restored.journeys) {
+    if (journey.source.kind !== "user") continue;
+    for (const key of journey.incompleteReason?.missingOperationKeys ?? []) named.push(`${journey.source.name}: ${key}`);
+    for (const step of journey.steps) {
+      if (step.bindings?.some((binding) => binding.state === "target-missing")) named.push(`${journey.source.name}: ${step.operationKey}`);
+    }
+  }
+  return named;
 }

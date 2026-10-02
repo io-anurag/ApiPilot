@@ -1,11 +1,14 @@
 import type {
   ApiOperation,
+  BodyPathSegment,
+  CaptureSource,
   PerformancePlan,
   PerformanceStep,
   PreviewAuth,
   PreviewParameter,
   PreviewReference,
   PreviewValue,
+  SchemaConstraint,
   StepRequestPreview,
   TestScenario,
 } from "@apipilot/shared-domain";
@@ -14,7 +17,7 @@ import { baseBodyText, bodyEditFor, bodyKindOf } from "./bodyEdits";
 import { bodySchemaMismatches, isOnlyReference } from "./bodySchemaMismatches";
 import { parameterEditModel } from "./parameterEdits";
 import { BASE_URL_VARIABLE } from "../../postman/artifactVariables";
-import { workflowVariableName } from "../../postman/workflowRendering";
+import { parseCapturePath } from "./capturePath";
 import { stepRequestFor } from "./planStepRequest";
 import { planAuth, templateReferences, UNIQUE_TOKEN_PREFIX, type PerformanceContext } from "./stepRequest";
 
@@ -47,12 +50,21 @@ function splitUrl(url: string): { path: string; query: string } {
 
 export function buildStepRequestPreview(plan: PerformancePlan, context: PerformanceContext, stepId: string): StepRequestPreview {
   const auth = planAuth(context);
-  const { step, operation, scenario, generated, workflow, consumes, built } = stepRequestFor(plan, context, auth, stepId);
+  const { journey, step, operation, scenario, generated, consumed, built } = stepRequestFor(plan, context, auth, stepId);
   const template = built.template;
   const tokenSource = built.schemeName ? auth.tokenSources.get(built.schemeName) : undefined;
   const acquiresToken = tokenSource !== undefined && (built.authKind === "chained-login" || built.authKind === "oauth2-client-credentials");
-  const workflowNames = new Map(consumes.map((variable) => [workflowVariableName(workflow?.id ?? "", variable.name), variable.name]));
+  const workflowNames = new Map(consumed.map((entry) => [entry.key, entry.name]));
   const secretByName = new Map(plan.userSuppliedValues.map((value) => [value.name, value.secret]));
+  // AP-035 FR-012: a bound target shows the capture's name and step, never a value.
+  const captureByKey = new Map(
+    journey.source.kind === "user"
+      ? consumed.map((entry) => {
+          const binding = (step.bindings ?? []).find((candidate) => candidate.captureName === entry.name && targetField(candidate.target) === entry.field);
+          return [entry.key, { binding, entry }] as const;
+        })
+      : [],
+  );
 
   const classify = (name: string): PreviewReference => {
     if (name.startsWith(UNIQUE_TOKEN_PREFIX)) {
@@ -60,6 +72,20 @@ export function buildStepRequestPreview(plan: PerformancePlan, context: Performa
       if (field) return { kind: "unique-per-iteration", name, format: field.format };
     }
     if (acquiresToken && name === tokenSource.tokenVariable) return { kind: "credential", name, schemeName: tokenSource.schemeName };
+    const captured = captureByKey.get(name);
+    if (captured?.binding) {
+      const producer = journey.steps.find((candidate) => candidate.id === captured.binding!.captureStepId);
+      const capture = producer?.captures?.find((candidate) => candidate.name === captured.binding!.captureName);
+      const source: CaptureSource = capture?.source ?? { kind: "body", path: "", segments: [] };
+      return {
+        kind: "capture",
+        name,
+        captureName: captured.binding.captureName,
+        producerStepId: captured.binding.captureStepId,
+        source,
+        secret: captureIsSecret(captured.binding.target, operation),
+      };
+    }
     const variable = workflowNames.get(name);
     if (variable !== undefined) {
       const binding = step.variableBindings.find((candidate) => candidate.role === "consumes" && candidate.variable === variable);
@@ -110,6 +136,30 @@ export function buildStepRequestPreview(plan: PerformancePlan, context: Performa
     // AP-033 FR-020 (amended 2026-09-30): the documented parameters, as generated and as edited.
     parameterEdit: parameterEditModel(plan, step, operation, generated),
   };
+}
+
+function targetField(target: NonNullable<PerformanceStep["bindings"]>[number]["target"]): string {
+  return target.kind === "body" ? target.fieldPath : target.name;
+}
+
+function schemaAt(schema: SchemaConstraint | undefined, segments: readonly BodyPathSegment[]): SchemaConstraint | undefined {
+  let current = schema;
+  for (const segment of segments) {
+    if (!current) return undefined;
+    current = "index" in segment ? current.items : current.properties[segment.field];
+  }
+  return current;
+}
+
+/**
+ * AP-035 spec Edge Cases ("Captured secrets"): a capture bound to a header, or to a field the
+ * request schema declares `format: password`, is marked secret, as environment secrets are.
+ */
+function captureIsSecret(target: NonNullable<PerformanceStep["bindings"]>[number]["target"], operation: ApiOperation): boolean {
+  if (target.kind === "header") return true;
+  if (target.kind !== "body") return false;
+  const parsed = parseCapturePath(target.fieldPath);
+  return parsed.ok && schemaAt(primaryRequestBodySchema(operation), parsed.segments)?.format === "password";
 }
 
 type Replacement = { fieldPath: string; reference: PreviewReference };

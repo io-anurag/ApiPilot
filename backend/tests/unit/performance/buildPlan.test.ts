@@ -1,12 +1,15 @@
+import type { PerformancePlan } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { assemblePlan, buildPlan, choicesOf, rebuildPlan, upstreamFingerprint } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import { valueStatuses } from "../../../src/performance/plan/userSuppliedValues";
 import { pathParameterVariableName } from "../../../src/postman/artifactVariables";
-import { InvalidLoadProfileError, InvalidThresholdError, UnknownOperationError } from "../../../src/performance/errors";
+import { InvalidLoadProfileError, InvalidThresholdError, UnknownOperationError, UserJourneyRefusedError } from "../../../src/performance/errors";
+import { userJourneysInput } from "../../../src/performance/plan/userJourneys";
 import { STARTING_STAGES, startingProfile, validateLoadProfile } from "../../../src/performance/plan/loadProfiles";
 import { environmentFixture, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
-import { bodyEditsContext, performanceContext, quickContext } from "../../fixtures/performance/context";
+import { bodyEditsContext, performanceContext, quickContext, userJourneysContext } from "../../fixtures/performance/context";
+import { CREATE, lifecycleInput, lifecyclePlan, READ, REMOVE, REPLACE } from "../../fixtures/performance/userJourneyPlans";
 
 /** US1 plan building (research D4, D5, D6, D13, D26; tasks T024 to T029). */
 
@@ -294,5 +297,109 @@ describe("body edits in the plan", () => {
     });
     expect(edited.bodyEdits).toEqual([]);
     expect(edited.fingerprint).toBe(plan.fingerprint);
+  });
+});
+
+/** AP-035 FR-002 to FR-005, FR-012, FR-025 (specs/035-user-defined-journeys research R2, R4, R17; tasks T018). */
+describe("assembling user-defined journeys (AP-035)", () => {
+  const userSteps = (plan: PerformancePlan) => plan.journeys.find((journey) => journey.source.kind === "user")!.steps;
+  const singleKeys = (plan: PerformancePlan) =>
+    plan.journeys.filter((journey) => journey.source.kind === "operation").map((journey) => journey.steps[0].operationKey);
+
+  it("starts a quick plan with single-step journeys only and no bindings (FR-006, FR-030)", async () => {
+    const context = await userJourneysContext();
+    const plan = buildPlan(context);
+    expect(plan.journeys.every((journey) => journey.source.kind === "operation" && journey.steps.length === 1)).toBe(true);
+    expect(plan.journeys.flatMap((journey) => journey.steps).every((step) => step.variableBindings.length === 0)).toBe(true);
+    expect(plan.userJourneys).toBeUndefined();
+  });
+
+  it("keeps ids across a rename and a reorder, and gives a repeated operation its own step id (FR-002, R2)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    const ids = userSteps(plan).map((step) => step.id);
+    const input = userJourneysInput(plan.userJourneys!) as Record<string, unknown>[];
+    const renamed = applyPlanUpdate(plan, { userJourneys: [{ ...input[0], name: "Renamed" }] }, context);
+    expect(userSteps(renamed).map((step) => step.id)).toEqual(ids);
+    expect(renamed.journeys.find((journey) => journey.source.kind === "user")!.id).toBe(plan.journeys.find((journey) => journey.source.kind === "user")!.id);
+    const repeated = applyPlanUpdate(
+      plan,
+      { userJourneys: [{ ...input[0], steps: [...(input[0].steps as unknown[]), { operationKey: REPLACE, captures: [], bindings: [] }] }] },
+      context,
+    );
+    const replaceSteps = userSteps(repeated).filter((step) => step.operationKey === REPLACE);
+    expect(replaceSteps).toHaveLength(2);
+    expect(new Set(replaceSteps.map((step) => step.id)).size).toBe(2);
+    expect(replaceSteps[0].id).toBe(ids[1]);
+  });
+
+  it("takes a journey's operations out of the single-step list, unless also run on their own, and returns them on delete (FR-003, FR-004)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    expect(singleKeys(plan)).not.toContain(CREATE);
+    expect(singleKeys(plan)).not.toContain(REMOVE);
+    expect(singleKeys(plan)).toContain(READ);
+    const standalone = applyPlanUpdate(plan, { alsoStandalone: [CREATE] }, context);
+    expect(singleKeys(standalone)).toContain(CREATE);
+    expect(() => applyPlanUpdate(plan, { alsoStandalone: [READ] }, context)).toThrow(UserJourneyRefusedError);
+    const deleted = applyPlanUpdate(standalone, { userJourneys: [] }, context);
+    expect(singleKeys(deleted)).toEqual(expect.arrayContaining([CREATE, REPLACE, REMOVE]));
+    expect(deleted.alsoStandalone ?? []).toEqual([]);
+  });
+
+  it("appends a new journey to the journey order (FR-005)", async () => {
+    const { plan } = await lifecyclePlan();
+    expect(plan.journeys[plan.journeys.length - 1].source.kind).toBe("user");
+    const { plan: second, context } = await lifecyclePlan();
+    const reordered = applyPlanUpdate(second, { journeyOrder: [...second.journeys].reverse().map((journey) => journey.id) }, context);
+    const input = userJourneysInput(reordered.userJourneys!);
+    const added = applyPlanUpdate(reordered, { userJourneys: [...input, lifecycleInput("Second")] }, context);
+    expect(added.journeys[added.journeys.length - 1].source).toMatchObject({ kind: "user", name: "Second" });
+  });
+
+  it("binds the path parameter instead of asking the environment for it (FR-012)", async () => {
+    const { plan } = await lifecyclePlan();
+    const [create, replace, remove] = userSteps(plan);
+    for (const step of [replace, remove]) {
+      expect(step.requiredValues).not.toContain("customer_id");
+      expect(step.variableBindings).toContainEqual({ variable: "customer_id", role: "consumes", field: "id", location: "path", producerStepId: create.id });
+      expect(step.bindings).toEqual([{ target: { kind: "path", name: "id" }, captureStepId: create.id, captureName: "customer_id", state: "active" }]);
+      expect(step.userDefined).toBe(true);
+    }
+    expect(create.captures).toEqual([{ name: "customer_id", source: { kind: "body", path: "id", segments: [{ field: "id" }] }, documented: true }]);
+    const customerId = plan.userSuppliedValues.find((value) => value.name === "customer_id");
+    expect(customerId?.neededBySteps ?? []).not.toEqual(expect.arrayContaining([replace.id, remove.id]));
+  });
+
+  it("marks a journey incomplete while one of its operations is removed, and complete again once restored (FR-025)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    const removed = applyPlanUpdate(plan, { excludedOperationKeys: [REPLACE] }, context);
+    const journey = removed.journeys.find((candidate) => candidate.source.kind === "user")!;
+    expect(journey.incompleteReason).toEqual({ missingOperationKeys: [REPLACE] });
+    expect(removed.userJourneys![0].steps.map((step) => step.operationKey)).toEqual([CREATE, REPLACE, REMOVE]);
+    expect(removed.stepsNeedingExpectedStatus.some((id) => journey.steps.some((step) => step.id === id))).toBe(false);
+    const restored = applyPlanUpdate(removed, { excludedOperationKeys: [] }, context);
+    expect(restored.journeys.find((candidate) => candidate.source.kind === "user")!.incompleteReason).toBeUndefined();
+  });
+
+  it("marks a journey incomplete when a guided rebuild takes an operation out of scope, rather than shortening it (spec Edge Cases)", async () => {
+    const { plan, context } = await lifecyclePlan();
+    const narrowed = { ...context, selectedOperationKeys: context.apiModel.operations.map((operation) => `${operation.method.toUpperCase()} ${operation.path}`).filter((key) => key !== REMOVE) };
+    const rebuilt = rebuildPlan(plan, narrowed, { keepOrder: true });
+    const journey = rebuilt.journeys.find((candidate) => candidate.source.kind === "user")!;
+    expect(journey.incompleteReason).toEqual({ missingOperationKeys: [REMOVE] });
+    expect(rebuilt.userJourneys![0].steps).toHaveLength(3);
+  });
+
+  it("changes the fingerprint with any journey change, and returns to the plan's own fingerprint without journeys (FR-021, R17)", async () => {
+    const context = await userJourneysContext();
+    const base = buildPlan(context);
+    const { plan } = await lifecyclePlan();
+    expect(plan.fingerprint).not.toBe(base.fingerprint);
+    const input = userJourneysInput(plan.userJourneys!) as Record<string, unknown>[];
+    expect(applyPlanUpdate(plan, { userJourneys: [{ ...input[0], name: "Other" }] }, context).fingerprint).not.toBe(plan.fingerprint);
+    const cleared = applyPlanUpdate(plan, { userJourneys: [] }, context);
+    expect(cleared.userJourneys).toBeUndefined();
+    // The returned single-step journeys come back at the end of the order; in the base order the plan is the base plan.
+    const reordered = applyPlanUpdate(cleared, { journeyOrder: base.journeys.map((journey) => journey.id) }, context);
+    expect(reordered.fingerprint).toBe(base.fingerprint);
   });
 });

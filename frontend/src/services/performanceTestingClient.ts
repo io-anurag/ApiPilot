@@ -1,4 +1,5 @@
 import type {
+  BindingTarget,
   BodyEditInput,
   ParameterEditInput,
   K6Readiness,
@@ -42,14 +43,36 @@ export interface PerformanceErrorResult {
   /** AP-033 parameter-edit refusals (amended 2026-09-30): the parameter refused. */
   location?: string;
   name?: string;
+  /** AP-035 user-journey refusals (specs/035 contracts/plan-journeys-api.md): which capture, target or journey. */
+  capture?: string;
+  captureName?: string;
+  operationKey?: string;
+  journeyId?: string;
+  path?: string;
+  target?: string;
+  position?: number;
 }
 
 export type Result<T> = ({ ok: true } & T) | PerformanceErrorResult;
 
 type ErrorExtras = Omit<PerformanceErrorResult, "ok" | "error" | "message">;
 
-const STRING_EXTRAS = ["variable", "runId", "stepId", "reference", "fieldPath", "location", "name"] as const;
-const NUMBER_EXTRAS = ["line", "column", "limitBytes"] as const;
+const STRING_EXTRAS = [
+  "variable",
+  "runId",
+  "stepId",
+  "reference",
+  "fieldPath",
+  "location",
+  "name",
+  "capture",
+  "captureName",
+  "operationKey",
+  "journeyId",
+  "path",
+  "target",
+] as const;
+const NUMBER_EXTRAS = ["line", "column", "limitBytes", "position"] as const;
 
 /** The contract's extra error fields, each copied only when it has the documented type. */
 function errorExtras(parsed: Record<string, unknown>): ErrorExtras {
@@ -109,6 +132,35 @@ export interface PlanUpdate {
   bodyEdits?: Record<string, BodyEditInput | null>;
   /** AP-033 FR-020 (amended 2026-09-30): a step's full set of parameter changes, or `null` to reset them. */
   parameterEdits?: Record<string, ParameterEditInput | null>;
+  /** AP-035: the complete list of the engineer's journeys (contracts/plan-journeys-api.md). */
+  userJourneys?: UserJourneyInput[];
+  /** AP-035 research R12: sent with a restored list, so new ids never repeat restored ones. */
+  nextUserJourneyNumber?: number;
+  /** AP-035 FR-003. */
+  alsoStandalone?: string[];
+  /** AP-035 FR-024 (guided only). */
+  editProposedJourney?: string;
+  revertProposedJourney?: string;
+}
+
+/** AP-035: one journey as `PUT /plan` takes it. A new journey or step has no id. */
+export interface UserJourneyInput {
+  id?: string;
+  name: string;
+  nextStepNumber?: number;
+  steps: {
+    id?: string;
+    operationKey: string;
+    captures: { name: string; source: { kind: "body"; path: string } | { kind: "header"; name: string } }[];
+    bindings: ({ target: BindingTarget; captureName: string } & ({ captureStepId: string } | { captureStepIndex: number }))[];
+  }[];
+}
+
+/** AP-035 FR-009: a response field the specification documents. */
+export interface DocumentedResponseField {
+  path: string;
+  type: string | null;
+  statusCodes: string[];
 }
 
 export type ValueStatusesResult = Result<{
@@ -151,6 +203,8 @@ export interface PerformanceClient extends PerformanceRunsClient {
   generateScript(): Promise<Result<{ script: ScriptStatus }>>;
   /** For an `<a download>`: the browser fetches the file itself, so no script text passes through app state. */
   scriptDownloadUrl(file: "script" | "environment-template"): string;
+  /** AP-035 FR-009: the documented response fields of an operation, for the capture picker. */
+  fetchResponseFields(operationKey: string): Promise<Result<{ fields: DocumentedResponseField[]; truncated: boolean }>>;
 }
 
 /** Exported for AP-034's user-script client, whose report route has the same shape. */
@@ -195,6 +249,11 @@ export function createPerformanceClient(base: string): PerformanceClient {
       ),
     generateScript: () => request("generateScript", `${base}/script`, json("POST"), (body) => ({ script: body.script as ScriptStatus })),
     scriptDownloadUrl: (file) => `${base}/script/download?file=${file}`,
+    fetchResponseFields: (operationKey) =>
+      request("fetchResponseFields", `${base}/plan/response-fields?operationKey=${encodeURIComponent(operationKey)}`, undefined, (body) => ({
+        fields: (body.fields ?? []) as DocumentedResponseField[],
+        truncated: body.truncated === true,
+      })),
     fetchReadiness: (recheck = false) =>
       request("fetchReadiness", `${base}/readiness${recheck ? "?recheck=true" : ""}`, undefined, (body) => ({ readiness: body.readiness as K6Readiness })),
     startRun: (environmentId) => request("startRun", `${base}/runs`, json("POST", { environmentId }), (body) => ({ run: body.run as PerformanceRun })),

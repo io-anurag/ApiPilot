@@ -69,6 +69,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-032 — Quick Performance Test from a Specification *(post-MVP)* (`specs/032-quick-performance-test`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 77 of 78 tasks done. A third start-screen entry takes an uploaded specification straight to AP-029's performance plan: positive rule-generated scenarios only, with content-derived ids so the same file gives a byte-identical script; one single-step journey per operation, no chaining; login operations found by the credential producers start removed. On both paths, the plan now lists every write operation above the journeys and beside the run trigger, marks each write's effect, removes by method or all writes in one action, previews each step's request, and shows counted lists. Environments open to a session with a quick test and stay one set per session. The guided stage's scope choice (AP-029 FR-001) is removed. Runs record `planSource`. Real-k6 check passed (k6 v2.3.0). Outstanding: quickstart scenarios 1 to 8 in a browser (`validation.md`). Version 19.6.0. See Next Actions #38. The shared plan screen was redesigned in 19.7.0 and 19.8.0 (Next Actions #39, #40); removed operations moved into the table with a preview in 19.9.0 (#43, FR-024a) |
 | AP-033 — Edit a Performance Step's Request Body *(post-MVP)* (`specs/033-edit-step-request-body`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 59 of 60 tasks done. On both performance paths, a step's request preview states its body or that it has none, and the engineer can edit a JSON or text body: ApiPilot still applies its own workflow variables, unique values and credentials to the edited base body, a `{{name}}` the engineer writes becomes a needed value (`body-reference`), `format: password` fields must hold a reference, schema differences are warnings, and edits can be reset one by one or all at once. Edits are kept while an operation is removed and discarded, with a note, when a rebuild changes the scenario. Runs store only a `bodyEdited` flag per step; the report marks those steps. Constitution v2.5.0 amended XVII for plan inputs the user edits. Real-k6 check passed (k6 v2.3.0). Version 19.10.0. See Next Actions #44. Amended 2026-09-30 (FR-020 to FR-023, version 19.12.0): documented path, query and header parameters are editable, and the plan flags steps that failed the last run (Next Actions #46) |
 | AP-034 — Run a User-Supplied k6 Script *(post-MVP)* (`specs/034-run-user-k6-script`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 72 of 73 tasks done. A fourth start-screen entry, **Run k6 Script**: the engineer uploads or writes a k6 script, which a static check (`acorn`, the one new dependency) accepts only when it imports allowlisted k6 built-ins and stays in a JavaScript subset with no route to `open()`, `require()`, the global object or the function constructor, and exports no `handleSummary`. The engineer confirms the exact bytes (bound to the SHA-256), maps the `__ENV` names to environment values, optionally replaces the load with a profile (`--stage`), and runs it with their own k6 under constitution v2.6.0 XVII (2026-09-30): pinned arguments, an allow-listed child environment, console output dropped, results grouped by k6 request name in a self-contained report. Scripts, run snapshots, results and k6 messages are encrypted at rest. The one execution slot is now one helper (`execution/executionSlot.ts`). Spec sharpened during planning (FR-006 `handleSummary`, FR-026 start-up names) and after analysis (generated scripts accepted, re-check at run start, replace with upload). AP-029 amended (FR-022a) so its generated script passes the check. Real-k6 check passed (k6 v2.3.0). Version 19.15.0. See Next Actions #49 |
+| AP-035 — User-Defined Journeys and Captured Values *(post-MVP)* (`specs/035-user-defined-journeys`) | Implementation complete — manual browser walkthrough pending (constitution XXXI); not yet Implemented. 62 of 63 tasks done. Real-k6 check passed (k6 v2.3.0). On both performance paths the engineer composes journeys from the plan's operations, captures values from response body fields (a closed field-path grammar) or headers, and binds them to later steps' path, query or header parameters or body fields. Definitions are plan choices re-resolved on every assembly (incomplete journeys are not run; a vanished target blocks the script); one `PUT /plan { userJourneys }` carries the full list, with server-assigned, sequence-based ids. Bindings reuse the workflow-variable substitution path; the one fixed k6 runtime now attempts every capture only on an expected status and accepts scalars only (AP-029 FR-010 amended, FR-033). Guided proposed journeys can be edited and reverted with settings carried back; reset and restore keep journeys. No dependency, table, configuration or AI. Version 19.16.0. See Next Actions #50 |
 
 AP-012's follow-up real-model validation surfaced the local inference capacity and
 output-reliability defects addressed by AP-013.
@@ -3124,6 +3125,29 @@ Implementation
       - name the generated script's requests so a downloaded copy groups by operation (needs an
         AP-029 amendment);
       - consider lazy-loading the standalone pages to bring the main chunk under 500 kB.
-    - AP-035 (`specs/035-user-defined-journeys`, user-defined journeys with captured values) is
-      specified and waiting for `/speckit-plan`.
     - Version bumped to 19.15.0 (root, backend, frontend, shared-domain).
+50. **AP-035 User-Defined Journeys and Captured Values implemented; AP-029 FR-010 and AP-032 FR-006, FR-009, FR-011 amended; version 19.16.0 (2026-10-02).**
+    - Trigger: the user asked how to run a PUT or DELETE after the POST that creates the record,
+      and pass the id it returns to them (2026-10-01).
+    - Specification: `specs/035-user-defined-journeys` (spec with two clarification sessions,
+      plan, research R1 to R20, data model, contracts, quickstart, tasks, validation).
+      Constitution v2.6.0 XVII (2026-09-24 exception, 2026-09-29 clarification) covers it; no
+      amendment was needed.
+    - Backend: `plan/userJourneys.ts`, `capturePath.ts`, `userJourneyNames.ts`,
+      `responseFields.ts`, `convertWorkflowJourney.ts`; `buildJourneys.ts`, `buildPlan.ts`,
+      `planStepRequest.ts`, `stepRequest.ts` and `requestPreview.ts` changed; `GET
+      /plan/response-fields`; `422 binding_target_missing`; report aggregate, findings (ruleset 2)
+      and HTML report name captures.
+    - Frontend: `UserJourneysPanel`, `CaptureEditor`, `BindingSourceControl`, `AddStepDialog`,
+      `userJourneysViewModel`; plan screen pending items and notes, reset confirmation, restore,
+      run-trigger note, write summary per step, quick scope note.
+    - Validation (`specs/035-user-defined-journeys/validation.md`): `npm test` 2,441 passed, 12
+      skipped (a first run had one known parallel-load timeout in an unrelated execution test,
+      passing alone); `npm run lint` clean; `npm run build` succeeds. `npm run test:k6-real -w
+      backend` 9 passed with k6 v2.3.0, including the two AP-035 journey cases. The quickstart's browser walkthrough has not been
+      performed.
+    - Follow-ups:
+      - perform the quickstart walkthrough;
+      - consider reading path-item-level parameters in the OpenAPI analysis (the journey editor
+        works around it through the path template).
+    - Version bumped to 19.16.0 (root, backend, frontend, shared-domain).
