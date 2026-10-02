@@ -402,3 +402,103 @@ describe.runIf(REAL_K6_ENABLED)("real k6 with a user-defined journey", () => {
     expect(journey.cutShortByCapture).toEqual({ customer_id: dropped });
   }, 120_000);
 });
+
+/**
+ * AP-036 opt-in real-k6 check (specs/036-collection-performance-test quickstart 8; SC-001, SC-002,
+ * SC-006, FR-028, FR-029; tasks T068). The APIFoundry collection against the customers target with
+ * token issue, 401 without a valid token and 409 for a repeated email.
+ */
+describe.runIf(REAL_K6_ENABLED)("real k6 with a plan built from a collection", () => {
+  let workDir = "";
+  beforeAll(() => {
+    workDir = mkdtempSync(path.join(tmpdir(), "apipilot-k6-collection-"));
+  });
+  afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+
+  async function runCollection(
+    customers: ReturnType<typeof customersTarget>,
+    options: { stages: { durationMs: number; targetVirtualUsers: number }[]; runTag?: string },
+  ) {
+    const { assembleCollectionPlan, defaultCollectionChoices } = await import("../../src/performance/collection/assembleCollectionPlan");
+    const { collectionScriptInputs } = await import("../../src/performance/collection/collectionEngine");
+    const { SUPPORTED_DYNAMIC_VARIABLES } = await import("../../src/performance/collection/dynamicValues");
+    const { renderScriptFrom } = await import("../../src/performance/k6/renderScript");
+    const { APIFOUNDRY_REQUEST_IDS, apifoundryCollection } = await import("../fixtures/collections/collectionBuilders");
+    const server = new TargetServer();
+    server.handle(customers.handler);
+    const url = await server.start();
+    try {
+      const choices = { ...defaultCollectionChoices([...APIFOUNDRY_REQUEST_IDS]), loadProfile: { kind: "load" as const, stages: options.stages, plannedDurationMs: options.stages.reduce((total, stage) => total + stage.durationMs, 0) } };
+      const assembly = assembleCollectionPlan({ id: "c-real", name: "APIFoundry", tier: "local", json: JSON.stringify(apifoundryCollection({ dynamicBody: true })) }, choices, { supportedDynamicVariables: SUPPORTED_DYNAMIC_VARIABLES });
+      const rendered = renderScriptFrom(assembly.plan, collectionScriptInputs(assembly));
+      const probe = await createK6Probe()({ recheck: true });
+      const runDir = mkdtempSync(path.join(workDir, "run-"));
+      const scriptPath = path.join(runDir, "script.js");
+      writeFileSync(scriptPath, rendered.script);
+      const values: Record<string, string> = { baseUrl: url, client_id: "real-client", client_secret: "real-secret" };
+      const env = buildChildEnv(process.env, {
+        ...Object.fromEntries(Object.entries(rendered.valueIndex).map(([name, index]) => [`APIPILOT_V_${index}`, values[name]])),
+        ...(options.runTag ? { APIPILOT_RUN_TAG: options.runTag } : {}),
+      });
+      const lines: string[] = [];
+      const handle = createK6Runner().start({ runDir, scriptPath, metricsPath: path.join(runDir, "metrics.ndjson"), binaryPath: probe.binaryPath!, env, onLine: (line) => lines.push(line), onStderrLine: () => undefined });
+      expect((await handle.done).exitCode).toBe(0);
+      const duration = choices.loadProfile.plannedDurationMs;
+      const aggregate = createAggregate(assembly.plan, duration, Date.now() - duration - 5_000);
+      for (const line of lines) {
+        const parsed = parseMetricsLine(line);
+        if (parsed.kind === "point") aggregate.ingest(parsed.point);
+      }
+      return { plan: assembly.plan, result: aggregate.toResult(Date.now()), script: rendered.script };
+    } finally {
+      await server.stop();
+    }
+  }
+
+  function emails(bodies: unknown[]): string[] {
+    return bodies.map((body) => (body as { email?: string }).email ?? "");
+  }
+
+  it("obtains the token once, sends each virtual user's own customer id, and receives no 401, 404 or 409 (SC-001, SC-002)", async () => {
+    const customers = customersTarget({ auth: {}, rejectRepeatedEmail: true });
+    const { result, script } = await runCollection(customers, { stages: [{ durationMs: 10_000, targetVirtualUsers: 2 }], runTag: "0a1b2c" });
+    expect(customers.counts.creates).toBeGreaterThan(0);
+    expect(customers.counts.tokensIssued).toBe(1);
+    expect(customers.counts.unauthorized).toBe(0);
+    expect(customers.counts.notFound).toBe(0);
+    expect(customers.counts.conflicts).toBe(0);
+    expect(customers.counts.patches).toBe(customers.counts.creates);
+    expect(customers.counts.deletes).toBe(customers.counts.creates);
+    expect(result.steps.every((step) => step.errorRatePercent === 0)).toBe(true);
+    expect(script).not.toContain("real-secret");
+  }, 120_000);
+
+  it("generates unique emails across virtual users, iterations and runs (SC-006)", async () => {
+    const customers = customersTarget({ auth: {}, rejectRepeatedEmail: true });
+    await runCollection(customers, { stages: [{ durationMs: 5_000, targetVirtualUsers: 10 }], runTag: "111111" });
+    const first = emails(customers.bodies);
+    await runCollection(customers, { stages: [{ durationMs: 5_000, targetVirtualUsers: 10 }], runTag: "222222" });
+    const all = emails(customers.bodies);
+    expect(first.length).toBeGreaterThanOrEqual(100);
+    expect(new Set(all).size).toBe(all.length);
+    expect(customers.counts.conflicts).toBe(0);
+  }, 120_000);
+
+  it("refreshes the token per virtual user before its stated lifetime ends (FR-028)", async () => {
+    const customers = customersTarget({ auth: { expiresIn: 10 }, rejectRepeatedEmail: true });
+    const { result } = await runCollection(customers, { stages: [{ durationMs: 40_000, targetVirtualUsers: 2 }], runTag: "333333" });
+    expect(customers.counts.unauthorized).toBe(0);
+    expect(result.tokenRefreshes.count).toBeGreaterThan(0);
+    expect(result.tokenRefreshes.failed).toBe(0);
+    expect(result.tokenRefreshes.byScheme?.[0].refreshed).toBeGreaterThan(0);
+  }, 120_000);
+
+  it("names the credential request that failed before the load, and its steps fail as authentication errors (FR-029)", async () => {
+    const customers = customersTarget({ auth: { tokenStatus: 500 } });
+    const { plan, result } = await runCollection(customers, { stages: [{ durationMs: 5_000, targetVirtualUsers: 1 }], runTag: "444444" });
+    expect(result.tokenRefreshes.setupFailed).toEqual([{ scheme: plan.collection!.credentialRequests[0].stepId, capture: "" }]);
+    expect(customers.counts.unauthorized).toBeGreaterThan(0);
+    const list = result.steps.find((step) => step.operationKey === "GET /api/v1/customers")!;
+    expect(list.errorsByCategory.some((entry) => entry.category === "authentication")).toBe(true);
+  }, 120_000);
+});

@@ -15,11 +15,14 @@ export function CaptureEditor({
   busy,
   loadFields,
   onAdd,
+  noFieldsText = "The specification documents no body field for this operation's success responses. A path you type is accepted with a warning.",
 }: Readonly<{
   operationKey: string;
   laterParameterNames: readonly string[];
   busy: boolean;
   loadFields: PerformanceClient["fetchResponseFields"];
+  /** AP-036: what is said when no field is documented; a collection plan has no specification. */
+  noFieldsText?: string;
   onAdd: (capture: { name: string; source: { kind: "body"; path: string } | { kind: "header"; name: string } }) => void;
 }>) {
   const id = useId();
@@ -99,7 +102,7 @@ export function CaptureEditor({
       {kind === "body" && fields !== null && (
         <p className="basis-full text-xs text-muted">
           {fields.length === 0
-            ? "The specification documents no body field for this operation's success responses. A path you type is accepted with a warning."
+            ? noFieldsText
             : `Documented fields: ${fields
                 .map((field) => `${field.path}${laterStepParameterMatches(field.path, laterParameterNames) ? " (matches a later step's parameter)" : ""}`)
                 .join(", ")}${truncated ? ", and more not listed" : ""}.`}

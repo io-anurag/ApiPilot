@@ -85,3 +85,18 @@ id, for every run. Scripts that do not read it ignore it (R9).
   - it shows capture adding for FR-019.
 - **`performanceViewModel.ts` and the specification-worded labels:** a source-aware variant ("from the
   collection's test", "Not documented in a specification").
+
+## Implementation notes (2026-10-02)
+
+- **`PlanHandle.gate?(action)`.** Besides `engine`, a handle may have a gate that `POST /script`
+  and `POST /runs` call first. The collection source uses it for `collection_plan_out_of_date` and
+  `conversion_not_reviewed`, so those refusals come before the plan's own checks. The guided and
+  quick handles have none.
+- **k6's environment.** `buildChildEnv` (`k6/runner.ts`) passes `APIPILOT_RUN_TAG` to k6 only when
+  it is 6 lowercase hex characters, beside the `APIPILOT_V_<n>` values.
+- **Setup data.** k6 hands setup data to virtual users with `undefined` written as `null`. The
+  runtime therefore checks a token source's values with `Array.isArray`, and the test sandbox
+  (`k6Sandbox.ts`) serialises setup data the same way. A real-k6 run found this; the goldens'
+  diff for it is two lines.
+- **Environments gate.** `requireEnvironmentAccess` accepts `hasCollectionPlan()` from User Story
+  1 on, because a run needs a target environment.

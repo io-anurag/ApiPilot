@@ -28,6 +28,12 @@ an uploaded specification straight to a k6 load-test plan, with no review stages
 operation becomes a step with a generated request that no one reviews, so every write it will
 send is listed before you run. See [section 5](#5-quick-performance-test).
 
+If a collection already passes in Import & Run Collection, **Set up a performance test** in its
+run panel turns the same requests into a k6 load-test plan, with the values its test scripts set
+passed on to later requests. ApiPilot reads the scripts and never runs them; you review what was
+and was not converted before you run. See
+[section 5a](#5a-performance-test-from-a-postman-collection).
+
 If you already have a k6 script, **Run k6 Script** checks it, asks you to confirm its exact
 content, and runs it with your own k6, with the report in ApiPilot. A script downloaded from
 any performance plan can be run there too. See [section 6](#6-run-k6-script).
@@ -863,6 +869,111 @@ keeps the quick test for your session. Like the guided workflow's plan, the quic
 memory: a backend restart loses it (runs, reports and environments are kept), and you upload the
 specification again.
 
+## 5a. Performance test from a Postman collection
+
+When a collection already passes in **Import & Run Collection**, you can load-test the same flow
+without defining its steps again. In the collection's run panel, choose the requests and their
+order as for a run, then choose **Set up a performance test** beside **Start run**. The
+**Collection Performance Test** tab opens with a plan built from that selection. Building the plan
+reads the collection only: it runs no script and sends no request.
+
+**What the plan contains.** One journey: the selected requests, in the run-order list's order, each
+named by its folder path and request name. Each step sends what the functional run sends for that
+request: its method, URL, query parameters, enabled headers and body, its own auth or the auth it
+inherits from its folders or the collection, and your saved edits. Variables are resolved only
+when the test runs.
+
+**What is converted from the scripts.** ApiPilot reads the test scripts as text, against a fixed
+set of statements, and never runs them:
+- a statement that sets a variable from a response body field or a response header, such as
+  `pm.environment.set("access_token", pm.response.json().access_token)` or
+  `const body = pm.response.json(); pm.collectionVariables.set("customer_id", body.id);`, becomes a
+  capture on that step;
+- a status assertion, such as `pm.response.to.have.status(201)` or
+  `pm.expect(pm.response.code).to.eql(200)`, sets the step's expected statuses, labelled "from the
+  collection's test".
+
+Only statements at the top of a script, or directly inside a `pm.test` callback, are recognised.
+A later request's `{{name}}` is filled from the latest earlier capture of that name, whatever
+scope the script set it in. Anything else, such as a statement inside an `if`, a body assertion,
+`pm.sendRequest` or `pm.setNextRequest`, and every pre-request script, is listed in the conversion
+review with its request, script, line and reason, and is not converted. A step with no recognised
+status assertion has no expected status until you set one.
+
+**Run once before the load.** A request whose captured values are used only in later requests'
+auth (for example a token request) is not a journey step. It is sent once before the load, its
+values are shared by every virtual user, and when its response states a lifetime (`expires_in`),
+each virtual user sends it again before the values expire. The report counts it apart from the
+steps, and names it if it fails before the load. A login that also returns an id used elsewhere
+stays a journey step.
+
+**Generated values.** `{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`,
+`{{$randomInt}}`, `{{$randomFirstName}}`, `{{$randomLastName}}`, `{{$randomFullName}}`,
+`{{$randomUserName}}`, `{{$randomEmail}}`, `{{$randomPhoneNumber}}`, `{{$randomAlphaNumeric}}` and
+`{{$randomBoolean}}` are generated when the test runs, each occurrence with its own value. Emails,
+user names and UUIDs are unique for each virtual user, iteration and occurrence, and differ between
+runs started from ApiPilot. A downloaded copy run elsewhere repeats them from run to run. A request
+using any other dynamic variable is left out, naming the variable.
+
+**Left out.** A request is left out, with its reason, when its auth is not none, bearer, basic or
+API key; when its body is form-data, a file or GraphQL; when it uses a dynamic variable ApiPilot
+cannot generate; when its URL starts with a variable other than the plan's base URL variable; or
+when it uses a name starting with `apipilot_`. Edit it in the collection editor and rebuild.
+
+**Values and secrets.** The variable most URLs start with (for example `{{baseUrl}}`) is the
+environment's base URL. Every other `{{name}}` that no earlier step captures is a value of the
+target environment. A value in an auth field, or in a credential header (`Authorization`,
+`Proxy-Authorization`, `Cookie`, or any header whose name contains `key`, `token`, `secret`,
+`password`, `auth` or `session`), is a secret. A literal written in such a field is kept out of
+the script and becomes a secret environment value under a name ApiPilot gives it. Other literal
+values are written into the script as data. Hosts written literally in a URL are listed in the
+plan and at the run trigger.
+
+**The conversion review.** Before a script can be generated, open the review on the Plan tab and
+choose **Mark as reviewed**. The review states that the requests and scripts were not generated or
+verified by ApiPilot, and lists every statement not converted, every pre-request script, every
+request left out and the notes below. A change that alters the conversion, such as a rebuild or a
+removal that re-binds a value, asks for the review again. You do not need Import & Run's first-run
+confirmation to build a plan.
+
+**Captures you add.** Where a value was not recognised, choose the step under **Captures you add**,
+add the capture by a typed field path or header name, and bind it on later steps. A collection
+documents no response fields, so a typed path is labelled "Not documented in a specification".
+
+**New environment from this collection.** On **Run setup**, **New environment from this
+collection** creates a target environment with the collection's tier, its base URL and the values
+the plan needs, as the collection resolves them. The values are copied on the server and never
+shown; the values checklist then shows each as present or missing. Later changes to the collection
+do not change the environment.
+
+**When the collection changes.** An edit in the collection editor marks the plan out of date: the
+script cannot be generated or run until you choose **Rebuild**. A rebuild keeps the load profile,
+thresholds, think time, removed requests, and the expected statuses and captures you set for
+requests that still exist, names those it could not keep, and asks for a new review. Values a
+functional run saves back do not mark the plan out of date. A deleted collection's plan cannot be
+rebuilt; its runs and reports are kept.
+
+**Everything else is the performance plan of section 3.11**: the write summary, removal and
+restore, expected statuses, order, think time, load profile, thresholds, the script and its
+download, k6 readiness, the run trigger, live progress, cancel, the report, **Run again** and
+**Restore**. Body and parameter editing and the journey composer are not offered; edit requests in
+the collection editor. A session has one collection plan, beside the guided and quick plans; a new
+one replaces it after you confirm. The run list on this page shows collection runs only. The plan
+lives in memory like the quick test, so a backend restart loses it (runs and reports are kept).
+
+**Notes on differences from Postman.**
+- A variable inside a URL is sent URL-encoded, so a value holding more than one path segment (for
+  example `v1/customers`) is sent differently from Postman. The review lists every name used in a
+  URL so you can check.
+- A value captured with `pm.collectionVariables.set` or `pm.globals.set` is used by later requests
+  even where Postman would send an environment value of the same name; the review notes each one.
+- Under load a value is captured only when its step receives an expected status, and only a
+  string, number or boolean is captured; a failed capture cuts the rest of the journey short.
+- `pm.iterationData` and data files are not available; such a name is an environment value.
+- The collection's delay between requests is not carried over; think time starts at 0.
+- Runs made before version 19.17.0 need **Regenerate script** before **Run again**, because every
+  generated script's runtime changed.
+
 ## 6. Run k6 Script
 
 Choose **Run k6 Script** on the start screen (or its tab, once the tab bar is visible) to run a
@@ -1059,6 +1170,11 @@ Variable and credential values are encrypted before being stored.
 - For an operation with both a rule-generated and an AI-enhanced positive scenario, the
   performance test uses the rule-generated one, while the Postman collection's choice ignores
   the origin, so the two can send different requests for that operation.
+- A performance test from a collection (section 5a) converts only a fixed set of script
+  statements and runs no script. Pre-request scripts, conditional or computed statements, body
+  assertions, `pm.sendRequest`, `pm.setNextRequest` and iteration data are listed, not converted.
+  Requests with OAuth 2.0, Digest and other auth types, form-data, file or GraphQL bodies, or
+  dynamic variables outside the supported list are left out. At most 100 requests per plan.
 
 ## 10. Troubleshooting
 

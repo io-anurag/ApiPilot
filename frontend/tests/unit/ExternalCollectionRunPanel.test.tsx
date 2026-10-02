@@ -222,6 +222,38 @@ describe("ExternalCollectionRunPanel", () => {
   });
 });
 
+/** AP-036 FR-001, FR-002 (tasks T031). */
+describe("ExternalCollectionRunPanel — Set up a performance test", () => {
+  it("sits beside Start run and hands over the selected requests in the run-order list's order, sending nothing", () => {
+    const calls = stubFetch([]);
+    const onSetUp = vi.fn();
+    const requests = [requestView({ id: "item-1", name: "Get token" }), requestView({ id: "item-2", name: "Get health" }), requestView({ id: "item-3", name: "Get version" })];
+    render(
+      <ExternalCollectionRunPanel
+        uploadedCollection={uploadedCollection()}
+        requests={requests}
+        runOrder={["item-3", "item-1", "item-2"]}
+        onSetUpPerformanceTest={onSetUp}
+      />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get token in this run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set up a performance test" }));
+    expect(onSetUp).toHaveBeenCalledWith("uc-1", ["item-3", "item-2"]);
+    expect(calls.filter((call) => call.init?.method === "POST")).toEqual([]);
+    expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
+  });
+
+  it("is disabled with no request selected, and absent without a handler", () => {
+    const requests = [requestView({ id: "item-1", name: "Get widget" })];
+    const { unmount } = render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} requests={requests} onSetUpPerformanceTest={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get widget in this run" }));
+    expect(screen.getByRole("button", { name: "Set up a performance test" })).toBeDisabled();
+    unmount();
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} requests={requests} />);
+    expect(screen.queryByRole("button", { name: "Set up a performance test" })).not.toBeInTheDocument();
+  });
+});
+
 describe("ExternalCollectionRunPanel — the run-order list (FR-015c)", () => {
   const threeRequests = () => [
     requestView({ id: "item-1", name: "Get token" }),

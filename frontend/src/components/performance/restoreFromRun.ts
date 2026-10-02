@@ -26,6 +26,7 @@ export function restoreSettingsFromRun(runId: string, snapshot: PerformancePlan,
   if (snapshot.source !== current.source || snapshot.upstreamFingerprint !== current.upstreamFingerprint) {
     return { ok: false, reason: `Run ${run} was built from a different specification or scenarios, so its settings cannot be restored.` };
   }
+  if (snapshot.collection) return { ok: true, settings: collectionSettingsOf(snapshot, snapshot.collection), notRestored: [] };
   const snapshotSteps = snapshot.journeys.flatMap((journey) => journey.steps);
   const expectedStatuses: Record<string, string[]> = {};
   for (const step of snapshotSteps) {
@@ -49,6 +50,43 @@ export function restoreSettingsFromRun(runId: string, snapshot: PerformancePlan,
   }
   const notRestored = snapshotSteps.filter((step) => step.bodyEdited || step.parametersEdited).map((step) => step.operationKey);
   return { ok: true, settings, notRestored };
+}
+
+/**
+ * AP-036 (FR-020): a collection plan's restorable settings. A collection plan takes no body,
+ * parameter or journey edits, so its removed requests, the statuses and captures the engineer set,
+ * and the load settings are all there is; the order follows with `restoreOrderFromRun`.
+ */
+function collectionSettingsOf(snapshot: PerformancePlan, collection: NonNullable<PerformancePlan["collection"]>): PlanUpdate {
+  const requests = [
+    ...snapshot.journeys.flatMap((journey) => journey.steps).map((step) => ({ id: step.id, expectedStatuses: step.expectedStatuses, captures: step.captures ?? [] })),
+    ...collection.credentialRequests.map((request) => ({ id: request.stepId, expectedStatuses: request.expectedStatuses, captures: request.captures })),
+  ];
+  const expectedStatuses: Record<string, string[]> = {};
+  const addedCaptures: NonNullable<PlanUpdate["addedCaptures"]> = {};
+  for (const request of requests) {
+    if (request.expectedStatuses.some((status) => status.source === "user")) expectedStatuses[request.id] = request.expectedStatuses.map((status) => status.code);
+    const added = request.captures.filter((capture) => capture.origin?.kind === "user");
+    if (added.length > 0) {
+      addedCaptures[request.id] = added.map((capture) => ({
+        name: capture.name,
+        source: capture.source.kind === "body" ? { kind: "body", path: capture.source.path } : { kind: "header", name: capture.source.name },
+      }));
+    }
+  }
+  const addedBindings: NonNullable<PlanUpdate["addedBindings"]> = {};
+  for (const binding of collection.addedBindings) {
+    (addedBindings[binding.stepId] ??= []).push({ name: binding.name, captureStepId: binding.captureStepId, captureName: binding.captureName });
+  }
+  return {
+    excludedRequestIds: [...collection.excludedRequestIds],
+    thinkTimeMs: snapshot.thinkTimeMs,
+    loadProfile: { kind: snapshot.loadProfile.kind, stages: snapshot.loadProfile.stages.map((stage) => ({ ...stage })) },
+    thresholds: snapshot.thresholds.map(({ scope, metric, comparator, limit }) => ({ scope, metric, comparator, limit })),
+    ...(Object.keys(expectedStatuses).length > 0 ? { expectedStatuses } : {}),
+    ...(Object.keys(addedCaptures).length > 0 ? { addedCaptures } : {}),
+    ...(Object.keys(addedBindings).length > 0 ? { addedBindings } : {}),
+  };
 }
 
 /**

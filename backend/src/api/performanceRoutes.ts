@@ -2,16 +2,10 @@ import type { Router } from "express";
 import { runnableJourneys, type PerformancePlan, type PerformancePlanSourceKind, type ScriptStatus } from "@apipilot/shared-domain";
 import { getEnvironment } from "../execution/environmentStore";
 import { createLogger } from "../logger";
-import { renderScript, scriptDigest } from "../performance/k6/renderScript";
+import { renderScriptFrom, scriptDigest } from "../performance/k6/renderScript";
 import type { K6Probe, PerformanceRunner } from "../performance/k6/runnerTypes";
-import { rebuildPlan } from "../performance/plan/buildPlan";
-import { revertAllWorkflowJourneys } from "../performance/plan/convertWorkflowJourney";
-import { applyPlanUpdate } from "../performance/plan/planUpdate";
-import { buildRemovedOperationPreview } from "../performance/plan/removedOperationPreview";
-import { buildStepRequestPreview } from "../performance/plan/requestPreview";
-import { documentedResponseFields } from "../performance/plan/responseFields";
-import { operationKeyOf, type PerformanceContext } from "../performance/plan/stepRequest";
-import { BindingTargetMissingError, UnknownOperationError } from "../performance/errors";
+import type { PlanEngine } from "../performance/plan/openApiEngine";
+import { BindingTargetMissingError } from "../performance/errors";
 import { valueStatuses } from "../performance/plan/userSuppliedValues";
 import type { GeneratedScript } from "../performance/scriptStore";
 import { fail, handleKnownError, logReceived, logSucceeded } from "./performanceHttp";
@@ -37,7 +31,8 @@ export interface PerformanceTestingDependencies {
 
 /** One request's view of a plan source's state. Obtained from `PerformancePlanSource.require()`. */
 export interface PlanHandle {
-  context: PerformanceContext;
+  /** AP-036 (specs/036-collection-performance-test research R2): the source's plan operations. */
+  engine: PlanEngine;
   /** The current plan (the guided source rebuilds it when its approvals changed). */
   plan(): PerformancePlan;
   savePlan(plan: PerformancePlan): void;
@@ -51,6 +46,11 @@ export interface PlanHandle {
   onPlanReset(plan: PerformancePlan): void;
   /** After `POST /script` stored a current script (guided: active → complete). */
   onScriptGenerated(): void;
+  /**
+   * AP-036 (research R13, R14): the source's own gate before `POST /script` and `POST /runs`, checked
+   * first; throws the source's error (collection: out of date, conversion not reviewed).
+   */
+  gate?(action: "script" | "run"): void;
 }
 
 export interface PerformancePlanSource {
@@ -101,7 +101,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     try {
       const handle = source.require();
       const before = handle.plan();
-      const plan = applyPlanUpdate(before, req.body, handle.context);
+      const plan = handle.engine.applyUpdate(before, req.body);
       handle.savePlan(plan);
       handle.onPlanChanged(before, plan);
       res.status(200).json({ plan, script: scriptStatus(plan, handle.script()) });
@@ -115,7 +115,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     const startedAt = logReceived(req);
     try {
       const handle = source.require();
-      const plan = rebuildPlan(handle.plan(), handle.context, { keepOrder: false, revertWorkflowJourneys: revertAllWorkflowJourneys });
+      const plan = handle.engine.reset(handle.plan());
       handle.savePlan(plan);
       handle.onPlanReset(plan);
       res.status(200).json({ plan, script: scriptStatus(plan, handle.script()) });
@@ -146,7 +146,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     const startedAt = logReceived(req);
     try {
       const handle = source.require();
-      res.status(200).json({ request: buildStepRequestPreview(handle.plan(), handle.context, req.params.stepId) });
+      res.status(200).json({ request: handle.engine.stepRequestPreview(handle.plan(), req.params.stepId) });
       logSucceeded(req, startedAt, 200);
     } catch (err) {
       handleKnownError(req, res, startedAt, err);
@@ -162,7 +162,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
       const handle = source.require();
       const operationKey = typeof req.query.operationKey === "string" ? req.query.operationKey : "";
       if (!operationKey) return fail(req, res, startedAt, 400, "invalid_request", "operationKey is required.");
-      res.status(200).json(buildRemovedOperationPreview(handle.plan(), handle.context, operationKey));
+      res.status(200).json(handle.engine.removedPreview(handle.plan(), operationKey));
       logSucceeded(req, startedAt, 200);
     } catch (err) {
       handleKnownError(req, res, startedAt, err);
@@ -177,9 +177,10 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
       const handle = source.require();
       const operationKey = typeof req.query.operationKey === "string" ? req.query.operationKey : "";
       if (!operationKey) return fail(req, res, startedAt, 400, "invalid_request", "operationKey is required.");
-      const operation = handle.context.apiModel.operations.find((candidate) => operationKeyOf(candidate) === operationKey);
-      if (!operation) throw new UnknownOperationError(operationKey);
-      res.status(200).json(documentedResponseFields(operation));
+      const fields = handle.engine.responseFields(operationKey);
+      // AP-036: a collection documents no response fields; the capture editor then takes typed paths.
+      if (fields === null) return fail(req, res, startedAt, 404, "not_applicable", "This plan has no specification, so no response fields are documented.");
+      res.status(200).json(fields);
       logSucceeded(req, startedAt, 200);
     } catch (err) {
       handleKnownError(req, res, startedAt, err);
@@ -190,6 +191,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
     const startedAt = logReceived(req);
     try {
       const handle = source.require();
+      handle.gate?.("script");
       const plan = handle.plan();
       const stepCount = stepCountOf(plan);
       if (stepCount === 0) return fail(req, res, startedAt, 422, "nothing_to_test", "The plan has no steps to test.");
@@ -200,7 +202,7 @@ export function registerPerformanceRoutes(router: Router, base: string, source: 
       }
       // AP-035 FR-016: a captured value whose target no longer exists blocks the script.
       if ((plan.bindingsNeedingAttention ?? []).length > 0) throw new BindingTargetMissingError(plan.bindingsNeedingAttention!);
-      const rendered = renderScript(plan, handle.context);
+      const rendered = renderScriptFrom(plan, handle.engine.scriptInputs(plan));
       const scriptSha256 = scriptDigest(rendered.script);
       handle.saveScript({
         planFingerprint: plan.fingerprint,

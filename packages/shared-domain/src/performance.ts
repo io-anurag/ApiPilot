@@ -12,8 +12,12 @@
  * Where a plan was built (AP-032, specs/032-quick-performance-test data-model.md): the guided
  * workflow's Performance Testing stage, or the quick performance test straight from an uploaded
  * specification, whose scenarios were generated and not reviewed (FR-013).
+ *
+ * AP-036 (specs/036-collection-performance-test research R1): `collection` is a plan built from a
+ * Postman collection stored in Import & Run Collection, whose requests and scripts were authored
+ * outside ApiPilot.
  */
-export type PerformancePlanSourceKind = "guided" | "quick";
+export type PerformancePlanSourceKind = "guided" | "quick" | "collection";
 
 /** An operation in scope that contributes no step (FR-005). */
 export interface OmittedOperation {
@@ -25,10 +29,15 @@ export interface OmittedOperation {
 export type ScenarioChoiceReason =
   | "rule-generated"
   | "only-positive"
-  | "ai-enhanced-no-rule-alternative";
+  | "ai-enhanced-no-rule-alternative"
+  /** AP-036 (research R15): the step is one request of a stored collection. */
+  | "collection-request";
 
-/** Where one expected status code came from (FR-012, FR-039). */
-export type ExpectedStatusSource = "specification" | "user";
+/**
+ * Where one expected status code came from (FR-012, FR-039). AP-036 (research R7): `collection` is a
+ * code the collection's own status assertions set, labelled "from the collection's test".
+ */
+export type ExpectedStatusSource = "specification" | "user" | "collection";
 
 /**
  * One expected status code of a step. `code` is an exact code (`^[1-5]\d\d$`) or an OpenAPI range
@@ -44,7 +53,12 @@ export type StepAuthKind =
   | "oauth2-client-credentials"
   | "chained-login"
   | "static-credential"
-  | "none";
+  | "none"
+  /**
+   * AP-036 (research R15): a collection step's own auth, or the auth it inherits from its folders or
+   * the collection. `schemeName` is the Postman auth type (`bearer`, `basic`, `apikey`, `noauth`).
+   */
+  | "collection-auth";
 
 export interface StepAuth {
   kind: StepAuthKind;
@@ -110,6 +124,8 @@ export interface PerformanceStep {
   bindings?: ValueBinding[];
   /** AP-035 FR-022: present, and `true`, only on a step of a user-defined journey. */
   userDefined?: true;
+  /** AP-036 (research R15): the collection request this step was built from. Present only on collection plans. */
+  collectionRequest?: CollectionRequestRef;
 }
 
 /**
@@ -139,12 +155,26 @@ export interface Capture {
   documented: boolean | null;
   /** Present only on a capture converted from a workflow variable (FR-024). */
   relationshipId?: string;
+  /**
+   * AP-036 (data-model `CaptureOrigin`): where a collection plan's capture came from, a recognised
+   * script statement or the engineer (FR-019). Absent on AP-035 captures. A `collection-script`
+   * capture's name is the Postman variable's name: 1 to 200 characters, without `{`, `}` or control
+   * characters.
+   */
+  origin?: CaptureOrigin;
 }
 
-/** AP-035 FR-011: a request target of a step that a capture of an earlier step fills. */
+/** AP-036 (research R6): where a collection request uses a `{{name}}`. */
+export type CollectionReferenceLocation = "url" | "header" | "body" | "auth";
+
+/**
+ * AP-035 FR-011: a request target of a step that a capture of an earlier step fills. AP-036
+ * (research R6): `reference` is every `{{name}}` of a collection step, wherever it occurs.
+ */
 export type BindingTarget =
   | { kind: "path" | "query" | "header"; name: string }
-  | { kind: "body"; fieldPath: string };
+  | { kind: "body"; fieldPath: string }
+  | { kind: "reference"; name: string; locations: CollectionReferenceLocation[] };
 
 export interface ValueBinding {
   target: BindingTarget;
@@ -187,7 +217,9 @@ export type PerformanceJourneySource =
   | { kind: "workflow"; workflowId: string }
   | { kind: "operation" }
   /** AP-035 FR-022, FR-027: a user-defined journey, or one based on a workflow. */
-  | { kind: "user"; userJourneyId: string; name: string; basedOnWorkflowId?: string };
+  | { kind: "user"; userJourneyId: string; name: string; basedOnWorkflowId?: string }
+  /** AP-036 (research R15): the one journey of a collection plan. */
+  | { kind: "collection"; collectionId: string; collectionName: string };
 
 /** An ordered sequence of steps run by every virtual user on each iteration (FR-006a). */
 export interface PerformanceJourney {
@@ -278,7 +310,17 @@ export interface PerformanceThreshold {
  * an edited body. Secret only when that reference fills a `format: password` field, or when the name
  * is secret elsewhere in the plan.
  */
-export type UserSuppliedValueSource = "path-parameter" | "credential" | "oauth2-client" | "base-url" | "body-reference" | "parameter-reference";
+export type UserSuppliedValueSource =
+  | "path-parameter"
+  | "credential"
+  | "oauth2-client"
+  | "base-url"
+  | "body-reference"
+  | "parameter-reference"
+  /** AP-036 (research R12): a collection `{{name}}` no earlier step captures. */
+  | "collection-variable"
+  /** AP-036 FR-015: a literal from a collection auth field or credential header, kept out of the script. */
+  | "collection-literal";
 
 /** A value the specification cannot produce (FR-013). The value itself lives in an environment. */
 export interface UserSuppliedValueRequirement {
@@ -474,6 +516,8 @@ export interface PerformancePlan {
   nextUserJourneyNumber?: number;
   /** Derived, not fingerprinted (FR-016): step ids with a `target-missing` binding. Blocks the script. */
   bindingsNeedingAttention?: string[];
+  /** AP-036 (data-model `CollectionPlanInfo`): present only on a plan built from a stored collection. */
+  collection?: CollectionPlanInfo;
 }
 
 /**
@@ -486,7 +530,9 @@ export type PreviewReference =
   | { kind: "unique-per-iteration"; name: string; format: UniqueValueField["format"] }
   | { kind: "credential"; name: string; schemeName: string }
   /** AP-035 FR-012: a value captured by an earlier step of the same journey. Never the value. */
-  | { kind: "capture"; name: string; captureName: string; producerStepId: string; source: CaptureSource; secret: boolean };
+  | { kind: "capture"; name: string; captureName: string; producerStepId: string; source: CaptureSource; secret: boolean }
+  /** AP-036 FR-013 (research R9): a Postman dynamic variable generated at run time; `variable` is the `$name`. */
+  | { kind: "generated-value"; name: string; variable: string };
 
 /** A parameter or header value: generated text, one reference, or text that mixes both. */
 export type PreviewValue =
@@ -759,7 +805,19 @@ export interface PerformanceResult {
   steps: StepResult[];
   timeline: { bucketMs: number; points: TimelinePoint[] };
   writeRequests: { operationKey: string; method: string; sent: number; succeeded: number }[];
-  tokenRefreshes: { count: number; failed: number; lifetimeStated: boolean; bucketOffsetsMs: number[] };
+  tokenRefreshes: {
+    count: number;
+    failed: number;
+    lifetimeStated: boolean;
+    bucketOffsetsMs: number[];
+    /**
+     * AP-036 FR-029 (research R8): token requests sent before the load that did not receive an
+     * expected status (`capture` is `""`), or whose capture failed. Absent on older runs.
+     */
+    setupFailed?: { scheme: string; capture: string }[];
+    /** AP-036 FR-028: refreshes by token source, sorted by scheme. Absent on older runs. */
+    byScheme?: { scheme: string; refreshed: number; failed: number }[];
+  };
   /** The earliest timeline bucket with a failure, and the step with the most failures in it (research D16 rule 3). */
   firstFailure?: { offsetMs: number; stepId: string };
   /** The earliest timeline bucket with an unexpected 429 (research D16 rule 6). */
@@ -882,4 +940,167 @@ export function summarizeWriteOperations(journeys: readonly PerformanceJourney[]
 export function laterStepParameterMatches(fieldPath: string, laterParameterNames: readonly string[]): boolean {
   const last = /([A-Za-z0-9_$-]+)(?:\[\d+\])*$/.exec(fieldPath)?.[1];
   return last !== undefined && laterParameterNames.includes(last);
+}
+
+/**
+ * AP-036 Performance Test from a Postman Collection (specs/036-collection-performance-test
+ * data-model.md). None of these types holds a variable value, a captured value or a literal secret;
+ * `ConversionFinding.excerpt` is the only script text, and run snapshots empty it (research R16).
+ */
+
+/** AP-036: the collection request a step, a left-out request or a credential request came from. */
+export interface CollectionRequestRef {
+  /** A stable item id (`ensureStableIds`). */
+  itemId: string;
+  name: string;
+  /** Folder names from the root; empty at the root. */
+  folderPath: string[];
+}
+
+/** AP-036 FR-004 (research R4): why a selected request is not a step. */
+export type LeftOutReason =
+  | "unsupported-auth"
+  | "unsupported-body"
+  | "unsupported-dynamic-variable"
+  | "unknown-dynamic-variable"
+  | "other-host-variable"
+  | "reserved-name";
+
+export interface LeftOutRequest extends CollectionRequestRef {
+  method: string;
+  path: string;
+  reason: LeftOutReason;
+  /** The auth type, body mode or variable name. Never a value. */
+  detail: string | null;
+}
+
+/** AP-036: where a script lives. */
+export type FindingOwner = { kind: "request"; itemId: string } | { kind: "folder"; folderId: string; folderName: string } | { kind: "collection" };
+
+/** AP-036 (data-model `FindingKind`): statements not converted (R5), scripts (FR-009) and notes. */
+export type FindingKind =
+  | "condition"
+  | "loop"
+  | "function"
+  | "try"
+  | "computed-name"
+  | "computed-value"
+  | "send-request"
+  | "set-next-request"
+  | "skip-request"
+  | "iteration-data"
+  | "unset"
+  | "assertion-not-converted"
+  | "no-effect"
+  | "unsupported-statement"
+  | "unreadable-script"
+  | "superseded-setter"
+  | "prerequest-not-converted"
+  | "scope-precedence"
+  | "contradictory-assertions"
+  | "url-encoding"
+  | "credential-header";
+
+/** AP-036 FR-010, FR-018: one item the engineer reviews before a script can be generated. */
+export interface ConversionFinding {
+  kind: FindingKind;
+  owner: FindingOwner;
+  /** `null` for notes that are not about a script. */
+  event: "test" | "prerequest" | null;
+  /** The steps (or credential requests) the item applies to, in plan order. */
+  stepIds: string[];
+  /** 1-based; `null` for a whole-script or plan-level finding. */
+  line: number | null;
+  /** Set for `unreadable-script` only. */
+  column: number | null;
+  /** At most 160 characters of the statement. Plan view only: emptied in run snapshots. */
+  excerpt: string | null;
+  /** A capture or variable name, a header-name rule, or the codes of `contradictory-assertions`. */
+  detail: string | null;
+}
+
+/** AP-036 (data-model `CaptureOrigin`): a recognised script statement, or the engineer (FR-019). */
+export type CaptureOrigin =
+  | {
+      kind: "collection-script";
+      scope: "environment" | "collectionVariables" | "globals" | "variables";
+      owner: FindingOwner;
+      line: number;
+    }
+  | { kind: "user" };
+
+/** AP-036 FR-027 (research R8): a request sent once before the load, whose values feed later steps' auth. */
+export interface CredentialRequestView {
+  /** The credential request's id, also its token-source scheme. */
+  stepId: string;
+  request: CollectionRequestRef & { method: string; path: string };
+  /** Empty blocks script generation. */
+  expectedStatuses: ExpectedStatus[];
+  captures: Capture[];
+  /** The steps that use each captured value, in plan order. */
+  usedBy: { captureName: string; stepIds: string[] }[];
+  /** Environment names it needs. */
+  requiredValues: string[];
+}
+
+/** AP-036 FR-019: a reference of a step that the engineer bound to an earlier capture. */
+export interface CollectionAddedBinding {
+  stepId: string;
+  /** The `{{name}}` the step uses. */
+  name: string;
+  captureStepId: string;
+  captureName: string;
+}
+
+/** AP-036 (data-model `CollectionPlanInfo`): what only a collection plan has, on `PerformancePlan.collection`. */
+export interface CollectionPlanInfo {
+  collectionId: string;
+  collectionName: string;
+  collectionTier: "local" | "dev" | "qa" | "staging" | "production";
+  /** SHA-256 of the stored collection JSON when built (research R13). */
+  collectionDigest: string;
+  /** Derived on every read; not fingerprinted. */
+  collectionState: "current" | "changed" | "deleted";
+  /** The run panel's order at build time, at most 100 (FR-002). */
+  orderedRequestIds: string[];
+  /** Removed by the engineer, code-unit sorted. */
+  excludedRequestIds: string[];
+  /** Derived: the removed requests, in run order, for the Removed view. */
+  excludedRequests: (CollectionRequestRef & { method: string; path: string })[];
+  /** In run order (research R4). */
+  leftOut: LeftOutRequest[];
+  /** In plan order (research R8). */
+  credentialRequests: CredentialRequestView[];
+  /** Step order, then owner order, then line (research R5, R19). */
+  findings: ConversionFinding[];
+  /** Research R12: the variable every step's URL starts with, which maps to the environment's base URL. */
+  baseUrlVariable: string | null;
+  /** Literal hosts, code-unit sorted (FR-016). */
+  hosts: string[];
+  /** Dynamic-variable occurrences generated at run time (research R9). */
+  generatedValueCount: number;
+  /** FR-019: references the engineer bound to an earlier capture, sorted by step, then name. */
+  addedBindings: CollectionAddedBinding[];
+  /** Research R14; not fingerprinted. */
+  review: { reviewed: boolean; conversionDigest: string };
+}
+
+/** AP-036 contracts/collection-performance-api.md: the session's collection plan as the client sees it. */
+export interface CollectionPerformanceTestView {
+  collection: { id: string; name: string; tier: CollectionPlanInfo["collectionTier"]; state: CollectionPlanInfo["collectionState"] };
+  plan: PerformancePlan;
+  script: ScriptStatus | null;
+}
+
+/** AP-036 `POST /collection-performance/rebuild`: the steps whose engineer settings could not be kept. */
+export interface CollectionRebuildNotKept {
+  stepId: string;
+  itemId: string;
+  name: string;
+  settings: ("expected-statuses" | "captures" | "bindings")[];
+}
+
+/** AP-036 (research R16): how a collection step is labelled: `<folder path> / <request name>`. */
+export function collectionStepLabel(ref: Pick<CollectionRequestRef, "name" | "folderPath">): string {
+  return [...ref.folderPath, ref.name].join(" / ");
 }

@@ -2,17 +2,26 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ApiModel, PerformancePlan, PostmanRequestItem } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
-import { renderScript, SYSTEM_TAGS } from "../../../src/performance/k6/renderScript";
+import {
+  renderScript,
+  renderScriptFrom,
+  scriptInputsFromContext,
+  SYSTEM_TAGS,
+  type RenderedStepInput,
+  type RenderedTokenSource,
+  type ScriptInputs,
+} from "../../../src/performance/k6/renderScript";
+import { checkUserScript } from "../../../src/performance/userScript/checkUserScript";
 import { buildPlan } from "../../../src/performance/plan/buildPlan";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import { stepRequestFor } from "../../../src/performance/plan/planStepRequest";
 import { buildStepRequestPreview } from "../../../src/performance/plan/requestPreview";
-import { planAuth, type PerformanceContext } from "../../../src/performance/plan/stepRequest";
+import { planAuth, type PerformanceContext, type RequestTemplate } from "../../../src/performance/plan/stepRequest";
 import { generateCollection } from "../../../src/postman/generateCollection";
 import { percentEncode } from "../../../src/postman/parameterSerialization";
 import { generateTestModel } from "../../../src/testDesign/generateTestModel";
 import { operationsWithDiscoverableProducer, twoBearerSchemes } from "../../fixtures/postman/credentialFixtures";
-import { SEEDED_CAPTURED_ID, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
+import { journeyFixture, planFixture, SEEDED_CAPTURED_ID, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
 import { lifecyclePlan, REPLACE } from "../../fixtures/performance/userJourneyPlans";
 import { performanceContext, quickContext, userJourneysContext } from "../../fixtures/performance/context";
 import { loadScript, type SandboxRequest, type SandboxResponse } from "../../fixtures/performance/k6Sandbox";
@@ -456,8 +465,11 @@ describe("renderScript runtime that passes the AP-034 check", () => {
 
 /** AP-035 FR-010, FR-018, FR-033 (specs/035-user-defined-journeys research R7; tasks T007). */
 describe("renderScript capture rule for every journey (AP-035 FR-033)", () => {
+  /** The runtime text, with AP-029's one plan-dependent line (Basic auth used or not) normalized. */
   function runtimeOf(script: string): string {
-    return script.slice(script.indexOf('const missingData = new Counter("apipilot_missing_data");'));
+    return script
+      .slice(script.indexOf('const missingData = new Counter("apipilot_missing_data");'))
+      .replace(/^ {4}headers\.Authorization = "Basic ".*$/m, "    // Basic auth is not used by this plan.");
   }
 
   it("attempts no capture on an unexpected status, even when the field is there, and cuts the journey short", async () => {
@@ -669,5 +681,237 @@ describe("renderScript with captures from headers and bindings anywhere", () => 
     const journey = plan.journeys.find((candidate) => candidate.source.kind === "user")!;
     expect(journey.steps).toHaveLength(2);
     for (const step of journey.steps) expect(script).toContain(`"id": "${step.id}"`);
+  });
+});
+
+/**
+ * AP-036 (specs/036-collection-performance-test research R2, R9, R10; tasks T007): the renderer's
+ * explicit inputs and the one runtime change every plan shares.
+ */
+describe("renderScript inputs and the AP-036 runtime additions", () => {
+  const BASE = "http://127.0.0.1:4600";
+  const TOKEN_A = "apipilot_t_aaaa_access_token";
+  const TOKEN_B = "apipilot_t_aaaa_tenant";
+  const TOKEN_C = "apipilot_t_bbbb_session";
+
+  function template(overrides: Partial<RequestTemplate> = {}): RequestTemplate {
+    return { method: "GET", url: "{{baseUrl}}/items", headers: [], auth: { kind: "none" }, ...overrides };
+  }
+
+  function stepInput(overrides: Partial<RenderedStepInput> = {}): RenderedStepInput {
+    return { operationKey: "GET /items", request: template(), expected: ["200"], needs: ["baseUrl"], dependsOn: [], captures: [], tokenSchemes: [], ...overrides };
+  }
+
+  function tokenSource(scheme: string, overrides: Partial<RenderedTokenSource> = {}): RenderedTokenSource {
+    return {
+      scheme,
+      kind: "collection-request",
+      request: template({ method: "POST", url: "{{baseUrl}}/auth/token" }),
+      needs: ["baseUrl"],
+      captures: [{ key: TOKEN_A, name: "access_token", source: { body: ["access_token"] } }],
+      expected: ["200"],
+      ...overrides,
+    };
+  }
+
+  function render(inputs: Partial<ScriptInputs>, step: RenderedStepInput = stepInput()) {
+    const plan = planFixture({ journeys: [journeyFixture({ id: "j_items", steps: [stepFixture({ id: "s_items" })] })] });
+    return renderScriptFrom(plan, { steps: new Map([["s_items", step]]), tokenSources: [], unique: [], dynamic: [], ...inputs });
+  }
+
+  /** The runtime text, with AP-029's one plan-dependent line (Basic auth used or not) normalized. */
+  function runtimeOf(script: string): string {
+    return script
+      .slice(script.indexOf('const missingData = new Counter("apipilot_missing_data");'))
+      .replace(/^ {4}headers\.Authorization = "Basic ".*$/m, "    // Basic auth is not used by this plan.");
+  }
+
+  it("renders a context's plan exactly as its explicit inputs (R2)", async () => {
+    const { plan, context } = await readyPlan();
+    expect(renderScript(plan, context)).toEqual(renderScriptFrom(plan, scriptInputsFromContext(plan, context)));
+  });
+
+  it("renders DYNAMIC as {} when no dynamic variable is used, and keeps one runtime text for every plan (R9, AP-035 FR-018)", async () => {
+    const guided = await readyPlan();
+    const guidedScript = renderScript(guided.plan, guided.context).script;
+    expect(guidedScript).toContain("const DYNAMIC = {};");
+    const journeys = await lifecyclePlan();
+    const dynamic = render({ dynamic: [{ token: "apipilot_dyn_0", kind: "$guid" }] }, stepInput({ request: template({ url: "{{baseUrl}}/items/{{apipilot_dyn_0}}" }) })).script;
+    expect(dynamic).toContain('"apipilot_dyn_0": {\n    "kind": "$guid"\n  }');
+    expect(runtimeOf(renderScript(journeys.plan, journeys.context).script)).toBe(runtimeOf(guidedScript));
+    expect(runtimeOf(dynamic)).toBe(runtimeOf(guidedScript));
+  });
+
+  it("checks a credential request's status and takes each capture before the load (R8, R10)", () => {
+    const source = tokenSource("s_aaaa", {
+      captures: [
+        { key: TOKEN_A, name: "access_token", source: { body: ["access_token"] } },
+        { key: TOKEN_B, name: "tenant", source: { header: "x-tenant" } },
+      ],
+    });
+    const step = stepInput({ request: template({ auth: { kind: "bearer", token: `{{${TOKEN_A}}}` }, headers: [{ key: "X-Tenant", value: `{{${TOKEN_B}}}` }] }), tokenSchemes: ["s_aaaa"] });
+    const { script, valueIndex } = render({ tokenSources: [source] }, step);
+    const k6 = loadScript(script, {
+      env: envFor(valueIndex, { baseUrl: BASE }),
+      respond: (request) =>
+        request.url.endsWith("/auth/token") ? { status: 200, body: { access_token: "tok-1" }, headers: { "X-Tenant": "acme" } } : { status: 200, body: {} },
+    });
+    k6.iterate(k6.setup());
+    const sent = k6.requests.find((request) => request.url.endsWith("/items"))!;
+    expect(sent.headers.Authorization).toBe("Bearer tok-1");
+    expect(sent.headers["X-Tenant"]).toBe("acme");
+    expect(k6.metrics.filter((metric) => metric.name === "apipilot_token_refresh").map((metric) => metric.tags.outcome)).toEqual(["no-lifetime"]);
+  });
+
+  it("counts setup-failed for an unexpected status or a non-scalar capture, and leaves the token empty (R8, FR-029)", () => {
+    const step = stepInput({ request: template({ auth: { kind: "bearer", token: `{{${TOKEN_A}}}` } }), tokenSchemes: ["s_aaaa"] });
+    for (const [response, capture] of [
+      [{ status: 500, body: { access_token: "tok-1" } }, ""],
+      [{ status: 200, body: { access_token: { nested: true } } }, "access_token"],
+    ] as const) {
+      const { script, valueIndex } = render({ tokenSources: [tokenSource("s_aaaa")] }, step);
+      const k6 = loadScript(script, {
+        env: envFor(valueIndex, { baseUrl: BASE }),
+        respond: (request) => (request.url.endsWith("/auth/token") ? response : { status: 401, body: {} }),
+      });
+      k6.iterate(k6.setup());
+      expect(k6.metrics.filter((metric) => metric.name === "apipilot_token_refresh").map((metric) => metric.tags)).toEqual([
+        { outcome: "setup-failed", scheme: "s_aaaa", capture },
+      ]);
+      expect(k6.requests.find((request) => request.url.endsWith("/items"))!.headers.Authorization).toBe("Bearer ");
+    }
+  });
+
+  it("acquires a credential request that uses an earlier one's value after it, and refreshes every source a step uses (R8, R10)", () => {
+    const first = tokenSource("s_aaaa");
+    const second = tokenSource("s_bbbb", {
+      request: template({ method: "POST", url: "{{baseUrl}}/sessions", auth: { kind: "bearer", token: `{{${TOKEN_A}}}` } }),
+      captures: [{ key: TOKEN_C, name: "session", source: { body: ["session"] } }],
+    });
+    const step = stepInput({ request: template({ headers: [{ key: "X-Session", value: `{{${TOKEN_C}}}` }], auth: { kind: "bearer", token: `{{${TOKEN_A}}}` } }), tokenSchemes: ["s_aaaa", "s_bbbb"] });
+    const { script, valueIndex } = render({ tokenSources: [first, second] }, step);
+    let issued = 0;
+    const k6 = loadScript(script, {
+      env: envFor(valueIndex, { baseUrl: BASE }),
+      respond: (request) => {
+        if (request.url.endsWith("/auth/token")) return { status: 200, body: { access_token: `tok-${++issued}`, expires_in: 10 } };
+        if (request.url.endsWith("/sessions")) return { status: 200, body: { session: `ses-for-${request.headers.Authorization}`, expires_in: 10 } };
+        return { status: 200, body: {} };
+      },
+    });
+    const data = k6.setup();
+    expect(k6.requests.map((request) => request.url.slice(BASE.length))).toEqual(["/auth/token", "/sessions"]);
+    expect(k6.requests[1].headers.Authorization).toBe("Bearer tok-1");
+    k6.iterate(data);
+    k6.clock.now += 9_900;
+    k6.iterate(data, 1);
+    const refreshes = k6.metrics.filter((metric) => metric.name === "apipilot_token_refresh" && metric.tags.outcome === "ok").map((metric) => metric.tags.scheme);
+    expect(refreshes).toEqual(["s_aaaa", "s_bbbb"]);
+    const last = k6.requests[k6.requests.length - 1];
+    expect(last.headers.Authorization).toBe("Bearer tok-2");
+    expect(last.headers["X-Session"]).toBe("ses-for-Bearer tok-2");
+  });
+
+  it("fills a form body's references URL-encoded (R11)", () => {
+    const step = stepInput({ request: template({ method: "POST", body: "name={{who}}&fixed=a%20b", bodyKind: "form" }), needs: ["baseUrl", "who"] });
+    const plan = planFixture({
+      journeys: [journeyFixture({ id: "j_items", steps: [stepFixture({ id: "s_items" })] })],
+      userSuppliedValues: [
+        { name: "baseUrl", secret: false, neededBySteps: ["s_items"], source: "base-url" },
+        { name: "who", secret: false, neededBySteps: ["s_items"], source: "collection-variable" },
+      ],
+    });
+    const { script, valueIndex } = renderScriptFrom(plan, { steps: new Map([["s_items", step]]), tokenSources: [], unique: [], dynamic: [] });
+    const k6 = loadScript(script, { env: envFor(valueIndex, { baseUrl: BASE, who: "Ada & Grace/ü" }), respond: () => ({ status: 200, body: {} }) });
+    k6.iterate(k6.setup());
+    expect(k6.requests[0].body).toBe("name=Ada%20%26%20Grace%2F%C3%BC&fixed=a%20b");
+  });
+
+  describe("dynamic values (R9, FR-013, SC-006)", () => {
+    const KINDS = ["$guid", "$randomUUID", "$timestamp", "$isoTimestamp", "$randomInt", "$randomFirstName", "$randomLastName", "$randomFullName", "$randomUserName", "$randomEmail", "$randomPhoneNumber", "$randomAlphaNumeric", "$randomBoolean"];
+    const dynamic = KINDS.map((kind, k) => ({ token: `apipilot_dyn_${k}`, kind }));
+    const body = `{${dynamic.map((entry, k) => `"v${k}":"{{${entry.token}}}"`).join(",")}}`;
+
+    function generated(options: { vu: number; iteration: number; tag?: string }): string[] {
+      const step = stepInput({ request: template({ method: "POST", body, bodyKind: "json" }) });
+      const { script, valueIndex } = render({ dynamic }, step);
+      const k6 = loadScript(script, {
+        env: { ...envFor(valueIndex, { baseUrl: BASE }), ...(options.tag === undefined ? {} : { APIPILOT_RUN_TAG: options.tag }) },
+        respond: () => ({ status: 200, body: {} }),
+        vu: options.vu,
+      });
+      k6.iterate(k6.setup(), options.iteration);
+      const sent = JSON.parse(k6.requests[0].body!) as Record<string, string>;
+      return KINDS.map((_kind, k) => sent[`v${k}`]);
+    }
+
+    it("generates each kind in its format, reproducibly for the same virtual user, iteration, occurrence and tag", () => {
+      const values = generated({ vu: 3, iteration: 7, tag: "a1b2c3" });
+      const [guid, uuid, timestamp, iso, int, first, last, full, user, email, phone, alpha, bool] = values;
+      for (const value of [guid, uuid]) expect(value).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(guid).toBe("00000003-0000-4a1b-82c3-000000000007");
+      expect(timestamp).toBe(String(Math.floor(Date.parse("2026-09-27T12:00:00.000Z") / 1000)));
+      expect(iso).toBe("2026-09-27T12:00:00.000Z");
+      expect(Number(int)).toBeGreaterThanOrEqual(0);
+      expect(Number(int)).toBeLessThanOrEqual(1000);
+      expect(first).toMatch(/^[A-Z][a-z]+$/);
+      expect(last).toMatch(/^[A-Z][a-z]+$/);
+      expect(full).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+      expect(user).toMatch(/^[a-z]+\.[a-z]+_ra1b2c3_vu3_it7_8$/);
+      expect(email).toMatch(/^[a-z]+\.[a-z]+\+ra1b2c3-vu3-it7-9@example\.com$/);
+      expect(phone).toMatch(/^\d{3}-\d{3}-\d{4}$/);
+      expect(alpha).toMatch(/^[0-9a-z]$/);
+      expect(["true", "false"]).toContain(bool);
+      expect(generated({ vu: 3, iteration: 7, tag: "a1b2c3" })).toEqual(values);
+    });
+
+    it("makes the unique kinds unique over 10 virtual users × 10 iterations × every occurrence, and different between run tags", () => {
+      const UNIQUE_KINDS = [0, 1, 8, 9];
+      const seen = new Set<string>();
+      let count = 0;
+      for (let vu = 1; vu <= 10; vu++) {
+        for (let iteration = 0; iteration < 10; iteration++) {
+          const values = generated({ vu, iteration, tag: "0f0f0f" });
+          for (const index of UNIQUE_KINDS) {
+            seen.add(values[index]);
+            count += 1;
+          }
+        }
+      }
+      expect(seen.size).toBe(count);
+      const other = generated({ vu: 1, iteration: 0, tag: "abcdef" });
+      const same = generated({ vu: 1, iteration: 0, tag: "0f0f0f" });
+      for (const index of UNIQUE_KINDS) expect(other[index]).not.toBe(same[index]);
+    });
+
+    it("treats a run tag that is not 6 lowercase hex characters as no tag", () => {
+      const none = generated({ vu: 2, iteration: 1 });
+      expect(none[0]).toBe("00000002-0000-4000-8000-000000000001");
+      expect(none[9]).toMatch(/^[a-z]+\.[a-z]+\+vu2-it1-9@example\.com$/);
+      for (const tag of ["ABCDEF", "abc", "a1b2c3d", "zzzzzz", "'; x"]) expect(generated({ vu: 2, iteration: 1, tag })).toEqual(none);
+    });
+
+    it("gives two occurrences of one variable their own values (US2 AS2)", () => {
+      const twice = [
+        { token: "apipilot_dyn_0", kind: "$randomEmail" },
+        { token: "apipilot_dyn_1", kind: "$randomEmail" },
+      ];
+      const step = stepInput({ request: template({ method: "POST", body: '{"a":"{{apipilot_dyn_0}}","b":"{{apipilot_dyn_1}}"}', bodyKind: "json" }) });
+      const { script, valueIndex } = render({ dynamic: twice }, step);
+      const k6 = loadScript(script, { env: envFor(valueIndex, { baseUrl: BASE }), respond: () => ({ status: 200, body: {} }) });
+      k6.iterate(k6.setup());
+      const sent = JSON.parse(k6.requests[0].body!) as { a: string; b: string };
+      expect(sent.a).not.toBe(sent.b);
+    });
+  });
+
+  it("keeps every golden and a dynamic-value script accepted by AP-034's check, which lists APIPILOT_RUN_TAG (FR-022a, R9)", async () => {
+    for (const file of ["script.js", "user-journeys-script.js"]) {
+      const result = checkUserScript(readFileSync(path.join(GOLDEN, file)));
+      expect(result.accepted).toBe(true);
+      expect(result.envNames.map((entry) => entry.name)).toContain("APIPILOT_RUN_TAG");
+    }
+    const dynamic = render({ dynamic: [{ token: "apipilot_dyn_0", kind: "$randomEmail" }] }, stepInput({ request: template({ method: "POST", body: '{"e":"{{apipilot_dyn_0}}"}', bodyKind: "json" }) }));
+    expect(checkUserScript(Buffer.from(dynamic.script)).accepted).toBe(true);
   });
 });

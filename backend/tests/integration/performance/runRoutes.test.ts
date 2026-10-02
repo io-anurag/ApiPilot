@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getPerformanceRunRepository } from "../../../src/persistence/performanceRunRepository";
 import { getStatus, sweepForTest } from "../../../src/session/sessionRegistry";
@@ -86,6 +87,8 @@ describe("performance run routes", () => {
     const input = runner.starts[0];
     expect(Object.values(input.env)).toContain(SEEDED_CLIENT_SECRET);
     expect(Object.keys(input.env).filter((key) => key.startsWith("APIPILOT_V_")).sort()).toEqual(["APIPILOT_V_0", "APIPILOT_V_1", "APIPILOT_V_2", "APIPILOT_V_3"]);
+    // AP-036 research R9: every run gets its tag, derived from the run id and never stored.
+    expect(input.env.APIPILOT_RUN_TAG).toBe(createHash("sha256").update(started.body.run.id).digest("hex").slice(0, 6));
     expect(input.scriptPath.endsWith("script.js")).toBe(true);
 
     const settled = await waitFor(

@@ -192,3 +192,17 @@ and reports persist independently.
 | `collectionState` must be `current` before `POST /script` and `POST /runs`. | FR-022, R13 |
 | `PUT /plan` refuses `bodyEdits`, `parameterEdits`, `userJourneys`, `journeyOrder`, `editProposedJourney`, `revertProposedJourney`, `alsoStandalone` and `excludedOperationKeys` on a collection plan. | FR-020 |
 | Added captures follow AP-035 names, paths and limits. An added binding's capture must be on an earlier step. | FR-019, AP-035 R6, R10, R11 |
+
+## Implementation notes (2026-10-02)
+
+Additive fields the implementation needed, beyond the tables above:
+
+| Type | Addition | Why |
+|---|---|---|
+| `CollectionPlanInfo` | `excludedRequests: (CollectionRequestRef & {method; path})[]` | The Removed view names a removed request, which is no longer a step. Derived from `excludedRequestIds`. |
+| `CollectionPlanInfo` | `addedBindings: CollectionAddedBinding[]` | FR-019 bindings the engineer set, so the plan, the snapshot and **Restore** carry them. |
+| `PerformanceResult.tokenRefreshes` | `setupFailed?`, `byScheme?` | The report's credential-request section (FR-028, FR-029). Present only when not empty, so earlier results are unchanged. |
+| shared-domain | `CollectionPerformanceTestView`, `CollectionRebuildNotKept`, `collectionStepLabel()` | The contract's view, the rebuild's `notKept`, and one step label for the UI and the report. |
+
+`Capture.documented` is `null` on a converted capture (a collection documents nothing) and `false`
+on a body capture the engineer types (FR-019's "Not documented in a specification").

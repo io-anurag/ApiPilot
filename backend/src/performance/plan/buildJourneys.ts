@@ -163,6 +163,8 @@ function workflowLinks(
 /** AP-035 research R5: the `{{key}}` an active binding writes at its target. */
 export function consumedValueOf(binding: ValueBinding): ConsumedValue {
   const key = captureKeyOf(binding.captureStepId, binding.captureName);
+  // AP-036: a collection step's reference binding is applied by the collection engine, never here.
+  if (binding.target.kind === "reference") throw new Error("A collection reference binding has no operation target.");
   if (binding.target.kind === "body") {
     const parsed = parseCapturePath(binding.target.fieldPath);
     return { key, name: binding.captureName, location: "body", field: binding.target.fieldPath, segments: parsed.ok ? parsed.segments : [] };
@@ -240,6 +242,7 @@ function withDocumented(capture: Capture, operation: ApiOperation): Capture {
 /** AP-035 FR-011, FR-016: whether a binding's target still exists for this step's operation and base body. */
 function targetExists(binding: ValueBinding, operation: ApiOperation, body: unknown): boolean {
   const { target } = binding;
+  if (target.kind === "reference") return false;
   if (target.kind === "body") {
     const parsed = parseCapturePath(target.fieldPath);
     return parsed.ok && valueAtPath(body, parsed.segments) !== undefined;
@@ -307,7 +310,7 @@ function userJourney(
             variable: binding.captureName,
             role: "consumes",
             field: binding.target.kind === "body" ? binding.target.fieldPath : binding.target.name,
-            location: binding.target.kind,
+            ...(binding.target.kind === "reference" ? {} : { location: binding.target.kind }),
             producerStepId: binding.captureStepId,
           }),
         ),

@@ -585,6 +585,7 @@ export function ExternalCollectionRunPanel({
   runOrder,
   onRunOrderChange,
   onConfirmed,
+  onSetUpPerformanceTest,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
   /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
@@ -605,6 +606,12 @@ export function ExternalCollectionRunPanel({
    * subsequent run re-showed the "not generated or verified by ApiPilot" dialog even though the
    * backend had already recorded the confirmation permanently. */
   onConfirmed?: () => void;
+  /**
+   * AP-036 (specs/036-collection-performance-test FR-001, FR-002): builds a performance plan from the
+   * selected requests, in the run-order list's order. Reading the collection runs nothing, so it
+   * needs no confirmation here; the plan's conversion review is the gate (FR-018).
+   */
+  onSetUpPerformanceTest?: (collectionId: string, orderedRequestIds: string[]) => void;
 }>) {
   const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
   const [runHistory, setRunHistory] = useState<Omit<UploadedCollectionExecutionRun, "results">[]>([]);
@@ -818,14 +825,31 @@ export function ExternalCollectionRunPanel({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{uploadedCollection.name}</h3>
-        <button
-          type="button"
-          onClick={handleRunClick}
-          disabled={runDisabled}
-          className={BUTTON_STYLES.primary}
-        >
-          {starting ? "Starting…" : "Start run"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onSetUpPerformanceTest && (
+            <button
+              type="button"
+              onClick={() =>
+                onSetUpPerformanceTest(
+                  uploadedCollection.id,
+                  orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id),
+                )
+              }
+              disabled={selectedIds.size === 0 || requests.length === 0}
+              className={BUTTON_STYLES.secondary}
+            >
+              Set up a performance test
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleRunClick}
+            disabled={runDisabled}
+            className={BUTTON_STYLES.primary}
+          >
+            {starting ? "Starting…" : "Start run"}
+          </button>
+        </div>
       </div>
 
       {requests.length > 0 && (

@@ -206,3 +206,89 @@ export function quickTestView(plan = quickPlan(), scriptStatus: ScriptStatus | n
     script: scriptStatus,
   };
 }
+
+/**
+ * AP-036: a plan built from a collection: a token request run once before the load, a create that
+ * captures `customer_id`, and a read that uses it. Not reviewed yet; one finding and one left out.
+ */
+export function collectionPlanFixture(overrides: Partial<NonNullable<PerformancePlan["collection"]>> = {}, plan: Partial<PerformancePlan> = {}): PerformancePlan {
+  const create = step({
+    id: "s-create",
+    operationKey: "POST /api/v1/customers",
+    method: "POST",
+    path: "/api/v1/customers",
+    scenarioDescription: "Create customer",
+    scenarioChoice: "collection-request",
+    expectedStatuses: [{ code: "201", source: "collection" }],
+    auth: { kind: "chained-login", schemeName: "s-token" },
+    collectionRequest: { itemId: "req-create", name: "Create customer", folderPath: ["Customers"] },
+    captures: [
+      {
+        name: "customer_id",
+        source: { kind: "body", path: "id", segments: [{ field: "id" }] },
+        documented: null,
+        origin: { kind: "collection-script", scope: "collectionVariables", owner: { kind: "request", itemId: "req-create" }, line: 2 },
+      },
+    ],
+  });
+  const read = step({
+    id: "s-read",
+    operationKey: "GET /api/v1/customers/{{customer_id}}",
+    path: "/api/v1/customers/{{customer_id}}",
+    scenarioDescription: "Get customer",
+    scenarioChoice: "collection-request",
+    expectedStatuses: [{ code: "200", source: "collection" }],
+    auth: { kind: "chained-login", schemeName: "s-token" },
+    collectionRequest: { itemId: "req-read", name: "Get customer", folderPath: ["Customers"] },
+    bindings: [{ target: { kind: "reference", name: "customer_id", locations: ["url"] }, captureStepId: "s-create", captureName: "customer_id", state: "active" }],
+  });
+  return planFixture({
+    source: "collection",
+    journeys: [{ id: "j-collection", source: { kind: "collection", collectionId: "c-1", collectionName: "APIFoundry" }, steps: [create, read] }],
+    stepsNeedingExpectedStatus: [],
+    userSuppliedValues: [
+      { name: "baseUrl", secret: false, neededBySteps: ["s-token", "s-create", "s-read"], source: "base-url" },
+      { name: "client_secret", secret: false, neededBySteps: ["s-token"], source: "collection-variable" },
+    ],
+    collection: {
+      collectionId: "c-1",
+      collectionName: "APIFoundry",
+      collectionTier: "local",
+      collectionDigest: "d".repeat(64),
+      collectionState: "current",
+      orderedRequestIds: ["req-token", "req-create", "req-read", "req-upload"],
+      excludedRequestIds: [],
+      excludedRequests: [],
+      leftOut: [{ itemId: "req-upload", name: "Upload", folderPath: [], method: "POST", path: "/upload", reason: "unsupported-body", detail: "formdata" }],
+      credentialRequests: [
+        {
+          stepId: "s-token",
+          request: { itemId: "req-token", name: "Get token", folderPath: ["Auth"], method: "POST", path: "/auth/token" },
+          expectedStatuses: [{ code: "200", source: "collection" }],
+          captures: [
+            {
+              name: "access_token",
+              source: { kind: "body", path: "access_token", segments: [{ field: "access_token" }] },
+              documented: null,
+              origin: { kind: "collection-script", scope: "environment", owner: { kind: "request", itemId: "req-token" }, line: 1 },
+            },
+          ],
+          usedBy: [{ captureName: "access_token", stepIds: ["s-create", "s-read"] }],
+          requiredValues: ["baseUrl", "client_secret"],
+        },
+      ],
+      findings: [
+        { kind: "send-request", owner: { kind: "collection" }, event: "test", stepIds: ["s-create", "s-read"], line: 3, column: null, excerpt: 'pm.sendRequest("x", () => {});', detail: null },
+        { kind: "prerequest-not-converted", owner: { kind: "folder", folderId: "f-1", folderName: "Customers" }, event: "prerequest", stepIds: ["s-create", "s-read"], line: null, column: null, excerpt: null, detail: null },
+        { kind: "scope-precedence", owner: { kind: "request", itemId: "req-create" }, event: "test", stepIds: ["s-create"], line: 2, column: null, excerpt: null, detail: "customer_id" },
+      ],
+      baseUrlVariable: "baseUrl",
+      hosts: [],
+      generatedValueCount: 0,
+      addedBindings: [],
+      review: { reviewed: false, conversionDigest: "c".repeat(64) },
+      ...overrides,
+    },
+    ...plan,
+  });
+}

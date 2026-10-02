@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  collectionStepLabel,
   writeEffectLabelOf,
   type BodyEditInput,
   type ParameterEditInput,
@@ -24,10 +25,13 @@ import {
   environmentValuesOf,
   INCOMPLETE_LABEL,
   journeyOriginLabel,
+  noExpectedStatusText,
+  STATUS_SOURCE_LABEL,
   TARGET_MISSING_LABEL,
   USES_CAPTURE_LABEL,
   variablesFor,
 } from "./performanceViewModel";
+import { CollectionStepSource } from "./collection/CollectionStepSource";
 import { StepRequestPreview } from "./StepRequestPreview";
 import { WrappingPath } from "./WrappingPath";
 
@@ -90,12 +94,13 @@ function rowLabel({ journey, journeyIndex, stepIndex }: InventoryRow): string {
     : `J${journeyIndex + 1}`;
 }
 
-function ExpectedStatusEditor({
+/** Exported for AP-036's credential requests, which have expected statuses but are not journey steps. */
+export function ExpectedStatusEditor({
   step,
   disabled,
   onChange,
 }: Readonly<{
-  step: PerformanceStep;
+  step: Pick<PerformanceStep, "id" | "operationKey" | "expectedStatuses" | "collectionRequest">;
   disabled: boolean;
   onChange: (codes: string[]) => void;
 }>) {
@@ -113,7 +118,7 @@ function ExpectedStatusEditor({
     <div className="space-y-1.5">
       {codes.length === 0 && (
         <p className="text-xs font-semibold text-warning-700 dark:text-warning-100">
-          The specification documents no success status. Set at least one.
+          {noExpectedStatusText(step)}
         </p>
       )}
       <ul
@@ -126,9 +131,7 @@ function ExpectedStatusEditor({
             className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-500/15"
           >
             <span className="font-mono font-semibold">{status.code}</span>
-            <span className="text-muted">
-              {status.source === "specification" ? "from specification" : "set by you"}
-            </span>
+            <span className="text-muted">{STATUS_SOURCE_LABEL[status.source]}</span>
             {codes.length > 1 && (
               <button
                 type="button"
@@ -149,7 +152,7 @@ function ExpectedStatusEditor({
         </label>
         <input
           id={inputId}
-          aria-describedby={EXPECTED_STATUS_HINT_ID}
+          aria-describedby={`${EXPECTED_STATUS_HINT_ID}-${step.id}`}
           value={draft}
           disabled={disabled}
           onChange={(event) => setDraft(event.target.value)}
@@ -168,7 +171,7 @@ function ExpectedStatusEditor({
           Add
         </button>
       </div>
-      <p id={EXPECTED_STATUS_HINT_ID} className="text-xs text-muted">
+      <p id={`${EXPECTED_STATUS_HINT_ID}-${step.id}`} className="text-xs text-muted">
         Expected status: a response with any other status counts as a failure. Add an
         exact code such as 201, or a range such as 2XX for any 2xx.
       </p>
@@ -530,6 +533,8 @@ export function JourneyList({
             </span>
             <HttpMethodBadge method={step.method} />
             <WrappingPath path={step.path} />
+            {/* AP-036 (research R16): a collection step is also named by its folder path and request. */}
+            {step.collectionRequest && <span className="text-xs text-muted">{collectionStepLabel(step.collectionRequest)}</span>}
             {effect && <StatusBadge label={effect} tone="warning" />}
             {step.bodyEdited && <StatusBadge label="Body edited" tone="info" />}
             {step.parametersEdited && (
@@ -917,8 +922,8 @@ function OperationInspector({
     <section aria-label={`Details for ${step.operationKey}`} className="space-y-3">
       <div className="space-y-2">
         <p className="text-sm">
-          <span className="text-xs font-medium text-muted">Scenario</span>{" "}
-          <span>{step.scenarioDescription}</span>
+          <span className="text-xs font-medium text-muted">{step.collectionRequest ? "Collection request" : "Scenario"}</span>{" "}
+          <span>{step.collectionRequest ? collectionStepLabel(step.collectionRequest) : step.scenarioDescription}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {note && <span className="text-xs text-muted">{note}</span>}
@@ -1031,7 +1036,8 @@ function OperationInspector({
               />
             </div>
           )}
-          {activeTab === "variables" && (
+          {activeTab === "variables" && step.collectionRequest && <CollectionStepSource step={step} stepLabel={stepLabel} />}
+          {activeTab === "variables" && !step.collectionRequest && (
             <p>
               {variables.length > 0
                 ? variables.join(", ")

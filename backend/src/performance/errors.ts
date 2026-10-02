@@ -272,3 +272,68 @@ export class BindingTargetMissingError extends Error {
     this.name = "BindingTargetMissingError";
   }
 }
+
+/**
+ * AP-036 (specs/036-collection-performance-test contracts/collection-performance-api.md): the
+ * collection plan's refusals. None carries a value, a script excerpt, a URL or a variable name.
+ */
+
+/** `409 collection_plan_exists`: a plan exists and replacing it was not confirmed (FR-025). */
+export class CollectionPlanExistsError extends Error {
+  constructor() {
+    super("This session already has a collection performance plan. Confirm to replace it; its runs and reports are kept.");
+    this.name = "CollectionPlanExistsError";
+  }
+}
+
+/** `422 too_many_requests`: more than 100 requests selected (FR-002). */
+export class TooManyCollectionRequestsError extends Error {
+  constructor(public readonly count: number) {
+    super(`${count} requests are selected. A collection performance plan takes at most 100; narrow the selection in the run panel.`);
+    this.name = "TooManyCollectionRequestsError";
+  }
+}
+
+/** `409 collection_plan_out_of_date` (FR-022, research R13). */
+export class CollectionPlanOutOfDateError extends Error {
+  constructor(public readonly state: "changed" | "deleted") {
+    super(
+      state === "changed"
+        ? "The collection changed since this plan was built. Rebuild the plan first."
+        : "The collection this plan was built from has been deleted, so the plan cannot be run or rebuilt.",
+    );
+    this.name = "CollectionPlanOutOfDateError";
+  }
+}
+
+/** `409 conversion_not_reviewed` (FR-018, research R14). */
+export class ConversionNotReviewedError extends Error {
+  constructor() {
+    super("Review the conversion before generating the script.");
+    this.name = "ConversionNotReviewedError";
+  }
+}
+
+/** `409 collection_deleted`: rebuilding or seeding from a collection that no longer exists (FR-022). */
+export class CollectionDeletedError extends Error {
+  constructor() {
+    super("The collection this plan was built from has been deleted.");
+    this.name = "CollectionDeletedError";
+  }
+}
+
+/** `400 not_supported_for_collection_plan` (FR-020): a `PUT /plan` field a collection plan does not offer. */
+export class NotSupportedForCollectionPlanError extends Error {
+  constructor(public readonly field: string) {
+    super(`${field} is not offered for a plan built from a collection. Edit the request in the collection editor instead.`);
+    this.name = "NotSupportedForCollectionPlanError";
+  }
+}
+
+/** `422 base_url_missing` (FR-017, research R17). */
+export class BaseUrlMissingError extends Error {
+  constructor() {
+    super("The plan has no base URL variable, or the collection gives it no value, so an environment cannot be created from it.");
+    this.name = "BaseUrlMissingError";
+  }
+}

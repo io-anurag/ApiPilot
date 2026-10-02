@@ -356,7 +356,8 @@ function toFolderView(group: Folder, context: ViewContext): CollectionFolderView
  * persisted `source` tiers (research.md D8): `variableValues` always wins over a collection
  * default of the same name.
  */
-function buildVariableBindings(
+/** Exported for AP-036's environment seeding, which resolves values exactly as this view does. */
+export function buildVariableBindings(
   collection: Collection,
   variableValues: Record<string, string>,
 ): VariableBinding[] {

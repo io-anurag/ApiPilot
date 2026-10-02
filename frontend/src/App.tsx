@@ -6,6 +6,7 @@ import { Tabs } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
+import type { CollectionPlanRequest } from "./pages/CollectionPerformancePage";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
 // exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
@@ -18,6 +19,9 @@ const ExternalCollectionsPage = lazy(() =>
 );
 const QuickPerformancePage = lazy(() =>
   import("./pages/QuickPerformancePage").then((m) => ({ default: m.QuickPerformancePage })),
+);
+const CollectionPerformancePage = lazy(() =>
+  import("./pages/CollectionPerformancePage").then((m) => ({ default: m.CollectionPerformancePage })),
 );
 const UserScriptPage = lazy(() =>
   import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
@@ -42,7 +46,8 @@ function LazyView({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-type ActiveTab = EntryChoice;
+/** AP-036: the collection performance test is opened from a collection, never from the chooser. */
+type ActiveTab = EntryChoice | "collection-performance";
 
 /** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
  * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
@@ -53,6 +58,9 @@ const TABS: Array<{ id: ActiveTab; label: string }> = [
   { id: "quick-performance", label: "Quick Performance Test" },
   { id: "user-script", label: "Run k6 Script" },
 ];
+
+/** AP-036 (research R20): the fifth tab, shown once a performance test is set up from a collection. */
+const COLLECTION_PERFORMANCE_TAB = { id: "collection-performance" as const, label: "Collection Performance Test" };
 
 export function App() {
   const showPerformancePlanScaleMock =
@@ -77,6 +85,10 @@ export function App() {
   const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
   // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
   const [userScriptMounted, setUserScriptMounted] = useState(false);
+  // AP-036: mounted when a collection's run panel hands its selection over, then kept like the others.
+  const [collectionPerformanceMounted, setCollectionPerformanceMounted] = useState(false);
+  const [collectionPlanRequest, setCollectionPlanRequest] = useState<CollectionPlanRequest | null>(null);
+  const collectionRequestNonce = useRef(0);
   const [importPreload, setImportPreload] = useState<ImportPreload | null>(null);
   const importPreloadTokenRef = useRef(0);
 
@@ -100,8 +112,18 @@ export function App() {
       "import-collection": setImportCollectionMounted,
       "quick-performance": setQuickPerformanceMounted,
       "user-script": setUserScriptMounted,
+      "collection-performance": setCollectionPerformanceMounted,
     };
     mounters[view](true);
+  }
+
+  /** AP-036 FR-001: the run panel's ordered selection opens the Collection Performance Test tab. */
+  function handleSetUpPerformanceTest(collectionId: string, orderedRequestIds: string[]) {
+    collectionRequestNonce.current += 1;
+    setCollectionPlanRequest({ collectionId, orderedRequestIds, nonce: collectionRequestNonce.current });
+    setActiveTab("collection-performance");
+    setTabsVisible(true);
+    setCollectionPerformanceMounted(true);
   }
 
   function handleSelect(choice: EntryChoice) {
@@ -156,7 +178,7 @@ export function App() {
             {!started && <EntryChooser onSelect={handleSelect} />}
             {started && tabsVisible && (
               <Tabs
-                tabs={TABS}
+                tabs={collectionPerformanceMounted ? [...TABS, COLLECTION_PERFORMANCE_TAB] : TABS}
                 activeTab={activeTab}
                 onChange={handleTabChange}
                 label="Top-level views"
@@ -187,6 +209,7 @@ export function App() {
                   <ExternalCollectionsPage
                     preload={importPreload}
                     onExit={handleExitToStart}
+                    onSetUpPerformanceTest={handleSetUpPerformanceTest}
                   />
                 </LazyView>
               </div>
@@ -195,6 +218,13 @@ export function App() {
               <div hidden={!started || activeTab !== "quick-performance"}>
                 <LazyView>
                   <QuickPerformancePage onExit={handleExitToStart} />
+                </LazyView>
+              </div>
+            )}
+            {collectionPerformanceMounted && (
+              <div hidden={!started || activeTab !== "collection-performance"}>
+                <LazyView>
+                  <CollectionPerformancePage request={collectionPlanRequest} onExit={handleExitToStart} />
                 </LazyView>
               </div>
             )}

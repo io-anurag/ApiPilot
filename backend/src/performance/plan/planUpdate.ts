@@ -26,7 +26,8 @@ export { InvalidPlanUpdateError };
 
 const METRICS: ReadonlySet<string> = new Set(["p50", "p90", "p95", "p99", "error-rate"]);
 
-function parseThreshold(raw: unknown, stepIds: ReadonlySet<string>): PerformanceThreshold {
+/** Exported for AP-036's collection plan, whose thresholds follow the same rules. */
+export function parseThreshold(raw: unknown, stepIds: ReadonlySet<string>): PerformanceThreshold {
   if (typeof raw !== "object" || raw === null) throw new InvalidThresholdError("Each threshold must be an object.");
   const record = raw as Record<string, unknown>;
   const scopeRecord = (record.scope ?? {}) as Record<string, unknown>;

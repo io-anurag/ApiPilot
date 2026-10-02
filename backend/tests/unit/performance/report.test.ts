@@ -4,6 +4,8 @@ import { deriveFindings } from "../../../src/performance/report/findings";
 import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
 import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, PARAMETERS_EDITED_MARKER, parameterEditProvenance, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP, UNEXPECTED_STATUS_HINT } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
+import { assembleCollectionPlan, defaultCollectionChoices } from "../../../src/performance/collection/assembleCollectionPlan";
+import { APIFOUNDRY_REQUEST_IDS, apifoundryCollection } from "../../fixtures/collections/collectionBuilders";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
 
@@ -309,5 +311,81 @@ describe("parameter edits and unexpected statuses in the report", () => {
     const html = renderHtmlReport(completedRun());
     // s-create received 429 and 401, which it does not expect; s-evil received none.
     expect(html.split(escapeHtml(UNEXPECTED_STATUS_HINT)).length - 1).toBe(1);
+  });
+});
+
+/** AP-036 FR-024, FR-028, FR-029 (research R16; tasks T030). */
+describe("the report of a plan built from a collection", () => {
+  const SEEDED_CAPTURE = "SEEDED-CAPTURED-c0ffee";
+
+  function collectionRun() {
+    const { plan } = assembleCollectionPlan(
+      { id: "c-1", name: "APIFoundry", tier: "local", json: JSON.stringify(apifoundryCollection({ dynamicBody: false })) },
+      { ...defaultCollectionChoices([...APIFOUNDRY_REQUEST_IDS]), expectedStatusCodes: new Map() },
+      { supportedDynamicVariables: new Set() },
+    );
+    const snapshot = planSnapshotForRun(plan);
+    const steps = snapshot.journeys[0].steps;
+    const token = snapshot.collection!.credentialRequests[0].stepId;
+    const create = steps[1];
+    const measured: PerformanceResult = {
+      ...result(),
+      journeys: [{ journeyId: snapshot.journeys[0].id, requests: 70, latencyMs: { p50: 10, p90: 20, p95: 30, p99: 40 }, throughputPerSecond: 1, errorRatePercent: 0, checkPassRatePercent: 100, runsCutShort: 0 }],
+      steps: steps.map((step) => ({
+        stepId: step.id,
+        operationKey: step.operationKey,
+        method: step.method,
+        expectedStatuses: step.expectedStatuses,
+        requests: 10,
+        latencyMs: { p50: 10, p90: 20, p95: 30, p99: 40 },
+        throughputPerSecond: 1,
+        errorRatePercent: 0,
+        errorsByStatus: [],
+        errorsByCategory: [],
+        checkPassRatePercent: 100,
+        notAttempted: { missingData: 0, dependencyNotAttempted: 0 },
+        missingVariables: [],
+        ...(step.id === create.id ? { captures: [{ name: "customer_id", succeeded: 9, failed: 1 }] } : {}),
+      })),
+      tokenRefreshes: { count: 2, failed: 1, lifetimeStated: true, bucketOffsetsMs: [5_000], setupFailed: [{ scheme: token, capture: "access_token" }], byScheme: [{ scheme: token, refreshed: 1, failed: 1 }] },
+    };
+    return { html: renderHtmlReport(runFixture({ status: "completed", planSnapshot: snapshot, planSource: "collection", endedAt: "2026-10-02T12:01:00.000Z", result: measured })), snapshot };
+  }
+
+  it("states the collection provenance and names each step by its folder path and request name", async () => {
+    const { html } = collectionRun();
+    expect(html).toContain(escapeHtml("Plan built from the collection APIFoundry. Its requests and scripts were authored outside ApiPilot and were not generated or verified by it."));
+    expect(html).toContain("Customers / Create customer");
+    expect(html).toContain("Version");
+  });
+
+  it("shows binding origins and capture outcomes, and labels collection statuses", async () => {
+    const { html } = collectionRun();
+    expect(html).toContain(escapeHtml("{{customer_id}} ← captured customer_id, from Customers / Create customer (response field id, the request's test script line 2)"));
+    expect(html).toContain(escapeHtml("customer_id ← response field id, the request's test script line 2 (captured × 9, failed × 1)"));
+    expect(html).toContain(escapeHtml("201 (from the collection's test)"));
+    expect(html).toContain("Values from Auth / Get token, sent once before the load");
+  });
+
+  it("has a section for the requests run once before the load, with refreshes and setup failures naming the capture", async () => {
+    const { html } = collectionRun();
+    expect(html).toContain("<h2>Run once before the load</h2>");
+    expect(html).toContain("capture access_token failed");
+    const statusFailure = renderHtmlReport(
+      runFixture({
+        status: "completed",
+        planSnapshot: (collectionRun()).snapshot,
+        planSource: "collection",
+        result: { ...result(), tokenRefreshes: { count: 0, failed: 0, lifetimeStated: true, bucketOffsetsMs: [], setupFailed: [{ scheme: (collectionRun()).snapshot.collection!.credentialRequests[0].stepId, capture: "" }] } },
+      }),
+    );
+    expect(statusFailure).toContain("no expected status received, so access_token was not captured");
+    expect(html).toMatch(/Auth \/ Get token[\s\S]*<td class="num">1<\/td><td class="num">1<\/td><td class="num">1<\/td>/);
+  });
+
+  it("contains no captured value, environment value, script text or request content", async () => {
+    const { html, snapshot } = collectionRun();
+    for (const forbidden of [SEEDED_CAPTURE, "fixture-client-secret", "pm.environment.set", "Ada Lovelace", "ada@example.com"]) expect(html).not.toContain(forbidden);
+    expect(JSON.stringify(snapshot)).not.toContain("pm.environment.set");
   });
 });

@@ -363,7 +363,10 @@ verify the new order is kept in the regenerated script.
 
 - **FR-009**: Authentication MUST reuse the existing credential producers (OAuth2 client
   credentials, chained login, and distinct per-role credentials). Tokens MUST be acquired once
-  before load starts and shared by the virtual users, not fetched per request.
+  before load starts and shared by the virtual users, not fetched per request. *(Extended
+  2026-10-02 by AP-036 FR-027, specs/036-collection-performance-test research R8, R10: a collection
+  plan's credential request is a token source too. It may provide several values, its expected
+  statuses are checked before the load, and a failure there is counted and named.)*
 - **FR-010**: Each workflow variable MUST be extracted from its producer's response and checked.
   When an extraction fails, the rest of that journey MUST NOT be attempted in that iteration, and it
   MUST be recorded as cut short. The virtual user MUST then continue with the next journey in the
@@ -401,6 +404,8 @@ verify the new order is kept in the regenerated script.
   MUST NOT be refreshed. Failures after it expires MUST be reported as authentication errors, and
   the report MUST say that the token had no stated lifetime. A failed refresh MUST be reported as
   such, and the steps that needed the token are then reported as authentication errors.
+  *(Extended 2026-10-02 by AP-036 FR-028, specs/036-collection-performance-test research R10: a step
+  may use tokens from several token sources, and refreshes each one it uses.)*
 - **FR-016**: Body values that must be unique across iterations MUST be derived from the
   virtual-user and iteration numbers, so they are unique within a run and identical across re-runs.
 

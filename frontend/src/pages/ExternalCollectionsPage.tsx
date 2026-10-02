@@ -95,7 +95,13 @@ function containerOf(
 export function ExternalCollectionsPage({
   preload,
   onExit,
-}: Readonly<{ preload?: ImportPreload | null; onExit?: () => void }>) {
+  onSetUpPerformanceTest,
+}: Readonly<{
+  preload?: ImportPreload | null;
+  onExit?: () => void;
+  /** AP-036: hands the run panel's ordered selection to the Collection Performance Test view. */
+  onSetUpPerformanceTest?: (collectionId: string, orderedRequestIds: string[]) => void;
+}>) {
   const [uploadedCollections, setUploadedCollections] = useState<
     UploadedCollectionSummary[]
   >([]);
@@ -568,6 +574,7 @@ export function ExternalCollectionsPage({
                   setRunOrders((current) => ({ ...current, [selected.id]: runOrder }))
               : undefined
           }
+          onSetUpPerformanceTest={onSetUpPerformanceTest}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) =>

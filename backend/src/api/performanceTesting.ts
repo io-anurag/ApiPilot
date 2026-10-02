@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { PerformancePlan, TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { buildPlan, contextFromWorkflow, rebuildPlan, upstreamFingerprint } from "../performance/plan/buildPlan";
+import { openApiEngine } from "../performance/plan/openApiEngine";
 import { getGeneratedScript, setGeneratedScript } from "../performance/scriptStore";
 import { advanceActiveStage, getCurrentWorkflow, patchWorkflow, updateStage } from "../testGenerationWorkflow/workflowStore";
 import { PlanSourceUnavailableError } from "./performanceHttp";
@@ -50,7 +51,7 @@ function stageStatus() {
 function guidedHandle(): PlanHandle {
   const workflow = requirePostmanGenerationComplete();
   return {
-    context: contextFromWorkflow(workflow),
+    engine: openApiEngine(contextFromWorkflow(workflow)),
     plan: () => currentPlan(getCurrentWorkflow()!),
     savePlan: (plan) => patchWorkflow({ performancePlan: plan }),
     script: () => getGeneratedScript(),

@@ -18,8 +18,15 @@ import { WrappingPath } from "./WrappingPath";
  * A left-out operation has no positive scenario, so there is nothing to open or restore.
  */
 export interface OtherOperation {
+  /** The key the plan removes and restores by: an operation key, or an AP-036 collection item id. */
   operationKey: string;
   reason?: string;
+  /** AP-036: a collection request is shown by its method, path and name, not by its key. */
+  request?: { method: string; path: string; name: string };
+}
+
+function nameOf(entry: OtherOperation): string {
+  return entry.request ? entry.request.name : entry.operationKey;
 }
 
 type PreviewState =
@@ -125,7 +132,9 @@ export function OtherOperationsTable({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const removed = kind === "removed" && onRestore !== undefined;
   const label = kind === "removed" ? "Removed operations" : "Operations left out";
-  const shown = entries.filter((entry) => entry.operationKey.toLowerCase().includes(query.toLowerCase()));
+  const shown = entries.filter((entry) =>
+    (entry.request ? `${entry.request.method} ${entry.request.path} ${entry.request.name}` : entry.operationKey).toLowerCase().includes(query.toLowerCase()),
+  );
   const presentKeys = new Set(entries.map((entry) => entry.operationKey));
   const selectedKeys = [...selected].filter((key) => presentKeys.has(key));
   const shownKeys = shown.map((entry) => entry.operationKey);
@@ -135,7 +144,8 @@ export function OtherOperationsTable({
 
   const restore = (keys: string[]) => {
     if (!onRestore) return;
-    onRestore(keys, keys.length === 1 ? `${keys[0]} restored.` : `${keys.length} operations restored.`);
+    const one = entries.find((entry) => entry.operationKey === keys[0]);
+    onRestore(keys, keys.length === 1 ? `${one ? nameOf(one) : keys[0]} restored.` : `${keys.length} operations restored.`);
     setSelected(new Set());
     setExpanded(null);
   };
@@ -165,13 +175,14 @@ export function OtherOperationsTable({
 
   const rows: ReactNode[] = [];
   for (const entry of shown) {
-    const { method, path } = splitOperationKey(entry.operationKey);
+    const { method, path } = entry.request ?? splitOperationKey(entry.operationKey);
     const effect = writeEffectLabelOf(method);
     const isOpen = expanded === entry.operationKey;
     const request = (
       <>
         {method && <HttpMethodBadge method={method} />}
         <WrappingPath path={path} />
+        {entry.request && <span className="text-xs text-muted">{entry.request.name}</span>}
         {effect && <StatusBadge label={effect} tone="warning" />}
       </>
     );
@@ -183,7 +194,7 @@ export function OtherOperationsTable({
               type="checkbox"
               checked={selected.has(entry.operationKey)}
               onChange={(event) => toggleSelected([entry.operationKey], event.target.checked)}
-              aria-label={`Select ${entry.operationKey}`}
+              aria-label={`Select ${nameOf(entry)}`}
               className="accent-brand-600"
             />
           </td>
@@ -194,7 +205,7 @@ export function OtherOperationsTable({
               type="button"
               onClick={() => void open(entry.operationKey)}
               aria-expanded={isOpen}
-              aria-label={`Details of ${entry.operationKey}`}
+              aria-label={`Details of ${nameOf(entry)}`}
               className="flex w-full items-center gap-2 rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <span aria-hidden="true" className="w-3 shrink-0 text-xs text-muted">
@@ -213,7 +224,7 @@ export function OtherOperationsTable({
               type="button"
               className={BUTTON_STYLES.ghost}
               disabled={busy}
-              aria-label={`Restore ${entry.operationKey}`}
+              aria-label={`Restore ${nameOf(entry)}`}
               onClick={() => restore([entry.operationKey])}
             >
               Restore
@@ -226,7 +237,7 @@ export function OtherOperationsTable({
       rows.push(
         <tr key={`${entry.operationKey}-details`}>
           <td colSpan={columnCount} className="border-t border-border bg-chrome px-4 py-4 dark:bg-white/5">
-            <section aria-label={`Details for ${entry.operationKey}`}>
+            <section aria-label={`Details for ${nameOf(entry)}`}>
               <RemovedDetails state={previews[entry.operationKey]} busy={busy} onRestore={() => restore([entry.operationKey])} />
             </section>
           </td>

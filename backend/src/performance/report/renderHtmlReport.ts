@@ -1,4 +1,15 @@
-import { runnableJourneys, type PerformancePlan, type PerformanceResult, type PerformanceRun, type PerformanceStep, type RequestPhase, type StepResult, type TimelinePoint } from "@apipilot/shared-domain";
+import {
+  collectionStepLabel,
+  runnableJourneys,
+  type ExpectedStatus,
+  type PerformancePlan,
+  type PerformanceResult,
+  type PerformanceRun,
+  type PerformanceStep,
+  type RequestPhase,
+  type StepResult,
+  type TimelinePoint,
+} from "@apipilot/shared-domain";
 
 /**
  * The self-contained performance report (FR-035 to FR-040; specs/031-k6-performance-testing
@@ -70,6 +81,7 @@ const CHOICE_TEXT: Record<PerformanceStep["scenarioChoice"], string> = {
   "rule-generated": "rule-generated, preferred over AI-enhanced alternatives",
   "only-positive": "the operation's only positive scenario",
   "ai-enhanced-no-rule-alternative": "AI-enhanced; no rule-generated positive scenario exists",
+  "collection-request": "a request of the collection",
 };
 
 const AUTH_TEXT: Record<PerformanceStep["auth"]["kind"], string> = {
@@ -77,6 +89,7 @@ const AUTH_TEXT: Record<PerformanceStep["auth"]["kind"], string> = {
   "chained-login": "Token from a login request",
   "static-credential": "Credential from the environment",
   none: "None",
+  "collection-auth": "The collection's auth",
 };
 
 export const PHASE_TEXT: Record<RequestPhase, string> = {
@@ -120,7 +133,30 @@ function stepRowsOf(plan: PerformancePlan, result: PerformanceResult | undefined
 }
 
 function stepLabel(step: PerformanceStep): string {
-  return `<span class="method">${escapeHtml(step.method)}</span> <code>${escapeHtml(step.path)}</code>`;
+  const request = `<span class="method">${escapeHtml(step.method)}</span> <code>${escapeHtml(step.path)}</code>`;
+  // AP-036 (research R16): a collection step is named by its folder path and request name.
+  return step.collectionRequest ? `${escapeHtml(collectionStepLabel(step.collectionRequest))} <span class="small">${request}</span>` : request;
+}
+
+/** AP-036 (research R16): where an expected status came from, in the report's words. */
+const STATUS_SOURCE_TEXT: Record<ExpectedStatus["source"], string> = {
+  specification: "from specification",
+  user: "set by you",
+  collection: "from the collection's test",
+};
+
+/** AP-036 FR-024: a collection plan's report says where its requests and scripts came from. */
+export function collectionPlanProvenance(collectionName: string): string {
+  return `Plan built from the collection ${collectionName}. Its requests and scripts were authored outside ApiPilot and were not generated or verified by it.`;
+}
+
+/** AP-036 FR-024: where a captured value came from, without the value. */
+function captureOriginText(capture: NonNullable<PerformanceStep["captures"]>[number] | undefined): string {
+  const origin = capture?.origin;
+  if (!origin) return "";
+  if (origin.kind === "user") return ", set by you";
+  const owner = origin.owner.kind === "collection" ? "the collection's" : origin.owner.kind === "folder" ? `folder ${origin.owner.folderName}'s` : "the request's";
+  return `, ${owner} test script line ${origin.line}`;
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────────────────────────
@@ -407,14 +443,20 @@ function captureSourceText(source: NonNullable<PerformanceStep["captures"]>[numb
   return source.kind === "body" ? `response field ${source.path}` : `response header ${source.name}`;
 }
 
+function producerName(producer: PerformanceStep | undefined): string {
+  if (!producer) return "an earlier step";
+  return producer.collectionRequest ? collectionStepLabel(producer.collectionRequest) : producer.operationKey;
+}
+
 function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceStep>): string {
   const sends = step.bindings
     ? step.bindings.map((binding) => {
         const producer = stepsById.get(binding.captureStepId);
         const capture = producer?.captures?.find((candidate) => candidate.name === binding.captureName);
-        const target = binding.target.kind === "body" ? `body ${binding.target.fieldPath}` : `${binding.target.kind} ${binding.target.name}`;
+        const target =
+          binding.target.kind === "body" ? `body ${binding.target.fieldPath}` : binding.target.kind === "reference" ? `{{${binding.target.name}}}` : `${binding.target.kind} ${binding.target.name}`;
         const missing = binding.state === "target-missing" ? " (target no longer exists)" : "";
-        return `${target} ← captured ${binding.captureName}, from ${producer?.operationKey ?? "an earlier step"}${capture ? ` (${captureSourceText(capture.source)})` : ""}${missing}`;
+        return `${target} ← captured ${binding.captureName}, from ${producerName(producer)}${capture ? ` (${captureSourceText(capture.source)}${captureOriginText(capture)})` : ""}${missing}`;
       })
     : step.variableBindings
         .filter((binding) => binding.role !== "produces")
@@ -427,7 +469,7 @@ function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceS
     "<h3>Request</h3>",
     "<dl>",
     `<dt>Request</dt><dd>${stepLabel(step)} <span class="muted small">path template; the resolved URL is not recorded</span></dd>`,
-    `<dt>Authentication</dt><dd>${escapeHtml(AUTH_TEXT[step.auth.kind])}${step.auth.schemeName ? ` (${escapeHtml(step.auth.schemeName)})` : ""}</dd>`,
+    `<dt>Authentication</dt><dd>${authText(step, stepsById)}</dd>`,
     `<dt>Sends from earlier steps</dt><dd>${escapeHtml(sends.join("; ") || "Nothing")}</dd>`,
     `<dt>Values you supply</dt><dd>${step.requiredValues.length > 0 ? step.requiredValues.map((name) => `<code>${escapeHtml(name)}</code>`).join(", ") : "None"}</dd>`,
     `<dt>Parameters</dt><dd>${escapeHtml(parameters)}</dd>`,
@@ -437,6 +479,13 @@ function requestBlock(step: PerformanceStep, stepsById: Map<string, PerformanceS
   ].join("");
 }
 
+function authText(step: PerformanceStep, stepsById: Map<string, PerformanceStep>): string {
+  // AP-036 FR-027: a collection step's token comes from a credential request sent before the load.
+  const credential = step.collectionRequest && step.auth.kind === "chained-login" ? stepsById.get(step.auth.schemeName ?? "") : undefined;
+  if (credential) return `Values from ${escapeHtml(producerName(credential))}, sent once before the load`;
+  return `${escapeHtml(AUTH_TEXT[step.auth.kind])}${step.auth.schemeName ? ` (${escapeHtml(step.auth.schemeName)})` : ""}`;
+}
+
 export function phaseTable(measured: StepResult): string {
   if (!measured.phaseTimings || measured.phaseTimings.length === 0) return "";
   const rows = measured.phaseTimings.map((timing) => `<tr><td>${escapeHtml(PHASE_TEXT[timing.phase])}</td><td class="num">${ms(timing.meanMs)}</td><td class="num">${ms(timing.p95Ms)}</td></tr>`).join("");
@@ -444,14 +493,14 @@ export function phaseTable(measured: StepResult): string {
 }
 
 function responseBlock(step: PerformanceStep, measured: StepResult | undefined): string {
-  const expected = step.expectedStatuses.map((status) => `${status.code} (${status.source === "specification" ? "from specification" : "set by you"})`).join(", ");
+  const expected = step.expectedStatuses.map((status) => `${status.code} (${STATUS_SOURCE_TEXT[status.source]})`).join(", ");
   const counts = new Map((measured?.captures ?? []).map((entry) => [entry.name, entry]));
   const countText = (name: string) => {
     const entry = counts.get(name);
     return entry ? ` (captured × ${formatCount(entry.succeeded)}, failed × ${formatCount(entry.failed)})` : "";
   };
   const extracts = step.captures
-    ? step.captures.map((capture) => `${capture.name} ← ${captureSourceText(capture.source)}${countText(capture.name)}`)
+    ? step.captures.map((capture) => `${capture.name} ← ${captureSourceText(capture.source)}${captureOriginText(capture)}${countText(capture.name)}`)
     : step.variableBindings.filter((binding) => binding.role === "produces").map((binding) => `${binding.variable} ← response field ${binding.field}${countText(binding.variable)}`);
   const extractionFailed = measured?.errorsByCategory.find((entry) => entry.category === "extraction-failed")?.count ?? 0;
   const head = ['<section class="rr-box" aria-label="Response">', "<h3>Response</h3>", "<dl>", `<dt>Expected status</dt><dd>${escapeHtml(expected || "None")}</dd>`];
@@ -490,8 +539,31 @@ function unexpectedHint(measured: StepResult): string {
   return unexpected ? `<dt>What to check</dt><dd>${escapeHtml(UNEXPECTED_STATUS_HINT)}</dd>` : "";
 }
 
-function stepBlocks(rows: StepRow[]): string {
-  const stepsById = new Map(rows.map((row) => [row.step.id, row.step]));
+/** AP-036: a collection plan's credential requests as steps, so bindings and auth can name them. */
+function credentialSteps(plan: PerformancePlan): PerformanceStep[] {
+  return (plan.collection?.credentialRequests ?? []).map((request) => ({
+    id: request.stepId,
+    operationKey: `${request.request.method} ${request.request.path}`,
+    method: request.request.method,
+    path: request.request.path,
+    scenarioId: `collection:${request.request.itemId}`,
+    scenarioDescription: request.request.name,
+    scenarioChoice: "collection-request",
+    tieBrokenByLowestId: false,
+    consumes: [],
+    produces: [],
+    variableBindings: [],
+    dependency: null,
+    expectedStatuses: request.expectedStatuses,
+    auth: { kind: "collection-auth", schemeName: null },
+    requiredValues: request.requiredValues,
+    collectionRequest: { itemId: request.request.itemId, name: request.request.name, folderPath: request.request.folderPath },
+    captures: request.captures,
+  }));
+}
+
+function stepBlocks(rows: StepRow[], extra: readonly PerformanceStep[] = []): string {
+  const stepsById = new Map([...extra, ...rows.map((row) => row.step)].map((step) => [step.id, step]));
   const failing = (row: StepRow) => row.measured !== undefined && row.measured.errorRatePercent > 0;
   // Open the steps that failed, so the reason is on screen; with none, open the first step.
   const anyFailing = rows.some(failing);
@@ -503,7 +575,9 @@ function stepBlocks(rows: StepRow[]): string {
         : "";
       // AP-035 FR-029 (AP-029 FR-039): whether the step is in a proposed or a user-defined journey.
       const why =
-        journey.source.kind === "user"
+        journey.source.kind === "collection" && step.collectionRequest
+          ? `Request ${collectionStepLabel(step.collectionRequest)} of the collection ${journey.source.collectionName}`
+          : journey.source.kind === "user"
           ? `${journey.source.basedOnWorkflowId ? `In a journey based on workflow ${journey.source.basedOnWorkflowId.slice(0, 12)}, edited by you` : "In a journey defined by you"}: ${journey.source.name}${relationships}`
           : step.dependency
             ? `${step.produces.length > 0 ? `Produces ${step.produces.join(", ")}` : `Consumes ${step.consumes.join(", ")}`}${relationships}`
@@ -654,6 +728,7 @@ export function renderHtmlReport(run: PerformanceRun): string {
     result.writeRequests.length === 0
       ? "<p>No write requests were sent.</p>"
       : `<table><thead><tr><th>Write operation</th><th class="num">Sent</th><th class="num">Succeeded</th></tr></thead><tbody>${result.writeRequests.map((entry) => `<tr><td><span class="method">${escapeHtml(entry.method)}</span> <code>${escapeHtml(entry.operationKey.slice(entry.operationKey.indexOf(" ") + 1))}</code></td><td class="num">${formatCount(entry.sent)}</td><td class="num">${formatCount(entry.succeeded)}</td></tr>`).join("")}</tbody></table><p class="small muted">ApiPilot does not clean up anything a run creates.</p>`,
+    credentialSection(plan, result),
     "<h2>Token refreshes</h2>",
     `<p>${formatCount(result.tokenRefreshes.count)} refreshes, ${formatCount(result.tokenRefreshes.failed)} failed. ${result.tokenRefreshes.lifetimeStated ? "Each virtual user refreshed its own token before its stated lifetime ended." : "A token had no stated lifetime, so it was not refreshed."}${result.tokenRefreshes.bucketOffsetsMs.length > 0 ? ` Refreshes at ${result.tokenRefreshes.bucketOffsetsMs.map(clock).join(", ")}.` : ""}</p>`,
     provenanceSection(plan, rows),
@@ -682,13 +757,48 @@ export function bodyEditProvenance(count: number): string {
   return `${steps} sent a body written by the engineer, not generated from the specification.`;
 }
 
+/**
+ * AP-036 FR-028, FR-029 (research R16): the requests sent once before the load, their refreshes by
+ * virtual users, and any that failed before the load, with the capture that failed.
+ */
+function credentialSection(plan: PerformancePlan, result: PerformanceResult): string {
+  const requests = plan.collection?.credentialRequests ?? [];
+  if (requests.length === 0) return "";
+  const byScheme = new Map((result.tokenRefreshes.byScheme ?? []).map((entry) => [entry.scheme, entry]));
+  const failures = result.tokenRefreshes.setupFailed ?? [];
+  const rows = requests
+    .map((request) => {
+      const refresh = byScheme.get(request.stepId);
+      const failed = failures.filter((failure) => failure.scheme === request.stepId);
+      const failedText =
+        failed.length === 0
+          ? "None"
+          : failed
+              .map((failure) =>
+                failure.capture === ""
+                  ? `no expected status received, so ${request.captures.map((capture) => escapeHtml(capture.name)).join(", ") || "nothing"} was not captured`
+                  : `capture ${escapeHtml(failure.capture)} failed`,
+              )
+              .join("; ");
+      const values = request.captures.map((capture) => `<code>${escapeHtml(capture.name)}</code>`).join(", ");
+      return `<tr><td>${escapeHtml(collectionStepLabel(request.request))} <span class="small"><span class="method">${escapeHtml(request.request.method)}</span> <code>${escapeHtml(request.request.path)}</code></span></td><td>${values || "None"}</td><td class="num">1</td><td class="num">${formatCount(refresh?.refreshed ?? 0)}</td><td class="num">${formatCount(refresh?.failed ?? 0)}</td><td>${failedText}</td></tr>`;
+    })
+    .join("");
+  return [
+    "<h2>Run once before the load</h2>",
+    '<p class="small muted">Credential requests of the collection: sent once before the load and shared by every virtual user, then sent again by each virtual user before a stated lifetime ends. They are not counted in any step.</p>',
+    `<div class="scroll"><table><thead><tr><th>Request</th><th>Provides</th><th class="num">Sent before the load</th><th class="num">Refreshes</th><th class="num">Refreshes failed</th><th>Failed before the load</th></tr></thead><tbody>${rows}</tbody></table></div>`,
+  ].join("");
+}
+
 function provenanceSection(plan: PerformancePlan, rows: StepRow[]): string {
   // A snapshot recorded before AP-032 has no `source`; it came from the guided workflow.
   const quick = plan.source === "quick" ? `<p>${escapeHtml(QUICK_PLAN_PROVENANCE)}</p>` : "";
+  const collection = plan.collection ? `<p>${escapeHtml(collectionPlanProvenance(plan.collection.collectionName))}</p>` : "";
   const editedCount = plan.journeys.reduce((total, journey) => total + journey.steps.filter((step) => step.bodyEdited).length, 0);
   const edited = editedCount > 0 ? `<p>${escapeHtml(bodyEditProvenance(editedCount))}</p>` : "";
   const parameterCount = plan.journeys.reduce((total, journey) => total + journey.steps.filter((step) => step.parametersEdited).length, 0);
   const parametersEdited = parameterCount > 0 ? `<p>${escapeHtml(parameterEditProvenance(parameterCount))}</p>` : "";
   const intro = '<p class="small muted">Per step: the request as planned and the response as measured. Steps with failures are open.</p>';
-  return `<h2>Provenance · request and response by step</h2>${quick}${edited}${parametersEdited}${intro}${stepBlocks(rows)}`;
+  return `<h2>Provenance · request and response by step</h2>${quick}${collection}${edited}${parametersEdited}${intro}${stepBlocks(rows, credentialSteps(plan))}`;
 }

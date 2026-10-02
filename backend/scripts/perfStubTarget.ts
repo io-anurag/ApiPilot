@@ -14,6 +14,12 @@ import { TargetServer } from "../tests/fixtures/execution/targetServer";
  * AP-035 (specs/035-user-defined-journeys tasks T004): `PERF_STUB_MODE=customers` adds the stateful
  * customers API of `user-journeys.yaml` (new id per create, 404 for an unknown id), and
  * `PERF_STUB_DROP_ID_EVERY=<n>` omits `id` from every n-th create. It prints counts, never ids.
+ *
+ * AP-036 (specs/036-collection-performance-test tasks T004): `PERF_STUB_MODE=customers-auth` adds
+ * token issue on `POST /auth/token` (with `expires_in` from `PERF_STUB_EXPIRES_IN`, or the status
+ * `PERF_STUB_TOKEN_STATUS`), 401 for customers requests without a valid token, `PATCH`, `/health`,
+ * `/version`, and, with `PERF_STUB_REJECT_REPEATED_EMAIL=1`, 409 for a repeated email. It prints
+ * counts, never tokens.
  */
 const ORDER_ID = "00000000-0000-4000-8000-000000000001";
 const port = Number(process.env.PERF_STUB_PORT ?? "4600");
@@ -30,9 +36,21 @@ async function main(): Promise<void> {
   // path it documents (reads, PUT/PATCH/DELETE, logout) answers the unconfigured `200 {}`.
   server.configure("POST", "/auth/login", { status: 200, body: { accessToken: "stub-login-token" } });
   server.configure("POST", "/products", { status: 201, body: {} });
+  const mode = process.env.PERF_STUB_MODE;
   const customers =
-    process.env.PERF_STUB_MODE === "customers"
-      ? customersTarget(process.env.PERF_STUB_DROP_ID_EVERY ? { dropIdEvery: Number(process.env.PERF_STUB_DROP_ID_EVERY) } : {})
+    mode === "customers" || mode === "customers-auth"
+      ? customersTarget({
+          ...(process.env.PERF_STUB_DROP_ID_EVERY ? { dropIdEvery: Number(process.env.PERF_STUB_DROP_ID_EVERY) } : {}),
+          ...(mode === "customers-auth"
+            ? {
+                auth: {
+                  ...(process.env.PERF_STUB_EXPIRES_IN ? { expiresIn: Number(process.env.PERF_STUB_EXPIRES_IN) } : {}),
+                  ...(process.env.PERF_STUB_TOKEN_STATUS ? { tokenStatus: Number(process.env.PERF_STUB_TOKEN_STATUS) } : {}),
+                },
+                rejectRepeatedEmail: process.env.PERF_STUB_REJECT_REPEATED_EMAIL === "1",
+              }
+            : {}),
+        })
       : undefined;
   if (customers) server.handle(customers.handler);
   const baseUrl = await server.start(port);
@@ -55,6 +73,10 @@ async function main(): Promise<void> {
     if (customers) {
       const { creates, reads, replaces, deletes, notFound } = customers.counts;
       process.stdout.write(`customers: created ${creates}, read ${reads}, replaced ${replaces}, deleted ${deletes}, 404 ${notFound}\n`);
+      if (mode === "customers-auth") {
+        const { patches, conflicts, tokensIssued, unauthorized } = customers.counts;
+        process.stdout.write(`customers-auth: updated ${patches}, tokens issued ${tokensIssued}, 401 ${unauthorized}, 409 ${conflicts}\n`);
+      }
     }
     if (keyPrefixes.size > 0) process.stdout.write(`X-Api-Key values received (SHA-256 prefixes): ${[...keyPrefixes].sort().join(", ")}\n`);
   }, 5_000);

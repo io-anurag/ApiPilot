@@ -33,7 +33,7 @@ const JOURNEY_ID = /^j_[0-9a-f]{16}$/;
 const STEP_ID = /^s_[0-9a-f]{16}$/;
 export const MAX_STEP_CAPTURES = 10;
 
-const TARGET_ORDER: Record<BindingTarget["kind"], number> = { path: 0, query: 1, header: 2, body: 3 };
+const TARGET_ORDER: Record<BindingTarget["kind"], number> = { path: 0, query: 1, header: 2, body: 3, reference: 4 };
 
 function record(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new InvalidPlanUpdateError(`${what} must be an object.`);
@@ -325,6 +325,8 @@ function checkTarget(
   kept: boolean,
 ): void {
   const unknown = (message: string) => new UserJourneyRefusedError("binding_target_unknown", message, { stepId, target: targetText(target) });
+  // AP-036: a collection reference is never a user journey's target.
+  if (target.kind === "reference") throw unknown("A user journey's binding fills a parameter or a body field.");
   if (target.kind === "body") {
     // A kept body binding whose field an edit in this same update removes is dropped by assembly
     // with a notice (FR-013), so only a new one is checked against the body.

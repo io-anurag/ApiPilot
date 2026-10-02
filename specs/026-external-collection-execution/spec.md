@@ -277,7 +277,9 @@ belongs to the run, not to the collection.
   the collection's stored order. A run order that repeats a request, contains an entry that is not
   a request id, or names a request the collection does not contain MUST be refused with a message
   saying why, rather than corrected silently; an order that names none of the collection's
-  requests keeps FR-018's existing refusal.
+  requests keeps FR-018's existing refusal. *(AP-036 FR-001, specs/036-collection-performance-test:
+  the run panel's ordered selection also builds a performance plan, through "Set up a performance
+  test" beside Start run. Building it reads the collection and runs nothing.)*
 
 ### Key Entities *(include if feature involves data)*
 

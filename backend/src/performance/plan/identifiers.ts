@@ -36,6 +36,19 @@ export function userJourneyStepIdFor(journeyId: string, sequence: number): strin
   return `s_${shortDigest("apipilot/performance/step", `${journeyId}:${sequence}`)}`;
 }
 
+/**
+ * AP-036 (specs/036-collection-performance-test research R19): a collection plan's one journey, from
+ * the stored collection's id, and its steps, from their item ids. A request appears once in a run
+ * order (AP-026 refuses repeats), so a step's id survives rebuilds, reorders and removal.
+ */
+export function collectionJourneyIdFor(collectionId: string): string {
+  return `j_${shortDigest("collection-journey", collectionId)}`;
+}
+
+export function collectionStepIdFor(itemId: string): string {
+  return `s_${shortDigest("collection-step", itemId)}`;
+}
+
 export function thresholdIdFor(content: string): string {
   return `t_${shortDigest("apipilot/performance/threshold", content)}`;
 }

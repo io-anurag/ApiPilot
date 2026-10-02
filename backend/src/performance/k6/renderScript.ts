@@ -1,7 +1,7 @@
 import { runnableJourneys, type PerformancePlan } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
 import { sha256Hex } from "../plan/identifiers";
-import { stepRequestFor, uniqueTokensOf, type StepCapture } from "../plan/planStepRequest";
+import { stepRequestFor, uniqueTokensOf, type StepCapture, type UniqueToken } from "../plan/planStepRequest";
 import { planAuth, type PerformanceContext, type RequestTemplate, type TokenSource } from "../plan/stepRequest";
 
 /**
@@ -27,8 +27,12 @@ export const SYSTEM_TAGS = ["status", "method", "error_code", "check", "group"] 
 
 export const K6_BUILTIN_IMPORTS = ["k6", "k6/http", "k6/metrics", "k6/encoding"] as const;
 
-interface RenderedStep {
-  id: string;
+/**
+ * AP-036 (specs/036-collection-performance-test research R2, data-model `ScriptInputs`): what the
+ * renderer reads for one plan, made explicit, so a plan built from an OpenAPI context and one built
+ * from a stored collection render through the same code. Every field is data only (FR-023).
+ */
+export interface RenderedStepInput {
   operationKey: string;
   request: RequestTemplate;
   expected: string[];
@@ -36,7 +40,36 @@ interface RenderedStep {
   dependsOn: string[];
   /** AP-035 research R7: what the step captures, as data only (FR-018). */
   captures: StepCapture[];
-  tokenScheme: string | null;
+  /** AP-036 research R10: every token source the step's request uses, in plan order. */
+  tokenSchemes: string[];
+}
+
+export interface RenderedTokenSource {
+  scheme: string;
+  kind: TokenSource["kind"] | "collection-request";
+  request: RequestTemplate;
+  needs: string[];
+  /** AP-036 research R10: each value the token request provides; an AP-029 source has one. */
+  captures: StepCapture[];
+  /** AP-036 research R8: present on a collection credential request, whose status is checked. */
+  expected?: string[];
+}
+
+/** AP-036 research R9: a Postman dynamic variable occurrence, `{{apipilot_dyn_<k>}}` in a template. */
+export interface DynamicToken {
+  token: string;
+  kind: string;
+}
+
+export interface ScriptInputs {
+  steps: Map<string, RenderedStepInput>;
+  tokenSources: RenderedTokenSource[];
+  unique: Pick<UniqueToken, "token" | "format" | "original">[];
+  dynamic: DynamicToken[];
+}
+
+interface RenderedStep extends RenderedStepInput {
+  id: string;
 }
 
 interface RenderedJourney {
@@ -44,67 +77,86 @@ interface RenderedJourney {
   steps: RenderedStep[];
 }
 
-interface RenderedTokenSource {
-  scheme: string;
-  kind: TokenSource["kind"];
-  tokenVariable: string;
-  request: RequestTemplate;
-  responseField: string;
-  needs: string[];
-}
-
 function formatDuration(ms: number): string {
   return ms % 1000 === 0 ? `${ms / 1000}s` : `${ms}ms`;
 }
 
-export function renderScript(plan: PerformancePlan, context: PerformanceContext): RenderedScript {
+/** An AP-029 token source's one value: its token variable, taken from its response field. */
+function tokenSourceCaptures(source: TokenSource): StepCapture[] {
+  return [{ key: source.tokenVariable, name: source.tokenVariable, source: { body: source.responseField.split(".") } }];
+}
+
+/** The renderer's inputs for a plan built from an OpenAPI context (AP-029, AP-032, AP-035). */
+export function scriptInputsFromContext(plan: PerformancePlan, context: PerformanceContext): ScriptInputs {
   const auth = planAuth(context);
+  const unique = uniqueTokensOf(plan, context);
+  const usedSchemes = new Set<string>();
+  const steps = new Map<string, RenderedStepInput>();
+  // AP-035 FR-025: an incomplete user-defined journey is not run.
+  for (const journey of runnableJourneys(plan.journeys)) {
+    for (const step of journey.steps) {
+      const { built, captures } = stepRequestFor(plan, context, auth, step.id, unique);
+      const tokenScheme =
+        built.schemeName && auth.tokenSources.has(built.schemeName) && (built.authKind === "oauth2-client-credentials" || built.authKind === "chained-login")
+          ? built.schemeName
+          : null;
+      if (tokenScheme) usedSchemes.add(tokenScheme);
+      steps.set(step.id, {
+        operationKey: step.operationKey,
+        request: built.template,
+        expected: step.expectedStatuses.map((status) => status.code),
+        needs: built.envNames,
+        dependsOn: [
+          ...new Set(step.variableBindings.flatMap((binding) => (binding.role === "consumes" && binding.producerStepId ? [binding.producerStepId] : []))),
+        ],
+        captures,
+        tokenSchemes: tokenScheme ? [tokenScheme] : [],
+      });
+    }
+  }
+  const tokenSources: RenderedTokenSource[] = [...usedSchemes].sort(compareCodeUnits).map((scheme) => {
+    const source = auth.tokenSources.get(scheme)!;
+    return { scheme, kind: source.kind, request: source.request, needs: source.envNames, captures: tokenSourceCaptures(source) };
+  });
+  return { steps, tokenSources, unique, dynamic: [] };
+}
+
+export function renderScript(plan: PerformancePlan, context: PerformanceContext): RenderedScript {
+  return renderScriptFrom(plan, scriptInputsFromContext(plan, context));
+}
+
+export function renderScriptFrom(plan: PerformancePlan, inputs: ScriptInputs): RenderedScript {
   const valueIndex: Record<string, number> = {};
   plan.userSuppliedValues.forEach((value, index) => {
     valueIndex[value.name] = index;
   });
 
-  const unique = uniqueTokensOf(plan, context);
-
-  const usedSchemes = new Set<string>();
-  // AP-035 FR-025: an incomplete user-defined journey is not run.
   const journeys: RenderedJourney[] = runnableJourneys(plan.journeys).map((journey) => ({
     id: journey.id,
-      steps: journey.steps.map((step): RenderedStep => {
-        const { built, captures } = stepRequestFor(plan, context, auth, step.id, unique);
-        const tokenScheme =
-          built.schemeName && auth.tokenSources.has(built.schemeName) && (built.authKind === "oauth2-client-credentials" || built.authKind === "chained-login")
-            ? built.schemeName
-            : null;
-        if (tokenScheme) usedSchemes.add(tokenScheme);
-        return {
-          id: step.id,
-          operationKey: step.operationKey,
-          request: built.template,
-          expected: step.expectedStatuses.map((status) => status.code),
-          needs: built.envNames,
-          dependsOn: [
-            ...new Set(
-              step.variableBindings.flatMap((binding) => (binding.role === "consumes" && binding.producerStepId ? [binding.producerStepId] : [])),
-            ),
-          ],
-          captures,
-          tokenScheme,
-        };
-      }),
+    steps: journey.steps.map((step): RenderedStep => {
+      const input = inputs.steps.get(step.id);
+      if (!input) throw new Error(`The script has no request for step ${step.id}.`);
+      return {
+        id: step.id,
+        operationKey: input.operationKey,
+        request: input.request,
+        expected: input.expected,
+        needs: input.needs,
+        dependsOn: input.dependsOn,
+        captures: input.captures,
+        tokenSchemes: input.tokenSchemes,
+      };
+    }),
   }));
 
-  const tokenSources: RenderedTokenSource[] = [...usedSchemes].sort(compareCodeUnits).map((scheme) => {
-    const source = auth.tokenSources.get(scheme)!;
-    return {
-      scheme,
-      kind: source.kind,
-      tokenVariable: source.tokenVariable,
-      request: source.request,
-      responseField: source.responseField,
-      needs: source.envNames,
-    };
-  });
+  const tokenSources = inputs.tokenSources.map((source) => ({
+    scheme: source.scheme,
+    kind: source.kind,
+    request: source.request,
+    needs: source.needs,
+    captures: source.captures,
+    ...(source.expected === undefined ? {} : { expected: source.expected }),
+  }));
 
   const usesBasic =
     journeys.some((journey) => journey.steps.some((step) => step.request.auth.kind === "basic")) ||
@@ -136,7 +188,8 @@ export function renderScript(plan: PerformancePlan, context: PerformanceContext)
     "",
     `const VALUE_ENV = ${JSON.stringify(valueEnv, null, 2)};`,
     `const THINK_TIME_S = ${JSON.stringify(plan.thinkTimeMs / 1000)};`,
-    `const UNIQUE = ${JSON.stringify(Object.fromEntries(unique.map((entry) => [entry.token, { format: entry.format, original: entry.original }])), null, 2)};`,
+    `const UNIQUE = ${JSON.stringify(Object.fromEntries(inputs.unique.map((entry) => [entry.token, { format: entry.format, original: entry.original }])), null, 2)};`,
+    `const DYNAMIC = ${JSON.stringify(Object.fromEntries(inputs.dynamic.map((entry) => [entry.token, { kind: entry.kind }])), null, 2)};`,
     `const TOKEN_SOURCES = ${JSON.stringify(tokenSources, null, 2)};`,
     `const JOURNEYS = ${JSON.stringify(journeys, null, 2)};`,
     "",
@@ -180,6 +233,20 @@ const BASIC_UNSUPPORTED = "    // Basic auth is not used by this plan.";
  * stored field names and array positions; a header capture matches the name regardless of case and
  * takes the value exactly as k6 reports it, never split. Each outcome is counted by capture name in
  * `apipilot_capture`; the first failed capture is named on `apipilot_cut_short`. No value is tagged.
+ *
+ * AP-036 (specs/036-collection-performance-test research R9, R10), the same text for every plan:
+ * - `DYNAMIC` names the Postman dynamic variables a plan uses. Each occurrence is generated from the
+ *   virtual user, the iteration, its occurrence index and the word lists below, never from
+ *   `Math.random()`; the four unique kinds also carry `APIPILOT_RUN_TAG`, a run setting, so the
+ *   script's bytes never change between runs. A tag that is not 6 lowercase hex characters is none.
+ * - A token source provides one or more captures, taken with the capture rule above. A source with
+ *   `expected` (a collection's credential request) is checked against it, and a failure before the
+ *   load is counted as `setup-failed` with the capture that failed (`""` for the status). Its values
+ *   stay empty, so the steps that use them fail as authentication failures.
+ * - A step may use tokens from several sources (`tokenSchemes`); a source may use an earlier one's.
+ * - A `form` body fills each reference URL-encoded.
+ * - k6 hands setup data to virtual users as JSON with `undefined` written as `null`, so a token
+ *   source that acquired nothing is recognised by its values not being an array.
  */
 const RUNTIME = String.raw`const missingData = new Counter("apipilot_missing_data");
 const notAttempted = new Counter("apipilot_not_attempted");
@@ -187,6 +254,11 @@ const cutShort = new Counter("apipilot_cut_short");
 const tokenRefresh = new Counter("apipilot_token_refresh");
 const captureOutcome = new Counter("apipilot_capture");
 const REFERENCE = /\{\{([^{}]+)\}\}/g;
+const RUN_TAG_SETTING = __ENV.APIPILOT_RUN_TAG;
+const RUN_TAG = typeof RUN_TAG_SETTING === "string" && /^[0-9a-f]{6}$/.test(RUN_TAG_SETTING) ? RUN_TAG_SETTING : "";
+const FIRST_NAMES = ["Ada", "Alan", "Barbara", "Claude", "Dennis", "Donald", "Edsger", "Frances", "Grace", "Hedy", "Ivan", "Jean", "Ken", "Katherine", "Leslie", "Linus", "Margaret", "Niklaus", "Radia", "Rosalind", "Sophie", "Tim", "Vint", "Whitfield"];
+const LAST_NAMES = ["Allen", "Babbage", "Backus", "Berners", "Cerf", "Diffie", "Dijkstra", "Engelbart", "Hamilton", "Hopper", "Johnson", "Kahn", "Knuth", "Lamarr", "Lamport", "Liskov", "Lovelace", "Perlman", "Ritchie", "Shannon", "Sutherland", "Thompson", "Turing", "Wirth"];
+const ALPHANUMERIC = "0123456789abcdefghijklmnopqrstuvwxyz";
 const SOURCE_BY_SCHEME = {};
 for (const source of TOKEN_SOURCES) SOURCE_BY_SCHEME[source.scheme] = source;
 
@@ -210,9 +282,45 @@ function uniqueValue(token) {
   return at < 0 ? entry.original + suffix : entry.original.slice(0, at) + suffix + entry.original.slice(at);
 }
 
+function mix(vu, iteration, k) {
+  let h = Math.imul(vu ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(iteration + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(k + 0x27d4eb2f, 0x165667b1);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function dynamicValue(name) {
+  const kind = DYNAMIC[name].kind;
+  const k = Number(name.slice("apipilot_dyn_".length));
+  const m = mix(__VU, __ITER, k);
+  const first = FIRST_NAMES[m % FIRST_NAMES.length];
+  const last = LAST_NAMES[Math.floor(m / FIRST_NAMES.length) % LAST_NAMES.length];
+  const person = (first + "." + last).toLowerCase();
+  if (kind === "$guid" || kind === "$randomUUID") {
+    const tag = RUN_TAG === "" ? "000000" : RUN_TAG;
+    return hex(__VU, 8) + "-" + hex(k, 4) + "-4" + tag.slice(0, 3) + "-8" + tag.slice(3) + "-" + hex(__ITER, 12);
+  }
+  if (kind === "$timestamp") return String(Math.floor(Date.now() / 1000));
+  if (kind === "$isoTimestamp") return new Date(Date.now()).toISOString();
+  if (kind === "$randomInt") return String(m % 1001);
+  if (kind === "$randomFirstName") return first;
+  if (kind === "$randomLastName") return last;
+  if (kind === "$randomFullName") return first + " " + last;
+  if (kind === "$randomUserName") return person + (RUN_TAG === "" ? "" : "_r" + RUN_TAG) + "_vu" + __VU + "_it" + __ITER + "_" + k;
+  if (kind === "$randomEmail") return person + "+" + (RUN_TAG === "" ? "" : "r" + RUN_TAG + "-") + "vu" + __VU + "-it" + __ITER + "-" + k + "@example.com";
+  if (kind === "$randomPhoneNumber") return String(200 + (m % 800)) + "-" + String(200 + (Math.floor(m / 800) % 800)) + "-" + String(10000 + (Math.floor(m / 640000) % 10000)).slice(1);
+  if (kind === "$randomAlphaNumeric") return ALPHANUMERIC[m % ALPHANUMERIC.length];
+  if (kind === "$randomBoolean") return m % 2 === 0 ? "true" : "false";
+  return "";
+}
+
 function resolve(name, scope) {
   if (scope.vars.has(name)) return scope.vars.get(name);
   if (scope.tokens.has(name)) return scope.tokens.get(name);
+  if (Object.prototype.hasOwnProperty.call(DYNAMIC, name)) return dynamicValue(name);
   if (Object.prototype.hasOwnProperty.call(UNIQUE, name)) return uniqueValue(name);
   const value = env(name);
   return value === undefined ? "" : value;
@@ -223,6 +331,7 @@ function fill(template, scope, mode) {
     const value = String(resolve(name, scope));
     if (mode === "url") return name === "baseUrl" ? value : encodeURIComponent(value);
     if (mode === "json") return JSON.stringify(value).slice(1, -1);
+    if (mode === "form") return encodeURIComponent(value);
     return value;
   });
 }
@@ -238,7 +347,8 @@ function build(request, scope) {
   if (auth.kind === "basic") {
     headers.Authorization = "Basic " + encoding.b64encode(fill(auth.username, scope, "raw") + ":" + fill(auth.password, scope, "raw"));
   }
-  const body = request.body === undefined ? null : fill(request.body, scope, request.bodyKind === "json" ? "json" : "raw");
+  const bodyMode = request.bodyKind === "json" || request.bodyKind === "form" ? request.bodyKind : "raw";
+  const body = request.body === undefined ? null : fill(request.body, scope, bodyMode);
   return { method: request.method, url: url, headers: headers, body: body };
 }
 
@@ -313,29 +423,36 @@ function statusOk(status, expected) {
   return false;
 }
 
-function acquire(source, kind) {
-  for (const name of source.needs) if (env(name) === undefined) return { value: undefined, acquiredAtMs: Date.now(), lifetimeS: 0 };
-  const request = build(source.request, { vars: new Map(), tokens: new Map() });
+function acquire(source, kind, tokens) {
+  for (const name of source.needs) if (env(name) === undefined) return { values: undefined, failed: null, acquiredAtMs: Date.now(), lifetimeS: 0 };
+  const request = build(source.request, { vars: new Map(), tokens: tokens });
   const response = http.request(request.method, request.url, request.body, {
     headers: request.headers,
     tags: { apipilot_kind: kind },
     responseType: "text",
   });
-  const value = jsonField(response, source.responseField);
+  if (source.expected !== undefined && !statusOk(response.status, source.expected)) {
+    return { values: undefined, failed: "", acquiredAtMs: Date.now(), lifetimeS: 0 };
+  }
+  const values = [];
+  for (const capture of source.captures) {
+    const value = captured(response, capture.source);
+    if (value === undefined) return { values: undefined, failed: capture.name, acquiredAtMs: Date.now(), lifetimeS: 0 };
+    values.push({ key: capture.key, value: value });
+  }
   const lifetime = Number(jsonField(response, "expires_in"));
-  return {
-    value: value === undefined || value === null || value === "" ? undefined : String(value),
-    acquiredAtMs: Date.now(),
-    lifetimeS: isFinite(lifetime) && lifetime > 0 ? lifetime : 0,
-  };
+  return { values: values, failed: null, acquiredAtMs: Date.now(), lifetimeS: isFinite(lifetime) && lifetime > 0 ? lifetime : 0 };
 }
 
 export function setup() {
   const tokens = [];
+  const acquired = new Map();
   for (const source of TOKEN_SOURCES) {
-    const token = acquire(source, "token-setup");
-    if (token.value !== undefined && token.lifetimeS === 0) tokenRefresh.add(1, { outcome: "no-lifetime", scheme: source.scheme });
-    tokens.push({ scheme: source.scheme, value: token.value, acquiredAtMs: token.acquiredAtMs, lifetimeS: token.lifetimeS });
+    const token = acquire(source, "token-setup", acquired);
+    if (token.failed !== null && source.expected !== undefined) tokenRefresh.add(1, { outcome: "setup-failed", scheme: source.scheme, capture: token.failed });
+    if (token.values !== undefined && token.lifetimeS === 0) tokenRefresh.add(1, { outcome: "no-lifetime", scheme: source.scheme });
+    if (token.values !== undefined) for (const entry of token.values) acquired.set(entry.key, entry.value);
+    tokens.push({ scheme: source.scheme, values: token.values, acquiredAtMs: token.acquiredAtMs, lifetimeS: token.lifetimeS });
   }
   return { tokens: tokens };
 }
@@ -349,10 +466,10 @@ function refreshFraction() {
 function maybeRefresh(scheme) {
   const current = vuTokens.get(scheme);
   const source = SOURCE_BY_SCHEME[scheme];
-  if (!current || !source || current.value === undefined || !(current.lifetimeS > 0)) return;
+  if (!current || !source || !Array.isArray(current.values) || !(current.lifetimeS > 0)) return;
   if (Date.now() - current.acquiredAtMs < current.lifetimeS * 1000 * refreshFraction()) return;
-  const next = acquire(source, "token-refresh");
-  if (next.value !== undefined) {
+  const next = acquire(source, "token-refresh", tokenScope());
+  if (next.values !== undefined) {
     vuTokens.set(scheme, next);
     tokenRefresh.add(1, { outcome: "ok", scheme: scheme });
   } else {
@@ -365,7 +482,8 @@ function tokenScope() {
   const tokens = new Map();
   for (const source of TOKEN_SOURCES) {
     const token = vuTokens.get(source.scheme);
-    tokens.set(source.tokenVariable, token && token.value !== undefined ? token.value : "");
+    for (const capture of source.captures) tokens.set(capture.key, "");
+    if (token && Array.isArray(token.values)) for (const entry of token.values) tokens.set(entry.key, entry.value);
   }
   return tokens;
 }
@@ -389,7 +507,7 @@ function runJourney(journey, run) {
       unavailable[step.id] = true;
       continue;
     }
-    if (step.tokenScheme) maybeRefresh(step.tokenScheme);
+    for (const scheme of step.tokenSchemes) maybeRefresh(scheme);
     scope.tokens = tokenScope();
     if (run.sent > 0 && THINK_TIME_S > 0) sleep(THINK_TIME_S);
     const request = build(step.request, scope);
@@ -422,7 +540,7 @@ export default function (data) {
   if (vuTokens === null) {
     vuTokens = new Map();
     for (const token of data.tokens) {
-      vuTokens.set(token.scheme, { value: token.value, acquiredAtMs: token.acquiredAtMs, lifetimeS: token.lifetimeS });
+      vuTokens.set(token.scheme, { values: token.values, acquiredAtMs: token.acquiredAtMs, lifetimeS: token.lifetimeS });
     }
   }
   const run = { sent: 0 };

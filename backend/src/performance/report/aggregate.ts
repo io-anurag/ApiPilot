@@ -11,6 +11,7 @@ import type {
   TimelinePoint,
 } from "@apipilot/shared-domain";
 import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES, runnableJourneys } from "@apipilot/shared-domain";
+import { compareCodeUnits } from "../../postman/ordering";
 import { statusMatches } from "../plan/expectedStatuses";
 import type { MetricsPoint } from "../k6/metricsStream";
 import { LatencyHistogram } from "./histogram";
@@ -156,6 +157,9 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
   const data = { sentBytes: 0, receivedBytes: 0 };
   const writes = new Map<string, { operationKey: string; method: string; sent: number; succeeded: number }>();
   const refresh = { count: 0, failed: 0, lifetimeStated: true, buckets: new Set<number>() };
+  // AP-036 FR-028, FR-029 (research R8): failures before the load, and refreshes by token source.
+  const setupFailed = new Map<string, { scheme: string; capture: string }>();
+  const refreshByScheme = new Map<string, { scheme: string; refreshed: number; failed: number }>();
   const firstFailure = { bucket: Number.POSITIVE_INFINITY, byStep: new Map<string, number>() };
   let firstRateLimitedBucket = Number.POSITIVE_INFINITY;
   let requests = 0;
@@ -209,10 +213,21 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         refresh.lifetimeStated = false;
         return;
       }
+      if (tags.outcome === "setup-failed") {
+        const entry = { scheme: tags.scheme ?? "", capture: tags.capture ?? "" };
+        setupFailed.set(JSON.stringify([entry.scheme, entry.capture]), entry);
+        return;
+      }
       refresh.count += 1;
       tokenRefreshesSoFar += 1;
       if (tags.outcome === "failed") refresh.failed += 1;
       refresh.buckets.add(index * bucketMs);
+      if (tags.scheme) {
+        const byScheme = refreshByScheme.get(tags.scheme) ?? { scheme: tags.scheme, refreshed: 0, failed: 0 };
+        if (tags.outcome === "failed") byScheme.failed += 1;
+        else byScheme.refreshed += 1;
+        refreshByScheme.set(tags.scheme, byScheme);
+      }
       return;
     }
     const step = tags.step ? steps.get(tags.step) : undefined;
@@ -405,6 +420,11 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         failed: refresh.failed,
         lifetimeStated: refresh.lifetimeStated,
         bucketOffsetsMs: [...refresh.buckets].sort((a, b) => a - b),
+        // AP-036: present only when there is something to say, so earlier runs' results are unchanged.
+        ...(setupFailed.size > 0
+          ? { setupFailed: [...setupFailed.values()].sort((a, b) => compareCodeUnits(a.scheme, b.scheme) || compareCodeUnits(a.capture, b.capture)) }
+          : {}),
+        ...(refreshByScheme.size > 0 ? { byScheme: [...refreshByScheme.values()].sort((a, b) => compareCodeUnits(a.scheme, b.scheme)) } : {}),
       },
       ...(firstFailureStep ? { firstFailure: { offsetMs: firstFailure.bucket * bucketMs, stepId: firstFailureStep } } : {}),
       ...(Number.isFinite(firstRateLimitedBucket) ? { firstRateLimitedOffsetMs: firstRateLimitedBucket * bucketMs } : {}),

@@ -4,6 +4,7 @@ import { createLogger } from "../logger";
 import { createQuickTest } from "../performance/quick/createQuickTest";
 import { contextFromQuickTest, getQuickTest, updateQuickTest, type QuickPerformanceTest } from "../performance/quick/quickTestStore";
 import { QuickTestExistsError } from "../performance/errors";
+import { openApiEngine } from "../performance/plan/openApiEngine";
 import { reaffirmSession } from "../session/sessionMiddleware";
 import { upload } from "../uploadMiddleware";
 import { fail, handleKnownError, logReceived, logSucceeded, PlanSourceUnavailableError } from "./performanceHttp";
@@ -40,7 +41,7 @@ function viewOf(test: QuickPerformanceTest): QuickPerformanceTestView {
 function quickHandle(): PlanHandle {
   const test = requireQuickTest();
   return {
-    context: contextFromQuickTest(test),
+    engine: openApiEngine(contextFromQuickTest(test)),
     // A quick test's scenarios are fixed at upload, so its plan is never rebuilt from upstream changes.
     plan: () => requireQuickTest().plan,
     savePlan: (plan) => updateQuickTest({ plan }),

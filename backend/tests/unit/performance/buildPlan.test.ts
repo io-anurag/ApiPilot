@@ -1,13 +1,14 @@
-import type { PerformancePlan } from "@apipilot/shared-domain";
+import type { CollectionPlanInfo, PerformancePlan } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
-import { assemblePlan, buildPlan, choicesOf, rebuildPlan, upstreamFingerprint } from "../../../src/performance/plan/buildPlan";
+import { assemblePlan, buildPlan, choicesOf, finalizePlan, rebuildPlan, upstreamFingerprint } from "../../../src/performance/plan/buildPlan";
+import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
 import { applyPlanUpdate } from "../../../src/performance/plan/planUpdate";
 import { valueStatuses } from "../../../src/performance/plan/userSuppliedValues";
 import { pathParameterVariableName } from "../../../src/postman/artifactVariables";
 import { InvalidLoadProfileError, InvalidThresholdError, UnknownOperationError, UserJourneyRefusedError } from "../../../src/performance/errors";
 import { userJourneysInput } from "../../../src/performance/plan/userJourneys";
 import { STARTING_STAGES, startingProfile, validateLoadProfile } from "../../../src/performance/plan/loadProfiles";
-import { environmentFixture, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
+import { environmentFixture, planFixture, SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "../../fixtures/performance/builders";
 import { bodyEditsContext, performanceContext, quickContext, userJourneysContext } from "../../fixtures/performance/context";
 import { CREATE, lifecycleInput, lifecyclePlan, READ, REMOVE, REPLACE } from "../../fixtures/performance/userJourneyPlans";
 
@@ -401,5 +402,58 @@ describe("assembling user-defined journeys (AP-035)", () => {
     // The returned single-step journeys come back at the end of the order; in the base order the plan is the base plan.
     const reordered = applyPlanUpdate(cleared, { journeyOrder: base.journeys.map((journey) => journey.id) }, context);
     expect(reordered.fingerprint).toBe(base.fingerprint);
+  });
+});
+
+/** AP-036 (specs/036-collection-performance-test research R16, R19; tasks T008). */
+describe("a collection plan's fingerprint and run snapshot", () => {
+  function collectionInfo(overrides: Partial<CollectionPlanInfo> = {}): CollectionPlanInfo {
+    return {
+      collectionId: "c-1",
+      collectionName: "APIFoundry",
+      collectionTier: "local",
+      collectionDigest: "d".repeat(64),
+      collectionState: "current",
+      orderedRequestIds: ["r1"],
+      excludedRequestIds: [],
+      excludedRequests: [],
+      leftOut: [],
+      credentialRequests: [],
+      findings: [
+        { kind: "condition", owner: { kind: "request", itemId: "r1" }, event: "test", stepIds: ["s_1"], line: 3, column: null, excerpt: "if (x) { pm.environment.set(\"a\", 1) }", detail: null },
+      ],
+      baseUrlVariable: "baseUrl",
+      hosts: [],
+      generatedValueCount: 0,
+      addedBindings: [],
+      review: { reviewed: false, conversionDigest: "c".repeat(64) },
+      ...overrides,
+    };
+  }
+
+  it("keeps the fingerprint of a plan without collection data", async () => {
+    const context = await performanceContext();
+    const plan = buildPlan(context);
+    const { fingerprint, stepsNeedingExpectedStatus, ...rest } = plan;
+    expect(finalizePlan(rest).fingerprint).toBe(fingerprint);
+    expect(stepsNeedingExpectedStatus).toEqual(finalizePlan(rest).stepsNeedingExpectedStatus);
+  });
+
+  it("fingerprints the collection data, but not its review or derived state", () => {
+    const base = planFixture({ source: "collection", collection: collectionInfo() });
+    const rest: Omit<PerformancePlan, "fingerprint" | "stepsNeedingExpectedStatus"> = { ...base };
+    const fingerprint = finalizePlan(rest).fingerprint;
+    expect(finalizePlan({ ...rest, collection: collectionInfo({ review: { reviewed: true, conversionDigest: "e".repeat(64) } }) }).fingerprint).toBe(fingerprint);
+    expect(finalizePlan({ ...rest, collection: collectionInfo({ collectionState: "changed" }) }).fingerprint).toBe(fingerprint);
+    expect(finalizePlan({ ...rest, collection: collectionInfo({ excludedRequestIds: ["r1"] }) }).fingerprint).not.toBe(fingerprint);
+    expect(finalizePlan({ ...rest, collection: undefined }).fingerprint).not.toBe(fingerprint);
+  });
+
+  it("empties every finding's excerpt in a run snapshot, keeping its kind, owner and line", () => {
+    const plan = planFixture({ source: "collection", collection: collectionInfo() });
+    const snapshot = planSnapshotForRun(plan);
+    expect(snapshot.collection!.findings).toEqual([{ ...plan.collection!.findings[0], excerpt: null }]);
+    expect(JSON.stringify(snapshot)).not.toContain("pm.environment.set");
+    expect(plan.collection!.findings[0].excerpt).not.toBeNull();
   });
 });

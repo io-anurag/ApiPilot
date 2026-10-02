@@ -36,6 +36,7 @@ import {
 import { findExecutionInProgress } from "../execution/executionSlot";
 import { hasQuickTest } from "../performance/quick/quickTestStore";
 import { hasUserScript } from "../performance/userScript/userScriptStore";
+import { hasCollectionPlan } from "../performance/collection/collectionPlanStore";
 import { missingVariableValues } from "../execution/variableCompleteness";
 import { confirmationRequirement } from "../execution/destructiveOperations";
 import { generateCollection } from "../postman/generateCollection";
@@ -163,12 +164,13 @@ function requireCompletedWorkflow(): TestGenerationWorkflow {
  * refusal is unchanged (`409 stage_not_active`), and every other route that uses
  * `requireCompletedWorkflow()` keeps requiring Postman generation.
  * AP-034 FR-024 (research R18): a session that holds a stored user script also opens them.
+ * AP-036 (specs/036-collection-performance-test research R17): so does a collection performance plan.
  */
 function requireEnvironmentAccess(): void {
   const workflow = getCurrentWorkflow();
-  if (workflow?.stages.postmanGeneration.status === "complete" || hasQuickTest() || hasUserScript()) return;
+  if (workflow?.stages.postmanGeneration.status === "complete" || hasQuickTest() || hasUserScript() || hasCollectionPlan()) return;
   throw new StageNotActiveError(
-    "Environments open once the guided workflow's Postman collection is generated, a quick performance test is started, or a k6 script is stored.",
+    "Environments open once the guided workflow's Postman collection is generated, a quick or collection performance test is started, or a k6 script is stored.",
   );
 }
 
