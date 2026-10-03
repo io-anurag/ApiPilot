@@ -13,11 +13,16 @@
  * Project design tokens (CLAUDE.md §29). Tailwind v4 CSS-first configuration — no
  * tailwind.config.js (CLAUDE.md §27). Values are a developer-tool-appropriate, low-decoration
  * palette (CLAUDE.md §28) shared by every screen in the guided workflow.
+ *
+ * AP-038 (Design A): headings use the sans display face, the light background is cool-neutral,
+ * and each top-level workflow has one colour (`--color-wf-*`) used wherever that workflow is
+ * shown — always beside its name, never as the only signal (spec FR-002, FR-005). Every value
+ * meets WCAG AA as text on its theme's surface (038 research.md D2).
  */
 @theme {
   --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --font-display: "IBM Plex Serif", Georgia, serif;
+  --font-display: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
 
   --color-brand-50: #eefcf8;
   --color-brand-100: #d7f7eb;
@@ -55,10 +60,18 @@
   --color-info-700: #0e7490;
 
   --color-surface: #ffffff;
-  --color-background: #f7faf8;
-  --color-muted: #60726c;
-  --color-border: #d8e4df;
-  --color-chrome: #f9fcfa;
+  --color-background: #f6f8fb;
+  --color-muted: #5b6878;
+  --color-border: #e1e7ef;
+  --color-chrome: #ffffff;
+
+  /* Workflow hues never reuse a status hue (success green, warning amber, danger red, info cyan)
+   * or the brand teal, so a workflow colour cannot be read as a status (038 FR-002). */
+  --color-wf-guided: #4f46e5;
+  --color-wf-import: #a21caf;
+  --color-wf-quick: #1d4ed8;
+  --color-wf-plans: #6d28d9;
+  --color-wf-k6: #be185d;
 }
 
 /**
@@ -78,11 +91,111 @@
  * prefers-color-scheme directly.
  */
 :root[data-theme="dark"] {
-  --color-surface: #121d1a;
-  --color-background: #07110f;
-  --color-muted: #95aaa2;
-  --color-border: #263b35;
-  --color-chrome: #081310;
+  /* AP-038: navy dark palette (Design A), replacing the earlier green-black surfaces. */
+  --color-surface: #0f182b;
+  --color-background: #070d1a;
+  --color-muted: #94a1b8;
+  --color-border: #22304a;
+  --color-chrome: #0a1222;
+
+  --color-wf-guided: #a5b4fc;
+  --color-wf-import: #f0abfc;
+  --color-wf-quick: #93c5fd;
+  --color-wf-plans: #c4b5fd;
+  --color-wf-k6: #f9a8d4;
+}
+
+/**
+ * AP-038: one colour scheme per workflow. While a workflow is open, App sets `data-workflow` on
+ * <main>, and the `brand` scale every component already uses (buttons, the active tab, the stage
+ * tracker, focus rings, provenance and tinted panels) takes that workflow's hue, the same hue as
+ * its start-screen tile (`--color-wf-*` is the 700 step in light and the 300 step in dark). The
+ * start screen keeps the product's teal brand. Success, warning, danger and info keep their own
+ * tokens, so no workflow hue ever reads as a status (spec FR-002, FR-027). Each scale is
+ * Tailwind's own; every step this app draws text or white-on-colour with meets or beats the teal
+ * scale's contrast (038 research D2).
+ */
+:root {
+  --color-glow: #1d4ed8;
+}
+
+:root[data-theme="dark"] {
+  --color-glow: #3b82f6;
+}
+
+[data-workflow="guided-workflow"] {
+  /* indigo */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+  --color-glow: var(--color-brand-600);
+}
+
+[data-workflow="import-collection"] {
+  /* fuchsia */
+  --color-brand-50: #fdf4ff;
+  --color-brand-100: #fae8ff;
+  --color-brand-200: #f5d0fe;
+  --color-brand-300: #f0abfc;
+  --color-brand-400: #e879f9;
+  --color-brand-500: #d946ef;
+  --color-brand-600: #c026d3;
+  --color-brand-700: #a21caf;
+  --color-brand-800: #86198f;
+  --color-brand-900: #701a75;
+  --color-glow: var(--color-brand-600);
+}
+
+[data-workflow="quick-performance"] {
+  /* blue */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+  --color-glow: var(--color-brand-600);
+}
+
+[data-workflow="performance-plans"] {
+  /* violet */
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+  --color-glow: var(--color-brand-600);
+}
+
+[data-workflow="user-script"] {
+  /* pink */
+  --color-brand-50: #fdf2f8;
+  --color-brand-100: #fce7f3;
+  --color-brand-200: #fbcfe8;
+  --color-brand-300: #f9a8d4;
+  --color-brand-400: #f472b6;
+  --color-brand-500: #ec4899;
+  --color-brand-600: #db2777;
+  --color-brand-700: #be185d;
+  --color-brand-800: #9d174d;
+  --color-brand-900: #831843;
+  --color-glow: var(--color-brand-600);
 }
 
 @layer base {
@@ -95,12 +208,12 @@
     margin: 0;
     font-family: var(--font-sans);
     background-color: var(--color-background);
-    color: #17231f;
+    color: #121a26;
     text-rendering: optimizeLegibility;
   }
 
   :root[data-theme="dark"] body {
-    color: #e4efeb;
+    color: #e6ecf5;
   }
 
   button,
@@ -108,6 +221,15 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  /* AP-038 (user request): prose is justified between its margins across the application.
+   * Hyphenation keeps the word gaps even in narrow columns; monospace paragraphs (paths, code,
+   * identifiers) are excluded so no identifier is ever hyphenated. Being a base-layer rule, any
+   * alignment utility (`text-center`, `text-left`) on a paragraph still wins. */
+  p:not(.font-mono) {
+    text-align: justify;
+    hyphens: auto;
   }
 
   button,
@@ -146,17 +268,23 @@
 }
 
 @layer utilities {
+  /* AP-038 (Design A): a soft blue glow at the top of the page over a faint neutral grid. The
+   * glow is anchored to the top and does not repeat, so long pages fade back to the plain
+   * background token. */
   .technical-grid {
     background-image:
-      linear-gradient(to right, rgb(7 131 102 / 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(7 131 102 / 0.05) 1px, transparent 1px);
-    background-size: 28px 28px;
+      radial-gradient(70rem 26rem at 75% -6rem, color-mix(in srgb, var(--color-glow) 7%, transparent), transparent 70%),
+      linear-gradient(to right, rgb(91 104 120 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(91 104 120 / 0.05) 1px, transparent 1px);
+    background-size: 100% 100%, 28px 28px, 28px 28px;
+    background-repeat: no-repeat, repeat, repeat;
   }
 
   :root[data-theme="dark"] .technical-grid {
     background-image:
-      linear-gradient(to right, rgb(53 197 162 / 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(53 197 162 / 0.06) 1px, transparent 1px);
+      radial-gradient(70rem 28rem at 75% -6rem, color-mix(in srgb, var(--color-glow) 20%, transparent), transparent 70%),
+      linear-gradient(to right, rgb(148 161 184 / 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(148 161 184 / 0.04) 1px, transparent 1px);
   }
 }
 

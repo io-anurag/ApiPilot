@@ -2,12 +2,23 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import type { ExportResult } from "@apipilot/shared-domain";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { AppHeader } from "./components/AppHeader";
-import { Tabs } from "./components/Tabs";
+import { Tabs, type TabItem } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
+import { WORKFLOWS } from "./components/workflowCatalog";
+import { CommandPalette } from "./components/CommandPalette";
+import {
+  buildCommands,
+  isEditableTarget,
+  isMacPlatform,
+  isPaletteShortcut,
+  shortcutLabel,
+  type Command,
+} from "./components/paletteCommands";
 import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 import type { OpenChainPlanRequest } from "./pages/RequestChainPlansPage";
 import { ActiveViewContext } from "./components/requestChain/activeView";
+import { useTheme } from "./hooks/useTheme";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
 // exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
@@ -51,20 +62,24 @@ type ActiveTab = EntryChoice;
 
 /** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
  * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
- * adds the quick performance test as the third, and AP-034 Run k6 Script as the fourth. */
-const TABS: Array<{ id: ActiveTab; label: string }> = [
-  { id: "guided-workflow", label: "Guided Workflow" },
-  { id: "import-collection", label: "Import & Run Collection" },
-  { id: "quick-performance", label: "Quick Performance Test" },
-  // AP-037: request-chain plans, the engineer's own, kept across restarts.
-  { id: "performance-plans", label: "Performance Plans" },
-  { id: "user-script", label: "Run k6 Script" },
-];
+ * adds the quick performance test as the third, AP-034 Run k6 Script, and AP-037 request-chain
+ * Performance Plans. AP-038 reads labels and colours from the shared workflow catalog. */
+const TABS: Array<TabItem<ActiveTab>> = WORKFLOWS.map((workflow) => ({
+  id: workflow.id,
+  label: workflow.tabLabel,
+  markerClassName: workflow.tone.marker,
+}));
 
 export function App() {
   const showPerformancePlanScaleMock =
     new URLSearchParams(window.location.search).get("mock") === "performance-plan-scale";
   const [health, setHealth] = useState<HealthCheckResult | null>(null);
+  const { theme, setTheme } = useTheme();
+  // AP-038 US3: the command palette. Its commands are derived from state on every opening and
+  // never stored; every action goes through the same handlers the cards, tabs and theme control
+  // use (research.md D8), so the palette cannot reach a state they cannot.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const shortcutHint = shortcutLabel(isMacPlatform(typeof navigator === "undefined" ? undefined : navigator));
   // No choice made yet: only the entry chooser is shown, no tab menu (requirement: menu bar
   // visible only once a path is picked, see EntryChooser).
   const [started, setStarted] = useState(false);
@@ -105,6 +120,26 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  /** Ctrl+K / Cmd+K opens the palette — never from a text field or over another dialog, where the
+   * keystroke is left untouched (FR-018). While the palette is open the shortcut only suppresses
+   * the browser's own Ctrl+K action (FR-017). Every app dialog renders through `Dialog`, so an
+   * `aria-modal` element in the document means one is open. */
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!isPaletteShortcut(event)) return;
+      if (paletteOpen) {
+        event.preventDefault();
+        return;
+      }
+      if (isEditableTarget(event.target)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      setPaletteOpen(true);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [paletteOpen]);
 
   function mount(view: ActiveTab) {
     const mounters: Record<ActiveTab, (mounted: boolean) => void> = {
@@ -150,6 +185,20 @@ export function App() {
     mount(tab);
   }
 
+  /** FR-019: a workflow opens as its tab would when the tab menu is shown, and as its start-screen
+   * card would otherwise (start screen, or the guided workflow hiding the menu). */
+  function runCommand(command: Command) {
+    setPaletteOpen(false);
+    if (command.kind === "workflow") {
+      if (started && tabsVisible) handleTabChange(command.id);
+      else handleSelect(command.id);
+    } else if (command.kind === "back-to-start") {
+      handleExitToStart();
+    } else {
+      setTheme(command.target);
+    }
+  }
+
   /** Fired once the guided workflow's Postman collection has been generated: the old, duplicate
    * in-workflow "Execution" screen is replaced by handing off straight to "Import & Run
    * Collection", pre-filled with the generated artifact (requirements 3 & 4). */
@@ -167,8 +216,17 @@ export function App() {
   }
 
   return (
-    <main className="technical-grid min-h-screen bg-background text-slate-900 dark:text-slate-100">
-      <AppHeader health={health} />
+    <main
+      // AP-038: inside a workflow, the brand scale takes that workflow's hue (index.css).
+      data-workflow={started ? activeTab : undefined}
+      className="technical-grid min-h-screen bg-background text-slate-900 dark:text-slate-100">
+      <AppHeader
+        health={health}
+        theme={theme}
+        onThemeChange={setTheme}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
+        shortcutHint={shortcutHint}
+      />
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         {showPerformancePlanScaleMock ? (
           <LazyView>
@@ -240,6 +298,14 @@ export function App() {
           </ActiveViewContext.Provider>
         )}
       </div>
+      {paletteOpen && (
+        <CommandPalette
+          commands={buildCommands({ workflowShown: started, theme })}
+          onRun={runCommand}
+          onClose={() => setPaletteOpen(false)}
+          shortcutHint={shortcutHint}
+        />
+      )}
     </main>
   );
 }

@@ -54,6 +54,38 @@ The header shows a live connection indicator — **Connecting…**, **Connected*
 light/dark theme toggle. Your choice is remembered on that browser; until you choose
 explicitly, ApiPilot follows your operating system's light/dark preference.
 
+The header also has two shortcuts:
+
+- **Command palette** (the search button showing **Ctrl K**, or **⌘ K** on macOS, or that key
+  combination anywhere outside a text field): type a few letters to open any of the five
+  workflows, return to the start screen, or switch between light and dark theme. Use ↑ and ↓
+  to move, **Enter** to choose and **Esc** to close. The palette offers only these commands; it
+  does not search your specifications, collections, plans or runs, sends nothing to the backend
+  and stores nothing except the theme choice. It does not open while you are typing in a field
+  or while another dialog is open.
+- **Help** (the **?** button): lists the keyboard shortcuts and what each workflow is for.
+
+### The start screen
+
+The start screen begins with **Start with the artifact you have.** Below it, three boxes name
+the kind of input you may already hold and the workflows that accept it:
+
+| You have | Workflows offered |
+|---|---|
+| An OpenAPI specification | Guided Workflow, Quick performance test |
+| A Postman collection | Import & Run Collection |
+| A k6 script | Run k6 Script |
+
+Each workflow name there is a button. Under **Launch a test session**, the five workflows also
+appear as cards, with **Guided Workflow** marked **Recommended**. A workflow opens the same way
+whether you choose it from an artifact box, its card, its tab or the command palette. Each
+workflow keeps one colour everywhere it appears (cards, tabs, palette), always next to its name:
+indigo for Guided Workflow, fuchsia for Import & Run Collection, blue for the Quick performance
+test, violet for Performance plans and pink for Run k6 Script. While a workflow is open, its pages take on its colour throughout: buttons, the
+active tab, the progress tracker and highlights. The start screen keeps ApiPilot's teal. These
+colours are never used for statuses: green, amber, red and cyan always mean success, warning, failure and information.
+Paragraph text is justified, evenly spread between its margins.
+
 ## 3. The guided workflow
 
 The start screen offers five paths: **Guided Workflow** (described in this section, including

@@ -29,4 +29,22 @@ describe("Tabs", () => {
     render(<Tabs tabs={TABS} activeTab="one" onChange={() => {}} label="Test tabs" />);
     expect(screen.getByRole("navigation", { name: "Test tabs" })).toBeInTheDocument();
   });
+
+  it("draws an optional colour marker without changing the tab's name or current state (AP-038 FR-013)", () => {
+    const { container } = render(
+      <Tabs
+        tabs={[
+          { id: "one", label: "One", markerClassName: "bg-wf-guided" },
+          { id: "two", label: "Two" },
+        ]}
+        activeTab="one"
+        onChange={() => {}}
+        label="Test tabs"
+      />,
+    );
+    const marker = container.querySelector(".bg-wf-guided");
+    expect(marker).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByRole("button", { name: "One" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Two" })).toBeInTheDocument();
+  });
 });

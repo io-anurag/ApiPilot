@@ -95,14 +95,14 @@ describe("request-chain plan routes: data sets", () => {
       [ownPlan.id, "data_set_not_found"],
     ]) {
       const base = `${CHAIN_BASE}/${planId}/data-sets/${added.id}`;
-      const refused = await Promise.all([
-        other.agent.put(base).send({ name: "Taken", mode: "row-per-iteration", columns }),
-        other.agent.put(`${base}/file`).attach("file", Buffer.from("username,password\nu,p\n"), "logins.csv"),
-        other.agent.get(`${base}/preview`),
-        other.agent.delete(base),
-      ]);
+      const refused = [
+        await other.agent.put(base).send({ name: "Taken", mode: "row-per-iteration", columns }),
+        await other.agent.put(`${base}/file`).attach("file", Buffer.from("username,password\nu,p\n"), "logins.csv"),
+        await other.agent.get(`${base}/preview`),
+        await other.agent.delete(base),
+      ];
       for (const response of refused) {
-        expect([response.req.method, response.req.path, response.status, response.body.error]).toEqual([response.req.method, response.req.path, 404, error]);
+        expect([response.status, response.body.error]).toEqual([404, error]);
         expect(JSON.stringify(response.body)).not.toContain("Lovelace");
       }
     }
