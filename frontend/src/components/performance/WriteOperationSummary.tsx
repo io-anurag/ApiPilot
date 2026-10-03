@@ -55,6 +55,8 @@ export function WriteOperationSummary({
   // AP-035 FR-023: an operation sent by several steps says how many and in which journeys.
   const entries = summary.operations.map((operation) => ({
     operationKey: operation.operationKey,
+    // A request-chain write is keyed by its step id, so name its method and URL explicitly.
+    request: { method: operation.method, path: operation.path },
     detail: (
       <>
         <StatusBadge label={WRITE_EFFECT_LABELS[operation.method]} tone="warning" />

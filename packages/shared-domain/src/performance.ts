@@ -330,11 +330,6 @@ export interface UserSuppliedValueRequirement {
   source: UserSuppliedValueSource;
 }
 
-/** A requirement judged against one environment. Presence only, never the value (FR-013). */
-export interface UserSuppliedValueStatus extends UserSuppliedValueRequirement {
-  present: boolean;
-}
-
 /** A body field made unique per virtual user and iteration (FR-016, D13). */
 export interface UniqueValueField {
   stepId: string;
@@ -356,12 +351,6 @@ export type BodyEdit = {
   scenarioId: string;
 } & ({ kind: "json"; json: unknown } | { kind: "text"; text: string });
 
-/** What `PUT /plan` accepts per step in `bodyEdits`; `null` resets the step (FR-017). */
-export interface BodyEditInput {
-  kind: "json" | "text";
-  text: string;
-}
-
 export type EditableParameterLocation = "path" | "query" | "header";
 
 /**
@@ -382,83 +371,12 @@ export interface ParameterEdit {
   parameters: ParameterEditEntry[];
 }
 
-/** What `PUT /plan` accepts per step in `parameterEdits`: the step's full set of changes; `null` resets it. */
-export interface ParameterEditInput {
-  parameters: ParameterEditEntry[];
-}
-
-/** Why a documented parameter cannot be edited in the plan (AP-033 FR-021). */
-export type ParameterNotEditableReason = "filled-at-run-time" | "structured-value";
-
-/** One documented parameter in the step's parameter editor (AP-033 FR-020). */
-export interface StepParameterEditRow {
-  location: EditableParameterLocation;
-  name: string;
-  required: boolean;
-  /** The schema's type, format and enum, for display only; `null` when the schema states none. */
-  type: string | null;
-  format: string | null;
-  enum: string[] | null;
-  /** The value the generated scenario sends, as text; `null` when it does not send this parameter. */
-  generated: string | null;
-  /** The engineer's change, or `null` when the parameter is as generated. */
-  edit: { action: "set"; value: string } | { action: "omit" } | null;
-  /** `null` when the parameter can be edited. */
-  notEditable: ParameterNotEditableReason | null;
-  /** A literal typed here is refused: the schema declares it `format: password` (FR-021). */
-  secret: boolean;
-}
-
-export interface StepParameterEditModel {
-  rows: StepParameterEditRow[];
-  edited: boolean;
-}
-
 /** AP-033 FR-010: a reference ApiPilot applies that an edited body no longer carries. */
 export interface BodyEditNotice {
   stepId: string;
   kind: "workflow-variable-dropped" | "unique-field-dropped" | "capture-binding-dropped";
   /** The workflow variable's name, or the unique field's path. */
   name: string;
-}
-
-export type BodyMismatchRule =
-  | "required"
-  | "type"
-  | "enum"
-  | "format"
-  | "minimum"
-  | "maximum"
-  | "minLength"
-  | "maxLength"
-  | "minItems"
-  | "maxItems";
-
-/** AP-033 FR-005: one difference between an edited JSON body and the request schema. Never blocks. */
-export interface BodyMismatch {
-  /** Dotted, with `[n]` for array items; `""` for the body itself. */
-  fieldPath: string;
-  rule: BodyMismatchRule;
-  message: string;
-}
-
-/** What body a step sends (AP-033 FR-001). */
-export type StepBodyStatus = "sent" | "not-documented" | "documented-not-sent" | "unsupported-content-type";
-
-/** The editor's model for one step (AP-033 data-model `StepBodyEditModel`). */
-export interface StepBodyEditModel {
-  kind: "json" | "text";
-  /** The base body to edit: the edit, or the generated body; `""` when the step sends none. */
-  text: string;
-  edited: boolean;
-  /** Empty unless the step has a JSON edit. */
-  mismatches: BodyMismatch[];
-  /**
-   * AP-033 FR-009: the JSON body fields ApiPilot fills at run time (workflow variables, unique
-   * values, credentials), found by comparing the body as sent with the base body. The engineer's
-   * own `{{name}}` references are not listed. Empty for text bodies.
-   */
-  replacements: { fieldPath: string; reference: PreviewReference }[];
 }
 
 /** What will be tested and how (data-model.md `PerformancePlan`). Holds no values. */
@@ -520,67 +438,6 @@ export interface PerformancePlan {
   collection?: CollectionPlanInfo;
 }
 
-/**
- * AP-032 FR-008 (specs/032-quick-performance-test data-model "StepRequestPreview"): one `{{name}}`
- * a step's request uses, by where its value comes from at run time. Never carries a value.
- */
-export type PreviewReference =
-  | { kind: "environment"; name: string; secret: boolean }
-  | { kind: "workflow-variable"; name: string; variable: string; producerStepId: string | null }
-  | { kind: "unique-per-iteration"; name: string; format: UniqueValueField["format"] }
-  | { kind: "credential"; name: string; schemeName: string }
-  /** AP-035 FR-012: a value captured by an earlier step of the same journey. Never the value. */
-  | { kind: "capture"; name: string; captureName: string; producerStepId: string; source: CaptureSource; secret: boolean }
-  /** AP-036 FR-013 (research R9): a Postman dynamic variable generated at run time; `variable` is the `$name`. */
-  | { kind: "generated-value"; name: string; variable: string };
-
-/** A parameter or header value: generated text, one reference, or text that mixes both. */
-export type PreviewValue =
-  | { kind: "generated"; text: string }
-  | { kind: "template"; text: string; references: PreviewReference[] }
-  | PreviewReference;
-
-export interface PreviewParameter {
-  location: "path" | "query" | "header";
-  name: string;
-  value: PreviewValue;
-}
-
-export interface PreviewAuth {
-  kind: StepAuthKind;
-  schemeName: string | null;
-  location: "header" | "query" | null;
-  references: PreviewReference[];
-}
-
-/** The view-only request of one step, derived from the request the script sends (FR-008). */
-export interface StepRequestPreview {
-  stepId: string;
-  operationKey: string;
-  method: string;
-  pathTemplate: string;
-  /** Path, then query, then header parameters, each in request order. */
-  parameters: PreviewParameter[];
-  auth: PreviewAuth;
-  /** `text` is the body as sent, with each reference left as `{{name}}`. */
-  body: { contentType: "json" | "text"; text: string; references: PreviewReference[] } | null;
-  /** AP-033 FR-001. */
-  bodyStatus: StepBodyStatus;
-  /** AP-033: `null` when the body cannot be edited (`not-documented`, `unsupported-content-type`). */
-  bodyEdit: StepBodyEditModel | null;
-  /** AP-033 FR-020: `null` when the operation documents no path, query or header parameter. */
-  parameterEdit: StepParameterEditModel | null;
-}
-
-/**
- * A removed operation as it would be if restored (AP-032 FR-024a): the step the plan would build
- * for it and that step's request. Computed on request and never stored; the plan is unchanged.
- */
-export interface RemovedOperationPreview {
-  step: PerformanceStep;
-  request: StepRequestPreview;
-}
-
 /** What the frontend knows about a generated script. Never the script text. */
 export interface ScriptStatus {
   planFingerprint: string;
@@ -591,12 +448,11 @@ export interface ScriptStatus {
 
 /**
  * AP-032 contracts/quick-performance-api.md: the session's quick performance test as the client sees
- * it. No script text, no scenario body outside the step preview, no environment value.
+ * it. Since AP-037 phase two it is a seeding source only, so the view is the uploaded specification;
+ * no scenario body and no environment value.
  */
 export interface QuickPerformanceTestView {
   specification: { filename: string; info?: { title: string; version: string }; operationCount: number };
-  plan: PerformancePlan;
-  script: ScriptStatus | null;
 }
 
 export type K6UnavailableReason =
@@ -886,12 +742,6 @@ export function writeEffectOf(method: string): WriteEffect | null {
   return isWriteMethod(normalized) ? WRITE_EFFECTS[normalized] : null;
 }
 
-/** The FR-010 text marker for this method ("Creates", …), or `null` for a read. */
-export function writeEffectLabelOf(method: string): string | null {
-  const normalized = method.toUpperCase();
-  return isWriteMethod(normalized) ? WRITE_EFFECT_LABELS[normalized] : null;
-}
-
 export interface WriteOperationEntry {
   operationKey: string;
   method: WriteMethod;
@@ -1095,21 +945,6 @@ export interface CollectionPlanInfo {
   addedBindings: CollectionAddedBinding[];
   /** Research R14; not fingerprinted. */
   review: { reviewed: boolean; conversionDigest: string };
-}
-
-/** AP-036 contracts/collection-performance-api.md: the session's collection plan as the client sees it. */
-export interface CollectionPerformanceTestView {
-  collection: { id: string; name: string; tier: CollectionPlanInfo["collectionTier"]; state: CollectionPlanInfo["collectionState"] };
-  plan: PerformancePlan;
-  script: ScriptStatus | null;
-}
-
-/** AP-036 `POST /collection-performance/rebuild`: the steps whose engineer settings could not be kept. */
-export interface CollectionRebuildNotKept {
-  stepId: string;
-  itemId: string;
-  name: string;
-  settings: ("expected-statuses" | "captures" | "bindings")[];
 }
 
 /** AP-036 (research R16): how a collection step is labelled: `<folder path> / <request name>`. */

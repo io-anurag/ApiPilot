@@ -729,8 +729,8 @@ points. It then does the following.
   phase.
 - **SC-006 measurement.** The measured set is listed in plan.md. Its baseline on 2026-10-03, before
   this feature, is 16,110 lines of non-test source: backend 7,396, frontend 7,608, shared 1,106. The
-  target after phase two is at most 8,055 lines across the same set plus every new chain module and
-  component.
+  target after phase two was at most 8,055 lines across the same set plus every new chain module and
+  component. Phase one measured 22,357, and the target was revised on 2026-10-03 to at most 13,000.
 
 ## R25. Testing
 

@@ -6,8 +6,6 @@ import type {
   PerformancePlan,
   PerformanceRun,
   PerformanceStep,
-  UserJourneyDefinition,
-  UserJourneyStepDefinition,
   ValueBinding,
 } from "@apipilot/shared-domain";
 
@@ -123,10 +121,3 @@ export function bindingFixture(overrides: Partial<ValueBinding> & { captureStepI
   return { target: { kind: "path", name: "id" }, captureName: "customer_id", state: "active", ...overrides };
 }
 
-/** AP-035: a user-defined journey of the given steps; ids are fixed strings. */
-export function userJourneyFixture(
-  steps: UserJourneyStepDefinition[],
-  overrides: Partial<UserJourneyDefinition> = {},
-): UserJourneyDefinition {
-  return { id: "j_user0000000001", name: "Customer lifecycle", origin: { kind: "defined" }, steps, nextStepNumber: steps.length + 1, ...overrides };
-}

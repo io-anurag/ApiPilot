@@ -82,6 +82,38 @@ describe("request-chain plan routes: data sets", () => {
     expect(removed.body.plan.dataSets).toEqual([]);
   });
 
+  it("refuses every data set route to another session, through its plan or its own, and leaves the data set unchanged", async () => {
+    const owner = await chainAgent();
+    const plan = await newPlan(owner.agent);
+    const added = (await upload(owner.agent, plan.id, CUSTOMERS)).body.dataSet;
+    const other = await chainAgent();
+    const ownPlan = await newPlan(other.agent, "Other session");
+    const columns = added.columns.map((column: { name: string }) => ({ name: column.name, secret: false }));
+
+    for (const [planId, error] of [
+      [plan.id, "chain_plan_not_found"],
+      [ownPlan.id, "data_set_not_found"],
+    ]) {
+      const base = `${CHAIN_BASE}/${planId}/data-sets/${added.id}`;
+      const refused = await Promise.all([
+        other.agent.put(base).send({ name: "Taken", mode: "row-per-iteration", columns }),
+        other.agent.put(`${base}/file`).attach("file", Buffer.from("username,password\nu,p\n"), "logins.csv"),
+        other.agent.get(`${base}/preview`),
+        other.agent.delete(base),
+      ]);
+      for (const response of refused) {
+        expect([response.req.method, response.req.path, response.status, response.body.error]).toEqual([response.req.method, response.req.path, 404, error]);
+        expect(JSON.stringify(response.body)).not.toContain("Lovelace");
+      }
+    }
+    const uploaded = await upload(other.agent, plan.id, CUSTOMERS, "taken");
+    expect([uploaded.status, uploaded.body.error]).toEqual([404, "chain_plan_not_found"]);
+    expect((await other.agent.get(`${CHAIN_BASE}/${ownPlan.id}`)).body.plan.dataSets).toEqual([]);
+
+    expect((await owner.agent.get(`${CHAIN_BASE}/${plan.id}`)).body.plan.dataSets).toEqual([added]);
+    expect((await owner.agent.get(`${CHAIN_BASE}/${plan.id}/data-sets/${added.id}/preview`)).body.rows[0][2]).toBe("Lovelace");
+  });
+
   it("writes the run's copy into the run directory after the integrity check, removes it when the run ends, and marks the download", async () => {
     const runner = createFakeRunner({ lines: [], holdUntilCancelled: true });
     const { agent } = await chainAgent({ runner, probe: readyProbe() });

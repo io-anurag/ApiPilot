@@ -61,7 +61,7 @@ export function deriveFindings(result: PerformanceResult, plan: PerformancePlan 
     findings.push({
       ruleId: "slowest-step",
       stepIds: [slowest.stepId],
-      message: `${slowest.operationKey} has the highest p95 latency: ${slowest.latencyMs!.p95} ms.`,
+      message: `${operationKeyOf(slowest.stepId)} has the highest p95 latency: ${slowest.latencyMs!.p95} ms.`,
       values: { p95Ms: slowest.latencyMs!.p95 },
     });
   }
@@ -100,7 +100,7 @@ export function deriveFindings(result: PerformanceResult, plan: PerformancePlan 
     findings.push({
       ruleId: "missing-data",
       stepIds: [step.stepId],
-      message: `${step.operationKey} was not sent ${step.notAttempted.missingData} times: ${step.missingVariables.join(", ")} missing in the environment.`,
+      message: `${operationKeyOf(step.stepId)} was not sent ${step.notAttempted.missingData} times: ${step.missingVariables.join(", ")} missing in the environment.`,
       values: { count: step.notAttempted.missingData, variables: step.missingVariables.join(",") },
     });
   }

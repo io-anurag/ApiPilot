@@ -14,6 +14,8 @@ import { WrappingPath } from "./WrappingPath";
  */
 export interface CountedOperationEntry {
   operationKey: string;
+  /** The method and path to show, when the key is not itself "METHOD path" (a request-chain step's id). */
+  request?: { method: string; path: string };
   detail?: ReactNode;
   action?: ReactNode;
 }
@@ -45,7 +47,7 @@ export function CountedOperationList({
   const items = (
     <ul className={columns ? "grid gap-x-4 gap-y-1 @xl:grid-cols-2 @5xl:grid-cols-3" : "divide-y divide-border rounded-md border border-border"}>
       {entries.map((entry) => {
-        const { method, path } = splitOperationKey(entry.operationKey);
+        const { method, path } = entry.request ?? splitOperationKey(entry.operationKey);
         return (
           <li key={entry.operationKey} className={columns ? "flex min-w-0 items-start gap-2 py-0.5 text-sm" : "flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm"}>
             {method && (

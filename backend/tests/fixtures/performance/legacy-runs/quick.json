@@ -1,0 +1,1534 @@
+{
+  "id": "2acf9933-edad-47d4-81ff-bd5a30c7dd9f",
+  "status": "completed",
+  "environment": {
+    "id": "90d64fa4-82ea-4d89-8b1b-484f75ccb65a",
+    "name": "legacy-local",
+    "tier": "local",
+    "baseUrl": "http://127.0.0.1:4600"
+  },
+  "planSource": "quick",
+  "scriptSha256": "2c97e198d73ca101a8e0f82143b0310ac70a6a6e186504efdd0f774aa4b12be6",
+  "k6Version": "1.2.0",
+  "plannedDurationMs": 60000,
+  "startedAt": "2026-10-03T15:52:58.591Z",
+  "cancelRequested": false,
+  "endedAt": "2026-10-03T15:52:59.008Z",
+  "planSnapshot": {
+    "bodyEdits": [],
+    "bodyEditNotices": [],
+    "discardedBodyEdits": [],
+    "parameterEdits": [],
+    "discardedParameterEdits": [],
+    "source": "quick",
+    "excludedOperationKeys": [
+      "POST /auth/login"
+    ],
+    "omitted": [],
+    "journeys": [
+      {
+        "id": "j_fca6e801fadafe03",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_413a4cce48a06794",
+            "operationKey": "DELETE /orders/{orderId}",
+            "method": "DELETE",
+            "path": "/orders/{orderId}",
+            "scenarioId": "q00-c53b38c6d2007b51c66cb919",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "orderId",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_0c322a0d9b21402b",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_32606c04aba4259c",
+            "operationKey": "DELETE /products/{productId}",
+            "method": "DELETE",
+            "path": "/products/{productId}",
+            "scenarioId": "q00-c8455ceba0729ad13e146873",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password",
+              "productId"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_8c4c4e93280cc84c",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_aa4a052de15de947",
+            "operationKey": "GET /orders",
+            "method": "GET",
+            "path": "/orders",
+            "scenarioId": "q00-21a8114dccddcdecd0c9aae5",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "rule-generated",
+            "tieBrokenByLowestId": true,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_d5ae9152f9790e35",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_a56e5e5807b14797",
+            "operationKey": "GET /orders/{orderId}",
+            "method": "GET",
+            "path": "/orders/{orderId}",
+            "scenarioId": "q00-f987a25d033d2958a7cc56a3",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "orderId",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_c25be31339d8b790",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_099a9f24ac1b597c",
+            "operationKey": "GET /products",
+            "method": "GET",
+            "path": "/products",
+            "scenarioId": "q00-b3018053b9b26b85a97518cc",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_1c5b894315e056ce",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_4c29e75525ddaaf0",
+            "operationKey": "GET /products/{productId}",
+            "method": "GET",
+            "path": "/products/{productId}",
+            "scenarioId": "q00-12d266bc20c7c885edb05dfb",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password",
+              "productId"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_d4b32c4864a14e16",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_34729e07a52aceaa",
+            "operationKey": "GET /status",
+            "method": "GET",
+            "path": "/status",
+            "scenarioId": "q00-c863223ee47a0c82456d531c",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "user"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_393961ecc63f30f4",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_974de5df3809c8f6",
+            "operationKey": "PATCH /orders/{orderId}",
+            "method": "PATCH",
+            "path": "/orders/{orderId}",
+            "scenarioId": "q00-db1ec30429a7338f6f920712",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "rule-generated",
+            "tieBrokenByLowestId": true,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "orderId",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_6737ce81b87ec2a8",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_a8b328fa8bb48066",
+            "operationKey": "POST /auth/logout",
+            "method": "POST",
+            "path": "/auth/logout",
+            "scenarioId": "q00-e5f81e8f48a1fd9f2555811e",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_68bd815e86d4dee3",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_7dd9e3f5ff875bef",
+            "operationKey": "POST /orders",
+            "method": "POST",
+            "path": "/orders",
+            "scenarioId": "q00-c8a8243e8cae7f9920b3b8d1",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_0da03c033a6c18e1",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_922bdba680280800",
+            "operationKey": "POST /products",
+            "method": "POST",
+            "path": "/products",
+            "scenarioId": "q00-8e0ebdda0a9a86b8722325f1",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "password"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_9df67c3496b710bf",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_2378bd19ddc1bde3",
+            "operationKey": "PUT /orders/{orderId}",
+            "method": "PUT",
+            "path": "/orders/{orderId}",
+            "scenarioId": "q00-a18b5de38b569e293171cbf1",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "LoginAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "orderId",
+              "password"
+            ]
+          }
+        ]
+      }
+    ],
+    "thinkTimeMs": 0,
+    "loadProfile": {
+      "kind": "smoke",
+      "stages": [
+        {
+          "durationMs": 60000,
+          "targetVirtualUsers": 1
+        }
+      ],
+      "plannedDurationMs": 60000
+    },
+    "thresholds": [],
+    "userSuppliedValues": [
+      {
+        "name": "baseUrl",
+        "secret": false,
+        "neededBySteps": [
+          "s_413a4cce48a06794",
+          "s_32606c04aba4259c",
+          "s_aa4a052de15de947",
+          "s_a56e5e5807b14797",
+          "s_099a9f24ac1b597c",
+          "s_4c29e75525ddaaf0",
+          "s_34729e07a52aceaa",
+          "s_974de5df3809c8f6",
+          "s_a8b328fa8bb48066",
+          "s_7dd9e3f5ff875bef",
+          "s_922bdba680280800",
+          "s_2378bd19ddc1bde3"
+        ],
+        "source": "base-url"
+      },
+      {
+        "name": "orderId",
+        "secret": false,
+        "neededBySteps": [
+          "s_413a4cce48a06794",
+          "s_a56e5e5807b14797",
+          "s_974de5df3809c8f6",
+          "s_2378bd19ddc1bde3"
+        ],
+        "source": "path-parameter"
+      },
+      {
+        "name": "password",
+        "secret": true,
+        "neededBySteps": [
+          "s_413a4cce48a06794",
+          "s_32606c04aba4259c",
+          "s_aa4a052de15de947",
+          "s_a56e5e5807b14797",
+          "s_099a9f24ac1b597c",
+          "s_4c29e75525ddaaf0",
+          "s_34729e07a52aceaa",
+          "s_974de5df3809c8f6",
+          "s_a8b328fa8bb48066",
+          "s_7dd9e3f5ff875bef",
+          "s_922bdba680280800",
+          "s_2378bd19ddc1bde3"
+        ],
+        "source": "credential"
+      },
+      {
+        "name": "productId",
+        "secret": false,
+        "neededBySteps": [
+          "s_32606c04aba4259c",
+          "s_4c29e75525ddaaf0"
+        ],
+        "source": "path-parameter"
+      }
+    ],
+    "uniqueValueFields": [
+      {
+        "stepId": "s_7dd9e3f5ff875bef",
+        "location": "body",
+        "fieldPath": "customerEmail",
+        "format": "email"
+      }
+    ],
+    "upstreamFingerprint": "085c9c33097fbc0841fe2ccb539598554d31e92f43b35b0dae818ae73cfde738",
+    "credentialProducerOperationKeys": [
+      "POST /auth/login"
+    ],
+    "fingerprint": "c15895a534e5c498834b89f0c9eae14e8c3fad4e7db45511b5c19efca8817e15",
+    "stepsNeedingExpectedStatus": []
+  },
+  "progress": {
+    "elapsedMs": 416,
+    "currentVirtualUsers": 2,
+    "requestsSoFar": 24,
+    "failuresSoFar": 0,
+    "journeysCutShortSoFar": 0,
+    "tokenRefreshesSoFar": 0,
+    "steps": [
+      {
+        "stepId": "s_413a4cce48a06794",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_32606c04aba4259c",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_aa4a052de15de947",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_a56e5e5807b14797",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_099a9f24ac1b597c",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_4c29e75525ddaaf0",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_34729e07a52aceaa",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_974de5df3809c8f6",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_a8b328fa8bb48066",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_7dd9e3f5ff875bef",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_922bdba680280800",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_2378bd19ddc1bde3",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      }
+    ]
+  },
+  "result": {
+    "totals": {
+      "requests": 24,
+      "errors": 0,
+      "errorRatePercent": 0,
+      "iterations": 24,
+      "journeysCutShort": 0,
+      "throughputPerSecond": 57.69,
+      "latencyMs": {
+        "p50": 35.9891,
+        "p90": 51.4013,
+        "p95": 53.4779,
+        "p99": 53.4779
+      },
+      "latencySummaryMs": {
+        "min": 20,
+        "mean": 37,
+        "max": 54
+      },
+      "iterationDurationMs": null,
+      "dataSentBytes": 0,
+      "dataReceivedBytes": 0
+    },
+    "journeys": [
+      {
+        "journeyId": "j_fca6e801fadafe03",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_0c322a0d9b21402b",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_8c4c4e93280cc84c",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_d5ae9152f9790e35",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 28.9447,
+          "p90": 30.1141,
+          "p95": 30.1141,
+          "p99": 30.1141
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_c25be31339d8b790",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 31.9573,
+          "p90": 33.2484,
+          "p95": 33.2484,
+          "p99": 33.2484
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_1c5b894315e056ce",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 35.2834,
+          "p90": 35.9891,
+          "p95": 35.9891,
+          "p99": 35.9891
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_d4b32c4864a14e16",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 38.1919,
+          "p90": 38.9558,
+          "p95": 38.9558,
+          "p99": 38.9558
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_393961ecc63f30f4",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 41.3402,
+          "p90": 42.167,
+          "p95": 42.167,
+          "p99": 42.167
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_6737ce81b87ec2a8",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 43.8705,
+          "p90": 44.7479,
+          "p95": 44.7479,
+          "p99": 44.7479
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_68bd815e86d4dee3",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 46.5557,
+          "p90": 48.4366,
+          "p95": 48.4366,
+          "p99": 48.4366
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_0da03c033a6c18e1",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 50.3934,
+          "p90": 51.4013,
+          "p95": 51.4013,
+          "p99": 51.4013
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_9df67c3496b710bf",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 53.4779,
+          "p90": 53.4779,
+          "p95": 53.4779,
+          "p99": 53.4779
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      }
+    ],
+    "steps": [
+      {
+        "stepId": "s_413a4cce48a06794",
+        "operationKey": "DELETE /orders/{orderId}",
+        "method": "DELETE",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 20,
+          "mean": 20.5,
+          "max": 21
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 21.0846
+          }
+        ]
+      },
+      {
+        "stepId": "s_32606c04aba4259c",
+        "operationKey": "DELETE /products/{productId}",
+        "method": "DELETE",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 23,
+          "mean": 23.5,
+          "max": 24
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 24.2196
+          }
+        ]
+      },
+      {
+        "stepId": "s_aa4a052de15de947",
+        "operationKey": "GET /orders",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 26,
+          "mean": 26.5,
+          "max": 27
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 26.7404
+          }
+        ]
+      },
+      {
+        "stepId": "s_a56e5e5807b14797",
+        "operationKey": "GET /orders/{orderId}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 28.9447,
+          "p90": 30.1141,
+          "p95": 30.1141,
+          "p99": 30.1141
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 29,
+          "mean": 29.5,
+          "max": 30
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 30.1141
+          }
+        ]
+      },
+      {
+        "stepId": "s_099a9f24ac1b597c",
+        "operationKey": "GET /products",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 31.9573,
+          "p90": 33.2484,
+          "p95": 33.2484,
+          "p99": 33.2484
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 32,
+          "mean": 32.5,
+          "max": 33
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 33.2484
+          }
+        ]
+      },
+      {
+        "stepId": "s_4c29e75525ddaaf0",
+        "operationKey": "GET /products/{productId}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 35.2834,
+          "p90": 35.9891,
+          "p95": 35.9891,
+          "p99": 35.9891
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 35,
+          "mean": 35.5,
+          "max": 36
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 35.9891
+          }
+        ]
+      },
+      {
+        "stepId": "s_34729e07a52aceaa",
+        "operationKey": "GET /status",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "user"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 38.1919,
+          "p90": 38.9558,
+          "p95": 38.9558,
+          "p99": 38.9558
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 38,
+          "mean": 38.5,
+          "max": 39
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 38.9558
+          }
+        ]
+      },
+      {
+        "stepId": "s_974de5df3809c8f6",
+        "operationKey": "PATCH /orders/{orderId}",
+        "method": "PATCH",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 41.3402,
+          "p90": 42.167,
+          "p95": 42.167,
+          "p99": 42.167
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 41,
+          "mean": 41.5,
+          "max": 42
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 42.167
+          }
+        ]
+      },
+      {
+        "stepId": "s_a8b328fa8bb48066",
+        "operationKey": "POST /auth/logout",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 43.8705,
+          "p90": 44.7479,
+          "p95": 44.7479,
+          "p99": 44.7479
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 44,
+          "mean": 44.5,
+          "max": 45
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 44.7479
+          }
+        ]
+      },
+      {
+        "stepId": "s_7dd9e3f5ff875bef",
+        "operationKey": "POST /orders",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 46.5557,
+          "p90": 48.4366,
+          "p95": 48.4366,
+          "p99": 48.4366
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 47,
+          "mean": 47.5,
+          "max": 48
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 48.4366
+          }
+        ]
+      },
+      {
+        "stepId": "s_922bdba680280800",
+        "operationKey": "POST /products",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 50.3934,
+          "p90": 51.4013,
+          "p95": 51.4013,
+          "p99": 51.4013
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 50,
+          "mean": 50.5,
+          "max": 51
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 51.4013
+          }
+        ]
+      },
+      {
+        "stepId": "s_2378bd19ddc1bde3",
+        "operationKey": "PUT /orders/{orderId}",
+        "method": "PUT",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 53.4779,
+          "p90": 53.4779,
+          "p95": 53.4779,
+          "p99": 53.4779
+        },
+        "throughputPerSecond": 4.81,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 53,
+          "mean": 53.5,
+          "max": 54
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 53.4779
+          }
+        ]
+      }
+    ],
+    "timeline": {
+      "bucketMs": 5000,
+      "points": [
+        {
+          "offsetMs": 0,
+          "virtualUsers": 2,
+          "requests": 24,
+          "errors": 0,
+          "p95Ms": 53.4779
+        }
+      ]
+    },
+    "writeRequests": [
+      {
+        "operationKey": "DELETE /orders/{orderId}",
+        "method": "DELETE",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "DELETE /products/{productId}",
+        "method": "DELETE",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "PATCH /orders/{orderId}",
+        "method": "PATCH",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "POST /auth/logout",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "POST /orders",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "POST /products",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "PUT /orders/{orderId}",
+        "method": "PUT",
+        "sent": 2,
+        "succeeded": 2
+      }
+    ],
+    "tokenRefreshes": {
+      "count": 0,
+      "failed": 0,
+      "lifetimeStated": true,
+      "bucketOffsetsMs": []
+    },
+    "thresholdOutcomes": [],
+    "findings": [
+      {
+        "ruleId": "slowest-step",
+        "stepIds": [
+          "s_2378bd19ddc1bde3"
+        ],
+        "message": "PUT /orders/{orderId} has the highest p95 latency: 53.4779 ms.",
+        "values": {
+          "p95Ms": 53.4779
+        }
+      }
+    ],
+    "findingsRulesetVersion": 2,
+    "latencyPrecision": "within-1-percent"
+  }
+}

@@ -87,6 +87,14 @@ describe("createAggregate with a chain layout", () => {
     const findings = deriveFindings({ ...result, thresholdOutcomes: [{ thresholdId: "t1", measured: 50, passed: false }] }, layout);
     expect(findings[0].message).toContain("GET Get the customer");
   });
+
+  it("names the slowest step by its label, never by its id", () => {
+    const plan = customerLifecyclePlan();
+    const layout = layoutFromChainSnapshot(snapshotOf(plan));
+    const result = aggregateOf(plan, [...httpReq({ step: "s5", journey: "c1", status: 200, method: "GET", durationMs: 50, atMs: 1_000 })]).toResult(STREAM_START_MS + 60_000);
+    const slowest = deriveFindings(result, layout).find((finding) => finding.ruleId === "slowest-step");
+    expect(slowest?.message).toMatch(/^GET Get the customer has the highest p95 latency: /);
+  });
 });
 
 describe("ChainRun type", () => {

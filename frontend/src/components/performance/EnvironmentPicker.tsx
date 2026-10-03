@@ -54,6 +54,12 @@ export function EnvironmentPicker({
             onChange={(event) => onSelect(event.target.value)}
             className="min-w-48 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
+            {/* Without this, the browser shows the first environment as chosen when none is. */}
+            {!selected && (
+              <option value="" disabled>
+                Choose an environment
+              </option>
+            )}
             {environments.map((environment) => (
               <option key={environment.id} value={environment.id}>
                 {environment.name} ({environment.tier})

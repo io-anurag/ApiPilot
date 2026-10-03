@@ -44,10 +44,24 @@ function puts(calls: Call[]): ChainPlan[] {
 }
 
 describe("ChainPlanEditor", () => {
+  it("says what still blocks a run above the tabs, as the other performance screens do", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    const pending = await screen.findByTestId("performance-pending");
+    expect(pending).toHaveTextContent("Before you can run");
+    expect(within(pending).getByText(/No target environment yet/)).toBeInTheDocument();
+    expect(within(pending).getByText("The k6 script has not been generated.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run setup (2 to do)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Runs & reports (0)" })).toBeInTheDocument();
+    fireEvent.click(within(pending).getByRole("button", { name: "Choose a target environment" }));
+    expect(screen.getByRole("button", { name: "Run setup (2 to do)" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("shows the chain and its steps, the authoring notice, and the selected step's request", async () => {
     setup();
     render(<ChainPlanEditor planId={PLAN_ID} />);
-    expect(await screen.findByRole("heading", { name: "Customer lifecycle" })).toBeInTheDocument();
+    expect(await screen.findByTestId("chain-plan-name")).toHaveTextContent("Customer lifecycle");
+    expect(screen.getByRole("heading", { name: "Performance plan" })).toBeInTheDocument();
     expect(screen.getByText(/Steps are authored by you and not verified by ApiPilot/)).toBeInTheDocument();
     const tree = screen.getByRole("navigation", { name: "Chains and steps" });
     expect(within(tree).getByText("Get a token")).toBeInTheDocument();
@@ -103,6 +117,32 @@ describe("ChainPlanEditor", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("k6 sets Host for every request, so a step cannot set it.");
   });
 
+  it("does not send a header row that was added and left empty", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add header" }));
+    const name = screen.getByLabelText("Step name");
+    fireEvent.change(name, { target: { value: "Get one customer" } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    const sent = puts(calls)[0].chains.flatMap((chain) => chain.steps).find((step) => step.id === "s3")!;
+    expect(sent.headers).toEqual([{ name: "Authorization", value: "Bearer {{token}}" }]);
+  });
+
+  it("says Not saved, not Saved, while the server refuses the plan, and blocks generation", async () => {
+    setup(lifecyclePlan(), () => [422, { error: "invalid_step", message: "\"\" is not a valid header name.", stepId: "s3", field: "headers" }]);
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    const name = screen.getByLabelText("Step name");
+    fireEvent.change(name, { target: { value: "Renamed" } });
+    fireEvent.blur(name);
+    expect(await screen.findByTestId("chain-plan-save-error")).toHaveTextContent("is not a valid header name.");
+    expect(await screen.findByText("Not saved")).toBeInTheDocument();
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("performance-pending")).getByRole("button", { name: "Generate the k6 script" })).toBeDisabled();
+  });
+
   it("announces a moved credential and asks for an environment when one is needed", async () => {
     let attempt = 0;
     setup(lifecyclePlan(), (call) => {
@@ -125,7 +165,7 @@ describe("ChainPlanEditor", () => {
     setup(lifecyclePlan(), () => [409, { error: "plan_revision_conflict", message: "m", current }]);
     render(<ChainPlanEditor planId={PLAN_ID} />);
     fireEvent.click(await screen.findByRole("button", { name: "+ Add step" }));
-    expect(await screen.findByRole("heading", { name: "Changed elsewhere" })).toBeInTheDocument();
+    expect(await screen.findByTestId("chain-plan-name")).toHaveTextContent("Changed elsewhere");
     expect(screen.getByTestId("chain-plan-announcement")).toHaveTextContent("The plan was changed elsewhere and has been reloaded.");
   });
 

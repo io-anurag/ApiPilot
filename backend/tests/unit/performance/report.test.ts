@@ -1,11 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { PerformanceResult, PerformanceRun, PerformanceThreshold } from "@apipilot/shared-domain";
 import { describe, expect, it } from "vitest";
 import { deriveFindings } from "../../../src/performance/report/findings";
-import { planSnapshotForRun } from "../../../src/performance/plan/runSnapshot";
 import { BODY_EDITED_MARKER, bodyEditProvenance, escapeHtml, formatCount, PARAMETERS_EDITED_MARKER, parameterEditProvenance, QUICK_PLAN_PROVENANCE, renderHtmlReport, REPORT_CSP, UNEXPECTED_STATUS_HINT } from "../../../src/performance/report/renderHtmlReport";
 import { evaluateThresholds } from "../../../src/performance/report/thresholds";
-import { assembleCollectionPlan, defaultCollectionChoices } from "../../../src/performance/collection/assembleCollectionPlan";
-import { APIFOUNDRY_REQUEST_IDS, apifoundryCollection } from "../../fixtures/collections/collectionBuilders";
 import { withReportFields } from "../../../src/performance/runPerformanceTest";
 import { journeyFixture, planFixture, runFixture, SEEDED_CLIENT_SECRET, stepFixture } from "../../fixtures/performance/builders";
 
@@ -187,17 +186,11 @@ describe("runs and reports of a plan with body edits", () => {
     discardedBodyEdits: ["GET /gone"],
   });
 
-  it("stores a snapshot without body content, keeping which steps were edited", () => {
-    const snapshot = planSnapshotForRun(editedPlan);
-    expect(snapshot.bodyEdits).toEqual([]);
-    expect(snapshot.discardedBodyEdits).toEqual([]);
-    expect(snapshot.journeys[0].steps[0].bodyEdited).toBe(true);
-    expect(JSON.stringify(snapshot)).not.toContain(BODY_MARKER);
-    expect(editedPlan.bodyEdits).toHaveLength(1);
-  });
+  // A stored snapshot keeps each edited step's flag but none of the body edits (AP-033 FR-014).
+  const storedSnapshot = { ...editedPlan, bodyEdits: [], discardedBodyEdits: [] };
 
   it("marks each edited step and counts them in provenance, with no body content", () => {
-    const run = completedRun({ planSnapshot: planSnapshotForRun(editedPlan) });
+    const run = completedRun({ planSnapshot: storedSnapshot });
     const html = renderHtmlReport({ ...run, result: withReportFields(result(), run) });
     expect(html).toContain(BODY_EDITED_MARKER);
     expect(html).toContain(escapeHtml(bodyEditProvenance(1)));
@@ -319,12 +312,9 @@ describe("the report of a plan built from a collection", () => {
   const SEEDED_CAPTURE = "SEEDED-CAPTURED-c0ffee";
 
   function collectionRun() {
-    const { plan } = assembleCollectionPlan(
-      { id: "c-1", name: "APIFoundry", tier: "local", json: JSON.stringify(apifoundryCollection({ dynamicBody: false })) },
-      { ...defaultCollectionChoices([...APIFOUNDRY_REQUEST_IDS]), expectedStatusCodes: new Map() },
-      { supportedDynamicVariables: new Set() },
-    );
-    const snapshot = planSnapshotForRun(plan);
+    // The snapshot of a run recorded from the ApiFoundry collection plan before AP-037 phase two retired it.
+    const stored = JSON.parse(readFileSync(path.join(__dirname, "..", "..", "fixtures", "performance", "legacy-runs", "collection.json"), "utf-8")) as PerformanceRun;
+    const snapshot = stored.planSnapshot;
     const steps = snapshot.journeys[0].steps;
     const token = snapshot.collection!.credentialRequests[0].stepId;
     const create = steps[1];

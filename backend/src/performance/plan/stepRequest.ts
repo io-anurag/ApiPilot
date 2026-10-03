@@ -3,7 +3,6 @@ import type {
   ApiModel,
   ApiOperation,
   ArtifactVariable,
-  BodyPathSegment,
   GeneratedRequest,
   IntegrationWorkflow,
   PerformancePlanSourceKind,
@@ -20,7 +19,6 @@ import { itemIdForOAuth2TokenFetch } from "../../postman/identifiers";
 import { buildOAuth2SetupFolders } from "../../postman/oauth2TokenFetch";
 import { buildRequestItem } from "../../postman/requestItem";
 import { compareCodeUnits } from "../../postman/ordering";
-import { valueAtPath, withValueAtPath } from "./capturePath";
 import { selectPerformanceScenario } from "./selectScenario";
 
 /**
@@ -97,16 +95,6 @@ export interface BuiltStepRequest {
   secretNames: Set<string>;
   authKind: StepAuthKind;
   schemeName: string | null;
-  /** AP-033 FR-010: workflow variables not applied because the edited body no longer has their field. */
-  droppedBodyConsumers?: string[];
-  /** AP-033 (research R4): names only a `{{name}}` the engineer wrote in the edited body refers to. */
-  bodyReferenceNames?: string[];
-  /** AP-033: of those, the ones that are the whole value of a `format: password` field. */
-  bodySecretReferenceNames?: string[];
-  /** AP-033 FR-020: names only a `{{name}}` the engineer wrote in an edited parameter refers to. */
-  parameterReferenceNames?: string[];
-  /** AP-033 FR-021: of those, the ones in a `format: password` parameter. */
-  parameterSecretReferenceNames?: string[];
 }
 
 export const UNIQUE_TOKEN_PREFIX = "apipilot_unique_";
@@ -116,15 +104,6 @@ const PATH_PARAMETER_SEGMENT = /^\{(.+)\}$/;
 
 export function templateReferences(text: string): string[] {
   return [...text.matchAll(REFERENCE)].map((match) => match[1]);
-}
-
-/**
- * AP-035 FR-011: a parameter the specification documents for the operation. A path parameter is
- * also documented by the operation's own path template, which covers one declared on the path item.
- */
-export function isDocumentedParameter(operation: ApiOperation, location: "path" | "query" | "header", name: string): boolean {
-  if (operation.parameters.some((parameter) => parameter.location === location && parameter.name === name)) return true;
-  return location === "path" && operation.path.split("/").some((segment) => segment === `{${name}}`);
 }
 
 export function operationKeyOf(operation: { method: string; path: string }): string {
@@ -243,26 +222,16 @@ function uniqueSorted(names: string[]): string[] {
 }
 
 /**
- * A value an earlier step of the same journey produces, filled into this step's request as
- * `{{key}}` (AP-029 FR-010; AP-035 research R5): a guided workflow variable, whose key is the
- * Postman generator's `workflowVariableName`, or an AP-035 capture, whose key is `captureKeyOf`.
- * A workflow body field is a dotted path written as the Postman generator writes it; a capture's
- * body target carries `segments` and must already exist in the body.
+ * A value an earlier step of the same workflow produces, filled into this step's request as
+ * `{{key}}` (AP-029 FR-010): a guided workflow variable, whose key is the Postman generator's
+ * `workflowVariableName`. A body field is a dotted path written as the Postman generator writes it.
  */
 export interface ConsumedValue {
   key: string;
-  /** The variable or capture name, for notices. */
+  /** The variable name. */
   name: string;
   location: "path" | "query" | "header" | "body" | "auth";
   field: string;
-  segments?: BodyPathSegment[];
-}
-
-/** AP-035 research R5: the script key of a capture, unique per step and capture, stable when the step moves. */
-export const CAPTURE_KEY_PREFIX = "apipilot_c_";
-
-export function captureKeyOf(producerStepId: string, captureName: string): string {
-  return `${CAPTURE_KEY_PREFIX}${producerStepId.replace(/^s_/, "")}_${captureName}`;
 }
 
 function setDottedCreating(target: Record<string, unknown>, field: string, value: string): void {
@@ -289,10 +258,7 @@ function applyConsumedValues(scenario: TestScenario, consumed: readonly Consumed
     if (entry.location === "path") request.pathParameters[entry.field] = value;
     if (entry.location === "query") request.queryParameters[entry.field] = value;
     if (entry.location === "header") request.headers[entry.field] = value;
-    if (entry.location === "body") {
-      if (entry.segments) request.body = withValueAtPath(request.body, entry.segments, value);
-      else setDottedCreating(request.body as Record<string, unknown>, entry.field, value);
-    }
+    if (entry.location === "body") setDottedCreating(request.body as Record<string, unknown>, entry.field, value);
   }
   return { ...scenario, request };
 }
@@ -302,20 +268,6 @@ export interface StepRequestOptions {
   consumed?: ConsumedValue[];
   /** FR-016: body fields replaced by a per-iteration token. */
   uniqueFields?: { fieldPath: string; token: string }[];
-  /** AP-033: the scenario carries the engineer's edited body (research R4). */
-  bodyEdited?: boolean;
-  /** AP-033 FR-020: path parameters the engineer set, which keep their value instead of becoming environment values. */
-  editedPathParameters?: ReadonlySet<string>;
-}
-
-/** True when `body` has an object field at the dotted path (arrays are not entered, as in `setDotted`). */
-function hasDottedField(body: unknown, fieldPath: string): boolean {
-  let current: unknown = body;
-  for (const part of fieldPath.split(".")) {
-    if (current === null || typeof current !== "object" || Array.isArray(current) || !(part in current)) return false;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return true;
 }
 
 /** Builds one step's request template with the Postman request builder (FR-011). */
@@ -327,14 +279,7 @@ export function buildStepRequest(
   options: StepRequestOptions,
 ): BuiltStepRequest {
   const consumes = options.consumed ?? [];
-  // AP-033 (research R4): a body consumer whose field the engineer removed is not applied, because
-  // the substitution would create the field again. Unedited steps keep every consumer. An AP-035
-  // capture's body target is applied only where the field exists (research R10).
-  const hasField = (entry: ConsumedValue) =>
-    entry.segments ? valueAtPath(scenario.request.body, entry.segments) !== undefined : hasDottedField(scenario.request.body, entry.field);
-  const applied = consumes.filter((entry) => entry.location !== "body" || (entry.segments ? hasField(entry) : !options.bodyEdited || hasField(entry)));
-  const droppedBodyConsumers = consumes.filter((entry) => !applied.includes(entry)).map((entry) => entry.name);
-  let effective = applied.length > 0 ? applyConsumedValues(scenario, applied) : scenario;
+  let effective = consumes.length > 0 ? applyConsumedValues(scenario, consumes) : scenario;
 
   // Spec US1 AS3: a path parameter no workflow step produces is a user-supplied value. Removing
   // the scenario's generated placeholder makes the Postman builder emit its own variable for it.
@@ -345,7 +290,6 @@ export function buildStepRequest(
     if (!parameter) continue;
     const value = pathParameters[parameter];
     if (typeof value === "string" && ONLY_REFERENCE.test(value)) continue;
-    if (options.editedPathParameters?.has(parameter)) continue;
     delete pathParameters[parameter];
     pathParameterNames.push(pathParameterVariableName(operation.path, parameter));
   }
@@ -389,6 +333,5 @@ export function buildStepRequest(
     secretNames: new Set(variables.filter((variable) => variable.secret).map((variable) => variable.name)),
     authKind,
     schemeName: authKind === "none" ? null : schemeName,
-    ...(droppedBodyConsumers.length > 0 ? { droppedBodyConsumers } : {}),
   };
 }

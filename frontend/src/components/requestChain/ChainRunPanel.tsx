@@ -26,7 +26,8 @@ export function runBlockedReason(input: { script: ScriptStatus | null; analysis:
 
 /** Why Run again is not offered for the newest ended run, or `null` (AP-029 FR-024a; FR-035). */
 export function runAgainBlockedReason(run: ChainRun, input: { plan: ChainPlan; script: ScriptStatus | null; environments: readonly Environment[]; runs: Runs }): string | null {
-  if (!input.script || input.script.scriptSha256 !== run.scriptSha256) return "The script changed since this run.";
+  // An edit marks the script out of date before it is regenerated, while its SHA-256 still matches the run.
+  if (!input.script || input.script.outOfDate || input.script.scriptSha256 !== run.scriptSha256) return "The script changed since this run.";
   if (!input.environments.some((environment) => environment.id === run.environment.id)) return "This run's environment no longer exists.";
   const changed = run.snapshot.dataSets.find((dataSet) => input.plan.dataSets.find((current) => current.id === dataSet.id)?.sha256 !== dataSet.sha256);
   if (changed) return `The data set ${changed.name} changed since this run.`;

@@ -91,6 +91,10 @@ describe("ChainRunPanel", () => {
     expect(screen.getByTestId("trigger-hosts")).toHaveTextContent("http://127.0.0.1:4600");
     expect(screen.getByText(/Load is generated from the machine running the ApiPilot backend/)).toBeInTheDocument();
     expect(screen.getAllByText(/Creates/).length).toBeGreaterThan(0);
+    // Each write is named by its URL, not by the step's internal id.
+    const writes = screen.getByTestId("write-summary-trigger-list");
+    expect(writes).toHaveTextContent("{{baseUrl}}/api/v1/customers");
+    expect(writes).not.toHaveTextContent(/\bs2\b/);
   });
 
   it("starts a run on the named environment only on the engineer's click", () => {
@@ -116,6 +120,12 @@ describe("ChainRunPanel", () => {
     renderPanel({ runs: runs({ latestFinished: finishedRun(), start }) });
     fireEvent.click(screen.getByRole("button", { name: "Run again on Local stub" }));
     expect(start).toHaveBeenCalledWith("e1");
+  });
+
+  it("refuses Run again once an edit marks the script out of date, though its SHA-256 still matches", () => {
+    renderPanel({ script: { ...SCRIPT, outOfDate: true }, runs: runs({ latestFinished: finishedRun() }) });
+    expect(screen.getByRole("button", { name: /Run again/ })).toBeDisabled();
+    expect(screen.getByTestId("run-again-blocked")).toHaveTextContent("The script changed since this run.");
   });
 
   it("refuses Run again after the script changed, and restores without starting a run", () => {

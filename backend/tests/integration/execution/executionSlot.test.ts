@@ -8,7 +8,8 @@ import { resetStore } from "../../../src/testGenerationWorkflow/workflowStore";
 import { driveToPostmanGenerationComplete } from "../../fixtures/execution/driveWorkflow";
 import { readyProbe } from "../../fixtures/performance/agent";
 import { createFakeRunner } from "../../fixtures/performance/fakeRunner";
-import { generateQuickScript, QUICK_BASE, uploadQuick } from "../../fixtures/performance/quickAgent";
+import { chainAgent, CHAIN_BASE, createEnvironment, newPlan, savePlanContent } from "../../fixtures/chain/chainAgent";
+import { customerLifecyclePlan } from "../../fixtures/chain/chainPlans";
 import { establishSession } from "../../fixtures/performance/session";
 
 /**
@@ -80,18 +81,16 @@ describe("a user-script run in the shared execution slot", () => {
     expect(refused.body).toMatchObject({ error: "execution_in_progress", runId: "user-run-2" });
   }, 30_000);
 
-  it("refuses a performance run start (quick path)", async () => {
+  it("refuses a request-chain run start (AP-037)", async () => {
     const runner = createFakeRunner({ lines: [] });
-    const agent = request.agent(createApp(undefined, { performance: { runner, probe: readyProbe() } }));
-    const sessionId = await establishSession(agent);
-    await uploadQuick(agent);
-    await generateQuickScript(agent);
-    const env = await agent
-      .post("/api/test-generation-workflow/environments")
-      .send({ name: "quick-local", tier: "local", baseUrl: "http://127.0.0.1:4600", variableValues: {} });
+    const { agent, sessionId } = await chainAgent({ runner, probe: readyProbe() });
+    const plan = await newPlan(agent);
+    const environmentId = await createEnvironment(agent, { client_id: "id-1", client_secret: "secret-1" });
+    await savePlanContent(agent, plan, customerLifecyclePlan({ targetEnvironmentId: environmentId }));
+    expect((await agent.post(`${CHAIN_BASE}/${plan.id}/script`)).status).toBe(200);
     getUserScriptRunRepository().create(sessionId, userScriptRun("user-run-3"));
 
-    const refused = await agent.post(`${QUICK_BASE}/runs`).send({ environmentId: env.body.environment.id });
+    const refused = await agent.post(`${CHAIN_BASE}/${plan.id}/runs`).send({ environmentId });
     expect(refused.status).toBe(409);
     expect(refused.body).toMatchObject({ error: "execution_in_progress", runId: "user-run-3" });
     expect(runner.starts).toHaveLength(0);

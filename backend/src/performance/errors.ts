@@ -13,25 +13,6 @@ export class PerformanceRunNotFoundError extends Error {
   }
 }
 
-/** `400 invalid_expected_status`: an unknown step, an empty list, or a malformed code (D26). */
-export class InvalidExpectedStatusError extends Error {
-  constructor(
-    public readonly stepId: string,
-    reason: string,
-  ) {
-    super(reason);
-    this.name = "InvalidExpectedStatusError";
-  }
-}
-
-/** `400 invalid_request`: a `PUT /plan` body or field that is not the documented shape. */
-export class InvalidPlanUpdateError extends Error {
-  constructor(reason: string) {
-    super(reason);
-    this.name = "InvalidPlanUpdateError";
-  }
-}
-
 /** `400 invalid_load_profile` (data-model.md validation rules). */
 export class InvalidLoadProfileError extends Error {
   constructor(reason: string) {
@@ -48,14 +29,6 @@ export class InvalidThresholdError extends Error {
   }
 }
 
-/** `400 unknown_operation`: an excluded operation key that is not in the analyzed model. */
-export class UnknownOperationError extends Error {
-  constructor(public readonly operationKey: string) {
-    super(`'${operationKey}' is not an analyzed operation.`);
-    this.name = "UnknownOperationError";
-  }
-}
-
 /** `400 invalid_order`: a proposed order that is not a permutation of the same ids. */
 export class InvalidOrderError extends Error {
   constructor(reason: string) {
@@ -64,39 +37,11 @@ export class InvalidOrderError extends Error {
   }
 }
 
-/** `400 dependency_order_violation` (FR-007): the first variable the proposed order breaks. */
-export class DependencyOrderViolationError extends Error {
-  constructor(
-    public readonly variable: string,
-    public readonly producerStepId: string,
-    public readonly consumerStepId: string,
-  ) {
-    super(`This order would run a step before the step that produces '${variable}'.`);
-    this.name = "DependencyOrderViolationError";
-  }
-}
-
 /** AP-032 `404 step_not_found`: a step id that is not in the current plan (step request preview). */
 export class StepNotFoundError extends Error {
   constructor(public readonly stepId: string) {
     super(`'${stepId}' is not a step in this plan.`);
     this.name = "StepNotFoundError";
-  }
-}
-
-/** AP-032 `404 operation_not_removed`: the removed-operation preview for a key not in the removed list. */
-export class OperationNotRemovedError extends Error {
-  constructor(public readonly operationKey: string) {
-    super(`'${operationKey}' is not a removed operation of this plan.`);
-    this.name = "OperationNotRemovedError";
-  }
-}
-
-/** AP-032 `409 no_positive_scenario`: a removed operation that would still build no step if restored. */
-export class NoPositiveScenarioError extends Error {
-  constructor(public readonly operationKey: string) {
-    super(`'${operationKey}' has no positive scenario, so restoring it would add no step.`);
-    this.name = "NoPositiveScenarioError";
   }
 }
 
@@ -134,35 +79,6 @@ export type InvalidParameterEditCode =
   | "parameter_too_long"
   | "reserved_reference"
   | "parameter_secret_literal";
-
-/**
- * AP-033 `400 <code>`: a `PUT /plan` parameter edit that cannot be saved; nothing is applied. The
- * extra fields name the parameter only; no message quotes the value the engineer typed.
- */
-export class InvalidParameterEditError extends Error {
-  constructor(
-    public readonly code: InvalidParameterEditCode,
-    public readonly stepId: string,
-    message: string,
-    public readonly extra: { location?: string; name?: string; reference?: string; limitBytes?: number } = {},
-  ) {
-    super(message);
-    this.name = "InvalidParameterEditError";
-  }
-}
-
-/** AP-033 `400 <code>`: a `PUT /plan` body edit that cannot be saved; nothing is applied (research R6). */
-export class InvalidBodyEditError extends Error {
-  constructor(
-    public readonly code: InvalidBodyEditCode,
-    public readonly stepId: string,
-    message: string,
-    public readonly extra: InvalidBodyEditExtra = {},
-  ) {
-    super(message);
-    this.name = "InvalidBodyEditError";
-  }
-}
 
 /** AP-034 (specs/034-run-user-k6-script contracts/user-scripts-api.md): `404 script_not_found`. */
 export class UserScriptNotFoundError extends Error {
@@ -254,89 +170,10 @@ export type UserJourneyRefusalCode =
   | "not_a_proposed_journey"
   | "not_based_on_workflow";
 
-export class UserJourneyRefusedError extends Error {
-  constructor(
-    public readonly code: UserJourneyRefusalCode,
-    message: string,
-    public readonly extra: Record<string, string | number | string[] | Record<string, string>> = {},
-  ) {
-    super(message);
-    this.name = "UserJourneyRefusedError";
-  }
-}
-
-/** AP-035 FR-016 `422 binding_target_missing`: a captured value's target no longer exists. */
-export class BindingTargetMissingError extends Error {
-  constructor(public readonly stepIds: string[]) {
-    super("A captured value's target no longer exists. Remove or re-target each binding marked \"Target no longer exists\".");
-    this.name = "BindingTargetMissingError";
-  }
-}
-
 /**
  * AP-036 (specs/036-collection-performance-test contracts/collection-performance-api.md): the
  * collection plan's refusals. None carries a value, a script excerpt, a URL or a variable name.
  */
-
-/** `409 collection_plan_exists`: a plan exists and replacing it was not confirmed (FR-025). */
-export class CollectionPlanExistsError extends Error {
-  constructor() {
-    super("This session already has a collection performance plan. Confirm to replace it; its runs and reports are kept.");
-    this.name = "CollectionPlanExistsError";
-  }
-}
-
-/** `422 too_many_requests`: more than 100 requests selected (FR-002). */
-export class TooManyCollectionRequestsError extends Error {
-  constructor(public readonly count: number) {
-    super(`${count} requests are selected. A collection performance plan takes at most 100; narrow the selection in the run panel.`);
-    this.name = "TooManyCollectionRequestsError";
-  }
-}
-
-/** `409 collection_plan_out_of_date` (FR-022, research R13). */
-export class CollectionPlanOutOfDateError extends Error {
-  constructor(public readonly state: "changed" | "deleted") {
-    super(
-      state === "changed"
-        ? "The collection changed since this plan was built. Rebuild the plan first."
-        : "The collection this plan was built from has been deleted, so the plan cannot be run or rebuilt.",
-    );
-    this.name = "CollectionPlanOutOfDateError";
-  }
-}
-
-/** `409 conversion_not_reviewed` (FR-018, research R14). */
-export class ConversionNotReviewedError extends Error {
-  constructor() {
-    super("Review the conversion before generating the script.");
-    this.name = "ConversionNotReviewedError";
-  }
-}
-
-/** `409 collection_deleted`: rebuilding or seeding from a collection that no longer exists (FR-022). */
-export class CollectionDeletedError extends Error {
-  constructor() {
-    super("The collection this plan was built from has been deleted.");
-    this.name = "CollectionDeletedError";
-  }
-}
-
-/** `400 not_supported_for_collection_plan` (FR-020): a `PUT /plan` field a collection plan does not offer. */
-export class NotSupportedForCollectionPlanError extends Error {
-  constructor(public readonly field: string) {
-    super(`${field} is not offered for a plan built from a collection. Edit the request in the collection editor instead.`);
-    this.name = "NotSupportedForCollectionPlanError";
-  }
-}
-
-/** `422 base_url_missing` (FR-017, research R17). */
-export class BaseUrlMissingError extends Error {
-  constructor() {
-    super("The plan has no base URL variable, or the collection gives it no value, so an environment cannot be created from it.");
-    this.name = "BaseUrlMissingError";
-  }
-}
 
 // ------------------------------------------------------------------------------------------------
 // AP-037 request-chain plans (specs/037-request-chain-performance contracts/chain-plan-api.md). Each

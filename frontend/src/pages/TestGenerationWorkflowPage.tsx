@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -233,14 +232,6 @@ export function TestGenerationWorkflowPage({
     // (research.md D6/FR-006), always follows the workflow's own activeStageId.
     setViewedStageId(result.workflow.activeStageId);
   }
-
-  /** AP-029: the performance stage changes stage status through its own routes; this refreshes the
-   * tracker without moving the view away from the stage the user is on. */
-  const refreshWorkflow = useCallback(() => {
-    void fetchCurrentWorkflow().then((result) => {
-      if (result.ok && result.workflow) setWorkflow(result.workflow);
-    });
-  }, []);
 
   // Postman generation's own onGenerated: deliberately does NOT follow activeStageId to
   // "execution" — the success screen (with its downloads) must stay visible until the user
@@ -641,7 +632,7 @@ export function TestGenerationWorkflowPage({
             />
           )}
           {displayStageId === "performanceTesting" && (
-            <PerformanceTestingStage onAdvanced={refreshWorkflow} onOpenChainPlan={onOpenChainPlan} />
+            <PerformanceTestingStage onOpenChainPlan={onOpenChainPlan ?? (() => undefined)} />
           )}
           {displayStageId === "execution" && (
             <ExecutionHandoffNotice

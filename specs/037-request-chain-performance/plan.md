@@ -232,7 +232,8 @@ silently (CLAUDE.md §63).
    need no amendment unless the engineer objects.
 7. **Resolved 2026-10-03 (SC-006 amended: measure after phase one, agree a revised target if over). SC-006 is at risk.** SC-006 asks that performance plan code and screens be at most half their
    size after phase two.
-   - **Baseline (2026-10-03):** 16,110 lines over the measured set below. The target is 8,055.
+   - **Baseline (2026-10-03):** 16,110 lines over the measured set below. The original target was
+     8,055. Phase one measured 22,357; the target agreed on 2026-10-03 is at most 13,000.
    - **Estimate:** what phase two keeps comes to about 3,500 lines (run panel and hooks, load,
      threshold and environment editors, trimmed `performance.ts`, the seeding builders). The new
      chain code is estimated at about 5,000 lines. That makes the target reachable only if the new

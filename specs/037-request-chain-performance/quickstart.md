@@ -161,4 +161,5 @@ regenerated, and no run starts.
    - legacy runs offer neither **Run again** nor restore, and say why;
    - the guided, quick and collection entry points open request-chain plans.
 3. Run `node scripts/count-performance-lines.mjs` over the measured set in plan.md. **Expected:**
-   at most 8,055 lines, against the baseline of 16,110.
+   at most 13,000 lines (the target agreed on 2026-10-03), against the baseline of 16,110 and the
+   phase-one count of 22,357.

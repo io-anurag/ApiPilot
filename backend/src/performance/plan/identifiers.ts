@@ -19,36 +19,6 @@ export function stepIdFor(journeyId: string, operationKey: string): string {
   return `s_${shortDigest("apipilot/performance/step", `${journeyId} ${operationKey}`)}`;
 }
 
-/**
- * AP-035 research R2: a user-defined journey's id, from a per-plan sequence number the server
- * assigns on creation and keeps in the plan, so it never changes on rename or reorder.
- */
-export function userJourneyIdFor(sequence: number): string {
-  return `j_${shortDigest("apipilot/performance/journey", `user:${sequence}`)}`;
-}
-
-/**
- * AP-035 research R2: a user journey step's id, from a per-journey sequence number assigned when
- * the step is added, so the same operation can appear more than once and each occurrence keeps its
- * own settings.
- */
-export function userJourneyStepIdFor(journeyId: string, sequence: number): string {
-  return `s_${shortDigest("apipilot/performance/step", `${journeyId}:${sequence}`)}`;
-}
-
-/**
- * AP-036 (specs/036-collection-performance-test research R19): a collection plan's one journey, from
- * the stored collection's id, and its steps, from their item ids. A request appears once in a run
- * order (AP-026 refuses repeats), so a step's id survives rebuilds, reorders and removal.
- */
-export function collectionJourneyIdFor(collectionId: string): string {
-  return `j_${shortDigest("collection-journey", collectionId)}`;
-}
-
-export function collectionStepIdFor(itemId: string): string {
-  return `s_${shortDigest("collection-step", itemId)}`;
-}
-
 export function thresholdIdFor(content: string): string {
   return `t_${shortDigest("apipilot/performance/threshold", content)}`;
 }

@@ -8,8 +8,6 @@ import { SEEDED_CLIENT_ID, SEEDED_CLIENT_SECRET } from "./builders";
 import { establishSession } from "./session";
 import { PERFORMANCE_SPECIFICATION_FILENAME, performanceSpecificationBuffer } from "./specification";
 
-export const PERFORMANCE_BASE = "/api/test-generation-workflow/performance";
-
 export function readyProbe(version = "1.2.0"): K6Probe {
   return async () => ({ readiness: { state: "ready", version, checkedAt: "2026-09-27T12:00:00.000Z" }, binaryPath: "k6" });
 }
@@ -45,13 +43,4 @@ export async function performanceAgent(
     variableValues: options.variableValues ?? { clientId: SEEDED_CLIENT_ID, clientSecret: SEEDED_CLIENT_SECRET, warehouseId: "wh-1" },
   });
   return { agent, sessionId, environmentId: environment.body.environment.id };
-}
-
-/** Sets the fixture's GET /status expected status, then generates the script. */
-export async function generateReadyScript(agent: PerformanceAgent["agent"]): Promise<{ scriptSha256: string }> {
-  const plan = (await agent.get(`${PERFORMANCE_BASE}/plan`)).body.plan;
-  const statusStep = plan.journeys.flatMap((j: { steps: { id: string; operationKey: string }[] }) => j.steps).find((s: { operationKey: string }) => s.operationKey === "GET /status");
-  await agent.put(`${PERFORMANCE_BASE}/plan`).send({ expectedStatuses: { [statusStep.id]: ["200"] } });
-  const generated = await agent.post(`${PERFORMANCE_BASE}/script`);
-  return generated.body.script;
 }

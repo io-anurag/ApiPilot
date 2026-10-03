@@ -20,6 +20,7 @@ const AREAS = [
       "backend/src/performance/chain",
       "backend/src/performance/k6/renderScript.ts",
       "backend/src/performance/k6/renderChainScript.ts",
+      "backend/src/performance/k6/scriptTypes.ts",
       "backend/src/api/performanceRoutes.ts",
       "backend/src/api/performanceTesting.ts",
       "backend/src/api/quickPerformance.ts",
@@ -40,6 +41,7 @@ const AREAS = [
       "frontend/src/services/quickPerformanceClient.ts",
       "frontend/src/services/collectionPerformanceClient.ts",
       "frontend/src/services/requestChainClient.ts",
+      "frontend/src/services/legacyRunsClient.ts",
     ],
   },
   {

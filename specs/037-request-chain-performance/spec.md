@@ -142,6 +142,8 @@ FR-033 and by listing what seeding could not carry over (FR-025).
 - Q: What if SC-006's half-size target cannot be met without removing required behaviour? → A:
   Keep the target, measure it at the end of phase one, and if over target report the gap and agree
   a revised target before phase two; required behaviour is never cut to meet it (SC-006).
+- Q: Phase one measured 22,357 lines and phase two is projected at about 12,500 to 13,500. Which
+  target should phase two be held to? → A: At most 13,000 lines over the same measured set (SC-006).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -658,7 +660,8 @@ and that the same plan generates a byte-identical script whatever the file's con
   before this feature, measured in lines of non-test source, with every acceptance scenario above
   passing. The size is measured at the end of phase one. If it is above target, the gap is reported
   and a revised target is agreed before phase two starts. No required behaviour is removed to meet
-  the target.
+  the target. *(Revised 2026-10-03: phase one measured 22,357 lines, and the agreed target after
+  phase two is at most 13,000 lines over the same measured set.)*
 - **SC-007**: Every report of a run recorded before this feature renders identically after phase
   two.
 

@@ -2,28 +2,23 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { QuickPerformanceTestView } from "@apipilot/shared-domain";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
-import { SeedPlanDialog } from "../components/requestChain/SeedPlanDialog";
-import { EmptyState } from "../components/EmptyState";
+import { SeedFromSource } from "../components/requestChain/SeededPlans";
 import {
   EntryFeatureIcon,
   type EntryFeatureIconName,
 } from "../components/EntryFeatureIcon";
 import { ErrorState } from "../components/ErrorState";
-import { PerformancePlanScreen } from "../components/performance/PerformancePlanScreen";
 import { Skeleton } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
-import {
-  fetchQuickTest,
-  quickPerformanceClient,
-  uploadQuickTest,
-} from "../services/quickPerformanceClient";
+import { fetchQuickTest, uploadQuickTest } from "../services/quickPerformanceClient";
 
 /**
- * The quick performance test (AP-032, specs/032-quick-performance-test US1 to US3): upload a
- * specification and go straight to the shared performance plan screen, with no API review,
- * scenario review, AI enhancement, workflow review or Postman generation stage. It keeps its own
- * session state and never touches the guided workflow (FR-021). "Back to start" keeps it (FR-025).
+ * The quick performance test (AP-032, specs/032-quick-performance-test US1): upload a specification,
+ * with no API review, scenario review, AI enhancement, workflow review or Postman generation stage.
+ * Since AP-037 phase two (specs/037-request-chain-performance US5) it seeds request-chain plans; the
+ * quick plan is retired. It keeps its own session state and never touches the guided workflow
+ * (FR-021). "Back to start" keeps it (FR-025).
  */
 type PageState =
   | { kind: "loading" }
@@ -75,7 +70,7 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
 
 /**
  * AP-037 FR-020 (specs/037-request-chain-performance US2): `onOpenChainPlan` opens a request-chain
- * plan seeded from this specification; the quick plan below is unchanged until phase two.
+ * plan seeded from this specification, and since phase two (US5) the page lists the plans seeded before.
  */
 export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onExit?: () => void; onOpenChainPlan?: (planId: string) => void }>) {
   const [state, setState] = useState<PageState>({ kind: "loading" });
@@ -83,8 +78,6 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<File | null>(null);
   // Remounts the plan screen for each new quick test, so it re-reads the new plan.
-  const [generation, setGeneration] = useState(0);
-  const [seeding, setSeeding] = useState(false);
   const replaceInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -112,7 +105,6 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
     }
     if (result.quickTest) {
       setState({ kind: "ready", quickTest: result.quickTest });
-      setGeneration((current) => current + 1);
     }
   }
 
@@ -276,11 +268,6 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
               />
             </div>
             <div className="flex items-center gap-2">
-              {onOpenChainPlan && (
-                <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setSeeding(true)}>
-                  Create request-chain plan
-                </button>
-              )}
               <button
                 type="button"
                 className={BUTTON_STYLES.secondary}
@@ -303,62 +290,27 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
           {uploadError && (
             <ErrorState message={uploadError} testId="quick-upload-error" />
           )}
-          <PerformancePlanScreen
-            key={generation}
-            client={quickPerformanceClient}
+          <SeedFromSource
+            source={{ kind: "specification" }}
+            seedKind="specification"
             title="Quick performance test"
             lead={
               <p>
-                Every operation of the specification, with generated requests that no one
-                reviewed. Nothing is sent to any system until you trigger a run.
+                Create a request-chain plan from this specification: one step for each operation, from its generated positive scenario, with
+                credential requests run once before the load. You then edit every request yourself. Nothing is sent to any system until you
+                trigger a run.
               </p>
             }
-            scopeNote={() => (
-              <p className="text-sm">
-                Every analyzed operation is in scope, and starts as its own single-step journey.
-                Requests are not chained unless you build a journey: a value such as a path
-                parameter comes from the target environment. To run operations in an order and
-                pass a value from one response to later requests, choose New journey.
-              </p>
-            )}
-            emptyState={
-              <div className="space-y-3">
-                <EmptyState
-                  message="Nothing can be load-tested"
-                  description="No operation of this specification has a positive scenario. The operations and their reasons are under Left out."
-                  testId="quick-plan-empty"
-                />
-                {onExit && (
-                  <button
-                    type="button"
-                    aria-label="Back to start from an empty plan"
-                    onClick={onExit}
-                    className={BUTTON_STYLES.secondary}
-                  >
-                    Back to start
-                  </button>
-                )}
-              </div>
-            }
+            defaultName={state.quickTest.specification.info?.title ?? state.quickTest.specification.filename}
+            onOpenChainPlan={onOpenChainPlan ?? (() => undefined)}
             testId="quick-performance-plan"
           />
         </>
       )}
 
-      {seeding && state.kind === "ready" && onOpenChainPlan && (
-        <SeedPlanDialog
-          source={{ kind: "specification" }}
-          defaultName={state.quickTest.specification.info?.title ?? state.quickTest.specification.filename}
-          onCancel={() => setSeeding(false)}
-          onSeeded={(planId) => {
-            setSeeding(false);
-            onOpenChainPlan(planId);
-          }}
-        />
-      )}
       {pendingReplacement && (
         <ConfirmDialog
-          message="Replace the current quick test with the new specification? Its plan, including any edited request bodies, is replaced. Runs and reports are kept."
+          message="Replace the current quick test with the new specification? Request-chain plans already created from it are kept, and so are runs and reports."
           affectedCount={1}
           confirmLabel="Replace"
           onCancel={() => setPendingReplacement(null)}

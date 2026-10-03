@@ -50,8 +50,8 @@ describe("RequestChainPlansPage", () => {
     fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     expect(await screen.findByTestId("chain-plan-editor")).toHaveAttribute("data-plan-id", PLAN_ID);
-    expect(await screen.findByRole("heading", { name: "Customer lifecycle" })).toBeInTheDocument();
-    expect(calls.find((call) => call.method === "POST")?.body).toEqual({ name: "Checkout" });
+    expect(await screen.findByTestId("chain-plan-name")).toHaveTextContent("Customer lifecycle");
+    expect(calls.find((call) => call.method === "POST" && call.url === BASE)?.body).toEqual({ name: "Checkout" });
   });
 
   it("deletes a plan after confirmation, saying its runs are kept", async () => {

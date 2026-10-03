@@ -1,16 +1,14 @@
-import type { ApiInfo, ApiModel, PerformancePlan, TestScenario } from "@apipilot/shared-domain";
+import type { ApiInfo, ApiModel, TestScenario } from "@apipilot/shared-domain";
 import { getSessionId } from "../../session/sessionContext";
 import { onExpire } from "../../session/sessionRegistry";
 import type { PerformanceContext } from "../plan/stepRequest";
-import type { GeneratedScript } from "../scriptStore";
 
 /**
  * The session's quick performance test (AP-032, specs/032-quick-performance-test research Q1, Q13;
  * data-model "QuickPerformanceTest"): one per browser session, in memory only, cleared on session
- * expiry, and lost on a backend restart as AP-029's plan is. Runs are persisted separately and
- * survive both. Nothing here reads or writes the guided workflow (FR-021).
- *
- * The spec's "Quick Performance Plan" is `QuickPerformanceTest.plan`.
+ * expiry, and lost on a backend restart. Since AP-037 phase two it is a seeding source only: the
+ * uploaded specification and its positive scenarios (specs/037-request-chain-performance FR-021).
+ * Nothing here reads or writes the guided workflow (FR-021).
  */
 export interface QuickPerformanceTest {
   /** Identifies the entry only; it appears in no plan, script or template. */
@@ -19,8 +17,6 @@ export interface QuickPerformanceTest {
   apiModel: ApiModel;
   /** Positive rule-generated scenarios only, with quick ids (FR-004, research Q4). */
   scenarios: TestScenario[];
-  plan: PerformancePlan;
-  script?: GeneratedScript;
 }
 
 const quickTests = new Map<string, QuickPerformanceTest>();
@@ -37,20 +33,12 @@ export function hasQuickTest(): boolean {
   return quickTests.has(getSessionId());
 }
 
-/** Stores the session's quick test, replacing any earlier one and its script. */
+/** Stores the session's quick test, replacing any earlier one. */
 export function setQuickTest(test: QuickPerformanceTest): void {
   quickTests.set(getSessionId(), test);
 }
 
-export function updateQuickTest(patch: Partial<Pick<QuickPerformanceTest, "plan" | "script">>): QuickPerformanceTest {
-  const existing = getQuickTest();
-  if (!existing) throw new Error("No quick performance test exists in this session.");
-  const updated = { ...existing, ...patch };
-  quickTests.set(getSessionId(), updated);
-  return updated;
-}
-
-/** The plan's inputs: every operation in scope, no workflows, so no chaining (FR-003, FR-006). */
+/** The seeding inputs: every operation in scope, no workflows, so no chaining (FR-003, FR-006). */
 export function contextFromQuickTest(test: Pick<QuickPerformanceTest, "apiModel" | "scenarios">): PerformanceContext {
   return {
     apiModel: test.apiModel,

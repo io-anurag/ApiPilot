@@ -14,6 +14,9 @@ import {
   type StepCheck,
   type StepMethod,
   type StepRuns,
+  type PerformanceThreshold,
+  type PerformanceThresholdMetric,
+  type PerformanceThresholdScope,
 } from "@apipilot/shared-domain";
 import {
   HeaderNotSettableError,
@@ -24,9 +27,38 @@ import {
   InvalidThresholdError,
   PlanLimitExceededError,
 } from "../errors";
-import { canonicalJson, sha256Hex } from "../plan/identifiers";
+import { canonicalJson, sha256Hex, thresholdIdFor } from "../plan/identifiers";
 import { validateLoadProfile, validateThinkTime } from "../plan/loadProfiles";
-import { parseThreshold } from "../plan/planUpdate";
+
+const METRICS: ReadonlySet<string> = new Set(["p50", "p90", "p95", "p99", "error-rate"]);
+
+/**
+ * One threshold of a saved plan, validated (AP-029 FR-019's rules, kept from the retired plan
+ * update when phase two removed it). Its id is derived from its content.
+ */
+function parseThreshold(raw: unknown, stepIds: ReadonlySet<string>): PerformanceThreshold {
+  if (typeof raw !== "object" || raw === null) throw new InvalidThresholdError("Each threshold must be an object.");
+  const record = raw as Record<string, unknown>;
+  const scopeRecord = (record.scope ?? {}) as Record<string, unknown>;
+  let scope: PerformanceThresholdScope;
+  if (scopeRecord.kind === "run") scope = { kind: "run" };
+  else if (scopeRecord.kind === "step" && typeof scopeRecord.stepId === "string" && stepIds.has(scopeRecord.stepId)) {
+    scope = { kind: "step", stepId: scopeRecord.stepId };
+  } else throw new InvalidThresholdError("A threshold applies to the whole run or to an existing step.");
+  if (typeof record.metric !== "string" || !METRICS.has(record.metric)) {
+    throw new InvalidThresholdError("A threshold's metric must be p50, p90, p95, p99 or error-rate.");
+  }
+  const metric = record.metric as PerformanceThresholdMetric;
+  if (record.comparator !== "<=") throw new InvalidThresholdError("A threshold's comparator must be <=.");
+  const limit = record.limit;
+  if (typeof limit !== "number" || !Number.isFinite(limit)) throw new InvalidThresholdError("A threshold needs a numeric limit.");
+  if (metric === "error-rate" ? limit < 0 || limit > 100 : limit <= 0) {
+    throw new InvalidThresholdError(
+      metric === "error-rate" ? "An error-rate limit is a percentage from 0 to 100." : "A latency limit must be over 0 ms.",
+    );
+  }
+  return { id: thresholdIdFor(canonicalJson({ scope, metric, limit })), scope, metric, comparator: "<=", limit };
+}
 
 /**
  * Saving a request-chain plan (specs/037-request-chain-performance research R2, R9, R22, R26). The

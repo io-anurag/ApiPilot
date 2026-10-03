@@ -9,8 +9,8 @@ import {
   type StepCheck,
 } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
-import type { DynamicToken, RenderedScript } from "./renderScript";
-import { SYSTEM_TAGS } from "./renderScript";
+import type { DynamicToken, RenderedScript } from "./scriptTypes";
+import { SYSTEM_TAGS } from "./scriptTypes";
 
 /**
  * Renders a request-chain plan as a k6 script and an environment template

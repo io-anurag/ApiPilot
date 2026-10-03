@@ -23,16 +23,13 @@ Postman, received from a teammate, or hand-authored — you can instead import a
 directly, without uploading an OpenAPI specification at all. See
 [section 4](#4-importing-and-running-your-own-postman-collection).
 
-If you only want to know how an API behaves under load, the **Quick performance test** takes
-an uploaded specification straight to a k6 load-test plan, with no review stages. Every
-operation becomes a step with a generated request that no one reviews, so every write it will
-send is listed before you run. See [section 5](#5-quick-performance-test).
-
-If a collection already passes in Import & Run Collection, **Set up a performance test** in its
-run panel turns the same requests into a k6 load-test plan, with the values its test scripts set
-passed on to later requests. ApiPilot reads the scripts and never runs them; you review what was
-and was not converted before you run. See
-[section 5a](#5a-performance-test-from-a-postman-collection).
+If you want to know how an API behaves under load, build a **performance plan**: chains of
+requests you write and edit, as in Postman or JMeter, run with your own k6. A plan can start
+empty, or be created once from an uploaded specification (the **Quick performance test**,
+[section 5](#5-quick-performance-test)), from the guided workflow's approved workflows
+([section 3.11](#311-performance-testing-optional)), or from the requests of an imported
+collection ([section 5a](#5a-performance-test-from-a-postman-collection)). After that the plan is
+yours. See [section 5b](#5b-performance-plans-request-chains).
 
 If you already have a k6 script, **Run k6 Script** checks it, asks you to confirm its exact
 content, and runs it with your own k6, with the report in ApiPilot. A script downloaded from
@@ -59,15 +56,16 @@ explicitly, ApiPilot follows your operating system's light/dark preference.
 
 ## 3. The guided workflow
 
-The start screen offers four paths: **Guided Workflow** (described in this section, including
-the optional k6 performance test in section 3.11),
+The start screen offers five paths: **Guided Workflow** (described in this section, including
+the optional performance test in section 3.11),
 **Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)),
-**Quick performance test** (described in [section 5](#5-quick-performance-test)) and
+**Quick performance test** (described in [section 5](#5-quick-performance-test)),
+**Performance plans** (described in [section 5b](#5b-performance-plans-request-chains)) and
 **Run k6 Script** (described in [section 6](#6-run-k6-script)).
 While the guided workflow is in progress the tab bar is hidden so you can finish it; use
 **← Back to start** to return to the start screen at any time. Nothing is discarded —
 choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
-are in **Import & Run Collection**, the **Quick performance test** or **Run k6 Script**, each of which has its own
+are in **Import & Run Collection**, the **Quick performance test**, **Performance Plans** or **Run k6 Script**, each of which has its own
 **← Back to start** too, and switching between the views never discards any one's state.
 
 Within the guided workflow, every step below is reached in this fixed order, and a
@@ -299,318 +297,18 @@ hand-off.
 
 ### 3.11 Performance Testing (optional)
 
-Performance Testing turns the scenarios and workflows you approved into a k6 load test. It
-opens once the Postman collection has been generated (section 3.9), whether or not you run
-it: choose **Set up a performance test** on the Execution notice, or the **Performance
-Testing** chip in the stage tracker. Nothing is sent to any system until you trigger a run.
+Performance Testing opens once the Postman collection is generated: choose **Set up a performance
+test** on the Execution notice, or the **Performance Testing** chip. Choose **Create request-chain
+plan** to create a performance plan from the workflows you approved: one chain per workflow, with
+each workflow variable extracted by the step that produces it and passed as `{{name}}` to the steps
+that use it, then one single-step chain for each other operation in the API review selection.
+Credential requests become **Once before load** steps. The plan opens in **Performance Plans**,
+where you edit, run and report it ([section 5b](#5b-performance-plans-request-chains)); it is never
+re-derived from the workflow.
 
-**The screen.** Above the tabs, a bar lists what still blocks a run, each item with the button
-that fixes it: steps without an expected status (**Show them**), no target environment (**Create
-one**), a script not generated or out of date (**Generate**), or k6 not available. Items disappear
-as you finish them. When nothing is left, the bar says **Ready to run on** the chosen
-environment, how many write operations will be sent, and **Go to run →**. The bar never starts a
-run itself. Missing environment values are noted in the bar but do not block a run.
-
-The tabs follow the order in which you prepare a test:
-
-- **Plan**: the operations table, at full width.
-- **Run setup**: the target environment and its values, the load profile, the thresholds
-  (optional) and the k6 script, beside the run trigger. The tab label counts what is still to do
-  there, for example **Run setup (2 to do)**. **Next: Run setup →** at the foot of the Plan tab
-  goes to it.
-- **Runs & reports**: a run's live progress, its report and the session's runs. Starting a run
-  switches to it.
-
-**The plan.** The operations in scope are the ones you selected in API Review, or every
-operation when you selected none; there is no choice to widen them here. To include other
-operations, widen the selection in API Review and regenerate, or use the quick performance
-test (section 5). ApiPilot proposes one journey per approved workflow, with its steps in
-dependency order, and one single-step journey for each other operation in scope. Every
-virtual user runs every journey, in order, on each iteration. For each step you see its
-method and path, the one positive scenario used and, when there was a choice, why (a
-rule-generated scenario is preferred over an AI-enhanced one), its authentication, and the
-variables it produces or needs. Each step sends that scenario's generated request, built the
-same way as the Postman collection: its headers, query parameters and body come from the
-scenario and are not edited here. Negative scenarios are never run under load. Write operations (POST, PUT, PATCH,
-DELETE) are included by default: remove any operation you do not want sent (see **Removing**
-below).
-
-- **The operations table.** One line per step: its journey number when some journey has more
-  than one step (`J2.1` is the first step of journey 2, whose steps are grouped under a
-  **Workflow** row; with only single-step journeys, as in the quick test, the column is left
-  out), its method
-  and path, the write marker, its expected status, a short authentication label, and the
-  environment values it needs. Filter by method, by **Writes**, by **Needs expected status** or
-  by **Body edited** (each chip shows its count), and search by method, path or scenario. Select a step's path to
-  open its details in a row directly under it: the scenario and why it was chosen, the request
-  preview, the expected-status editor, the full authentication, the variables, the order
-  controls and **Remove from plan**. More than 50 steps are split into pages.
-
-- **What the writes will do.** Above the journeys, a summary states how many write
-  operations will be sent, the count per method, and each one by method and path, with the
-  reminder that every virtual user sends each of them on every iteration for the whole run and
-  that ApiPilot does not clean up afterwards. Each write step carries a text marker
-  (**Creates**, **Replaces**, **Updates** or **Deletes**) beside its method. The same list is
-  shown next to the run trigger. Select an operation's path in either list to open its details
-  in the table. A plan with no writes says it sends only read requests.
-- **Removing.** **Remove all write operations** removes every write in one action, and
-  **Remove by method** offers **Remove all <METHOD> operations** for each method in the plan.
-  To remove a few operations, tick their rows and choose **Remove from plan**, or use
-  **Remove from plan** in one step's details. Removed
-  operations are in the table's **Removed** view (see below). When every operation is removed,
-  the plan says so and the script cannot be generated until you restore one.
-- **Removed and left-out operations.** Above the table, **In plan**, **Removed** and **Left out**
-  switch between the plan's steps, the operations you (or ApiPilot, for a login it uses for
-  credentials) removed, and the operations left out because they have no positive scenario. Each
-  shows its count; a view with nothing in it is not offered. In **Removed**, each row gives the
-  reason and a **Restore** button; tick several rows to restore them together, or use **Restore
-  all**. Select a removed operation's path to see, under it, the step and request it would have
-  if restored: scenario, expected status, authentication, variables and the request preview. This
-  view does not change the plan; **Restore to the plan** there adds it back. A left-out operation
-  has nothing to open or restore.
-- **The request a step sends.** In a step's details, choose **Request** to see what it sends: the
-  method, the path template, each path, query and header parameter with its generated value
-  or the environment value it needs, the authentication, and the body. Values that come from
-  the environment are shown by name only, and secrets are marked, never shown. A step without a
-  body says **This request has no body.**; an operation that accepts a body this step does not
-  send says so; form and multipart bodies are shown but cannot be edited. Authentication and
-  undocumented headers are view only.
-- **Editing a step's parameters.** Under **Parameters**, each path, query and header
-  parameter the specification documents is listed with its type, allowed values, the generated
-  value and what the step sends. Choose **Edit parameters**, change a value or clear **Send** to
-  leave an optional parameter out (or tick it to add one the step does not send), and **Save
-  parameters**. For example, if your server rejects the generated `sort=a`, set `sort` to a value
-  it accepts, or leave it out.
-  - A parameter filled by an earlier workflow step cannot be edited. An array or object
-    parameter can be left out but not edited. A required parameter, and every path parameter, is
-    always sent; an edited path parameter is sent as the value you type instead of a value from
-    the environment.
-  - `{{name}}` in a value takes it from the target environment, as in a body. A parameter the
-    specification marks `format: password` must hold a `{{name}}` reference. A value is at most
-    2 KiB and cannot contain a line break. A refusal is shown on the parameter it is about.
-  - An edited step shows **Parameters edited**. **Reset to generated parameters** puts it back
-    after you confirm. Saving or resetting marks the script **Out of date**. Parameter edits are
-    kept, restored and discarded exactly as body edits are.
-- **Steps that failed the last run.** After a run ends, each step the server answered with a
-  status it does not expect shows **Failed last run**, and the **Failed last run** chip lists
-  only those steps. A step's details name the statuses (for example `400 × 7,422`) and point you
-  to its **Request**, where you can check and edit what it sends.
-- **Editing a step's body.** For a JSON or text body, choose **Edit body** (or **Add a body**)
-  under the request, change it, and **Save body**; **Cancel** leaves it as it was. You edit the
-  body before ApiPilot fills in its own values: under **Replaced at run time**, the editor lists
-  each field ApiPilot fills when the test runs (a value unique per virtual user and iteration, a
-  value from an earlier workflow step, or a token) and where it comes from. Keep the field to
-  keep that value; remove the field and ApiPilot stops filling it, and the step's details say so.
-  - To use a value from the target environment, write `{{name}}` inside a JSON string (or
-    anywhere in a text body). The name is then listed with the plan's other values, in the
-    environment template and in the checklist. Names ApiPilot uses for its own values are
-    refused.
-  - **Secrets.** Values you type are written into the script. Reference secrets from the
-    environment as `{{name}}` instead. A field the specification marks `format: password` must
-    hold a `{{name}}` reference whenever you save the body, even if you changed another field;
-    such a reference is marked secret. ApiPilot cannot recognise a secret typed into any other
-    field, so do not type one.
-  - A JSON body must be valid JSON; if not, the editor shows the line and column. A body that
-    differs from the specification (a missing required field, a wrong type, a value outside the
-    documented values, format or bounds) is saved with a **Differs from the specification**
-    warning listing each difference; it never blocks the script. A body is at most 64 KiB.
-  - An edited step shows **Body edited** in the table; the **Body edited** chip lists them, and
-    **Reset all edited bodies** puts every one back to the generated body after you confirm.
-    **Reset to generated body** in a step's details does the same for one step.
-  - Saving or resetting a body marks the script **Out of date**. Editing a performance step's
-    body never changes the approved test model, the Postman collection or the functional tests.
-  - An edit stays with its step while the plan exists. It is kept while the operation is removed
-    (the **Removed** view shows it, read only) and comes back when you restore it, and **Reset
-    plan** keeps it. If the guided workflow's approvals change the step's scenario, the edit is
-    discarded and the plan names the operation. Starting a new quick test replaces the plan and
-    its edits.
-- **Long lists.** The steps that still need an expected status are a counted list, collapsed.
-  The write list is never collapsed. The steps that need an
-  expected status are counted in the bar above the tabs; open **steps to set** there, and each
-  entry opens that step in the table and puts the cursor in its editor. **Needs status · Set** in
-  the table does the same for its row.
-
-- **Expected status.** Each step starts with the success statuses the specification
-  documents, labelled "from specification". You can add codes (an exact code such as `201`,
-  or a range such as `2XX`) or remove them; yours are labelled "set by you". Any other
-  response counts as a failure. A step whose specification documents no success status
-  starts empty, and the script cannot be generated until you set one.
-- **Order and think time.** In a step's details, **Move up** and **Move down** move a single-step
-  journey, **Move journey up** and **Move journey down** move a workflow journey, and **Move step
-  up** and **Move step down** reorder a workflow journey's steps.
-  A move that would run a step before the step producing a value it needs is refused, and
-  the message names the value. **Think time** pauses between requests.
-- **Load profile.** Pick Smoke, Load, Stress, Spike or Soak and edit its stages (duration and
-  target virtual users). These are starting values, not recommendations. ApiPilot applies no
-  limit on virtual users or duration and gives no warning.
-- **Thresholds.** None are set until you add one (a latency percentile or a failure rate,
-  for the run or one step). With none, the report gives no pass/fail verdict.
-
-**Values.** Values the specification cannot produce (the base URL, client credentials, a
-path parameter no operation produces) are the target environment's values. Choose the
-environment, then **Edit values** or **New environment**; values are stored encrypted. The
-dialog's title follows the name you type, and its **Save** button is named after it. The value
-rows sit in their own scrolling list, with a count of how many are filled, so the dialog stays
-within the window. The checklist shows each value as **Present** or **Missing**
-for the chosen environment. A missing value does not block a run: that step is not sent and
-is reported as missing data, and the steps that depend on it are reported as not attempted.
-The environment form suggests one row for each value the plan still needs. Removing an
-operation drops only the values no remaining step needs: a path parameter such as `customer_id`
-stays while any remaining operation, for example `GET /customers/{id}`, uses it. The checklist's
-**Needed by** column shows which steps need each value. Rows left empty are not saved.
-
-**The script.** **Generate script** creates a k6 script and an environment template, which
-you can download and run elsewhere. The same plan always produces the same bytes, and neither
-file ever contains a value. Any change to the plan marks the script **Out of date** until you
-regenerate it.
-
-**Running the script outside ApiPilot.** The two downloads are `apipilot-performance.js` (the
-script) and `apipilot-performance-environment.json` (the template). The template lists each
-value the plan needs, the environment variable that carries it, and whether it is a secret. The
-names and numbers depend on the plan, and a changed plan can renumber them, so always take them
-from the template downloaded with the script you run. For example:
-
-```json
-{
-  "baseUrl": { "env": "APIPILOT_V_0", "secret": false, "value": "" },
-  "clientSecret": { "env": "APIPILOT_V_1", "secret": true, "value": "" }
-}
-```
-
-k6 does not read the template. The script takes each value only from its `APIPILOT_V_<n>`
-environment variable, so install k6 1.0.0 or later on the machine that will generate the load,
-set those variables, and run the script unmodified:
-
-```powershell
-$env:APIPILOT_V_0 = "https://staging.example.com"
-$env:APIPILOT_V_1 = "<client secret>"
-k6 run apipilot-performance.js
-```
-
-On Linux or macOS, use `export APIPILOT_V_0=...` instead. `k6 run -e APIPILOT_V_0=...` also works,
-but it leaves secrets in shell history and the process list, so prefer environment variables for
-anything the template marks `"secret": true`. Do not type real secrets into the template and keep
-it on disk: the files are value-free by design. A variable left unset behaves as a missing value
-does in ApiPilot: that step is not sent, and the steps depending on it are not attempted. A run
-outside ApiPilot prints k6's own end-of-test summary; ApiPilot's report, findings and run history
-are produced only for runs started from the panel.
-
-**Running.** You need k6 1.0.0 or later installed yourself on the machine running the
-ApiPilot backend, on `PATH` or named in `K6_BINARY_PATH` (README Configuration). ApiPilot
-never downloads or installs k6; the panel shows whether k6 is ready, and **Check again**
-re-checks. The trigger names its target, for example **Run on perf-local (local)**, next to
-the environment's tier and base URL and the statement that load comes from the machine
-running the backend. There is no extra confirmation on any tier, production included. Starting a run opens the
-**Runs & reports** tab, which repeats the target for as long as the run lasts. While
-it runs you see elapsed time against the plan, virtual users, requests, failures, journeys
-cut short, token refreshes, and a per-step table. **Cancel run** stops load within about 10
-seconds and keeps what was measured. A run carries on if you close the page, and it keeps
-your session alive; only one run (performance or functional) can be in progress per session.
-ApiPilot never starts, repeats or resumes a run by itself: a run interrupted by a backend
-restart is recorded as cancelled.
-
-**Running the last run again.** Once a run has ended, the **Runs & reports** tab shows **Run
-again** above the list of runs. It repeats the newest run on the same environment, for example
-**Run again on QA_Run (qa)**, next to that environment's tier and base URL as they are now and the
-write operations the run sends. Values are read from the environment as it is now. The button
-is available only while the script is identical to the one that run used; after you change the
-plan, it says so. It is also unavailable when that environment has been deleted, when k6 is not
-ready, or while another run is in progress.
-
-The plan is kept in memory only, so a backend restart, a new upload or **Reset plan** rebuilds it
-with its defaults: operations you removed come back, with any values they need, and the load
-profile and thresholds return to their starting values. When that happens, **Run again** offers
-**Restore run … 's settings**. It re-applies that run's removed operations, order, think time,
-load profile, thresholds and the expected statuses you set, then generates the script. Nothing is
-sent until you press **Run again**. A run from a different specification cannot be restored.
-Body and parameter edits are not recorded in runs, so the message names any steps that had them;
-edit those again before running. To test the current plan instead, start it from **Run setup**.
-
-**The report.** When a run ends, its report appears automatically, and **Download report
-(HTML)** saves the same file, which opens with no network access. It shows:
-
-- Totals: requests, throughput, failure rate, p50, p95 and p99 latency (within 1%), exact
-  minimum, mean and maximum latency, iterations with their p95 duration, journeys cut short, and
-  data received and sent.
-- Your thresholds with passed or failed, and findings from fixed rules (such as the slowest step
-  or where failures start).
-- **Timeline**: three panels on one time axis, each with its own scale: virtual users, p95
-  latency of all steps (a log scale when one interval is far slower than the rest), and requests
-  per interval split into as expected and failed. Hover over an interval for its figures, or open
-  **Timeline as a table**.
-- **By step over time**: one row per step, one cell per interval, shaded by that step's p95
-  latency on a shared scale. Hatched cells had failures; hover over a cell for its figures.
-- **By step**: the expected statuses and every status **received**, each marked expected or
-  unexpected (for example `400 × 59 unexpected`), requests, throughput, failure rate, min, p50,
-  p90, p95, p99 and max latency, failure category, check pass rate and requests not sent.
-- What the run changed on the target (write requests sent and succeeded) and token refreshes.
-- **Provenance · request and response by step**: for each step, a **Request** block (method and
-  path template, authentication, values taken from earlier steps, values you supply, whether the
-  body was edited) and a **Response** block (expected and received statuses, failures, latency,
-  k6's request phases such as time to first byte, extracted values and checks), followed by why
-  the step is in its journey and which scenario it uses. Steps with failures open automatically.
-
-A run recorded before version 19.11.0 has no received statuses beyond its failures, no request
-phases and no per-step timeline; its report says so rather than showing empty figures. A step that sent a
-body you edited is marked **Body edited by you**, and a step whose parameters you edited is
-marked **Parameters edited by you**; the provenance says how many steps did each. A step that
-received a status it does not expect says, under **What to check**, to open its request in the
-plan;
-the edited body itself is not recorded. It never contains a credential, token, request or
-response body, or a resolved URL, so the request and response blocks show each step's template
-and what was measured, not the content that was sent or received.
-
-### 3.12 Your own journeys and captured values
-
-On both performance paths (this stage and the quick performance test of section 5) you can
-compose your own journeys, for example so that a `PUT` or `DELETE` runs after the `POST` that
-creates the record, and pass the id the `POST` returned to them. ApiPilot never builds a journey
-for you: every journey, step, capture and binding is one you add.
-
-**Composing a journey.** Under **Your journeys**, choose **New journey**, name it and pick its
-first step from the plan's operations. **+ Add step** adds more, in the order you want; the same
-operation can be added more than once, and each occurrence is its own step with its own expected
-status and edits. A journey holds up to 20 steps. When an operation joins a journey it no longer
-runs as its own single-step journey; tick **Also run … on its own** to keep that too. Steps move
-with ↑ and ↓; **Delete** returns the journey's operations to single-step journeys.
-
-**Capturing a value.** Open **Capture or use a value** on a step and add a capture: a name
-(letters, digits and underscores, not starting with a digit) and either a response body field
-(such as `id` or `data.items[0].id`) or a response header (such as `Location`). The fields the
-specification documents for the operation's success responses are offered, and a field whose
-name matches a later step's parameter is marked. A path you type that the specification does not
-document is accepted with "Not documented in the specification". Wildcards, filters and code are
-refused. A step holds up to 10 captures.
-
-**Using it later.** On a later step, choose a target (a path, query or header parameter the step
-sends, or a field of its body) and **Value captured by an earlier step**. Only captures of
-earlier steps of the same journey are offered. The value is no longer one the environment must
-provide, and the request preview shows the capture's name and step instead of a value. Binding a
-parameter that has an edited value asks first and drops that edit. A move or removal that would
-leave a step without the capture it uses is refused, naming the capture.
-
-**At run time.** Each virtual user captures its own value on each iteration and uses it only in
-the same journey run; captured values are never stored, shown, logged or reported. A capture is
-attempted only when the step received one of its expected statuses, and succeeds only for a
-string, number or boolean. A missing field, an empty or `null` value, an object, an array, or a
-response that is not JSON is a failed capture: the rest of that journey is not sent in that
-iteration and the journey is counted as cut short, naming the capture. The same rule applies to
-the workflow variables of proposed journeys. A header capture matches the name regardless of
-case and takes the value exactly as k6 reports it, even when a header is repeated; ApiPilot never
-splits it, and taking part of a value (such as the id at the end of a URL) is not supported.
-
-**What can change it.** Removing an operation that a journey uses keeps the journey but marks it
-**Incomplete**: it is not run, the plan notes it, and the run trigger names it. A rebuild that
-removes a bound target marks the binding **Target no longer exists**, which blocks the script
-until you remove or re-target it. On the guided path, **Edit journey** turns a proposed workflow
-journey into one you can change, marked **Based on workflow**; **Revert to proposed journey**
-brings the proposed one back, keeping the expected statuses and edits of the workflow's steps and
-discarding those of steps you added. **Reset plan** keeps your own journeys and reverts edited
-workflow journeys, after asking. **Restore** of a past run brings back its journeys too.
-
-**The report** shows, for each step, where each bound value came from (capture, step, response
-field or header), how many times each capture succeeded and failed, and whether the step is in a
-proposed journey or one defined by you. The write summary counts every step that sends a write.
+The stage also lists the plans already created from the guided workflow, each with **Open**. Runs
+recorded from the guided plan this stage held before version 19.19.0 are listed read only under
+**Earlier runs** in Performance Plans.
 
 ## 4. Importing and running your own Postman collection
 
@@ -832,147 +530,41 @@ guided workflow you have in progress; both can exist side by side.
 **Upload.** Upload one OpenAPI 3.x YAML file. The same checks as the guided workflow apply
 (size limit, YAML, OpenAPI version), with the same error messages, and nothing is created when
 the file is rejected. ApiPilot then generates positive scenarios only, with its fixed rules and
-no AI, and opens the performance plan. Uploading the same file again gives the same plan, and
-the same edits give a byte-identical script.
+no AI.
 
-**What the plan contains.** Every operation that has a positive scenario is its own single-step
-journey, using the operation's full happy-path request. Requests are not chained unless you build
-a journey: a path parameter such as `orderId` is a value you supply in the environment. To run
-operations in order and pass a value from one response to later requests, use **New journey**
-(section 3.12). Operations with no positive scenario are listed as left out, with
-the reason. When the specification secures its operations with a token from a login operation
-(for example `POST /auth/login`), that login is placed in the removed list as "used to acquire
-the run's credentials": the token is still obtained once for the run, but the login itself is
-not sent by every virtual user on every iteration. You can restore it. Nothing else is removed
-by name; a logout or revoke operation stays in the plan, where the write summary shows it.
-
-**Everything else is the performance plan of section 3.11**: the write summary and effect
-markers, bulk removal, the request preview, expected statuses, order and think time, the load
-profile, thresholds, the script and its download, and the out-of-date marking. Because no one
-reviewed these scenarios, read the write summary before you run. It lists every write operation
-the run will send, above the journeys and again next to the run trigger.
-
-**Environments and values.** You can create, edit and choose target environments from the quick
-plan without starting a guided workflow. Environments are one set per browser session: one you
-create here is also available in the guided workflow, and the other way round. The values
-checklist works as in section 3.11.
-
-**Running.** Runs work exactly as in section 3.11: your own k6, a trigger that names the
-target, live progress, cancel, and the report. They share the one-run-at-a-time slot with
-functional and guided performance runs. The report of a quick run states that the plan came
-from the quick performance test with generated scenarios that were not reviewed. The run list
-on this page shows quick runs only.
+**Creating a plan.** Choose **Create request-chain plan** to create a performance plan from the
+specification: one single-step chain per operation, from its positive scenario, with credential
+requests (an OAuth2 token, a login) as **Once before load** steps. Operations with no positive
+scenario are listed in the plan's seeding report. Because no one reviewed these generated
+requests, read each step, and the write steps listed at the run trigger, before you run. The plan
+opens in **Performance Plans** ([section 5b](#5b-performance-plans-request-chains)). The page also
+lists the plans already created from a specification, each with **Open**.
 
 **Starting again.** **New specification** replaces the current quick test after you confirm.
-Runs and reports already made are kept. **← Back to start** returns to the start screen and
-keeps the quick test for your session. Like the guided workflow's plan, the quick test lives in
-memory: a backend restart loses it (runs, reports and environments are kept), and you upload the
+Plans already created from it, runs and reports are kept. **← Back to start** returns to the
+start screen and keeps the quick test for your session. The quick test lives in memory: a backend
+restart loses it (plans, runs, reports and environments are kept), and you upload the
 specification again.
+
+Before version 19.19.0 the quick test held its own plan and runs. Those runs are listed read only
+under **Earlier runs** in Performance Plans.
 
 ## 5a. Performance test from a Postman collection
 
 When a collection already passes in **Import & Run Collection**, you can load-test the same flow
-without defining its steps again. In the collection's run panel, choose the requests and their
-order as for a run, then choose **Set up a performance test** beside **Start run**. The
-**Collection Performance Test** tab opens with a plan built from that selection. Building the plan
-reads the collection only: it runs no script and sends no request.
+without defining its steps again. In the collection's run panel, select the requests and set their
+order as for a run, then choose **Create request-chain plan**. You get one chain per top-level
+folder, in run order. Recognised `pm.environment.set(...)` statements become extractors,
+recognised status assertions become expected statuses, and inherited auth becomes an
+`Authorization` header. Credential requests become **Once before load** steps. Creating the plan
+reads the collection only: it runs no script and sends no request, and a seeding report lists
+everything that was not carried over, such as pre-request scripts. The plan opens in
+**Performance Plans** ([section 5b](#5b-performance-plans-request-chains)) and is never compared
+with the collection again: editing or removing the collection leaves it unchanged.
 
-**What the plan contains.** One journey: the selected requests, in the run-order list's order, each
-named by its folder path and request name. Each step sends what the functional run sends for that
-request: its method, URL, query parameters, enabled headers and body, its own auth or the auth it
-inherits from its folders or the collection, and your saved edits. Variables are resolved only
-when the test runs.
-
-**What is converted from the scripts.** ApiPilot reads the test scripts as text, against a fixed
-set of statements, and never runs them:
-- a statement that sets a variable from a response body field or a response header, such as
-  `pm.environment.set("access_token", pm.response.json().access_token)` or
-  `const body = pm.response.json(); pm.collectionVariables.set("customer_id", body.id);`, becomes a
-  capture on that step;
-- a status assertion, such as `pm.response.to.have.status(201)` or
-  `pm.expect(pm.response.code).to.eql(200)`, sets the step's expected statuses, labelled "from the
-  collection's test".
-
-Only statements at the top of a script, or directly inside a `pm.test` callback, are recognised.
-A later request's `{{name}}` is filled from the latest earlier capture of that name, whatever
-scope the script set it in. Anything else, such as a statement inside an `if`, a body assertion,
-`pm.sendRequest` or `pm.setNextRequest`, and every pre-request script, is listed in the conversion
-review with its request, script, line and reason, and is not converted. A step with no recognised
-status assertion has no expected status until you set one.
-
-**Run once before the load.** A request whose captured values are used only in later requests'
-auth (for example a token request) is not a journey step. It is sent once before the load, its
-values are shared by every virtual user, and when its response states a lifetime (`expires_in`),
-each virtual user sends it again before the values expire. The report counts it apart from the
-steps, and names it if it fails before the load. A login that also returns an id used elsewhere
-stays a journey step.
-
-**Generated values.** `{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`,
-`{{$randomInt}}`, `{{$randomFirstName}}`, `{{$randomLastName}}`, `{{$randomFullName}}`,
-`{{$randomUserName}}`, `{{$randomEmail}}`, `{{$randomPhoneNumber}}`, `{{$randomAlphaNumeric}}` and
-`{{$randomBoolean}}` are generated when the test runs, each occurrence with its own value. Emails,
-user names and UUIDs are unique for each virtual user, iteration and occurrence, and differ between
-runs started from ApiPilot. A downloaded copy run elsewhere repeats them from run to run. A request
-using any other dynamic variable is left out, naming the variable.
-
-**Left out.** A request is left out, with its reason, when its auth is not none, bearer, basic or
-API key; when its body is form-data, a file or GraphQL; when it uses a dynamic variable ApiPilot
-cannot generate; when its URL starts with a variable other than the plan's base URL variable; or
-when it uses a name starting with `apipilot_`. Edit it in the collection editor and rebuild.
-
-**Values and secrets.** The variable most URLs start with (for example `{{baseUrl}}`) is the
-environment's base URL. Every other `{{name}}` that no earlier step captures is a value of the
-target environment. A value in an auth field, or in a credential header (`Authorization`,
-`Proxy-Authorization`, `Cookie`, or any header whose name contains `key`, `token`, `secret`,
-`password`, `auth` or `session`), is a secret. A literal written in such a field is kept out of
-the script and becomes a secret environment value under a name ApiPilot gives it. Other literal
-values are written into the script as data. Hosts written literally in a URL are listed in the
-plan and at the run trigger.
-
-**The conversion review.** Before a script can be generated, open the review on the Plan tab and
-choose **Mark as reviewed**. The review states that the requests and scripts were not generated or
-verified by ApiPilot, and lists every statement not converted, every pre-request script, every
-request left out and the notes below. A change that alters the conversion, such as a rebuild or a
-removal that re-binds a value, asks for the review again. You do not need Import & Run's first-run
-confirmation to build a plan.
-
-**Captures you add.** Where a value was not recognised, choose the step under **Captures you add**,
-add the capture by a typed field path or header name, and bind it on later steps. A collection
-documents no response fields, so a typed path is labelled "Not documented in a specification".
-
-**New environment from this collection.** On **Run setup**, **New environment from this
-collection** creates a target environment with the collection's tier, its base URL and the values
-the plan needs, as the collection resolves them. The values are copied on the server and never
-shown; the values checklist then shows each as present or missing. Later changes to the collection
-do not change the environment.
-
-**When the collection changes.** An edit in the collection editor marks the plan out of date: the
-script cannot be generated or run until you choose **Rebuild**. A rebuild keeps the load profile,
-thresholds, think time, removed requests, and the expected statuses and captures you set for
-requests that still exist, names those it could not keep, and asks for a new review. Values a
-functional run saves back do not mark the plan out of date. A deleted collection's plan cannot be
-rebuilt; its runs and reports are kept.
-
-**Everything else is the performance plan of section 3.11**: the write summary, removal and
-restore, expected statuses, order, think time, load profile, thresholds, the script and its
-download, k6 readiness, the run trigger, live progress, cancel, the report, **Run again** and
-**Restore**. Body and parameter editing and the journey composer are not offered; edit requests in
-the collection editor. A session has one collection plan, beside the guided and quick plans; a new
-one replaces it after you confirm. The run list on this page shows collection runs only. The plan
-lives in memory like the quick test, so a backend restart loses it (runs and reports are kept).
-
-**Notes on differences from Postman.**
-- A variable inside a URL is sent URL-encoded, so a value holding more than one path segment (for
-  example `v1/customers`) is sent differently from Postman. The review lists every name used in a
-  URL so you can check.
-- A value captured with `pm.collectionVariables.set` or `pm.globals.set` is used by later requests
-  even where Postman would send an environment value of the same name; the review notes each one.
-- Under load a value is captured only when its step receives an expected status, and only a
-  string, number or boolean is captured; a failed capture cuts the rest of the journey short.
-- `pm.iterationData` and data files are not available; such a name is an environment value.
-- The collection's delay between requests is not carried over; think time starts at 0.
-- Runs made before version 19.17.0 need **Regenerate script** before **Run again**, because every
-  generated script's runtime changed.
+The run panel also lists the plans already created from collections, each with **Open**. The
+**Collection Performance Test** tab of earlier versions is gone; its runs are listed read only
+under **Earlier runs** in Performance Plans.
 
 ## 5b. Performance plans: request chains
 
@@ -982,6 +574,19 @@ request you can edit freely. Open the **Performance Plans** tab (or choose **Per
 the start screen) to list your plans, start an empty one, open, duplicate or delete one. Plans are
 saved on this machine, so they are still there after ApiPilot restarts, for as long as your
 browser session lasts.
+
+An open plan is laid out like the other performance screens. **Before you can run** lists what
+still blocks a run (plan problems, the target environment, the script, k6), each with the action
+that fixes it, above the **Chains**, **Run setup** and **Runs & reports** tabs. The bar at the top
+says **Saved**, **Saving…** or **Not saved**. **Not saved** means the last change was refused: the
+message under the bar says why, and the script cannot be generated until it is fixed. A row you add
+with **+ Add header** (or a query or form row) and leave empty is not saved.
+
+**Earlier runs.** Before version 19.19.0 the guided workflow, the quick performance test and the
+Collection Performance Test each held a derived plan of their own. Those plans are gone, but their
+runs are not: when your session has any, the plans list shows them under **Earlier runs**, with the
+note "Recorded before request-chain plans: you can open the report, but it cannot be run again or
+restored." **View report** opens each report exactly as it was rendered.
 
 **Starting from something you already have.** Each existing entry point can seed a first draft:
 - **Quick performance test**: after uploading a specification, choose **Create request-chain plan**.
@@ -1205,8 +810,8 @@ Variable and credential values are encrypted before being stored.
   unresolved analysis issues, never fetched.
 - Request-chain performance plans (section 5b) do not support multipart bodies or file uploads,
   extracting from XML or form responses, partial values (regular expressions) or computed values,
-  conditional steps, loops or per-step retries. Their old plan screens (sections 3.11, 3.12, 5 and
-  5a) remain until a later release retires them.
+  conditional steps, loops or per-step retries. Runs recorded from the derived plans retired in
+  version 19.19.0 can be opened under **Earlier runs** but not run again or restored.
 - Execution always requires you to explicitly click **Start run** — there is no scheduled,
   unattended, or CI-triggered execution mode.
 - The operations you select at API Review can't be changed later in the same workflow;
@@ -1238,17 +843,17 @@ Variable and credential values are encrypted before being stored.
   it through the hand-off (section 3.10).
 - Headers added by authentication are previewed only for bearer tokens and API keys sent
   in a header (section 4.3).
-- The quick performance test (section 5) sends generated requests that no one reviewed, never
-  chains requests, and uses each operation's full happy-path scenario only. Valid boundary
-  variants and negative scenarios are not generated.
-- Performance testing (section 3.11), the quick performance test (section 5) and Run k6 Script
-  (section 6) need k6 1.0.0 or later that you install yourself. The run path has been checked
-  against a real k6 (v2.3.0 on Windows, 2026-09-28; Run k6 Script on 2026-10-01); the manual
-  browser walkthrough of these features is still outstanding.
+- A plan created from a specification (section 5) starts from generated requests that no one
+  reviewed, one single-step chain per operation, using each operation's full happy-path scenario
+  only. Valid boundary variants and negative scenarios are not generated.
+- Performance plans (section 5b) and Run k6 Script (section 6) need k6 1.0.0 or later that you
+  install yourself. The run path has been checked against a real k6 (v2.3.0 on Windows,
+  2026-10-03).
 - Performance runs apply no limit and no warning on virtual users or duration, include write
   operations by default, and never clean up what they create. Load comes from the machine
   running the backend, so a heavy profile can be limited by that machine; the report shows it.
-- Under load, each step checks its status and extracted values only, not response schemas.
+- Under load, each step checks its status, its extracted values and the checks you add, not
+  response schemas.
 - Run k6 Script (section 6) accepts a single file of allowed k6 modules in a strict subset of
   JavaScript: reading a property by a key built at run time is refused (use a `Map`), and test
   data files cannot be read. ApiPilot lists the hosts written in a script but cannot restrict
@@ -1259,14 +864,14 @@ Variable and credential values are encrypted before being stored.
   one token request per virtual user per token lifetime. A token provider that rate-limits
   token requests, or revokes older tokens when it issues a new one, can make refreshes fail;
   the report shows this as failed refreshes and authentication failures.
-- For an operation with both a rule-generated and an AI-enhanced positive scenario, the
-  performance test uses the rule-generated one, while the Postman collection's choice ignores
-  the origin, so the two can send different requests for that operation.
-- A performance test from a collection (section 5a) converts only a fixed set of script
-  statements and runs no script. Pre-request scripts, conditional or computed statements, body
-  assertions, `pm.sendRequest`, `pm.setNextRequest` and iteration data are listed, not converted.
-  Requests with OAuth 2.0, Digest and other auth types, form-data, file or GraphQL bodies, or
-  dynamic variables outside the supported list are left out. At most 100 requests per plan.
+- For an operation with both a rule-generated and an AI-enhanced positive scenario, a plan created
+  from the guided workflow uses the rule-generated one, while the Postman collection's choice
+  ignores the origin, so the two can send different requests for that operation.
+- Creating a plan from a collection (section 5a) converts only a fixed set of script statements
+  and runs no script. Pre-request scripts, conditional or computed statements, body assertions,
+  `pm.sendRequest`, `pm.setNextRequest` and iteration data are listed in the seeding report, not
+  converted. Requests with OAuth 2.0, Digest and other auth types, form-data, file or GraphQL
+  bodies, or dynamic variables outside the supported list are left out.
 
 ## 10. Troubleshooting
 
@@ -1293,11 +898,9 @@ Variable and credential values are encrypted before being stored.
 | Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` (README Configuration). An earlier explanation is kept |
 | Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
 | "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
-| **Generate script** stays disabled | A step has no expected status (its specification documents no success status) | Add an expected status to the listed step |
-| **Generate script** is disabled with "The plan has no operations" | Every operation was removed | Restore at least one operation from the removed list |
-| Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; runs and reports are kept |
-| Quick performance test: the login operation is under Removed | It is the operation the plan uses to acquire its token | Leave it removed unless you want it load-tested; **Restore** adds it as a journey |
-| Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the checklist shows which are missing |
+| **Generate script** stays disabled | **Before you can run** lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the plan says **Not saved** | Choose **Show** to go to the problem, or fix the error shown under the plan's bar |
+| Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; plans created from it, runs and reports are kept |
+| Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the plan check lists which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Run k6 Script: "Imports a module from a URL" | The script imports from `https://…`, such as jslib.k6.io | Copy the helper you need into the script; remote code is never loaded |
 | Run k6 Script: "Reads a property by a key built at run time" | The script reads `obj[key]` with a string key | Use a `Map` (`map.get(key)`), a `const` lookup table, or a numeric index; see section 6 |
