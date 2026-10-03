@@ -1,33 +1,34 @@
 import type { ArtifactIconName, WorkflowIconName } from "./workflowCatalog";
 
-/** Hand-drawn inline icons for the five workflows and three artifacts (AP-038 research.md D11),
- * following the existing no-icon-library convention (spec 027 D1). Decorative: the workflow or
- * artifact name always sits beside the icon. */
-const PATHS: Record<WorkflowIconName | ArtifactIconName, React.ReactNode> = {
+/** Flow-oriented icons for the five workspace workflows. Decorative: the workflow name is visible beside each icon. */
+const PATHS: Record<WorkflowIconName, React.ReactNode> = {
   guided: (
     <>
-      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
-      <path d="M14 3v5h5" />
-      <path d="m9 14 2 2 4-4" />
+      <circle cx="6" cy="6" r="2" />
+      <circle cx="18" cy="12" r="2" />
+      <circle cx="6" cy="18" r="2" />
+      <path d="m8 6 8 6M8 18l8-6" />
     </>
   ),
   import: (
     <>
-      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
-      <path d="M14 3v5h5" />
-      <path d="M12 11v6m0 0-2.5-2.5M12 17l2.5-2.5" />
+      <path d="M4 12h4l2 3h4l2-3h4v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+      <path d="M12 3v8m0 0-3-3m3 3 3-3" />
     </>
   ),
   quick: (
     <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m10 8.5 5 3.5-5 3.5z" />
+      <path d="M4 16a8 8 0 0 1 16 0" />
+      <path d="m12 16 4-5M7 19h10" />
+      <circle cx="12" cy="16" r="1" />
     </>
   ),
   plans: (
     <>
-      <path d="M4 4v16h16" />
-      <path d="m8 15 3.5-4 3 2.5L19 8" />
+      <rect x="3" y="5" width="5" height="5" rx="1" />
+      <rect x="16" y="5" width="5" height="5" rx="1" />
+      <rect x="9.5" y="15" width="5" height="5" rx="1" />
+      <path d="m8 7.5h8M18.5 10v2.5H12v2.5" />
     </>
   ),
   script: (
@@ -37,30 +38,12 @@ const PATHS: Record<WorkflowIconName | ArtifactIconName, React.ReactNode> = {
       <path d="m10 12-2 2 2 2m4-4 2 2-2 2" />
     </>
   ),
-  openapi: (
-    <>
-      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
-      <path d="M14 3v5h5M9 13h6M9 17h4" />
-    </>
-  ),
-  postman: (
-    <>
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <path d="M8 13h8" />
-    </>
-  ),
-  k6: (
-    <>
-      <path d="m8 9-4 3 4 3m8-6 4 3-4 3" />
-      <path d="m13.5 6-3 12" />
-    </>
-  ),
 };
 
 export function WorkflowIcon({
   name,
   className = "h-5 w-5",
-}: Readonly<{ name: WorkflowIconName | ArtifactIconName; className?: string }>) {
+}: Readonly<{ name: WorkflowIconName; className?: string }>) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -73,6 +56,59 @@ export function WorkflowIcon({
       aria-hidden="true"
     >
       {PATHS[name]}
+    </svg>
+  );
+}
+
+/** Product marks for OpenAPI, Postman and k6. Their text labels remain visible alongside them. */
+export function ArtifactProductIcon({
+  name,
+  className = "h-5 w-5",
+}: Readonly<{ name: ArtifactIconName; className?: string }>) {
+  if (name === "postman") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="#ff6c37" />
+        <path
+          d="m7.5 16.5 7.2-7.2m-3.1-.9 3.9.9-.9 3.9m-3-1 2.2 2.2"
+          fill="none"
+          stroke="white"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "k6") {
+    return (
+      <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+        <rect width="24" height="24" rx="5" fill="#7d64ff" />
+        <text
+          x="4.2"
+          y="16.2"
+          fill="white"
+          fontFamily="Arial, sans-serif"
+          fontSize="11"
+          fontWeight="700"
+        >
+          k6
+        </text>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="5" fill="#6ba539" />
+      <path
+        d="M6 8.5 9 6l3 2.5v3L9 14l-3-2.5zM12 8.5 15 6l3 2.5v3L15 14l-3-2.5zM9 14l3-2.5 3 2.5v3L12 19l-3-2.5z"
+        fill="none"
+        stroke="white"
+        strokeLinejoin="round"
+        strokeWidth="1.2"
+      />
     </svg>
   );
 }

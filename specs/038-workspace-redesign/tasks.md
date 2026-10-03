@@ -273,6 +273,16 @@ and the `App.test.tsx` palette cases.
 - [X] T031 Walk through quickstart scenarios 1 to 7 (headless-browser screenshots where
   possible), and record the results in `specs/038-workspace-redesign/validation.md`.
 
+- [X] T032 Amendment, from the user's review of the implementation: restore Design A spacing on
+  the start screen (FR-012 and SC-001 amended) in `frontend/src/components/EntryChooser.tsx`.
+- [X] T033 Amendment: replace workflow hues that repeated status colours with indigo, fuchsia,
+  blue, violet and pink (FR-002) in `frontend/src/index.css`.
+- [X] T034 Amendment: justify prose paragraphs app-wide (FR-026) in `frontend/src/index.css`, plus
+  the card and help descriptions.
+- [X] T035 Amendment: a per-workflow colour scheme (FR-027, research D13). This adds
+  `data-workflow` on `<main>` in `frontend/src/App.tsx`, scoped brand scales in
+  `frontend/src/index.css`, and a test in `frontend/tests/unit/App.test.tsx`.
+
 ---
 
 ## Dependencies and execution order

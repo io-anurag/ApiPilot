@@ -214,6 +214,30 @@ is kept below for the record.
   inline SVG convention, so `EntryFeatureIcon` stays as is for the pages that already use it.
 - **Rationale**: No icon library exists or is added (spec 027 D1).
 
+## D13. Per-workflow colour scheme by scoping the brand scale (FR-027)
+
+- **Decision**: `App` sets `data-workflow={activeTab}` on `<main>` while a workflow view is
+  shown. `index.css` redefines `--color-brand-50…900` under each `[data-workflow=…]` with
+  Tailwind's own scale for that hue:
+  - indigo for Guided Workflow;
+  - fuchsia for Import & Run Collection;
+  - blue for the Quick performance test;
+  - violet for Performance plans;
+  - pink for Run k6 Script.
+
+  The page glow follows through `--color-glow`. Each `--color-wf-*` token is that scale's 700
+  step (light) or 300 step (dark), so the tile and its workflow match.
+- **Rationale**: Every component already draws from the `brand` scale (about 300 uses across
+  buttons, tabs, the stage tracker, focus rings and badges). Tailwind v4 emits these as
+  `var(--color-brand-*)` (checked in the built CSS), so one scoped block per workflow re-themes the
+  whole screen without touching a component.
+  - Contrast: at every step the app uses for text or white-on-colour, each hue meets or beats the
+    teal scale it replaces. White on the 600 step measures 4.6:1 to 6.3:1, against 4.7:1 for teal.
+    The 700 step on white measures 6.0:1 to 7.9:1, and the 300 step on the navy surface
+    8.9:1 to 10.1:1.
+- **Alternatives considered**: Per-component workflow props. Rejected as hundreds of edits for one
+  visual rule.
+
 ## D12. Reduced motion and responsiveness
 
 - **Decision**:

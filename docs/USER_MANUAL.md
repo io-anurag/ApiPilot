@@ -81,8 +81,9 @@ appear as cards, with **Guided Workflow** marked **Recommended**. A workflow ope
 whether you choose it from an artifact box, its card, its tab or the command palette. Each
 workflow keeps one colour everywhere it appears (cards, tabs, palette), always next to its name:
 indigo for Guided Workflow, fuchsia for Import & Run Collection, blue for the Quick performance
-test, violet for Performance plans and pink for Run k6 Script. These colours are never used for
-statuses: green, amber, red and cyan always mean success, warning, failure and information.
+test, violet for Performance plans and pink for Run k6 Script. While a workflow is open, its pages take on its colour throughout: buttons, the
+active tab, the progress tracker and highlights. The start screen keeps ApiPilot's teal. These
+colours are never used for statuses: green, amber, red and cyan always mean success, warning, failure and information.
 Paragraph text is justified, evenly spread between its margins.
 
 ## 3. The guided workflow

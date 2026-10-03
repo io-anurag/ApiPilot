@@ -3277,7 +3277,8 @@ Implementation
       heading stays in the first screen; the cards follow below it).
     - The first workflow colours (green, orange, purple, blue, red) repeated the status colours.
       At the user's request they became indigo, fuchsia, blue, violet and pink (FR-002 amended),
-      and prose paragraphs are justified app-wide (FR-026).
+      and prose paragraphs are justified app-wide (FR-026). Each workflow's pages now use its
+      tile's colour scheme by scoping the `brand` scale under `data-workflow` (FR-027).
     - Scripted Playwright check on the dev stack (mock AI): headings in IBM Plex Sans; no
       horizontal overflow at 390 px; palette and help dialog behave as specified
       (`specs/038-workspace-redesign/validation.md`).

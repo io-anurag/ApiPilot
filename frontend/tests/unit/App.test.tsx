@@ -154,8 +154,9 @@ describe("App", () => {
     const externalCollectionFetches = () =>
       vi
         .mocked(fetch)
-        .mock.calls.filter(([input]) => input.toString().includes("/api/external-collections"))
-        .length;
+        .mock.calls.filter(([input]) =>
+          input.toString().includes("/api/external-collections"),
+        ).length;
     await waitFor(() => expect(externalCollectionFetches()).toBeGreaterThan(0));
     const fetchesBeforeExit = externalCollectionFetches();
 
@@ -182,15 +183,27 @@ describe("App", () => {
     render(<App />);
     const quick = await screen.findByRole("button", { name: "Quick performance test" });
     expect(quick).toHaveTextContent(
-      "Load-tests every operation of an uploaded specification with generated requests that no one reviews.",
+      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
     );
-    expect(screen.getByRole("button", { name: "Import & Run Collection" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Import & Run Collection" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(quick);
-    expect(await screen.findByLabelText("Upload OpenAPI specification for a quick performance test")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Top-level views" })).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(
+        "Upload OpenAPI specification for a quick performance test",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Top-level views" }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Exit the quick performance test and return to the start screen" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Exit the quick performance test and return to the start screen",
+      }),
+    );
     expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
   });
 
@@ -230,7 +243,12 @@ describe("App", () => {
       apiModel: {
         operations: [],
         securitySchemes: {},
-        summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] },
+        summary: {
+          operationCount: 0,
+          schemaCount: 0,
+          securitySchemeCount: 0,
+          issues: [],
+        },
       },
       postmanArtifact,
     };
@@ -303,11 +321,17 @@ describe("App", () => {
 
       pressCtrlK();
       const palette = await screen.findByRole("dialog", { name: "Command palette" });
-      expect(within(palette).queryByRole("option", { name: /Back to start/ })).not.toBeInTheDocument();
+      expect(
+        within(palette).queryByRole("option", { name: /Back to start/ }),
+      ).not.toBeInTheDocument();
 
-      fireEvent.click(within(palette).getByRole("option", { name: /Import & Run Collection/ }));
+      fireEvent.click(
+        within(palette).getByRole("option", { name: /Import & Run Collection/ }),
+      );
       expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
-      expect(screen.getByRole("navigation", { name: "Top-level views" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("navigation", { name: "Top-level views" }),
+      ).toBeInTheDocument();
       expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
 
       pressCtrlK();
@@ -318,7 +342,9 @@ describe("App", () => {
     it("also opens from the header button", async () => {
       stubFetch();
       render(<App />);
-      fireEvent.click(await screen.findByRole("button", { name: "Open command palette" }));
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Open command palette" }),
+      );
       expect(await screen.findByTestId("command-palette")).toBeInTheDocument();
     });
 
@@ -333,7 +359,9 @@ describe("App", () => {
       expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
       field.remove();
 
-      fireEvent.click(screen.getByRole("button", { name: "Keyboard shortcuts and help" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Keyboard shortcuts and help" }),
+      );
       await screen.findByTestId("help-dialog");
       pressCtrlK();
       expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
@@ -346,10 +374,15 @@ describe("App", () => {
       await screen.findByTestId("entry-chooser");
 
       pressCtrlK();
-      fireEvent.click(await screen.findByRole("option", { name: /Switch to dark theme/ }));
+      fireEvent.click(
+        await screen.findByRole("option", { name: /Switch to dark theme/ }),
+      );
       expect(document.documentElement.dataset.theme).toBe("dark");
       expect(window.localStorage.getItem("apipilot-theme")).toBe("dark");
-      expect(screen.getByRole("button", { name: "Dark theme" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Dark theme" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
       window.localStorage.removeItem("apipilot-theme");
     });
 
@@ -358,17 +391,48 @@ describe("App", () => {
       render(<App />);
       fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
       await screen.findByLabelText("Upload OpenAPI specification");
-      expect(screen.queryByRole("navigation", { name: "Top-level views" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("navigation", { name: "Top-level views" }),
+      ).not.toBeInTheDocument();
 
       pressCtrlK();
-      fireEvent.click(await screen.findByRole("option", { name: /Quick performance test/ }));
+      fireEvent.click(
+        await screen.findByRole("option", { name: /Quick performance test/ }),
+      );
       expect(
-        await screen.findByLabelText("Upload OpenAPI specification for a quick performance test"),
+        await screen.findByLabelText(
+          "Upload OpenAPI specification for a quick performance test",
+        ),
       ).toBeInTheDocument();
-      expect(screen.getByRole("navigation", { name: "Top-level views" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("navigation", { name: "Top-level views" }),
+      ).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
       expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeVisible();
     });
+  });
+
+  it("gives the open workflow its own colour scheme, and the start screen the brand one (AP-038 FR-027)", async () => {
+    stubFetch();
+    const { container } = render(<App />);
+    const main = container.querySelector("main") as HTMLElement;
+    await screen.findByTestId("entry-chooser");
+    expect(main).not.toHaveAttribute("data-workflow");
+
+    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
+    await screen.findByText("Import a Postman collection");
+    expect(main).toHaveAttribute("data-workflow", "import-collection");
+
+    fireEvent.click(screen.getByRole("button", { name: "Quick Performance Test" }));
+    expect(main).toHaveAttribute("data-workflow", "quick-performance");
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Exit the quick performance test and return to the start screen",
+      }),
+    );
+    await screen.findByTestId("entry-chooser");
+    expect(main).not.toHaveAttribute("data-workflow");
   });
 });

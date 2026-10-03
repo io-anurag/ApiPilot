@@ -1,6 +1,11 @@
 import { EntryIllustration } from "./EntryIllustration";
-import { WorkflowIcon } from "./WorkflowIcon";
-import { ARTIFACT_CHOICES, WORKFLOWS, workflowById, type EntryChoice } from "./workflowCatalog";
+import { ArtifactProductIcon, WorkflowIcon } from "./WorkflowIcon";
+import {
+  ARTIFACT_CHOICES,
+  WORKFLOWS,
+  workflowById,
+  type EntryChoice,
+} from "./workflowCatalog";
 
 export type { EntryChoice } from "./workflowCatalog";
 
@@ -9,7 +14,16 @@ const FOCUS_RING =
 
 function ArrowIcon({ className }: Readonly<{ className: string }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
       <path d="M5 12h14m-6-6 6 6-6 6" />
     </svg>
   );
@@ -17,7 +31,15 @@ function ArrowIcon({ className }: Readonly<{ className: string }>) {
 
 function InfoIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4 shrink-0" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="M12 16v-4m0-4h.01" />
     </svg>
@@ -52,12 +74,14 @@ export function EntryChooser({
               API test engineering workspace
             </p>
             <h2 className="font-display text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl dark:text-white">
-              Start with the <span className="text-brand-600 dark:text-brand-300">artifact</span>
+              Start with the{" "}
+              <span className="text-brand-600 dark:text-brand-300">artifact</span>
               <br className="hidden sm:block" /> you have.
             </h2>
             <p className="max-w-xl text-lg leading-8 text-muted">
-              Build an explainable test suite from an OpenAPI specification, or go straight to
-              running a Postman collection, a quick load test, or a k6 script of your own.
+              Build an explainable test suite from an OpenAPI specification, or go
+              straight to running a Postman collection, a quick load test, or a k6 script
+              of your own.
             </p>
           </div>
 
@@ -71,7 +95,7 @@ export function EntryChooser({
               className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
             >
               <legend className="float-left flex w-full items-center gap-2.5 text-sm font-semibold text-slate-900 dark:text-white">
-                <WorkflowIcon name={artifact.icon} className="h-5 w-5 text-muted" />
+                <ArtifactProductIcon name={artifact.icon} className="h-5 w-5 shrink-0" />
                 {artifact.label}
               </legend>
               <div className="clear-left flex flex-wrap gap-2 pt-3">
@@ -85,7 +109,10 @@ export function EntryChooser({
                       onClick={() => onSelect(id)}
                       className={`inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-slate-700 motion-safe:transition-colors hover:text-slate-950 dark:text-slate-200 dark:hover:text-white ${workflow.tone.border} ${FOCUS_RING}`}
                     >
-                      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-sm ${workflow.tone.marker}`} />
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 shrink-0 rounded-sm ${workflow.tone.marker}`}
+                      />
                       {workflow.title}
                     </button>
                   );
@@ -142,7 +169,10 @@ export function EntryChooser({
               <span className="mt-1 font-display text-base font-bold text-slate-950 dark:text-white">
                 {workflow.title}
               </span>
-              <span id={`entry-${workflow.id}-description`} className="hyphens-auto text-justify text-sm leading-6 text-muted">
+              <span
+                id={`entry-${workflow.id}-description`}
+                className="hyphens-auto text-justify text-sm leading-6 text-muted"
+              >
                 {workflow.description}
               </span>
               <span

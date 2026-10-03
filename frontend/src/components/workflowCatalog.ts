@@ -47,7 +47,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     title: "Guided Workflow",
     tabLabel: "Guided Workflow",
     description:
-      "Upload an OpenAPI specification, inspect its analysis, review generated scenarios, and produce a runnable Postman collection with an optional k6 performance test.",
+      "Turn an OpenAPI specification into reviewed API tests and a ready-to-run Postman collection.",
     icon: "guided",
     recommended: true,
     tone: {
@@ -62,7 +62,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     title: "Import & Run Collection",
     tabLabel: "Import & Run Collection",
     description:
-      "Upload a Postman collection and environment, inspect every request, then run it against your API.",
+      "Bring in a Postman collection and environment, review every request, then run it against your API.",
     icon: "import",
     recommended: false,
     tone: {
@@ -77,7 +77,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     title: "Quick performance test",
     tabLabel: "Quick Performance Test",
     description:
-      "Load-tests every operation of an uploaded specification with generated requests that no one reviews.",
+      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
     icon: "quick",
     recommended: false,
     tone: {
@@ -92,7 +92,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     title: "Performance plans",
     tabLabel: "Performance Plans",
     description:
-      "Chain requests you write and edit, as in Postman: pass a token or an id from one step to the next, check responses, and run with k6.",
+      "Design multi-step k6 journeys that pass data between requests and verify each response.",
     icon: "plans",
     recommended: false,
     tone: {
@@ -107,7 +107,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     title: "Run k6 Script",
     tabLabel: "Run k6 Script",
     description:
-      "Upload or write a k6 script, confirm its exact content, and run it with the k6 installed on this machine.",
+      "Run a k6 script you own after confirming exactly what will execute on this machine.",
     icon: "script",
     recommended: false,
     tone: {
@@ -144,7 +144,13 @@ export const ARTIFACT_CHOICES: readonly ArtifactChoice[] = [
     icon: "postman",
     workflows: ["import-collection"],
   },
-  { id: "k6", label: "k6 script", phrase: "a k6 script", icon: "k6", workflows: ["user-script"] },
+  {
+    id: "k6",
+    label: "k6 script",
+    phrase: "a k6 script",
+    icon: "k6",
+    workflows: ["user-script"],
+  },
 ];
 
 export function workflowById(id: EntryChoice): WorkflowEntry {

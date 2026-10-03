@@ -1145,7 +1145,10 @@ any backend, contract or shared-domain change (its FR-025). Three mechanisms car
   removed. Workflow hues never reuse a status hue or the brand teal, and every workflow colour
   meets WCAG AA as text on its theme's surface (038 research D2). A base-layer rule justifies
   prose paragraphs app-wide with hyphenation (`p:not(.font-mono)`), and utility classes still
-  override it (FR-026).
+  override it (FR-026). While a workflow is open, `App` sets `data-workflow` on `<main>`, and
+  `index.css` redefines the whole `--color-brand-*` scale (and the page glow) under that
+  attribute. Every component, already written against `brand`, therefore takes the workflow's
+  hue without per-component code (FR-027, research D13).
 - **One workflow catalog.** `components/workflowCatalog.ts` is the single ordered list of the
   five views: id, start-screen title, the unchanged tab label, description, icon and literal
   Tailwind tone classes. It also holds the three artifact choices (OpenAPI → Guided Workflow and

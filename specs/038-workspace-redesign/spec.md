@@ -35,6 +35,10 @@ specification was written (see Clarifications).
   Workflow colours must not reuse the status colours (success green, warning amber, danger red,
   info cyan). The brand teal is also avoided, so a workflow colour is never read as a status
   (FR-002 amended).
+- Q: (after the first implementation) "There is a disconnect between home page tile color & the
+  color scheme in the actual workflow page." → A: Use the tile's colour scheme throughout its
+  workflow: while a workflow is open, its pages, tabs, buttons, stage tracker and background take
+  that workflow's hue instead of the brand teal (FR-027).
 - Q: (after the first implementation) Text alignment? → A: "Distribute text evenly between
   margins" across the whole application: prose paragraphs are justified (FR-026).
 - Q: Design A's help (?) button and the chevron on the connection pill have nothing behind them
@@ -307,6 +311,10 @@ focus to the help button.
   reachable with a visible focus indicator.
 - **FR-024**: Transitions and hover effects this feature introduces MUST be disabled when the
   user's system requests reduced motion.
+- **FR-027**: While a workflow is open, every element that uses the brand colour (primary
+  buttons, the active tab, the stage tracker, focus rings, tinted panels, provenance and the
+  background glow) MUST use that workflow's hue, the same hue as its start-screen tile. The start
+  screen keeps the brand teal. Status colours (success, warning, danger, info) are unaffected.
 - **FR-026**: Prose paragraphs across the application MUST be justified (distributed evenly
   between their margins) with hyphenation. Monospace text (paths, code, identifiers) and
   single-line UI text (buttons, labels, badges, table cells) keep their alignment, and any

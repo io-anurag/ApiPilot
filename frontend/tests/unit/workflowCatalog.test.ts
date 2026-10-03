@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ARTIFACT_CHOICES, WORKFLOWS, workflowById } from "../../src/components/workflowCatalog";
+import {
+  ARTIFACT_CHOICES,
+  WORKFLOWS,
+  workflowById,
+} from "../../src/components/workflowCatalog";
 
 describe("workflowCatalog (AP-038 research.md D4)", () => {
   it("lists the five top-level views in tab order, with the tab labels unchanged (FR-013)", () => {
@@ -21,12 +25,14 @@ describe("workflowCatalog (AP-038 research.md D4)", () => {
       "Run k6 Script",
     ]);
     expect(workflowById("quick-performance").description).toBe(
-      "Load-tests every operation of an uploaded specification with generated requests that no one reviews.",
+      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
     );
   });
 
   it("recommends only the guided workflow", () => {
-    expect(WORKFLOWS.filter((w) => w.recommended).map((w) => w.id)).toEqual(["guided-workflow"]);
+    expect(WORKFLOWS.filter((w) => w.recommended).map((w) => w.id)).toEqual([
+      "guided-workflow",
+    ]);
   });
 
   it("gives every workflow its own colour", () => {
