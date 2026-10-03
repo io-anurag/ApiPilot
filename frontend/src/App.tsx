@@ -7,6 +7,7 @@ import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 import type { OpenChainPlanRequest } from "./pages/RequestChainPlansPage";
+import { ActiveViewContext } from "./components/requestChain/activeView";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
 // exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
@@ -174,7 +175,7 @@ export function App() {
             <PerformancePlanScaleMockPage />
           </LazyView>
         ) : (
-          <>
+          <ActiveViewContext.Provider value={started ? activeTab : "start"}>
             {!started && <EntryChooser onSelect={handleSelect} />}
             {started && tabsVisible && (
               <Tabs
@@ -236,7 +237,7 @@ export function App() {
                 </LazyView>
               </div>
             )}
-          </>
+          </ActiveViewContext.Provider>
         )}
       </div>
     </main>

@@ -35,7 +35,7 @@ Reviewed against the uncommitted diff. Security-relevant changes are flagged for
 
 | Check | Result |
 |---|---|
-| Every new route is session-scoped | Pass. Plans, data sets and runs are read through `getSessionId()` (`chainPlanStore`, `chainPlanDataSetRepository`, `performanceRunRepository.getChainRun/listChainRuns/getChainInProgress/requestChainCancel`). Another session's id is `404`. `tests/integration/performance/chainPlanRoutes.test.ts` covers reading and saving another session's plan; the data set and run routes use the same session-scoped lookups but have no cross-session test of their own. Plans and data sets are deleted with the session (`onExpire`). |
+| Every new route is session-scoped | Pass. Plans, data sets and runs are read through `getSessionId()` (`chainPlanStore`, `chainPlanDataSetRepository`, `performanceRunRepository.getChainRun/listChainRuns/getChainInProgress/requestChainCancel`). Another session's id is `404`. `tests/integration/performance/chainPlanRoutes.test.ts` covers reading and saving another session's plan; the data set and run routes use the same session-scoped lookups. *(2026-10-04: cross-session tests added for them too: `chainPlanDataSets.test.ts`, `chainPlanRuns.test.ts` and `legacyRunsReadOnly.test.ts`; see "Browser walkthrough of scenario 10".)* Plans and data sets are deleted with the session (`onExpire`). |
 | Upload limits | Pass. `multer.memoryStorage()` with `fileSize` = 5 MiB and `files: 1`; `LIMIT_FILE_SIZE` answers `413 data_set_too_large` instead of reaching the central handler. The CSV parser then enforces 100,000 rows and 50 columns, and a plan holds at most 5 data sets. The route-specific JSON limit is 8 MiB, larger than the global one, for whole-plan saves only. |
 | Run copy of data sets | Pass, with a platform note. Each `apipilot-data-<i>.json` is written with `mode: 0o600` into the run directory after the script integrity check, and `removeRunDirectory` in `startPerformanceRun`'s `finally` removes it however the run settles. On Windows, Node maps the mode to the read-only attribute only, so the file is protected by the user profile's directory ACL rather than by the mode. |
 | No value in logs | Pass. The new logger calls (`chain_plan_created/saved/seeded/duplicated/deleted`, `chain_data_set_stored/refused`, `chain_script_generated`, `chain_run_restored`, `performance_run_unhandled_error`) carry ids, counts, durations, a refusal reason and line number, and an error class name only: no names, URLs, headers, step content, column names, file names or values. `chainLeakScan.test.ts` feeds sentinels through every route and the logs and finds none. |
@@ -151,6 +151,59 @@ version numbers changed after):
 | `K6_TEST_REAL=1 npm run test:k6-real -w backend` | Exit 0 with k6 v2.3.0. 7 tests passed: the AP-034 user script case and six request-chain cases, including three moved from the legacy cases: k6 flags and no `url`/`name` tags, per-virtual-user token refresh with no 401, and cancel within 10 seconds. |
 | `node scripts/count-performance-lines.mjs` | 11,372 (see SC-006). |
 
-**Open.** Quickstart scenario 10 has not been walked through in a browser. Its report and route
-assertions are covered by T094 and T095, but the entry points and **Earlier runs** have only been
-checked by component tests. AP-037 is therefore not recorded as Implemented.
+## Browser walkthrough of scenario 10 (2026-10-04)
+
+**Scripted walkthrough.** At the user's request, quickstart scenario 10 was driven through the real UI
+with Playwright 1.63 (Chromium, headless, 1400×1000), as for scenarios 1 to 9, from a scratch folder.
+Nothing was added to the repository. It ran on a separate local stack:
+- backend on port 4100, with its own SQLite file and `AI_PROVIDER_MODE=mock`;
+- frontend on port 5180.
+
+**Earlier runs.** **Earlier runs** needs legacy runs in the browser's own session, and phase two can no
+longer record any. So the four T094 fixtures (guided, quick, user-journey and collection) were
+inserted into the scratch database under the browser's session id, through the backend's own
+`performanceRunRepository`. Step 1 of the scenario (record one run per source and save its report
+HTML) is the T094 capture and goldens.
+
+| Part | Checks | Notes |
+|---|---|---|
+| Earlier runs and legacy reports | 28/28 | No section before the insert. After it: the heading and the FR-037 note word for word, 4 rows newest first, each naming its source, all Completed, **View report** the only action, and no Run again or Restore anywhere on the page. For each run, the served report, the sandboxed frame's `srcdoc` and the download are byte-identical to the T094 golden. The former plan, script and run-start routes are 404 with no application error code. |
+| Entry points | 25/25 | The guided stage (via **Set up a performance test**), the quick page after an upload, and the collection run panel each offer only **Create request-chain plan**, with no legacy plan action. Each opens the request-chain editor in Performance Plans, naming its seed (the guided workflow, `performance.yaml`, the collection ApiFoundry). Back on the entry point, the plan is listed and **Open** reopens it. Performance Plans then lists the three plans, with Earlier runs unchanged. |
+| SC-006 | 1/1 | `node scripts/count-performance-lines.mjs`: 11,383, with the fixes below (11,372 at 19.19.0). |
+
+**Defects found and fixed** (each with a regression test):
+- **Seeded plans list out of date.** An entry point listed its seeded plans only when first shown. The
+  guided, quick and Import & Run views stay mounted while hidden, so a plan seeded, renamed or deleted
+  elsewhere was missing when the user came back. App now provides the active top-level view
+  (`components/requestChain/activeView.ts`), and `SeededPlans` lists the plans again whenever it
+  changes (`ChainSeedEntryPoints.test.tsx`).
+- **Report button label not in its accessible name.** The **View report** button in Earlier runs was
+  named "View the report of the run started …", which fails WCAG 2.5.3 (Label in Name), so a voice
+  command "View report" did not reach it. It is now "View report of the run started …"
+  (`LegacyRunsView.tsx`, `LegacyRunsView.test.tsx`).
+
+**Cross-session tests (security review follow-up).** A second session gets `404` for the first
+session's resources, and the first session's data is left unchanged:
+- data sets, both through the owner's plan (`chain_plan_not_found`) and through its own plan
+  (`data_set_not_found`): update, file replace, preview, delete and upload
+  (`chainPlanDataSets.test.ts`);
+- chain runs: open, cancel, report and restore (`run_not_found`); a run start on the other session's
+  plan (`chain_plan_not_found`); its own plan run against the other session's environment
+  (`environment_not_found`). The plan-scoped list `GET /:planId/runs` answers `200 { runs: [] }`,
+  as for an unknown plan (`chainPlanRuns.test.ts`);
+- legacy runs under each old base: list, open, report and cancel (`legacyRunsReadOnly.test.ts`).
+
+Removing the session filter from the plan and run lookups made all five new tests fail, and no
+others.
+
+**Validation runs** (Windows 11, Node 24, at 19.19.0 before the bump to 19.19.1; only version numbers
+and documentation changed after):
+
+| Command | Outcome |
+|---|---|
+| `npm test` (root) | Exit 0. 307 test files passed, 3 skipped; 2,430 tests passed, 10 skipped. |
+| `npm run lint` (root) | Exit 0, no findings. |
+| `npm run build` (root) | Exit 0. |
+
+`npm run test:k6-real` was not re-run, since no runtime code changed. Recording AP-037 as Implemented
+is the user's decision on this walkthrough, as it was for phase one.

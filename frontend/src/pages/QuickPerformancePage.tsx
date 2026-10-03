@@ -70,7 +70,7 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
 
 /**
  * AP-037 FR-020 (specs/037-request-chain-performance US2): `onOpenChainPlan` opens a request-chain
- * plan seeded from this specification; the quick plan below is unchanged until phase two.
+ * plan seeded from this specification, and since phase two (US5) the page lists the plans seeded before.
  */
 export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onExit?: () => void; onOpenChainPlan?: (planId: string) => void }>) {
   const [state, setState] = useState<PageState>({ kind: "loading" });

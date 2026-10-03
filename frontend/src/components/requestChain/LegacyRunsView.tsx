@@ -65,7 +65,7 @@ export function LegacyRunsView() {
                   </td>
                   <td className="py-2 text-right">
                     {run.status !== "in-progress" && (
-                      <button type="button" className={BUTTON_STYLES.ghost} aria-label={`View the report of the run started ${new Date(run.startedAt).toLocaleString()}`} onClick={() => setOpen(run)}>
+                      <button type="button" className={BUTTON_STYLES.ghost} aria-label={`View report of the run started ${new Date(run.startedAt).toLocaleString()}`} onClick={() => setOpen(run)}>
                         View report
                       </button>
                     )}

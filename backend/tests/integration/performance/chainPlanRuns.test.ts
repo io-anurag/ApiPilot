@@ -116,6 +116,36 @@ describe("request-chain plan routes: runs", () => {
     expect((await agent.get(`${CHAIN_BASE}/runs/${run.id}`)).body.run.id).toBe(run.id);
   });
 
+  it("refuses another session's runs and plan to a second session, which cannot start, cancel, report or restore them", async () => {
+    const owner = await readyPlan([], { hold: true });
+    await owner.agent.post(`${CHAIN_BASE}/${owner.plan.id}/script`);
+    const run = (await owner.agent.post(`${CHAIN_BASE}/${owner.plan.id}/runs`).send({ environmentId: owner.environmentId })).body.run as ChainRun;
+    const other = await readyPlan();
+    await other.agent.post(`${CHAIN_BASE}/${other.plan.id}/script`);
+
+    const refused = await Promise.all([
+      other.agent.get(`${CHAIN_BASE}/runs/${run.id}`),
+      other.agent.post(`${CHAIN_BASE}/runs/${run.id}/cancel`),
+      other.agent.get(`${CHAIN_BASE}/runs/${run.id}/report`),
+      other.agent.post(`${CHAIN_BASE}/runs/${run.id}/restore`).send({ into: "new-plan" }),
+      other.agent.post(`${CHAIN_BASE}/runs/${run.id}/restore`).send({ into: "plan", planId: owner.plan.id, revision: owner.plan.revision }),
+    ]);
+    for (const response of refused) expect([response.req.method, response.req.path, response.status, response.body.error]).toEqual([response.req.method, response.req.path, 404, "run_not_found"]);
+    // The plan-scoped list answers for this session only: another session's plan lists no run.
+    expect((await other.agent.get(`${CHAIN_BASE}/${owner.plan.id}/runs`)).body).toEqual({ runs: [] });
+    const started = await other.agent.post(`${CHAIN_BASE}/${owner.plan.id}/runs`).send({ environmentId: other.environmentId });
+    expect([started.status, started.body.error]).toEqual([404, "chain_plan_not_found"]);
+    // Nor can its own plan run against the other session's environment and its values.
+    const borrowed = await other.agent.post(`${CHAIN_BASE}/${other.plan.id}/runs`).send({ environmentId: owner.environmentId });
+    expect([borrowed.status, borrowed.body.error]).toEqual([404, "environment_not_found"]);
+    expect(other.runner.starts).toEqual([]);
+    expect((await other.agent.get(CHAIN_BASE)).body.plans.map((plan: { id: string }) => plan.id)).toEqual([other.plan.id]);
+
+    expect((await owner.agent.get(`${CHAIN_BASE}/runs/${run.id}`)).body.run.status).toBe("in-progress");
+    expect((await owner.agent.post(`${CHAIN_BASE}/runs/${run.id}/cancel`)).status).toBe(202);
+    expect((await settledRun(owner.agent, run.id)).status).toBe("cancelled");
+  });
+
   it("settles a run whose Once before load step failed as setup-step-failed, naming the step and reason", async () => {
     const lines = [
       vus(1, 0),

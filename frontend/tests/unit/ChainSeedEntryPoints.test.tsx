@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { CollectionRequestView } from "@apipilot/shared-domain";
 import { ExternalCollectionRunPanel } from "../../src/components/ExternalCollectionRunPanel";
 import { PerformanceTestingStage } from "../../src/components/performance/PerformanceTestingStage";
+import { ActiveViewContext } from "../../src/components/requestChain/activeView";
 import { stubFetch, type Call } from "./performanceFixtures";
 import { chainPlanFixture, PLAN_ID, viewOf } from "./requestChainFixtures";
 
@@ -50,6 +51,22 @@ describe("Create request-chain plan from the guided Performance Testing stage", 
     expect(within(list).queryByText("Built by hand")).not.toBeInTheDocument();
     fireEvent.click(within(list).getByRole("button", { name: "Open Workflow plan" }));
     expect(onOpenChainPlan).toHaveBeenCalledWith("w1");
+  });
+
+  it("lists a plan seeded while another view was on screen when the user returns, though the stage stayed mounted (US5)", async () => {
+    let plans: unknown[] = [];
+    stubFetch({ ["GET /api/chain-plans"]: () => [200, { plans }] });
+    const stage = (view: string) => (
+      <ActiveViewContext.Provider value={view}>
+        <PerformanceTestingStage onOpenChainPlan={vi.fn()} />
+      </ActiveViewContext.Provider>
+    );
+    const { rerender } = render(stage("guided-workflow"));
+    expect(await screen.findByText("No plan has been created from this source yet.")).toBeInTheDocument();
+    plans = [{ id: "w1", name: "Workflow plan", chainCount: 2, stepCount: 4, dataSetCount: 0, seedSource: "workflow", updatedAt: "2026-10-03T10:00:00.000Z" }];
+    rerender(stage("performance-plans"));
+    rerender(stage("guided-workflow"));
+    expect(within(await screen.findByTestId("seeded-plans")).getByRole("button", { name: "Open Workflow plan" })).toBeInTheDocument();
   });
 });
 

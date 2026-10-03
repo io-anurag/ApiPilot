@@ -55,7 +55,8 @@ describe("LegacyRunsView", () => {
   it("opens a run's report from its own base", async () => {
     const calls = stubRuns({ quick: [summary("q1", "2026-10-01T10:00:00.000Z", "quick")] });
     render(<LegacyRunsView />);
-    fireEvent.click(await screen.findByRole("button", { name: /View the report/ }));
+    // WCAG 2.5.3: the accessible name starts with the visible label, so "View report" reaches it.
+    fireEvent.click(await screen.findByRole("button", { name: /^View report of the run started / }));
     await waitFor(() => expect(calls.some((call) => call.url === `${QUICK}/runs/q1/report`)).toBe(true));
   });
 

@@ -49,6 +49,26 @@ describe("legacy runs after phase two", () => {
     expect(report.text).toBe(readFileSync(path.join(FIXTURES, "golden", "reports", `${name}.html`), "utf-8"));
   });
 
+  it.each([
+    ["guided", GUIDED],
+    ["quick", QUICK],
+    ["collection", COLLECTION],
+  ])("neither lists, opens, reports nor cancels a %s run of another session", async (name, base) => {
+    const owner = await withLegacyRuns();
+    const other = request.agent(createApp(undefined, { performance: { probe: unavailableProbe() } }));
+    await establishSession(other);
+    const run = storedRun(name);
+    expect((await other.get(`${base}/runs`)).body.runs).toEqual([]);
+    for (const response of await Promise.all([
+      other.get(`${base}/runs/${run.id}`),
+      other.get(`${base}/runs/${run.id}/report`),
+      other.post(`${base}/runs/${run.id}/cancel`),
+    ])) {
+      expect([response.req.method, response.req.path, response.status, response.body.error]).toEqual([response.req.method, response.req.path, 404, "run_not_found"]);
+    }
+    expect((await owner.get(`${base}/runs/${run.id}`)).status).toBe(200);
+  });
+
   it.each([GUIDED, QUICK, COLLECTION])("no longer serves the plan, script or run-start routes under %s", async (base) => {
     const agent = await withLegacyRuns();
     const removed = [

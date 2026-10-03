@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import type { ChainPlanSummary } from "@apipilot/shared-domain";
 import { listPlans, type SeedSourceInput } from "../../services/requestChainClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
+import { ActiveViewContext } from "./activeView";
 import { SeedPlanDialog } from "./SeedPlanDialog";
 
 type SeedKind = NonNullable<ChainPlanSummary["seedSource"]>;
@@ -10,10 +11,12 @@ type SeedKind = NonNullable<ChainPlanSummary["seedSource"]>;
 /**
  * The request-chain plans already seeded from one kind of source (specs/037-request-chain-performance
  * US5, FR-020): each with its size and an Open action, newest first. Lists nothing while loading, and
- * says so when there is none.
+ * says so when there is none. Listed again whenever the top-level view changes, since the entry view
+ * holding it stays mounted while plans are seeded, renamed or deleted in Performance Plans.
  */
 export function SeededPlans({ seedKind, onOpen, emptyText }: Readonly<{ seedKind: SeedKind; onOpen: (planId: string) => void; emptyText: string }>) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; plans: ChainPlanSummary[] }>({ kind: "loading" });
+  const activeView = useContext(ActiveViewContext);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,7 +26,7 @@ export function SeededPlans({ seedKind, onOpen, emptyText }: Readonly<{ seedKind
     return () => {
       cancelled = true;
     };
-  }, [seedKind]);
+  }, [seedKind, activeView]);
 
   if (state.kind === "loading") return null;
   if (state.kind === "error") return <ErrorState message="The plans could not be loaded." detail={state.message} testId="seeded-plans-error" />;
