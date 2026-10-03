@@ -23,6 +23,7 @@ import { StatusBadge } from "../StatusBadge";
 import { Tabs } from "../Tabs";
 import { EnvironmentPicker } from "../performance/EnvironmentPicker";
 import { LoadProfileEditor } from "../performance/LoadProfileEditor";
+import { PendingBar, type PendingItem } from "../performance/PendingBar";
 import { SetupItem } from "../performance/SetupItem";
 import { ThresholdEditor } from "../performance/ThresholdEditor";
 import { usePerformanceRuns } from "../performance/usePerformanceRuns";
@@ -36,12 +37,6 @@ import { SeedingReportView } from "./SeedingReportView";
 import { StepEditor } from "./StepEditor";
 
 type Tab = "chains" | "setup" | "runs";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "chains", label: "Chains" },
-  { id: "setup", label: "Run setup" },
-  { id: "runs", label: "Runs" },
-];
 
 type Dialog = { kind: "new-chain" } | { kind: "rename-chain"; chainId: string } | { kind: "rename-plan" } | { kind: "delete-chain"; chainId: string } | null;
 
@@ -65,14 +60,17 @@ function environmentNames(environment: Environment | null): string[] | null {
  * focus or a structural action completes; the server's answer is authoritative (research R2). The
  * plan check runs locally on every edit with the shared analysis, so a use before an extraction shows
  * as the engineer types (FR-014). Steps are authored by the engineer and not verified by ApiPilot,
- * and the screen says so (constitution XVII).
+ * and the screen says so (constitution XVII). Its layout follows the other performance screens: a
+ * bar naming the plan, what still blocks a run, then the tabs.
  */
-export function ChainPlanEditor({ planId, onOpenPlan }: Readonly<{ planId: string; onOpenPlan?: (planId: string) => void }>) {
+export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planId: string; onOpenPlan?: (planId: string) => void; onBack?: () => void }>) {
   const [view, setView] = useState<ChainPlanView | null>(null);
   const [draft, setDraftState] = useState<ChainPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // The last save was refused: the editor holds changes the server does not, so it must not say Saved.
+  const [saveFailed, setSaveFailed] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -116,6 +114,8 @@ export function ChainPlanEditor({ planId, onOpenPlan }: Readonly<{ planId: strin
     saving.current = true;
     const result = await savePlan(sent.id, sent.revision, edit.inputOf(sent));
     saving.current = false;
+    // A conflict reloads the server's plan, so the editor and the server agree again.
+    setSaveFailed(!result.ok && !(result.error === "plan_revision_conflict" && result.current));
     if (result.ok) {
       setView(result);
       setSaveError(null);
@@ -176,7 +176,13 @@ export function ChainPlanEditor({ planId, onOpenPlan }: Readonly<{ planId: strin
   const selected = plan.chains.flatMap((chain) => chain.steps).find((step) => step.id === selectedStepId) ?? null;
   const stepsWithIssues = new Set(analysis.blockers.flatMap((blocker) => ("stepId" in blocker ? [blocker.stepId] : [])));
   const script = view.script && view.script.planFingerprint === plan.fingerprint && !dirty ? view.script : view.script ? { ...view.script, outOfDate: true } : null;
-  const generateBlocked = dirty ? "Saving your latest change…" : analysis.blockers.length > 0 ? "Fix the plan's problems first." : null;
+  const generateBlocked = dirty
+    ? "Saving your latest change…"
+    : saveFailed
+      ? "Your latest change is not saved. Fix the error above first."
+      : analysis.blockers.length > 0
+        ? "Fix the plan's problems first."
+        : null;
 
   const updateStep = (step: ChainStep) => change(edit.updateStep(plan, step.id, () => step));
 
@@ -225,22 +231,91 @@ export function ChainPlanEditor({ planId, onOpenPlan }: Readonly<{ planId: strin
   }
 
   const seed = plan.seedingReport?.source;
+  const stepCount = plan.chains.reduce((total, chain) => total + chain.steps.length, 0);
+
+  // What still blocks a run, in the order the engineer meets it, as on the other performance screens.
+  const pending: PendingItem[] = [];
+  if (analysis.blockers.length > 0) {
+    pending.push({
+      id: "blockers",
+      state: "attention",
+      text: analysis.blockers.length === 1 ? "1 problem in the plan blocks the script." : `${analysis.blockers.length} problems in the plan block the script.`,
+      action: { label: "Show", ariaLabel: "Show the plan's problems", onClick: () => setTab("chains") },
+    });
+  }
+  if (!environment) {
+    pending.push({
+      id: "environment",
+      state: "todo",
+      text: "No target environment yet. It holds the base URL and every value the plan uses.",
+      action: { label: "Choose one", ariaLabel: "Choose a target environment", onClick: () => setTab("setup") },
+    });
+  }
+  if (!script || script.outOfDate) {
+    pending.push({
+      id: "script",
+      state: "todo",
+      text: script ? "The k6 script is out of date." : "The k6 script has not been generated.",
+      action: { label: script ? "Regenerate" : "Generate", ariaLabel: script ? "Regenerate the k6 script" : "Generate the k6 script", onClick: () => void handleGenerate(), disabled: busy || generateBlocked !== null },
+      hint: generateBlocked ?? undefined,
+    });
+  }
+  if (runs.readiness?.state === "unavailable") {
+    pending.push({
+      id: "k6",
+      state: "attention",
+      text: "k6 is not available on the machine running the ApiPilot backend.",
+      action: { label: "See why", onClick: () => setTab("setup") },
+    });
+  }
+  const setupPending = pending.filter((item) => item.id !== "blockers").length;
+  const ready =
+    pending.length === 0 && environment && runs.readiness?.state === "ready" && !runs.inProgress
+      ? { text: `Ready to run on ${environment.name} (${environment.tier})`, action: { label: "Go to run →", onClick: () => setTab("setup") } }
+      : null;
+  const missingValues = analysis.requiredValues.filter((value) => value.provided === false).length;
+  const notes =
+    environment && missingValues > 0
+      ? [
+          <>
+            {missingValues} of {analysis.requiredValues.length} values are missing in {environment.name}. Steps that use them are not sent.{" "}
+            <button type="button" className={BUTTON_STYLES.ghost} onClick={() => setTab("setup")}>
+              Review values
+            </button>
+          </>,
+        ]
+      : [];
+
   return (
     <div className="space-y-4" data-testid="chain-plan-editor" data-plan-id={planId}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 className="font-display text-xl font-semibold text-slate-950 dark:text-white">{plan.name}</h2>
-          <p className="text-sm text-muted">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          {onBack && (
+            <>
+              <button type="button" className={BUTTON_STYLES.ghost} onClick={onBack}>
+                ← All plans
+              </button>
+              <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+            </>
+          )}
+          <span className="font-semibold" data-testid="chain-plan-name">{plan.name}</span>
+          <span className="text-xs text-muted">
             {seed ? (seed.kind === "collection" ? `Seeded from the collection ${seed.collectionName}` : seed.kind === "specification" ? `Seeded from ${seed.filename}` : "Seeded from the guided workflow") : "Built by you"}
-            {" · "}Steps are authored by you and not verified by ApiPilot.
-          </p>
+          </span>
+          <StatusBadge label={`${plan.chains.length} ${plan.chains.length === 1 ? "chain" : "chains"} · ${stepCount} ${stepCount === 1 ? "step" : "steps"}`} />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {dirty ? <StatusBadge label="Saving…" tone="info" /> : <StatusBadge label="Saved" tone="success" />}
-          <button type="button" className={BUTTON_STYLES.ghost} onClick={() => setDialog({ kind: "rename-plan" })}>
+        <div className="flex items-center gap-2">
+          {dirty ? <StatusBadge label="Saving…" tone="info" /> : saveFailed ? <StatusBadge label="Not saved" tone="danger" /> : <StatusBadge label="Saved" tone="success" />}
+          <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setDialog({ kind: "rename-plan" })}>
             Rename plan
           </button>
         </div>
+      </div>
+      <div className="min-w-0 space-y-0.5">
+        <h2 className="text-lg font-semibold">Performance plan</h2>
+        <p className="max-w-3xl text-sm text-muted">
+          Chains of requests you write and edit. Steps are authored by you and not verified by ApiPilot. Nothing is sent to any system until you trigger a run.
+        </p>
       </div>
       <p className="sr-only" role="status" aria-live="polite" data-testid="chain-plan-announcement">
         {announcement}
@@ -248,7 +323,24 @@ export function ChainPlanEditor({ planId, onOpenPlan }: Readonly<{ planId: strin
       {announcement && <p className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm dark:bg-white/5">{announcement}</p>}
       {saveError && <ErrorState message={saveError} testId="chain-plan-save-error" />}
 
-      <Tabs tabs={TABS} activeTab={tab} onChange={setTab} label="Plan sections" />
+      <PendingBar
+        items={pending}
+        ready={ready}
+        idleText={runs.readiness === null ? "Checking whether k6 is ready…" : undefined}
+        running={runs.inProgress ? { label: "View progress", onClick: () => setTab("runs") } : null}
+        notes={notes}
+      />
+
+      <Tabs
+        tabs={[
+          { id: "chains", label: "Chains" },
+          { id: "setup", label: setupPending > 0 ? `Run setup (${setupPending} to do)` : "Run setup" },
+          { id: "runs", label: `Runs & reports (${runs.runs.length})` },
+        ]}
+        activeTab={tab}
+        onChange={setTab}
+        label="Plan sections"
+      />
 
       {tab === "chains" && (
         <div className="space-y-4">

@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
 export interface ReferenceSuggestion {
   /** What is inserted between `{{` and `}}`. */
@@ -17,6 +17,9 @@ const INPUT_CLASS =
  * environment value names, data set columns and dynamic variables, passed in by the caller. It follows
  * the ARIA combobox pattern: arrow keys move through the list, Enter or Tab inserts, Escape closes,
  * and the field keeps focus throughout. Nothing is inserted without a keystroke or click.
+ *
+ * The list is positioned against the viewport, not the field's container: fields sit inside tables
+ * that scroll sideways, and such a container would otherwise clip the list.
  */
 export function ReferenceField({
   label,
@@ -54,6 +57,23 @@ export function ReferenceField({
 
   const matches = query === null ? [] : suggestions.filter((suggestion) => suggestion.name.toLowerCase().startsWith(query.toLowerCase())).slice(0, 12);
   const open = matches.length > 0;
+  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // While the list is open it follows the field through page scrolls and resizes.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const box = fieldRef.current?.getBoundingClientRect();
+      if (box) setAnchor({ top: box.bottom + 4, left: box.left, width: box.width });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   function track(text: string, caret: number | null) {
     const before = text.slice(0, caret ?? text.length);
@@ -122,7 +142,14 @@ export function ReferenceField({
         {label}
       </label>
       {multiline ? <textarea {...common} rows={rows} spellCheck={false} /> : <input {...common} type="text" spellCheck={false} autoComplete="off" />}
-      <ul id={listId} role="listbox" aria-label={`References for ${label}`} hidden={!open} className="absolute z-20 mt-1 max-h-60 w-full min-w-56 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg">
+      <ul
+        id={listId}
+        role="listbox"
+        aria-label={`References for ${label}`}
+        hidden={!open}
+        style={anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined}
+        className="fixed z-50 max-h-60 min-w-56 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
+      >
         {matches.map((suggestion, index) => (
           <li
             key={suggestion.name}

@@ -983,6 +983,13 @@ the start screen) to list your plans, start an empty one, open, duplicate or del
 saved on this machine, so they are still there after ApiPilot restarts, for as long as your
 browser session lasts.
 
+An open plan is laid out like the other performance screens. **Before you can run** lists what
+still blocks a run (plan problems, the target environment, the script, k6), each with the action
+that fixes it, above the **Chains**, **Run setup** and **Runs & reports** tabs. The bar at the top
+says **Saved**, **Saving…** or **Not saved**. **Not saved** means the last change was refused: the
+message under the bar says why, and the script cannot be generated until it is fixed. A row you add
+with **+ Add header** (or a query or form row) and leave empty is not saved.
+
 **Starting from something you already have.** Each existing entry point can seed a first draft:
 - **Quick performance test**: after uploading a specification, choose **Create request-chain plan**.
   You get one single-step chain per operation, from its positive scenario.

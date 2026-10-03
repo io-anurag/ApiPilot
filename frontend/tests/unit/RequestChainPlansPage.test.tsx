@@ -50,7 +50,7 @@ describe("RequestChainPlansPage", () => {
     fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     expect(await screen.findByTestId("chain-plan-editor")).toHaveAttribute("data-plan-id", PLAN_ID);
-    expect(await screen.findByRole("heading", { name: "Customer lifecycle" })).toBeInTheDocument();
+    expect(await screen.findByTestId("chain-plan-name")).toHaveTextContent("Customer lifecycle");
     expect(calls.find((call) => call.method === "POST")?.body).toEqual({ name: "Checkout" });
   });
 

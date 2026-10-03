@@ -1,4 +1,4 @@
-import type { Chain, ChainPlan, ChainPlanInput, ChainStep, Extractor, StepCheck } from "@apipilot/shared-domain";
+import type { Chain, ChainPlan, ChainPlanInput, ChainStep, Extractor, NameValue, StepCheck } from "@apipilot/shared-domain";
 
 /**
  * Pure edits of a request-chain plan for the editor (specs/037-request-chain-performance FR-002,
@@ -7,10 +7,27 @@ import type { Chain, ChainPlan, ChainPlanInput, ChainStep, Extractor, StepCheck 
  * moving are never refused here: the analysis lists what an order breaks (FR-014).
  */
 
+// A row just added with "+ Add …" and left empty is editing scaffolding, not part of the request,
+// so it is not sent: otherwise its empty name is refused and blocks every later save.
+const filled = (rows: readonly NameValue[]) => rows.filter((row) => row.name !== "" || row.value !== "");
+
+function withoutBlankRows(step: ChainStep): ChainStep {
+  return {
+    ...step,
+    query: filled(step.query),
+    headers: filled(step.headers),
+    body: step.body.kind === "form" ? { ...step.body, fields: filled(step.body.fields) } : step.body,
+  };
+}
+
 export function inputOf(plan: ChainPlan): ChainPlanInput {
   return {
     name: plan.name,
-    chains: plan.chains.map((chain) => ({ id: chain.id, name: chain.name, steps: chain.steps.map(({ source: _source, seedDigest: _digest, changed: _changed, ...rest }) => rest) })),
+    chains: plan.chains.map((chain) => ({
+      id: chain.id,
+      name: chain.name,
+      steps: chain.steps.map(withoutBlankRows).map(({ source: _source, seedDigest: _digest, changed: _changed, ...rest }) => rest),
+    })),
     loadProfile: plan.loadProfile,
     thinkTimeMs: plan.thinkTimeMs,
     thresholds: plan.thresholds,

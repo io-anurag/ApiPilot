@@ -75,4 +75,20 @@ describe("ReferenceField", () => {
     fireEvent.blur(field);
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
+
+  it("places the list against the viewport, under the field, so a scrolling container cannot clip it", () => {
+    render(
+      <div style={{ overflowX: "auto" }}>
+        <Harness />
+      </div>,
+    );
+    const field = screen.getByRole("combobox", { name: "Header value" });
+    vi.spyOn(field, "getBoundingClientRect").mockReturnValue({ top: 100, bottom: 130, left: 40, right: 340, width: 300, height: 30, x: 40, y: 100, toJSON: () => ({}) });
+    type("Bearer {{");
+    const list = screen.getByRole("listbox");
+    expect(list).toHaveClass("fixed");
+    expect(list.style.top).toBe("134px");
+    expect(list.style.left).toBe("40px");
+    expect(list.style.width).toBe("300px");
+  });
 });

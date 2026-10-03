@@ -857,7 +857,7 @@ Run 5 virtual users × 20 iterations against a recording stub.
   and `npm run test:k6-real -w backend` (cases 1 to 4). Record each command and its outcome, exactly
   as run and including failures, in `specs/037-request-chain-performance/validation.md`. Confirm the
   legacy goldens are byte-identical (`git diff --stat backend/tests/fixtures/performance/golden/`).
-- [ ] T093 Walk through `specs/037-request-chain-performance/quickstart.md` scenarios 1 to 9 in the
+- [X] T093 Walk through `specs/037-request-chain-performance/quickstart.md` scenarios 1 to 9 in the
   browser and record each outcome in `validation.md`, with the elapsed time for scenario 1
   (SC-001). If this cannot be done, say so there, and do not mark the feature Implemented in the
   ROADMAP (constitution XXXI).
@@ -881,9 +881,13 @@ following hold:
 - **SC-006 measured:** run `scripts/count-performance-lines.mjs` at the end of phase one and record
   the result in `validation.md`. If the projected total is above 8,055, report the gap and agree a
   revised target with the user before continuing (Clarification 2026-10-03). Never cut required
-  behaviour to meet it.
+  behaviour to meet it. *(Done 2026-10-03: 22,357 measured, about 12,500 to 13,500 projected;
+  target agreed at 13,000.)*
 - **Constitution amended:** TODO(XVII_LEGACY_PLAN_TEXT) has been carried out through
-  `/speckit-constitution` (a MAJOR bump), approved and merged.
+  `/speckit-constitution` (a MAJOR bump), approved and merged. *(Done: v3.0.0, commit `a5e020a`,
+  merged to `main` in PR #59.)*
+- **Done (2026-10-03):** T093, by a scripted Playwright walkthrough of scenarios 1 to 9 through the
+  real UI, accepted by the user as the walkthrough (`validation.md`).
 
 ### Tests for User Story 5 ⚠️
 
