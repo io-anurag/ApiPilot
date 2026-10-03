@@ -20,6 +20,11 @@ import { TargetServer } from "../tests/fixtures/execution/targetServer";
  * `PERF_STUB_TOKEN_STATUS`), 401 for customers requests without a valid token, `PATCH`, `/health`,
  * `/version`, and, with `PERF_STUB_REJECT_REPEATED_EMAIL=1`, 409 for a repeated email. It prints
  * counts, never tokens.
+ *
+ * AP-037 (specs/037-request-chain-performance tasks T004, quickstart 4): in `customers-auth` mode,
+ * `PERF_STUB_WRONG_ID_EVERY=<n>` answers another id on every n-th single-customer read, and
+ * `PERF_STUB_SLOW_EVERY=<n>` delays every n-th customers response by `PERF_STUB_SLOW_MS` (or 600).
+ * It prints how many of each it did, never an id.
  */
 const ORDER_ID = "00000000-0000-4000-8000-000000000001";
 const port = Number(process.env.PERF_STUB_PORT ?? "4600");
@@ -48,6 +53,9 @@ async function main(): Promise<void> {
                   ...(process.env.PERF_STUB_TOKEN_STATUS ? { tokenStatus: Number(process.env.PERF_STUB_TOKEN_STATUS) } : {}),
                 },
                 rejectRepeatedEmail: process.env.PERF_STUB_REJECT_REPEATED_EMAIL === "1",
+                ...(process.env.PERF_STUB_WRONG_ID_EVERY ? { wrongIdEvery: Number(process.env.PERF_STUB_WRONG_ID_EVERY) } : {}),
+                ...(process.env.PERF_STUB_SLOW_EVERY ? { slowEvery: Number(process.env.PERF_STUB_SLOW_EVERY) } : {}),
+                ...(process.env.PERF_STUB_SLOW_MS ? { slowMs: Number(process.env.PERF_STUB_SLOW_MS) } : {}),
               }
             : {}),
         })
@@ -76,6 +84,8 @@ async function main(): Promise<void> {
       if (mode === "customers-auth") {
         const { patches, conflicts, tokensIssued, unauthorized } = customers.counts;
         process.stdout.write(`customers-auth: updated ${patches}, tokens issued ${tokensIssued}, 401 ${unauthorized}, 409 ${conflicts}\n`);
+        const { wrongIds, slow } = customers.counts;
+        if (wrongIds > 0 || slow > 0) process.stdout.write(`customers-auth: wrong ids ${wrongIds}, slow responses ${slow}\n`);
       }
     }
     if (keyPrefixes.size > 0) process.stdout.write(`X-Api-Key values received (SHA-256 prefixes): ${[...keyPrefixes].sort().join(", ")}\n`);

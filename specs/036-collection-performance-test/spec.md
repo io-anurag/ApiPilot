@@ -443,6 +443,9 @@ afterwards does not change the environment.
 - **FR-025**: A session MUST hold at most one collection plan, in memory, beside the guided and quick
   plans. Building a plan from another collection MUST replace it after the engineer confirms. Runs
   MUST share the one-run-at-a-time slot. The collection plan's run list MUST show its own runs only.
+  *(Superseded for new work 2026-10-03 by AP-037 FR-039, specs/037-request-chain-performance: a
+  collection seeds a request-chain plan, which is saved locally, and a session may hold several.
+  This plan stays as written until AP-037's phase two retires it.)*
 - **FR-026**: No AI MUST take part in building, converting, generating, running or reporting. Scripts,
   collection values and the generated script MUST NOT be logged.
 

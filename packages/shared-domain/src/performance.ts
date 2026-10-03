@@ -730,6 +730,8 @@ export interface StepResult {
   timeline?: StepTimelinePoint[];
   /** AP-035 FR-029: each capture's outcomes, in the step's capture order; absent on older runs. */
   captures?: { name: string; succeeded: number; failed: number }[];
+  /** AP-037 FR-034: each check's outcomes, in the step's check order; request-chain runs only. */
+  checks?: { checkId: string; kind: string; passed: number; failed: number }[];
 }
 
 export interface JourneyResult {
@@ -817,7 +819,17 @@ export interface PerformanceResult {
     setupFailed?: { scheme: string; capture: string }[];
     /** AP-036 FR-028: refreshes by token source, sorted by scheme. Absent on older runs. */
     byScheme?: { scheme: string; refreshed: number; failed: number }[];
+    /** AP-037 FR-040: refreshes by Once before load step, in plan order; request-chain runs only. */
+    bySetupStep?: { stepId: string; refreshed: number; failed: number }[];
   };
+  /**
+   * AP-037 FR-018, FR-034: each Once before load step's outcome and latency, in plan order; never in
+   * the load's figures. `reason` names why it failed (`status`, `no-response`, `extractor:<name>`,
+   * `missing-data:<name>` or `unknown`). Request-chain runs only.
+   */
+  setupSteps?: { stepId: string; outcome: "ok" | "failed"; reason: string | null; latencyMs: number | null }[];
+  /** AP-037 FR-046: how each data set was used, never a value. Request-chain runs only. */
+  dataSets?: { dataSetId: string; takes: number; rowsUsed: number; wrapped: boolean }[];
   /** The earliest timeline bucket with a failure, and the step with the most failures in it (research D16 rule 3). */
   firstFailure?: { offsetMs: number; stepId: string };
   /** The earliest timeline bucket with an unexpected 429 (research D16 rule 6). */

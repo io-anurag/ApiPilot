@@ -13,6 +13,11 @@ import type { RequestHandler } from "./targetServer";
  * token answers 401. `PATCH` is handled like `PUT`. With `rejectRepeatedEmail`, a create repeating an
  * earlier email answers 409. `GET /health` and `GET /version` answer 200. Every received create body
  * is kept in `bodies`, for uniqueness checks; tokens and ids are never counted by value.
+ *
+ * AP-037 (specs/037-request-chain-performance tasks T004, US3): `GET` of one customer answers
+ * `{ id, name, status: "ACTIVE" }`. With `wrongIdEvery: n`, every n-th such read answers another id
+ * (`wrongIds` counts them); with `slowEvery: n`, every n-th customers response is delayed by `slowMs`
+ * (default 600) (`slow` counts them). Both counters follow arrival order, never random.
  */
 export interface CustomersTarget {
   handler: RequestHandler;
@@ -26,6 +31,10 @@ export interface CustomersTarget {
     conflicts: number;
     tokensIssued: number;
     unauthorized: number;
+    /** AP-037: reads answered with another id. */
+    wrongIds: number;
+    /** AP-037: customers responses delayed by `slowMs`. */
+    slow: number;
   };
   /** AP-036: every create body received, in arrival order. */
   bodies: unknown[];
@@ -36,6 +45,11 @@ export interface CustomersTargetOptions {
   idPrefix?: string;
   auth?: { expiresIn?: number; tokenStatus?: number };
   rejectRepeatedEmail?: boolean;
+  /** AP-037: every n-th single-customer read answers another id. */
+  wrongIdEvery?: number;
+  /** AP-037: every n-th customers response is delayed by `slowMs`. */
+  slowEvery?: number;
+  slowMs?: number;
   now?: () => number;
 }
 
@@ -49,7 +63,9 @@ export function customersTarget(options: CustomersTargetOptions = {}): Customers
   const tokens = new Map<string, number>();
   const bodies: unknown[] = [];
   let issued = 0;
-  const counts = { creates: 0, reads: 0, replaces: 0, deletes: 0, notFound: 0, patches: 0, conflicts: 0, tokensIssued: 0, unauthorized: 0 };
+  let singleReads = 0;
+  let customerResponses = 0;
+  const counts = { creates: 0, reads: 0, replaces: 0, deletes: 0, notFound: 0, patches: 0, conflicts: 0, tokensIssued: 0, unauthorized: 0, wrongIds: 0, slow: 0 };
 
   const authorized = (header: unknown): boolean => {
     if (!options.auth) return true;
@@ -102,10 +118,28 @@ export function customersTarget(options: CustomersTargetOptions = {}): Customers
       live.delete(id);
       return { status: 204 };
     }
+    if (method === "GET") {
+      singleReads += 1;
+      if (options.wrongIdEvery !== undefined && singleReads % options.wrongIdEvery === 0) {
+        counts.wrongIds += 1;
+        return { status: 200, body: { id: `${id}-other`, name: "Customer", status: "ACTIVE" } };
+      }
+      return { status: 200, body: { id, name: "Customer", status: "ACTIVE" } };
+    }
     return { status: 200, body: { id, name: "Customer" } };
   };
 
-  const handler: RequestHandler = (request) => {
+  const slowed = (handled: Handled): Handled => {
+    if (!handled || options.slowEvery === undefined) return handled;
+    customerResponses += 1;
+    if (customerResponses % options.slowEvery !== 0) return handled;
+    counts.slow += 1;
+    return { ...handled, delayMs: options.slowMs ?? 600 };
+  };
+
+  const handler: RequestHandler = (request) => (CUSTOMERS.test(request.path) ? slowed(respond(request)) : respond(request));
+
+  const respond: RequestHandler = (request) => {
     if (options.auth && request.method === "POST" && request.path === "/auth/token") return issueToken(options.auth);
     if (options.auth && request.method === "GET" && (request.path === "/health" || request.path === "/version")) {
       return { status: 200, body: request.path === "/health" ? { status: "ok" } : { version: "1.0.0" } };

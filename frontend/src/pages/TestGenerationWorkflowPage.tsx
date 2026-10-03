@@ -163,6 +163,7 @@ const HOME_FEATURES: {
 export function TestGenerationWorkflowPage({
   onExit,
   onHandoffToExecution,
+  onOpenChainPlan,
 }: Readonly<{
   /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
   onExit?: () => void;
@@ -173,6 +174,8 @@ export function TestGenerationWorkflowPage({
     postmanArtifact: ExportResult,
     specTitle: string | undefined,
   ) => void;
+  /** AP-037 FR-020: opens a request-chain plan seeded from the approved workflows. */
+  onOpenChainPlan?: (planId: string) => void;
 }>) {
   const [workflow, setWorkflow] = useState<TestGenerationWorkflow | null>(null);
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
@@ -638,7 +641,7 @@ export function TestGenerationWorkflowPage({
             />
           )}
           {displayStageId === "performanceTesting" && (
-            <PerformanceTestingStage onAdvanced={refreshWorkflow} />
+            <PerformanceTestingStage onAdvanced={refreshWorkflow} onOpenChainPlan={onOpenChainPlan} />
           )}
           {displayStageId === "execution" && (
             <ExecutionHandoffNotice

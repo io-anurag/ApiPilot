@@ -1,0 +1,162 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ChainPlan } from "@apipilot/shared-domain";
+import { ChainPlanEditor } from "../../src/components/requestChain/ChainPlanEditor";
+import { stubFetch, type Call } from "./performanceFixtures";
+import { lifecyclePlan, PLAN_ID, viewOf } from "./requestChainFixtures";
+
+/** AP-037 (specs/037-request-chain-performance tasks T030; US1, FR-002 to FR-015, FR-027). */
+
+const BASE = `/api/chain-plans/${PLAN_ID}`;
+
+afterEach(() => vi.unstubAllGlobals());
+
+function savedPlan(call: Call, revision: number): ChainPlan {
+  const body = call.body as { plan: ChainPlan };
+  const plan = body.plan;
+  return {
+    ...lifecyclePlan(),
+    ...plan,
+    id: PLAN_ID,
+    revision,
+    chains: plan.chains.map((chain) => ({ ...chain, steps: chain.steps.map((step) => ({ source: { kind: "added" as const }, seedDigest: null, changed: false, ...step })) })),
+  } as ChainPlan;
+}
+
+function setup(plan: ChainPlan = lifecyclePlan(), save?: (call: Call) => [number, unknown]) {
+  let revision = plan.revision;
+  return stubFetch({
+    [`GET ${BASE}`]: () => [200, viewOf(plan)],
+    ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [] }],
+    [`GET /api/chain-plans/${PLAN_ID}/runs`]: () => [200, { runs: [] }],
+    ["GET /api/chain-plans/readiness"]: () => [200, { readiness: { state: "ready", version: "1.2.0", checkedAt: "t" } }],
+    [`PUT ${BASE}`]:
+      save ??
+      ((call) => {
+        revision += 1;
+        return [200, { ...viewOf(savedPlan(call, revision)), movedCredentials: [] }];
+      }),
+  });
+}
+
+function puts(calls: Call[]): ChainPlan[] {
+  return calls.filter((call) => call.method === "PUT").map((call) => (call.body as { plan: ChainPlan }).plan);
+}
+
+describe("ChainPlanEditor", () => {
+  it("shows the chain and its steps, the authoring notice, and the selected step's request", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    expect(await screen.findByRole("heading", { name: "Customer lifecycle" })).toBeInTheDocument();
+    expect(screen.getByText(/Steps are authored by you and not verified by ApiPilot/)).toBeInTheDocument();
+    const tree = screen.getByRole("navigation", { name: "Chains and steps" });
+    expect(within(tree).getByText("Get a token")).toBeInTheDocument();
+    expect(within(tree).getByText("Once before load")).toBeInTheDocument();
+    expect(screen.getByLabelText("Step name")).toHaveValue("Get a token");
+    expect(screen.getByRole("combobox", { name: "URL" })).toHaveValue("{{baseUrl}}/auth/token");
+  });
+
+  it("adds a step to a chain and saves the whole plan with a new id", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add step" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    const sent = puts(calls)[0];
+    expect(sent.chains[0].steps.map((step) => step.id)).toEqual(["s1", "s2", "s3", "s4"]);
+    expect(sent.nextStepNumber).toBe(5);
+    expect(screen.getByLabelText("Step name")).toHaveValue("New request");
+  });
+
+  it("splits a pasted URL's query into rows, and saves the field on blur", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    const url = screen.getByRole("combobox", { name: "URL" });
+    fireEvent.change(url, { target: { value: "{{baseUrl}}/api/v1/customers?page=1&size=20" } });
+    expect(url).toHaveValue("{{baseUrl}}/api/v1/customers");
+    fireEvent.blur(url);
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].chains[0].steps[2].query).toEqual([
+      { name: "page", value: "1" },
+      { name: "size", value: "20" },
+    ]);
+  });
+
+  it("lists a use before extraction, never refuses the move, and jumps to the step", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+    const blockers = await screen.findByTestId("plan-blockers");
+    expect(blockers).toHaveTextContent("Get the customer uses {{customer_id}} before any step extracts it.");
+    fireEvent.click(screen.getByText("Create a customer"));
+    fireEvent.click(within(blockers).getByRole("button", { name: "Go to step" }));
+    expect(screen.getByLabelText("Step name")).toHaveValue("Get the customer");
+    expect(screen.getAllByText("Needs attention").length).toBeGreaterThan(0);
+  });
+
+  it("refuses Host as a header in text, with the reason", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    fireEvent.change(screen.getByLabelText("Headers 1 name"), { target: { value: "Host" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("k6 sets Host for every request, so a step cannot set it.");
+  });
+
+  it("announces a moved credential and asks for an environment when one is needed", async () => {
+    let attempt = 0;
+    setup(lifecyclePlan(), (call) => {
+      attempt += 1;
+      if (attempt === 1) return [422, { error: "credential_needs_environment", message: "This step holds a credential typed as text.", stepId: "s3", location: { kind: "header", name: "Authorization" } }];
+      return [200, { ...viewOf(savedPlan(call, 2)), movedCredentials: [{ stepId: "s3", location: { kind: "header", name: "Authorization" }, valueName: "authorization_s3", environmentName: "Local stub" }] }];
+    });
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    const value = screen.getByRole("combobox", { name: "Headers 1 value" });
+    fireEvent.change(value, { target: { value: "Bearer abc" } });
+    fireEvent.blur(value);
+    expect(await screen.findByTestId("chain-plan-save-error")).toHaveTextContent("Choose one under Run setup.");
+    fireEvent.blur(value);
+    await waitFor(() => expect(screen.getByTestId("chain-plan-announcement")).toHaveTextContent("The Authorization header value was moved into the secret value authorization_s3 of Local stub."));
+  });
+
+  it("reloads the plan when it was saved elsewhere", async () => {
+    const current = viewOf(lifecyclePlan({ revision: 7, name: "Changed elsewhere" }));
+    setup(lifecyclePlan(), () => [409, { error: "plan_revision_conflict", message: "m", current }]);
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add step" }));
+    expect(await screen.findByRole("heading", { name: "Changed elsewhere" })).toBeInTheDocument();
+    expect(screen.getByTestId("chain-plan-announcement")).toHaveTextContent("The plan was changed elsewhere and has been reloaded.");
+  });
+
+  it("adds a chain, renames it and deletes it after confirmation", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add chain" }));
+    fireEvent.change(screen.getByLabelText("Chain name"), { target: { value: "Reports" } });
+    const prompt = screen.getByLabelText("Chain name").closest("[role=dialog]") as HTMLElement;
+    fireEvent.click(within(prompt).getByRole("button", { name: "Add chain" }));
+    expect(await screen.findByRole("heading", { name: /^Reports/ })).toBeInTheDocument();
+    expect(screen.getByText(/Reports has no step that runs in the load/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete chain Reports" }));
+    fireEvent.click(within(screen.getByTestId("confirm-dialog")).getByRole("button", { name: "Delete chain (0)" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: /^Reports/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(puts(calls).length).toBeGreaterThanOrEqual(2));
+    expect(puts(calls)[0].chains.map((chain) => [chain.id, chain.name])).toEqual([
+      ["c1", "Customer lifecycle"],
+      ["c2", "Reports"],
+    ]);
+  });
+
+  it("shows each step's source and its Changed mark as text (FR-033)", async () => {
+    const plan = lifecyclePlan();
+    plan.chains[0].steps[1] = { ...plan.chains[0].steps[1], source: { kind: "operation", operationKey: "POST /customers", label: "POST /customers", passwordFields: [] }, seedDigest: "d", changed: true };
+    setup(plan);
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Create a customer"));
+    expect(screen.getByText("From operation POST /customers")).toBeInTheDocument();
+    expect(screen.getAllByText("Changed").length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByText("Get a token"));
+    expect(screen.getByText("Added by you")).toBeInTheDocument();
+  });
+});

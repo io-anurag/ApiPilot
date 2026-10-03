@@ -25,6 +25,7 @@ import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { BUTTON_STYLES } from "./controlStyles";
+import { SeedPlanDialog } from "./requestChain/SeedPlanDialog";
 import { applyRunOrder, moveRunOrderItem, type RunOrder } from "../utils/runOrder";
 
 const POLL_INTERVAL_MS = 750;
@@ -586,6 +587,7 @@ export function ExternalCollectionRunPanel({
   onRunOrderChange,
   onConfirmed,
   onSetUpPerformanceTest,
+  onOpenChainPlan,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
   /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
@@ -612,8 +614,11 @@ export function ExternalCollectionRunPanel({
    * needs no confirmation here; the plan's conversion review is the gate (FR-018).
    */
   onSetUpPerformanceTest?: (collectionId: string, orderedRequestIds: string[]) => void;
+  /** AP-037 FR-020: opens a request-chain plan seeded from the selected requests, in run order. */
+  onOpenChainPlan?: (planId: string) => void;
 }>) {
   const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
+  const [seedingChainPlan, setSeedingChainPlan] = useState(false);
   const [runHistory, setRunHistory] = useState<Omit<UploadedCollectionExecutionRun, "results">[]>([]);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -818,6 +823,7 @@ export function ExternalCollectionRunPanel({
     if (result.ok) setRun(result.run);
   }
 
+  const seedOrder = orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id);
   return (
     <section
       data-testid="external-collection-run-panel"
@@ -826,6 +832,11 @@ export function ExternalCollectionRunPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{uploadedCollection.name}</h3>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenChainPlan && (
+            <button type="button" onClick={() => setSeedingChainPlan(true)} disabled={selectedIds.size === 0 || requests.length === 0} className={BUTTON_STYLES.secondary}>
+              Create request-chain plan
+            </button>
+          )}
           {onSetUpPerformanceTest && (
             <button
               type="button"
@@ -913,6 +924,17 @@ export function ExternalCollectionRunPanel({
       )}
 
       <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectHistoryRun} />
+      {seedingChainPlan && onOpenChainPlan && (
+        <SeedPlanDialog
+          source={{ kind: "collection", collectionId: uploadedCollection.id, orderedRequestIds: seedOrder }}
+          defaultName={uploadedCollection.name}
+          onCancel={() => setSeedingChainPlan(false)}
+          onSeeded={(planId) => {
+            setSeedingChainPlan(false);
+            onOpenChainPlan(planId);
+          }}
+        />
+      )}
     </section>
   );
 }

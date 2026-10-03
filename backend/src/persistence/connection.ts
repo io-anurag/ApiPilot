@@ -252,6 +252,51 @@ export class SqliteConnection {
       );
       CREATE INDEX IF NOT EXISTS user_script_runs_session ON user_script_runs (session_id, started_at);
     `);
+
+    // AP-037 (specs/037-request-chain-performance research R2, R14, R19; data-model "Storage"):
+    // request-chain plans the engineer owns, and their CSV data sets. A plan holds no secret value
+    // (FR-027), but its steps are the engineer's own content, so the whole document is encrypted, as
+    // AP-034 does for user scripts. A data set's uploaded bytes are encrypted with the same cipher as
+    // environment values (FR-044). The plain columns hold ids, names, counts, sizes, hashes and column
+    // names only, so the plan list never needs decrypting. Chain runs share `performance_runs` (and so
+    // the one execution slot), with an encrypted copy of the plan as run, read only by restore (FR-035).
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS chain_plans (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        fingerprint TEXT NOT NULL,
+        chain_count INTEGER NOT NULL,
+        step_count INTEGER NOT NULL,
+        seed_source TEXT,
+        document_encrypted BLOB NOT NULL,
+        document_iv BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chain_plans_session ON chain_plans (session_id, updated_at);
+      CREATE TABLE IF NOT EXISTS chain_plan_data_sets (
+        id TEXT PRIMARY KEY,
+        plan_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        columns TEXT NOT NULL,
+        row_count INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        content_encrypted BLOB NOT NULL,
+        content_iv BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chain_plan_data_sets_plan ON chain_plan_data_sets (session_id, plan_id, position);
+    `);
+    this.ensureColumn("performance_runs", "chain_plan_id", "TEXT");
+    this.ensureColumn("performance_runs", "plan_document_encrypted", "BLOB");
+    this.ensureColumn("performance_runs", "plan_document_iv", "BLOB");
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

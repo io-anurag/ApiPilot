@@ -435,7 +435,10 @@ verify the new order is kept in the regenerated script.
     its `APIPILOT_V_<index>` name.
 
   Running a downloaded copy is an AP-034 run of a user-supplied script; it never changes what this
-  feature executes (FR-026) (amended 2026-10-01).
+  feature executes (FR-026) (amended 2026-10-01). *(Narrowed 2026-10-03 by AP-037 FR-047,
+  specs/037-request-chain-performance research R10: a request-chain plan's script passes the check
+  only while the plan has no data set. One that reads a data set calls `open()`, which AP-034
+  refuses, and its download says so.)*
 - **FR-023**: When any plan input changes after generation, the script MUST be marked out of date
   and MUST NOT be runnable until it is regenerated.
 
@@ -450,6 +453,8 @@ verify the new order is kept in the regenerated script.
   environment no longer exists, or when FR-027 or FR-029 would refuse a run. It MUST show the
   environment as it is now, not as the run recorded it, and the write operations beside it (AP-032
   FR-011). An ended run's environment MUST NOT be shown on any other trigger (amended 2026-09-30).
+  *(Extended 2026-10-03 by AP-037 FR-035, specs/037-request-chain-performance research R21: for a
+  request-chain run it is also unavailable when any data set's SHA-256 differs from the run's.)*
 - **FR-024b**: When the current script is not the one the newest ended run used, the runs view MUST
   say so and offer to restore that run's settings from its recorded plan: removed operations,
   journey and step order, think time, load profile and stages, thresholds, and the expected

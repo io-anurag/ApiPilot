@@ -160,7 +160,7 @@ function keptEdits<T extends { stepId: string; operationKey: string }>(edits: re
  * chained-login token sources call, as the existing credential producers identify them. Nothing is
  * guessed by name or path.
  */
-function credentialProducerOperationKeys(auth: AuthPlan): string[] {
+export function credentialProducerOperationKeys(auth: AuthPlan): string[] {
   const keys = [...auth.tokenSources.values()].flatMap((source) => (source.producerOperationKey ? [source.producerOperationKey] : []));
   return [...new Set(keys)].sort(compareCodeUnits);
 }

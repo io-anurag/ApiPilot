@@ -7,6 +7,7 @@ import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 import type { CollectionPlanRequest } from "./pages/CollectionPerformancePage";
+import type { OpenChainPlanRequest } from "./pages/RequestChainPlansPage";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
 // exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
@@ -22,6 +23,9 @@ const QuickPerformancePage = lazy(() =>
 );
 const CollectionPerformancePage = lazy(() =>
   import("./pages/CollectionPerformancePage").then((m) => ({ default: m.CollectionPerformancePage })),
+);
+const RequestChainPlansPage = lazy(() =>
+  import("./pages/RequestChainPlansPage").then((m) => ({ default: m.RequestChainPlansPage })),
 );
 const UserScriptPage = lazy(() =>
   import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
@@ -56,6 +60,8 @@ const TABS: Array<{ id: ActiveTab; label: string }> = [
   { id: "guided-workflow", label: "Guided Workflow" },
   { id: "import-collection", label: "Import & Run Collection" },
   { id: "quick-performance", label: "Quick Performance Test" },
+  // AP-037: request-chain plans, the engineer's own, kept across restarts.
+  { id: "performance-plans", label: "Performance Plans" },
   { id: "user-script", label: "Run k6 Script" },
 ];
 
@@ -85,6 +91,10 @@ export function App() {
   const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
   // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
   const [userScriptMounted, setUserScriptMounted] = useState(false);
+  // AP-037: request-chain plans stay mounted once reached; a seeding entry point opens one by id.
+  const [performancePlansMounted, setPerformancePlansMounted] = useState(false);
+  const [openChainPlanRequest, setOpenChainPlanRequest] = useState<OpenChainPlanRequest | null>(null);
+  const openChainPlanNonce = useRef(0);
   // AP-036: mounted when a collection's run panel hands its selection over, then kept like the others.
   const [collectionPerformanceMounted, setCollectionPerformanceMounted] = useState(false);
   const [collectionPlanRequest, setCollectionPlanRequest] = useState<CollectionPlanRequest | null>(null);
@@ -112,6 +122,7 @@ export function App() {
       "import-collection": setImportCollectionMounted,
       "quick-performance": setQuickPerformanceMounted,
       "user-script": setUserScriptMounted,
+      "performance-plans": setPerformancePlansMounted,
       "collection-performance": setCollectionPerformanceMounted,
     };
     mounters[view](true);
@@ -124,6 +135,16 @@ export function App() {
     setActiveTab("collection-performance");
     setTabsVisible(true);
     setCollectionPerformanceMounted(true);
+  }
+
+  /** AP-037 FR-020: an entry point seeded a request-chain plan; show it in Performance Plans. */
+  function handleOpenChainPlan(planId: string) {
+    openChainPlanNonce.current += 1;
+    setOpenChainPlanRequest({ planId, nonce: openChainPlanNonce.current });
+    setStarted(true);
+    setActiveTab("performance-plans");
+    setTabsVisible(true);
+    setPerformancePlansMounted(true);
   }
 
   function handleSelect(choice: EntryChoice) {
@@ -199,6 +220,7 @@ export function App() {
                   <TestGenerationWorkflowPage
                     onExit={handleExitToStart}
                     onHandoffToExecution={handleHandoffToExecution}
+                    onOpenChainPlan={handleOpenChainPlan}
                   />
                 </LazyView>
               </div>
@@ -210,6 +232,7 @@ export function App() {
                     preload={importPreload}
                     onExit={handleExitToStart}
                     onSetUpPerformanceTest={handleSetUpPerformanceTest}
+                    onOpenChainPlan={handleOpenChainPlan}
                   />
                 </LazyView>
               </div>
@@ -217,7 +240,7 @@ export function App() {
             {quickPerformanceMounted && (
               <div hidden={!started || activeTab !== "quick-performance"}>
                 <LazyView>
-                  <QuickPerformancePage onExit={handleExitToStart} />
+                  <QuickPerformancePage onExit={handleExitToStart} onOpenChainPlan={handleOpenChainPlan} />
                 </LazyView>
               </div>
             )}
@@ -225,6 +248,13 @@ export function App() {
               <div hidden={!started || activeTab !== "collection-performance"}>
                 <LazyView>
                   <CollectionPerformancePage request={collectionPlanRequest} onExit={handleExitToStart} />
+                </LazyView>
+              </div>
+            )}
+            {performancePlansMounted && (
+              <div hidden={!started || activeTab !== "performance-plans"}>
+                <LazyView>
+                  <RequestChainPlansPage onExit={handleExitToStart} openRequest={openChainPlanRequest} />
                 </LazyView>
               </div>
             )}

@@ -502,3 +502,140 @@ describe.runIf(REAL_K6_ENABLED)("real k6 with a plan built from a collection", (
     expect(list.errorsByCategory.some((entry) => entry.category === "authentication")).toBe(true);
   }, 120_000);
 });
+
+/**
+ * AP-037 opt-in real-k6 check (specs/037-request-chain-performance tasks T048; quickstart 1 and 5;
+ * SC-003, FR-018). The US1 customer journey built by hand, against the customers target with token
+ * issue and 401 without a valid token.
+ */
+describe.runIf(REAL_K6_ENABLED)("real k6 with a request-chain plan", () => {
+  let workDir = "";
+  beforeAll(() => {
+    workDir = mkdtempSync(path.join(tmpdir(), "apipilot-k6-chain-"));
+  });
+  afterAll(() => rmSync(workDir, { recursive: true, force: true }));
+
+  async function runChain(
+    customers: ReturnType<typeof customersTarget>,
+    options: { stages: { durationMs: number; targetVirtualUsers: number }[]; files?: Record<string, string>; plan?: import("@apipilot/shared-domain").ChainPlan },
+  ) {
+    const { analyzeChainPlan } = await import("@apipilot/shared-domain");
+    const { renderChainScript } = await import("../../src/performance/k6/renderChainScript");
+    const { planFingerprint } = await import("../../src/performance/chain/savePlan");
+    const { chainRunSnapshot } = await import("../../src/performance/chain/runSnapshot");
+    const { layoutFromChainSnapshot } = await import("../../src/performance/report/runLayout");
+    const { customerLifecyclePlan } = await import("../fixtures/chain/chainPlans");
+    const server = new TargetServer();
+    server.handle(customers.handler);
+    const url = await server.start();
+    try {
+      const base = options.plan ?? customerLifecyclePlan();
+      const plannedDurationMs = options.stages.reduce((total, stage) => total + stage.durationMs, 0);
+      const unfingerprinted = { ...base, thinkTimeMs: 0, loadProfile: { kind: "load" as const, stages: options.stages, plannedDurationMs } };
+      const plan = { ...unfingerprinted, fingerprint: planFingerprint(unfingerprinted) };
+      const analysis = analyzeChainPlan(plan, { environmentValueNames: null });
+      const rendered = renderChainScript(plan, analysis);
+      const probe = await createK6Probe()({ recheck: true });
+      const runDir = mkdtempSync(path.join(workDir, "run-"));
+      const scriptPath = path.join(runDir, "script.js");
+      writeFileSync(scriptPath, rendered.script);
+      for (const [name, content] of Object.entries(options.files ?? {})) writeFileSync(path.join(runDir, name), content);
+      const values: Record<string, string> = { baseUrl: url, client_id: "real-client", client_secret: "real-chain-secret" };
+      const env = buildChildEnv(process.env, {
+        ...Object.fromEntries(Object.entries(rendered.valueIndex).map(([name, index]) => [`APIPILOT_V_${index}`, values[name] ?? ""])),
+        APIPILOT_RUN_TAG: "a0a0a0",
+      });
+      const lines: string[] = [];
+      const handle = createK6Runner().start({ runDir, scriptPath, metricsPath: path.join(runDir, "metrics.ndjson"), binaryPath: probe.binaryPath!, env, onLine: (line) => lines.push(line), onStderrLine: () => undefined });
+      const exit = await handle.done;
+      const aggregate = createAggregate(layoutFromChainSnapshot(chainRunSnapshot(plan, analysis)), plannedDurationMs, Date.now() - plannedDurationMs - 5_000);
+      for (const line of lines) {
+        const parsed = parseMetricsLine(line);
+        if (parsed.kind === "point") aggregate.ingest(parsed.point);
+      }
+      return { exit, aggregate, result: aggregate.toResult(Date.now()), script: rendered.script, lines };
+    } finally {
+      await server.stop();
+    }
+  }
+
+  it("sends the token once before load and every customer request with each virtual user's own id: 10 virtual users, no 401 or 404 (SC-003)", async () => {
+    const customers = customersTarget({ auth: {} });
+    const { exit, result, script, lines } = await runChain(customers, { stages: [{ durationMs: 10_000, targetVirtualUsers: 10 }] });
+    expect(exit.exitCode).toBe(0);
+    expect(customers.counts.tokensIssued).toBe(1);
+    expect(customers.counts.creates).toBeGreaterThan(10);
+    expect(customers.counts.unauthorized).toBe(0);
+    // Each iteration deletes its own customer: a reused, stale or another virtual user's id would 404.
+    expect(customers.counts.notFound).toBe(0);
+    expect(customers.counts.deletes).toBe(customers.counts.creates);
+    expect(result.setupSteps).toEqual([expect.objectContaining({ stepId: "s1", outcome: "ok", reason: null })]);
+    expect(result.totals.journeysCutShort).toBe(0);
+    expect(result.steps.find((step) => step.stepId === "s5")?.checks).toEqual([expect.objectContaining({ checkId: "k3", failed: 0 })]);
+    const issued = /cust-\d+|stub-token-\d+/;
+    expect(script).not.toMatch(issued);
+    expect(lines.some((line) => issued.test(line))).toBe(false);
+    expect(script).not.toContain("real-chain-secret");
+  }, 120_000);
+
+  it("stops before the load when the Once before load step fails, naming it, and sends no customer request (FR-018)", async () => {
+    const customers = customersTarget({ auth: { tokenStatus: 401 } });
+    const { exit, aggregate, result } = await runChain(customers, { stages: [{ durationMs: 5_000, targetVirtualUsers: 2 }] });
+    expect(exit.exitCode).toBe(108);
+    expect(aggregate.setupFailure()).toEqual({ stepId: "s1", reason: "status" });
+    expect(result.totals.requests).toBe(0);
+    expect(customers.counts.creates).toBe(0);
+    expect(customers.counts.unauthorized).toBe(0);
+  }, 120_000);
+
+  it("counts each check's failures as the target misbehaves, apart from unexpected statuses (US3)", async () => {
+    const { customerLifecyclePlan } = await import("../fixtures/chain/chainPlans");
+    const plan = customerLifecyclePlan();
+    plan.chains[0].steps[4] = {
+      ...plan.chains[0].steps[4],
+      checks: [
+        { id: "k3", kind: "field-equals", path: "id", expected: { type: "text", value: "{{customer_id}}" } },
+        { id: "k4", kind: "body-contains", text: '"status":"ACTIVE"' },
+        { id: "k5", kind: "time-at-most", maxMs: 500 },
+      ],
+    };
+    const customers = customersTarget({ auth: {}, wrongIdEvery: 10, slowEvery: 5, slowMs: 600 });
+    const { exit, result } = await runChain(customers, { stages: [{ durationMs: 10_000, targetVirtualUsers: 5 }], plan });
+    expect(exit.exitCode).toBe(0);
+    const read = result.steps.find((step) => step.stepId === "s5")!;
+    const byId = new Map((read.checks ?? []).map((check) => [check.checkId, check]));
+    expect(byId.get("k3")!.failed).toBe(customers.counts.wrongIds);
+    expect(byId.get("k3")!.failed).toBeGreaterThan(0);
+    expect(byId.get("k4")!.failed).toBe(0);
+    expect(byId.get("k5")!.failed).toBeGreaterThan(0);
+    expect(byId.get("k5")!.failed).toBeLessThanOrEqual(customers.counts.slow);
+    expect(read.errorRatePercent).toBe(0);
+    expect(result.totals.journeysCutShort).toBe(0);
+  }, 120_000);
+
+  it("takes data set rows in file order across virtual users, wrapping after the last row, without the values in the result (US6, SC-009)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { parseCsv } = await import("../../src/performance/chain/csv");
+    const { dataSetPlan } = await import("../fixtures/chain/chainPlans");
+    const csv = readFileSync(path.join(__dirname, "..", "fixtures", "chain", "customers.csv"));
+    const parsed = parseCsv(csv);
+    const customers = customersTarget({ auth: {} });
+    const { exit, result, lines } = await runChain(customers, {
+      stages: [{ durationMs: 10_000, targetVirtualUsers: 5 }],
+      plan: dataSetPlan(),
+      files: { "apipilot-data-0.json": JSON.stringify(parsed.rows) },
+    });
+    expect(exit.exitCode).toBe(0);
+    const emails = customers.bodies.map((body) => (body as { email: string }).email);
+    const fileEmails = parsed.rows.map((row) => row[3]);
+    expect(emails.every((email) => fileEmails.includes(email))).toBe(true);
+    const usage = result.dataSets![0];
+    expect(usage.takes).toBe(result.totals.iterations);
+    expect(usage.takes).toBeGreaterThan(50);
+    expect(usage).toMatchObject({ rowsUsed: 50, wrapped: true });
+    expect(new Set(emails).size).toBe(50);
+    const passwords = parsed.rows.map((row) => row[5]);
+    expect(lines.some((line) => passwords.some((password) => line.includes(password)))).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("example.test");
+  }, 120_000);
+});

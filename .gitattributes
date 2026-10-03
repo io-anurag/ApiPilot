@@ -1,3 +1,6 @@
 # Golden fixtures are compared byte-for-byte against renderer output (LF), so they
 # must not be converted to CRLF on Windows checkouts (core.autocrlf=true).
 backend/tests/fixtures/**/golden/** text eol=lf
+
+# AP-037 CSV fixtures test exact bytes (CRLF, LF and invalid UTF-8), so they are never converted.
+backend/tests/fixtures/chain/*.csv -text

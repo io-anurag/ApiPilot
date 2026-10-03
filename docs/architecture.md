@@ -851,6 +851,71 @@ POST /collection-performance {collectionId, orderedRequestIds}
   and `NewEnvironmentFromCollection` for a collection plan, and hides the body, parameter and
   journey editors.
 
+### Request-chain performance plans (AP-037)
+
+AP-037 (`specs/037-request-chain-performance`) adds a plan the engineer owns outright: a
+`ChainPlan` of chains of concrete steps, seeded once from a specification, the guided workflow or a
+stored collection (or started empty), and never re-derived from its source. It is a separate model
+beside the derived `PerformancePlan`. It does not use the `PlanEngine` seam, and phase two retires
+the older plans. Constitution v2.8.0 extends XVII's exception to it.
+
+```text
+/api/chain-plans                              api/chainPlans.ts (8 MiB JSON limit, multer for CSV)
+  GET|POST /, POST /seed, GET|PUT|DELETE /:planId, POST /:planId/duplicate
+  POST|PUT|DELETE /:planId/data-sets[/:id[/file]], GET …/preview
+  POST /:planId/script, GET /:planId/script/download
+  GET /readiness, POST|GET /:planId/runs, GET /runs/:id, POST /runs/:id/cancel|restore, GET /runs/:id/report
+
+shared-domain/requestChain.ts   types; parseReferences, chainRunOrder, analyzeChainPlan (blockers,
+                                required values, hosts), summarizeChainWrites; used by editor and server
+performance/chain/
+  savePlan.ts                   whole-document save: validation, limits, ids never reused,
+                                seed digest → Changed, fingerprint (script-relevant content only)
+  literalCredentials.ts         Authorization / Proxy-Authorization / Cookie / password-field literals
+                                → secret environment values; refused without a target environment
+  chainPlanStore.ts             session-scoped plans; data sets merged from their table on read
+  seed/                         toChainStep (RequestTemplate → step text), seedFromSpecification,
+                                seedFromWorkflow (buildPlan + stepRequestFor), seedFromCollection
+                                (readCollectionRequests + recognizeScript), assembleSeededPlan
+  csv.ts, dataSets.ts           RFC 4180 parser with reasons and lines; upload, preview, run copies
+  runSnapshot.ts, restore.ts, generateScript.ts
+k6/renderChainScript.ts         data tables + CHAIN_RUNTIME (one fixed text for every plan)
+report/runLayout.ts             legacy plan or chain snapshot → what the aggregate and findings read
+report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's helpers
+```
+
+- **Storage.** `chain_plans` holds each plan as one encrypted document (credential cipher), with
+  the name, counts, revision and fingerprint plain. `chain_plan_data_sets` holds each CSV file
+  encrypted, with name, mode, columns, row count and SHA-256 plain. Saves are whole-document `PUT`s
+  with an optimistic revision; a stale one is refused with the current plan.
+- **Runtime.** `CHAIN_RUNTIME` is separate from the legacy `RUNTIME`, which is unchanged, so legacy
+  scripts and Run again keep their bytes.
+  - Each iteration starts from setup values, then per-virtual-user values. Every extraction
+    overwrites, so the latest write wins.
+  - Once before load steps run in `setup()`; a failure counts `apipilot_setup` and calls
+    `exec.test.abort` (exit 108, `setup-step-failed`).
+  - A setup step with `expires_in` is refreshed per virtual user.
+  - Checks count on `apipilot_check`.
+  - Data set rows come from `SharedArray` over `apipilot-data-<i>.json`. That file is written into
+    the run directory after the integrity check and removed with it. Rows are chosen by
+    `exec.vu.idInTest` or `exec.scenario.iterationInTest`, and takes and wraps are counted on
+    `apipilot_data`.
+  - A script without data sets passes AP-034's check. One with data sets cannot, because it calls
+    `open()`.
+- **Runs.** Chain runs share `performance_runs` (`plan_source = 'chain'`), and so the execution
+  slot, restart handling and cancel. The snapshot (`ChainRunSnapshot`) holds structure and
+  provenance only. A separate encrypted copy of the plan as run is read only by restore.
+  `createAggregate` takes a `RunLayout`: `layoutFromPlan` reproduces the legacy inputs exactly, and
+  `layoutFromChainSnapshot` adds setup steps, checks and data sets.
+- **Frontend.** `pages/RequestChainPlansPage.tsx` (the **Performance Plans** tab) lists plans and
+  opens `requestChain/ChainPlanEditor`:
+  - a chain tree and a step editor with Request, Extract, Checks and Settings sections;
+  - `ReferenceField`, an ARIA combobox offering `{{` suggestions;
+  - the plan check, data sets, run setup and `ChainRunPanel`.
+
+  `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
+  All calls go through `services/requestChainClient.ts`.
+
 ### Run k6 Script (AP-034)
 
 `specs/034-run-user-k6-script` runs a k6 script the engineer supplies, under constitution v2.6.0's

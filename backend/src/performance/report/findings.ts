@@ -1,4 +1,5 @@
 import type { PerformanceFinding, PerformancePlan, PerformanceResult, PerformanceThreshold } from "@apipilot/shared-domain";
+import { isRunLayout, type RunLayout } from "./runLayout";
 
 /**
  * Plain-language findings from fixed rules over the measured data (FR-038; research D16, ruleset
@@ -20,10 +21,14 @@ function describeThreshold(threshold: PerformanceThreshold, operationKeyOf: (ste
   return { label: `${where} ${threshold.metric} latency`, unit: " ms" };
 }
 
-export function deriveFindings(result: PerformanceResult, plan: PerformancePlan): PerformanceFinding[] {
+/** AP-037 (research R19): a legacy plan, or a run layout whose step labels name each step. */
+export function deriveFindings(result: PerformanceResult, plan: PerformancePlan | RunLayout): PerformanceFinding[] {
   const findings: PerformanceFinding[] = [];
-  const stepOrder = plan.journeys.flatMap((journey) => journey.steps.map((step) => step.id));
-  const operationKeyOf = (stepId: string) => result.steps.find((step) => step.stepId === stepId)?.operationKey ?? stepId;
+  const stepOrder = isRunLayout(plan)
+    ? plan.journeys.flatMap((journey) => journey.steps.map((step) => step.stepId))
+    : plan.journeys.flatMap((journey) => journey.steps.map((step) => step.id));
+  const labels = isRunLayout(plan) ? plan.stepLabels : undefined;
+  const operationKeyOf = (stepId: string) => labels?.[stepId] ?? result.steps.find((step) => step.stepId === stepId)?.operationKey ?? stepId;
   const inStepOrder = <T extends { stepId: string }>(items: T[]) =>
     [...items].sort((a, b) => stepOrder.indexOf(a.stepId) - stepOrder.indexOf(b.stepId));
   const categoryCount = (category: string) =>
