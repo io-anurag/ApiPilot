@@ -20,11 +20,6 @@ export function getPerformanceInProgressRun(): PerformanceRun | undefined {
   return getPerformanceRunRepository().getInProgress(getSessionId());
 }
 
-export function createPerformanceRun(run: PerformanceRun): PerformanceRun {
-  getPerformanceRunRepository().create(getSessionId(), run);
-  return run;
-}
-
 export function getPerformanceRun(runId: string): PerformanceRun {
   const run = getPerformanceRunRepository().get(getSessionId(), runId);
   if (!run) throw new PerformanceRunNotFoundError(runId);

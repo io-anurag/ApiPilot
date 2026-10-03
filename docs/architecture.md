@@ -595,6 +595,15 @@ model is model-agnostic and does not change with it.
 
 ## k6 performance testing
 
+> **Retired in AP-037 phase two (19.19.0).** The derived plan, its routes, the legacy script
+> renderer (`k6/renderScript.ts`) and the guided `scriptStore` entry described below are gone; the
+> Performance Testing stage now seeds request-chain plans. What remains: the runner, readiness,
+> metrics stream, aggregate, thresholds, findings and `renderHtmlReport`, which still renders runs
+> recorded before; the read-only legacy run routes (`api/performanceRuns.ts`); and the seeding
+> derivation (`plan/buildPlan.ts`, `plan/buildJourneys.ts`, `plan/stepRequest.ts`,
+> `plan/planStepRequest.ts`) with the edit overlays removed. The rest of this section is kept as the
+> design record of what produced those runs.
+
 AP-029 (`specs/031-k6-performance-testing`) turns the guided workflow's approved scenarios and
 workflows into a k6 load test, runs it on the user's explicit trigger with a k6 the user
 installed, and reports the result. It is the optional last guided-workflow stage,
@@ -668,6 +677,10 @@ approved TestModel + approved IntegrationWorkflows + selection
 
 ### Quick performance test (AP-032)
 
+> **Retired in AP-037 phase two (19.19.0).** The quick test keeps only its specification upload and
+> status (`POST|GET /api/quick-performance`), as a seeding source; its plan, script and run trigger
+> are gone. Its earlier runs are read only.
+
 AP-032 (`specs/032-quick-performance-test`) builds the same `PerformancePlan` straight from an
 uploaded specification, as a standalone route family (`/api/quick-performance`) like Import & Run.
 It never reads or writes `TestGenerationWorkflow`.
@@ -715,6 +728,11 @@ upload → parseYaml / validateSpec / buildApiModel (unchanged)
   `400 invalid_request`.
 
 ### Step body edits (AP-033)
+
+> **Retired in AP-037 phase two (19.19.0)** (`plan/bodyEdits.ts`, `plan/parameterEdits.ts`,
+> `plan/bodySchemaMismatches.ts` and the editors were removed). A request-chain step's body,
+> query and headers are edited directly. Stored snapshots keep `bodyEdited` and `parametersEdited`
+> flags, which the legacy report still marks.
 
 Amended 2026-09-30: parameter edits. `plan/parameterEdits.ts` holds `applyParameterEdit`
 (applied right after `effectiveScenario` in `buildJourneys` and `stepRequestFor`, so the preview
@@ -771,6 +789,9 @@ approved plan, with extra conditions this design meets.
 
 ### User-defined journeys and captured values (AP-035)
 
+> **Retired in AP-037 phase two (19.19.0)** (`plan/userJourneys.ts`, `plan/convertWorkflowJourney.ts`
+> and the journey screens were removed). Chains and extractors replace them.
+
 AP-035 (`specs/035-user-defined-journeys`) lets the engineer compose journeys on both plan
 sources and pass a value one step captures to later steps.
 
@@ -798,6 +819,13 @@ sources and pass a value one step captures to later steps.
   `userJourneysViewModel.ts` and sent through the shared plan screen's `apply`.
 
 ### Performance test from a Postman collection (AP-036)
+
+> **Retired in AP-037 phase two (19.19.0).** The collection plan, its engine, store and routes are
+> gone (`collection/assembleCollectionPlan.ts`, `collectionEngine.ts`, `collectionPlanStore.ts`,
+> `seedEnvironment.ts`); a collection seeds a request-chain plan through the kept readers
+> (`readCollectionRequests`, `recognizeScript`, `statusAssertions`, `bindCollectionPlan`,
+> `credentialRequests`, `collectionValues`). Its earlier runs are read only under
+> `/api/collection-performance/runs`.
 
 AP-036 (`specs/036-collection-performance-test`) builds a `PerformancePlan` with `source:
 "collection"` from a collection stored in Import & Run Collection, as a third route family,
@@ -915,6 +943,15 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
 
   `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
   All calls go through `services/requestChainClient.ts`.
+
+- **Phase two (19.19.0, FR-036 to FR-038).** One plan model remains:
+  - the guided, quick and collection entry points seed request-chain plans and list the plans
+    seeded from them (`requestChain/SeededPlans.tsx`); the plan screens, overlays, Collection
+    Performance Test tab and old plan clients were removed;
+  - legacy runs keep their read routes under the old bases (`registerLegacyRunRoutes`) and are shown
+    read only under **Earlier runs** (`LegacyRunsView`); their reports are pinned byte-identical by
+    `legacyReportGolden.test.ts` against stored runs captured before the removal (SC-007);
+  - constitution v3.0.0 consolidated XVII onto request-chain plans.
 
 ### Run k6 Script (AP-034)
 

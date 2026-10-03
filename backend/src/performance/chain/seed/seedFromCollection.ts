@@ -1,4 +1,4 @@
-import { collectionStepLabel, type CollectionReferenceLocation } from "@apipilot/shared-domain";
+import { collectionStepLabel, type CollectionReferenceLocation, SUPPORTED_DYNAMIC_VARIABLES } from "@apipilot/shared-domain";
 import type { Collection } from "postman-collection";
 import { convertedCaptures, bindReferences, type DraftReference, type DraftStep } from "../../collection/bindCollectionPlan";
 import { classifyCredentialRequests } from "../../collection/credentialRequests";
@@ -6,7 +6,6 @@ import { baseUrlVariableOf, BASE_URL, withBaseUrl } from "../../collection/colle
 import { readCollectionRequests, type CollectionRequestSource, type CollectionScript } from "../../collection/readCollectionRequests";
 import { recognizeScript, type ScriptRecognition } from "../../collection/recognizeScript";
 import { intersectStatuses } from "../../collection/statusAssertions";
-import { SUPPORTED_DYNAMIC_VARIABLES } from "../../collection/dynamicValues";
 import type { AuthTemplate, RequestTemplate } from "../../plan/stepRequest";
 import type { SeedInput, SeedStep } from "./assembleSeededPlan";
 import { basicAuthItem } from "./seedFromSpecification";

@@ -135,17 +135,13 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // Standalone route family (FR-011) — mounted independently of testGenerationWorkflowRouter;
   // no active TestGenerationWorkflow is required for any endpoint below.
   app.use("/api", externalCollectionsRouter);
-  // AP-029: k6 performance testing. A run starts only on POST .../performance/runs, the user's
-  // explicit per-run trigger (constitution XVII exception of 2026-09-24).
   const performanceDependencies = { ...defaultPerformanceDependencies(), ...options?.performance };
-  app.use("/api", createPerformanceTestingRouter(performanceDependencies));
-  // AP-032: the quick performance test, a standalone route family like Import & Run (no guided
-  // workflow required). Its runs start only on POST /api/quick-performance/runs, under the same
-  // XVII exception as extended on 2026-09-27, and share the one runner and probe above.
-  app.use("/api", createQuickPerformanceRouter(performanceDependencies));
-  // AP-036: a performance plan built from a stored collection, a third standalone route family. Its
-  // runs start only on POST /api/collection-performance/runs (XVII, as extended on 2026-10-02).
-  app.use("/api", createCollectionPerformanceRouter(performanceDependencies));
+  // AP-029, AP-032 and AP-036: the runs recorded from the guided, quick and collection plans, read
+  // only since AP-037 phase two retired those plans (specs/037-request-chain-performance FR-037).
+  // The quick test keeps its specification upload, now a seeding source only.
+  app.use("/api", createPerformanceTestingRouter());
+  app.use("/api", createQuickPerformanceRouter());
+  app.use("/api", createCollectionPerformanceRouter());
   // AP-034: Run k6 Script, a standalone route family for scripts the engineer supplies. A run starts
   // only on POST /api/user-scripts/:id/runs, after the engineer confirmed the script's exact bytes
   // (constitution XVII exception of 2026-09-30); it shares the one runner and probe above.

@@ -1,0 +1,918 @@
+{
+  "id": "af1a680f-9929-474c-80dc-95d38c525300",
+  "status": "completed",
+  "environment": {
+    "id": "0f242b10-73ff-477d-83f2-a7aff33906ec",
+    "name": "legacy-local",
+    "tier": "local",
+    "baseUrl": "http://127.0.0.1:4600"
+  },
+  "planSource": "quick",
+  "scriptSha256": "144f7661e1f6bc3ea4582163801272be82292d69b20c34b7e865bb66dd52264c",
+  "k6Version": "1.2.0",
+  "plannedDurationMs": 60000,
+  "startedAt": "2026-10-03T15:52:59.048Z",
+  "cancelRequested": false,
+  "endedAt": "2026-10-03T15:52:59.215Z",
+  "planSnapshot": {
+    "bodyEdits": [],
+    "bodyEditNotices": [],
+    "discardedBodyEdits": [],
+    "parameterEdits": [],
+    "discardedParameterEdits": [],
+    "source": "quick",
+    "excludedOperationKeys": [],
+    "omitted": [],
+    "journeys": [
+      {
+        "id": "j_86be9a4ac730c417",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_42efa2c712fd18b7",
+            "operationKey": "GET /api/v1/customers/{id}",
+            "method": "GET",
+            "path": "/api/v1/customers/{id}",
+            "scenarioId": "q00-5dc2103e703e6f8aa1f1dae7",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl",
+              "customer_id"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_3d546694ee6f51f5",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_8f8f247edc9918d9",
+            "operationKey": "GET /api/v1/orders/{id}",
+            "method": "GET",
+            "path": "/api/v1/orders/{id}",
+            "scenarioId": "q00-a018e5f4ac8753af405c6c07",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl",
+              "order_id"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_0b7c5b5db94311b1",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_480d3fccddf3fa32",
+            "operationKey": "POST /api/v1/orders",
+            "method": "POST",
+            "path": "/api/v1/orders",
+            "scenarioId": "q00-527ddea507cc986d142925a2",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_9edbbbe1525cc1a4",
+        "source": {
+          "kind": "user",
+          "userJourneyId": "j_9edbbbe1525cc1a4",
+          "name": "Customer lifecycle"
+        },
+        "steps": [
+          {
+            "id": "s_d4f19ca94dade8ed",
+            "operationKey": "POST /api/v1/customers",
+            "method": "POST",
+            "path": "/api/v1/customers",
+            "scenarioId": "q00-de52f5bf808ebd9c04f73f49",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [
+              "customer_id"
+            ],
+            "variableBindings": [
+              {
+                "variable": "customer_id",
+                "role": "produces",
+                "field": "id"
+              }
+            ],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl"
+            ],
+            "captures": [
+              {
+                "name": "customer_id",
+                "source": {
+                  "kind": "body",
+                  "path": "id",
+                  "segments": [
+                    {
+                      "field": "id"
+                    }
+                  ]
+                },
+                "documented": true
+              }
+            ],
+            "userDefined": true
+          },
+          {
+            "id": "s_93e46a1ab23863cc",
+            "operationKey": "PUT /api/v1/customers/{id}",
+            "method": "PUT",
+            "path": "/api/v1/customers/{id}",
+            "scenarioId": "q00-58240eaa03bb4bd401bf2835",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [
+              "customer_id"
+            ],
+            "produces": [],
+            "variableBindings": [
+              {
+                "variable": "customer_id",
+                "role": "consumes",
+                "field": "id",
+                "location": "path",
+                "producerStepId": "s_d4f19ca94dade8ed"
+              }
+            ],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl"
+            ],
+            "bindings": [
+              {
+                "target": {
+                  "kind": "path",
+                  "name": "id"
+                },
+                "captureStepId": "s_d4f19ca94dade8ed",
+                "captureName": "customer_id",
+                "state": "active"
+              }
+            ],
+            "userDefined": true
+          },
+          {
+            "id": "s_80938e0a53060484",
+            "operationKey": "DELETE /api/v1/customers/{id}",
+            "method": "DELETE",
+            "path": "/api/v1/customers/{id}",
+            "scenarioId": "q00-dbf7240a5e20280bc569cf75",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [
+              "customer_id"
+            ],
+            "produces": [],
+            "variableBindings": [
+              {
+                "variable": "customer_id",
+                "role": "consumes",
+                "field": "id",
+                "location": "path",
+                "producerStepId": "s_d4f19ca94dade8ed"
+              }
+            ],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "204",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "none",
+              "schemeName": null
+            },
+            "requiredValues": [
+              "baseUrl"
+            ],
+            "bindings": [
+              {
+                "target": {
+                  "kind": "path",
+                  "name": "id"
+                },
+                "captureStepId": "s_d4f19ca94dade8ed",
+                "captureName": "customer_id",
+                "state": "active"
+              }
+            ],
+            "userDefined": true
+          }
+        ]
+      }
+    ],
+    "thinkTimeMs": 0,
+    "loadProfile": {
+      "kind": "smoke",
+      "stages": [
+        {
+          "durationMs": 60000,
+          "targetVirtualUsers": 1
+        }
+      ],
+      "plannedDurationMs": 60000
+    },
+    "thresholds": [],
+    "userSuppliedValues": [
+      {
+        "name": "baseUrl",
+        "secret": false,
+        "neededBySteps": [
+          "s_42efa2c712fd18b7",
+          "s_8f8f247edc9918d9",
+          "s_480d3fccddf3fa32",
+          "s_d4f19ca94dade8ed",
+          "s_93e46a1ab23863cc",
+          "s_80938e0a53060484"
+        ],
+        "source": "base-url"
+      },
+      {
+        "name": "customer_id",
+        "secret": false,
+        "neededBySteps": [
+          "s_42efa2c712fd18b7"
+        ],
+        "source": "path-parameter"
+      },
+      {
+        "name": "order_id",
+        "secret": false,
+        "neededBySteps": [
+          "s_8f8f247edc9918d9"
+        ],
+        "source": "path-parameter"
+      }
+    ],
+    "uniqueValueFields": [],
+    "upstreamFingerprint": "0b4d1bb669f1ce47012e092393e12b3905b890488be8c228cd99d60c2137de48",
+    "credentialProducerOperationKeys": [],
+    "userJourneys": [
+      {
+        "id": "j_9edbbbe1525cc1a4",
+        "name": "Customer lifecycle",
+        "origin": {
+          "kind": "defined"
+        },
+        "steps": [
+          {
+            "id": "s_d4f19ca94dade8ed",
+            "operationKey": "POST /api/v1/customers",
+            "captures": [
+              {
+                "name": "customer_id",
+                "source": {
+                  "kind": "body",
+                  "path": "id",
+                  "segments": [
+                    {
+                      "field": "id"
+                    }
+                  ]
+                },
+                "documented": true
+              }
+            ],
+            "bindings": []
+          },
+          {
+            "id": "s_93e46a1ab23863cc",
+            "operationKey": "PUT /api/v1/customers/{id}",
+            "captures": [],
+            "bindings": [
+              {
+                "target": {
+                  "kind": "path",
+                  "name": "id"
+                },
+                "captureStepId": "s_d4f19ca94dade8ed",
+                "captureName": "customer_id",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_80938e0a53060484",
+            "operationKey": "DELETE /api/v1/customers/{id}",
+            "captures": [],
+            "bindings": [
+              {
+                "target": {
+                  "kind": "path",
+                  "name": "id"
+                },
+                "captureStepId": "s_d4f19ca94dade8ed",
+                "captureName": "customer_id",
+                "state": "active"
+              }
+            ]
+          }
+        ],
+        "nextStepNumber": 4
+      }
+    ],
+    "alsoStandalone": [],
+    "nextUserJourneyNumber": 2,
+    "bindingsNeedingAttention": [],
+    "fingerprint": "f7af1030330ca8fdce43a3e199252e2568a6c8bb3c3f5cc98aa2d6bcb87a5513",
+    "stepsNeedingExpectedStatus": []
+  },
+  "progress": {
+    "elapsedMs": 166,
+    "currentVirtualUsers": 2,
+    "requestsSoFar": 12,
+    "failuresSoFar": 0,
+    "journeysCutShortSoFar": 0,
+    "tokenRefreshesSoFar": 0,
+    "steps": [
+      {
+        "stepId": "s_42efa2c712fd18b7",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_8f8f247edc9918d9",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_480d3fccddf3fa32",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_d4f19ca94dade8ed",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_93e46a1ab23863cc",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_80938e0a53060484",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      }
+    ]
+  },
+  "result": {
+    "totals": {
+      "requests": 12,
+      "errors": 0,
+      "errorRatePercent": 0,
+      "iterations": 8,
+      "journeysCutShort": 0,
+      "throughputPerSecond": 72.29,
+      "latencyMs": {
+        "p50": 26.7404,
+        "p90": 43.0103,
+        "p95": 43.8705,
+        "p99": 43.8705
+      },
+      "latencySummaryMs": {
+        "min": 20,
+        "mean": 30,
+        "max": 44
+      },
+      "iterationDurationMs": null,
+      "dataSentBytes": 0,
+      "dataReceivedBytes": 0
+    },
+    "journeys": [
+      {
+        "journeyId": "j_86be9a4ac730c417",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_3d546694ee6f51f5",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_0b7c5b5db94311b1",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_9edbbbe1525cc1a4",
+        "requests": 6,
+        "latencyMs": {
+          "p50": 35.9891,
+          "p90": 43.8705,
+          "p95": 43.8705,
+          "p99": 43.8705
+        },
+        "throughputPerSecond": 36.14,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      }
+    ],
+    "steps": [
+      {
+        "stepId": "s_42efa2c712fd18b7",
+        "operationKey": "GET /api/v1/customers/{id}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 20,
+          "mean": 20.5,
+          "max": 21
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 21.0846
+          }
+        ]
+      },
+      {
+        "stepId": "s_8f8f247edc9918d9",
+        "operationKey": "GET /api/v1/orders/{id}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 23,
+          "mean": 23.5,
+          "max": 24
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 24.2196
+          }
+        ]
+      },
+      {
+        "stepId": "s_480d3fccddf3fa32",
+        "operationKey": "POST /api/v1/orders",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 26,
+          "mean": 26.5,
+          "max": 27
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 26.7404
+          }
+        ]
+      },
+      {
+        "stepId": "s_d4f19ca94dade8ed",
+        "operationKey": "POST /api/v1/customers",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 28.9447,
+          "p90": 30.1141,
+          "p95": 30.1141,
+          "p99": 30.1141
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 29,
+          "mean": 29.5,
+          "max": 30
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 30.1141
+          }
+        ],
+        "captures": [
+          {
+            "name": "customer_id",
+            "succeeded": 0,
+            "failed": 0
+          }
+        ]
+      },
+      {
+        "stepId": "s_93e46a1ab23863cc",
+        "operationKey": "PUT /api/v1/customers/{id}",
+        "method": "PUT",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 35.9891,
+          "p90": 36.7089,
+          "p95": 36.7089,
+          "p99": 36.7089
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 36,
+          "mean": 36.5,
+          "max": 37
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 36.7089
+          }
+        ]
+      },
+      {
+        "stepId": "s_80938e0a53060484",
+        "operationKey": "DELETE /api/v1/customers/{id}",
+        "method": "DELETE",
+        "expectedStatuses": [
+          {
+            "code": "204",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 43.0103,
+          "p90": 43.8705,
+          "p95": 43.8705,
+          "p99": 43.8705
+        },
+        "throughputPerSecond": 12.05,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "204",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 43,
+          "mean": 43.5,
+          "max": 44
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 43.8705
+          }
+        ]
+      }
+    ],
+    "timeline": {
+      "bucketMs": 5000,
+      "points": [
+        {
+          "offsetMs": 0,
+          "virtualUsers": 2,
+          "requests": 12,
+          "errors": 0,
+          "p95Ms": 43.8705
+        }
+      ]
+    },
+    "writeRequests": [
+      {
+        "operationKey": "POST /api/v1/orders",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "POST /api/v1/customers",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "PUT /api/v1/customers/{id}",
+        "method": "PUT",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "DELETE /api/v1/customers/{id}",
+        "method": "DELETE",
+        "sent": 2,
+        "succeeded": 2
+      }
+    ],
+    "tokenRefreshes": {
+      "count": 0,
+      "failed": 0,
+      "lifetimeStated": true,
+      "bucketOffsetsMs": []
+    },
+    "thresholdOutcomes": [],
+    "findings": [
+      {
+        "ruleId": "slowest-step",
+        "stepIds": [
+          "s_80938e0a53060484"
+        ],
+        "message": "DELETE /api/v1/customers/{id} has the highest p95 latency: 43.8705 ms.",
+        "values": {
+          "p95Ms": 43.8705
+        }
+      }
+    ],
+    "findingsRulesetVersion": 2,
+    "latencyPrecision": "within-1-percent"
+  }
+}

@@ -20,6 +20,7 @@ Measured with `node scripts/count-performance-lines.mjs`: non-test `.ts`/`.tsx` 
 |---|---|---|---|---|---|
 | 2026-10-03, before AP-037 | 7,396 | 7,608 | 1,106 | 16,110 | Baseline; matches plan.md. Original target after phase two: 8,055. |
 | 2026-10-03, after phase one | 10,337 | 10,260 | 1,760 | 22,357 | +6,247: the chain plan code sits beside the legacy plans until phase two removes them. |
+| 2026-10-04, after phase two | 5,189 | 4,588 | 1,595 | 11,372 | Within the agreed 13,000 (−4,738 against the baseline, −10,985 against phase one). The set now also counts the new `k6/scriptTypes.ts` and `services/legacyRunsClient.ts`. |
 
 **Revised target (agreed 2026-10-03): at most 13,000 lines after phase two.** The original target
 of 8,055 is out of reach without removing required behaviour, which SC-006 forbids. Projection:
@@ -110,3 +111,46 @@ scenarios 1, 4, 5 and 7. `npm run test:k6-real` was not re-run, since no runtime
 **Accepted (2026-10-03).** Constitution XXXI asks for a manual browser walkthrough. The user accepted
 this scripted walkthrough, with screenshot review, as T093. Phase one is complete. The fixes above
 shipped as version 19.18.1.
+
+## Phase two (T094 to T099, 2026-10-04)
+
+**Before removal.**
+- T094: guided, quick, user-journey (AP-035) and collection (AP-036) runs were completed through the
+  legacy routes with the fake runner. Each stored run was saved as a fixture
+  (`backend/tests/fixtures/performance/legacy-runs/`), with the HTML the report route served as its
+  golden (`golden/reports/`). The fixtures contain no secret value; only the base URL appears, as
+  reports always record it.
+- T095: `legacyRunsReadOnly.test.ts` and `LegacyRunsView.test.tsx` were written first. The removed
+  routes are checked to answer Express's own 404 with no application error code, so a source's gate,
+  such as `quick_test_not_found`, cannot pass for a removed route.
+
+**Removal (T096 to T098).**
+- Backend: the plan, script and run-start routes of the three old bases are gone; their run read
+  routes and the quick upload remain.
+- Deviation from research R24's list: the journey derivation (`plan/buildPlan.ts`, `buildJourneys.ts`),
+  the step request building (`stepRequest.ts`, `planStepRequest.ts`) and `collection/bindCollectionPlan.ts`
+  are kept, trimmed of the overlays, because the workflow and collection seeders need them. The edit
+  overlays, user journeys, plan updates, engines, previews, value listing, collection plan assembly,
+  engine, store and environment seeding, the guided script store and the legacy runtime are deleted,
+  with their tests and the legacy script goldens.
+- Frontend: the plan screens, the collection components and page, the Collection Performance Test tab
+  and the old plan clients are removed. The guided stage, the quick page and the collection run panel
+  seed request-chain plans and list the plans seeded from them. **Earlier runs** lists legacy runs
+  with the FR-037 note.
+- Shared: orphaned types removed (step previews, edit inputs, the collection view);
+  `QuickPerformanceTestView` is the specification only; `TestGenerationWorkflow.performancePlan` is gone.
+
+**Validation runs** (Windows 11, Node 24, at 19.18.1 before the T099 bump; only documentation and
+version numbers changed after):
+
+| Command | Outcome |
+|---|---|
+| `npm test` (root) | Exit 0. 307 test files passed, 3 skipped; 2,424 tests passed, 10 skipped. |
+| `npm run lint` (root) | Exit 0, no findings. |
+| `npm run build` (root) | Exit 0. |
+| `K6_TEST_REAL=1 npm run test:k6-real -w backend` | Exit 0 with k6 v2.3.0. 7 tests passed: the AP-034 user script case and six request-chain cases, including three moved from the legacy cases: k6 flags and no `url`/`name` tags, per-virtual-user token refresh with no 401, and cancel within 10 seconds. |
+| `node scripts/count-performance-lines.mjs` | 11,372 (see SC-006). |
+
+**Open.** Quickstart scenario 10 has not been walked through in a browser. Its report and route
+assertions are covered by T094 and T095, but the entry points and **Earlier runs** have only been
+checked by component tests. AP-037 is therefore not recorded as Implemented.

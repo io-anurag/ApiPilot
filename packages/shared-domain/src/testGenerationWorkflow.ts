@@ -2,7 +2,6 @@ import type { AIErrorCategory } from "./aiProvider";
 import type { ApiModel } from "./apiModel";
 import type { DependencyAnalysisResult } from "./apiDependency";
 import type { EnhancementResult } from "./aiScenarioDesign";
-import type { PerformancePlan } from "./performance";
 import type { ExportResult } from "./postmanArtifact";
 import type { ReviewWorkspace } from "./testScenarioReview";
 import type { TestModel } from "./testModel";
@@ -316,10 +315,4 @@ export interface TestGenerationWorkflow {
 
   postmanArtifact?: ExportResult;
 
-  /**
-   * The k6 performance plan (AP-029, specs/031-k6-performance-testing research D1). Held in
-   * memory like the rest of this workflow; it holds no values, and the generated script lives
-   * backend-only, never on this record.
-   */
-  performancePlan?: PerformancePlan;
 }

@@ -5,9 +5,8 @@ import { parseYaml } from "../../openapi/parseYaml";
 import { validateSpec } from "../../openapi/validateSpec";
 import { generatePositiveScenarios } from "../../testDesign/generateTestModel";
 import { QuickTestExistsError } from "../errors";
-import { buildPlan } from "../plan/buildPlan";
 import { withQuickScenarioIds } from "./quickScenarioIds";
-import { contextFromQuickTest, hasQuickTest, setQuickTest, type QuickPerformanceTest } from "./quickTestStore";
+import { hasQuickTest, setQuickTest, type QuickPerformanceTest } from "./quickTestStore";
 
 const logger = createLogger("performance.quick");
 
@@ -17,9 +16,9 @@ const logger = createLogger("performance.quick");
  * - the unchanged parse, validate and model-building pipeline, whose `InvalidYamlError` and
  *   `UnsupportedVersionError` propagate to app.ts's centralized handler, exactly as for the guided
  *   upload;
- * - positive rule-generated scenarios only, with content-derived ids, and no AI (FR-004, FR-007);
- * - a plan of single-step journeys over every operation, with credential producers removed (FR-003a).
+ * - positive rule-generated scenarios only, with content-derived ids, and no AI (FR-004, FR-007).
  *
+ * Since AP-037 phase two the quick test only seeds request-chain plans; no plan is built here.
  * Nothing is stored unless every step succeeds. It never touches the guided workflow (FR-021).
  */
 export async function createQuickTest(fileBuffer: Buffer, filename: string, replaceExisting: boolean): Promise<QuickPerformanceTest> {
@@ -30,21 +29,17 @@ export async function createQuickTest(fileBuffer: Buffer, filename: string, repl
   const { document, issues } = await validateSpec(rawDocument);
   const apiModel = buildApiModel(document, issues);
   const scenarios = withQuickScenarioIds(generatePositiveScenarios(apiModel));
-  const plan = buildPlan(contextFromQuickTest({ apiModel, scenarios }));
 
   const test: QuickPerformanceTest = {
     id: randomUUID(),
     specification: { filename, ...(apiModel.info ? { info: apiModel.info } : {}), operationCount: apiModel.operations.length },
     apiModel,
     scenarios,
-    plan,
   };
   setQuickTest(test);
   logger.info("quick_performance_test_created", {
     operationCount: apiModel.operations.length,
-    journeyCount: plan.journeys.length,
-    leftOutCount: plan.omitted.length,
-    credentialProducerCount: plan.credentialProducerOperationKeys.length,
+    scenarioCount: scenarios.length,
     replaced,
   });
   return test;

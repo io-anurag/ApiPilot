@@ -1,106 +1,20 @@
-import { randomUUID } from "node:crypto";
 import type { Router } from "express";
-import type { PerformanceRun } from "@apipilot/shared-domain";
-import { getEnvironment } from "../execution/environmentStore";
-import { findExecutionInProgress } from "../execution/executionSlot";
-import { createLogger } from "../logger";
-import {
-  createPerformanceRun,
-  getPerformanceRun,
-  listPerformanceRuns,
-  requestPerformanceCancel,
-} from "../performance/performanceRunStore";
-import { planSnapshotForRun } from "../performance/plan/runSnapshot";
+import type { PerformancePlanSourceKind } from "@apipilot/shared-domain";
+import { getPerformanceRun, listPerformanceRuns, requestPerformanceCancel } from "../performance/performanceRunStore";
 import { renderHtmlReport } from "../performance/report/renderHtmlReport";
-import { cancelLiveRun, startPerformanceRun } from "../performance/runPerformanceTest";
-import { getSessionId } from "../session/sessionContext";
+import { cancelLiveRun } from "../performance/runPerformanceTest";
 import { fail, handleKnownError } from "./performanceHttp";
-import type { PerformancePlanSource, PerformanceTestingDependencies } from "./performanceRoutes";
-
-const logger = createLogger("api.performanceRuns");
 
 /**
- * Readiness, run and report routes (contracts/performance-api.md "Runs"). `POST /runs` is the only
- * way a run starts (FR-024; constitution XVII exception of 2026-09-24, extended 2026-09-27 to
- * AP-032's quick plans). Only it is gated by the plan source: a run already started stays
- * visible, cancellable and reportable even if an upstream revision later makes Postman generation
- * stale, or its quick test is replaced (contract "Stage gating"). `GET /runs` lists the source's
- * own runs; the run-by-id routes accept any run of the session (specs/032 research Q12).
+ * The read-only routes of runs recorded from the retired guided, quick and collection plans
+ * (specs/037-request-chain-performance FR-037; contracts/changes-to-existing-apis.md "Routes kept,
+ * read-only"), under their old bases. A legacy run can be listed, opened, cancelled while it is
+ * still settling, and its report opened exactly as it was rendered. No route here starts, repeats
+ * or restores a run: request-chain plans are the only way a run starts (constitution XVII).
  */
-export function registerPerformanceRunRoutes(router: Router, deps: PerformanceTestingDependencies, base: string, source: PerformancePlanSource): void {
-  router.get(`${base}/readiness`, async (req, res, next) => {
-    try {
-      const { readiness } = await deps.probe({ recheck: req.query.recheck === "true" });
-      res.status(200).json({ readiness });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.post(`${base}/runs`, async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      // 1. The plan source's gate (guided: Postman generation complete; quick: a quick test exists).
-      const handle = source.require();
-      // AP-036 (research R13): the source's own gate, such as a collection plan out of date.
-      handle.gate?.("run");
-      // 2. A script exists and is current (FR-023).
-      const plan = handle.plan();
-      const script = handle.script();
-      if (!script) return fail(req, res, startedAt, 409, "script_not_generated", "Generate the script before running it.");
-      if (script.planFingerprint !== plan.fingerprint) {
-        return fail(req, res, startedAt, 409, "script_out_of_date", "The plan changed after the script was generated. Regenerate it first.");
-      }
-      // 3. k6 is ready, probed now rather than from the cache (FR-027).
-      const probe = await deps.probe({ recheck: true });
-      if (probe.readiness.state !== "ready" || !probe.binaryPath) {
-        return fail(req, res, startedAt, 409, "k6_unavailable", "k6 is not available on the machine running ApiPilot.", { readiness: probe.readiness });
-      }
-      // 4. The environment exists.
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const environment = getEnvironment(typeof body.environmentId === "string" ? body.environmentId : "");
-      // 5. The shared slot (FR-029). The check and the insert are synchronous, with no await between them.
-      const inProgress = findExecutionInProgress();
-      if (inProgress) {
-        return fail(req, res, startedAt, 409, "execution_in_progress", "Another execution run is in progress in this session.", { runId: inProgress.runId });
-      }
-      const run: PerformanceRun = {
-        id: randomUUID(),
-        status: "in-progress",
-        environment: { id: environment.id, name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl },
-        planSnapshot: planSnapshotForRun(plan),
-        planSource: source.kind,
-        scriptSha256: script.scriptSha256,
-        k6Version: probe.readiness.version,
-        plannedDurationMs: plan.loadProfile.plannedDurationMs,
-        startedAt: deps.now().toISOString(),
-        cancelRequested: false,
-      };
-      createPerformanceRun(run);
-      const sessionId = getSessionId();
-      void startPerformanceRun({
-        sessionId,
-        run,
-        script,
-        environment,
-        binaryPath: probe.binaryPath,
-        runner: deps.runner,
-        tickIntervalMs: deps.tickIntervalMs,
-        now: deps.now,
-        runDirectoryRoot: deps.runDirectoryRoot,
-      }).catch((error: Error) => logger.error("performance_run_unhandled_error", { runId: run.id, errorCategory: error.name }));
-      res.status(200).json({ run });
-    } catch (err) {
-      try {
-        handleKnownError(req, res, startedAt, err);
-      } catch (unknown) {
-        next(unknown);
-      }
-    }
-  });
-
+export function registerLegacyRunRoutes(router: Router, base: string, source: PerformancePlanSourceKind): void {
   router.get(`${base}/runs`, (_req, res) => {
-    res.status(200).json({ runs: listPerformanceRuns(source.kind) });
+    res.status(200).json({ runs: listPerformanceRuns(source) });
   });
 
   router.get(`${base}/runs/:runId`, (req, res) => {

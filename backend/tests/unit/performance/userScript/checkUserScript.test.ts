@@ -3,11 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ScriptCheckAccepted } from "@apipilot/shared-domain";
 import { USER_SCRIPT_MAX_BYTES } from "@apipilot/shared-domain";
-import { renderScript } from "../../../../src/performance/k6/renderScript";
-import { buildPlan } from "../../../../src/performance/plan/buildPlan";
-import { applyPlanUpdate } from "../../../../src/performance/plan/planUpdate";
 import { checkUserScript, hostsInText } from "../../../../src/performance/userScript/checkUserScript";
-import { performanceContext, quickContext } from "../../../fixtures/performance/context";
 
 /** AP-034 FR-004 to FR-009, SC-001, SC-005, SC-010 (research R1 to R5, R23; tasks T019). */
 
@@ -116,48 +112,5 @@ describe("checkUserScript: limits", () => {
 
   it("accepts a byte order mark", () => {
     expect(checkUserScript(Buffer.from("﻿export default function () {}\n")).accepted).toBe(true);
-  });
-});
-
-describe("checkUserScript: scripts ApiPilot generated (AP-029 FR-022a, research R23)", () => {
-  async function guidedScript(update: Record<string, unknown> = {}) {
-    const context = await performanceContext();
-    let plan = buildPlan(context);
-    plan = applyPlanUpdate(plan, { expectedStatuses: { [plan.journeys[1].steps[0].id]: ["200"] }, ...update }, context);
-    return { plan, rendered: renderScript(plan, context) };
-  }
-
-  it("accepts a guided script with a token source and a workflow, and suggests each value's source", async () => {
-    const { plan, rendered } = await guidedScript();
-    const result = accepted(Buffer.from(rendered.script));
-    expect(result.hosts).toEqual([]);
-    expect(result.hasDefaultFunction).toBe(true);
-    expect(result.envNames).toEqual(
-      [
-        // AP-036 research R9: every generated script reads the run tag, which has no suggested source.
-        { name: "APIPILOT_RUN_TAG", mappable: true },
-        ...plan.userSuppliedValues.map((value, index) => ({
-          name: `APIPILOT_V_${index}`,
-          mappable: true,
-          suggestedSource: value.name === "baseUrl" ? { kind: "base-url" } : { kind: "environment-value", valueName: value.name },
-        })),
-      ].sort((a, b) => (a.name < b.name ? -1 : 1)),
-    );
-  });
-
-  it("accepts a guided script with an edited body", async () => {
-    const context = await performanceContext();
-    const base = buildPlan(context);
-    const post = base.journeys.flatMap((journey) => journey.steps).find((step) => step.operationKey === "POST /orders")!;
-    const { rendered } = await guidedScript({ bodyEdits: { [post.id]: { kind: "json", text: '{"customerEmail":"a@example.com","quantity":2}' } } });
-    expect(checkUserScript(Buffer.from(rendered.script)).accepted).toBe(true);
-  });
-
-  it("accepts a quick script", async () => {
-    const context = await quickContext();
-    let plan = buildPlan(context);
-    const status = plan.journeys.flatMap((journey) => journey.steps).find((step) => step.operationKey === "GET /status")!;
-    plan = applyPlanUpdate(plan, { expectedStatuses: { [status.id]: ["200"] } }, context);
-    expect(checkUserScript(Buffer.from(renderScript(plan, context).script)).accepted).toBe(true);
   });
 });

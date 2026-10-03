@@ -43,20 +43,3 @@ export function classifyCredentialRequests(steps: readonly DraftStep[], bindings
   }
   return candidates;
 }
-
-/**
- * The credential requests a step depends on, directly or through another credential request, in
- * plan order: refreshing them in that order keeps every value current (research R10).
- */
-export function credentialDependencies(stepId: string, bindings: ReadonlyMap<string, readonly StepBinding[]>, credential: ReadonlySet<string>, order: readonly string[]): string[] {
-  const found = new Set<string>();
-  const visit = (id: string) => {
-    for (const binding of bindings.get(id) ?? []) {
-      if (!credential.has(binding.captureStepId) || found.has(binding.captureStepId)) continue;
-      found.add(binding.captureStepId);
-      visit(binding.captureStepId);
-    }
-  };
-  visit(stepId);
-  return order.filter((id) => found.has(id));
-}

@@ -25,6 +25,7 @@ import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { BUTTON_STYLES } from "./controlStyles";
+import { SeededPlans } from "./requestChain/SeededPlans";
 import { SeedPlanDialog } from "./requestChain/SeedPlanDialog";
 import { applyRunOrder, moveRunOrderItem, type RunOrder } from "../utils/runOrder";
 
@@ -586,7 +587,6 @@ export function ExternalCollectionRunPanel({
   runOrder,
   onRunOrderChange,
   onConfirmed,
-  onSetUpPerformanceTest,
   onOpenChainPlan,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
@@ -608,12 +608,6 @@ export function ExternalCollectionRunPanel({
    * subsequent run re-showed the "not generated or verified by ApiPilot" dialog even though the
    * backend had already recorded the confirmation permanently. */
   onConfirmed?: () => void;
-  /**
-   * AP-036 (specs/036-collection-performance-test FR-001, FR-002): builds a performance plan from the
-   * selected requests, in the run-order list's order. Reading the collection runs nothing, so it
-   * needs no confirmation here; the plan's conversion review is the gate (FR-018).
-   */
-  onSetUpPerformanceTest?: (collectionId: string, orderedRequestIds: string[]) => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the selected requests, in run order. */
   onOpenChainPlan?: (planId: string) => void;
 }>) {
@@ -837,21 +831,6 @@ export function ExternalCollectionRunPanel({
               Create request-chain plan
             </button>
           )}
-          {onSetUpPerformanceTest && (
-            <button
-              type="button"
-              onClick={() =>
-                onSetUpPerformanceTest(
-                  uploadedCollection.id,
-                  orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id),
-                )
-              }
-              disabled={selectedIds.size === 0 || requests.length === 0}
-              className={BUTTON_STYLES.secondary}
-            >
-              Set up a performance test
-            </button>
-          )}
           <button
             type="button"
             onClick={handleRunClick}
@@ -862,6 +841,10 @@ export function ExternalCollectionRunPanel({
           </button>
         </div>
       </div>
+      {onOpenChainPlan && (
+        // AP-037 phase two (US5): the plans seeded from collections, opened in Performance Plans.
+        <SeededPlans seedKind="collection" onOpen={onOpenChainPlan} emptyText="No request-chain plan has been created from a collection yet. Select requests and choose Create request-chain plan." />
+      )}
 
       {requests.length > 0 && (
         <RunOrderChecklist

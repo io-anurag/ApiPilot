@@ -1,16 +1,14 @@
 import type { QuickPerformanceTestView } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
-import { createPerformanceClient, type PerformanceClient, type Result } from "./performanceTestingClient";
+import type { Result } from "./performanceTestingClient";
 
 /**
  * AP-032 quick performance test (specs/032-quick-performance-test contracts/quick-performance-api.md):
- * the upload and read of the session's quick test. The plan, script and run calls are AP-029's
- * contract on the quick base (`quickPerformanceClient`).
+ * the upload and read of the session's quick test, a seeding source for request-chain plans since
+ * AP-037 phase two.
  */
 const logger = createLogger("quickPerformanceClient");
 const BASE = "/api/quick-performance";
-
-export const quickPerformanceClient: PerformanceClient = createPerformanceClient(BASE);
 
 async function send(operation: string, path: string, init?: RequestInit): Promise<Result<{ quickTest: QuickPerformanceTestView | null }>> {
   let response: Response;

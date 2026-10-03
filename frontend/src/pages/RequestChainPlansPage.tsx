@@ -8,6 +8,7 @@ import { PromptDialog } from "../components/PromptDialog";
 import { Skeleton } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { ChainPlanEditor } from "../components/requestChain/ChainPlanEditor";
+import { LegacyRunsView } from "../components/requestChain/LegacyRunsView";
 import { createPlan, deletePlan, duplicatePlan, listPlans } from "../services/requestChainClient";
 
 /** A request from another view (seeding) to open one plan. The nonce makes a repeat request distinct. */
@@ -34,6 +35,7 @@ function formatUpdated(iso: string): string {
  * session's saved plans, with New, Open, Duplicate and Delete. Opening a plan shows its editor in
  * place of the list. Plans are kept in the local database, so the list survives a backend restart.
  * The layout follows the other screens: a bar with the way back and the main action, then the content.
+ * Runs recorded from the retired guided, quick and collection plans are listed below, read only (FR-037).
  */
 export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit?: () => void; openRequest?: OpenChainPlanRequest | null }>) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
@@ -193,6 +195,7 @@ export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit
           </div>
         )}
       </section>
+      <LegacyRunsView />
       {prompt && (
         <PromptDialog
           title={prompt.kind === "new" ? "New plan" : "Duplicate plan"}

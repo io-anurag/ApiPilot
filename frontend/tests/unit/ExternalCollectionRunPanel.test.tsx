@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type {
   CollectionRequestView,
   FailureAnalysis,
@@ -223,33 +223,28 @@ describe("ExternalCollectionRunPanel", () => {
 });
 
 /** AP-036 FR-001, FR-002 (tasks T031). */
-describe("ExternalCollectionRunPanel — Set up a performance test", () => {
-  it("sits beside Start run and hands over the selected requests in the run-order list's order, sending nothing", () => {
-    const calls = stubFetch([]);
-    const onSetUp = vi.fn();
-    const requests = [requestView({ id: "item-1", name: "Get token" }), requestView({ id: "item-2", name: "Get health" }), requestView({ id: "item-3", name: "Get version" })];
-    render(
-      <ExternalCollectionRunPanel
-        uploadedCollection={uploadedCollection()}
-        requests={requests}
-        runOrder={["item-3", "item-1", "item-2"]}
-        onSetUpPerformanceTest={onSetUp}
-      />,
+describe("ExternalCollectionRunPanel — plans seeded from collections (AP-037 US5)", () => {
+  it("lists the request-chain plans created from collections, and opens one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const plans =
+          url === "/api/chain-plans"
+            ? [
+                { id: "c1", name: "From APIFoundry", chainCount: 2, stepCount: 6, dataSetCount: 0, seedSource: "collection", updatedAt: "2026-10-03T10:00:00.000Z" },
+                { id: "s1", name: "From a specification", chainCount: 1, stepCount: 1, dataSetCount: 0, seedSource: "specification", updatedAt: "2026-10-03T10:00:00.000Z" },
+              ]
+            : [];
+        return { ok: true, status: 200, json: () => Promise.resolve(url === "/api/chain-plans" ? { plans } : { runs: [] }) };
+      }),
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get token in this run" }));
-    fireEvent.click(screen.getByRole("button", { name: "Set up a performance test" }));
-    expect(onSetUp).toHaveBeenCalledWith("uc-1", ["item-3", "item-2"]);
-    expect(calls.filter((call) => call.init?.method === "POST")).toEqual([]);
-    expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
-  });
-
-  it("is disabled with no request selected, and absent without a handler", () => {
-    const requests = [requestView({ id: "item-1", name: "Get widget" })];
-    const { unmount } = render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} requests={requests} onSetUpPerformanceTest={vi.fn()} />);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Include Get widget in this run" }));
-    expect(screen.getByRole("button", { name: "Set up a performance test" })).toBeDisabled();
-    unmount();
-    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} requests={requests} />);
+    const onOpenChainPlan = vi.fn();
+    render(<ExternalCollectionRunPanel uploadedCollection={uploadedCollection()} requests={[requestView({ id: "item-1", name: "Get widget" })]} onOpenChainPlan={onOpenChainPlan} />);
+    const list = await screen.findByTestId("seeded-plans");
+    expect(within(list).queryByText("From a specification")).not.toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: "Open From APIFoundry" }));
+    expect(onOpenChainPlan).toHaveBeenCalledWith("c1");
     expect(screen.queryByRole("button", { name: "Set up a performance test" })).not.toBeInTheDocument();
   });
 });

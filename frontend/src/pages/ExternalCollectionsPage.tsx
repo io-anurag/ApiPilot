@@ -95,13 +95,10 @@ function containerOf(
 export function ExternalCollectionsPage({
   preload,
   onExit,
-  onSetUpPerformanceTest,
   onOpenChainPlan,
 }: Readonly<{
   preload?: ImportPreload | null;
   onExit?: () => void;
-  /** AP-036: hands the run panel's ordered selection to the Collection Performance Test view. */
-  onSetUpPerformanceTest?: (collectionId: string, orderedRequestIds: string[]) => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the run panel's ordered selection. */
   onOpenChainPlan?: (planId: string) => void;
 }>) {
@@ -577,7 +574,6 @@ export function ExternalCollectionsPage({
                   setRunOrders((current) => ({ ...current, [selected.id]: runOrder }))
               : undefined
           }
-          onSetUpPerformanceTest={onSetUpPerformanceTest}
           onOpenChainPlan={onOpenChainPlan}
           onConfirmed={() =>
             setUploadedCollections((current) =>

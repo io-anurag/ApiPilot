@@ -1,0 +1,1137 @@
+{
+  "id": "237bc61d-e75c-4b01-a18b-9c7ea97814ed",
+  "status": "completed",
+  "environment": {
+    "id": "ab066348-364c-40a3-9e00-8d8164e4fc6f",
+    "name": "legacy-local",
+    "tier": "local",
+    "baseUrl": "http://127.0.0.1:4600"
+  },
+  "planSource": "collection",
+  "scriptSha256": "99a28df01abe1ce0229b4fcbe04213921a3762eebd67da8315a512f9286aa594",
+  "k6Version": "1.2.0",
+  "plannedDurationMs": 60000,
+  "startedAt": "2026-10-03T15:52:59.311Z",
+  "cancelRequested": false,
+  "endedAt": "2026-10-03T15:52:59.474Z",
+  "planSnapshot": {
+    "bodyEdits": [],
+    "bodyEditNotices": [],
+    "discardedBodyEdits": [],
+    "parameterEdits": [],
+    "discardedParameterEdits": [],
+    "source": "collection",
+    "excludedOperationKeys": [],
+    "omitted": [],
+    "journeys": [
+      {
+        "id": "j_cc508ca0d7b8d7ab",
+        "source": {
+          "kind": "collection",
+          "collectionId": "050b6502-3ed5-4475-8aae-0b72c7d9ced6",
+          "collectionName": "APIFoundry"
+        },
+        "steps": [
+          {
+            "id": "s_cc3016dc0b6b2992",
+            "operationKey": "GET /api/v1/customers",
+            "method": "GET",
+            "path": "/api/v1/customers",
+            "scenarioId": "collection:req-list-customers",
+            "scenarioDescription": "List customers",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-list-customers",
+              "name": "List customers",
+              "folderPath": [
+                "Customers"
+              ]
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_8f3e68b567c7acb5",
+            "operationKey": "POST /api/v1/customers",
+            "method": "POST",
+            "path": "/api/v1/customers",
+            "scenarioId": "collection:req-create-customer",
+            "scenarioDescription": "Create customer",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-create-customer",
+              "name": "Create customer",
+              "folderPath": [
+                "Customers"
+              ]
+            },
+            "captures": [
+              {
+                "name": "customer_id",
+                "source": {
+                  "kind": "body",
+                  "path": "id",
+                  "segments": [
+                    {
+                      "field": "id"
+                    }
+                  ]
+                },
+                "documented": null,
+                "origin": {
+                  "kind": "collection-script",
+                  "scope": "collectionVariables",
+                  "owner": {
+                    "kind": "request",
+                    "itemId": "req-create-customer"
+                  },
+                  "line": 2
+                }
+              }
+            ],
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_f4d1490740a02e5f",
+            "operationKey": "GET /api/v1/customers/{{customer_id}}",
+            "method": "GET",
+            "path": "/api/v1/customers/{{customer_id}}",
+            "scenarioId": "collection:req-get-customer",
+            "scenarioDescription": "Get customer",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-get-customer",
+              "name": "Get customer",
+              "folderPath": [
+                "Customers"
+              ]
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "customer_id",
+                  "locations": [
+                    "url"
+                  ]
+                },
+                "captureStepId": "s_8f3e68b567c7acb5",
+                "captureName": "customer_id",
+                "state": "active"
+              },
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_b2b5e37f69221052",
+            "operationKey": "PATCH /api/v1/customers/{{customer_id}}",
+            "method": "PATCH",
+            "path": "/api/v1/customers/{{customer_id}}",
+            "scenarioId": "collection:req-update-customer",
+            "scenarioDescription": "Update customer",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-update-customer",
+              "name": "Update customer",
+              "folderPath": [
+                "Customers"
+              ]
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "customer_id",
+                  "locations": [
+                    "url"
+                  ]
+                },
+                "captureStepId": "s_8f3e68b567c7acb5",
+                "captureName": "customer_id",
+                "state": "active"
+              },
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_f600c93d3a7359e3",
+            "operationKey": "DELETE /api/v1/customers/{{customer_id}}",
+            "method": "DELETE",
+            "path": "/api/v1/customers/{{customer_id}}",
+            "scenarioId": "collection:req-delete-customer",
+            "scenarioDescription": "Delete customer",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "204",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-delete-customer",
+              "name": "Delete customer",
+              "folderPath": [
+                "Customers"
+              ]
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "customer_id",
+                  "locations": [
+                    "url"
+                  ]
+                },
+                "captureStepId": "s_8f3e68b567c7acb5",
+                "captureName": "customer_id",
+                "state": "active"
+              },
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_72409216960290bb",
+            "operationKey": "GET /health",
+            "method": "GET",
+            "path": "/health",
+            "scenarioId": "collection:req-health",
+            "scenarioDescription": "Health",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-health",
+              "name": "Health",
+              "folderPath": []
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          },
+          {
+            "id": "s_471141a37bb80b71",
+            "operationKey": "GET /version",
+            "method": "GET",
+            "path": "/version",
+            "scenarioId": "collection:req-version",
+            "scenarioDescription": "Version",
+            "scenarioChoice": "collection-request",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "collection"
+              }
+            ],
+            "auth": {
+              "kind": "chained-login",
+              "schemeName": "s_d7cbf49202913bb7"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "client_id",
+              "client_secret"
+            ],
+            "collectionRequest": {
+              "itemId": "req-version",
+              "name": "Version",
+              "folderPath": []
+            },
+            "bindings": [
+              {
+                "target": {
+                  "kind": "reference",
+                  "name": "access_token",
+                  "locations": [
+                    "auth"
+                  ]
+                },
+                "captureStepId": "s_d7cbf49202913bb7",
+                "captureName": "access_token",
+                "state": "active"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "thinkTimeMs": 0,
+    "loadProfile": {
+      "kind": "smoke",
+      "stages": [
+        {
+          "durationMs": 60000,
+          "targetVirtualUsers": 1
+        }
+      ],
+      "plannedDurationMs": 60000
+    },
+    "thresholds": [],
+    "userSuppliedValues": [
+      {
+        "name": "baseUrl",
+        "secret": false,
+        "neededBySteps": [
+          "s_d7cbf49202913bb7",
+          "s_cc3016dc0b6b2992",
+          "s_8f3e68b567c7acb5",
+          "s_f4d1490740a02e5f",
+          "s_b2b5e37f69221052",
+          "s_f600c93d3a7359e3",
+          "s_72409216960290bb",
+          "s_471141a37bb80b71"
+        ],
+        "source": "base-url"
+      },
+      {
+        "name": "client_id",
+        "secret": false,
+        "neededBySteps": [
+          "s_d7cbf49202913bb7"
+        ],
+        "source": "collection-variable"
+      },
+      {
+        "name": "client_secret",
+        "secret": false,
+        "neededBySteps": [
+          "s_d7cbf49202913bb7"
+        ],
+        "source": "collection-variable"
+      }
+    ],
+    "uniqueValueFields": [],
+    "upstreamFingerprint": "22580a687aaca0b8db3cfe4de7d9185ef5eb4977e5b71ba274adc822fb139028",
+    "credentialProducerOperationKeys": [],
+    "collection": {
+      "collectionId": "050b6502-3ed5-4475-8aae-0b72c7d9ced6",
+      "collectionName": "APIFoundry",
+      "collectionTier": "local",
+      "collectionDigest": "b4c93b41ca17385c9b1f861c03dbce776be1b9ae506af925408dedbc32a910a3",
+      "orderedRequestIds": [
+        "req-token",
+        "req-list-customers",
+        "req-create-customer",
+        "req-get-customer",
+        "req-update-customer",
+        "req-delete-customer",
+        "req-health",
+        "req-version"
+      ],
+      "leftOut": [],
+      "credentialRequests": [
+        {
+          "stepId": "s_d7cbf49202913bb7",
+          "request": {
+            "itemId": "req-token",
+            "name": "Get token",
+            "folderPath": [
+              "Auth"
+            ],
+            "method": "POST",
+            "path": "/auth/token"
+          },
+          "expectedStatuses": [
+            {
+              "code": "200",
+              "source": "collection"
+            }
+          ],
+          "captures": [
+            {
+              "name": "access_token",
+              "source": {
+                "kind": "body",
+                "path": "access_token",
+                "segments": [
+                  {
+                    "field": "access_token"
+                  }
+                ]
+              },
+              "documented": null,
+              "origin": {
+                "kind": "collection-script",
+                "scope": "environment",
+                "owner": {
+                  "kind": "request",
+                  "itemId": "req-token"
+                },
+                "line": 2
+              }
+            }
+          ],
+          "usedBy": [
+            {
+              "captureName": "access_token",
+              "stepIds": [
+                "s_cc3016dc0b6b2992",
+                "s_8f3e68b567c7acb5",
+                "s_f4d1490740a02e5f",
+                "s_b2b5e37f69221052",
+                "s_f600c93d3a7359e3",
+                "s_72409216960290bb",
+                "s_471141a37bb80b71"
+              ]
+            }
+          ],
+          "requiredValues": [
+            "baseUrl",
+            "client_id",
+            "client_secret"
+          ]
+        }
+      ],
+      "findings": [
+        {
+          "kind": "scope-precedence",
+          "owner": {
+            "kind": "request",
+            "itemId": "req-create-customer"
+          },
+          "event": "test",
+          "stepIds": [
+            "s_8f3e68b567c7acb5"
+          ],
+          "line": 2,
+          "column": null,
+          "excerpt": null,
+          "detail": "customer_id"
+        },
+        {
+          "kind": "url-encoding",
+          "owner": {
+            "kind": "collection"
+          },
+          "event": null,
+          "stepIds": [
+            "s_f4d1490740a02e5f",
+            "s_b2b5e37f69221052",
+            "s_f600c93d3a7359e3"
+          ],
+          "line": null,
+          "column": null,
+          "excerpt": null,
+          "detail": "customer_id"
+        }
+      ],
+      "baseUrlVariable": "baseUrl",
+      "hosts": [],
+      "generatedValueCount": 0,
+      "collectionState": "current",
+      "excludedRequestIds": [],
+      "excludedRequests": [],
+      "addedBindings": [],
+      "review": {
+        "reviewed": true,
+        "conversionDigest": "ea3c89a013a8d137eb088ffa28e4330a8ad132f338ff5d2435fbdd4b90682113"
+      }
+    },
+    "fingerprint": "7c34ae458fe81a6419e52ac072b8b76b318412fd51ba79c7c333282979a5811a",
+    "stepsNeedingExpectedStatus": []
+  },
+  "progress": {
+    "elapsedMs": 163,
+    "currentVirtualUsers": 2,
+    "requestsSoFar": 14,
+    "failuresSoFar": 0,
+    "journeysCutShortSoFar": 0,
+    "tokenRefreshesSoFar": 0,
+    "steps": [
+      {
+        "stepId": "s_cc3016dc0b6b2992",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_8f3e68b567c7acb5",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_f4d1490740a02e5f",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_b2b5e37f69221052",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_f600c93d3a7359e3",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_72409216960290bb",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_471141a37bb80b71",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      }
+    ]
+  },
+  "result": {
+    "totals": {
+      "requests": 14,
+      "errors": 0,
+      "errorRatePercent": 0,
+      "iterations": 2,
+      "journeysCutShort": 0,
+      "throughputPerSecond": 85.89,
+      "latencyMs": {
+        "p50": 41.3402,
+        "p90": 61.4293,
+        "p95": 62.6579,
+        "p99": 62.6579
+      },
+      "latencySummaryMs": {
+        "min": 20,
+        "mean": 41.5,
+        "max": 63
+      },
+      "iterationDurationMs": null,
+      "dataSentBytes": 0,
+      "dataReceivedBytes": 0
+    },
+    "journeys": [
+      {
+        "journeyId": "j_cc508ca0d7b8d7ab",
+        "requests": 14,
+        "latencyMs": {
+          "p50": 41.3402,
+          "p90": 61.4293,
+          "p95": 62.6579,
+          "p99": 62.6579
+        },
+        "throughputPerSecond": 85.89,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      }
+    ],
+    "steps": [
+      {
+        "stepId": "s_cc3016dc0b6b2992",
+        "operationKey": "GET /api/v1/customers",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 20,
+          "mean": 20.5,
+          "max": 21
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 21.0846
+          }
+        ]
+      },
+      {
+        "stepId": "s_8f3e68b567c7acb5",
+        "operationKey": "POST /api/v1/customers",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.7404,
+          "p90": 27.8207,
+          "p95": 27.8207,
+          "p99": 27.8207
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 27,
+          "mean": 27.5,
+          "max": 28
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 27.8207
+          }
+        ],
+        "captures": [
+          {
+            "name": "customer_id",
+            "succeeded": 0,
+            "failed": 0
+          }
+        ]
+      },
+      {
+        "stepId": "s_f4d1490740a02e5f",
+        "operationKey": "GET /api/v1/customers/{{customer_id}}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 33.9133,
+          "p90": 35.2834,
+          "p95": 35.2834,
+          "p99": 35.2834
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 34,
+          "mean": 34.5,
+          "max": 35
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 35.2834
+          }
+        ]
+      },
+      {
+        "stepId": "s_b2b5e37f69221052",
+        "operationKey": "PATCH /api/v1/customers/{{customer_id}}",
+        "method": "PATCH",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 41.3402,
+          "p90": 42.167,
+          "p95": 42.167,
+          "p99": 42.167
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 41,
+          "mean": 41.5,
+          "max": 42
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 42.167
+          }
+        ]
+      },
+      {
+        "stepId": "s_f600c93d3a7359e3",
+        "operationKey": "DELETE /api/v1/customers/{{customer_id}}",
+        "method": "DELETE",
+        "expectedStatuses": [
+          {
+            "code": "204",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 48.4366,
+          "p90": 49.4053,
+          "p95": 49.4053,
+          "p99": 49.4053
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "204",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 48,
+          "mean": 48.5,
+          "max": 49
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 49.4053
+          }
+        ]
+      },
+      {
+        "stepId": "s_72409216960290bb",
+        "operationKey": "GET /health",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 54.5475,
+          "p90": 55.6384,
+          "p95": 55.6384,
+          "p99": 55.6384
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 55,
+          "mean": 55.5,
+          "max": 56
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 55.6384
+          }
+        ]
+      },
+      {
+        "stepId": "s_471141a37bb80b71",
+        "operationKey": "GET /version",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "collection"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 61.4293,
+          "p90": 62.6579,
+          "p95": 62.6579,
+          "p99": 62.6579
+        },
+        "throughputPerSecond": 12.27,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 62,
+          "mean": 62.5,
+          "max": 63
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 62.6579
+          }
+        ]
+      }
+    ],
+    "timeline": {
+      "bucketMs": 5000,
+      "points": [
+        {
+          "offsetMs": 0,
+          "virtualUsers": 2,
+          "requests": 14,
+          "errors": 0,
+          "p95Ms": 62.6579
+        }
+      ]
+    },
+    "writeRequests": [
+      {
+        "operationKey": "POST /api/v1/customers",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "PATCH /api/v1/customers/{{customer_id}}",
+        "method": "PATCH",
+        "sent": 2,
+        "succeeded": 2
+      },
+      {
+        "operationKey": "DELETE /api/v1/customers/{{customer_id}}",
+        "method": "DELETE",
+        "sent": 2,
+        "succeeded": 2
+      }
+    ],
+    "tokenRefreshes": {
+      "count": 0,
+      "failed": 0,
+      "lifetimeStated": true,
+      "bucketOffsetsMs": []
+    },
+    "thresholdOutcomes": [],
+    "findings": [
+      {
+        "ruleId": "slowest-step",
+        "stepIds": [
+          "s_471141a37bb80b71"
+        ],
+        "message": "GET /version has the highest p95 latency: 62.6579 ms.",
+        "values": {
+          "p95Ms": 62.6579
+        }
+      }
+    ],
+    "findingsRulesetVersion": 2,
+    "latencyPrecision": "within-1-percent"
+  }
+}

@@ -891,12 +891,12 @@ following hold:
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T094 [P] [US5] Before any removal, write
+- [X] T094 [P] [US5] Before any removal, write
   `backend/tests/unit/performance/report/legacyReportGolden.test.ts`. It renders guided, quick
   (AP-032), user-journey (AP-035) and collection (AP-036) runs from stored-run fixtures with
   `renderHtmlReport`, and pins the HTML as goldens under
   `backend/tests/fixtures/performance/golden/reports/` (SC-007).
-- [ ] T095 [P] [US5] Write `backend/tests/integration/performance/legacyRunsReadOnly.test.ts` and
+- [X] T095 [P] [US5] Write `backend/tests/integration/performance/legacyRunsReadOnly.test.ts` and
   `frontend/tests/unit/LegacyRunsView.test.tsx`:
   - legacy runs list, open and report under their old bases;
   - the removed routes return `404`;
@@ -905,7 +905,7 @@ following hold:
 
 ### Implementation for User Story 5
 
-- [ ] T096 [US5] Remove the legacy plan routes listed in
+- [X] T096 [US5] Remove the legacy plan routes listed in
   contracts/changes-to-existing-apis.md "Phase two" from these files, keeping the legacy runs' read
   routes and the quick upload:
   - `backend/src/api/performanceRoutes.ts`, `performanceTesting.ts`, `quickPerformance.ts`,
@@ -913,20 +913,20 @@ following hold:
   - `backend/src/app.ts`.
 
   `POST /api/quick-performance` now only stores the specification for seeding.
-- [ ] T097 [US5] Delete the backend modules in research.md R24 "Removed" and their tests. Delete
+- [X] T097 [US5] Delete the backend modules in research.md R24 "Removed" and their tests. Delete
   `RUNTIME` and `renderScriptFrom` from `backend/src/performance/k6/renderScript.ts`, then the file
   itself if nothing else uses it.
   - Keep the seeding inputs listed in R24 "Kept".
   - Trim `PerformancePlan` and the legacy types in `packages/shared-domain/src/performance.ts` to
     what stored snapshots and `renderHtmlReport` read.
   - `npm run build` and the remaining tests must pass, including T094.
-- [ ] T098 [US5] Remove the frontend legacy plan screens and clients listed in
+- [X] T098 [US5] Remove the frontend legacy plan screens and clients listed in
   contracts/changes-to-existing-apis.md "Frontend removed".
   - Make `PerformanceTestingStage`, `QuickPerformancePage` and the collection action offer
     seeding plus the plans already seeded from that source (US5).
   - Show legacy runs read-only with the FR-037 note.
   - Remove the old tests that covered deleted code. T095 passes.
-- [ ] T099 [US5] Run `scripts/count-performance-lines.mjs` and record the result against the agreed
+- [X] T099 [US5] Run `scripts/count-performance-lines.mjs` and record the result against the agreed
   SC-006 target in `specs/037-request-chain-performance/validation.md`. Bump the version with
   `npm run version:bump -- feature` for phase two, and update `docs/USER_MANUAL.md`,
   `docs/architecture.md` and `specs/ROADMAP.md` for the retirement.

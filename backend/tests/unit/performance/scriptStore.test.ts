@@ -1,21 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { ApiModel } from "@apipilot/shared-domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import { enterTestSession } from "../../../src/session/sessionContext";
 import { forceExpireForTest } from "../../../src/session/sessionRegistry";
-import {
-  clearGeneratedScript,
-  getGeneratedScript,
-  setGeneratedScript,
-  type GeneratedScript,
-} from "../../../src/performance/scriptStore";
-import { resetStore, startWorkflow } from "../../../src/testGenerationWorkflow/workflowStore";
+import { deleteChainScript, getChainScript, saveChainScript, type GeneratedScript } from "../../../src/performance/scriptStore";
 
-const apiModel: ApiModel = {
-  operations: [],
-  securitySchemes: {},
-  summary: { operationCount: 0, schemaCount: 0, securitySchemeCount: 0, issues: [] },
-};
+/** AP-037 (specs/037-request-chain-performance research R22): request-chain scripts, per session and plan. */
 
 function script(fingerprint: string): GeneratedScript {
   return {
@@ -29,36 +18,31 @@ function script(fingerprint: string): GeneratedScript {
   };
 }
 
-describe("scriptStore (AP-029 data-model 'Generated script')", () => {
-  beforeEach(() => resetStore());
+describe("scriptStore", () => {
+  beforeEach(() => enterTestSession(randomUUID()));
 
-  it("keeps one script per session, for the current workflow only", () => {
-    startWorkflow({ specificationFilename: "a.yaml", apiModel });
-    setGeneratedScript(script("f1"));
-    expect(getGeneratedScript()?.planFingerprint).toBe("f1");
-
-    startWorkflow({ specificationFilename: "b.yaml", apiModel });
-    expect(getGeneratedScript()).toBeUndefined();
+  it("keeps one script per plan, replaced on save and removed on delete", () => {
+    saveChainScript("p1", script("f1"));
+    saveChainScript("p2", script("f2"));
+    saveChainScript("p1", script("f3"));
+    expect(getChainScript("p1")?.planFingerprint).toBe("f3");
+    expect(getChainScript("p2")?.planFingerprint).toBe("f2");
+    deleteChainScript("p1");
+    expect(getChainScript("p1")).toBeUndefined();
+    expect(getChainScript("p2")).toBeDefined();
   });
 
   it("does not leak between sessions", () => {
-    startWorkflow({ specificationFilename: "a.yaml", apiModel });
-    setGeneratedScript(script("f1"));
+    saveChainScript("p1", script("f1"));
     enterTestSession(randomUUID());
-    startWorkflow({ specificationFilename: "a.yaml", apiModel });
-    expect(getGeneratedScript()).toBeUndefined();
+    expect(getChainScript("p1")).toBeUndefined();
   });
 
-  it("is cleared explicitly and when the session expires", () => {
+  it("is cleared when the session expires", () => {
     const sessionId = randomUUID();
     enterTestSession(sessionId);
-    startWorkflow({ specificationFilename: "a.yaml", apiModel });
-    setGeneratedScript(script("f1"));
-    clearGeneratedScript();
-    expect(getGeneratedScript()).toBeUndefined();
-
-    setGeneratedScript(script("f2"));
+    saveChainScript("p1", script("f1"));
     forceExpireForTest(sessionId);
-    expect(getGeneratedScript()).toBeUndefined();
+    expect(getChainScript("p1")).toBeUndefined();
   });
 });

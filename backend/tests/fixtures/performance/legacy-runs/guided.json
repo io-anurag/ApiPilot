@@ -1,0 +1,626 @@
+{
+  "id": "763da4a8-fdfb-46d5-a875-270e036e5f52",
+  "status": "completed",
+  "environment": {
+    "id": "3b4bc466-2169-424b-adec-d4e0eac18f6b",
+    "name": "perf-local",
+    "tier": "local",
+    "baseUrl": "http://127.0.0.1:4600"
+  },
+  "planSource": "guided",
+  "scriptSha256": "e2bdcd9eaf2218bbe436090cb8c8e3b7be47a025bf9ce29b5eb30b1eb39d4fe5",
+  "k6Version": "1.2.0",
+  "plannedDurationMs": 60000,
+  "startedAt": "2026-10-03T15:52:58.356Z",
+  "cancelRequested": false,
+  "endedAt": "2026-10-03T15:52:58.511Z",
+  "planSnapshot": {
+    "bodyEdits": [],
+    "bodyEditNotices": [],
+    "discardedBodyEdits": [],
+    "parameterEdits": [],
+    "discardedParameterEdits": [],
+    "source": "guided",
+    "excludedOperationKeys": [],
+    "omitted": [],
+    "journeys": [
+      {
+        "id": "j_91a61d6ffd8b851b",
+        "source": {
+          "kind": "workflow",
+          "workflowId": "08990a6a9ecbc73665c27e863f6d395ad98167cf6353a62af54f5a170662387c"
+        },
+        "steps": [
+          {
+            "id": "s_f1faedcc7af8a36d",
+            "operationKey": "POST /orders",
+            "method": "POST",
+            "path": "/orders",
+            "scenarioId": "129de10d-823b-4c87-90b2-bc12e566b023",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "rule-generated",
+            "tieBrokenByLowestId": true,
+            "consumes": [],
+            "produces": [
+              "orderId"
+            ],
+            "variableBindings": [
+              {
+                "variable": "orderId",
+                "role": "produces",
+                "field": "orderId"
+              }
+            ],
+            "dependency": {
+              "relationshipIds": [
+                "088e125cce8b7bfca27d4ed352be01afcd727422c74a6f08a8011619366c3a17"
+              ],
+              "confidence": "CONFIRMED"
+            },
+            "expectedStatuses": [
+              {
+                "code": "201",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "oauth2-client-credentials",
+              "schemeName": "OrdersAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "clientId",
+              "clientSecret"
+            ]
+          },
+          {
+            "id": "s_603b7f20fd6c66b0",
+            "operationKey": "GET /orders/{orderId}",
+            "method": "GET",
+            "path": "/orders/{orderId}",
+            "scenarioId": "69c44322-3758-4344-90b5-56f37189e90d",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [
+              "orderId"
+            ],
+            "produces": [],
+            "variableBindings": [
+              {
+                "variable": "orderId",
+                "role": "consumes",
+                "field": "orderId",
+                "location": "path",
+                "producerStepId": "s_f1faedcc7af8a36d"
+              }
+            ],
+            "dependency": {
+              "relationshipIds": [
+                "088e125cce8b7bfca27d4ed352be01afcd727422c74a6f08a8011619366c3a17"
+              ],
+              "confidence": "CONFIRMED"
+            },
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "oauth2-client-credentials",
+              "schemeName": "OrdersAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "clientId",
+              "clientSecret"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_d4b32c4864a14e16",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_34729e07a52aceaa",
+            "operationKey": "GET /status",
+            "method": "GET",
+            "path": "/status",
+            "scenarioId": "cd01eca4-dd9c-436e-ab9f-1e89d6ebe79a",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "user"
+              }
+            ],
+            "auth": {
+              "kind": "oauth2-client-credentials",
+              "schemeName": "OrdersAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "clientId",
+              "clientSecret"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "j_997c7915ac4ca5ef",
+        "source": {
+          "kind": "operation"
+        },
+        "steps": [
+          {
+            "id": "s_16fef0444660a0f5",
+            "operationKey": "GET /warehouses/{warehouseId}",
+            "method": "GET",
+            "path": "/warehouses/{warehouseId}",
+            "scenarioId": "c3545850-a54a-41bc-8b07-514244dc788c",
+            "scenarioDescription": "Happy-path request using specification-conformant values.",
+            "scenarioChoice": "only-positive",
+            "tieBrokenByLowestId": false,
+            "consumes": [],
+            "produces": [],
+            "variableBindings": [],
+            "dependency": null,
+            "expectedStatuses": [
+              {
+                "code": "200",
+                "source": "specification"
+              }
+            ],
+            "auth": {
+              "kind": "oauth2-client-credentials",
+              "schemeName": "OrdersAuth"
+            },
+            "requiredValues": [
+              "baseUrl",
+              "clientId",
+              "clientSecret",
+              "warehouseId"
+            ]
+          }
+        ]
+      }
+    ],
+    "thinkTimeMs": 0,
+    "loadProfile": {
+      "kind": "smoke",
+      "stages": [
+        {
+          "durationMs": 60000,
+          "targetVirtualUsers": 1
+        }
+      ],
+      "plannedDurationMs": 60000
+    },
+    "thresholds": [],
+    "userSuppliedValues": [
+      {
+        "name": "baseUrl",
+        "secret": false,
+        "neededBySteps": [
+          "s_f1faedcc7af8a36d",
+          "s_603b7f20fd6c66b0",
+          "s_34729e07a52aceaa",
+          "s_16fef0444660a0f5"
+        ],
+        "source": "base-url"
+      },
+      {
+        "name": "clientId",
+        "secret": true,
+        "neededBySteps": [
+          "s_f1faedcc7af8a36d",
+          "s_603b7f20fd6c66b0",
+          "s_34729e07a52aceaa",
+          "s_16fef0444660a0f5"
+        ],
+        "source": "oauth2-client"
+      },
+      {
+        "name": "clientSecret",
+        "secret": true,
+        "neededBySteps": [
+          "s_f1faedcc7af8a36d",
+          "s_603b7f20fd6c66b0",
+          "s_34729e07a52aceaa",
+          "s_16fef0444660a0f5"
+        ],
+        "source": "oauth2-client"
+      },
+      {
+        "name": "warehouseId",
+        "secret": false,
+        "neededBySteps": [
+          "s_16fef0444660a0f5"
+        ],
+        "source": "path-parameter"
+      }
+    ],
+    "uniqueValueFields": [
+      {
+        "stepId": "s_f1faedcc7af8a36d",
+        "location": "body",
+        "fieldPath": "customerEmail",
+        "format": "email"
+      }
+    ],
+    "upstreamFingerprint": "a0c498aec26b2aee62145ac9d8fa485c8105895a434f69e00fcc098d637bad18",
+    "credentialProducerOperationKeys": [],
+    "fingerprint": "907b489e89b1c72bdc4fffa04cf6aff5a2ff8ba979f5427dc73eb32ad6882f5d",
+    "stepsNeedingExpectedStatus": []
+  },
+  "progress": {
+    "elapsedMs": 155,
+    "currentVirtualUsers": 2,
+    "requestsSoFar": 8,
+    "failuresSoFar": 0,
+    "journeysCutShortSoFar": 0,
+    "tokenRefreshesSoFar": 0,
+    "steps": [
+      {
+        "stepId": "s_f1faedcc7af8a36d",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_603b7f20fd6c66b0",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_34729e07a52aceaa",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      },
+      {
+        "stepId": "s_16fef0444660a0f5",
+        "requests": 2,
+        "failures": 0,
+        "notSent": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        }
+      }
+    ]
+  },
+  "result": {
+    "totals": {
+      "requests": 8,
+      "errors": 0,
+      "errorRatePercent": 0,
+      "iterations": 6,
+      "journeysCutShort": 0,
+      "throughputPerSecond": 51.61,
+      "latencyMs": {
+        "p50": 24.2196,
+        "p90": 27.8207,
+        "p95": 27.8207,
+        "p99": 27.8207
+      },
+      "latencySummaryMs": {
+        "min": 20,
+        "mean": 24.5,
+        "max": 28
+      },
+      "iterationDurationMs": null,
+      "dataSentBytes": 0,
+      "dataReceivedBytes": 0
+    },
+    "journeys": [
+      {
+        "journeyId": "j_91a61d6ffd8b851b",
+        "requests": 4,
+        "latencyMs": {
+          "p50": 21.0846,
+          "p90": 27.8207,
+          "p95": 27.8207,
+          "p99": 27.8207
+        },
+        "throughputPerSecond": 25.81,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_d4b32c4864a14e16",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      },
+      {
+        "journeyId": "j_997c7915ac4ca5ef",
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "checkPassRatePercent": null,
+        "runsCutShort": 0
+      }
+    ],
+    "steps": [
+      {
+        "stepId": "s_f1faedcc7af8a36d",
+        "operationKey": "POST /orders",
+        "method": "POST",
+        "expectedStatuses": [
+          {
+            "code": "201",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 19.8685,
+          "p90": 21.0846,
+          "p95": 21.0846,
+          "p99": 21.0846
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "201",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 20,
+          "mean": 20.5,
+          "max": 21
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 21.0846
+          }
+        ],
+        "captures": [
+          {
+            "name": "orderId",
+            "succeeded": 0,
+            "failed": 0
+          }
+        ]
+      },
+      {
+        "stepId": "s_603b7f20fd6c66b0",
+        "operationKey": "GET /orders/{orderId}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.7404,
+          "p90": 27.8207,
+          "p95": 27.8207,
+          "p99": 27.8207
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 27,
+          "mean": 27.5,
+          "max": 28
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 27.8207
+          }
+        ]
+      },
+      {
+        "stepId": "s_34729e07a52aceaa",
+        "operationKey": "GET /status",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "user"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 22.8227,
+          "p90": 24.2196,
+          "p95": 24.2196,
+          "p99": 24.2196
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 23,
+          "mean": 23.5,
+          "max": 24
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 24.2196
+          }
+        ]
+      },
+      {
+        "stepId": "s_16fef0444660a0f5",
+        "operationKey": "GET /warehouses/{warehouseId}",
+        "method": "GET",
+        "expectedStatuses": [
+          {
+            "code": "200",
+            "source": "specification"
+          }
+        ],
+        "requests": 2,
+        "latencyMs": {
+          "p50": 26.2161,
+          "p90": 26.7404,
+          "p95": 26.7404,
+          "p99": 26.7404
+        },
+        "throughputPerSecond": 12.9,
+        "errorRatePercent": 0,
+        "errorsByStatus": [],
+        "errorsByCategory": [],
+        "checkPassRatePercent": null,
+        "notAttempted": {
+          "missingData": 0,
+          "dependencyNotAttempted": 0
+        },
+        "missingVariables": [],
+        "statusesReceived": [
+          {
+            "status": "200",
+            "count": 2,
+            "expected": true
+          }
+        ],
+        "latencySummaryMs": {
+          "min": 26,
+          "mean": 26.5,
+          "max": 27
+        },
+        "phaseTimings": [],
+        "timeline": [
+          {
+            "offsetMs": 0,
+            "requests": 2,
+            "errors": 0,
+            "p95Ms": 26.7404
+          }
+        ]
+      }
+    ],
+    "timeline": {
+      "bucketMs": 5000,
+      "points": [
+        {
+          "offsetMs": 0,
+          "virtualUsers": 2,
+          "requests": 8,
+          "errors": 0,
+          "p95Ms": 27.8207
+        }
+      ]
+    },
+    "writeRequests": [
+      {
+        "operationKey": "POST /orders",
+        "method": "POST",
+        "sent": 2,
+        "succeeded": 2
+      }
+    ],
+    "tokenRefreshes": {
+      "count": 0,
+      "failed": 0,
+      "lifetimeStated": true,
+      "bucketOffsetsMs": []
+    },
+    "thresholdOutcomes": [],
+    "findings": [
+      {
+        "ruleId": "slowest-step",
+        "stepIds": [
+          "s_603b7f20fd6c66b0"
+        ],
+        "message": "GET /orders/{orderId} has the highest p95 latency: 27.8207 ms.",
+        "values": {
+          "p95Ms": 27.8207
+        }
+      }
+    ],
+    "findingsRulesetVersion": 2,
+    "latencyPrecision": "within-1-percent"
+  }
+}
