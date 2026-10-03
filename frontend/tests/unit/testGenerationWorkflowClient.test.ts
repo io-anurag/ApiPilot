@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyScenarioDecisions,
   editScenario,
@@ -14,6 +14,8 @@ afterEach(() => {
 });
 
 describe("testGenerationWorkflowClient logging (FR-010)", () => {
+  beforeEach(() => vi.spyOn(console, "warn").mockImplementation(() => undefined));
+
   it("logs via postJson/toWorkflowResult on a non-2xx response (runDeterministicGeneration)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.stubGlobal(
@@ -123,7 +125,10 @@ describe("testGenerationWorkflowClient logging (FR-010)", () => {
       } as Response),
     );
 
-    await editScenario("s1", 0, { request: { pathParameters: {}, queryParameters: {}, headers: {} } });
+    await editScenario("s1", 0, {
+      request: { pathParameters: {}, queryParameters: {}, headers: {} },
+      assertions: [],
+    });
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
     expect(errorSpy.mock.calls[0][0]).toMatchObject({

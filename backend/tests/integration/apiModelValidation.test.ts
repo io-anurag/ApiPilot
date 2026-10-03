@@ -1,5 +1,5 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 
 /**
@@ -10,6 +10,16 @@ import { createApp } from "../../src/app";
  */
 const incompleteApiModel = { operations: [] };
 const emptyTestModel = { scenarios: [] };
+
+beforeEach(() => {
+  for (const level of ["log", "info", "warn", "error", "debug"] as const) {
+    vi.spyOn(console, level).mockImplementation(() => undefined);
+  }
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("apiModel structural validation", () => {
   it("POST /api/test-models rejects an apiModel missing summary/securitySchemes", async () => {
