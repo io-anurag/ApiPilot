@@ -62,6 +62,11 @@ export const KNOWN_METRICS: ReadonlySet<string> = new Set([
   "apipilot_cut_short",
   "apipilot_capture",
   "apipilot_token_refresh",
+  // AP-037 (specs/037-request-chain-performance contracts/chain-script.md): request-chain checks,
+  // Once before load outcomes, and data set takes. Legacy scripts never emit them.
+  "apipilot_check",
+  "apipilot_setup",
+  "apipilot_data",
 ]);
 
 export function parseMetricsLine(line: string, options: ParseOptions = {}): ParsedLine {

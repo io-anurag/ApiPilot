@@ -23,7 +23,9 @@ export interface RouteConfig {
  * AP-035 (specs/035-user-defined-journeys tasks T004): a computed response, for a stateful target.
  * Consulted before the configured routes; returning `undefined` falls through to them.
  */
-export type RequestHandler = (request: RecordedRequest) => { status: number; body?: unknown; headers?: Record<string, string> } | undefined;
+export type RequestHandler = (
+  request: RecordedRequest,
+) => { status: number; body?: unknown; headers?: Record<string, string>; delayMs?: number } | undefined;
 
 /**
  * A small local HTTP server standing in for "the target API" in execution integration tests
@@ -52,9 +54,14 @@ export class TargetServer {
       this.requests.push(recorded);
       const handled = this.handler?.(recorded);
       if (handled) {
-        for (const [name, value] of Object.entries(handled.headers ?? {})) res.setHeader(name, value);
-        if (handled.body === undefined) res.status(handled.status).end();
-        else res.status(handled.status).json(handled.body);
+        const send = () => {
+          for (const [name, value] of Object.entries(handled.headers ?? {})) res.setHeader(name, value);
+          if (handled.body === undefined) res.status(handled.status).end();
+          else res.status(handled.status).json(handled.body);
+        };
+        // AP-037: a computed response may be delayed, for per-step response-time checks.
+        if (handled.delayMs) setTimeout(send, handled.delayMs);
+        else send();
         return;
       }
       const config = this.routes.get(`${req.method.toUpperCase()} ${req.path}`);

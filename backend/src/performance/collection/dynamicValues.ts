@@ -7,21 +7,8 @@ import type { RequestTemplate } from "../plan/stepRequest";
  * `{{apipilot_dyn_<k>}}` token, so every occurrence gets its own value. The values come from the
  * script's fixed runtime; nothing here generates one. Pure.
  */
-export const SUPPORTED_DYNAMIC_VARIABLES: ReadonlySet<string> = new Set([
-  "$guid",
-  "$randomUUID",
-  "$timestamp",
-  "$isoTimestamp",
-  "$randomInt",
-  "$randomFirstName",
-  "$randomLastName",
-  "$randomFullName",
-  "$randomUserName",
-  "$randomEmail",
-  "$randomPhoneNumber",
-  "$randomAlphaNumeric",
-  "$randomBoolean",
-]);
+/** AP-037 (research R5): the list moved to the shared domain unchanged; re-exported here. */
+export { SUPPORTED_DYNAMIC_VARIABLES } from "@apipilot/shared-domain";
 
 export const DYNAMIC_TOKEN_PREFIX = "apipilot_dyn_";
 const DYNAMIC_REFERENCE = /\{\{(\$[^{}]+)\}\}/g;

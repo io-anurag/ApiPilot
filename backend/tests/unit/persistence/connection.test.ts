@@ -48,6 +48,9 @@ describe("SqliteConnection", () => {
       expect(tables.map((t) => t.name).sort()).toEqual([
         "ai_readiness_history",
         "benchmark_runs",
+        // AP-037 (specs/037-request-chain-performance research R2, R14).
+        "chain_plan_data_sets",
+        "chain_plans",
         "environments",
         "execution_runs",
         "failure_analyses",

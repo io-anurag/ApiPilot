@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { QuickPerformanceTestView } from "@apipilot/shared-domain";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import { SeedPlanDialog } from "../components/requestChain/SeedPlanDialog";
 import { EmptyState } from "../components/EmptyState";
 import {
   EntryFeatureIcon,
@@ -72,13 +73,18 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
   );
 }
 
-export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void }>) {
+/**
+ * AP-037 FR-020 (specs/037-request-chain-performance US2): `onOpenChainPlan` opens a request-chain
+ * plan seeded from this specification; the quick plan below is unchanged until phase two.
+ */
+export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onExit?: () => void; onOpenChainPlan?: (planId: string) => void }>) {
   const [state, setState] = useState<PageState>({ kind: "loading" });
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pendingReplacement, setPendingReplacement] = useState<File | null>(null);
   // Remounts the plan screen for each new quick test, so it re-reads the new plan.
   const [generation, setGeneration] = useState(0);
+  const [seeding, setSeeding] = useState(false);
   const replaceInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -270,6 +276,11 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
               />
             </div>
             <div className="flex items-center gap-2">
+              {onOpenChainPlan && (
+                <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setSeeding(true)}>
+                  Create request-chain plan
+                </button>
+              )}
               <button
                 type="button"
                 className={BUTTON_STYLES.secondary}
@@ -334,6 +345,17 @@ export function QuickPerformancePage({ onExit }: Readonly<{ onExit?: () => void 
         </>
       )}
 
+      {seeding && state.kind === "ready" && onOpenChainPlan && (
+        <SeedPlanDialog
+          source={{ kind: "specification" }}
+          defaultName={state.quickTest.specification.info?.title ?? state.quickTest.specification.filename}
+          onCancel={() => setSeeding(false)}
+          onSeeded={(planId) => {
+            setSeeding(false);
+            onOpenChainPlan(planId);
+          }}
+        />
+      )}
       {pendingReplacement && (
         <ConfirmDialog
           message="Replace the current quick test with the new specification? Its plan, including any edited request bodies, is replaced. Runs and reports are kept."

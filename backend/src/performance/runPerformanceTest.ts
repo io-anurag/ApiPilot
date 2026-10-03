@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { Environment, PerformanceResult, PerformanceRun } from "@apipilot/shared-domain";
+import type { ChainRun, Environment, PerformanceResult, PerformanceRun } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 import { getPerformanceRunRepository, type PerformanceRunSettlement } from "../persistence/performanceRunRepository";
 import { touch } from "../session/sessionRegistry";
@@ -11,6 +11,7 @@ import { buildChildEnv } from "./k6/runner";
 import type { PerformanceRunner, RunnerHandle } from "./k6/runnerTypes";
 import { createAggregate } from "./report/aggregate";
 import { deriveFindings } from "./report/findings";
+import { layoutFromChainSnapshot, type RunLayout } from "./report/runLayout";
 import { evaluateThresholds } from "./report/thresholds";
 import type { GeneratedScript } from "./scriptStore";
 
@@ -24,7 +25,8 @@ const logger = createLogger("performance.run");
  */
 export interface StartPerformanceRunInput {
   sessionId: string;
-  run: PerformanceRun;
+  /** AP-037: a request-chain run shares this path (specs/037-request-chain-performance research R19). */
+  run: PerformanceRun | ChainRun;
   script: GeneratedScript;
   environment: Environment;
   binaryPath: string;
@@ -32,7 +34,16 @@ export interface StartPerformanceRunInput {
   tickIntervalMs: number;
   now: () => Date;
   runDirectoryRoot?: string;
+  /**
+   * AP-037 FR-044 (research R14): writes the run's data set copies into the run directory, after the
+   * script integrity check and before k6 starts. The directory, and so every copy, is removed when
+   * the run settles.
+   */
+  writeRunFiles?: (runDir: string) => void;
 }
+
+/** AP-037 research R12: k6's exit code when the script called `exec.test.abort`. */
+const K6_SCRIPT_ABORTED = 108;
 
 /** More unreadable lines than this and the stream is treated as unreadable (D11). */
 const MAX_UNREADABLE_LINES = 10;
@@ -78,16 +89,28 @@ export function valueEnvironment(valueIndex: Record<string, number>, environment
   return values;
 }
 
-export function withReportFields(result: PerformanceResult, run: PerformanceRun): PerformanceResult {
-  const withThresholds = { ...result, thresholdOutcomes: evaluateThresholds(run.planSnapshot.thresholds, result) };
-  return { ...withThresholds, findings: deriveFindings(withThresholds, run.planSnapshot) };
+/** What the aggregate and the findings read: the legacy plan snapshot, or a chain run's layout (AP-037 R19). */
+function sourceOf(run: PerformanceRun | ChainRun): PerformanceRun["planSnapshot"] | RunLayout {
+  return run.planSource === "chain" ? layoutFromChainSnapshot(run.snapshot) : run.planSnapshot;
+}
+
+export function withReportFields(result: PerformanceResult, run: PerformanceRun | ChainRun): PerformanceResult {
+  const source = sourceOf(run);
+  const withThresholds = { ...result, thresholdOutcomes: evaluateThresholds(source.thresholds, result) };
+  return { ...withThresholds, findings: deriveFindings(withThresholds, source) };
+}
+
+function stepCountOf(run: PerformanceRun | ChainRun): number {
+  return run.planSource === "chain"
+    ? run.snapshot.chains.reduce((total, chain) => total + chain.steps.length, 0)
+    : run.planSnapshot.journeys.reduce((total, journey) => total + journey.steps.length, 0);
 }
 
 export async function startPerformanceRun(input: StartPerformanceRunInput): Promise<void> {
   const { sessionId, run } = input;
   const repository = getPerformanceRunRepository();
   const startedAtMs = Date.parse(run.startedAt);
-  const aggregate = createAggregate(run.planSnapshot, run.plannedDurationMs, startedAtMs);
+  const aggregate = createAggregate(sourceOf(run), run.plannedDurationMs, startedAtMs);
   const settle = (settlement: PerformanceRunSettlement, result?: PerformanceResult) => {
     const settled = repository.settle(sessionId, run.id, settlement, input.now().toISOString(), result);
     touch(sessionId);
@@ -114,6 +137,7 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
       settle({ status: "failed", failure: { category: "script-integrity-failed" } });
       return;
     }
+    input.writeRunFiles?.(runDir);
 
     let unreadable = 0;
     let pointCount = 0;
@@ -149,7 +173,7 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
       runId: run.id,
       planSource: run.planSource,
       environmentTier: run.environment.tier,
-      stepCount: run.planSnapshot.journeys.reduce((total, journey) => total + journey.steps.length, 0),
+      stepCount: stepCountOf(run),
       plannedDurationMs: run.plannedDurationMs,
     });
 
@@ -179,7 +203,10 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
     repository.checkpoint(sessionId, run.id, { progress: aggregate.progress(endMs) });
     if (stderrLines > 0) logger.info("performance_run_stderr", { runId: run.id, lineCount: stderrLines });
 
+    // AP-037 FR-018 (research R12): a failed Once before load step aborted the test before the load.
+    const setupFailed = run.planSource === "chain" && (aggregate.setupFailure() !== null || exit.exitCode === K6_SCRIPT_ABORTED);
     if (exit.spawnError) settle({ status: "failed", failure: { category: "k6-unavailable" } });
+    else if (setupFailed && !userCancelled && !exit.cancelled) settle({ status: "failed", failure: { category: "setup-step-failed" } }, result);
     else if (metricsUnreadable) settle({ status: "failed", failure: { category: "metrics-unreadable" } }, result);
     else if (userCancelled || exit.cancelled) settle({ status: "cancelled", cancelReason: "user-requested" }, result);
     else if (exit.exitCode !== 0 && pointCount === 0) settle({ status: "failed", failure: { category: "k6-exited-with-error" } });

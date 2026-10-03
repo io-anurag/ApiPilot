@@ -1,4 +1,4 @@
-export type EntryChoice = "guided-workflow" | "import-collection" | "quick-performance" | "user-script";
+export type EntryChoice = "guided-workflow" | "import-collection" | "quick-performance" | "user-script" | "performance-plans";
 
 import { EntryFeatureIcon, type EntryFeatureIconName } from "./EntryFeatureIcon";
 
@@ -31,6 +31,15 @@ const DIRECT_PATHS: readonly EntryPath[] = [
     icon: "control",
   },
   {
+    choice: "performance-plans",
+    title: "Performance plans",
+    label: "Build a load test step by step",
+    description:
+      "Chain requests you write and edit, as in Postman: pass a token or an id from one step to the next, check responses, and run with k6.",
+    detail: "Request chains",
+    icon: "direct",
+  },
+  {
     choice: "user-script",
     title: "Run k6 Script",
     label: "Run a script you supply",
@@ -50,8 +59,8 @@ const GUIDED_STAGES: readonly (readonly [number: string, name: string])[] = [
 
 /**
  * The very first thing a user sees: a choice between the guided workflow, the standalone
- * "Import & Run Collection" path, the quick performance test (AP-032 FR-001) and Run k6 Script
- * (AP-034 FR-001). Shown only until
+ * "Import & Run Collection" path, the quick performance test (AP-032 FR-001), request-chain
+ * performance plans (AP-037) and Run k6 Script (AP-034 FR-001). Shown only until
  * a choice is made — after that the top tab menu takes over navigation between them (App.tsx).
  *
  * Layout: the guided workflow is a full-width featured row and the direct paths sit in their own

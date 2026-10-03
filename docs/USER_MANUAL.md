@@ -974,6 +974,94 @@ lives in memory like the quick test, so a backend restart loses it (runs and rep
 - Runs made before version 19.17.0 need **Regenerate script** before **Run again**, because every
   generated script's runtime changed.
 
+## 5b. Performance plans: request chains
+
+A **performance plan** is a load test you build and own outright, as in Postman or JMeter. It
+holds one or more **chains**. A chain is an ordered list of **steps**, and every step is a concrete
+request you can edit freely. Open the **Performance Plans** tab (or choose **Performance plans** on
+the start screen) to list your plans, start an empty one, open, duplicate or delete one. Plans are
+saved on this machine, so they are still there after ApiPilot restarts, for as long as your
+browser session lasts.
+
+**Starting from something you already have.** Each existing entry point can seed a first draft:
+- **Quick performance test**: after uploading a specification, choose **Create request-chain plan**.
+  You get one single-step chain per operation, from its positive scenario.
+- **Guided workflow**: on the Performance Testing stage, choose **Create request-chain plan**. You
+  get one chain per approved workflow, with its variables already extracted and referenced, then one
+  single-step chain per other operation.
+- **Import & Run Collection**: select requests in the run panel and choose **Create request-chain
+  plan**. You get one chain per top-level folder, in run order. Recognised `pm.environment.set(...)`
+  statements become extractors, recognised status assertions become expected statuses, and
+  inherited auth becomes an `Authorization` header.
+
+In every case, credential requests (an OAuth2 token, a login) become **Once before load** steps.
+Seeding only reads its source and never runs a script. A **Seeding report** lists everything it
+could not carry over, such as pre-request scripts, statements it did not recognise, or operations
+with no positive scenario. After seeding, the plan is yours: it is never compared with,
+re-derived from or overwritten by its source. Each seeded step shows where it came from, and is
+marked **Changed** once you edit it. A step you add is marked **Added by you**.
+
+**A step.** Each step has:
+- a method, a URL and ordered query parameters, headers and a body (none, raw text with a content
+  type, or form fields). Start the URL with `{{baseUrl}}`, the target environment's base URL, or
+  with a full `http://` or `https://` address. Pasting a URL with a query splits it into rows.
+  `Host` and `Content-Length` are set by k6 and cannot be set by a step;
+- expected statuses, such as `201` or `2XX`. Any other status counts as a failure;
+- **extractors**: a name taken from a JSON body field (`data.items[0].id`) or a response header;
+- **checks**: a JSON field exists, a JSON field equals a value (text, number, true or false, or a
+  `{{name}}`), the body contains a text, or the response time is at most a number of milliseconds.
+  A failed check is counted, but never stops the chain;
+- **Runs**: **Every iteration** (the default), **Once per virtual user** (on its first iteration,
+  and again until it succeeds), or **Once before load** (once before any virtual user starts, shared
+  by all of them);
+- a think time after it, or the plan's default.
+
+**Values.** Type `{{` in any field to pick a value. A `{{name}}` is filled from, in order:
+- a value an earlier step extracted for the same virtual user (the latest extraction wins);
+- the current row of a data set with that column;
+- the target environment.
+
+`{{$guid}}`, `{{$randomEmail}}` and the other supported dynamic variables are generated for each
+request. Values extracted by every-iteration steps are cleared at the start of each iteration.
+
+**The plan check** lists what must be fixed before a script can be generated:
+- a value used before any step extracts it (move the step; moving is never refused);
+- a Once before load step that uses a load step's value;
+- a host taken from a variable other than `{{baseUrl}}`;
+- a step with no expected status;
+- a reference that is not valid.
+
+It also lists the values the environment must provide (and whether it does), and every host the
+plan sends to.
+
+**Credentials typed as text.** If you type a credential into an `Authorization`,
+`Proxy-Authorization` or `Cookie` header (or into a password field of a seeded step), saving
+moves it into a secret value of the target environment, and the step keeps only `{{name}}`. You
+are told which value was moved and where. Without a target environment, the save is refused until
+you choose one.
+
+**Data sets.** Under **Run setup**, add up to five CSV files: UTF-8, a header row, at most 5 MiB,
+100,000 rows and 50 columns. Each column is a `{{name}}` you can use in any step. Choose **Next row
+per iteration** (rows in file order, shared by all virtual users) or **One row per virtual user**.
+Rows wrap to the first when they run out. Once before load steps use the first row. Mark columns
+secret to hide them in the preview. A file that breaks a rule is refused with the reason and line,
+and nothing is kept. Data set files are encrypted on this machine and reach k6 only while a run
+lasts. Note that a downloaded copy of a script that reads a data set cannot be run in **Run k6
+Script**, which never lets a script open files.
+
+**Running.** Under **Run setup**, choose the target environment, the load profile, thresholds and
+the default think time, then generate the script. The run trigger names the environment and
+lists the chains, every write step and every host. Nothing is sent until you start the run. If a
+Once before load step fails, the load never starts and the run ends as failed, naming that step.
+The report shows each chain and step with its figures, each check's and extractor's counts, the
+Once before load steps apart from the load, and how each data set was used. It never shows a
+request or response body, an extracted value or a data set value. **Run again** repeats the newest
+run while its script and data set files are unchanged. **Restore** brings a run's chains and steps
+back into the plan, or into a new plan, without starting a run.
+
+**Limits.** 20 chains, 50 steps per chain, 10 extractors and 10 checks per step, a 256 KiB body, 50
+plans per session.
+
 ## 6. Run k6 Script
 
 Choose **Run k6 Script** on the start screen (or its tab, once the tab bar is visible) to run a
@@ -1115,6 +1203,10 @@ Variable and credential values are encrypted before being stored.
   and JSON OpenAPI input are not supported.
 - Only same-document `$ref`s are resolved; external references are reported as
   unresolved analysis issues, never fetched.
+- Request-chain performance plans (section 5b) do not support multipart bodies or file uploads,
+  extracting from XML or form responses, partial values (regular expressions) or computed values,
+  conditional steps, loops or per-step retries. Their old plan screens (sections 3.11, 3.12, 5 and
+  5a) remain until a later release retires them.
 - Execution always requires you to explicitly click **Start run** — there is no scheduled,
   unattended, or CI-triggered execution mode.
 - The operations you select at API Review can't be changed later in the same workflow;

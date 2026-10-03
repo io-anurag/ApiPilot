@@ -337,3 +337,144 @@ export class BaseUrlMissingError extends Error {
     this.name = "BaseUrlMissingError";
   }
 }
+
+// ------------------------------------------------------------------------------------------------
+// AP-037 request-chain plans (specs/037-request-chain-performance contracts/chain-plan-api.md). Each
+// maps to one contract code in `backend/src/api/chainPlanHttp.ts`; none carries a value.
+
+/** `404 chain_plan_not_found`. */
+export class ChainPlanNotFoundError extends Error {
+  constructor(planId: string) {
+    super(`No request-chain plan with id '${planId}' was found.`);
+    this.name = "ChainPlanNotFoundError";
+  }
+}
+
+/** `409 plan_revision_conflict`: the plan was saved elsewhere since this revision was read. */
+export class PlanRevisionConflictError extends Error {
+  constructor(readonly planId: string) {
+    super("The plan was changed since you opened it. It has been reloaded; make your change again.");
+    this.name = "PlanRevisionConflictError";
+  }
+}
+
+/** `422 invalid_plan`: a plan-level field that is not the documented shape. */
+export class InvalidChainPlanError extends Error {
+  constructor(
+    readonly field: string,
+    reason: string,
+  ) {
+    super(reason);
+    this.name = "InvalidChainPlanError";
+  }
+}
+
+/** `422 invalid_chain`. */
+export class InvalidChainError extends Error {
+  constructor(
+    readonly chainId: string,
+    reason: string,
+  ) {
+    super(reason);
+    this.name = "InvalidChainError";
+  }
+}
+
+/** `422 invalid_step`: one field of one step. */
+export class InvalidStepError extends Error {
+  constructor(
+    readonly stepId: string,
+    readonly field: string,
+    reason: string,
+  ) {
+    super(reason);
+    this.name = "InvalidStepError";
+  }
+}
+
+/** `422 header_not_settable`: `Host` and `Content-Length` are set by the runtime (FR-003). */
+export class HeaderNotSettableError extends Error {
+  constructor(
+    readonly stepId: string,
+    readonly header: string,
+  ) {
+    super(`The ${header} header is set by k6 for every request, so a step cannot set it.`);
+    this.name = "HeaderNotSettableError";
+  }
+}
+
+/** `422` or `409 plan_limit_exceeded` (research R26). */
+export class PlanLimitExceededError extends Error {
+  constructor(
+    readonly limit: string,
+    reason: string,
+    readonly statusCode: 409 | 422 = 422,
+  ) {
+    super(reason);
+    this.name = "PlanLimitExceededError";
+  }
+}
+
+export type CredentialLocation = { kind: "header"; name: string } | { kind: "body-field"; path: string };
+
+/** `422 credential_needs_environment` (FR-027, Clarification 2026-10-03). */
+export class CredentialNeedsEnvironmentError extends Error {
+  constructor(
+    readonly stepId: string,
+    readonly location: CredentialLocation,
+  ) {
+    super("This step holds a credential typed as text. Choose a target environment first, so it can be kept there as a secret value.");
+    this.name = "CredentialNeedsEnvironmentError";
+  }
+}
+
+/** `422 credential_mixed_literal` (research R8). */
+export class CredentialMixedLiteralError extends Error {
+  constructor(
+    readonly stepId: string,
+    readonly location: CredentialLocation,
+  ) {
+    super("This credential mixes typed text with {{references}}. Use only a reference, or only the typed value.");
+    this.name = "CredentialMixedLiteralError";
+  }
+}
+
+/** `422 plan_has_blockers` (FR-014). */
+export class PlanHasBlockersError extends Error {
+  constructor(readonly blockers: readonly unknown[]) {
+    super("The plan has problems to fix before a script can be generated or run.");
+    this.name = "PlanHasBlockersError";
+  }
+}
+
+/** `409 run_in_progress`: a plan with a run in progress cannot be deleted. */
+export class ChainRunInProgressError extends Error {
+  constructor() {
+    super("A run of this plan is in progress. Cancel it or wait for it to end first.");
+    this.name = "ChainRunInProgressError";
+  }
+}
+
+/** `404 data_set_not_found`. */
+export class DataSetNotFoundError extends Error {
+  constructor(dataSetId: string) {
+    super(`No data set with id '${dataSetId}' was found in this plan.`);
+    this.name = "DataSetNotFoundError";
+  }
+}
+
+/** `409 data_set_limit_exceeded` (FR-041: at most 5 data sets per plan). */
+export class DataSetLimitExceededError extends Error {
+  constructor(limit: number) {
+    super(`A plan has at most ${limit} data sets. Remove one first.`);
+    this.name = "DataSetLimitExceededError";
+  }
+}
+
+/** `413 data_set_too_large` (FR-041). */
+export class DataSetTooLargeError extends Error {
+  constructor(limitBytes: number) {
+    super(`A data set file is at most ${limitBytes / (1024 * 1024)} MiB.`);
+    this.name = "DataSetTooLargeError";
+  }
+}

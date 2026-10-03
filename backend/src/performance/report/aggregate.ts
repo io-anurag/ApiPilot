@@ -10,11 +10,12 @@ import type {
   StepTimelinePoint,
   TimelinePoint,
 } from "@apipilot/shared-domain";
-import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES, runnableJourneys } from "@apipilot/shared-domain";
+import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
 import { statusMatches } from "../plan/expectedStatuses";
 import type { MetricsPoint } from "../k6/metricsStream";
 import { LatencyHistogram } from "./histogram";
+import { isRunLayout, layoutFromPlan, type RunLayout } from "./runLayout";
 
 /**
  * Streams k6's metrics into a constant-memory aggregate (specs/031-k6-performance-testing research
@@ -64,6 +65,8 @@ interface StepStats {
   buckets: Map<number, StepBucket>;
   /** AP-035 FR-029: outcomes per capture name, in the step's capture order. */
   captures: Map<string, { succeeded: number; failed: number }>;
+  /** AP-037 FR-034: outcomes per check, in the step's check order; empty for legacy steps. */
+  checks: Map<string, { kind: string; passed: number; failed: number }>;
 }
 
 interface JourneyStats {
@@ -109,13 +112,22 @@ export interface PerformanceAggregate {
   ingest(point: MetricsPoint): void;
   progress(nowMs: number): RunProgress;
   toResult(endMs: number): PerformanceResult;
+  /** AP-037 FR-018: the Once before load step that failed, if any (research R12). */
+  setupFailure(): { stepId: string; reason: string } | null;
 }
 
-export function createAggregate(plan: PerformancePlan, plannedDurationMs: number, runStartMs: number): PerformanceAggregate {
+/**
+ * Takes a legacy plan, read through `layoutFromPlan` exactly as before, or an AP-037 run layout
+ * (specs/037-request-chain-performance research R19). Chain-only streams (`apipilot_setup`,
+ * `apipilot_check`, `apipilot_data`, refreshes by `setup_step`) add result fields only for a layout
+ * that has setup steps or data sets, so a legacy run's result is unchanged.
+ */
+export function createAggregate(source: PerformancePlan | RunLayout, plannedDurationMs: number, runStartMs: number): PerformanceAggregate {
+  const layout = isRunLayout(source) ? source : layoutFromPlan(source);
   const steps = new Map<string, StepStats>();
   const journeys = new Map<string, JourneyStats>();
   // AP-035 FR-025: an incomplete user journey was not in the script, so it has no figures.
-  for (const journey of runnableJourneys(plan.journeys)) {
+  for (const journey of layout.journeys) {
     journeys.set(journey.id, {
       requests: 0,
       failures: 0,
@@ -127,12 +139,12 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
       histogram: new LatencyHistogram(),
     });
     for (const step of journey.steps) {
-      steps.set(step.id, {
-        stepId: step.id,
+      steps.set(step.stepId, {
+        stepId: step.stepId,
         journeyId: journey.id,
         operationKey: step.operationKey,
         method: step.method,
-        expected: step.expectedStatuses,
+        expected: step.expected,
         requests: 0,
         failures: 0,
         byStatus: new Map(),
@@ -146,7 +158,8 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         histogram: new LatencyHistogram(),
         phases: new Map(),
         buckets: new Map(),
-        captures: new Map((step.captures?.map((capture) => capture.name) ?? step.produces).map((name) => [name, { succeeded: 0, failed: 0 }])),
+        captures: new Map(step.captureNames.map((name) => [name, { succeeded: 0, failed: 0 }])),
+        checks: new Map(step.checks.map((check) => [check.id, { kind: check.kind, passed: 0, failed: 0 }])),
       });
     }
   }
@@ -168,6 +181,10 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
   let journeysCutShort = 0;
   let currentVirtualUsers = 0;
   let tokenRefreshesSoFar = 0;
+  // AP-037 (research R12 to R14): setup steps, refreshes by setup step, and data set takes.
+  const setupOutcomes = new Map<string, { outcome: "ok" | "failed"; reason: string | null; latencyMs: number | null }>();
+  const refreshBySetupStep = new Map<string, { stepId: string; refreshed: number; failed: number }>();
+  const dataTakes = new Map<number, { takes: number; wrapped: boolean }>();
 
   const bucketIndex = (timeMs: number) => Math.max(0, Math.floor((timeMs - runStartMs) / bucketMs));
   const bucketAt = (index: number): Bucket => {
@@ -208,6 +225,25 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
       else data.receivedBytes += point.value;
       return;
     }
+    if (metric === "apipilot_setup" && tags.setup_step) {
+      const current = setupOutcomes.get(tags.setup_step);
+      setupOutcomes.set(tags.setup_step, { outcome: tags.outcome === "failed" ? "failed" : "ok", reason: tags.reason ? tags.reason : null, latencyMs: current?.latencyMs ?? null });
+      return;
+    }
+    if (metric === "http_req_duration" && tags.apipilot_kind === "setup" && tags.setup_step) {
+      const current = setupOutcomes.get(tags.setup_step) ?? { outcome: "ok" as const, reason: null, latencyMs: null };
+      setupOutcomes.set(tags.setup_step, { ...current, latencyMs: Math.round(point.value * 100) / 100 });
+      return;
+    }
+    if (metric === "apipilot_data" && tags.dataset !== undefined) {
+      if (tags.outcome !== "take" && tags.outcome !== "wrap") return;
+      const index = Number(tags.dataset);
+      const entry = dataTakes.get(index) ?? { takes: 0, wrapped: false };
+      entry.takes += point.value;
+      if (tags.outcome === "wrap") entry.wrapped = true;
+      dataTakes.set(index, entry);
+      return;
+    }
     if (metric === "apipilot_token_refresh") {
       if (tags.outcome === "no-lifetime") {
         refresh.lifetimeStated = false;
@@ -227,6 +263,12 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         if (tags.outcome === "failed") byScheme.failed += 1;
         else byScheme.refreshed += 1;
         refreshByScheme.set(tags.scheme, byScheme);
+      }
+      if (tags.setup_step) {
+        const bySetupStep = refreshBySetupStep.get(tags.setup_step) ?? { stepId: tags.setup_step, refreshed: 0, failed: 0 };
+        if (tags.outcome === "failed") bySetupStep.failed += 1;
+        else bySetupStep.refreshed += 1;
+        refreshBySetupStep.set(tags.setup_step, bySetupStep);
       }
       return;
     }
@@ -319,6 +361,13 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         step.captures.set(tags.capture, outcome);
         return;
       }
+      case "apipilot_check": {
+        const outcome = tags.check ? step.checks.get(tags.check) : undefined;
+        if (!outcome) return;
+        if (tags.outcome === "passed") outcome.passed += point.value;
+        else outcome.failed += point.value;
+        return;
+      }
       default:
         return;
     }
@@ -370,8 +419,9 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
         .sort(([a], [b]) => a - b)
         .map(([index, bucket]): StepTimelinePoint => ({ offsetMs: index * bucketMs, requests: bucket.requests, errors: bucket.errors, p95Ms: bucket.histogram.percentile(95) })),
       ...(step.captures.size > 0 ? { captures: [...step.captures.entries()].map(([name, outcome]) => ({ name, ...outcome })) } : {}),
+      ...(step.checks.size > 0 ? { checks: [...step.checks.entries()].map(([checkId, outcome]) => ({ checkId, ...outcome })) } : {}),
     }));
-    const journeyResults: JourneyResult[] = runnableJourneys(plan.journeys).map((journey) => {
+    const journeyResults: JourneyResult[] = layout.journeys.map((journey) => {
       const stats = journeys.get(journey.id)!;
       const cutShortAt = [...stats.cutShortAt.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       return {
@@ -425,7 +475,21 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
           ? { setupFailed: [...setupFailed.values()].sort((a, b) => compareCodeUnits(a.scheme, b.scheme) || compareCodeUnits(a.capture, b.capture)) }
           : {}),
         ...(refreshByScheme.size > 0 ? { byScheme: [...refreshByScheme.values()].sort((a, b) => compareCodeUnits(a.scheme, b.scheme)) } : {}),
+        ...(layout.setupStepIds && refreshBySetupStep.size > 0
+          ? { bySetupStep: layout.setupStepIds.flatMap((stepId) => (refreshBySetupStep.has(stepId) ? [refreshBySetupStep.get(stepId)!] : [])) }
+          : {}),
       },
+      ...(layout.setupStepIds
+        ? { setupSteps: layout.setupStepIds.flatMap((stepId) => (setupOutcomes.has(stepId) ? [{ stepId, ...setupOutcomes.get(stepId)! }] : [])) }
+        : {}),
+      ...(layout.dataSets
+        ? {
+            dataSets: layout.dataSets.map((dataSet, index) => {
+              const taken = dataTakes.get(index) ?? { takes: 0, wrapped: false };
+              return { dataSetId: dataSet.id, takes: taken.takes, rowsUsed: Math.min(taken.takes, dataSet.rowCount), wrapped: taken.wrapped };
+            }),
+          }
+        : {}),
       ...(firstFailureStep ? { firstFailure: { offsetMs: firstFailure.bucket * bucketMs, stepId: firstFailureStep } } : {}),
       ...(Number.isFinite(firstRateLimitedBucket) ? { firstRateLimitedOffsetMs: firstRateLimitedBucket * bucketMs } : {}),
       thresholdOutcomes: [],
@@ -435,5 +499,10 @@ export function createAggregate(plan: PerformancePlan, plannedDurationMs: number
     };
   }
 
-  return { ingest, progress, toResult };
+  function setupFailure(): { stepId: string; reason: string } | null {
+    for (const [stepId, outcome] of setupOutcomes) if (outcome.outcome === "failed") return { stepId, reason: outcome.reason ?? "unknown" };
+    return null;
+  }
+
+  return { ingest, progress, toResult, setupFailure };
 }

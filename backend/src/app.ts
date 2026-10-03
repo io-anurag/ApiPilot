@@ -25,6 +25,7 @@ import { createPerformanceTestingRouter, type PerformanceTestingDependencies } f
 import { createQuickPerformanceRouter } from "./api/quickPerformance";
 import { createCollectionPerformanceRouter } from "./api/collectionPerformance";
 import { createUserScriptsRouter } from "./api/userScripts";
+import { CHAIN_PLANS_BASE, chainPlansJson, createChainPlansRouter } from "./api/chainPlans";
 import { createK6Probe } from "./performance/k6/readiness";
 import { createK6Runner } from "./performance/k6/runner";
 import { versionRouter } from "./api/version";
@@ -99,6 +100,9 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // body-parser marks a request's body as already parsed once this runs, so the general
   // `express.json` below safely skips re-parsing it rather than double-parsing or erroring.
   app.use("/api/client-logs", express.json({ limit: CLIENT_LOGS_BODY_LIMIT }));
+  // AP-037 (specs/037-request-chain-performance research R26): a whole request-chain plan is saved in
+  // one request, up to 8 MiB, so its routes get their own limit, claimed before the general parser.
+  app.use(CHAIN_PLANS_BASE, chainPlansJson);
 
   // Downstream endpoints (test-model generation/enhancement/review, Postman export) receive
   // the ApiModel/TestModel derived from an uploaded spec as a JSON body. Match express.json's
@@ -146,6 +150,9 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // only on POST /api/user-scripts/:id/runs, after the engineer confirmed the script's exact bytes
   // (constitution XVII exception of 2026-09-30); it shares the one runner and probe above.
   app.use("/api", createUserScriptsRouter(performanceDependencies));
+  // AP-037: request-chain plans the engineer owns, saved locally. A run starts only on
+  // POST /api/chain-plans/:planId/runs (constitution XVII, 2026-09-24 exception as extended for AP-037).
+  app.use("/api", createChainPlansRouter(performanceDependencies));
   // AP-031: reads recorded AP-026 results only; never executes a request (specs/030 FR-009).
   app.use(
     "/api",
