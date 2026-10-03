@@ -31,7 +31,8 @@ const OPTIONS: { value: Theme; label: string; Icon: typeof SunIcon }[] = [
   { value: "dark", label: "Dark theme", Icon: MoonIcon },
 ];
 
-/** Explicit light/dark selector (not a single toggle) so both states stay directly reachable. */
+/** Explicit light/dark selector (not a single toggle) so both states stay directly reachable.
+ * AP-038 (Design A): the active sun is amber in light theme, the active moon indigo in dark. */
 export function ThemeToggle({
   theme,
   onChange,
@@ -50,10 +51,10 @@ export function ThemeToggle({
           aria-label={label}
           title={label}
           onClick={() => onChange(value)}
-          className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${
+          className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${
             theme === value
-              ? "bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200"
-              : "text-muted hover:text-brand-700 dark:hover:text-brand-200"
+              ? "bg-amber-100 text-amber-700 dark:bg-indigo-500/20 dark:text-indigo-200"
+              : "text-muted hover:text-slate-900 dark:hover:text-white"
           }`}
         >
           <Icon className="h-3.5 w-3.5" />

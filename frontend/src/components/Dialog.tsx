@@ -13,6 +13,7 @@ export function Dialog({
   panelClassName = "w-full max-w-md space-y-3 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl dark:border-brand-500",
   testId = "dialog",
   onClose,
+  onBackdropClick,
   children,
 }: Readonly<{
   role?: "dialog" | "alertdialog";
@@ -20,6 +21,9 @@ export function Dialog({
   panelClassName?: string;
   testId?: string;
   onClose: () => void;
+  /** Optional (AP-038): called when the backdrop itself — not the panel — is clicked. Existing
+   * dialogs omit it, so a stray click outside them still does nothing. */
+  onBackdropClick?: () => void;
   children: ReactNode;
 }>) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -63,8 +67,20 @@ export function Dialog({
   // a dialog taller than the window (an environment with many values) then starts at the top and
   // scrolls, instead of being centred with its title and buttons pushed off screen.
   return (
-    <div className="fixed inset-0 z-50 flex overflow-y-auto bg-slate-900/40 p-4">
-      <div className="m-auto flex w-full justify-center">
+    // The backdrop's click is a pointer convenience only (Escape is the keyboard equivalent), so
+    // it carries no key handler of its own.
+    <div
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-slate-900/40 p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onBackdropClick?.();
+      }}
+    >
+      <div
+        className="m-auto flex w-full justify-center"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onBackdropClick?.();
+        }}
+      >
         <div
           ref={panelRef}
           role={role}

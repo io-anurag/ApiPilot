@@ -71,7 +71,7 @@ describe("Run k6 Script entry", () => {
   it("is offered on the start screen", () => {
     const onSelect = vi.fn();
     render(<EntryChooser onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole("button", { name: /Run k6 Script/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Run k6 Script" }));
     expect(onSelect).toHaveBeenCalledWith("user-script");
   });
 });

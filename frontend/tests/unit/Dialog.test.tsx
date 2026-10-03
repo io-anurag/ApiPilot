@@ -63,4 +63,31 @@ describe("Dialog", () => {
     expect(screen.queryByTestId("test-dialog")).not.toBeInTheDocument();
     expect(openButton).toHaveFocus();
   });
+
+  it("calls onBackdropClick for a click on the backdrop only, never on the panel (AP-038)", () => {
+    const onBackdropClick = vi.fn();
+    render(
+      <Dialog testId="test-dialog" onClose={vi.fn()} onBackdropClick={onBackdropClick}>
+        <button type="button">Inside</button>
+      </Dialog>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Inside" }));
+    fireEvent.click(screen.getByTestId("test-dialog"));
+    expect(onBackdropClick).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("test-dialog").parentElement?.parentElement as HTMLElement);
+    expect(onBackdropClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores backdrop clicks when no onBackdropClick is given (existing dialogs)", () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog testId="test-dialog" onClose={onClose}>
+        <button type="button">Inside</button>
+      </Dialog>,
+    );
+    fireEvent.click(screen.getByTestId("test-dialog").parentElement?.parentElement as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("test-dialog")).toBeInTheDocument();
+  });
 });

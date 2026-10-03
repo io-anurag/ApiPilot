@@ -1132,6 +1132,37 @@ unavailable, rather than each page building its own progress display. Every stat
 indicator carries a text label or icon in addition to color, and every interactive element is
 keyboard-operable with a visible focus indicator (constitution/CLAUDE.md §38).
 
+### Workspace redesign (AP-038)
+
+specs/038-workspace-redesign applies the "Design A" direction across the whole frontend without
+any backend, contract or shared-domain change (its FR-025). Three mechanisms carry it:
+
+- **Tokens, not per-page edits.** `index.css` keeps the spec 027 token names
+  (`background`, `surface`, `chrome`, `border`, `muted`) and changes their values: a cool-neutral
+  light theme and a navy dark theme. It adds one colour per top-level workflow
+  (`--color-wf-guided|import|quick|plans|k6`, each with a dark override), and points
+  `--font-display` at IBM Plex Sans, so every page follows at once. The serif package was
+  removed. Workflow hues never reuse a status hue or the brand teal, and every workflow colour
+  meets WCAG AA as text on its theme's surface (038 research D2). A base-layer rule justifies
+  prose paragraphs app-wide with hyphenation (`p:not(.font-mono)`), and utility classes still
+  override it (FR-026).
+- **One workflow catalog.** `components/workflowCatalog.ts` is the single ordered list of the
+  five views: id, start-screen title, the unchanged tab label, description, icon and literal
+  Tailwind tone classes. It also holds the three artifact choices (OpenAPI → Guided Workflow and
+  Quick performance test; Postman → Import & Run; k6 → Run k6 Script). `App.tsx` builds its tabs
+  from it, and `EntryChooser`, `CommandPalette` and `HelpDialog` read it.
+- **A palette that reuses the existing navigation.** `App` owns the theme (`useTheme` was lifted
+  out of `AppHeader`) and the palette's open state. One document `keydown` listener uses the pure
+  helpers in `components/paletteCommands.ts`. It opens the palette on Ctrl/⌘+K unless the target
+  is editable or an `aria-modal` element (any `Dialog`) is present. While the palette is open it
+  only suppresses the browser's own shortcut. Commands are derived on each opening
+  (`buildCommands`) and run through the handlers the tabs, cards and theme control already use: a
+  workflow calls `handleTabChange` when the tab menu is shown and `handleSelect` otherwise, so
+  the palette cannot reach a state they cannot. `CommandPalette` follows the ARIA combobox
+  pattern on top of `Dialog`, which gained one optional prop, `onBackdropClick`; existing dialogs
+  omit it and behave as before. The header's help button opens `HelpDialog` (shortcuts and the
+  five workflows).
+
 ### Collection and variable editor
 
 specs/028-collection-editor-ui adds a Postman-style pre-run editing surface — `CollectionTreeView`,
