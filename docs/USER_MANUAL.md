@@ -713,8 +713,8 @@ and nothing is kept. Data set files are encrypted on this machine and reach k6 o
 lasts. Note that a downloaded copy of a script that reads a data set cannot be run in **Run k6
 Script**, which never lets a script open files.
 
-**Running.** Under **Run setup**, choose the target environment, the load profile, thresholds and
-the default think time, then generate the script. The run trigger names the environment and
+**Running.** The **Run** card leads **Run setup**. It says in one line whether a run can start, shows the profile, duration, peak virtual users, think time and script below it, and holds the load run and Debug run. Below it, choose the target environment, the load profile, thresholds and
+the default think time, then generate the script. The load profile shows a chart of the planned virtual users over time, drawn from the stages you entered (k6 starts at one virtual user and ramps to each stage's target); it recommends nothing. The run trigger names the environment and
 lists the chains, every write step and every host. Nothing is sent until you start the run. If a
 Once before load step fails, the load never starts and the run ends as failed, naming that step.
 The report shows each chain and step with its figures, each check's and extractor's counts, the

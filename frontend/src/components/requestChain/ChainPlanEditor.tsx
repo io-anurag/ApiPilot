@@ -345,7 +345,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
 
       <PendingBar
         items={pending}
-        ready={ready}
+        ready={tab === "setup" ? null : ready}
         idleText={runs.readiness === null ? "Checking whether k6 is ready…" : undefined}
         running={runs.inProgress ? { label: "View progress", onClick: () => setTab("runs") } : null}
         notes={notes}
@@ -445,7 +445,8 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
 
       {tab === "setup" && (
         <div className="space-y-4">
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-2">
+        <ChainRunTrigger hero plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+        <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-2">
           <SetupItem flush state={environment ? "done" : "todo"} title="Target environment" titleId="chain-environment-title" summary="Holds the base URL and every value the plan uses. Literal credentials you type are moved into it as secret values.">
             <EnvironmentPicker
               environments={environments}
@@ -519,7 +520,6 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
               </p>
             )}
           </SetupItem>
-          <ChainRunTrigger flush plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
         </div>
         <ChainRunHistory plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
         </div>

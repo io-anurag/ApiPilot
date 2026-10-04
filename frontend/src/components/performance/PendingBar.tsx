@@ -60,6 +60,8 @@ export function PendingBar({
   /** Things worth knowing that do not block a run. */
   notes: readonly ReactNode[];
 }>) {
+  // Nothing to say (the Run setup tab says a ready plan itself): no empty box.
+  if (items.length === 0 && !ready && !idleText && !running && notes.length === 0) return null;
   let tone = "border-border bg-surface";
   if (items.length > 0) tone = "border-warning-500 bg-warning-50 dark:bg-warning-500/10";
   else if (ready) tone = "border-success-500 bg-success-50 dark:bg-success-500/10";

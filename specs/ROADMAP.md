@@ -3354,3 +3354,10 @@ Implementation
       returning the token, no run listed, and 404 after discard. Layout and keyboard use checked in
       jsdom only: the browser walkthrough (`quickstart.md`) is outstanding.
     - Version bumped to 19.23.0 (root, backend, frontend, shared-domain).
+60. **AP-040 Run setup launch card and load profile chart; version 19.24.0 (2026-10-04).**
+    - The Run card now leads the Run setup tab as a rounded launch card: a status line, a facts strip
+      (profile, duration, peak VUs, think time, script) and the target, write list, load run and Debug
+      run unchanged. The load profile editor gained a chart of the planned virtual users. Frontend only;
+      spec in `specs/040-run-setup-launch-card`. Cards on the tab use larger corner radii.
+    - Validation: frontend tests, lint and build pass; the browser walkthrough is outstanding.
+    - Version bumped to 19.24.0 (root, backend, frontend, shared-domain).

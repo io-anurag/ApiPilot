@@ -2,6 +2,8 @@ import type { ChainPlan, ChainPlanAnalysis, ChainRun, ChainRunSummary, Environme
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
+import { StateMark } from "../performance/SetupItem";
+import { formatDuration } from "../performance/performanceViewModel";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
@@ -66,21 +68,61 @@ export function ChainRunPanel(props: ChainRunProps) {
 }
 
 /**
- * The Run card: one target summary and the load run and Debug run triggers. `flush` drops its own
- * border so the Run setup tab can group it with the setup items in one card.
+ * The Run card: one target summary and the load run and Debug run triggers. `hero` is the Run setup
+ * tab's launch card (AP-040): it leads the tab, says in one line whether a run can start, and puts the
+ * profile, duration, peak, think time and script in a strip above the target summary and the write list.
  */
-export function ChainRunTrigger({ plan, analysis, script, environment, runs, dirty, flush = false }: ChainRunProps & Readonly<{ flush?: boolean }>) {
+export function ChainRunTrigger({ plan, analysis, script, environment, runs, dirty, hero = false }: ChainRunProps & Readonly<{ hero?: boolean }>) {
   const blocked = runBlockedReason({ script, analysis, environment, runs, dirty });
   // The Debug run runs every chain once; the load run skips a chain whose steps all run once before load.
   const summaryChains = plan.chains
     .filter((chain) => chain.steps.length > 0)
     .map((chain) => (chain.steps.some((step) => step.runs !== "once-before-load") ? chain : { ...chain, note: "once before load only; not in the load run" }));
 
+  const profile = plan.loadProfile;
+  const peak = Math.max(0, ...profile.stages.map((stage) => stage.targetVirtualUsers));
+  const facts = [
+    { label: "Profile", value: profile.kind.charAt(0).toUpperCase() + profile.kind.slice(1), mono: false },
+    { label: "Duration", value: formatDuration(profile.plannedDurationMs), mono: true },
+    { label: "Peak VUs", value: String(peak), mono: true },
+    { label: "Think time", value: `${plan.thinkTimeMs} ms`, mono: true },
+    { label: "Script", value: script ? `${script.scriptSha256.slice(0, 8)}…` : "Not generated", mono: true },
+  ];
+  const launchable = blocked === null && !runs.inProgress;
+
   return (
-      <section aria-labelledby="chain-run-title" className={`space-y-3 bg-surface p-4 ${flush ? "lg:col-span-2" : "rounded-lg border border-border"}`}>
-        <h3 id="chain-run-title" className="text-sm font-semibold">
-          Run
-        </h3>
+      <section
+        aria-labelledby="chain-run-title"
+        className={hero ? `overflow-hidden rounded-2xl border bg-surface ${launchable ? "border-success-500" : "border-border"}` : "space-y-3 rounded-lg border border-border bg-surface p-4"}
+      >
+        {hero ? (
+          <>
+            <div className="flex items-start gap-3 p-5">
+              <StateMark state={launchable ? "done" : "todo"} />
+              <div className="min-w-0">
+                <h3 id="chain-run-title" className="text-lg font-semibold">
+                  Run
+                </h3>
+                <p className="text-sm text-muted" data-testid="run-hero-status">
+                  {runs.inProgress ? "Run in progress." : environment && blocked === null ? `Ready to run on ${environment.name} (${environment.tier}).` : "Not ready to run yet."}
+                </p>
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-3 lg:grid-cols-5" data-testid="run-hero-facts">
+              {facts.map((fact) => (
+                <div key={fact.label} className="bg-slate-50 px-5 py-3 dark:bg-white/5">
+                  <dt className="text-xs font-medium text-muted">{fact.label}</dt>
+                  <dd className={`mt-0.5 text-sm font-semibold ${fact.mono ? "font-mono" : ""}`}>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        ) : (
+          <h3 id="chain-run-title" className="text-sm font-semibold">
+            Run
+          </h3>
+        )}
+        <div className={hero ? "space-y-3 p-5" : "space-y-3"}>
         <RunTargetSummary plan={plan} analysis={analysis} environment={environment} chains={summaryChains} />
         <div className="space-y-4 border-t border-border pt-3">
           <div className="space-y-2">
@@ -108,6 +150,7 @@ export function ChainRunTrigger({ plan, analysis, script, environment, runs, dir
           <div className="border-t border-border pt-3">
             <ChainDebugPanel plan={plan} analysis={analysis} environment={environment} dirty={dirty} loadRunInProgress={runs.inProgress} />
           </div>
+        </div>
         </div>
       </section>
   );
