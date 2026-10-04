@@ -272,5 +272,23 @@ describe("ChainPlanEditor", () => {
     expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
     expect(calls.some((call) => call.url.includes("/debug-runs"))).toBe(false);
   });
-});
 
+  it("leads the Run setup tab with the launch card: not-ready status, the plan's profile facts, then the setup items", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    await screen.findByTestId("chain-plan-name");
+    fireEvent.click(screen.getByRole("button", { name: "Run setup (2 to do)" }));
+    expect(screen.getByTestId("run-hero-status")).toHaveTextContent("Not ready to run yet.");
+    const facts = within(screen.getByTestId("run-hero-facts"));
+    expect(facts.getByText("Smoke")).toBeInTheDocument();
+    expect(facts.getByText("01:00")).toBeInTheDocument();
+    expect(facts.getByText("1000 ms")).toBeInTheDocument();
+    expect(facts.getByText("Not generated")).toBeInTheDocument();
+    // The load profile chart sits with the load profile editor.
+    expect(screen.getByTestId("load-profile-chart")).toBeInTheDocument();
+    // The hero comes before the setup items in reading order.
+    const hero = screen.getByRole("heading", { name: "Run" });
+    const environmentTitle = document.getElementById("chain-environment-title");
+    expect(hero.compareDocumentPosition(environmentTitle as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

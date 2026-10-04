@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LoadProfile, LoadProfileKind, LoadStage } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
+import { LoadProfileChart } from "./LoadProfileChart";
 import { formatDuration, secondsToMs } from "./performanceViewModel";
 
 /**
@@ -100,6 +101,7 @@ export function LoadProfileEditor({
           ))}
         </tbody>
       </table>
+      {valid && <LoadProfileChart stages={parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target }))} />}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => setStages((current) => [...current, { seconds: "60", target: "1" }])}>
           + Add stage

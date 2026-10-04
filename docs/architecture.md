@@ -948,6 +948,13 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
   All calls go through `services/requestChainClient.ts`.
 
+- **Run setup launch card and load profile chart (AP-040, 19.24.0, `specs/040-run-setup-launch-card`).**
+  Frontend only. `ChainRunTrigger` takes a `hero` variant that `ChainPlanEditor` renders first on
+  the Run setup tab (the Runs & reports tab keeps the plain card), with a status line and a facts
+  strip from the plan; `PendingBar` omits its ready row on that tab and renders nothing when it has
+  nothing to say. `LoadProfileChart` draws `loadProfilePoints(stages)` (pure, in
+  `performanceViewModel.ts`) inside `LoadProfileEditor`. No contract, route or dependency changed.
+
 - **Debug run (AP-039, 19.23.0, `specs/039-chain-debug-run`).** An explicit, one-shot, in-process run
   of a saved plan that returns each step's request and response to the UI and stores nothing.
   AP-036/037's rule that reports and stored results hold no request or response content is

@@ -1,4 +1,4 @@
-import type { EnvironmentTier, K6Readiness, LoadProfile, PerformanceRunSummary } from "@apipilot/shared-domain";
+import type { EnvironmentTier, K6Readiness, LoadProfile, LoadStage, PerformanceRunSummary } from "@apipilot/shared-domain";
 import type { StatusTone } from "../StatusBadge";
 
 /**
@@ -47,4 +47,26 @@ export function loadProfileSummary(profile: LoadProfile): string {
 /** Stage durations are edited in whole seconds and sent as milliseconds. */
 export function secondsToMs(seconds: number): number {
   return Math.max(1, Math.round(seconds)) * 1000;
+}
+
+/** k6 starts a run that has only `stages` at one virtual user, then ramps linearly to each stage's target. */
+export const K6_STARTING_VIRTUAL_USERS = 1;
+
+export interface LoadProfilePoint {
+  seconds: number;
+  virtualUsers: number;
+}
+
+/**
+ * The planned virtual users over time as the corners of the ramp k6 follows: the starting point, then the
+ * end of each stage at its target. Pure, so the chart's geometry is testable without rendering.
+ */
+export function loadProfilePoints(stages: readonly Pick<LoadStage, "durationMs" | "targetVirtualUsers">[]): LoadProfilePoint[] {
+  let seconds = 0;
+  const points: LoadProfilePoint[] = [{ seconds, virtualUsers: K6_STARTING_VIRTUAL_USERS }];
+  for (const stage of stages) {
+    seconds += stage.durationMs / 1000;
+    points.push({ seconds, virtualUsers: stage.targetVirtualUsers });
+  }
+  return points;
 }
