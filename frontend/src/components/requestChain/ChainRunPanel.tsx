@@ -4,8 +4,9 @@ import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
-import { WriteOperationSummary } from "../performance/WriteOperationSummary";
 import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
+import { ChainDebugPanel } from "./ChainDebugPanel";
+import { RunTargetSummary } from "./RunTargetSummary";
 
 type Runs = PerformanceRuns<ChainRun, ChainRunSummary, string>;
 
@@ -43,17 +44,7 @@ export function runAgainBlockedReason(run: ChainRun, input: { plan: ChainPlan; s
  * repeats the newest ended run only while its script and data are unchanged; restoring a run's plan
  * never starts one.
  */
-export function ChainRunPanel({
-  plan,
-  analysis,
-  script,
-  environment,
-  environments,
-  runs,
-  runsClient,
-  dirty,
-  onRestore,
-}: Readonly<{
+type ChainRunProps = Readonly<{
   plan: ChainPlan;
   analysis: ChainPlanAnalysis;
   script: ScriptStatus | null;
@@ -63,82 +54,73 @@ export function ChainRunPanel({
   runsClient: PerformanceRunsClient<ChainRun, ChainRunSummary, string>;
   dirty: boolean;
   onRestore: (runId: string, into: "plan" | "new-plan") => void;
-}>) {
-  const blocked = runBlockedReason({ script, analysis, environment, runs, dirty });
-  const latest = runs.latestFinished;
-  const againBlocked = latest ? runAgainBlockedReason(latest, { plan, script, environments, runs }) : null;
-  const latestEnvironment = latest ? environments.find((candidate) => candidate.id === latest.environment.id) : undefined;
-  const loadChains = plan.chains.filter((chain) => chain.steps.some((step) => step.runs !== "once-before-load"));
+}>;
 
+export function ChainRunPanel(props: ChainRunProps) {
   return (
     <div className="space-y-4">
-      <section aria-labelledby="chain-run-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
+      <ChainRunTrigger {...props} />
+      <ChainRunHistory {...props} />
+    </div>
+  );
+}
+
+/**
+ * The Run card: one target summary and the load run and Debug run triggers. `flush` drops its own
+ * border so the Run setup tab can group it with the setup items in one card.
+ */
+export function ChainRunTrigger({ plan, analysis, script, environment, runs, dirty, flush = false }: ChainRunProps & Readonly<{ flush?: boolean }>) {
+  const blocked = runBlockedReason({ script, analysis, environment, runs, dirty });
+  // The Debug run runs every chain once; the load run skips a chain whose steps all run once before load.
+  const summaryChains = plan.chains
+    .filter((chain) => chain.steps.length > 0)
+    .map((chain) => (chain.steps.some((step) => step.runs !== "once-before-load") ? chain : { ...chain, note: "once before load only; not in the load run" }));
+
+  return (
+      <section aria-labelledby="chain-run-title" className={`space-y-3 bg-surface p-4 ${flush ? "lg:col-span-2" : "rounded-lg border border-border"}`}>
         <h3 id="chain-run-title" className="text-sm font-semibold">
           Run
         </h3>
-        {environment ? (
-          <p className="text-sm">
-            Target: <span className="font-medium">{environment.name}</span> <StatusBadge label={`Tier: ${environment.tier}`} /> <code className="font-mono text-xs">{environment.baseUrl}</code>
-          </p>
-        ) : (
-          <p className="text-sm text-muted">No target environment chosen.</p>
-        )}
-        <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <h4 className="text-xs font-semibold uppercase text-muted">Chains</h4>
-            <ul className="mt-1 space-y-0.5" data-testid="trigger-chains">
-              {loadChains.map((chain) => (
-                <li key={chain.id}>
-                  {chain.name} · {chain.steps.length} {chain.steps.length === 1 ? "step" : "steps"}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-xs font-semibold uppercase text-muted">Hosts</h4>
-            <ul className="mt-1 space-y-0.5" data-testid="trigger-hosts">
-              {analysis.hosts.map((host) => (
-                <li key={host}>
-                  <code className="font-mono text-xs">{host === "{{baseUrl}}" && environment ? environment.baseUrl : host}</code>
-                </li>
-              ))}
-            </ul>
-          </div>
-          {plan.dataSets.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted">Data sets</h4>
-              <ul className="mt-1 space-y-0.5" data-testid="trigger-data-sets">
-                {plan.dataSets.map((dataSet) => (
-                  <li key={dataSet.id}>
-                    {dataSet.name} · {dataSet.rowCount} rows
-                  </li>
-                ))}
-              </ul>
+        <RunTargetSummary plan={plan} analysis={analysis} environment={environment} chains={summaryChains} />
+        <div className="space-y-4 border-t border-border pt-3">
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold">Load run</h4>
+            <p className="text-xs text-muted">Load is generated from the machine running the ApiPilot backend. Nothing is sent until you start the run.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              {!runs.inProgress ? (
+                <button type="button" className={BUTTON_STYLES.primary} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id)}>
+                  {runs.starting ? "Starting…" : `Start run on ${environment?.name ?? "…"}`}
+                </button>
+              ) : (
+                <button type="button" className={BUTTON_STYLES.danger} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
+                  {runs.cancelling ? "Cancelling…" : "Cancel run"}
+                </button>
+              )}
+              {blocked && !runs.inProgress && <span className="text-xs text-muted" data-testid="run-blocked">{blocked}</span>}
             </div>
-          )}
+            {runs.run && runs.inProgress && (
+              <p className="text-sm" role="status">
+                Running · {Math.round((runs.run.progress?.elapsedMs ?? 0) / 1000)} s · {runs.run.progress?.requestsSoFar ?? 0} requests · {runs.run.progress?.failuresSoFar ?? 0} failures
+              </p>
+            )}
+            {runs.error && <ErrorState message={runs.error} testId="chain-run-error" />}
+          </div>
+          <div className="border-t border-border pt-3">
+            <ChainDebugPanel plan={plan} analysis={analysis} environment={environment} dirty={dirty} loadRunInProgress={runs.inProgress} />
+          </div>
         </div>
-        <WriteOperationSummary summary={analysis.writeSummary} variant="trigger" />
-        <p className="text-xs text-muted">Load is generated from the machine running the ApiPilot backend. Nothing is sent until you start the run.</p>
-        <div className="flex flex-wrap items-center gap-3">
-          {!runs.inProgress ? (
-            <button type="button" className={BUTTON_STYLES.primary} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id)}>
-              {runs.starting ? "Starting…" : `Start run on ${environment?.name ?? "…"}`}
-            </button>
-          ) : (
-            <button type="button" className={BUTTON_STYLES.danger} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
-              {runs.cancelling ? "Cancelling…" : "Cancel run"}
-            </button>
-          )}
-          {blocked && !runs.inProgress && <span className="text-xs text-muted" data-testid="run-blocked">{blocked}</span>}
-        </div>
-        {runs.run && runs.inProgress && (
-          <p className="text-sm" role="status">
-            Running · {Math.round((runs.run.progress?.elapsedMs ?? 0) / 1000)} s · {runs.run.progress?.requestsSoFar ?? 0} requests · {runs.run.progress?.failuresSoFar ?? 0} failures
-          </p>
-        )}
-        {runs.error && <ErrorState message={runs.error} testId="chain-run-error" />}
       </section>
+  );
+}
 
+/** The plan's last run, restore controls and run list with the opened report. */
+export function ChainRunHistory({ plan, script, environments, runs, runsClient, onRestore }: ChainRunProps) {
+  const latest = runs.latestFinished;
+  const againBlocked = latest ? runAgainBlockedReason(latest, { plan, script, environments, runs }) : null;
+  const latestEnvironment = latest ? environments.find((candidate) => candidate.id === latest.environment.id) : undefined;
+
+  return (
+    <div className="space-y-4">
       {latest && (
         <section aria-labelledby="chain-last-run-title" className="space-y-2 rounded-lg border border-border bg-surface p-4">
           <h3 id="chain-last-run-title" className="text-sm font-semibold">

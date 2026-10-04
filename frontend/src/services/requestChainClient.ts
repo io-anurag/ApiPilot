@@ -9,6 +9,7 @@ import type {
   DataSetInfo,
   DataSetMode,
   DataSetPreview,
+  DebugRunResult,
   K6Readiness,
   MovedCredential,
   PlanBlocker,
@@ -63,6 +64,8 @@ async function chainRequest<T>(operation: string, path: string, init: RequestIni
   try {
     response = await fetch(path, init);
   } catch (err) {
+    // The engineer cancelled (a Debug run's request is aborted to cancel it): not an error to log.
+    if (err instanceof DOMException && err.name === "AbortError") return { ok: false, error: "aborted", message: "Cancelled." };
     logger.error("network_error", { operation, errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
@@ -136,6 +139,20 @@ export const fetchDataSetPreview = (planId: string, dataSetId: string) =>
   }));
 
 export const generateScript = (planId: string) => chainRequest("generateScript", `${planPath(planId)}/script`, json("POST"), (body) => ({ script: body.script as ScriptStatus }));
+
+/**
+ * AP-039 (specs/039-chain-debug-run contracts/debug-run-api.md). The request stays open until the run
+ * ends; aborting `signal` cancels it. The result is held in component state only: it is never written to
+ * storage, the URL or a log, and `discardDebugRun` tells the server to forget what it kept for reveal.
+ */
+export const debugRun = (planId: string, environmentId: string, signal?: AbortSignal) =>
+  chainRequest("debugRun", `${planPath(planId)}/debug-runs`, { ...json("POST", { environmentId }), signal }, (body) => ({ result: body as unknown as DebugRunResult }));
+
+export const revealDebugValue = (planId: string, debugRunId: string, valueId: string) =>
+  chainRequest("revealDebugValue", `${planPath(planId)}/debug-runs/${encodeURIComponent(debugRunId)}/values/${encodeURIComponent(valueId)}`, undefined, (body) => ({ value: String(body.value ?? "") }));
+
+export const discardDebugRun = (planId: string, debugRunId: string) =>
+  chainRequest("discardDebugRun", `${planPath(planId)}/debug-runs/${encodeURIComponent(debugRunId)}`, { method: "DELETE" }, () => ({}));
 
 /** For an `<a download>`: the browser fetches the file itself, so no script text passes through app state. */
 export const scriptDownloadUrl = (planId: string, file: "script" | "environment-template") => `${planPath(planId)}/script/download?file=${file}`;

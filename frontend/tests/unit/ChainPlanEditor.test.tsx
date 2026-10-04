@@ -257,4 +257,20 @@ describe("ChainPlanEditor", () => {
     fireEvent.click(screen.getByText("Get a token"));
     expect(screen.getByText("Added by you")).toBeInTheDocument();
   });
+
+  it("offers the Debug run beside the run trigger, in Run setup and in Runs & reports, and never starts it by itself", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    await screen.findByTestId("chain-plan-name");
+    fireEvent.click(screen.getByRole("button", { name: "Run setup (2 to do)" }));
+    expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Run" })).toBeInTheDocument();
+    // Without a target environment it says why it cannot start.
+    expect(screen.getByRole("button", { name: /Start debug run/ })).toBeDisabled();
+    expect(screen.getByTestId("debug-blocked")).toHaveTextContent("Choose the target environment.");
+    fireEvent.click(screen.getByRole("button", { name: "Runs & reports (0)" }));
+    expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
+    expect(calls.some((call) => call.url.includes("/debug-runs"))).toBe(false);
+  });
 });
+

@@ -20,8 +20,8 @@ Errors:
 
 | Status | `error` | When |
 |---|---|---|
-| 400 | `invalid_request` | `planId` or `environmentId` is not a UUID, or the body is malformed. |
-| 404 | `chain_plan_not_found` | No such plan in this session. |
+| 400 | `invalid_request` | `environmentId` is missing or not a UUID. |
+| 404 | `chain_plan_not_found` | No such plan in this session, or `planId` is not a UUID. |
 | 404 | `environment_not_found` | No such environment in this session. |
 | 409 | `execution_in_progress` | A run is in progress in this session. |
 | 409 | `debug_run_in_progress` | A Debug run is already executing for this plan (FR-023). |
@@ -44,14 +44,13 @@ Reveals one masked value that came from the target.
 
 | Status | `error` | When |
 |---|---|---|
-| 400 | `invalid_request` | Ids are not valid. |
-| 404 | `debug_value_not_found` | The value is unknown, not revealable, expired, or its Debug run was discarded or replaced. The response does not distinguish these cases. |
+| 404 | `debug_value_not_found` | The value is unknown, malformed, not revealable, expired, or its Debug run was discarded or replaced. The response does not distinguish these cases. |
 
 Secret environment values and secret data-column values are never held, so they always yield `404`.
 
 ## DELETE `/api/chain-plans/:planId/debug-runs/:debugRunId`
 
-Discards the held revealable values for that Debug run. `204` always, including when nothing was held. The client calls it when the Debug view is closed.
+Discards the held revealable values for that Debug run. `204` whether or not anything was held (`404 chain_plan_not_found` only for an unknown plan). The client calls it when the Debug view is closed.
 
 ## Logging contract
 

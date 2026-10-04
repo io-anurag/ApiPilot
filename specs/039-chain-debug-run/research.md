@@ -18,6 +18,8 @@ Sources: spec.md (with its 2026-10-04 clarifications), a read-only survey of `ba
 
 **Decision**: the debug executor reproduces the runtime's behaviour, and parity is enforced by tests that run the same plan with the same stub responder through the existing sandbox (`backend/tests/fixtures/chain/chainSandbox.ts`, `loadChainPlan`) and through the debug executor, comparing: the requests built (method, resolved URL, headers, body), per-extractor outcome, per-check outcome, and which steps were sent or skipped. Dynamic variables are table-tested against the sandbox for fixed VU, iteration, run tag and a frozen clock. A hash guard on `CHAIN_RUNTIME` fails when the runtime changes, prompting a parity review.
 
+**Path walk** (decided, task T002): `valueAtPath` in shared-domain differs from the runtime's `field()` for a field named like an array position (the runtime matches `Object.entries` keys, so a field `0` matches the first element of an array, while `valueAtPath` refuses a field on an array). The debug executor therefore has its own walker (`walkBody` in `debug/extraction.ts`) that copies the runtime's, and shared-domain is not changed.
+
 **Pieces to twin**: reference filling and request building (URL, query, headers, raw and form bodies), dynamic variable generation (including its word lists), extractors, checks, expected-status matching, and the setup and chain flow.
 
 ## R3. Where the spec and the runtime differ (spec corrected)
@@ -68,7 +70,7 @@ The text is split on every occurrence of each sensitive literal (longest first),
 
 **Why not streaming**: progress streaming adds a protocol, partial-result masking and a replay problem for no scenario in the spec. It can be added later without changing the result shape.
 
-**Execution slot**: the existing session-wide slot (`findExecutionInProgress`) guards load runs. A Debug run refuses to start while a run is in progress (409 `execution_in_progress`) so it never competes with a load run for the same target; whether a Debug run should itself occupy the slot is settled in implementation after reading `execution/executionSlot.ts` (task T-slot).
+**Execution slot** (decided, task T001): the session-wide slot (`findExecutionInProgress`, `backend/src/execution/executionSlot.ts`) is a synchronous read over stored run records of every run kind. A Debug run is not a stored run, so it does **not** take the slot; it refuses to start while the slot is held (409 `execution_in_progress`), so it never competes with a load run for a target, and an in-memory per-session-and-plan flag stops two Debug runs of one plan overlapping (409 `debug_run_in_progress`). The load-run start route is unchanged, so a load run can start while a Debug run is executing; closing that direction would change load-run behaviour and is left to a later specification.
 
 ## R7. Environment tier safeguards
 

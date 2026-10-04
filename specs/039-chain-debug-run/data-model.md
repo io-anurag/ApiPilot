@@ -23,7 +23,7 @@ TextSegment  = { kind: "text"; text: string }
 | `debugRunId` | Opaque id; keys the reveal store. |
 | `planId`, `environment` | Plan id; environment `{ id, name, tier, baseUrl }`. |
 | `startedAt`, `durationMs` | Wall-clock start (ISO) and total duration. |
-| `outcome` | `"completed" \| "stopped-early" \| "setup-failed" \| "cancelled"`. |
+| `outcome` | `"completed" \| "stopped-early" \| "setup-failed" \| "cut-off" \| "cancelled"`. `cut-off`: the overall time limit was reached. |
 | `setup` | `DebugStepOutcome[]` for the once-before-load steps, in order. |
 | `chains` | `DebugChainOutcome[]`, one per chain in plan order. |
 | `dataRow` | `{ dataSetName; rowNumber: 1 }[]`, the row used per data set (FR rule: first row). |
@@ -43,8 +43,8 @@ A discriminated union on `status`.
 |---|---|
 | `stepId`, `stepName` | From the plan. |
 | `request` | `{ method; url: MaskedText; headers: DebugHeader[]; body: DebugBody }` as actually sent. |
-| `response` | `{ status; statusText; headers: DebugHeader[]; body: DebugBody; redirects: MaskedText[]; sizeBytes } \| null`. `null` when there was no response. |
-| `noResponseReason` | `"refused" \| "timeout" \| "dns" \| "host-not-allowed-redirect" \| "aborted" \| "error"`, present when `response` is `null`. |
+| `response` | `{ status; statusText; headers: DebugHeader[]; body: DebugBody; redirects: MaskedText[]; redirectBlockedTo?: string } \| null`. `null` when there was no response. `redirectBlockedTo` is the host of a redirect that was not followed because it is not an allowed host. |
+| `noResponseReason` | `"refused" \| "timeout" \| "dns" \| "aborted" \| "unsupported-request" \| "error"`, present when `response` is `null`. `unsupported-request`: a body on a GET or HEAD request, which a Debug run cannot send. |
 | `durationMs` | Time to the final response or failure. |
 | `statusExpected` | `{ expected: string[]; received: number \| null; ok: boolean }`. |
 | `extractors` | `DebugExtractorOutcome[]`. |

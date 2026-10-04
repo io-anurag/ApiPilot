@@ -97,6 +97,24 @@ describe("ChainRunPanel", () => {
     expect(writes).not.toHaveTextContent(/\bs2\b/);
   });
 
+  it("describes both the load run and the Debug run with one target summary, and starts neither by itself", () => {
+    renderPanel();
+    expect(screen.getAllByTestId("trigger-chains")).toHaveLength(1);
+    expect(screen.getAllByTestId("write-summary-trigger")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Load run" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start run on Local stub" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Start debug run on Local stub" })).toBeEnabled();
+  });
+
+  it("says which chains the load run skips, because the Debug run runs every chain once", () => {
+    const plan = lifecyclePlan();
+    plan.chains = [...plan.chains, { ...plan.chains[0], id: "setup-only", name: "Setup only", steps: plan.chains[0].steps.map((step) => ({ ...step, id: `${step.id}-setup`, runs: "once-before-load" as const })) }];
+    renderPanel({ plan });
+    expect(screen.getByTestId("trigger-chains")).toHaveTextContent("Setup only · 3 steps (once before load only; not in the load run)");
+    expect(screen.getByTestId("trigger-chains")).not.toHaveTextContent("Customer lifecycle · 3 steps (");
+  });
+
   it("starts a run on the named environment only on the engineer's click", () => {
     const start = vi.fn(async () => true);
     renderPanel({ runs: runs({ start }) });

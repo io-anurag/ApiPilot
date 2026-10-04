@@ -43,16 +43,21 @@ export function SetupItem({
   title,
   titleId,
   summary,
+  flush = false,
+  className = "",
   children,
 }: Readonly<{
   state: SetupItemState;
   title: string;
   titleId: string;
   summary?: ReactNode;
+  /** Drop the item's own border, so a parent can group several items in one bordered card. */
+  flush?: boolean;
+  className?: string;
   children?: ReactNode;
 }>) {
   return (
-    <section aria-labelledby={titleId} className="space-y-3 rounded-lg border border-border bg-surface p-4">
+    <section aria-labelledby={titleId} className={`space-y-3 bg-surface p-4 ${flush ? "" : "rounded-lg border border-border"} ${className}`}>
       <div className="flex items-start gap-3">
         <StateMark state={state} />
         <div className="min-w-0 flex-1">

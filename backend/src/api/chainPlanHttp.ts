@@ -5,6 +5,9 @@ import {
   ChainRunInProgressError,
   CredentialMixedLiteralError,
   CredentialNeedsEnvironmentError,
+  DebugRunBlockedError,
+  DebugRunInProgressError,
+  DebugValueNotFoundError,
   DataSetLimitExceededError,
   DataSetNotFoundError,
   DataSetTooLargeError,
@@ -60,6 +63,9 @@ export function handleChainError(req: Request, res: Response, startedAt: number,
   if (err instanceof DataSetLimitExceededError) return fail(req, res, startedAt, 409, "data_set_limit_exceeded", err.message);
   if (err instanceof DataSetNotFoundError) return fail(req, res, startedAt, 404, "data_set_not_found", err.message);
   if (err instanceof ChainRunInProgressError) return fail(req, res, startedAt, 409, "run_in_progress", err.message);
+  if (err instanceof DebugRunBlockedError) return fail(req, res, startedAt, 409, "execution_in_progress", err.message, { runId: err.runId });
+  if (err instanceof DebugRunInProgressError) return fail(req, res, startedAt, 409, "debug_run_in_progress", err.message);
+  if (err instanceof DebugValueNotFoundError) return fail(req, res, startedAt, 404, "debug_value_not_found", err.message);
   if (err instanceof EnvironmentNotFoundError) return fail(req, res, startedAt, 404, "environment_not_found", err.message);
   if (err instanceof PerformanceRunNotFoundError) return fail(req, res, startedAt, 404, "run_not_found", err.message);
   handleKnownError(req, res, startedAt, err);

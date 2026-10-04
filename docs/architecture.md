@@ -948,6 +948,56 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
   All calls go through `services/requestChainClient.ts`.
 
+- **Debug run (AP-039, 19.23.0, `specs/039-chain-debug-run`).** An explicit, one-shot, in-process run
+  of a saved plan that returns each step's request and response to the UI and stores nothing.
+  AP-036/037's rule that reports and stored results hold no request or response content is
+  unchanged.
+
+  ```text
+  POST   /api/chain-plans/:planId/debug-runs                           run every chain once, masked result
+  GET    /api/chain-plans/:planId/debug-runs/:runId/values/:valueId    reveal one value from the target
+  DELETE /api/chain-plans/:planId/debug-runs/:runId                    discard what was held for reveal
+
+  shared-domain/chainDebugRun.ts   MaskedText, DebugRunResult and the outcome unions
+  performance/chain/debug/
+    runDebugRun.ts      orchestrator: setup, chains in plan order, one shared scope, stop rules,
+                        120 s cap, abort; observes every exchange, then builds the masked result
+    resolveRequest.ts   reference filling and request building; numbers `{{$name}}` as the renderer does
+    dynamicValues.ts    the 48 dynamic variables, with an injected clock
+    extraction.ts       extractors with the reason for a failure; statusOk
+    checks.ts           check evaluation; `detail` never carries a value
+    masker.ts           sensitive values -> MaskedText segments; secrets are never revealable
+    sender.ts           the `Sender` interface and the fetch implementation (30 s, manual redirects
+                        with a host check per hop, 2 MiB read cap); injected in tests
+    heldValues.ts       in-memory reveal store: per session and plan, 30 min, discarded on close
+    firstDataRows.ts    row 0 of each data set, in memory
+    debugRunService.ts  preconditions, per-plan lock, held values, scalar-only logging
+  ```
+
+  - **A twin of the k6 runtime.** `CHAIN_RUNTIME` is a fixed text and cannot be imported, and
+    capturing exchanges from a k6 process would put content on disk, so the executor repeats the
+    runtime's per-step logic (reference filling, dynamic values, extractors, checks, the continue-or-stop
+    rule). `debugParity.test.ts` runs one plan and one stub through the real generated script in the
+    sandbox and through the executor and compares what was sent, which extractors and checks passed
+    and which steps were skipped; a hash of `CHAIN_RUNTIME` fails when the runtime changes, as a prompt
+    to review the twin. Neither the script nor the runtime was changed.
+  - **Masking.** Output is `MaskedText`: the original text split around sensitive values, never
+    reformatted. Secret environment values and secret data columns are masked on the server and never
+    held; values from the target at credential-looking positions are held for **Reveal**. Every
+    exchange is observed before any is masked, so a value found late is masked everywhere.
+  - **No stored artifact.** No run row, report or run directory; logs carry ids, counts, an outcome
+    and a duration only (`chainDebugRun.test.ts` scans every table and the logs for sentinels).
+  - **Safeguards.** The trigger shows the same information and needs the same explicit start as a
+    load run; no tier policy exists for chain runs and none is added. The host allow-list is enforced
+    after substitution and on every redirect hop. A Debug run does not take the execution slot; it
+    refuses while the slot is held and keeps a per-plan flag against overlap.
+  - **Frontend.** `requestChain/ChainDebugPanel` (trigger and lifecycle: Cancel aborts the request,
+    closing or leaving discards the held values), `DebugRunOutput` (steps, outcomes, reveal state in
+    component state only) and `RunTargetSummary`, extracted from `ChainRunPanel`. `ChainRunPanel`
+    renders the summary once and hosts both the load run trigger and `ChainDebugPanel` in one Run
+    card, so the two describe their effect in the same words; the summary marks a chain the load
+    run skips (all steps Once before load) because the Debug run still executes it.
+
 - **Phase two (19.19.0, FR-036 to FR-038).** One plan model remains:
   - the guided, quick and collection entry points seed request-chain plans and list the plans
     seeded from them (`requestChain/SeededPlans.tsx`); the plan screens, overlays, Collection
