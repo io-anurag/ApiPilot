@@ -948,12 +948,17 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
   All calls go through `services/requestChainClient.ts`.
 
-- **Run setup launch card and load profile chart (AP-040, 19.24.0, `specs/040-run-setup-launch-card`).**
-  Frontend only. `ChainRunTrigger` takes a `hero` variant that `ChainPlanEditor` renders first on
-  the Run setup tab (the Runs & reports tab keeps the plain card), with a status line and a facts
-  strip from the plan; `PendingBar` omits its ready row on that tab and renders nothing when it has
-  nothing to say. `LoadProfileChart` draws `loadProfilePoints(stages)` (pure, in
-  `performanceViewModel.ts`) inside `LoadProfileEditor`. No contract, route or dependency changed.
+- **Run setup redesign (AP-040, 19.25.0, `specs/040-run-setup-launch-card`).** Frontend only. The Run
+  setup tab is three parts: `RunLaunchCard` (readiness headline, the load-run and Debug-run buttons,
+  a facts strip and the write banner; the Debug run's state is `useChainDebugRun`, split from
+  `ChainDebugPanel` so the button and the output can sit apart), a Configuration card of `SetupItem
+  variant="row"` rows (optional rows are `collapsible` and keep their content mounted while hidden),
+  in one full-width column. The launch card also lists the chains, hosts, data sets and every write
+  operation, from the plan analysis.
+  A plain "Script generated." confirmation is announced to screen readers only, because the script
+  row already shows it. The last run is one line in the launch card with a link to Runs & reports. `ChainRunPanel` (Runs & reports) is a two-column layout: the runs table and the open report on the left; the run in progress with Cancel, the last run with Run again and a link back to Run setup, and Restore on the right. `PendingBar` omits its ready row on this
+  tab. `LoadProfileChart` draws `loadProfilePoints(stages)` inside `LoadProfileEditor`. No contract,
+  route or dependency changed.
 
 - **Debug run (AP-039, 19.23.0, `specs/039-chain-debug-run`).** An explicit, one-shot, in-process run
   of a saved plan that returns each step's request and response to the UI and stores nothing.
@@ -998,12 +1003,12 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
     load run; no tier policy exists for chain runs and none is added. The host allow-list is enforced
     after substitution and on every redirect hop. A Debug run does not take the execution slot; it
     refuses while the slot is held and keeps a per-plan flag against overlap.
-  - **Frontend.** `requestChain/ChainDebugPanel` (trigger and lifecycle: Cancel aborts the request,
-    closing or leaving discards the held values), `DebugRunOutput` (steps, outcomes, reveal state in
-    component state only) and `RunTargetSummary`, extracted from `ChainRunPanel`. `ChainRunPanel`
-    renders the summary once and hosts both the load run trigger and `ChainDebugPanel` in one Run
-    card, so the two describe their effect in the same words; the summary marks a chain the load
-    run skips (all steps Once before load) because the Debug run still executes it.
+  - **Frontend.** `requestChain/ChainDebugPanel` (the `useChainDebugRun` hook: Cancel aborts the
+    request, closing or leaving discards the held values; plus the description and result views),
+    `DebugRunOutput` (steps, outcomes, reveal state in component state only). Since AP-040 the Run
+    setup tab's `RunLaunchCard` hosts both the load run trigger and the Debug run trigger, so the two
+    describe their effect in the same card; it marks a chain the load run skips (all steps Once
+    before load) because the Debug run still executes it. Runs & reports no longer has triggers.
 
 - **Phase two (19.19.0, FR-036 to FR-038).** One plan model remains:
   - the guided, quick and collection entry points seed request-chain plans and list the plans

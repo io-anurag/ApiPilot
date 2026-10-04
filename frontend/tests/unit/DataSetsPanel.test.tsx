@@ -78,6 +78,18 @@ describe("DataSetsPanel", () => {
     await waitFor(() => expect(onPlanChanged).toHaveBeenCalledTimes(1));
   });
 
+  it("fills the data set name from the chosen file, until the engineer types their own", () => {
+    renderPanel(lifecyclePlan());
+    const file = (name: string) => ({ target: { files: [new File(["a\n1\n"], name, { type: "text/csv" })] } });
+    fireEvent.change(screen.getByLabelText(/CSV file/), file("customers.csv"));
+    expect(screen.getByLabelText("Data set name")).toHaveValue("customers");
+    fireEvent.change(screen.getByLabelText(/CSV file/), file("orders.CSV"));
+    expect(screen.getByLabelText("Data set name")).toHaveValue("orders");
+    fireEvent.change(screen.getByLabelText("Data set name"), { target: { value: "my data" } });
+    fireEvent.change(screen.getByLabelText(/CSV file/), file("other.csv"));
+    expect(screen.getByLabelText("Data set name")).toHaveValue("my data");
+  });
+
   it("marks a column secret and previews the first rows with secret cells hidden", async () => {
     const calls = stub({
       [`PUT ${BASE}/d1`]: (init) => [200, { dataSet: { ...CUSTOMERS, columns: JSON.parse(String(init.body)).columns }, ...viewOf(planWithData()) }],

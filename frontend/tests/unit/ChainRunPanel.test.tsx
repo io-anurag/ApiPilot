@@ -6,7 +6,7 @@ import type { PerformanceRuns } from "../../src/components/performance/usePerfor
 import { chainRunsClient } from "../../src/services/requestChainClient";
 import { lifecyclePlan, PLAN_ID } from "./requestChainFixtures";
 
-/** AP-037 (specs/037-request-chain-performance tasks T031; FR-031, FR-035, Clarification 2026-10-03). */
+/** AP-037 (FR-031, FR-035, Clarification 2026-10-03); AP-040 (the Runs & reports tab: runs, report, last run, restore). */
 
 const ENVIRONMENT: Environment = { id: "e1", name: "Local stub", tier: "local", baseUrl: "http://127.0.0.1:4600", variableValues: { client_id: "x" }, requestDelayMs: 0 };
 const SCRIPT: ScriptStatus = { planFingerprint: "fp-chain-1", scriptSha256: "a".repeat(64), stepCount: 3, outOfDate: false };
@@ -65,6 +65,7 @@ function finishedRun(overrides: Partial<ChainRun> = {}): ChainRun {
 function renderPanel(props: Partial<Parameters<typeof ChainRunPanel>[0]> = {}) {
   const plan = props.plan ?? lifecyclePlan();
   const onRestore = vi.fn();
+  const onGoToSetup = vi.fn();
   render(
     <ChainRunPanel
       plan={plan}
@@ -76,64 +77,47 @@ function renderPanel(props: Partial<Parameters<typeof ChainRunPanel>[0]> = {}) {
       runsClient={chainRunsClient(PLAN_ID)}
       dirty={false}
       onRestore={onRestore}
+      onGoToSetup={onGoToSetup}
       {...props}
     />,
   );
-  return onRestore;
+  return { onRestore, onGoToSetup };
 }
 
 describe("ChainRunPanel", () => {
-  it("names the environment and lists the chains, write steps and hosts at the trigger", () => {
+  it("does not start anything: starting a run is on Run setup, and the last run's card links there", () => {
+    const { onGoToSetup } = renderPanel({ runs: runs({ latestFinished: finishedRun() }) });
+    expect(screen.queryByRole("button", { name: /Start run/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start debug run/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Run setup" }));
+    expect(onGoToSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it("says there are no runs yet, and links to Run setup", () => {
     renderPanel();
-    expect(screen.getByText("Local stub", { selector: "span" })).toBeInTheDocument();
-    expect(screen.getByText("Tier: local")).toBeInTheDocument();
-    expect(screen.getByTestId("trigger-chains")).toHaveTextContent("Customer lifecycle · 3 steps");
-    expect(screen.getByTestId("trigger-hosts")).toHaveTextContent("http://127.0.0.1:4600");
-    expect(screen.getByText(/Load is generated from the machine running the ApiPilot backend/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Creates/).length).toBeGreaterThan(0);
-    // Each write is named by its URL, not by the step's internal id.
-    const writes = screen.getByTestId("write-summary-trigger-list");
-    expect(writes).toHaveTextContent("{{baseUrl}}/api/v1/customers");
-    expect(writes).not.toHaveTextContent(/\bs2\b/);
+    expect(screen.getByText(/No runs yet/)).toBeInTheDocument();
+    expect(screen.getByText("No finished run yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to Run setup" })).toBeInTheDocument();
   });
 
-  it("describes both the load run and the Debug run with one target summary, and starts neither by itself", () => {
-    renderPanel();
-    expect(screen.getAllByTestId("trigger-chains")).toHaveLength(1);
-    expect(screen.getAllByTestId("write-summary-trigger")).toHaveLength(1);
-    expect(screen.getByRole("heading", { name: "Load run" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start run on Local stub" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Start debug run on Local stub" })).toBeEnabled();
+  it("lists the runs and opens a report", () => {
+    const summary = { id: "r1", status: "completed", startedAt: "2026-10-03T10:00:00.000Z", environment: { id: "e1", name: "Local stub", tier: "local", baseUrl: "http://127.0.0.1:4600" } } as unknown as ChainRunSummary;
+    const showReport = vi.fn();
+    renderPanel({ runs: runs({ runs: [summary], showReport }) });
+    fireEvent.click(screen.getByRole("button", { name: "View report" }));
+    expect(showReport).toHaveBeenCalledWith("r1");
   });
 
-  it("says which chains the load run skips, because the Debug run runs every chain once", () => {
-    const plan = lifecyclePlan();
-    plan.chains = [...plan.chains, { ...plan.chains[0], id: "setup-only", name: "Setup only", steps: plan.chains[0].steps.map((step) => ({ ...step, id: `${step.id}-setup`, runs: "once-before-load" as const })) }];
-    renderPanel({ plan });
-    expect(screen.getByTestId("trigger-chains")).toHaveTextContent("Setup only · 3 steps (once before load only; not in the load run)");
-    expect(screen.getByTestId("trigger-chains")).not.toHaveTextContent("Customer lifecycle · 3 steps (");
+  it("shows the run in progress with its figures and Cancel", () => {
+    const cancel = vi.fn(async () => undefined);
+    const run = { ...finishedRun(), status: "in-progress" as const, progress: { elapsedMs: 12_000, requestsSoFar: 40, failuresSoFar: 1 } } as unknown as ChainRun;
+    renderPanel({ runs: runs({ run, inProgress: true, cancel }) });
+    expect(screen.getByRole("status")).toHaveTextContent("Running · 12 s · 40 requests · 1 failures");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel run" }));
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
-  it("starts a run on the named environment only on the engineer's click", () => {
-    const start = vi.fn(async () => true);
-    renderPanel({ runs: runs({ start }) });
-    fireEvent.click(screen.getByRole("button", { name: "Start run on Local stub" }));
-    expect(start).toHaveBeenCalledWith("e1");
-  });
-
-  it.each([
-    [{ script: null }, "Generate the script first."],
-    [{ script: { ...SCRIPT, outOfDate: true } }, "The plan changed after the script was generated. Regenerate it first."],
-    [{ environment: null }, "Choose the target environment."],
-    [{ dirty: true }, "Saving your latest change…"],
-  ])("says why a run cannot start (%j)", (props, reason) => {
-    renderPanel(props);
-    expect(screen.getByTestId("run-blocked")).toHaveTextContent(reason);
-    expect(screen.getByRole("button", { name: /Start run/ })).toBeDisabled();
-  });
-
-  it("offers Run again only while the script is unchanged, and says why otherwise", () => {
+  it("offers Run again only while the script is unchanged", () => {
     const start = vi.fn(async () => true);
     renderPanel({ runs: runs({ latestFinished: finishedRun(), start }) });
     fireEvent.click(screen.getByRole("button", { name: "Run again on Local stub" }));
@@ -148,7 +132,7 @@ describe("ChainRunPanel", () => {
 
   it("refuses Run again after the script changed, and restores without starting a run", () => {
     const start = vi.fn(async () => true);
-    const onRestore = renderPanel({ runs: runs({ latestFinished: finishedRun({ scriptSha256: "b".repeat(64) }), start }) });
+    const { onRestore } = renderPanel({ runs: runs({ latestFinished: finishedRun({ scriptSha256: "b".repeat(64) }), start }) });
     expect(screen.getByRole("button", { name: /Run again/ })).toBeDisabled();
     expect(screen.getByTestId("run-again-blocked")).toHaveTextContent("The script changed since this run.");
     fireEvent.click(screen.getByRole("button", { name: "Into this plan" }));
@@ -166,6 +150,5 @@ describe("ChainRunPanel", () => {
     run.snapshot.dataSets = [{ ...dataSet, sha256: "old" }];
     renderPanel({ plan: lifecyclePlan({ dataSets: [dataSet] }), runs: runs({ latestFinished: run }) });
     expect(screen.getByTestId("run-again-blocked")).toHaveTextContent("The data set customers changed since this run.");
-    expect(screen.getByTestId("trigger-data-sets")).toHaveTextContent("customers · 50 rows");
   });
 });

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { analyzeChainPlan, type DebugRunResult, type Environment } from "@apipilot/shared-domain";
-import { ChainDebugPanel, debugBlockedReason } from "../../src/components/requestChain/ChainDebugPanel";
+import { analyzeChainPlan, type ChainRun, type ChainRunSummary, type DebugRunResult, type Environment, type ScriptStatus } from "@apipilot/shared-domain";
+import { debugBlockedReason } from "../../src/components/requestChain/ChainDebugPanel";
+import { RunLaunchCard } from "../../src/components/requestChain/RunLaunchCard";
+import type { PerformanceRuns } from "../../src/components/performance/usePerformanceRuns";
 import * as client from "../../src/services/requestChainClient";
+import { chainRunsClient } from "../../src/services/requestChainClient";
 import { failedExtractionResult } from "./debugRunFixtures";
 import { lifecyclePlan } from "./requestChainFixtures";
 
-/** AP-039 (specs/039-chain-debug-run tasks T041; FR-001, FR-017, FR-018, FR-023). */
+/** AP-039 (specs/039-chain-debug-run tasks T041; FR-001, FR-017, FR-018, FR-023); the trigger is the Run setup launch card (AP-040). */
 
 vi.mock("../../src/services/requestChainClient", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/services/requestChainClient")>();
@@ -17,12 +20,48 @@ const ENVIRONMENT: Environment = { id: "e1", name: "Local stub", tier: "local", 
 const debugRun = vi.mocked(client.debugRun);
 const discardDebugRun = vi.mocked(client.discardDebugRun);
 
-function renderPanel(overrides: { environment?: Environment | null; dirty?: boolean; loadRunInProgress?: boolean; names?: string[] | null } = {}) {
-  const plan = lifecyclePlan();
+const SCRIPT: ScriptStatus = { planFingerprint: "fp", scriptSha256: "a".repeat(64), stepCount: 3, outOfDate: false };
+
+function runsState(inProgress = false): PerformanceRuns<ChainRun, ChainRunSummary, string> {
+  return {
+    readiness: { state: "ready", version: "1.2.0", checkedAt: "t" },
+    checking: false,
+    checkReadiness: async () => undefined,
+    run: null,
+    latestFinished: null,
+    inProgress,
+    runs: [],
+    reportRunId: null,
+    showReport: () => undefined,
+    starting: false,
+    cancelling: false,
+    error: null,
+    start: vi.fn(async () => true),
+    cancel: async () => undefined,
+  };
+}
+
+function renderCard(plan = lifecyclePlan(), overrides: { environment?: Environment | null; dirty?: boolean; loadRunInProgress?: boolean; names?: string[] | null } = {}) {
   const analysis = analyzeChainPlan(plan, { environmentValueNames: overrides.names === undefined ? ["baseUrl", "client_id"] : overrides.names });
+  const environment = overrides.environment === undefined ? ENVIRONMENT : overrides.environment;
   return render(
-    <ChainDebugPanel plan={plan} analysis={analysis} environment={overrides.environment === undefined ? ENVIRONMENT : overrides.environment} dirty={overrides.dirty ?? false} loadRunInProgress={overrides.loadRunInProgress ?? false} />,
+    <RunLaunchCard
+      plan={plan}
+      analysis={analysis}
+      script={SCRIPT}
+      environment={environment}
+      environments={environment ? [environment] : []}
+      runs={runsState(overrides.loadRunInProgress)}
+      runsClient={chainRunsClient(plan.id)}
+      dirty={overrides.dirty ?? false}
+      onRestore={vi.fn()}
+      onViewRuns={vi.fn()}
+    />,
   );
+}
+
+function renderPanel(overrides: { environment?: Environment | null; dirty?: boolean; loadRunInProgress?: boolean; names?: string[] | null } = {}) {
+  return renderCard(lifecyclePlan(), overrides);
 }
 
 beforeEach(() => {
@@ -32,14 +71,13 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("Debug run trigger", () => {
-  // The target, chains, hosts and write steps are described once for both runs, by the Run card
-  // (ChainRunPanel.test.tsx); this panel only states what a Debug run does and when it sends.
+  // The target, chains, hosts and write steps are described once for both runs, by the launch card.
   it("states that it sends real requests, names the environment on its button, and sends nothing until started", () => {
     renderPanel();
     expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start debug run on Local stub" })).toBeEnabled();
     expect(screen.getByText(/real requests, including writes/)).toBeInTheDocument();
-    expect(screen.getByText(/Nothing is sent until you start/)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is stored/)).toBeInTheDocument();
     expect(debugRun).not.toHaveBeenCalled();
   });
 
@@ -52,18 +90,23 @@ describe("Debug run trigger", () => {
   it.each([
     [{ environment: null }, "Choose the target environment."],
     [{ dirty: true }, "Saving your latest change…"],
-    [{ loadRunInProgress: true }, "A run is in progress."],
   ])("is blocked, with the reason, for %j", (props, reason) => {
     renderPanel(props);
     expect(screen.getByRole("button", { name: /Start debug run/ })).toBeDisabled();
-    expect(screen.getByTestId("debug-blocked")).toHaveTextContent(reason);
+    expect(screen.getByTestId("run-blocked")).toHaveTextContent(reason);
+  });
+
+  it("is blocked while a load run is in progress", () => {
+    renderPanel({ loadRunInProgress: true });
+    expect(screen.getByRole("button", { name: /Start debug run/ })).toBeDisabled();
+    expect(debugBlockedReason({ analysis: analyzeChainPlan(lifecyclePlan(), { environmentValueNames: null }), environment: ENVIRONMENT, dirty: false, loadRunInProgress: true })).toBe("A run is in progress.");
   });
 
   it("is blocked while the plan has problems", () => {
     const plan = lifecyclePlan();
     plan.chains[0].steps[1].url = "not a url";
-    render(<ChainDebugPanel plan={plan} analysis={analyzeChainPlan(plan, { environmentValueNames: null })} environment={ENVIRONMENT} dirty={false} loadRunInProgress={false} />);
-    expect(screen.getByTestId("debug-blocked")).toHaveTextContent("Fix the plan's problems first.");
+    renderCard(plan, { names: null });
+    expect(screen.getByTestId("run-blocked")).toHaveTextContent("Fix the plan's problems first.");
     expect(debugBlockedReason({ analysis: analyzeChainPlan(plan, { environmentValueNames: null }), environment: ENVIRONMENT, dirty: false, loadRunInProgress: false })).toBe("Fix the plan's problems first.");
   });
 });

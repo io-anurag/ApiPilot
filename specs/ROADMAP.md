@@ -3361,3 +3361,13 @@ Implementation
       spec in `specs/040-run-setup-launch-card`. Cards on the tab use larger corner radii.
     - Validation: frontend tests, lint and build pass; the browser walkthrough is outstanding.
     - Version bumped to 19.24.0 (root, backend, frontend, shared-domain).
+61. **AP-040 amended: Run setup follows the approved design; version 19.25.0 (2026-10-04).**
+    - The 19.24.0 change was a partial adaptation. The tab now has the launch card (headline, both run
+      buttons, facts strip, write banner), a Configuration card of rows with Edit on the optional ones,
+      with the chains, hosts and writes listed in the card. The Debug run's state moved to a hook so its
+      button can sit in the launch card. The Last run and Runs of this plan cards were removed from Run setup
+      (they remain on Runs & reports); the launch card links to them. Runs & reports follows the approved design: a runs
+      table and report on the left, the run in progress, last run (Run again) and Restore on the right; its load-run and
+      Debug-run triggers were removed (both are on Run setup). The Chains tab shows the Seeding report panel
+      only when it has items to list. Frontend only. Browser walkthrough in light and dark: outstanding.
+    - Version bumped to 19.25.0 (root, backend, frontend, shared-domain).

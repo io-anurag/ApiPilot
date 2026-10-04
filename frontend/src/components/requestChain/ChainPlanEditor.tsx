@@ -28,9 +28,10 @@ import { SetupItem } from "../performance/SetupItem";
 import { ThresholdEditor } from "../performance/ThresholdEditor";
 import { usePerformanceRuns } from "../performance/usePerformanceRuns";
 import * as edit from "./chainEditing";
-import { ChainRunHistory, ChainRunPanel, ChainRunTrigger } from "./ChainRunPanel";
+import { ChainRunPanel } from "./ChainRunPanel";
 import { ChainTree } from "./ChainTree";
 import { DataSetsPanel } from "./DataSetsPanel";
+import { RunLaunchCard } from "./RunLaunchCard";
 import { Disclosure } from "./Disclosure";
 import { PlanIssues } from "./PlanIssues";
 import type { ReferenceSuggestion } from "./ReferenceField";
@@ -79,6 +80,8 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
   // The last save was refused: the editor holds changes the server does not, so it must not say Saved.
   const [saveFailed, setSaveFailed] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  // A plain confirmation the page already shows elsewhere (the script row's badge) is announced to screen readers only.
+  const [announcementQuiet, setAnnouncementQuiet] = useState(false);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("chains");
@@ -133,11 +136,15 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
       setSaveError(null);
       if (draftRef.current === sent || result.movedCredentials.length > 0) setDraft(result.plan);
       else if (draftRef.current) setDraft({ ...draftRef.current, revision: result.plan.revision, fingerprint: result.plan.fingerprint });
-      if (result.movedCredentials.length > 0) setAnnouncement(movedText(result.movedCredentials));
+      if (result.movedCredentials.length > 0) {
+        setAnnouncement(movedText(result.movedCredentials));
+        setAnnouncementQuiet(false);
+      }
     } else if (result.error === "plan_revision_conflict" && result.current) {
       setView(result.current);
       setDraft(result.current.plan);
       setAnnouncement("The plan was changed elsewhere and has been reloaded. Make your change again.");
+      setAnnouncementQuiet(false);
     } else if (result.error === "credential_needs_environment") {
       setSaveError(`${result.message} Choose one under Run setup.`);
     } else {
@@ -216,6 +223,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
     }
     setView((current) => (current ? { ...current, script: result.script } : current));
     setAnnouncement("Script generated.");
+    setAnnouncementQuiet(true);
   }
 
   async function handleRestore(runId: string, into: "plan" | "new-plan") {
@@ -233,6 +241,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
     }
     setView(result);
     setDraft(result.plan);
+    setAnnouncementQuiet(false);
     setAnnouncement(`The run's plan was restored and its script generated. No run was started.${missing ? ` Data sets not restored: ${missing}.` : ""}`);
   }
 
@@ -333,14 +342,14 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
       </div>
       <div className="min-w-0 space-y-0.5">
         <h2 className="text-lg font-semibold">Performance plan</h2>
-        <p className="max-w-3xl text-sm text-muted">
+        <p className="text-sm text-muted">
           Chains of requests you write and edit. Steps are authored by you and not verified by ApiPilot. Nothing is sent to any system until you trigger a run.
         </p>
       </div>
       <p className="sr-only" role="status" aria-live="polite" data-testid="chain-plan-announcement">
         {announcement}
       </p>
-      {announcement && <p className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm dark:bg-white/5">{announcement}</p>}
+      {announcement && !announcementQuiet && <p className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm dark:bg-white/5">{announcement}</p>}
       {saveError && <ErrorState message={saveError} testId="chain-plan-save-error" />}
 
       <PendingBar
@@ -435,7 +444,13 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
           >
             <PlanIssues plan={plan} analysis={analysis} environmentChosen={environment !== null} onGoToStep={goToStep} />
           </Disclosure>
-          {plan.seedingReport && (
+          {/* Seeding always produces a report (AP-037 FR-025); with nothing to list, one line says so instead of an empty panel (AP-040). */}
+          {plan.seedingReport && plan.seedingReport.items.length === 0 && (
+            <p className="px-1 text-sm text-muted" data-testid="seeding-report-empty">
+              Seeding report: {seedingSummary(0).toLowerCase()}
+            </p>
+          )}
+          {plan.seedingReport && plan.seedingReport.items.length > 0 && (
             <Disclosure title="Seeding report" open={seedingOpen} onToggle={() => setSeedingOpen(!seedingOpen)} summary={seedingSummary(plan.seedingReport.items.length)}>
               <SeedingReportView report={plan.seedingReport} onGoToStep={goToStep} />
             </Disclosure>
@@ -444,89 +459,113 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
       )}
 
       {tab === "setup" && (
-        <div className="space-y-4">
-        <ChainRunTrigger hero plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
-        <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-2">
-          <SetupItem flush state={environment ? "done" : "todo"} title="Target environment" titleId="chain-environment-title" summary="Holds the base URL and every value the plan uses. Literal credentials you type are moved into it as secret values.">
-            <EnvironmentPicker
-              environments={environments}
-              selectedId={plan.targetEnvironmentId}
-              suggestedNames={analysis.requiredValues.map((value) => value.name).filter((name) => name !== "baseUrl")}
-              onSelect={(environmentId) => change({ ...plan, targetEnvironmentId: environmentId }, true)}
-              onSaved={(saved) => {
-                void fetchEnvironments().then((result) => result.ok && setEnvironments(result.environments));
-                change({ ...plan, targetEnvironmentId: saved.id }, true);
-              }}
-            />
-          </SetupItem>
-          <SetupItem flush state="done" title="Load profile" titleId="chain-profile-title" summary="Every virtual user runs every chain, in order, on each iteration.">
-            <LoadProfileEditor
-              profile={plan.loadProfile}
-              startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
-              busy={busy}
-              onSave={(profile) => change({ ...plan, loadProfile: { ...profile, plannedDurationMs: profile.stages.reduce((total, stage) => total + stage.durationMs, 0) } }, true)}
-            />
-            <label className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <span>Default think time after each step (ms)</span>
-              <input
-                type="number"
-                min={0}
-                className="w-28 rounded-md border border-border bg-surface px-2 py-1"
-                value={plan.thinkTimeMs}
-                onChange={(event) => change({ ...plan, thinkTimeMs: Math.max(0, Math.round(Number(event.target.value) || 0)) })}
-                onBlur={() => void save()}
-              />
-            </label>
-          </SetupItem>
-          <SetupItem flush state={plan.thresholds.length > 0 ? "done" : "optional"} title="Thresholds (optional)" titleId="chain-thresholds-title">
-            <ThresholdEditor
-              thresholds={plan.thresholds}
-              scopeOptions={[
-                { key: "run", label: "Whole run", scope: { kind: "run" } as const },
-                ...plan.chains.flatMap((chain) => chain.steps.filter((step) => step.runs !== "once-before-load")).map((step) => ({ key: step.id, label: `${step.method} ${step.name}`, scope: { kind: "step", stepId: step.id } as const })),
-              ]}
-              scopeLabel={(scope) => (scope.kind === "run" ? "Run" : (plan.chains.flatMap((chain) => chain.steps).find((step) => step.id === scope.stepId)?.name ?? scope.stepId))}
-              busy={busy}
-              onSave={(thresholds) => change({ ...plan, thresholds: thresholds as PerformanceThreshold[] }, true)}
-            />
-          </SetupItem>
-          <DataSetsPanel flush plan={plan} analysis={analysis} onPlanChanged={(next) => { setView(next); setDraft(next.plan); }} />
-          <SetupItem flush className="lg:col-span-2" state={script && !script.outOfDate ? "done" : "todo"} title="k6 script" titleId="chain-script-title" summary="ApiPilot writes every byte of the script; your steps reach it only as data.">
-            {script?.outOfDate && <StatusBadge label="Out of date: regenerate" tone="warning" />}
-            {script && !script.outOfDate && (
-              <p className="text-sm">
-                <StatusBadge label="Script current" tone="success" /> <span className="font-mono text-xs">sha256 {script.scriptSha256.slice(0, 12)}…</span>
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className={BUTTON_STYLES.primary} disabled={busy || generateBlocked !== null} onClick={() => void handleGenerate()}>
-                {script ? "Regenerate script" : "Generate script"}
-              </button>
-              {generateBlocked && <span className="text-xs text-muted">{generateBlocked}</span>}
-              {script && !script.outOfDate && (
-                <>
-                  <a className={BUTTON_STYLES.ghost} href={scriptDownloadUrl(planId, "script")} download>
-                    Download script
-                  </a>
-                  <a className={BUTTON_STYLES.ghost} href={scriptDownloadUrl(planId, "environment-template")} download>
-                    Download environment template
-                  </a>
-                </>
-              )}
+        <div className="space-y-5">
+          <RunLaunchCard onViewRuns={() => setTab("runs")} plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+          <section aria-labelledby="chain-config-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="px-5 py-4">
+              <h2 id="chain-config-title" className="text-base font-semibold">
+                Configuration
+              </h2>
+              <p className="text-xs text-muted">Review each part, edit only what needs to change.</p>
             </div>
-            {plan.dataSets.length > 0 && (
-              <p className="text-xs text-muted">
-                This plan reads its data sets from files ApiPilot writes for each run, so a downloaded copy of the script cannot run in Run k6 Script, which never lets a script open files.
-              </p>
-            )}
-          </SetupItem>
-        </div>
-        <ChainRunHistory plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+            <SetupItem variant="row" state={environment ? "done" : "todo"} title="Target environment" titleId="chain-environment-title" summary="Holds the base URL and every value the plan uses. Literal credentials you type are moved into it as secret values.">
+              <EnvironmentPicker
+                compact
+                environments={environments}
+                selectedId={plan.targetEnvironmentId}
+                suggestedNames={analysis.requiredValues.map((value) => value.name).filter((name) => name !== "baseUrl")}
+                onSelect={(environmentId) => change({ ...plan, targetEnvironmentId: environmentId }, true)}
+                onSaved={(saved) => {
+                  void fetchEnvironments().then((result) => result.ok && setEnvironments(result.environments));
+                  change({ ...plan, targetEnvironmentId: saved.id }, true);
+                }}
+              />
+            </SetupItem>
+            <SetupItem variant="row" state="done" title="Load profile" titleId="chain-profile-title" summary="Every virtual user runs every chain, in order, on each iteration.">
+              <LoadProfileEditor
+                compact
+                profile={plan.loadProfile}
+                startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
+                busy={busy}
+                onSave={(profile) => change({ ...plan, loadProfile: { ...profile, plannedDurationMs: profile.stages.reduce((total, stage) => total + stage.durationMs, 0) } }, true)}
+                extra={
+                  <label className="flex flex-wrap items-center gap-2 text-sm">
+                    <span>Default think time after each step (ms)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-28 rounded-lg border border-border bg-surface px-2 py-1"
+                      value={plan.thinkTimeMs}
+                      onChange={(event) => change({ ...plan, thinkTimeMs: Math.max(0, Math.round(Number(event.target.value) || 0)) })}
+                      onBlur={() => void save()}
+                    />
+                  </label>
+                }
+              />
+            </SetupItem>
+            <SetupItem
+              variant="row"
+              collapsible
+              startOpen={false}
+              state={plan.thresholds.length > 0 ? "done" : "optional"}
+              title="Thresholds (optional)"
+              titleId="chain-thresholds-title"
+              collapsedSummary={plan.thresholds.length > 0 ? `${plan.thresholds.length} ${plan.thresholds.length === 1 ? "threshold" : "thresholds"} set.` : "None set. The report shows measurements with no pass/fail verdict."}
+            >
+              <ThresholdEditor
+                  compact
+                thresholds={plan.thresholds}
+                scopeOptions={[
+                  { key: "run", label: "Whole run", scope: { kind: "run" } as const },
+                  ...plan.chains.flatMap((chain) => chain.steps.filter((step) => step.runs !== "once-before-load")).map((step) => ({ key: step.id, label: `${step.method} ${step.name}`, scope: { kind: "step", stepId: step.id } as const })),
+                ]}
+                scopeLabel={(scope) => (scope.kind === "run" ? "Run" : (plan.chains.flatMap((chain) => chain.steps).find((step) => step.id === scope.stepId)?.name ?? scope.stepId))}
+                busy={busy}
+                onSave={(thresholds) => change({ ...plan, thresholds: thresholds as PerformanceThreshold[] }, true)}
+              />
+            </SetupItem>
+            <DataSetsPanel row plan={plan} analysis={analysis} onPlanChanged={(next) => { setView(next); setDraft(next.plan); }} />
+            <SetupItem variant="row" state={script && !script.outOfDate ? "done" : "todo"} title="k6 script"
+              titleId="chain-script-title"
+              status={
+                script ? (
+                  <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+                    <span className="shrink-0">{script.outOfDate ? <StatusBadge label="Out of date: regenerate" tone="warning" /> : <StatusBadge label="Script current" tone="success" />}</span>
+                    {!script.outOfDate && <span className="min-w-0 truncate font-mono text-xs" title={`sha256 ${script.scriptSha256}`}>sha256 {script.scriptSha256}</span>}
+                  </span>
+                ) : undefined
+              }
+              actions={
+                <>
+                  {script && !script.outOfDate && (
+                    <>
+                      <a className={BUTTON_STYLES.ghost} href={scriptDownloadUrl(planId, "script")} download>
+                        Download script
+                      </a>
+                      <a className={BUTTON_STYLES.ghost} href={scriptDownloadUrl(planId, "environment-template")} download>
+                        Download environment template
+                      </a>
+                    </>
+                  )}
+                  <button type="button" className={BUTTON_STYLES.ghost} disabled={busy || generateBlocked !== null} onClick={() => void handleGenerate()}>
+                    {script ? "Regenerate script" : "Generate script"}
+                  </button>
+                </>
+              }
+              summary="ApiPilot writes every byte of the script; your steps reach it only as data.">
+              {generateBlocked && <p className="text-xs text-muted">{generateBlocked}</p>}
+              {plan.dataSets.length > 0 && (
+                <p className="text-xs text-muted">
+                  This plan reads its data sets from files ApiPilot writes for each run, so a downloaded copy of the script cannot run in Run k6 Script, which never lets a script open files.
+                </p>
+              )}
+            </SetupItem>
+          </section>
         </div>
       )}
 
       {tab === "runs" && (
-        <ChainRunPanel plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+        <ChainRunPanel onGoToSetup={() => setTab("setup")} plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
       )}
 
       {(dialog?.kind === "new-chain" || dialog?.kind === "rename-chain" || dialog?.kind === "rename-plan") && (

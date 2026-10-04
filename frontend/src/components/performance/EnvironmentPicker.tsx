@@ -8,7 +8,8 @@ import { TIER_TONE } from "./performanceViewModel";
 
 /**
  * Chooses the run's target environment and opens the environment form to add one or to edit the
- * chosen one's values (AP-029 FR-013, FR-025). The tier is always shown as text.
+ * chosen one's values (AP-029 FR-013, FR-025). The tier is always shown as text. `compact` (AP-040) is for a
+ * screen that shows the base URL elsewhere: a short select with the tier and both actions, as links, on one row.
  */
 export function EnvironmentPicker({
   environments,
@@ -16,12 +17,14 @@ export function EnvironmentPicker({
   suggestedNames,
   onSelect,
   onSaved,
+  compact = false,
 }: Readonly<{
   environments: Environment[];
   selectedId: string | null;
   suggestedNames: readonly string[];
   onSelect: (environmentId: string) => void;
   onSaved: (environment: Environment) => void;
+  compact?: boolean;
 }>) {
   const [editing, setEditing] = useState<"new" | "edit" | null>(null);
   // The Name field as typed, so the dialog title follows it before the environment is saved.
@@ -38,7 +41,7 @@ export function EnvironmentPicker({
   }
 
   return (
-    <div className="space-y-2">
+    <div className={compact ? "flex flex-wrap items-center gap-x-5 gap-y-2" : "space-y-2"}>
       {environments.length === 0 ? (
         <p className="text-sm text-muted">
           No environment yet. Add one to hold the values a run needs.
@@ -52,7 +55,7 @@ export function EnvironmentPicker({
             id="performance-environment"
             value={selectedId ?? ""}
             onChange={(event) => onSelect(event.target.value)}
-            className="min-w-48 flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className={`rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${compact ? "w-64 max-w-full" : "min-w-48 flex-1"}`}
           >
             {/* Without this, the browser shows the first environment as chosen when none is. */}
             {!selected && (
@@ -74,14 +77,14 @@ export function EnvironmentPicker({
           )}
         </div>
       )}
-      {selected && (
+      {selected && !compact && (
         <p className="break-all font-mono text-xs text-muted">{selected.baseUrl}</p>
       )}
       <div className="flex flex-wrap gap-3">
         {selected && (
           <button
             type="button"
-            className={BUTTON_STYLES.secondary}
+            className={compact ? BUTTON_STYLES.ghost : BUTTON_STYLES.secondary}
             onClick={() => openDialog("edit")}
           >
             Edit values in {selected.name}

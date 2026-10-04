@@ -258,37 +258,95 @@ describe("ChainPlanEditor", () => {
     expect(screen.getByText("Added by you")).toBeInTheDocument();
   });
 
-  it("offers the Debug run beside the run trigger, in Run setup and in Runs & reports, and never starts it by itself", async () => {
+  it("offers the Debug run beside the run trigger on Run setup, never starts it by itself, and keeps both off Runs & reports", async () => {
     const calls = setup();
     render(<ChainPlanEditor planId={PLAN_ID} />);
     await screen.findByTestId("chain-plan-name");
     fireEvent.click(screen.getByRole("button", { name: "Run setup (2 to do)" }));
     expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Run" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Not ready to run yet" })).toBeInTheDocument();
     // Without a target environment it says why it cannot start.
     expect(screen.getByRole("button", { name: /Start debug run/ })).toBeDisabled();
     expect(screen.getByTestId("debug-blocked")).toHaveTextContent("Choose the target environment.");
     fireEvent.click(screen.getByRole("button", { name: "Runs & reports (0)" }));
-    expect(screen.getByRole("heading", { name: "Debug run" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start debug run/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to Run setup" })).toBeInTheDocument();
     expect(calls.some((call) => call.url.includes("/debug-runs"))).toBe(false);
   });
 
-  it("leads the Run setup tab with the launch card: not-ready status, the plan's profile facts, then the setup items", async () => {
+  it("leads the Run setup tab with the launch card, which lists the chains and hosts, then the configuration rows", async () => {
     setup();
     render(<ChainPlanEditor planId={PLAN_ID} />);
     await screen.findByTestId("chain-plan-name");
     fireEvent.click(screen.getByRole("button", { name: "Run setup (2 to do)" }));
-    expect(screen.getByTestId("run-hero-status")).toHaveTextContent("Not ready to run yet.");
-    const facts = within(screen.getByTestId("run-hero-facts"));
+    const card = within(screen.getByTestId("run-launch-card"));
+    expect(card.getByRole("heading", { name: "Not ready to run yet" })).toBeInTheDocument();
+    expect(card.getByRole("button", { name: /Start run on/ })).toBeDisabled();
+    expect(card.getByRole("button", { name: /Start debug run/ })).toBeDisabled();
+    const facts = within(screen.getByTestId("run-launch-facts"));
     expect(facts.getByText("Smoke")).toBeInTheDocument();
     expect(facts.getByText("01:00")).toBeInTheDocument();
     expect(facts.getByText("1000 ms")).toBeInTheDocument();
     expect(facts.getByText("Not generated")).toBeInTheDocument();
-    // The load profile chart sits with the load profile editor.
-    expect(screen.getByTestId("load-profile-chart")).toBeInTheDocument();
-    // The hero comes before the setup items in reading order.
-    const hero = screen.getByRole("heading", { name: "Run" });
-    const environmentTitle = document.getElementById("chain-environment-title");
-    expect(hero.compareDocumentPosition(environmentTitle as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The load profile chart sits with the load profile editor, in the Configuration card.
+    const configuration = within(screen.getByRole("region", { name: "Configuration" }));
+    expect(configuration.getByTestId("load-profile-chart")).toBeInTheDocument();
+    // What the run sends is read in the launch card, not in a second card.
+    expect(card.getByTestId("trigger-chains")).toHaveTextContent(/Customer lifecycles*3 steps/);
+    expect(card.getByTestId("trigger-hosts")).toBeInTheDocument();
+    // Optional rows show a summary until the engineer chooses Edit.
+    expect(configuration.getByText("None set. The report shows measurements with no pass/fail verdict.")).toBeInTheDocument();
+    const edit = configuration.getByRole("button", { name: "Edit Thresholds (optional)" });
+    expect(edit).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(edit);
+    expect(configuration.getByRole("button", { name: "Hide Thresholds (optional)" })).toHaveAttribute("aria-expanded", "true");
+    expect(configuration.getByRole("button", { name: "+ Add threshold" })).toBeInTheDocument();
+    // The launch card comes first in reading order.
+    const heading = within(screen.getByTestId("run-launch-card")).getByRole("heading", { name: "Not ready to run yet" });
+    expect(heading.compareDocumentPosition(document.getElementById("chain-environment-title") as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("saves each Run setup edit and goes back to Saved: think time, load profile and a threshold", async () => {
+    const calls = setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    await screen.findByTestId("chain-plan-name");
+    fireEvent.click(screen.getByRole("button", { name: "Run setup (2 to do)" }));
+    const setupRegion = within(screen.getByRole("region", { name: "Configuration" }));
+
+    const think = setupRegion.getByLabelText("Default think time after each step (ms)");
+    fireEvent.change(think, { target: { value: "2500" } });
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
+    fireEvent.blur(think);
+    await waitFor(() => expect(puts(calls)).toHaveLength(1));
+    expect(puts(calls)[0].thinkTimeMs).toBe(2500);
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+
+    fireEvent.change(setupRegion.getByLabelText("Stage 1 target virtual users"), { target: { value: "10" } });
+    fireEvent.click(setupRegion.getByRole("button", { name: "Save load profile" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(2));
+    expect(puts(calls)[1].loadProfile.stages[0].targetVirtualUsers).toBe(10);
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+
+    fireEvent.click(setupRegion.getByRole("button", { name: "Edit Thresholds (optional)" }));
+    fireEvent.change(setupRegion.getByLabelText("At most"), { target: { value: "800" } });
+    fireEvent.click(setupRegion.getByRole("button", { name: "+ Add threshold" }));
+    await waitFor(() => expect(puts(calls)).toHaveLength(3));
+    expect(puts(calls)[2].thresholds).toHaveLength(1);
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
+  it("shows the seeding report panel only when seeding left something out; otherwise one line says nothing was", async () => {
+    const source = { kind: "specification" as const, filename: "openapi.yaml" };
+    setup(lifecyclePlan({ seedingReport: { source, seededAt: "t", items: [] } }));
+    const first = render(<ChainPlanEditor planId={PLAN_ID} />);
+    expect(await screen.findByTestId("seeding-report-empty")).toHaveTextContent("Seeding report: everything was carried over.");
+    expect(screen.queryByRole("button", { name: /Seeding report/ })).not.toBeInTheDocument();
+    first.unmount();
+
+    const item = { kind: "left-out-request" as const, sourceLabel: "GET /health", detail: "Left out of the plan.", stepId: null };
+    setup(lifecyclePlan({ seedingReport: { source, seededAt: "t", items: [item] } }));
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    expect(await screen.findByRole("button", { name: /Seeding report/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("seeding-report-empty")).not.toBeInTheDocument();
   });
 });

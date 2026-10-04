@@ -47,6 +47,7 @@ export function ThresholdEditor<S>({
   customScope,
   busy,
   onSave,
+  compact = false,
 }: Readonly<{
   thresholds: ReadonlyArray<ThresholdDraft<S> & { id: string }>;
   scopeOptions: ReadonlyArray<ThresholdScopeOption<S>>;
@@ -55,6 +56,8 @@ export function ThresholdEditor<S>({
   customScope?: CustomThresholdScope<S>;
   busy: boolean;
   onSave: (thresholds: ThresholdDraft<S>[]) => void;
+  /** Inside a settings row (AP-040): the selects have a set width and the add action is a link, like Remove. */
+  compact?: boolean;
 }>) {
   const [scopeKey, setScopeKey] = useState(scopeOptions[0]?.key ?? CUSTOM_KEY);
   const [customText, setCustomText] = useState("");
@@ -94,7 +97,7 @@ export function ThresholdEditor<S>({
         {/* A step's operation key can be long; the select never grows wider than its column. */}
         <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-muted">
           Applies to
-          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className="max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
+          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className={`max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100 ${compact ? "w-52" : ""}`}>
             {scopeOptions.map((option) => (
               <option key={option.key} value={option.key}>
                 {option.label}
@@ -121,7 +124,7 @@ export function ThresholdEditor<S>({
         )}
         <label className="flex flex-col gap-1 text-xs text-muted">
           Metric
-          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100">
+          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className={`rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100 ${compact ? "w-44" : ""}`}>
             {METRICS.map((entry) => (
               <option key={entry.value} value={entry.value}>
                 {entry.label}
@@ -135,7 +138,7 @@ export function ThresholdEditor<S>({
         </label>
         <button
           type="button"
-          className={BUTTON_STYLES.secondary}
+          className={compact ? BUTTON_STYLES.ghost : BUTTON_STYLES.secondary}
           disabled={!canAdd}
           onClick={() => {
             const scope = chosenScope();

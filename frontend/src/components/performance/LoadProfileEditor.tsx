@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LoadProfile, LoadProfileKind, LoadStage } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
 import { LoadProfileChart } from "./LoadProfileChart";
@@ -26,11 +26,17 @@ export function LoadProfileEditor({
   startingStages,
   busy,
   onSave,
+  compact = false,
+  extra,
 }: Readonly<{
   profile: LoadProfile;
   startingStages: (kind: LoadProfileKind) => LoadStage[];
   busy: boolean;
   onSave: (profile: { kind: LoadProfileKind; stages: LoadStage[] }) => void;
+  /** Inside a settings row (AP-040): a table sized to its columns, a chart of moderate width, and both actions as links in one row. */
+  compact?: boolean;
+  /** Another field of the same setting, shown with the stage fields (the plan's default think time). */
+  extra?: ReactNode;
 }>) {
   const [kind, setKind] = useState<LoadProfileKind>(profile.kind);
   const [stages, setStages] = useState<DraftStage[]>(() => toDraft(profile.stages));
@@ -45,8 +51,20 @@ export function LoadProfileEditor({
   const peak = valid ? Math.max(...parsed.map((stage) => stage.target)) : 0;
   const update = (index: number, patch: Partial<DraftStage>) => setStages((current) => current.map((stage, i) => (i === index ? { ...stage, ...patch } : stage)));
 
+  const saveButton = (
+    <button
+      type="button"
+      className={compact ? BUTTON_STYLES.ghost : BUTTON_STYLES.secondary}
+      disabled={busy || !valid}
+      onClick={() => onSave({ kind, stages: parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target })) })}
+    >
+      Save load profile
+    </button>
+  );
+
+  // Compact: the stage fields and actions stack in a fixed-width column and the chart fills the space beside them.
   return (
-    <div className="space-y-3">
+    <div className={compact ? "grid items-start gap-x-8 gap-y-3 lg:grid-cols-[24rem_minmax(0,1fr)]" : "space-y-3"}>
       <div className="flex items-center gap-2">
         <label htmlFor="load-profile-kind" className="text-sm font-medium">
           Profile
@@ -69,7 +87,7 @@ export function LoadProfileEditor({
           ))}
         </select>
       </div>
-      <table className="w-full border-collapse text-sm">
+      <table className={`border-collapse text-sm ${compact ? "w-auto" : "w-full"}`}>
         <thead>
           <tr className="bg-chrome text-left text-xs text-muted">
             <th scope="col" className="px-2 py-1.5 font-semibold">Stage</th>
@@ -101,24 +119,25 @@ export function LoadProfileEditor({
           ))}
         </tbody>
       </table>
-      {valid && <LoadProfileChart stages={parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target }))} />}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => setStages((current) => [...current, { seconds: "60", target: "1" }])}>
-          + Add stage
-        </button>
+      {valid && (
+        <div className={compact ? "min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-5" : undefined}>
+          <LoadProfileChart stages={parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target }))} />
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => setStages((current) => [...current, { seconds: "60", target: "1" }])}>
+            + Add stage
+          </button>
+          {compact && saveButton}
+        </div>
         <span>
           Planned duration <strong className="font-mono">{valid ? formatDuration(plannedMs) : "—"}</strong> · peak <strong className="font-mono">{valid ? peak : "—"}</strong> VUs
         </span>
       </div>
       <p className="text-xs text-muted">Starting values only, not recommended targets. No limit is applied; the stages run exactly as entered.</p>
-      <button
-        type="button"
-        className={BUTTON_STYLES.secondary}
-        disabled={busy || !valid}
-        onClick={() => onSave({ kind, stages: parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target })) })}
-      >
-        Save load profile
-      </button>
+      {!compact && saveButton}
+      {extra}
     </div>
   );
 }

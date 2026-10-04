@@ -23,12 +23,14 @@ function stepNames(plan: ChainPlan, stepIds: readonly string[]): string {
  * first rows with secret cells hidden, or remove. A refused file is shown with the reason and line,
  * and nothing is kept. Values are never shown except the preview's non-secret cells.
  */
-export function DataSetsPanel({ plan, analysis, onPlanChanged, flush }: Readonly<{ plan: ChainPlan; analysis: ChainPlanAnalysis; onPlanChanged: (view: ChainPlanView) => void; flush?: boolean }>) {
+export function DataSetsPanel({ plan, analysis, onPlanChanged, row }: Readonly<{ plan: ChainPlan; analysis: ChainPlanAnalysis; onPlanChanged: (view: ChainPlanView) => void; row?: boolean }>) {
   const id = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
+  // The name follows the chosen file until the engineer types their own.
+  const [nameEdited, setNameEdited] = useState(false);
   const [mode, setMode] = useState<DataSetMode>("row-per-iteration");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +56,15 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged, flush }: Readonly
         onPlanChanged(result);
         setFile(null);
         setName("");
+        setNameEdited(false);
         if (fileInput.current) fileInput.current.value = "";
       },
     );
+  }
+
+  function chooseFile(chosen: File | null) {
+    setFile(chosen);
+    if (!nameEdited) setName(chosen ? chosen.name.replace(/\.csv$/i, "") : "");
   }
 
   function save(dataSet: DataSetInfo, patch: Partial<Pick<DataSetInfo, "name" | "mode" | "columns">>) {
@@ -69,7 +77,7 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged, flush }: Readonly
   const usage = (dataSetId: string, column: string) => analysis.dataSetUsage.find((entry) => entry.dataSetId === dataSetId && entry.column === column)?.stepIds ?? [];
 
   return (
-    <SetupItem flush={flush} state={plan.dataSets.length > 0 ? "done" : "optional"} title="Data sets (optional)" titleId={`${id}-title`} summary="CSV files whose columns are {{name}} values. Values are encrypted on this machine and reach k6 only while a run lasts.">
+    <SetupItem variant={row ? "row" : "card"} collapsible={row} startOpen={false} collapsedSummary={plan.dataSets.length === 0 ? "No data sets. Add a CSV file whose columns are {{name}} values." : `${plan.dataSets.length} ${plan.dataSets.length === 1 ? "data set" : "data sets"}: ${plan.dataSets.map((dataSet) => dataSet.name).join(", ")}.`} state={plan.dataSets.length > 0 ? "done" : "optional"} title="Data sets (optional)" titleId={`${id}-title`} summary="CSV files whose columns are {{name}} values. Values are encrypted on this machine and reach k6 only while a run lasts.">
       {error && <ErrorState message={error} testId="data-set-error" />}
       {plan.dataSets.map((dataSet) => {
         const preview = previews[dataSet.id];
@@ -185,32 +193,48 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged, flush }: Readonly
         }}
       />
       {plan.dataSets.length < CHAIN_PLAN_LIMITS.dataSets ? (
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-          <div className="space-y-1">
-            <label htmlFor={`${id}-file`} className="text-xs font-medium text-muted">
-              CSV file (UTF-8, header row, up to 5 MiB)
-            </label>
-            <input id={`${id}-file`} ref={fileInput} type="file" accept=".csv,text/csv" className="block w-full text-sm" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+        <div className="space-y-3">
+          {/* The browser's own file control reads as plain text; a button opens the picker and the file is named beside it. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <input
+              id={`${id}-file`}
+              ref={fileInput}
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="CSV file (UTF-8, header row, up to 5 MiB)"
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+            />
+            <button type="button" className={BUTTON_STYLES.ghost} disabled={busy} onClick={() => fileInput.current?.click()}>
+              Choose CSV file
+            </button>
+            <span className="text-sm">{file ? file.name : <span className="text-muted">No file chosen</span>}</span>
+            <span className="text-xs text-muted">UTF-8, header row, up to 5 MiB</span>
           </div>
-          <div className="space-y-1">
-            <label htmlFor={`${id}-name`} className="text-xs font-medium text-muted">
-              Data set name
-            </label>
-            <input id={`${id}-name`} className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={name} placeholder={file?.name.replace(/\.csv$/i, "") ?? ""} onChange={(event) => setName(event.target.value)} />
-            <label htmlFor={`${id}-mode`} className="sr-only">
-              Mode
-            </label>
-            <select id={`${id}-mode`} className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={mode} onChange={(event) => setMode(event.target.value as DataSetMode)}>
-              {(Object.keys(MODE_LABELS) as DataSetMode[]).map((option) => (
-                <option key={option} value={option}>
-                  {MODE_LABELS[option]}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+            <div className="space-y-1">
+              <label htmlFor={`${id}-name`} className="text-xs font-medium text-muted">
+                Data set name
+              </label>
+              <input id={`${id}-name`} className="block w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={name} onChange={(event) => { setName(event.target.value); setNameEdited(true); }} />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor={`${id}-mode`} className="text-xs font-medium text-muted">
+                Mode
+              </label>
+              <select id={`${id}-mode`} className="block w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={mode} onChange={(event) => setMode(event.target.value as DataSetMode)}>
+                {(Object.keys(MODE_LABELS) as DataSetMode[]).map((option) => (
+                  <option key={option} value={option}>
+                    {MODE_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="button" className={BUTTON_STYLES.ghost} disabled={busy || !file} onClick={handleUpload}>
+              Add data set
+            </button>
           </div>
-          <button type="button" className={BUTTON_STYLES.secondary} disabled={busy || !file} onClick={handleUpload}>
-            Add data set
-          </button>
         </div>
       ) : (
         <StatusBadge label={`A plan has at most ${CHAIN_PLAN_LIMITS.dataSets} data sets`} />

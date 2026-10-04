@@ -713,9 +713,8 @@ and nothing is kept. Data set files are encrypted on this machine and reach k6 o
 lasts. Note that a downloaded copy of a script that reads a data set cannot be run in **Run k6
 Script**, which never lets a script open files.
 
-**Running.** The **Run** card leads **Run setup**. It says in one line whether a run can start, shows the profile, duration, peak virtual users, think time and script below it, and holds the load run and Debug run. Below it, choose the target environment, the load profile, thresholds and
-the default think time, then generate the script. The load profile shows a chart of the planned virtual users over time, drawn from the stages you entered (k6 starts at one virtual user and ramps to each stage's target); it recommends nothing. The run trigger names the environment and
-lists the chains, every write step and every host. Nothing is sent until you start the run. If a
+**Running.** A launch card leads **Run setup**; it shows the last run in one line, and **Run again**, **Restore** and the report are in **Runs & reports**. Its headline says whether a run can start, and it holds **Start run** and **Start debug run**, a strip with the target, profile, duration, peak virtual users, think time and script, the chains, hosts and data sets the run uses, and the write warning with every write operation listed. Under it, the **Configuration** card lists the parts of the plan: choose the target environment, the load profile, thresholds and
+the default think time, and open **Edit** on Thresholds or Data sets, then generate the script. The load profile shows a chart of the planned virtual users over time, drawn from the stages you entered (k6 starts at one virtual user and ramps to each stage's target); it recommends nothing. Nothing is sent until you start the run. If a
 Once before load step fails, the load never starts and the run ends as failed, naming that step.
 The report shows each chain and step with its figures, each check's and extractor's counts, the
 Once before load steps apart from the load, and how each data set was used. It never shows a
@@ -727,8 +726,8 @@ back into the plan, or into a new plan, without starting a run.
 plans per session.
 
 **Debug run.** When a run does not do what you expect, for example a step reports that a value
-could not be extracted and the steps after it never ran, use **Debug run**, in the **Run** card in
-**Run setup** and in **Runs & reports**, under **Load run**. The card describes the target once for
+could not be extracted and the steps after it never ran, use **Debug run**, in the launch card at the top of
+**Run setup**, beside **Start run**. The card describes the target once for
 both runs. A chain that only has **Once before load** steps is marked, because the load run skips it
 and the Debug run does not. It runs every chain **once**, in order, and shows here each
 request that was sent and each response that came back, so you can see what the target really

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChainPlan, ChainPlanAnalysis, DebugRunResult, Environment } from "@apipilot/shared-domain";
 import { debugRun, discardDebugRun, revealDebugValue } from "../../services/requestChainClient";
-import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { DebugRunOutput } from "./DebugRunOutput";
 
@@ -16,15 +15,27 @@ export function debugBlockedReason(input: { analysis: ChainPlanAnalysis; environ
 
 type DebugState = { kind: "idle" } | { kind: "running" } | { kind: "done"; result: DebugRunResult } | { kind: "failed"; message: string };
 
+export interface ChainDebugRun {
+  state: DebugState;
+  running: boolean;
+  blocked: string | null;
+  /** Names the target has no value for; the steps that need them are not sent. */
+  missing: string[];
+  start: () => void;
+  cancel: () => void;
+  close: () => void;
+  reveal: (valueId: string) => Promise<string | null>;
+}
+
 /**
- * The Debug run trigger and its output (specs/039-chain-debug-run; constitution XVII). It sits inside
- * the Run card, under the one `RunTargetSummary` that describes what both runs do to the target, and
- * sending starts only when the engineer presses Start: a Debug run sends real requests, including
- * writes, and every chain runs once. Cancel aborts the request, which cancels the run on the server. The result is kept in this
- * component's state only; closing it, starting another run or leaving the screen asks the server to
- * forget what it held for reveal, and nothing is written to storage or the URL.
+ * The Debug run's state and actions (specs/039-chain-debug-run; constitution XVII). Sending starts
+ * only when the engineer calls `start`: a Debug run sends real requests, including writes, and every
+ * chain runs once. `cancel` aborts the request, which cancels the run on the server. The result is kept
+ * in this hook's state only; closing it, starting another run or leaving the screen asks the server to
+ * forget what it held for reveal, and nothing is written to storage or the URL. The trigger buttons
+ * and the output are separate components so a screen can place them apart (AP-040).
  */
-export function ChainDebugPanel({
+export function useChainDebugRun({
   plan,
   analysis,
   environment,
@@ -36,7 +47,7 @@ export function ChainDebugPanel({
   environment: Environment | null;
   dirty: boolean;
   loadRunInProgress: boolean;
-}>) {
+}>): ChainDebugRun {
   const [state, setState] = useState<DebugState>({ kind: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
   const heldRef = useRef<string | null>(null);
@@ -61,23 +72,25 @@ export function ChainDebugPanel({
   const running = state.kind === "running";
   const missing = analysis.requiredValues.filter((value) => value.provided === false).map((value) => value.name);
 
-  const start = async () => {
+  const start = () => {
     if (!environment || running) return;
-    discardHeld();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setState({ kind: "running" });
-    const outcome = await debugRun(planId, environment.id, controller.signal);
-    if (controllerRef.current !== controller) return;
-    controllerRef.current = null;
-    if (outcome.ok) {
-      heldRef.current = outcome.result.debugRunId;
-      setState({ kind: "done", result: outcome.result });
-    } else if (outcome.error === "aborted") {
-      setState({ kind: "idle" });
-    } else {
-      setState({ kind: "failed", message: outcome.message });
-    }
+    void (async () => {
+      discardHeld();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      setState({ kind: "running" });
+      const outcome = await debugRun(planId, environment.id, controller.signal);
+      if (controllerRef.current !== controller) return;
+      controllerRef.current = null;
+      if (outcome.ok) {
+        heldRef.current = outcome.result.debugRunId;
+        setState({ kind: "done", result: outcome.result });
+      } else if (outcome.error === "aborted") {
+        setState({ kind: "idle" });
+      } else {
+        setState({ kind: "failed", message: outcome.message });
+      }
+    })();
   };
 
   const cancel = () => {
@@ -99,46 +112,38 @@ export function ChainDebugPanel({
     [planId],
   );
 
+  return { state, running, blocked, missing, start, cancel, close, reveal };
+}
+
+/** What a Debug run does, and what it masks. Nothing here sends anything. */
+export function DebugRunNotes({ missing, compact = false }: Readonly<{ missing: readonly string[]; compact?: boolean }>) {
+  // A caption in a narrow column is left-aligned and not hyphenated; the app's justified prose needs a wide measure.
+  const caption = compact ? "text-left text-xs hyphens-none" : "";
   return (
-    <section aria-labelledby="chain-debug-title" className="space-y-3">
-      <h4 id="chain-debug-title" className="text-sm font-semibold">
-        Debug run
-      </h4>
-      <p className="text-sm text-muted">Runs every chain once and shows each request and response here, so you can see why a step failed or was not sent. It sends real requests, including writes, to the target above.</p>
+    <>
+      <p className={`text-sm text-muted ${caption}`}>Runs every chain once and shows each request and response here, so you can see why a step failed or was not sent. It sends real requests, including writes, to the target above.</p>
       {missing.length > 0 && (
-        <p className="text-sm text-warning-700 dark:text-warning-100" role="note" data-testid="debug-missing-values">
+        <p className={`text-sm text-warning-700 dark:text-warning-100 ${caption}`} role="note" data-testid="debug-missing-values">
           The target has no value for {missing.join(", ")}. The steps that need them will not be sent, and the output will say so.
         </p>
       )}
-      <p className="text-xs text-muted">Nothing is stored: the output is gone when you close it or reload the page. Authorization, cookie and API key values, secret values and credentials are masked. Nothing is sent until you start.</p>
-      <div className="flex flex-wrap items-center gap-3">
-        {running ? (
-          <button type="button" className={BUTTON_STYLES.danger} onClick={cancel}>
-            Cancel debug run
-          </button>
-        ) : (
-          <button type="button" className={BUTTON_STYLES.primary} disabled={blocked !== null} onClick={() => void start()}>
-            {`Start debug run on ${environment?.name ?? "…"}`}
-          </button>
-        )}
-        {state.kind === "done" && (
-          <button type="button" className={BUTTON_STYLES.secondary} onClick={close}>
-            Close output
-          </button>
-        )}
-        {blocked && !running && (
-          <span className="text-xs text-muted" data-testid="debug-blocked">
-            {blocked}
-          </span>
-        )}
-      </div>
-      {running && (
+      <p className={`text-xs text-muted ${caption}`}>Nothing is stored: the output is gone when you close it or reload the page. Authorization, cookie and API key values, secret values and credentials are masked. Nothing is sent until you start.</p>
+    </>
+  );
+}
+
+/** The Debug run's progress, failure or output. */
+export function DebugRunResultView({ debug }: Readonly<{ debug: ChainDebugRun }>) {
+  const { state } = debug;
+  return (
+    <>
+      {debug.running && (
         <p className="text-sm" role="status">
           Running the plan once…
         </p>
       )}
       {state.kind === "failed" && <ErrorState message="The Debug run could not run." detail={state.message} testId="debug-run-error" />}
-      {state.kind === "done" && <DebugRunOutput result={state.result} onReveal={reveal} />}
-    </section>
+      {state.kind === "done" && <DebugRunOutput result={state.result} onReveal={debug.reveal} />}
+    </>
   );
 }
