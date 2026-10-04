@@ -452,7 +452,22 @@ export interface ScriptStatus {
  * no scenario body and no environment value.
  */
 export interface QuickPerformanceTestView {
-  specification: { filename: string; info?: { title: string; version: string }; operationCount: number };
+  specification: {
+    filename: string;
+    info?: { title: string; version: string };
+    operationCount: number;
+    /** Every analyzed operation in specification order, so the engineer can choose which to seed. */
+    operations: {
+      method: string;
+      path: string;
+      operationId?: string;
+      /** The operation's declared parameters, which become `{{name}}` references or values in its step. */
+      parameters: { name: string; location: "path" | "query" | "header" | "cookie"; required: boolean }[];
+      hasRequestBody: boolean;
+      /** The documented success codes the seeded step expects; empty when the specification documents none. */
+      expectedStatuses: string[];
+    }[];
+  };
 }
 
 export type K6UnavailableReason =

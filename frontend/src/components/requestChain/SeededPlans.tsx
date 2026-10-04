@@ -63,21 +63,37 @@ export function SeedFromSource({
   defaultName,
   onOpenChainPlan,
   testId,
-}: Readonly<{ source: SeedSourceInput; seedKind: SeedKind; title: string; lead: ReactNode; defaultName: string; onOpenChainPlan: (planId: string) => void; testId: string }>) {
+  children,
+  disabledReason,
+}: Readonly<{
+  source: SeedSourceInput;
+  seedKind: SeedKind;
+  title: string;
+  lead: ReactNode;
+  defaultName: string;
+  onOpenChainPlan: (planId: string) => void;
+  testId: string;
+  /** Source-specific controls shown above the plans, such as choosing operations. */
+  children?: ReactNode;
+  /** When set, creating a plan is not offered and this says why. */
+  disabledReason?: string;
+}>) {
   const [seeding, setSeeding] = useState(false);
   return (
     <section aria-labelledby={`${testId}-title`} className="space-y-3 rounded-lg border border-border bg-surface p-4" data-testid={testId}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-0.5">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id={`${testId}-title`} className="text-lg font-semibold">
             {title}
           </h2>
-          <div className="max-w-3xl text-sm text-muted">{lead}</div>
+          <button type="button" className={BUTTON_STYLES.primary} disabled={Boolean(disabledReason)} title={disabledReason} onClick={() => setSeeding(true)}>
+            Create request-chain plan
+          </button>
         </div>
-        <button type="button" className={BUTTON_STYLES.primary} onClick={() => setSeeding(true)}>
-          Create request-chain plan
-        </button>
+        <div className="text-sm text-muted">{lead}</div>
       </div>
+      {children}
+      {disabledReason && <p className="text-sm text-muted">{disabledReason}</p>}
       <SeededPlans seedKind={seedKind} onOpen={onOpenChainPlan} emptyText="No plan has been created from this source yet." />
       {seeding && (
         <SeedPlanDialog

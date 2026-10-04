@@ -31,9 +31,11 @@ import * as edit from "./chainEditing";
 import { ChainRunPanel } from "./ChainRunPanel";
 import { ChainTree } from "./ChainTree";
 import { DataSetsPanel } from "./DataSetsPanel";
+import { Disclosure } from "./Disclosure";
 import { PlanIssues } from "./PlanIssues";
 import type { ReferenceSuggestion } from "./ReferenceField";
 import { SeedingReportView } from "./SeedingReportView";
+import { StepActions } from "./StepActions";
 import { StepEditor } from "./StepEditor";
 
 type Tab = "chains" | "setup" | "runs";
@@ -44,6 +46,11 @@ function movedText(moved: readonly MovedCredential[]): string {
   return moved
     .map((entry) => `The ${entry.location.kind === "header" ? `${entry.location.name} header` : `${entry.location.path} field`} value was moved into the secret value ${entry.valueName} of ${entry.environmentName}.`)
     .join(" ");
+}
+
+function seedingSummary(itemCount: number): string {
+  if (itemCount === 0) return "Everything was carried over.";
+  return `${itemCount} ${itemCount === 1 ? "item" : "items"} not carried over. The report never blocks the script.`;
 }
 
 function environmentNames(environment: Environment | null): string[] | null {
@@ -77,6 +84,11 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
   const [tab, setTab] = useState<Tab>("chains");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
+  // Plan check opens itself while something blocks the script; the engineer's own choice wins once made.
+  const [planCheckChoice, setPlanCheckChoice] = useState<boolean | null>(null);
+  const [seedingOpen, setSeedingOpen] = useState(false);
+  const [revealCount, setRevealCount] = useState(0);
+  const workbenchRef = useRef<HTMLDivElement | null>(null);
   const draftRef = useRef<ChainPlan | null>(null);
   const saving = useRef(false);
   const queued = useRef(false);
@@ -185,6 +197,14 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
         : null;
 
   const updateStep = (step: ChainStep) => change(edit.updateStep(plan, step.id, () => step));
+  const planCheckOpen = planCheckChoice ?? analysis.blockers.length > 0;
+
+  // Plan check and the seeding report sit below the workbench, so jumping to a step brings it back into view.
+  function goToStep(stepId: string) {
+    setSelectedStepId(stepId);
+    setRevealCount((count) => count + 1);
+    if (typeof workbenchRef.current?.scrollIntoView === "function") workbenchRef.current.scrollIntoView({ block: "start" });
+  }
 
   async function handleGenerate() {
     setBusy(true);
@@ -344,12 +364,17 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
 
       {tab === "chains" && (
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+          {/* A workbench: on a wide screen the tree and the editor share one viewport-high frame and
+              scroll on their own, so the page does not grow with the plan and a step picked in the tree
+              is already beside its editor. The height is viewport-relative, which no fixed utility
+              expresses. Below lg the two stack and the page scrolls as before. */}
+          <div ref={workbenchRef} className="grid scroll-mt-2 gap-4 lg:h-[max(32rem,calc(100dvh-5rem))] lg:grid-cols-[minmax(20rem,2fr)_minmax(0,3fr)]" data-testid="chain-workbench">
             <ChainTree
               plan={plan}
               selectedStepId={selectedStepId}
               stepsWithIssues={stepsWithIssues}
               busy={busy}
+              revealCount={revealCount}
               actions={{
                 onSelect: setSelectedStepId,
                 onAddChain: () => setDialog({ kind: "new-chain" }),
@@ -362,27 +387,59 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
                   setSelectedStepId(added.stepId);
                   change(added.plan, true);
                 },
-                onMoveStep: (stepId, offset) => change(edit.moveStep(plan, stepId, offset), true),
-                onMoveStepToChain: (stepId, chainId) => change(edit.moveStepToChain(plan, stepId, chainId), true),
-                onDuplicateStep: (stepId) => {
-                  const copied = edit.duplicateStep(plan, stepId);
-                  setSelectedStepId(copied.stepId);
-                  change(copied.plan, true);
-                },
-                onDeleteStep: (stepId) => {
-                  setSelectedStepId(null);
-                  change(edit.deleteStep(plan, stepId), true);
-                },
               }}
             />
             {selected ? (
-              <StepEditor key={selected.id} step={selected} suggestions={suggestions} onChange={updateStep} onCommit={() => void save()} onAddExtractor={addExtractor} onAddCheck={addCheck} />
+              <StepEditor
+                key={selected.id}
+                step={selected}
+                suggestions={suggestions}
+                onChange={updateStep}
+                onCommit={() => void save()}
+                onAddExtractor={addExtractor}
+                onAddCheck={addCheck}
+                actions={
+                  <StepActions
+                    plan={plan}
+                    step={selected}
+                    busy={busy}
+                    actions={{
+                      onMoveStep: (stepId, offset) => change(edit.moveStep(plan, stepId, offset), true),
+                      onMoveStepToChain: (stepId, chainId) => change(edit.moveStepToChain(plan, stepId, chainId), true),
+                      onDuplicateStep: (stepId) => {
+                        const copied = edit.duplicateStep(plan, stepId);
+                        setSelectedStepId(copied.stepId);
+                        change(copied.plan, true);
+                      },
+                      onDeleteStep: (stepId) => {
+                        setSelectedStepId(null);
+                        change(edit.deleteStep(plan, stepId), true);
+                      },
+                    }}
+                  />
+                }
+              />
             ) : (
               <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted">Select a step, or add one to a chain.</p>
             )}
           </div>
-          <PlanIssues plan={plan} analysis={analysis} environmentChosen={environment !== null} onGoToStep={setSelectedStepId} />
-          {plan.seedingReport && <SeedingReportView report={plan.seedingReport} onGoToStep={setSelectedStepId} />}
+          <Disclosure
+            title="Plan check"
+            open={planCheckOpen}
+            onToggle={() => setPlanCheckChoice(!planCheckOpen)}
+            summary={
+              analysis.blockers.length === 0
+                ? "Ready to generate. Nothing blocks the script."
+                : `${analysis.blockers.length} ${analysis.blockers.length === 1 ? "problem blocks" : "problems block"} the script.`
+            }
+          >
+            <PlanIssues plan={plan} analysis={analysis} environmentChosen={environment !== null} onGoToStep={goToStep} />
+          </Disclosure>
+          {plan.seedingReport && (
+            <Disclosure title="Seeding report" open={seedingOpen} onToggle={() => setSeedingOpen(!seedingOpen)} summary={seedingSummary(plan.seedingReport.items.length)}>
+              <SeedingReportView report={plan.seedingReport} onGoToStep={goToStep} />
+            </Disclosure>
+          )}
         </div>
       )}
 

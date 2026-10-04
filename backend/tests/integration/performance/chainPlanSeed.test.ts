@@ -29,6 +29,22 @@ describe("POST /api/chain-plans/seed from a specification", () => {
     expect((await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "nothing" } })).body.error).toBe("invalid_plan");
   });
 
+  it("seeds only the chosen operations, and refuses an empty or unknown choice", async () => {
+    const { agent } = await withSpecification(WEAK);
+    const chosen = ["POST /api/v1/customers", "PUT /customer/{customerId}"];
+    const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "Subset", source: { kind: "specification", selectedOperationKeys: chosen } });
+    expect(seeded.status).toBe(201);
+    const operationKeys = steps(seeded.body.plan as ChainPlan).flatMap((step) => (step.source.kind === "operation" ? [step.source.operationKey] : []));
+    expect(operationKeys.filter((key) => !key.startsWith("securityScheme:") && !(seeded.body.plan as ChainPlan).chains[0].steps.some((s) => s.runs === "once-before-load" && s.source.kind === "operation" && s.source.operationKey === key)).sort()).toEqual([...chosen].sort());
+
+    const unknown = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "specification", selectedOperationKeys: ["GET /nope"] } });
+    expect(unknown.status).toBe(422);
+    expect(unknown.body).toMatchObject({ error: "invalid_plan", field: "source" });
+    const empty = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "specification", selectedOperationKeys: [] } });
+    expect(empty.status).toBe(422);
+    expect(empty.body).toMatchObject({ error: "invalid_plan", field: "source" });
+  });
+
   it("seeds a first draft, then keeps every edit exactly as entered with no check against the specification (FR-026)", async () => {
     const { agent } = await withSpecification(WEAK);
     const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "Weak", source: { kind: "specification" } });

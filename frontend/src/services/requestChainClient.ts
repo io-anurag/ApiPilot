@@ -92,7 +92,7 @@ function planPath(planId: string): string {
   return `${CHAIN_PLANS_BASE}/${encodeURIComponent(planId)}`;
 }
 
-export type SeedSourceInput = { kind: "specification" } | { kind: "workflow" } | { kind: "collection"; collectionId: string; orderedRequestIds: string[] };
+export type SeedSourceInput = { kind: "specification"; selectedOperationKeys?: string[] } | { kind: "workflow" } | { kind: "collection"; collectionId: string; orderedRequestIds: string[] };
 
 export const listPlans = () => chainRequest("listPlans", CHAIN_PLANS_BASE, undefined, (body) => ({ plans: (body.plans ?? []) as ChainPlanSummary[] }));
 

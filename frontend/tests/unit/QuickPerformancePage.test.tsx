@@ -98,6 +98,37 @@ describe("QuickPerformancePage", () => {
     expect(uploads(calls)[0].url).toContain("replaceExisting=true");
   });
 
+  it("seeds only the operations the engineer leaves checked, and offers no plan with none", async () => {
+    const calls = stubFetch({
+      ...SEED_ROUTES,
+      [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }],
+      ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [] }],
+      ["POST /api/chain-plans/seed"]: () => [201, { plan: { id: "p9" }, analysis: {}, script: null, movedCredentials: [] }],
+    });
+    render(<QuickPerformancePage onExit={() => undefined} onOpenChainPlan={() => undefined} />);
+    const selection = await screen.findByTestId("operation-selection");
+    expect(within(selection).getByText("3 of 3 selected")).toBeInTheDocument();
+    expect(within(selection).getByRole("columnheader", { name: "Expected status" })).toBeInTheDocument();
+    expect(within(selection).getByText("201")).toBeInTheDocument();
+    expect(within(selection).getByRole("list", { name: "Variables of DELETE /customers/{id}" })).toHaveTextContent("id path*");
+
+    fireEvent.click(within(selection).getByRole("checkbox", { name: "DELETE /customers/{id}" }));
+    expect(within(selection).getByText("2 of 3 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create request-chain plan" }));
+    fireEvent.click(within(await screen.findByTestId("seed-plan-dialog")).getByRole("button", { name: "Create plan" }));
+    await waitFor(() => expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/api/chain-plans/seed"))).toBe(true));
+    expect(calls.find((call) => call.url.endsWith("/api/chain-plans/seed"))?.body).toMatchObject({
+      source: { kind: "specification", selectedOperationKeys: ["GET /customers", "POST /customers"] },
+    });
+
+    const selectAll = within(selection).getByRole("checkbox", { name: /Select all/ });
+    fireEvent.click(selectAll);
+    expect(within(selection).getByText("3 of 3 selected")).toBeInTheDocument();
+    fireEvent.click(selectAll);
+    expect(screen.getByRole("button", { name: "Create request-chain plan" })).toBeDisabled();
+    expect(screen.getByText("Select at least one operation to create a plan.")).toBeInTheDocument();
+  });
+
   it("calls onExit from Back to start", async () => {
     const onExit = vi.fn();
     stubFetch({ [`GET ${QUICK}`]: () => [404, { error: "quick_test_not_found", message: "none" }] });

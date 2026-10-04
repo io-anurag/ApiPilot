@@ -85,5 +85,5 @@ export function quickStep(method: string, path: string, overrides: Partial<Perfo
 
 /** AP-032 since AP-037 phase two: the quick test is its uploaded specification, a seeding source. */
 export function quickTestView() {
-  return { specification: { filename: "quick-performance.yaml", info: { title: "Quick Performance Fixture", version: "1.0" }, operationCount: 13 } };
+  return { specification: { filename: "quick-performance.yaml", info: { title: "Quick Performance Fixture", version: "1.0" }, operationCount: 13, operations: [{ method: "GET", path: "/customers", operationId: "listCustomers", parameters: [{ name: "limit", location: "query", required: false }], hasRequestBody: false, expectedStatuses: ["200"] }, { method: "POST", path: "/customers", parameters: [], hasRequestBody: true, expectedStatuses: ["201"] }, { method: "DELETE", path: "/customers/{id}", parameters: [{ name: "id", location: "path", required: true }], hasRequestBody: false, expectedStatuses: [] }] } };
 }

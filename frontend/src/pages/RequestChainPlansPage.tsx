@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { ChainPlanSummary } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { PromptDialog } from "../components/PromptDialog";
 import { Skeleton } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { ChainPlanEditor } from "../components/requestChain/ChainPlanEditor";
+import { PlansIntro } from "../components/requestChain/PlansIntro";
 import { LegacyRunsView } from "../components/requestChain/LegacyRunsView";
 import { createPlan, deletePlan, duplicatePlan, listPlans } from "../services/requestChainClient";
 
@@ -107,6 +107,27 @@ export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit
     );
   }
 
+  if (state.kind === "ready" && state.plans.length === 0) {
+    return (
+      <div className="space-y-4" data-testid="request-chain-plans-page">
+        {backButton && <div className="flex justify-start">{backButton}</div>}
+        {actionError && <ErrorState message={actionError} testId="chain-plans-action-error" />}
+        <PlansIntro disabled={busy} onNewPlan={() => setPrompt({ kind: "new" })} />
+        <LegacyRunsView />
+        {prompt && (
+          <PromptDialog
+            title={prompt.kind === "new" ? "New plan" : "Duplicate plan"}
+            label="Plan name"
+            initialValue=""
+            confirmLabel="Create plan"
+            onConfirm={(name) => void handlePromptConfirm(name)}
+            onCancel={() => setPrompt(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4" data-testid="request-chain-plans-page">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
@@ -146,9 +167,6 @@ export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit
               Try again
             </button>
           </ErrorState>
-        )}
-        {state.kind === "ready" && state.plans.length === 0 && (
-          <EmptyState message="No plans yet" description="Start an empty plan here, or create one from a specification, the guided workflow or a collection." testId="chain-plans-empty" />
         )}
         {state.kind === "ready" && state.plans.length > 0 && (
           <div className="overflow-x-auto">

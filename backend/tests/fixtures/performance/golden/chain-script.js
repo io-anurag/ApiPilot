@@ -353,6 +353,29 @@ const RUN_TAG = typeof RUN_TAG_SETTING === "string" && /^[0-9a-f]{6}$/.test(RUN_
 const FIRST_NAMES = ["Ada", "Alan", "Barbara", "Claude", "Dennis", "Donald", "Edsger", "Frances", "Grace", "Hedy", "Ivan", "Jean", "Ken", "Katherine", "Leslie", "Linus", "Margaret", "Niklaus", "Radia", "Rosalind", "Sophie", "Tim", "Vint", "Whitfield"];
 const LAST_NAMES = ["Allen", "Babbage", "Backus", "Berners", "Cerf", "Diffie", "Dijkstra", "Engelbart", "Hamilton", "Hopper", "Johnson", "Kahn", "Knuth", "Lamarr", "Lamport", "Liskov", "Lovelace", "Perlman", "Ritchie", "Shannon", "Sutherland", "Thompson", "Turing", "Wirth"];
 const ALPHANUMERIC = "0123456789abcdefghijklmnopqrstuvwxyz";
+const COLORS = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black", "white", "grey", "pink", "teal"];
+const ABBREVIATIONS = ["SQL", "TCP", "HTTP", "JSON", "XML", "SSL", "API", "CSS", "RAM", "SMS", "PCI", "USB"];
+const LOCALES = ["en", "de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ja", "ko", "zh"];
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+];
+const NAME_PREFIXES = ["Mr", "Mrs", "Ms", "Miss", "Dr"];
+const NAME_SUFFIXES = ["Jr.", "Sr.", "I", "II", "III", "IV", "MD", "DDS", "PhD"];
+const JOB_AREAS = ["Accounts", "Brand", "Communications", "Creative", "Data", "Factors", "Integration", "Marketing", "Operations", "Optimization", "Research", "Security", "Tactics"];
+const JOB_DESCRIPTORS = ["Central", "Chief", "Corporate", "Customer", "Direct", "Dynamic", "Forward", "Future", "Global", "Internal", "Lead", "National", "Principal", "Regional"];
+const JOB_TYPES = ["Administrator", "Agent", "Analyst", "Architect", "Assistant", "Coordinator", "Designer", "Developer", "Director", "Engineer", "Executive", "Facilitator", "Liaison", "Manager", "Officer", "Planner", "Specialist", "Strategist", "Supervisor", "Technician"];
+const CITIES = ["London", "Paris", "Berlin", "Madrid", "Rome", "Lisbon", "Dublin", "Vienna", "Oslo", "Helsinki", "Tokyo", "Sydney", "Toronto", "Chicago", "Austin", "Denver"];
+const STREET_NAMES = ["Maple", "Oak", "Cedar", "Elm", "Pine", "Willow", "Birch", "Lake", "Hill", "River", "Park", "Church"];
+const STREET_TYPES = ["Street", "Avenue", "Road", "Lane", "Drive", "Court", "Way", "Place"];
+const COUNTRIES = [["United Kingdom", "GB"], ["France", "FR"], ["Germany", "DE"], ["Spain", "ES"], ["Italy", "IT"], ["Portugal", "PT"], ["Ireland", "IE"], ["Austria", "AT"], ["Norway", "NO"], ["Finland", "FI"], ["Japan", "JP"], ["Australia", "AU"], ["Canada", "CA"], ["United States", "US"], ["India", "IN"], ["Brazil", "BR"]];
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DOMAIN_WORDS = ["alpha", "brisk", "cedar", "delta", "ember", "fable", "glint", "harbor", "indigo", "juniper", "kestrel", "lumen"];
+const DOMAIN_SUFFIXES = ["com", "net", "org", "info", "biz", "io"];
+const EXAMPLE_DOMAINS = ["example.com", "example.net", "example.org"];
 const SETUP_BY_ID = new Map();
 for (const step of SETUP_STEPS) SETUP_BY_ID.set(step.id, step);
 const COLUMNS = new Map();
@@ -390,6 +413,18 @@ function dynamicValue(name) {
   const first = FIRST_NAMES[m % FIRST_NAMES.length];
   const last = LAST_NAMES[Math.floor(m / FIRST_NAMES.length) % LAST_NAMES.length];
   const person = (first + "." + last).toLowerCase();
+  // Further independent values for one occurrence: each salt gives its own, still deterministic, draw.
+  const draw = function (salt) { return mix(m, salt, 101); };
+  const pick = function (list, salt) { return list[draw(salt) % list.length]; };
+  const groups = function (count, width, separator) {
+    const parts = [];
+    for (let i = 0; i < count; i++) parts.push(hex(draw(20 + i), width));
+    return parts.join(separator);
+  };
+  const phone = String(200 + (m % 800)) + "-" + String(200 + (Math.floor(m / 800) % 800)) + "-" + String(10000 + (Math.floor(m / 640000) % 10000)).slice(1);
+  const streetName = pick(STREET_NAMES, 1) + " " + pick(STREET_TYPES, 2);
+  const domainName = pick(DOMAIN_WORDS, 3) + "." + pick(DOMAIN_SUFFIXES, 4);
+  const day = 86400000;
   if (kind === "$guid" || kind === "$randomUUID") {
     const tag = RUN_TAG === "" ? "000000" : RUN_TAG;
     return hex(__VU, 8) + "-" + hex(k, 4) + "-4" + tag.slice(0, 3) + "-8" + tag.slice(3) + "-" + hex(__ITER, 12);
@@ -402,9 +437,48 @@ function dynamicValue(name) {
   if (kind === "$randomFullName") return first + " " + last;
   if (kind === "$randomUserName") return person + (RUN_TAG === "" ? "" : "_r" + RUN_TAG) + "_vu" + __VU + "_it" + __ITER + "_" + k;
   if (kind === "$randomEmail") return person + "+" + (RUN_TAG === "" ? "" : "r" + RUN_TAG + "-") + "vu" + __VU + "-it" + __ITER + "-" + k + "@example.com";
-  if (kind === "$randomPhoneNumber") return String(200 + (m % 800)) + "-" + String(200 + (Math.floor(m / 800) % 800)) + "-" + String(10000 + (Math.floor(m / 640000) % 10000)).slice(1);
+  if (kind === "$randomPhoneNumber") return phone;
   if (kind === "$randomAlphaNumeric") return ALPHANUMERIC[m % ALPHANUMERIC.length];
   if (kind === "$randomBoolean") return m % 2 === 0 ? "true" : "false";
+  if (kind === "$randomColor") return pick(COLORS, 1);
+  if (kind === "$randomHexColor") return "#" + hex(draw(1), 6);
+  if (kind === "$randomAbbreviation") return pick(ABBREVIATIONS, 1);
+  if (kind === "$randomIP") return String(1 + (draw(1) % 254)) + "." + String(draw(2) % 256) + "." + String(draw(3) % 256) + "." + String(1 + (draw(4) % 254));
+  if (kind === "$randomIPV6") return groups(8, 4, ":");
+  if (kind === "$randomMACAddress") return groups(6, 2, ":");
+  if (kind === "$randomPassword") {
+    let password = "";
+    for (let i = 0; i < 15; i++) password += ALPHANUMERIC[draw(40 + i) % ALPHANUMERIC.length];
+    return password;
+  }
+  if (kind === "$randomLocale") return pick(LOCALES, 1);
+  if (kind === "$randomUserAgent") return pick(USER_AGENTS, 1);
+  if (kind === "$randomProtocol") return pick(["http", "https"], 1);
+  if (kind === "$randomSemver") return String(draw(1) % 10) + "." + String(draw(2) % 10) + "." + String(draw(3) % 10);
+  if (kind === "$randomNamePrefix") return pick(NAME_PREFIXES, 1);
+  if (kind === "$randomNameSuffix") return pick(NAME_SUFFIXES, 1);
+  if (kind === "$randomJobArea") return pick(JOB_AREAS, 1);
+  if (kind === "$randomJobDescriptor") return pick(JOB_DESCRIPTORS, 1);
+  if (kind === "$randomJobType") return pick(JOB_TYPES, 1);
+  if (kind === "$randomJobTitle") return pick(JOB_DESCRIPTORS, 1) + " " + pick(JOB_AREAS, 2) + " " + pick(JOB_TYPES, 3);
+  if (kind === "$randomPhoneNumberExt") return phone + "x" + String(100 + (draw(5) % 9900));
+  if (kind === "$randomCity") return pick(CITIES, 1);
+  if (kind === "$randomStreetName") return streetName;
+  if (kind === "$randomStreetAddress") return String(1 + (draw(6) % 9999)) + " " + streetName;
+  if (kind === "$randomCountry") return pick(COUNTRIES, 1)[0];
+  if (kind === "$randomCountryCode") return pick(COUNTRIES, 1)[1];
+  if (kind === "$randomLatitude") return (((draw(1) % 1800001) / 10000) - 90).toFixed(4);
+  if (kind === "$randomLongitude") return (((draw(2) % 3600001) / 10000) - 180).toFixed(4);
+  if (kind === "$randomDateFuture") return new Date(Date.now() + (1 + (draw(1) % 365)) * day).toISOString();
+  if (kind === "$randomDatePast") return new Date(Date.now() - (1 + (draw(1) % 365)) * day).toISOString();
+  if (kind === "$randomDateRecent") return new Date(Date.now() - (draw(1) % day)).toISOString();
+  if (kind === "$randomWeekday") return pick(WEEKDAYS, 1);
+  if (kind === "$randomMonth") return pick(MONTHS, 1);
+  if (kind === "$randomDomainName") return domainName;
+  if (kind === "$randomDomainSuffix") return pick(DOMAIN_SUFFIXES, 4);
+  if (kind === "$randomDomainWord") return pick(DOMAIN_WORDS, 3);
+  if (kind === "$randomExampleEmail") return person + "+" + (RUN_TAG === "" ? "" : "r" + RUN_TAG + "-") + "vu" + __VU + "-it" + __ITER + "-" + k + "@" + pick(EXAMPLE_DOMAINS, 7);
+  if (kind === "$randomUrl") return pick(["http", "https"], 8) + "://" + domainName;
   return "";
 }
 

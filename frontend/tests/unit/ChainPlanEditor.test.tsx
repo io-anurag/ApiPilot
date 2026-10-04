@@ -188,6 +188,64 @@ describe("ChainPlanEditor", () => {
     ]);
   });
 
+  it("keeps the step's actions in the editor header and out of the tree", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    const tree = screen.getByRole("navigation", { name: "Chains and steps" });
+    expect(within(tree).queryByRole("button", { name: "Move up" })).not.toBeInTheDocument();
+    const actions = screen.getByRole("group", { name: "Step actions" });
+    expect(within(actions).getByRole("button", { name: "Move up" })).toBeEnabled();
+    expect(within(actions).getByRole("button", { name: "Move down" })).toBeDisabled();
+  });
+
+  it("collapses a chain, and re-opens it when a step in it is chosen from the plan check", async () => {
+    const plan = lifecyclePlan();
+    setup(plan);
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+    const toggle = screen.getByRole("button", { name: /^Customer lifecycle/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "+ Add step" })).not.toBeInTheDocument();
+    fireEvent.click(within(await screen.findByTestId("plan-blockers")).getByRole("button", { name: "Go to step" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("opens the plan check by itself while a problem blocks the script, and lets the engineer close it", async () => {
+    setup();
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    fireEvent.click(await screen.findByText("Get the customer"));
+    const panel = screen.getByRole("button", { name: /^Plan check/ });
+    expect(panel).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveTextContent("Ready to generate");
+    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+    await waitFor(() => expect(panel).toHaveAttribute("aria-expanded", "true"));
+    expect(panel).toHaveTextContent("1 problem blocks the script");
+    fireEvent.click(panel);
+    expect(panel).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("filters a long plan by method, name or URL", async () => {
+    const plan = lifecyclePlan();
+    const template = plan.chains[0].steps[2];
+    plan.chains[0].steps.push(
+      ...["s11", "s12", "s13"].map((stepId, index) => ({ ...template, id: stepId, name: `Extra ${index + 1}`, url: `{{baseUrl}}/extra/${index + 1}` })),
+    );
+    setup(plan);
+    render(<ChainPlanEditor planId={PLAN_ID} />);
+    const filter = await screen.findByRole("searchbox", { name: "Filter steps" });
+    const tree = screen.getByRole("navigation", { name: "Chains and steps" });
+    fireEvent.change(filter, { target: { value: "extra/2" } });
+    expect(within(tree).getByText("Extra 2")).toBeInTheDocument();
+    expect(within(tree).queryByText("Extra 1")).not.toBeInTheDocument();
+    expect(within(tree).queryByText("Get a token")).not.toBeInTheDocument();
+    fireEvent.change(filter, { target: { value: "nothing like this" } });
+    expect(within(tree).getByText(/No step matches/)).toBeInTheDocument();
+  });
+
   it("shows each step's source and its Changed mark as text (FR-033)", async () => {
     const plan = lifecyclePlan();
     plan.chains[0].steps[1] = { ...plan.chains[0].steps[1], source: { kind: "operation", operationKey: "POST /customers", label: "POST /customers", passwordFields: [] }, seedDigest: "d", changed: true };

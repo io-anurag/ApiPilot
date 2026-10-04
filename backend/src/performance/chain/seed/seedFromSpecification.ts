@@ -14,9 +14,10 @@ import { referenceName, toChainRequest } from "./toChainStep";
  * Seeding from a specification (specs/037-request-chain-performance FR-021, FR-022, FR-023; research
  * R15). The existing builders produce, once, the request AP-029 and AP-032 send for each operation's
  * chosen positive scenario; seeding keeps it as concrete text. Unique body fields become dynamic
- * variables, values the specification cannot produce stay `{{name}}` references, and each credential
- * producer becomes a Once before load step with an extractor, in a first chain "Credentials". Login
- * operations are left out of the per-operation chains (AP-032 FR-003a). Nothing is guessed: expected
+ * variables, values the specification cannot produce stay `{{name}}` references, and a selected
+ * credential producer becomes a Once before load step with an extractor, in a first chain
+ * "Credentials" (see `seedFromSpecification`). Login operations are not repeated as per-operation
+ * chains (AP-032 FR-003a). Nothing is guessed: expected
  * statuses are the documented success codes. Seeding sends nothing and runs nothing.
  */
 
@@ -95,12 +96,25 @@ export function basicAuthItem(label: string, valueName: string): SeedInput["repo
   };
 }
 
-/** The seed of a specification plan: credential steps first, then one single-step chain per operation. */
+/** Whether any seeded step sends the token a source produces, as `{{name}}` anywhere in its request. */
+function tokenIsUsed(source: TokenSource, steps: readonly SeedStep[]): boolean {
+  const reference = `{{${referenceName(source.tokenVariable)}}}`;
+  return steps.some((step) => JSON.stringify(step.request).includes(reference));
+}
+
+/**
+ * The seed of a specification plan: one single-step chain per selected operation, preceded by a
+ * "Credentials" chain only for the token sources the engineer asked for. A token operation (a login,
+ * an API-key issuer) is an ordinary operation: it is seeded as a Once before load step when it is
+ * selected, and not at all when it is not. A token source with no operation behind it (OAuth2 client
+ * credentials) cannot be selected, so it is seeded only when a seeded step sends its token. Endpoints
+ * that need no token never cause a credential step.
+ */
 export function seedFromSpecification(context: PerformanceContext, filename: string, name: string, now: string): Omit<SeedInput, "environment"> {
   const auth = planAuth(context);
   const producers = new Set(credentialProducerOperationKeys(auth));
-  const credentialSteps = [...auth.tokenSources.values()].sort((a, b) => (a.schemeName < b.schemeName ? -1 : a.schemeName > b.schemeName ? 1 : 0)).map((source) => credentialStep(source, context));
-  const chains: SeedInput["chains"] = credentialSteps.length > 0 ? [{ name: "Credentials", steps: credentialSteps }] : [];
+  const inScope = new Set(operationsInScope(context).map(operationKeyOf));
+  const operationChains: SeedInput["chains"] = [];
   const items: SeedInput["report"]["items"] = [];
   const secretNames: string[] = [];
   for (const operation of operationsInScope(context)) {
@@ -116,9 +130,16 @@ export function seedFromSpecification(context: PerformanceContext, filename: str
       secretNames.push(seeded.basicValueName);
       items.push(basicAuthItem(key, seeded.basicValueName));
     }
-    chains.push({ name: key, steps: [seeded.step] });
+    operationChains.push({ name: key, steps: [seeded.step] });
   }
+  const operationSteps = operationChains.flatMap((chain) => chain.steps);
+  const sources = [...auth.tokenSources.values()]
+    .filter((source) => (source.producerOperationKey ? inScope.has(source.producerOperationKey) : tokenIsUsed(source, operationSteps)))
+    .sort((a, b) => (a.schemeName < b.schemeName ? -1 : a.schemeName > b.schemeName ? 1 : 0));
+  const credentialSteps = sources.map((source) => credentialStep(source, context));
+  const chains: SeedInput["chains"] = credentialSteps.length > 0 ? [{ name: "Credentials", steps: credentialSteps }, ...operationChains] : operationChains;
   // The OAuth2 client secret is secret by the scheme's own variable plan, never by its name.
-  for (const entry of auth.schemePlan.values()) if (entry.type === "oauth2") secretNames.push(referenceName(entry.variableNames.clientSecret));
+  const seededSchemes = new Set(sources.map((source) => source.schemeName));
+  for (const [schemeName, entry] of auth.schemePlan) if (entry.type === "oauth2" && seededSchemes.has(schemeName)) secretNames.push(referenceName(entry.variableNames.clientSecret));
   return { name, chains, secretNames, now, report: { source: { kind: "specification", filename }, seededAt: now, items } };
 }

@@ -937,7 +937,11 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   `layoutFromChainSnapshot` adds setup steps, checks and data sets.
 - **Frontend.** `pages/RequestChainPlansPage.tsx` (the **Performance Plans** tab) lists plans and
   opens `requestChain/ChainPlanEditor`:
-  - a chain tree and a step editor with Request, Extract, Checks and Settings sections;
+  - a chain tree and a step editor with Request, Extract, Checks and Settings sections, laid out
+    as a viewport-high workbench (19.22.0): the tree (collapsible chains, a filter from six steps)
+    and the editor scroll independently, the step's actions (`StepActions`) sit in the editor
+    header, and Plan check and the seeding report are `Disclosure` bars under it. Below `lg` the
+    panes stack. Frontend only: no contract, shared-domain or backend change;
   - `ReferenceField`, an ARIA combobox offering `{{` suggestions;
   - the plan check, data sets, run setup and `ChainRunPanel`.
 

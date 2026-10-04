@@ -341,7 +341,7 @@ export type ChainRunSummary = Omit<ChainRun, "snapshot" | "progress" | "result">
 
 export const REFERENCE_NAME = /^[A-Za-z0-9_]+$/;
 const REFERENCE = /\{\{([^{}]*)\}\}/g;
-const DYNAMIC_NAME = /^\$[A-Za-z]+$/;
+const DYNAMIC_NAME = /^\$[A-Za-z0-9]+$/;
 /** RFC 7230 token. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 /** FR-003 edge case: set by the runtime, never by a step. */

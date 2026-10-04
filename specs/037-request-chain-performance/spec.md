@@ -505,7 +505,11 @@ and that the same plan generates a byte-identical script whatever the file's con
 - **FR-022**: Seeded authentication MUST be ordinary steps and headers: a credential producer
   (OAuth2 client credentials, chained login, distinct per-role credentials) becomes a **Once before
   load** step with an extractor, and each step that used it gets the header that applies it with a
-  `{{name}}` reference.
+  `{{name}}` reference. *(Amended 2026-10-04, 19.22.0: when seeding from a specification, a token
+  operation (a login, an API-key issuer) is an ordinary selectable operation and is seeded as a
+  credential step only when it is selected; a token source with no operation behind it, such as OAuth2
+  client credentials, is seeded only when a seeded step sends its token. Endpoints that need no token
+  never cause a credential step. Guided-workflow and collection seeding are unchanged.)*
 - **FR-023**: Seeding from the guided workflow MUST give one chain per approved workflow, with each
   workflow variable as an extractor on its producer and a `{{name}}` reference on its consumers, and
   one single-step chain per other operation in scope. Seeding from the quick path MUST give one
@@ -618,6 +622,14 @@ and that the same plan generates a byte-identical script whatever the file's con
   A script from a plan without data sets MUST pass AP-034's script check (AP-029 FR-022a). A script
   from a plan with data sets reads them with `open()`, which AP-034 refuses. AP-029 FR-022a does
   not apply to it, and downloading it MUST state that the copy cannot be run in Run k6 Script.
+- **FR-048** *(added 2026-10-04, 19.22.0)*: Every Postman dynamic variable the collection editor
+  offers (48 in all: common, text, numbers and colors, internet, names, profession, phone, address
+  and location, dates, domains and emails) MUST be accepted as `{{$name}}` and generated at run time
+  by the fixed runtime, deterministically from the virtual user, the iteration, the occurrence and
+  the run tag (the clock-based ones, timestamps and the three random dates, from the time of the
+  request). Amends AP-036 FR-013 and research R5, which listed 13. A name is supported only together
+  with its generator; any other `{{$name}}` stays an `invalid-reference` blocker. Values come from
+  short built-in lists, so a generated script does not grow with a data set. Dates are ISO 8601.
 
 ### Key Entities
 

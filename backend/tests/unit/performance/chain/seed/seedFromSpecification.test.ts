@@ -25,9 +25,9 @@ async function contextOf(buffer: Buffer) {
   return contextFromQuickTest({ apiModel, scenarios: withQuickScenarioIds(generatePositiveScenarios(apiModel)) });
 }
 
-async function seed(buffer: Buffer, environment: { name: string; valueNames: string[] } | null = null) {
+async function seed(buffer: Buffer, environment: { name: string; valueNames: string[] } | null = null, selectedOperationKeys?: string[]) {
   const context = await contextOf(buffer);
-  return assembleSeededPlan({ ...seedFromSpecification(context, "spec.yaml", "Seeded", NOW), environment });
+  return assembleSeededPlan({ ...seedFromSpecification({ ...context, selectedOperationKeys }, "spec.yaml", "Seeded", NOW), environment });
 }
 
 describe("toChainRequest", () => {
@@ -77,6 +77,24 @@ describe("seedFromSpecification", () => {
     const token = plan.chains[0].steps[0].extractors[0].name;
     expect(create.headers).toContainEqual({ name: "Authorization", value: `Bearer {{${token}}}` });
     expect(plan.chains.find((chain) => chain.name === "GET /status")!.steps[0].expectedStatuses).toEqual([]);
+  });
+
+  it("seeds a Credentials chain only when the token operation is selected", async () => {
+    const without = (await seed(openApiFixtureBuffer("quick-performance.yaml"), null, ["POST /orders"])).plan;
+    expect(without.chains.map((chain) => chain.name)).toEqual(["POST /orders"]);
+    expect(without.chains[0].steps[0].headers.some((header) => header.name === "Authorization")).toBe(true);
+    const withLogin = (await seed(openApiFixtureBuffer("quick-performance.yaml"), null, ["POST /auth/login", "POST /orders"])).plan;
+    expect(withLogin.chains.map((chain) => chain.name)).toEqual(["Credentials", "POST /orders"]);
+    expect(withLogin.chains[0].steps[0].runs).toBe("once-before-load");
+  });
+
+  it("seeds no credential step for endpoints that need no token", async () => {
+    // The fixture's GET /status inherits the global security; this copy makes it public.
+    const marker = "      operationId: getStatus";
+    const publicStatus = Buffer.from(openApiFixtureBuffer("quick-performance.yaml").toString("utf-8").replace(marker, `${marker}\n      security: []`));
+    const { plan } = await seed(publicStatus, null, ["GET /status"]);
+    expect(plan.chains.map((chain) => chain.name)).toEqual(["GET /status"]);
+    expect(plan.chains[0].steps[0].headers.some((header) => header.name === "Authorization")).toBe(false);
   });
 
   it("is deterministic: the same specification seeds the same chains, steps, ids and digests", async () => {

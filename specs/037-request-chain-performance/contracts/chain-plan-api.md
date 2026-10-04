@@ -31,7 +31,7 @@ and a think time of 1,000 ms.
 Body:
 ```json
 { "name": "Customer lifecycle",
-  "source": { "kind": "specification" }
+  "source": { "kind": "specification", "selectedOperationKeys"?: ["METHOD /path"] }
           | { "kind": "workflow" }
           | { "kind": "collection", "collectionId": "…", "orderedRequestIds": ["…"] },
   "environmentId": "…" }
@@ -40,6 +40,12 @@ Body:
   while seeding are moved (research R8). Without it they are dropped and listed.
 - **Source kinds.**
   - `specification` uses the session's quick test: `404 quick_test_not_found` if none.
+    `selectedOperationKeys` (amendment 2026-10-04, version 19.21.0) limits the seed to those
+    operations; absent means every operation. It must be non-empty and name only analyzed
+    operations, otherwise `422 invalid_plan { field: "source" }`. It is stored in specification
+    order, so the same choice always seeds the same plan. `GET /api/quick-performance` and its
+    upload response list the analyzed operations in `specification.operations`
+    (`{ method, path, operationId? }`) for the picker.
   - `workflow` uses the guided workflow: `409 workflow_not_ready` until Postman generation is
     complete, the same gate as today's guided plan.
   - `collection`: `404 uploaded_collection_not_found`, or `400 no_requests_selected`, the codes

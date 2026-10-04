@@ -3288,3 +3288,33 @@ Implementation
       every view's main screens; the palette made no network requests (`validation.md`).
     - **Accepted by the user on 2026-10-04: AP-038 recorded as Implemented.**
     - Version bumped to 19.20.0 (root, backend, frontend, shared-domain).
+56. **Quick performance test: choose the operations to seed (2026-10-04); version 19.21.0.**
+    - After a specification is uploaded, the page lists its operations with checkboxes (all
+      checked), and the plan is seeded from the checked ones. AP-037 FR-021 and
+      `contracts/chain-plan-api.md` amended: the `specification` seed source takes an optional
+      `selectedOperationKeys`, reusing the guided workflow's `normalizeOperationSelection`; the
+      quick-test view gains `specification.operations`. An empty or unknown selection is
+      `422 invalid_plan`. Guided-workflow and collection seeding are unchanged.
+    - Validation: `npm test` 2,473 passed, 10 skipped; lint clean; build succeeds.
+    - Version bumped to 19.21.0 (root, backend, frontend, shared-domain).
+57. **Performance plan editor: workbench layout (2026-10-04); version 19.22.0.**
+    - The Chains tab of a plan is a viewport-high workbench: the chain tree and the step editor
+      scroll independently, so the page no longer grows with the number of chains and a step
+      picked in the tree is already beside its editor. Chains collapse, a filter appears from six
+      steps, the step's actions moved from the tree to the editor header, and Plan check and the
+      seeding report became collapsible bars (Plan check opens itself while a problem blocks the
+      script; "Go to step" reveals and scrolls to the step). Below `lg` the panes stack.
+    - Chain and step actions are icon buttons (accessible names and tooltips kept); the tree is
+      40 % of the workbench; long chain and step names truncate with the full name as a tooltip.
+    - Seeding from a specification: the Credentials chain is no longer added unconditionally.
+      AP-037 FR-022 amended: a token operation is seeded only when selected; a token source with no
+      operation (OAuth2 client credentials) only when a seeded step sends its token. Backend
+      `seedFromSpecification`; no contract or shared-domain change.
+    - Dynamic variables: all 48 Postman variables the collection editor offers are supported in
+      request-chain plans (35 added to the 13). AP-037 FR-048 added, AP-036 FR-013 and research R5
+      amended. Generators are in the fixed runtime (`CHAIN_RUNTIME`), deterministic from virtual
+      user, iteration, occurrence and run tag, with short built-in lists; the golden scripts were
+      regenerated and differ only in the runtime. `$randomIPV6` needed digits allowed in a name.
+    - Validation: `npm test` 2,484 passed, 10 skipped; lint, typecheck and build clean. Layout
+      checked in jsdom only: not yet walked through in a browser.
+    - Version bumped to 19.22.0 (root, backend, frontend, shared-domain).

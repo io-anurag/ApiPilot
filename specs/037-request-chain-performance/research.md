@@ -135,8 +135,8 @@ let each name and value be filled and encoded on its own (FR-004).
 ## R5. References, dynamic variables and value scopes
 
 **Decision**:
-- **Grammar.** `{{name}}` where `name` is `[A-Za-z0-9_]+`, or `{{$name}}` for one of the 13 supported
-  dynamic variables (AP-036 FR-013, `SUPPORTED_DYNAMIC_VARIABLES` in
+- **Grammar.** `{{name}}` where `name` is `[A-Za-z0-9_]+`, or `{{$name}}` for one of the supported
+  dynamic variables (13 when written; 48 since 19.22.0, FR-048) (AP-036 FR-013, `SUPPORTED_DYNAMIC_VARIABLES` in
   `backend/src/performance/collection/dynamicValues.ts`, which moves to shared-domain).
   - Any other `{{…}}` text is an `invalid-reference` blocker.
   - A lone `{{` or `}}` is literal text.

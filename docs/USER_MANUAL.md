@@ -564,8 +564,13 @@ guided workflow you have in progress; both can exist side by side.
 the file is rejected. ApiPilot then generates positive scenarios only, with its fixed rules and
 no AI.
 
+**Choosing operations.** Every analyzed operation is listed with a checkbox, all checked at first.
+Uncheck the ones to leave out, or use **Select all** to clear or restore the whole list. The plan
+is created from the checked operations only, and **Create request-chain plan** is unavailable
+while none is checked. Credential requests the checked operations need are still added.
+
 **Creating a plan.** Choose **Create request-chain plan** to create a performance plan from the
-specification: one single-step chain per operation, from its positive scenario, with credential
+specification: one single-step chain per chosen operation, from its positive scenario, with credential
 requests (an OAuth2 token, a login) as **Once before load** steps. Operations with no positive
 scenario are listed in the plan's seeding report. Because no one reviewed these generated
 requests, read each step, and the write steps listed at the run trigger, before you run. The plan
@@ -631,12 +636,27 @@ restored." **View report** opens each report exactly as it was rendered.
   statements become extractors, recognised status assertions become expected statuses, and
   inherited auth becomes an `Authorization` header.
 
-In every case, credential requests (an OAuth2 token, a login) become **Once before load** steps.
+In every case, credential requests (an OAuth2 token, a login) become **Once before load** steps,
+with one exception: from a specification, a token operation (a login, an API-key issuer) is an
+ordinary operation in the list, and is seeded only if you leave it ticked. An OAuth2 token request
+that has no operation to tick is seeded only when a step you seeded sends its token. Endpoints that
+need no token never add a credentials step; if you leave the token operation out, `{{token}}` is a
+value the target environment provides, and Plan check lists it.
 Seeding only reads its source and never runs a script. A **Seeding report** lists everything it
 could not carry over, such as pre-request scripts, statements it did not recognise, or operations
 with no positive scenario. After seeding, the plan is yours: it is never compared with,
 re-derived from or overwritten by its source. Each seeded step shows where it came from, and is
 marked **Changed** once you edit it. A step you add is marked **Added by you**.
+
+**The Chains tab.** On a wide screen the chain list and the step editor sit side by side in a
+frame as tall as the window, and each scrolls on its own, so the page does not grow with the plan
+and the step you pick is always beside its editor. In the list, select a chain's name to collapse
+or expand it (**Collapse all** and **Expand all** act on every chain), and once a plan has six or
+more steps, **Filter steps** narrows the list by method, name or URL. The step's actions (**Move
+up**, **Move down**, **Duplicate**, **Delete**, **Move to** another chain) are at the top of its
+editor. **Plan check** and the **Seeding report** are collapsed bars under the frame; Plan check
+opens itself while a problem blocks the script, and **Go to step** brings the step back into view.
+On a narrow screen the list and the editor stack and the page scrolls.
 
 **A step.** Each step has:
 - a method, a URL and ordered query parameters, headers and a body (none, raw text with a content
@@ -658,8 +678,15 @@ marked **Changed** once you edit it. A step you add is marked **Added by you**.
 - the current row of a data set with that column;
 - the target environment.
 
-`{{$guid}}`, `{{$randomEmail}}` and the other supported dynamic variables are generated for each
-request. Values extracted by every-iteration steps are cleared at the start of each iteration.
+`{{$guid}}`, `{{$randomEmail}}` and the other dynamic variables are generated for each request.
+All 48 Postman dynamic variables are supported: identifiers and timestamps (`$guid`,
+`$timestamp`), text, numbers and colors (`$randomInt`, `$randomHexColor`), internet values
+(`$randomIP`, `$randomIPV6`, `$randomMACAddress`, `$randomPassword`, `$randomUserAgent`), names and
+job titles, phone numbers, addresses, countries and coordinates, dates (`$randomDateFuture`,
+`$randomDatePast`, `$randomDateRecent`, as ISO 8601), and domains, URLs and emails. Type `{{$` to
+see them all. Values are repeatable for the same virtual user, iteration and run; the ones that
+are meant to be unique (`$guid`, `$randomEmail`, `$randomUserName`) differ for each. A name that is
+not on the list is flagged by the plan check. Values extracted by every-iteration steps are cleared at the start of each iteration.
 
 **The plan check** lists what must be fixed before a script can be generated:
 - a value used before any step extracts it (move the step; moving is never refused);

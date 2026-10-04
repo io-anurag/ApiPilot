@@ -19,7 +19,9 @@ describe("quick performance test routes", () => {
     const created = await uploadQuick(agent);
     expect(created.status).toBe(200);
     const { quickTest } = created.body;
-    expect(quickTest).toEqual({ specification: { filename: "quick-performance.yaml", operationCount: 13, info: { title: "Quick Performance Fixture", version: expect.any(String) } } });
+    expect(quickTest).toEqual({ specification: { filename: "quick-performance.yaml", operationCount: 13, info: { title: "Quick Performance Fixture", version: expect.any(String) }, operations: expect.any(Array) } });
+    expect(quickTest.specification.operations).toHaveLength(13);
+    expect(quickTest.specification.operations[0]).toMatchObject({ method: expect.stringMatching(/^[A-Z]+$/), path: expect.stringMatching(/^\//), parameters: expect.any(Array), hasRequestBody: expect.any(Boolean), expectedStatuses: expect.any(Array) });
     const read = await agent.get(QUICK_BASE);
     expect(read.status).toBe(200);
     expect(read.body.quickTest).toEqual(quickTest);

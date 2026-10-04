@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import type { QuickPerformanceTestView } from "@apipilot/shared-domain";
+import { toOperationKey, type QuickPerformanceTestView } from "@apipilot/shared-domain";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import { OperationSelection } from "../components/requestChain/OperationSelection";
 import { SeedFromSource } from "../components/requestChain/SeededPlans";
 import {
   EntryFeatureIcon,
@@ -11,6 +12,7 @@ import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
+import type { SeedSourceInput } from "../services/requestChainClient";
 import { fetchQuickTest, uploadQuickTest } from "../services/quickPerformanceClient";
 
 /**
@@ -65,6 +67,38 @@ function UploadIcon({ className }: Readonly<{ className?: string }>) {
         d="M5 14.5V19a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-4.5"
       />
     </svg>
+  );
+}
+
+/** The operations to seed start all checked; the plan is seeded from the checked ones only (FR-021). */
+function SpecificationSeeding({
+  specification,
+  onOpenChainPlan,
+}: Readonly<{ specification: QuickPerformanceTestView["specification"]; onOpenChainPlan?: (planId: string) => void }>) {
+  const allKeys = specification.operations.map(toOperationKey);
+  const [checkedKeys, setCheckedKeys] = useState<ReadonlySet<string>>(() => new Set(allKeys));
+  const allChecked = checkedKeys.size === allKeys.length;
+  // Sent in specification order; absent means every operation, which keeps the unchanged request shape.
+  const source: SeedSourceInput = allChecked ? { kind: "specification" } : { kind: "specification", selectedOperationKeys: allKeys.filter((key) => checkedKeys.has(key)) };
+  return (
+    <SeedFromSource
+      source={source}
+      seedKind="specification"
+      title="Quick performance test"
+      lead={
+        <p className="text-left hyphens-none">
+          Choose the operations to include, then create a request-chain plan from this specification: one step for each chosen operation, from its
+          generated positive scenario, with credential requests run once before the load. You then edit every request yourself. Nothing is sent to
+          any system until you trigger a run.
+        </p>
+      }
+      defaultName={specification.info?.title ?? specification.filename}
+      onOpenChainPlan={onOpenChainPlan ?? (() => undefined)}
+      testId="quick-performance-plan"
+      disabledReason={checkedKeys.size === 0 && allKeys.length > 0 ? "Select at least one operation to create a plan." : undefined}
+    >
+      <OperationSelection operations={specification.operations} checkedKeys={checkedKeys} onChange={setCheckedKeys} />
+    </SeedFromSource>
   );
 }
 
@@ -290,21 +324,7 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
           {uploadError && (
             <ErrorState message={uploadError} testId="quick-upload-error" />
           )}
-          <SeedFromSource
-            source={{ kind: "specification" }}
-            seedKind="specification"
-            title="Quick performance test"
-            lead={
-              <p>
-                Create a request-chain plan from this specification: one step for each operation, from its generated positive scenario, with
-                credential requests run once before the load. You then edit every request yourself. Nothing is sent to any system until you
-                trigger a run.
-              </p>
-            }
-            defaultName={state.quickTest.specification.info?.title ?? state.quickTest.specification.filename}
-            onOpenChainPlan={onOpenChainPlan ?? (() => undefined)}
-            testId="quick-performance-plan"
-          />
+          <SpecificationSeeding key={`${state.quickTest.specification.filename}:${state.quickTest.specification.operations.map(toOperationKey).join("|")}`} specification={state.quickTest.specification} onOpenChainPlan={onOpenChainPlan} />
         </>
       )}
 

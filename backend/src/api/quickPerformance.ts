@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { prefillExpectedStatuses } from "../performance/plan/expectedStatuses";
 import type { QuickPerformanceTestView } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
 import { createQuickTest } from "../performance/quick/createQuickTest";
@@ -28,7 +29,19 @@ function requireQuickTest(): QuickPerformanceTest {
 }
 
 function viewOf(test: QuickPerformanceTest): QuickPerformanceTestView {
-  return { specification: test.specification };
+  return {
+    specification: {
+      ...test.specification,
+      operations: test.apiModel.operations.map((operation) => ({
+        method: operation.method.toUpperCase(),
+        path: operation.path,
+        ...(operation.operationId ? { operationId: operation.operationId } : {}),
+        parameters: operation.parameters.map(({ name, location, required }) => ({ name, location, required })),
+        hasRequestBody: operation.requestBody !== undefined,
+        expectedStatuses: prefillExpectedStatuses(operation),
+      })),
+    },
+  };
 }
 
 export function createQuickPerformanceRouter(): Router {

@@ -4,6 +4,7 @@ import {
   chainRunOrder,
   namesAvailableAt,
   parseReferences,
+  SUPPORTED_DYNAMIC_VARIABLES,
   summarizeChainWrites,
   type Chain,
   type ChainPlan,
@@ -67,8 +68,12 @@ describe("parseReferences", () => {
   });
 
   it("accepts every supported dynamic variable", () => {
-    const names = ["$guid", "$randomUUID", "$timestamp", "$isoTimestamp", "$randomInt", "$randomFirstName", "$randomLastName", "$randomFullName", "$randomUserName", "$randomEmail", "$randomPhoneNumber", "$randomAlphaNumeric", "$randomBoolean"];
+    const names = [...SUPPORTED_DYNAMIC_VARIABLES];
+    expect(names).toHaveLength(48);
     for (const name of names) expect(parseReferences(`{{${name}}}`)).toEqual([{ kind: "dynamic", name, raw: `{{${name}}}` }]);
+    // A name with a digit, such as $randomIPV6, is a name; an unknown one is still invalid.
+    expect(parseReferences("{{$randomIPV6}}")).toEqual([{ kind: "dynamic", name: "$randomIPV6", raw: "{{$randomIPV6}}" }]);
+    expect(parseReferences("{{$randomLorem}}")).toEqual([{ kind: "invalid", raw: "{{$randomLorem}}" }]);
   });
 });
 

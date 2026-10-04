@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { isSettableHeader, isValidHeaderName, STEP_METHODS, type ChainStep, type StepMethod } from "@apipilot/shared-domain";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
@@ -60,8 +60,11 @@ export function StepEditor({
   onCommit,
   onAddExtractor,
   onAddCheck,
+  actions,
 }: Readonly<{
   step: ChainStep;
+  /** The step's structural actions, shown in the header so they stay in reach while the body scrolls. */
+  actions?: ReactNode;
   suggestions: readonly ReferenceSuggestion[];
   onChange: (step: ChainStep) => void;
   onCommit: () => void;
@@ -80,22 +83,25 @@ export function StepEditor({
   const edit = (patch: Partial<ChainStep>) => onChange({ ...step, ...patch });
 
   return (
-    <section aria-label={`Step: ${step.name}`} className="space-y-4 rounded-lg border border-border bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          <label htmlFor={`${id}-name`} className="text-xs font-medium text-muted">
-            Step name
-          </label>
-          <input id={`${id}-name`} className={`${FIELD_CLASS} w-full font-medium`} value={step.name} onChange={(event) => edit({ name: event.target.value })} onBlur={onCommit} />
+    <section aria-label={`Step: ${step.name}`} className="flex min-h-0 flex-col rounded-lg border border-border bg-surface lg:h-full">
+      <div className="shrink-0 space-y-3 border-b border-border p-4 pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1">
+            <label htmlFor={`${id}-name`} className="text-xs font-medium text-muted">
+              Step name
+            </label>
+            <input id={`${id}-name`} className={`${FIELD_CLASS} w-full font-medium`} value={step.name} onChange={(event) => edit({ name: event.target.value })} onBlur={onCommit} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-5">
+            <StatusBadge label={sourceLabel(step)} tone={step.source.kind === "added" ? "info" : "neutral"} />
+            {step.changed && <StatusBadge label="Changed" tone="warning" />}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-5">
-          <StatusBadge label={sourceLabel(step)} tone={step.source.kind === "added" ? "info" : "neutral"} />
-          {step.changed && <StatusBadge label="Changed" tone="warning" />}
-        </div>
+        {actions}
+        <Tabs tabs={SECTIONS} activeTab={section} onChange={setSection} label="Step sections" />
       </div>
 
-      <Tabs tabs={SECTIONS} activeTab={section} onChange={setSection} label="Step sections" />
-
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
       {section === "request" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-2">
@@ -221,6 +227,7 @@ export function StepEditor({
           </div>
         </div>
       )}
+      </div>
     </section>
   );
 }
