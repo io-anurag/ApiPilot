@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AppErrorBoundary } from "../../src/components/AppErrorBoundary";
 
 function Thrower(): never {
@@ -81,5 +81,41 @@ describe("AppErrorBoundary", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Reload page" }));
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the error's message under Technical details, and nothing else about the crash", () => {
+    render(
+      <AppErrorBoundary>
+        <Thrower />
+      </AppErrorBoundary>,
+    );
+    expect(screen.getByText("Technical details")).toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Objects are not valid as a React child");
+    expect(alert).not.toHaveTextContent(/at Thrower|\.tsx/);
+  });
+
+  it("copies the message, and says so", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    render(
+      <AppErrorBoundary>
+        <Thrower />
+      </AppErrorBoundary>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Details copied."));
+    expect(writeText).toHaveBeenCalledWith("ApiPilot could not show a page. Error: Objects are not valid as a React child");
+  });
+
+  it("says when the clipboard refuses, instead of claiming success", async () => {
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    render(
+      <AppErrorBoundary>
+        <Thrower />
+      </AppErrorBoundary>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Could not copy."));
   });
 });

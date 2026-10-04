@@ -232,6 +232,15 @@
     hyphens: auto;
   }
 
+  /* Programming-font ligatures (JetBrains Mono / Cascadia Code) fuse `//` and `://`, which hides
+   * a slash in URLs and paths. Monospace text must show every character as typed. */
+  .font-mono,
+  code,
+  pre {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
   button,
   input[type="file"],
   select {

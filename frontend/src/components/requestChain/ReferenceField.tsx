@@ -55,7 +55,7 @@ export function ReferenceField({
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
-  const matches = query === null ? [] : suggestions.filter((suggestion) => suggestion.name.toLowerCase().startsWith(query.toLowerCase())).slice(0, 12);
+  const matches = query === null ? [] : suggestions.filter((suggestion) => suggestion.name.toLowerCase().startsWith(query.toLowerCase()));
   const open = matches.length > 0;
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
 
@@ -74,6 +74,11 @@ export function ReferenceField({
       window.removeEventListener("resize", place);
     };
   }, [open]);
+
+  // Arrow-key navigation keeps the highlighted suggestion visible inside the scrollable list.
+  useLayoutEffect(() => {
+    if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, active, listId]);
 
   function track(text: string, caret: number | null) {
     const before = text.slice(0, caret ?? text.length);
@@ -148,7 +153,7 @@ export function ReferenceField({
         aria-label={`References for ${label}`}
         hidden={!open}
         style={anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined}
-        className="fixed z-50 max-h-60 min-w-56 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
+        className="fixed z-50 max-h-96 min-w-80 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
       >
         {matches.map((suggestion, index) => (
           <li

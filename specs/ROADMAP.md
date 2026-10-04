@@ -3318,3 +3318,11 @@ Implementation
     - Validation: `npm test` 2,484 passed, 10 skipped; lint, typecheck and build clean. Layout
       checked in jsdom only: not yet walked through in a browser.
     - Version bumped to 19.22.0 (root, backend, frontend, shared-domain).
+58. **Error page redesign; version 19.22.1 (2026-10-04).**
+    - `AppErrorBoundary` (AP-020) shows a centred card with an icon, the same title and reassurance,
+      a **Reload page** action, **Copy details** and a collapsed **Technical details** section with
+      the error's message. Only the message is shown, copied and logged, as before: never props,
+      state or the component stack. The screen does not depend on the app header or any part of the
+      tree that may have failed; dark mode and narrow screens are covered by the existing tokens.
+    - Frontend only. Validation: frontend tests pass (3 new); lint and typecheck clean.
+    - Version bumped to 19.22.1 (root, backend, frontend, shared-domain).
