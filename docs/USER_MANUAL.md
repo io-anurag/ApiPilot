@@ -726,6 +726,47 @@ back into the plan, or into a new plan, without starting a run.
 **Limits.** 20 chains, 50 steps per chain, 10 extractors and 10 checks per step, a 256 KiB body, 50
 plans per session.
 
+**Debug run.** When a run does not do what you expect, for example a step reports that a value
+could not be extracted and the steps after it never ran, use **Debug run**, in the **Run** card in
+**Run setup** and in **Runs & reports**, under **Load run**. The card describes the target once for
+both runs. A chain that only has **Once before load** steps is marked, because the load run skips it
+and the Debug run does not. It runs every chain **once**, in order, and shows here each
+request that was sent and each response that came back, so you can see what the target really
+returned.
+- **It sends real requests**, including writes, to the target environment, from the machine running
+  ApiPilot. The card names the environment, its tier and base URL, the chains,
+  the hosts and every write step, and nothing is sent until you press **Start debug run**. **Cancel
+  debug run** stops it. Think time and request pauses are not waited out, a data set's first row is
+  used, and a step that needs a value the environment lacks is shown as not sent (the trigger warns
+  you first). It does not need a generated script.
+- **What you see for each step.** The method, the address that was actually requested, the headers
+  and body that were sent, the status, headers and body that came back, and how long it took. A step
+  that got no response shows the request and why (refused, timed out, host not found). A step that was
+  not sent says why: the step that stopped the chain and what went wrong there, a value that is
+  missing, or a host that is not allowed.
+- **Extractors and checks.** Each extractor says whether it found its value, or why not: the response
+  body is not JSON, the field path was not found (compare it with the field names in the response
+  shown beside it), the value is an object, an array, null or empty text rather than a single value,
+  or the header is missing. Each check says what was compared. A Debug run applies the same rules as
+  the load run: a failed extractor stops its chain, an unexpected status stops a chain only for a Once
+  per virtual user step, and the next chain still runs.
+- **Nothing is stored.** The output exists only on this screen. It is not written to a report, a run,
+  a file or a log, a Debug run is not listed under **Runs of this plan**, and it is gone when you
+  close it, start another or reload the page. Load run reports are unchanged and still never show a
+  body or a value.
+- **Masked values.** The values of `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and
+  API key headers, of fields and parameters named like a password, secret, token or key, and of
+  extracted credentials are replaced by a marker, and the field names and layout stay visible. A value
+  that came from the target can be shown one at a time with **Reveal**, and is hidden again when you
+  press **Hide**, close the output or reload. A secret value you entered in the environment, or a
+  secret data set column, is never shown and has no **Reveal**: it never leaves the server. A secret
+  shorter than three characters is not recognised inside body text, only where it stands alone as a
+  header, query or form value.
+- **Limits.** Each request waits at most 30 seconds, the whole run at most 120 seconds (steps not yet
+  sent are then marked), a response is read up to 2 MiB and shown up to 64 KiB, and up to 10 redirects
+  are followed, each only to an allowed host. A body on a GET or HEAD request cannot be sent. Only one
+  Debug run of a plan runs at a time, and none starts while a load run is in progress.
+
 ## 6. Run k6 Script
 
 Choose **Run k6 Script** on the start screen (or its tab, once the tab bar is visible) to run a

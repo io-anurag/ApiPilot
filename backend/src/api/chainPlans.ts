@@ -5,6 +5,8 @@ import { CHAIN_PLAN_LIMITS, type ChainRun } from "@apipilot/shared-domain";
 import { getEnvironment } from "../execution/environmentStore";
 import { findExecutionInProgress } from "../execution/executionSlot";
 import { createLogger } from "../logger";
+import { discardDebugRun, executeDebugRun, revealDebugValue } from "../performance/chain/debug/debugRunService";
+import { createFetchSender, type Sender } from "../performance/chain/debug/sender";
 import { createPlan, deletePlan, duplicatePlan, emptyPlan, getPlan, listPlans, savePlan, scriptStatusOf, viewOf } from "../performance/chain/chainPlanStore";
 import { addDataSet, previewDataSet, removeDataSet, replaceDataSetFile, runCopyWriter, updateDataSet } from "../performance/chain/dataSets";
 import { generateChainScript } from "../performance/chain/generateScript";
@@ -92,8 +94,11 @@ function chainRunOf(runId: string): ChainRun {
   return run;
 }
 
+const DEBUG_VALUE_ID = /^v[0-9]{1,6}$/;
+
 export function createChainPlansRouter(deps: PerformanceTestingDependencies): Router {
   const router = Router();
+  const debugSender: Sender = deps.debugSender ?? createFetchSender();
 
   // Static paths first, so `/:planId` never captures them.
   router.get(
@@ -368,6 +373,49 @@ export function createChainPlansRouter(deps: PerformanceTestingDependencies): Ro
       }).catch((error: Error) => logger.error("performance_run_unhandled_error", { runId: run.id, errorCategory: error.name }));
       res.status(200).json({ run });
       logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  // AP-039 (specs/039-chain-debug-run contracts/debug-run-api.md): an explicit, one-shot Debug run. The
+  // request stays open until the run ends; the browser cancels by aborting it. Nothing is stored.
+  router.post(
+    `${BASE}/:planId/debug-runs`,
+    chainRoute(async (req, res, startedAt) => {
+      res.setHeader("Cache-Control", "no-store");
+      const planId = planIdOf(req.params.planId);
+      const environmentId = (req.body as { environmentId?: unknown } | null)?.environmentId;
+      if (typeof environmentId !== "string" || !UUID.test(environmentId)) return fail(req, res, startedAt, 400, "invalid_request", "A Debug run needs the id of the environment to run against.");
+      const controller = new AbortController();
+      res.on("close", () => {
+        if (!res.writableFinished) controller.abort();
+      });
+      const result = await executeDebugRun(planId, environmentId, controller.signal, { sender: debugSender, nowMs: () => deps.now().getTime() });
+      if (controller.signal.aborted) return;
+      res.status(200).json(result);
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  router.get(
+    `${BASE}/:planId/debug-runs/:debugRunId/values/:valueId`,
+    chainRoute((req, res, startedAt) => {
+      res.setHeader("Cache-Control", "no-store");
+      const planId = planIdOf(req.params.planId);
+      const { debugRunId, valueId } = req.params;
+      if (!UUID.test(debugRunId) || !DEBUG_VALUE_ID.test(valueId)) return fail(req, res, startedAt, 404, "debug_value_not_found", "That value is not available. Run the Debug run again to see it.");
+      res.status(200).json({ value: revealDebugValue(planId, debugRunId, valueId) });
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  router.delete(
+    `${BASE}/:planId/debug-runs/:debugRunId`,
+    chainRoute((req, res, startedAt) => {
+      res.setHeader("Cache-Control", "no-store");
+      const planId = planIdOf(req.params.planId);
+      if (UUID.test(req.params.debugRunId)) discardDebugRun(planId, req.params.debugRunId);
+      res.status(204).end();
+      logSucceeded(req, startedAt, 204);
     }),
   );
 

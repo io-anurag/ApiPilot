@@ -28,7 +28,7 @@ import { SetupItem } from "../performance/SetupItem";
 import { ThresholdEditor } from "../performance/ThresholdEditor";
 import { usePerformanceRuns } from "../performance/usePerformanceRuns";
 import * as edit from "./chainEditing";
-import { ChainRunPanel } from "./ChainRunPanel";
+import { ChainRunHistory, ChainRunPanel, ChainRunTrigger } from "./ChainRunPanel";
 import { ChainTree } from "./ChainTree";
 import { DataSetsPanel } from "./DataSetsPanel";
 import { Disclosure } from "./Disclosure";
@@ -444,8 +444,9 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
       )}
 
       {tab === "setup" && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SetupItem state={environment ? "done" : "todo"} title="Target environment" titleId="chain-environment-title" summary="Holds the base URL and every value the plan uses. Literal credentials you type are moved into it as secret values.">
+        <div className="space-y-4">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-2">
+          <SetupItem flush state={environment ? "done" : "todo"} title="Target environment" titleId="chain-environment-title" summary="Holds the base URL and every value the plan uses. Literal credentials you type are moved into it as secret values.">
             <EnvironmentPicker
               environments={environments}
               selectedId={plan.targetEnvironmentId}
@@ -457,7 +458,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
               }}
             />
           </SetupItem>
-          <SetupItem state="done" title="Load profile" titleId="chain-profile-title" summary="Every virtual user runs every chain, in order, on each iteration.">
+          <SetupItem flush state="done" title="Load profile" titleId="chain-profile-title" summary="Every virtual user runs every chain, in order, on each iteration.">
             <LoadProfileEditor
               profile={plan.loadProfile}
               startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
@@ -476,7 +477,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
               />
             </label>
           </SetupItem>
-          <SetupItem state={plan.thresholds.length > 0 ? "done" : "optional"} title="Thresholds (optional)" titleId="chain-thresholds-title">
+          <SetupItem flush state={plan.thresholds.length > 0 ? "done" : "optional"} title="Thresholds (optional)" titleId="chain-thresholds-title">
             <ThresholdEditor
               thresholds={plan.thresholds}
               scopeOptions={[
@@ -488,8 +489,8 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
               onSave={(thresholds) => change({ ...plan, thresholds: thresholds as PerformanceThreshold[] }, true)}
             />
           </SetupItem>
-          <DataSetsPanel plan={plan} analysis={analysis} onPlanChanged={(next) => { setView(next); setDraft(next.plan); }} />
-          <SetupItem state={script && !script.outOfDate ? "done" : "todo"} title="k6 script" titleId="chain-script-title" summary="ApiPilot writes every byte of the script; your steps reach it only as data.">
+          <DataSetsPanel flush plan={plan} analysis={analysis} onPlanChanged={(next) => { setView(next); setDraft(next.plan); }} />
+          <SetupItem flush className="lg:col-span-2" state={script && !script.outOfDate ? "done" : "todo"} title="k6 script" titleId="chain-script-title" summary="ApiPilot writes every byte of the script; your steps reach it only as data.">
             {script?.outOfDate && <StatusBadge label="Out of date: regenerate" tone="warning" />}
             {script && !script.outOfDate && (
               <p className="text-sm">
@@ -518,13 +519,15 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
               </p>
             )}
           </SetupItem>
-          <div className="lg:col-span-2">
-            <ChainRunPanel plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
-          </div>
+          <ChainRunTrigger flush plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+        </div>
+        <ChainRunHistory plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
         </div>
       )}
 
-      {tab === "runs" && <ChainRunPanel plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />}
+      {tab === "runs" && (
+        <ChainRunPanel plan={plan} analysis={analysis} script={script} environment={environment} environments={environments} runs={runs} runsClient={runsClient} dirty={dirty} onRestore={(runId, into) => void handleRestore(runId, into)} />
+      )}
 
       {(dialog?.kind === "new-chain" || dialog?.kind === "rename-chain" || dialog?.kind === "rename-plan") && (
         <PromptDialog

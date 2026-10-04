@@ -23,7 +23,7 @@ function stepNames(plan: ChainPlan, stepIds: readonly string[]): string {
  * first rows with secret cells hidden, or remove. A refused file is shown with the reason and line,
  * and nothing is kept. Values are never shown except the preview's non-secret cells.
  */
-export function DataSetsPanel({ plan, analysis, onPlanChanged }: Readonly<{ plan: ChainPlan; analysis: ChainPlanAnalysis; onPlanChanged: (view: ChainPlanView) => void }>) {
+export function DataSetsPanel({ plan, analysis, onPlanChanged, flush }: Readonly<{ plan: ChainPlan; analysis: ChainPlanAnalysis; onPlanChanged: (view: ChainPlanView) => void; flush?: boolean }>) {
   const id = useId();
   const fileInput = useRef<HTMLInputElement>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
@@ -69,7 +69,7 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged }: Readonly<{ plan
   const usage = (dataSetId: string, column: string) => analysis.dataSetUsage.find((entry) => entry.dataSetId === dataSetId && entry.column === column)?.stepIds ?? [];
 
   return (
-    <SetupItem state={plan.dataSets.length > 0 ? "done" : "optional"} title="Data sets (optional)" titleId={`${id}-title`} summary="CSV files whose columns are {{name}} values. Values are encrypted on this machine and reach k6 only while a run lasts.">
+    <SetupItem flush={flush} state={plan.dataSets.length > 0 ? "done" : "optional"} title="Data sets (optional)" titleId={`${id}-title`} summary="CSV files whose columns are {{name}} values. Values are encrypted on this machine and reach k6 only while a run lasts.">
       {error && <ErrorState message={error} testId="data-set-error" />}
       {plan.dataSets.map((dataSet) => {
         const preview = previews[dataSet.id];

@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   chainRunsClient,
   createPlan,
+  debugRun,
   deletePlan,
+  discardDebugRun,
   fetchPlan,
   listPlans,
+  revealDebugValue,
   savePlan,
   scriptDownloadUrl,
   seedPlan,
@@ -187,5 +190,59 @@ describe("requestChainClient", () => {
       readiness: { state: "ready" },
     });
     expect(runs.reportDownloadUrl("r1")).toBe(`${BASE}/runs/r1/report?download=true`);
+  });
+});
+
+describe("requestChainClient: Debug run (AP-039)", () => {
+  const DEBUG_RUN_ID = "22222222-2222-4222-8222-222222222222";
+
+  it("posts the environment id and maps the masked result", async () => {
+    const result = { debugRunId: DEBUG_RUN_ID, outcome: "completed", setup: [], chains: [], notes: [] };
+    const calls = stubFetch({ [`POST ${BASE}/${PLAN_ID}/debug-runs`]: () => [200, result] });
+    expect(await debugRun(PLAN_ID, "e1")).toMatchObject({ ok: true, result: { debugRunId: DEBUG_RUN_ID, outcome: "completed" } });
+    expect(calls[0].body).toEqual({ environmentId: "e1" });
+  });
+
+  it("maps a refusal to its code and details", async () => {
+    stubFetch({ [`POST ${BASE}/${PLAN_ID}/debug-runs`]: () => [409, { error: "execution_in_progress", message: "Another execution run is in progress in this session.", runId: "r1" }] });
+    expect(await debugRun(PLAN_ID, "e1")).toMatchObject({ ok: false, error: "execution_in_progress", runId: "r1" });
+  });
+
+  it("reports a cancelled request as aborted and logs no error", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new DOMException("The operation was aborted.", "AbortError"))));
+    expect(await debugRun(PLAN_ID, "e1", new AbortController().signal)).toEqual({ ok: false, error: "aborted", message: "Cancelled." });
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("passes the abort signal to the request", async () => {
+    const seen: (AbortSignal | null | undefined)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: RequestInit) => {
+        seen.push(init?.signal);
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) } as Response);
+      }),
+    );
+    const controller = new AbortController();
+    await debugRun(PLAN_ID, "e1", controller.signal);
+    expect(seen[0]).toBe(controller.signal);
+  });
+
+  it("reveals one value and discards a run's held values, without storing either", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const calls = stubFetch({
+      [`GET ${BASE}/${PLAN_ID}/debug-runs/${DEBUG_RUN_ID}/values/v1`]: () => [200, { value: "Bearer tok-1" }],
+      [`DELETE ${BASE}/${PLAN_ID}/debug-runs/${DEBUG_RUN_ID}`]: () => [204, {}],
+    });
+    expect(await revealDebugValue(PLAN_ID, DEBUG_RUN_ID, "v1")).toEqual({ ok: true, value: "Bearer tok-1" });
+    expect(await discardDebugRun(PLAN_ID, DEBUG_RUN_ID)).toEqual({ ok: true });
+    expect(calls.map((call) => call.method)).toEqual(["GET", "DELETE"]);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("maps an unavailable value to the contract's code", async () => {
+    stubFetch({ [`GET ${BASE}/${PLAN_ID}/debug-runs/${DEBUG_RUN_ID}/values/v9`]: () => [404, { error: "debug_value_not_found", message: "That value is not available." }] });
+    expect(await revealDebugValue(PLAN_ID, DEBUG_RUN_ID, "v9")).toMatchObject({ ok: false, error: "debug_value_not_found" });
   });
 });

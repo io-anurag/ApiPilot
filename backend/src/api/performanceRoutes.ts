@@ -1,3 +1,4 @@
+import type { Sender } from "../performance/chain/debug/sender";
 import type { K6Probe, PerformanceRunner } from "../performance/k6/runnerTypes";
 
 /**
@@ -12,4 +13,6 @@ export interface PerformanceTestingDependencies {
   tickIntervalMs: number;
   now: () => Date;
   runDirectoryRoot?: string;
+  /** AP-039: sends a Debug run's requests. Absent in production, where the fetch sender is used; tests pass a fake. */
+  debugSender?: Sender;
 }

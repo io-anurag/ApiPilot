@@ -315,3 +315,30 @@ export class DataSetTooLargeError extends Error {
     this.name = "DataSetTooLargeError";
   }
 }
+
+/** AP-039 `409 debug_run_in_progress`: a Debug run of this plan is already executing (FR-023). */
+export class DebugRunInProgressError extends Error {
+  constructor() {
+    super("A Debug run of this plan is already running. Wait for it to end or cancel it first.");
+    this.name = "DebugRunInProgressError";
+  }
+}
+
+/**
+ * AP-039 `404 debug_value_not_found`: the value is unknown, not revealable, expired, or its Debug run
+ * was discarded or replaced. One error for all four, so the response says nothing about which.
+ */
+export class DebugValueNotFoundError extends Error {
+  constructor() {
+    super("That value is not available. Run the Debug run again to see it.");
+    this.name = "DebugValueNotFoundError";
+  }
+}
+
+/** AP-039 `409 execution_in_progress`: another execution run holds the session's slot, so no Debug run starts. */
+export class DebugRunBlockedError extends Error {
+  constructor(public readonly runId: string) {
+    super("Another execution run is in progress in this session.");
+    this.name = "DebugRunBlockedError";
+  }
+}
