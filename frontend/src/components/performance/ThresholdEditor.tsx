@@ -97,7 +97,7 @@ export function ThresholdEditor<S>({
         {/* A step's operation key can be long; the select never grows wider than its column. */}
         <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-muted">
           Applies to
-          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className={`max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100 ${compact ? "w-52" : ""}`}>
+          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className={`max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary ${compact ? "w-52" : ""}`}>
             {scopeOptions.map((option) => (
               <option key={option.key} value={option.key}>
                 {option.label}
@@ -124,7 +124,7 @@ export function ThresholdEditor<S>({
         )}
         <label className="flex flex-col gap-1 text-xs text-muted">
           Metric
-          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className={`rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100 ${compact ? "w-44" : ""}`}>
+          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className={`rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary ${compact ? "w-44" : ""}`}>
             {METRICS.map((entry) => (
               <option key={entry.value} value={entry.value}>
                 {entry.label}

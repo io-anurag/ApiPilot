@@ -118,7 +118,7 @@ export function EnvironmentPicker({
               type="button"
               aria-label="Close environment dialog"
               onClick={() => setEditing(null)}
-              className="shrink-0 rounded p-1 text-lg leading-none text-muted hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:text-slate-100"
+              className="shrink-0 rounded p-1 text-lg leading-none text-muted hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               ×
             </button>

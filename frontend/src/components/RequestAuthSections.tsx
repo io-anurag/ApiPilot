@@ -57,7 +57,7 @@ export function RequestAuthSection({ auth }: Readonly<{ auth: RequestAuthView | 
   return (
     <div className="space-y-3">
       <p className="text-sm">
-        <span className="font-semibold text-slate-900 dark:text-slate-100">{authTypeLabel(auth.type)}</span>{" "}
+        <span className="font-semibold text-text-primary">{authTypeLabel(auth.type)}</span>{" "}
         <span className="text-muted">{authSourceText(auth.source)}</span>
       </p>
       {auth.fields.length > 0 && (

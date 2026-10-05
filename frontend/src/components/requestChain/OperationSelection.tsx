@@ -46,7 +46,7 @@ export function OperationSelection({
       <div className="max-h-[calc(100dvh-26rem)] min-h-64 overflow-auto rounded-md border border-border" data-testid="operation-selection-scroll">
         <table className="w-full min-w-3xl border-collapse text-left text-sm">
           <caption className="sr-only">Operations to include in the plan</caption>
-          <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-muted dark:bg-slate-800">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-xs font-semibold text-muted">
             <tr>
               <th scope="col" className="w-10 px-3 py-2">
                 <span className="sr-only">Include</span>
@@ -62,7 +62,7 @@ export function OperationSelection({
             {operations.map((operation, index) => {
               const key = allKeys[index];
               return (
-                <tr key={key} className="hover:bg-slate-50 dark:hover:bg-white/10">
+                <tr key={key} className="hover:bg-surface-hover">
                   <td className="px-3 py-1.5">
                     <input
                       type="checkbox"

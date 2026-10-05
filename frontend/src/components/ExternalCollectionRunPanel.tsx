@@ -79,7 +79,7 @@ function runStatusTone(status: UploadedCollectionExecutionRun["status"]): Status
 /** One labeled number in the run overview stat row. */
 function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
   const toneClass: Record<StatusTone, string> = {
-    neutral: "text-slate-900 dark:text-white",
+    neutral: "text-text-primary",
     info: "text-info-700 dark:text-info-400",
     success: "text-success-700 dark:text-success-400",
     warning: "text-warning-700 dark:text-warning-400",
@@ -95,7 +95,7 @@ function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: s
 
 function RunOverview({ run }: Readonly<{ run: UploadedCollectionExecutionRun }>) {
   return (
-    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-slate-50 p-3 dark:bg-white/5">
+    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-surface-subtle p-3">
       <OverviewStat label="Requests" value={String(run.summary.total)} />
       <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
       <OverviewStat
@@ -116,8 +116,8 @@ function HeaderTable({ headers }: Readonly<{ headers: RawHeader[] }>) {
       <tbody>
         {headers.map((header) => (
           <tr key={header.key} className="border-b border-border last:border-0">
-            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-slate-600 dark:text-slate-400">{header.key}</td>
-            <td className="py-1 font-mono text-slate-700 dark:text-slate-300 break-all">{header.value}</td>
+            <td className="w-1/3 py-1 pr-2 align-top font-mono font-medium text-text-secondary">{header.key}</td>
+            <td className="py-1 font-mono text-text-secondary break-all">{header.value}</td>
           </tr>
         ))}
       </tbody>
@@ -154,13 +154,13 @@ function ResultDetail({
 }: Readonly<{ result: UploadedRequestResult; collectionTier: EnvironmentTier; failureAnalysis: FailureAnalysisBinding }>) {
   const [tab, setTab] = useState<ResultDetailTab>("request");
   const noRawCaptureNotice = collectionTier !== "local" && (
-    <p className="text-slate-500 dark:text-slate-400">
+    <p className="text-muted">
       Full request/response headers and bodies are only captured for Local-tier runs.
     </p>
   );
 
   return (
-    <div className="mt-2 rounded-md border border-border bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-400">
+    <div className="mt-2 rounded-md border border-border bg-surface-subtle p-3 text-xs text-text-secondary">
       <p className="mb-2">
         {result.durationMs}ms
         {result.responseStatusCode !== undefined && ` · Response status ${result.responseStatusCode}`}
@@ -171,7 +171,7 @@ function ResultDetail({
       {tab === "request" &&
         (result.rawCapture ? (
           <div className="space-y-2">
-            <p className="break-all font-mono text-slate-600 dark:text-slate-400">{result.rawCapture.requestUrl}</p>
+            <p className="break-all font-mono text-text-secondary">{result.rawCapture.requestUrl}</p>
             <HeaderTable headers={result.rawCapture.requestHeaders} />
             {result.rawCapture.requestBody && <CodeBlock label="Body" content={result.rawCapture.requestBody} />}
           </div>
@@ -192,14 +192,14 @@ function ResultDetail({
           <ul className="space-y-1">
             {result.testOutcomes.map((test) => (
               <li key={test.name} className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-700 dark:text-slate-300">{test.name}</span>
+                <span className="font-medium text-text-secondary">{test.name}</span>
                 <StatusBadge label={test.outcome === "passed" ? "Passed" : "Failed"} tone={test.outcome === "passed" ? "success" : "danger"} />
                 {test.detail && <span>{test.detail}</span>}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-slate-500 dark:text-slate-400">This request has no named tests.</p>
+          <p className="text-muted">This request has no named tests.</p>
         ))}
       {result.outcome === "failed" && (
         <FailureAnalysisPanel {...failureAnalysis} requestName={result.requestName} />
@@ -224,7 +224,7 @@ function ExternalCollectionResultRow({
       >
         <div className="flex min-w-0 items-center gap-2">
           <HttpMethodBadge method={result.requestMethod} />
-          <span className="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={result.requestName}>
+          <span className="min-w-0 truncate font-mono text-xs text-text-secondary" title={result.requestName}>
             {result.requestName}
           </span>
         </div>
@@ -323,8 +323,8 @@ function RunHistory({
               type="button"
               onClick={() => onSelect(historyRun.id)}
               aria-current={historyRun.id === selectedRunId}
-              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                historyRun.id === selectedRunId ? "bg-slate-50 dark:bg-white/5" : ""
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                historyRun.id === selectedRunId ? "bg-surface-subtle" : ""
               }`}
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -370,7 +370,7 @@ export function endpointPath(url: string): string {
 }
 
 const ROW_ACTION_STYLE =
-  "rounded px-1.5 py-0.5 text-xs text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white";
+  "rounded px-1.5 py-0.5 text-xs text-muted hover:bg-surface-hover hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * Postman-Runner-style "which requests will run, in what order" checklist (AP-028 follow-up) —
@@ -476,7 +476,7 @@ function RunOrderChecklist({
                 endDrag();
               }}
               onDragEnd={endDrag}
-              className={`flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5 ${dropIndicator} ${
+              className={`flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-surface-hover ${dropIndicator} ${
                 draggedId === item.id ? "opacity-50" : ""
               }`}
             >
@@ -500,7 +500,7 @@ function RunOrderChecklist({
               <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
               {placements && <RunOrderFolder folderPath={placements.get(item.id)?.folderPath ?? []} />}
               <HttpMethodBadge method={item.raw.method} />
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title={item.name}>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary" title={item.name}>
                 {item.name}
               </span>
               <span className="min-w-0 max-w-xs shrink truncate font-mono text-xs text-muted" title={item.raw.url}>
@@ -824,7 +824,7 @@ export function ExternalCollectionRunPanel({
       className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{uploadedCollection.name}</h3>
+        <h3 className="text-sm font-semibold text-text-primary">{uploadedCollection.name}</h3>
         <div className="flex flex-wrap items-center gap-2">
           {onOpenChainPlan && (
             <button type="button" onClick={() => setSeedingChainPlan(true)} disabled={selectedIds.size === 0 || requests.length === 0} className={BUTTON_STYLES.secondary}>
@@ -877,7 +877,7 @@ export function ExternalCollectionRunPanel({
       {startError && <ErrorState message={startError} />}
 
       {run && (
-        <div data-testid="external-collection-run-summary" className="space-y-3">
+        <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={RUN_STATUS_LABEL[run.status]} tone={runStatusTone(run.status)} />
             <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />

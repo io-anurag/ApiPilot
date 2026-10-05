@@ -9,7 +9,7 @@ export interface ReferenceSuggestion {
 
 const OPEN = /\{\{(\$?[A-Za-z0-9_]*)$/;
 const INPUT_CLASS =
-  "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50 dark:text-slate-100";
+  "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
 
 /**
  * A text field that offers `{{name}}` references as the engineer types `{{`
@@ -167,7 +167,7 @@ export function ReferenceField({
             }}
             className={`flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-sm ${index === active ? "bg-brand-50 dark:bg-brand-500/20" : ""}`}
           >
-            <span className="font-mono text-xs text-slate-900 dark:text-slate-100">{`{{${suggestion.name}}}`}</span>
+            <span className="font-mono text-xs text-text-primary">{`{{${suggestion.name}}}`}</span>
             <span className="text-xs text-muted">{suggestion.detail}</span>
           </li>
         ))}

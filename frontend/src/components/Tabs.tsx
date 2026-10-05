@@ -44,7 +44,7 @@ export function Tabs<T extends string>({
           className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
             activeTab === tab.id
               ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
-              : "border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              : "border-transparent text-text-secondary hover:text-text-primary"
           }`}
         >
           {tab.markerClassName && (

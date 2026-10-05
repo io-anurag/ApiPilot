@@ -53,7 +53,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-guided",
       tile: "border-wf-guided/30 bg-wf-guided/10 text-wf-guided",
-      solid: "bg-wf-guided text-white dark:text-slate-950",
+      solid: "bg-wf-guided text-on-solid",
       border: "hover:border-wf-guided/60",
     },
   },
@@ -68,7 +68,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-import",
       tile: "border-wf-import/30 bg-wf-import/10 text-wf-import",
-      solid: "bg-wf-import text-white dark:text-slate-950",
+      solid: "bg-wf-import text-on-solid",
       border: "hover:border-wf-import/60",
     },
   },
@@ -83,7 +83,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-quick",
       tile: "border-wf-quick/30 bg-wf-quick/10 text-wf-quick",
-      solid: "bg-wf-quick text-white dark:text-slate-950",
+      solid: "bg-wf-quick text-on-solid",
       border: "hover:border-wf-quick/60",
     },
   },
@@ -98,7 +98,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-plans",
       tile: "border-wf-plans/30 bg-wf-plans/10 text-wf-plans",
-      solid: "bg-wf-plans text-white dark:text-slate-950",
+      solid: "bg-wf-plans text-on-solid",
       border: "hover:border-wf-plans/60",
     },
   },
@@ -113,7 +113,7 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-k6",
       tile: "border-wf-k6/30 bg-wf-k6/10 text-wf-k6",
-      solid: "bg-wf-k6 text-white dark:text-slate-950",
+      solid: "bg-wf-k6 text-on-solid",
       border: "hover:border-wf-k6/60",
     },
   },

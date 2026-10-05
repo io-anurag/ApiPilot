@@ -62,13 +62,13 @@ export function TestScenarioReviewDetail({
       className="space-y-4 rounded-md border border-border bg-surface p-4"
     >
       <div>
-        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <h4 className="text-sm font-semibold text-text-primary">
           {scenario.category}
           {scenario.targetField ? ` — ${scenario.targetField}` : ""}
         </h4>
         <p className="mt-1 flex items-center gap-2 text-sm">
           <HttpMethodBadge method={scenario.operationMethod} />
-          <span className="font-mono text-slate-700 dark:text-slate-300">{scenario.operationPath}</span>
+          <span className="font-mono text-text-secondary">{scenario.operationPath}</span>
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
           <span data-testid="review-scenario-state">
@@ -87,9 +87,9 @@ export function TestScenarioReviewDetail({
         <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
           {provenance.source === "RULE" ? "Rule" : "AI source"}
         </h5>
-        <p className="text-sm text-slate-700 dark:text-slate-300">{provenance.description}</p>
+        <p className="text-sm text-text-secondary">{provenance.description}</p>
         {provenance.source === "AI" && (
-          <dl className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <dl className="mt-2 space-y-1 text-sm text-text-secondary">
             <div>
               <dt className="inline text-muted">Rationale: </dt>
               <dd className="inline" data-testid="review-scenario-rationale">
@@ -124,7 +124,7 @@ export function TestScenarioReviewDetail({
         </h5>
         <pre
           data-testid="review-scenario-request"
-          className="mt-1 overflow-x-auto rounded-md border border-border bg-slate-900 p-3 font-mono text-xs text-slate-100"
+          className="mt-1 overflow-x-auto rounded-md border border-border bg-code-surface p-3 font-mono text-xs text-code-text"
         >
           {JSON.stringify(scenario.displayRequest, null, 2)}
         </pre>
@@ -145,7 +145,7 @@ export function TestScenarioReviewDetail({
             No documented response was available to assert against.
           </p>
         ) : (
-          <ul className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <ul className="mt-1 space-y-1 text-sm text-text-secondary">
             {scenario.assertions.map((assertion) => (
               <li key={JSON.stringify(assertion)}>
                 {assertion.type === "status-code"
@@ -164,7 +164,7 @@ export function TestScenarioReviewDetail({
           </h5>
           <ul
             data-testid="review-scenario-history"
-            className="mt-1 space-y-1 text-sm text-slate-700 dark:text-slate-300"
+            className="mt-1 space-y-1 text-sm text-text-secondary"
           >
             {history.map((entry) => (
               <li

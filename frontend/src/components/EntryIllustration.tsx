@@ -16,8 +16,8 @@ const OUTPUTS: ReadonlyArray<{ label: string; tone: EntryChoice }> = [
 export function EntryIllustration() {
   return (
     <div aria-hidden="true" className="hidden items-center justify-end lg:flex">
-      <div className="w-40 -rotate-3 rounded-lg border border-slate-700 bg-slate-900 p-3 font-mono text-[11px] leading-5 text-slate-300 shadow-lg">
-        <span className="mb-1.5 inline-flex items-center gap-1.5 rounded bg-white px-1.5 py-0.5 font-sans text-[10px] font-bold text-slate-900">
+      <div className="w-40 -rotate-3 rounded-lg border border-code-border bg-code-surface p-3 font-mono text-[11px] leading-5 text-code-text shadow-lg">
+        <span className="mb-1.5 inline-flex items-center gap-1.5 rounded bg-surface px-1.5 py-0.5 font-sans text-[10px] font-bold text-text-primary">
           <span className="h-2 w-2 rounded-full bg-success-500" />
           OpenAPI
         </span>
@@ -34,7 +34,7 @@ export function EntryIllustration() {
         <path d="M0 4h32" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
       </svg>
 
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface shadow-lg dark:ring-4 dark:ring-white/5">
+      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface shadow-lg dark:ring-4 dark:ring-text-primary/5">
         <img src="/logo-icon.png" alt="" className="h-14 w-14 object-contain" />
       </div>
 
@@ -60,7 +60,7 @@ export function EntryIllustration() {
               >
                 <WorkflowIcon name={workflow.icon} className="h-3.5 w-3.5" />
               </span>
-              <span className="text-xs font-semibold text-slate-900 dark:text-white">{label}</span>
+              <span className="text-xs font-semibold text-text-primary">{label}</span>
             </div>
           );
         })}

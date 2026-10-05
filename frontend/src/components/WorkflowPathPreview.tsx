@@ -61,7 +61,7 @@ export function WorkflowPathPreview({ steps }: Readonly<{ steps: readonly PathSt
               <PathIcon type={icon} />
             </span>
             <span
-              className={`whitespace-nowrap text-xs font-medium ${index === 0 ? "text-slate-900 dark:text-white" : "text-muted"}`}
+              className={`whitespace-nowrap text-xs font-medium ${index === 0 ? "text-text-primary" : "text-muted"}`}
             >
               {label}
             </span>

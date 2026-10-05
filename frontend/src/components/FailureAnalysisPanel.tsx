@@ -145,13 +145,13 @@ function ExplanationSection({ explanation }: Readonly<{ explanation: FailureAnal
     <section aria-label="AI explanation" className="space-y-2 rounded border border-border p-2">
       <div className="flex flex-wrap items-center gap-2">
         <ProvenanceBadge source="AI" />
-        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+        <span className="text-xs font-medium text-text-secondary">
           AI inference, not a confirmed root cause
         </span>
       </div>
       {explanation.status === "available" ? (
         <>
-          <p className="text-slate-700 dark:text-slate-300">{explanation.summary}</p>
+          <p className="text-text-secondary">{explanation.summary}</p>
           <section aria-label="Suggested next steps" className="space-y-1">
             <h5 className="text-xs font-semibold uppercase text-muted">Suggested next steps</h5>
             <ol className="list-decimal space-y-1 pl-5">
@@ -186,7 +186,7 @@ function AnalysisView({
   return (
     <div className="space-y-3" data-testid="failure-analysis-result">
       <section aria-label="Likely cause" className="space-y-1">
-        <h4 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-slate-900 focus:outline-none dark:text-white">
+        <h4 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-text-primary focus:outline-none">
           {insufficient ? "Not enough evidence to name a likely cause" : CAUSE_LABEL[conclusion.cause]}
         </h4>
         {conclusion.kind === "likely-cause" ? (
@@ -333,7 +333,7 @@ export function FailureAnalysisPanel({
     <section
       aria-label={`AI failure analysis for ${requestName}`}
       data-testid="failure-analysis-panel"
-      className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3 text-sm text-slate-700 dark:text-slate-300"
+      className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3 text-sm text-text-secondary"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-xs font-semibold uppercase text-muted">AI failure analysis</h4>

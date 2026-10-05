@@ -73,7 +73,7 @@ export function EntryChooser({
               <span aria-hidden="true" className="h-3 w-0.5 rounded-full bg-brand-500" />
               API test engineering workspace
             </p>
-            <h2 className="font-display text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl dark:text-white">
+            <h2 className="font-display text-4xl font-bold leading-tight tracking-tight text-text-primary sm:text-5xl">
               Start with the{" "}
               <span className="text-brand-600 dark:text-brand-300">artifact</span>
               <br className="hidden sm:block" /> you have.
@@ -94,7 +94,7 @@ export function EntryChooser({
               key={artifact.id}
               className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
             >
-              <legend className="float-left flex w-full items-center gap-2.5 text-sm font-semibold text-slate-900 dark:text-white">
+              <legend className="float-left flex w-full items-center gap-2.5 text-sm font-semibold text-text-primary">
                 <ArtifactProductIcon name={artifact.icon} className="h-5 w-5 shrink-0" />
                 {artifact.label}
               </legend>
@@ -107,7 +107,7 @@ export function EntryChooser({
                       type="button"
                       aria-label={`${workflow.title}, for ${artifact.phrase}`}
                       onClick={() => onSelect(id)}
-                      className={`inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-slate-700 motion-safe:transition-colors hover:text-slate-950 dark:text-slate-200 dark:hover:text-white ${workflow.tone.border} ${FOCUS_RING}`}
+                      className={`inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-text-secondary motion-safe:transition-colors hover:text-text-primary ${workflow.tone.border} ${FOCUS_RING}`}
                     >
                       <span
                         aria-hidden="true"
@@ -129,7 +129,7 @@ export function EntryChooser({
             <p className="text-sm text-muted">Choose a workflow</p>
             <h2
               id="entry-paths-heading"
-              className="font-display text-2xl font-bold tracking-tight text-slate-950 dark:text-white"
+              className="font-display text-2xl font-bold tracking-tight text-text-primary"
             >
               Launch a test session
             </h2>
@@ -150,7 +150,7 @@ export function EntryChooser({
               onClick={() => onSelect(workflow.id)}
               className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border p-5 text-left shadow-sm motion-safe:transition-colors ${
                 workflow.recommended
-                  ? "border-wf-guided/50 bg-linear-to-b from-wf-guided/10 to-surface"
+                  ? "border-wf-guided/50 bg-wf-guided/5"
                   : "border-border bg-surface"
               } ${workflow.tone.border} ${FOCUS_RING}`}
             >
@@ -166,7 +166,7 @@ export function EntryChooser({
                   </span>
                 )}
               </span>
-              <span className="mt-1 font-display text-base font-bold text-slate-950 dark:text-white">
+              <span className="mt-1 font-display text-base font-bold text-text-primary">
                 {workflow.title}
               </span>
               <span

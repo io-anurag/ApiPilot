@@ -145,7 +145,7 @@ export function MoveItemDialog({
         }}
         className="space-y-3"
       >
-        <p id="move-item-dialog-title" className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <p id="move-item-dialog-title" className="text-sm font-medium text-text-primary">
           Move “{itemName}” to…
         </p>
         {destinations.length === 0 ? (
@@ -157,7 +157,7 @@ export function MoveItemDialog({
               {destinations.map((destination, index) => (
                 <label
                   key={destination.containerId}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-white/5"
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-hover"
                 >
                   <input
                     ref={index === 0 ? firstOptionRef : undefined}
@@ -168,7 +168,7 @@ export function MoveItemDialog({
                     onChange={() => setTargetId(destination.containerId)}
                     className="h-4 w-4 shrink-0 border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   />
-                  <span className="min-w-0 truncate text-slate-800 dark:text-slate-100">{destination.label}</span>
+                  <span className="min-w-0 truncate text-text-primary">{destination.label}</span>
                 </label>
               ))}
             </div>
@@ -178,7 +178,7 @@ export function MoveItemDialog({
           It keeps the auth and the scripts it gets from the folders it leaves: they are copied into it.
         </p>
         {scripts && scripts.alsoRuns.length > 0 && (
-          <p className="rounded-md bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:bg-white/5 dark:text-slate-200">
+          <p className="rounded-md bg-surface-subtle px-2 py-1.5 text-xs text-text-secondary">
             <span className="font-semibold">Also runs there:</span> scripts of {scripts.alsoRuns.join(", ")}. A folder&apos;s
             scripts run for everything inside it.
           </p>

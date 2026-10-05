@@ -75,7 +75,7 @@ export function PostmanExportLimitations({
             <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-warning-700 marker:text-warning-500 dark:text-warning-100">
               {LIMITATION_HEADINGS[kind]} ({forKind.length})
             </summary>
-            <ul className="mt-1 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2 text-sm text-slate-700 dark:text-slate-300">
+            <ul className="mt-1 ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2 text-sm text-text-secondary">
               {aggregated.map((limitation, index) => (
                 <li key={`${limitation.location}-${limitation.scenarioIds[0] ?? index}`}>
                   <code className="font-mono text-xs">{limitation.location}</code>

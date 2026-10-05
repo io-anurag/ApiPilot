@@ -41,12 +41,12 @@ export function EmptyState({
   return (
     <div
       data-testid={testId}
-      className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center dark:border-slate-600 dark:bg-white/5"
+      className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-subtle px-4 py-8 text-center"
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-muted dark:bg-white/10">
+      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted">
         {icon ?? <InboxIcon className="h-5 w-5" />}
       </span>
-      <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{message}</p>
+      <p className="text-sm font-medium text-text-secondary">{message}</p>
       {description && <p className="text-xs text-muted">{description}</p>}
     </div>
   );

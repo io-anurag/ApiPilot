@@ -7,6 +7,7 @@ import {
 } from "@apipilot/shared-domain";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { STAGE_LABELS, getLockReason } from "./workflowStageViewModel";
+import { STAGE_SECTIONS } from "./sectionCatalog";
 
 function CheckIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -88,7 +89,7 @@ function StageIcon({ stageId }: Readonly<{ stageId: WorkflowStageId }>) {
       fill="none"
       stroke="currentColor"
       strokeWidth={1.75}
-      className="h-4 w-4 shrink-0"
+      className="h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300"
       aria-hidden="true"
     >
       {icons[stageId]}
@@ -104,19 +105,18 @@ const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
   complete: "border-transparent bg-success-50 dark:bg-success-500/15",
   stale:
     "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
-  skipped: "border-transparent bg-slate-50 dark:bg-slate-500/15",
+  skipped: "border-transparent bg-surface-subtle",
   partial:
     "border-warning-300 bg-warning-50 dark:border-warning-500 dark:bg-warning-500/15",
 };
 
 const INDEX_TONE_CLASSES: Record<StageStatus, string> = {
-  "not-yet-reached":
-    "bg-slate-200 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
+  "not-yet-reached": "bg-surface-strong text-text-secondary",
   active: "bg-brand-600 text-white",
   complete: "bg-success-600 text-white",
-  stale: "bg-warning-500 text-white",
-  skipped: "bg-slate-300 text-slate-600 dark:bg-slate-500/30 dark:text-slate-200",
-  partial: "bg-warning-500 text-white",
+  stale: "bg-warning-600 text-white",
+  skipped: "bg-border-strong text-text-primary",
+  partial: "bg-warning-600 text-white",
 };
 
 const STATUS_LABELS: Record<StageStatus, string> = {
@@ -269,7 +269,10 @@ export function WorkflowStageTracker({
               key={stageId}
               ref={isActive ? activeStageRef : undefined}
               aria-current={isCurrentlyViewed ? "step" : undefined}
-              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-slate-950 dark:text-slate-50" : "text-slate-600 dark:text-slate-300"}`}
+              // AP-041: the chip takes its stage's section accent (icon, current-step ring). Its
+              // tint and badge stay status-coloured, so section and status never share a colour.
+              data-section={STAGE_SECTIONS[stageId]}
+              className={`flex min-w-max items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-text-primary" : "text-text-secondary"}`}
             >
               <span
                 aria-hidden="true"

@@ -5,7 +5,7 @@ const METHOD_CLASSES: Record<string, string> = {
   PATCH: "bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200",
   DELETE: "bg-danger-100 text-danger-700 dark:bg-danger-500/15 dark:text-danger-100",
 };
-const DEFAULT_METHOD_CLASSES = "bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-100";
+const DEFAULT_METHOD_CLASSES = "bg-surface-strong text-text-secondary";
 
 /**
  * Single source of truth for HTTP-method visual treatment (FR-001, FR-002; post-/speckit-analyze

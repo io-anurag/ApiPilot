@@ -107,14 +107,14 @@ export function ApiReviewStage({
       className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
       <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-white">Review Discovered APIs</h2>
+        <h2 className="text-base font-semibold text-text-primary">Review Discovered APIs</h2>
         <AnalysisSummary summary={apiModel.summary} />
         {!readOnly && total > 0 && (
           <div
             data-testid="api-review-selection-bar"
             className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500 dark:bg-brand-500/10"
           >
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
               <input
                 type="checkbox"
                 checked={allChecked}

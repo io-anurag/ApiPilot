@@ -146,13 +146,13 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   return (
     <div className="space-y-5" data-testid="user-script-page">
       {!working && backButton && <div className="flex justify-start">{backButton}</div>}
-      {list.kind === "loading" && <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />}
+      {list.kind === "loading" && <Skeleton className="h-40 w-full rounded bg-surface-strong" />}
 
       {list.kind !== "loading" && !working && (
         <section aria-labelledby="user-script-title" className="relative isolate overflow-hidden">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-slate-400/5"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
           />
           <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
@@ -161,7 +161,7 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
                   <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
                   <span>Bring your own k6 script</span>
                 </p>
-                <h2 id="user-script-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white">
+                <h2 id="user-script-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl">
                   Run k6 Script
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-muted">
@@ -180,11 +180,11 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
                 ))}
               </dl>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
-              <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
+            <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+              <div className="h-1 bg-brand-600" />
+              <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Add a k6 script</p>
+                  <p className="text-sm font-semibold text-text-primary">Add a k6 script</p>
                   <p className="mt-0.5 text-xs text-muted">JavaScript · checked before it is stored</p>
                 </div>
                 <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
@@ -192,12 +192,12 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
               <div className="space-y-4 p-5 sm:p-6">
                 <label
                   htmlFor="user-script-upload"
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-slate-50 opacity-60 dark:bg-white/5" : "cursor-pointer border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-white/5 dark:hover:bg-brand-500/10"}`}
+                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-surface-subtle opacity-60" : "cursor-pointer border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"}`}
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
                     <UploadIcon className="h-5 w-5" />
                   </span>
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{uploading ? "Checking…" : "Upload a k6 script"}</span>
+                  <span className="text-sm font-medium text-text-primary">{uploading ? "Checking…" : "Upload a k6 script"}</span>
                   <span className="text-xs text-muted">Click to browse your files</span>
                   <input
                     id="user-script-upload"
@@ -265,7 +265,7 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
           </h2>
           <label className="flex max-w-md flex-col gap-1 text-xs text-muted">
             Name
-            <input value={newScript.name} maxLength={100} onChange={(event) => setNewScript({ ...newScript, name: event.target.value })} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-slate-900 dark:text-slate-100" />
+            <input value={newScript.name} maxLength={100} onChange={(event) => setNewScript({ ...newScript, name: event.target.value })} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary" />
           </label>
           <ScriptEditor value={newScript.content} onChange={(content) => setNewScript({ ...newScript, content })} problems={newScript.problems} label="New script" />
           <div className="flex gap-2">

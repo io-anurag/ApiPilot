@@ -29,7 +29,7 @@ export function PerformanceReportFrame({ client, runId }: Readonly<{ client: Pic
   }, [runId, fetchReport]);
 
   return (
-    <section aria-labelledby="performance-report-title" className="space-y-3">
+    <section aria-labelledby="performance-report-title" data-section="results" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="performance-report-title" className="text-base font-semibold">
           Report · run <span className="font-mono">{runId.slice(0, 8)}</span>
@@ -38,14 +38,14 @@ export function PerformanceReportFrame({ client, runId }: Readonly<{ client: Pic
           Download report (HTML)
         </a>
       </div>
-      {state.kind === "loading" && <Skeleton className="h-96 w-full rounded bg-slate-200 dark:bg-slate-600" />}
+      {state.kind === "loading" && <Skeleton className="h-96 w-full rounded bg-surface-strong" />}
       {state.kind === "error" && <ErrorState message="The report could not be loaded." detail={state.message} testId="performance-report-error" />}
       {state.kind === "ready" && (
         <iframe
           sandbox=""
           srcDoc={state.html}
           title={`Performance report for run ${runId.slice(0, 8)}`}
-          className="h-160 w-full rounded-lg border border-border bg-white"
+          className="h-160 w-full rounded-lg border border-border bg-surface"
         />
       )}
     </section>

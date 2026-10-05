@@ -13,11 +13,11 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
       className="space-y-4 rounded-md border border-border bg-surface p-4"
     >
       <div>
-        <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+        <h4 className="text-sm font-semibold text-text-primary">
           {scenario.category}
           {scenario.targetField ? ` — ${scenario.targetField}` : ""}
         </h4>
-        <p className="mt-1 break-all font-mono text-xs text-slate-600 dark:text-slate-400">
+        <p className="mt-1 break-all font-mono text-xs text-text-secondary">
           {scenario.operationMethod} {scenario.operationPath}
         </p>
       </div>
@@ -25,16 +25,16 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
         <h5 className="text-xs font-medium uppercase text-muted">
           {scenario.provenance.source === "RULE" ? "Rule" : "AI source"}
         </h5>
-        <p data-testid="scenario-rule" className="font-mono text-xs text-slate-700 dark:text-slate-300">
+        <p data-testid="scenario-rule" className="font-mono text-xs text-text-secondary">
           {provenanceLabel}
         </p>
-        <p className="text-sm leading-6 text-slate-700 dark:text-slate-300">
+        <p className="text-sm leading-6 text-text-secondary">
           {scenario.provenance.description}
         </p>
       </section>
       <section className="space-y-1">
         <h5 className="text-xs font-medium uppercase text-muted">Request</h5>
-        <pre className="max-w-full overflow-x-auto rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100">
+        <pre className="max-w-full overflow-x-auto rounded-md border border-code-border bg-code-surface p-3 font-mono text-xs leading-5 text-code-text">
           {JSON.stringify(scenario.request, null, 2)}
         </pre>
       </section>
@@ -45,7 +45,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
             No documented response was available to assert against.
           </p>
         ) : (
-          <ul className="space-y-1 text-sm text-slate-700 dark:text-slate-300">
+          <ul className="space-y-1 text-sm text-text-secondary">
             {scenario.assertions.map((assertion) => (
               <li key={JSON.stringify(assertion)}>
                 {assertion.type === "status-code"

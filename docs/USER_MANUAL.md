@@ -54,6 +54,10 @@ The header shows a live connection indicator — **Connecting…**, **Connected*
 light/dark theme toggle. Your choice is remembered on that browser; until you choose
 explicitly, ApiPilot follows your operating system's light/dark preference.
 
+Each part of the workflow has its own accent colour (for example blue for the specification, violet for AI
+enhancement, teal for execution), shown on the stage tracker, tabs and primary buttons. Colour never carries a
+result on its own: success, warnings and failures always have a text label and use their own green, amber and red.
+
 The header also has two shortcuts:
 
 - **Command palette** (the search button showing **Ctrl K**, or **⌘ K** on macOS, or that key

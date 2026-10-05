@@ -3,7 +3,7 @@ import { BUTTON_STYLES } from "../controlStyles";
 import { ReferenceField, type ReferenceSuggestion } from "./ReferenceField";
 
 const NAME_CLASS =
-  "w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-100";
+  "w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 /**
  * Ordered name and value rows: query parameters, headers or form fields (FR-003). Values accept

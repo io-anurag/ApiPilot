@@ -90,11 +90,11 @@ export function PostmanExportPanel({
       <div className="space-y-1">
         <h3
           id="postman-export-heading"
-          className="text-base font-semibold text-slate-900 dark:text-white"
+          className="text-base font-semibold text-text-primary"
         >
           Export a Postman collection
         </h3>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+        <p className="max-w-3xl text-sm leading-6 text-text-secondary">
           Exports the scenarios you accepted as a runnable collection, a companion
           environment, and a README. Nothing is executed and no credential is written into
           the collection.
@@ -124,7 +124,7 @@ export function PostmanExportPanel({
           data-testid="postman-export-variables"
           className="space-y-3 border-t border-border pt-4"
         >
-          <legend className="text-sm font-semibold text-slate-900 dark:text-white">
+          <legend className="text-sm font-semibold text-text-primary">
             Values for referenced variables
           </legend>
           <p className="text-sm leading-6 text-muted">
@@ -135,7 +135,7 @@ export function PostmanExportPanel({
             <div key={variable.key} className="flex max-w-lg flex-col gap-1">
               <label
                 htmlFor={`postman-export-variable-${variable.key}`}
-                className="font-mono text-xs font-medium text-slate-700 dark:text-slate-300"
+                className="font-mono text-xs font-medium text-text-secondary"
               >
                 {variable.key}
               </label>
@@ -202,7 +202,7 @@ export function PostmanExportPanel({
       {status === "success" && result && (
         <div
           data-testid="export-success"
-          className="space-y-3 rounded-md border border-success-200 bg-success-50 p-4 text-sm text-slate-700 dark:border-success-500 dark:bg-success-500/10 dark:text-slate-300"
+          className="space-y-3 rounded-md border border-success-200 bg-success-50 p-4 text-sm text-text-secondary dark:border-success-500 dark:bg-success-500/10"
         >
           <p
             data-testid="export-validation-result"

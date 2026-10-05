@@ -220,7 +220,7 @@ export function RequestEditorPanel({
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            className={`${TAB_BUTTON} ${activeTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+            className={`${TAB_BUTTON} ${activeTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-text-secondary"}`}
           >
             {tab}
             {tab === "Headers" && activeHeaderCount > 0 && (
@@ -303,9 +303,9 @@ export function RequestEditorPanel({
               + Add header
             </button>
             {request.impliedAuthHeader && (
-              <div className="space-y-1 rounded-md border border-border bg-slate-50 px-3 py-2 dark:bg-white/5">
+              <div className="space-y-1 rounded-md border border-border bg-surface-subtle px-3 py-2">
                 <p className="text-sm wrap-anywhere">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-text-primary">
                     Auth adds:
                   </span>{" "}
                   <span className="font-mono">
@@ -421,7 +421,7 @@ export function RequestEditorPanel({
                 role="tab"
                 aria-selected={previewTab === tab}
                 onClick={() => setPreviewTab(tab)}
-                className={`${TAB_BUTTON} ${previewTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+                className={`${TAB_BUTTON} ${previewTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-text-secondary"}`}
               >
                 {tab}
               </button>

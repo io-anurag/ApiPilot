@@ -47,7 +47,7 @@ export function PromptDialog({
         }}
         className="space-y-3"
       >
-        <p id="prompt-dialog-title" className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <p id="prompt-dialog-title" className="text-sm font-medium text-text-primary">
           {title}
         </p>
         <div className="flex flex-col gap-1">

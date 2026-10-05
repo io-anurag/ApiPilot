@@ -3371,3 +3371,17 @@ Implementation
       Debug-run triggers were removed (both are on Run setup). The Chains tab shows the Seeding report panel
       only when it has items to list. Frontend only. Browser walkthrough in light and dark: outstanding.
     - Version bumped to 19.25.0 (root, backend, frontend, shared-domain).
+62. **AP-041 Section colour system; version 19.26.0 (2026-10-05).**
+    - One token layer in `frontend/src/index.css`: a shared neutral foundation (dark theme on a #090B10 to #202631
+      family, no pure black), eight section accents (Specification, Analysis, Test scenarios, AI enhancement,
+      Dependencies, Artifacts, Execution, Results), independent status colours and a chart palette. A section is set with
+      `data-section`; the existing `brand` scale is derived from it, so buttons, tabs, focus rings and selected states
+      follow the stage on screen. Stage chips show their stage's accent on the icon and current-step ring while status
+      stays a labelled badge. 422 raw slate/white utilities moved to semantic neutrals; hex colours and palette
+      utilities are now barred from components by a test. AP-038's per-workflow `brand` blocks and `data-workflow`
+      were removed (the five workflow tokens remain for start-screen tiles). Deviations from the brief, all AA-driven or
+      to avoid status-hue collisions, are listed in `specs/041-section-color-system/spec.md`. Frontend only.
+    - Validation: frontend tests (584), lint and build pass; headless-Chrome walkthrough in light and dark of the start
+      screen and the first six guided stages. Later stages, Import & Run and the performance screens were checked by
+      tests and computed styles only.
+    - Version bumped to 19.26.0 (root, backend, frontend, shared-domain).

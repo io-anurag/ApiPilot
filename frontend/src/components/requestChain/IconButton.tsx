@@ -25,7 +25,7 @@ export function IconButton({ icon, label, onClick, disabled, danger }: Readonly<
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex size-7 shrink-0 items-center justify-center rounded border border-transparent hover:border-border hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 ${danger ? "text-danger-700 dark:text-danger-200" : "text-slate-600 dark:text-slate-300"}`}
+      className={`inline-flex size-7 shrink-0 items-center justify-center rounded border border-transparent hover:border-border hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 ${danger ? "text-danger-700 dark:text-danger-200" : "text-text-secondary"}`}
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {ICONS[icon]}

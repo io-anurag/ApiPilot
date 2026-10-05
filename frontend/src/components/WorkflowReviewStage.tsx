@@ -243,7 +243,7 @@ export function WorkflowReviewStage({
         className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
       >
         <div className="min-w-0 space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+          <h2 className="text-base font-semibold text-text-primary">
             Review Integration Workflows
           </h2>
           {errorBanner}
@@ -285,7 +285,7 @@ export function WorkflowReviewStage({
       className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
       <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+        <h2 className="text-base font-semibold text-text-primary">
           Review Integration Workflows
         </h2>
         {errorBanner}
@@ -298,7 +298,7 @@ export function WorkflowReviewStage({
           requests). This decision never adds or removes a generated test scenario — it
           only changes how already-approved scenarios are sequenced in the Postman output.
         </p>
-        <label className="flex w-fit items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <label className="flex w-fit items-center gap-2 text-sm text-text-secondary">
           <input
             ref={selectAllRef}
             type="checkbox"
@@ -360,7 +360,7 @@ export function WorkflowReviewStage({
                           className="flex flex-wrap items-center gap-2 text-sm"
                         >
                           <HttpMethodBadge method={step.operationMethod} />
-                          <span className="font-mono text-slate-800 dark:text-slate-200">
+                          <span className="font-mono text-text-primary">
                             {step.operationPath}
                           </span>
                           {relationship && (
@@ -415,7 +415,7 @@ export function WorkflowReviewStage({
         {bulkDecision.status === "done" && (
           <output
             data-testid="workflow-bulk-summary"
-            className="block rounded-md border border-border bg-slate-50 dark:bg-white/5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300"
+            className="block rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-text-secondary"
           >
             <p>
               <span className="font-medium text-success-700 dark:text-success-400">

@@ -205,7 +205,7 @@ export function ScenarioReviewStage({
       className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
       <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+        <h2 className="text-base font-semibold text-text-primary">
           Review Generated Scenarios
         </h2>
         <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
@@ -244,7 +244,7 @@ export function ScenarioReviewStage({
                   <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
                     Selected scenario
                   </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                  <p className="text-sm text-text-secondary">
                     Review the request and decide before continuing.
                   </p>
                 </div>
@@ -286,9 +286,9 @@ export function ScenarioReviewStage({
         {bulkDecision.status === "done" && (
           <output
             data-testid="scenario-bulk-summary"
-            className="block w-full rounded-md border border-border bg-slate-50 dark:bg-white/5 px-3 py-3 text-sm text-slate-700 dark:text-slate-300"
+            className="block w-full rounded-md border border-border bg-surface-subtle px-3 py-3 text-sm text-text-secondary"
           >
-            <p className="font-semibold text-slate-900 dark:text-white">Bulk review complete</p>
+            <p className="font-semibold text-text-primary">Bulk review complete</p>
             <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
               <div>
                 <dt className="inline text-muted">Accepted or rejected: </dt>
@@ -302,7 +302,7 @@ export function ScenarioReviewStage({
                   className={
                     bulkDecision.failed.length > 0
                       ? "inline font-medium text-danger-700 dark:text-danger-400"
-                      : "inline font-medium text-slate-700 dark:text-slate-300"
+                      : "inline font-medium text-text-secondary"
                   }
                 >
                   {bulkDecision.failed.length}

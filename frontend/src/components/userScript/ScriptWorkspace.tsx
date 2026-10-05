@@ -210,7 +210,7 @@ export function ScriptWorkspace({
   }
 
   if (loadError) return <ErrorState message="The script could not be loaded." detail={loadError} testId="user-script-load-error" />;
-  if (!script) return <Skeleton className="h-64 w-full rounded bg-slate-200 dark:bg-slate-600" />;
+  if (!script) return <Skeleton className="h-64 w-full rounded bg-surface-strong" />;
 
   const environment = environments.find((candidate) => candidate.id === environmentId) ?? null;
   const check = script.check;

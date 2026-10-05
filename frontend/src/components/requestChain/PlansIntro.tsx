@@ -27,7 +27,7 @@ export function PlansIntro({ onNewPlan, disabled, children }: Readonly<{ onNewPl
     <section aria-labelledby="chain-plans-title" data-testid="chain-plans-empty" className="relative isolate overflow-hidden">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-slate-400/5"
+        className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
       />
       <div className="grid min-h-[calc(100vh-14rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
         <div className="space-y-8">
@@ -36,7 +36,7 @@ export function PlansIntro({ onNewPlan, disabled, children }: Readonly<{ onNewPl
               <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
               <span>Request chains to k6 performance testing</span>
             </p>
-            <h2 id="chain-plans-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white">
+            <h2 id="chain-plans-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl">
               Build a load test, step by step
             </h2>
             <p className="max-w-2xl text-left text-base leading-7 text-muted hyphens-none">
@@ -54,18 +54,18 @@ export function PlansIntro({ onNewPlan, disabled, children }: Readonly<{ onNewPl
             ))}
           </dl>
         </div>
-        <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
-          <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-          <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
+        <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+          <div className="h-1 bg-brand-600" />
+          <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">No plans yet</p>
+              <p className="text-sm font-semibold text-text-primary">No plans yet</p>
               <p className="mt-0.5 text-xs text-muted">Saved in the local database</p>
             </div>
             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
           </div>
           <div className="space-y-4 p-5 sm:p-6">
             <div className="space-y-1">
-              <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">Start a plan</h3>
+              <h3 className="font-display text-lg font-semibold text-text-primary">Start a plan</h3>
               <p className="text-left text-sm leading-6 text-muted hyphens-none">Begin with an empty plan, or seed a first draft from one of these sources:</p>
             </div>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted">

@@ -5,6 +5,7 @@ import { AppHeader } from "./components/AppHeader";
 import { Tabs, type TabItem } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
 import { WORKFLOWS } from "./components/workflowCatalog";
+import { WORKFLOW_SECTIONS, type SectionId } from "./components/sectionCatalog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   buildCommands,
@@ -49,7 +50,7 @@ function LazyView({ children }: Readonly<{ children: ReactNode }>) {
     <Suspense
       fallback={
         <div role="status" aria-label="Loading view">
-          <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />
+          <Skeleton className="h-40 w-full rounded bg-surface-strong" />
         </div>
       }
     >
@@ -91,6 +92,7 @@ export function App() {
   // Set once the user first reaches the guided workflow, then never reset — see its use below for
   // why this must survive "Back to start" even though `started` itself does not.
   const [guidedWorkflowMounted, setGuidedWorkflowMounted] = useState(false);
+  const [guidedSection, setGuidedSection] = useState<SectionId>("spec");
   // Same idea for "Import & Run Collection": once reached it stays mounted, so "Back to start"
   // keeps its in-memory state (selection, per-run order, an in-progress run's view).
   const [importCollectionMounted, setImportCollectionMounted] = useState(false);
@@ -180,6 +182,13 @@ export function App() {
     setTabsVisible(false);
   }
 
+  // AP-041: the start screen keeps the product accent (no section). A standalone workflow has a
+  // fixed section; the guided workflow reports the section of the stage it is showing.
+  let section: SectionId | undefined;
+  if (started) {
+    section = activeTab === "guided-workflow" ? guidedSection : WORKFLOW_SECTIONS[activeTab];
+  }
+
   function handleTabChange(tab: ActiveTab) {
     setActiveTab(tab);
     mount(tab);
@@ -217,9 +226,9 @@ export function App() {
 
   return (
     <main
-      // AP-038: inside a workflow, the brand scale takes that workflow's hue (index.css).
-      data-workflow={started ? activeTab : undefined}
-      className="technical-grid min-h-screen bg-background text-slate-900 dark:text-slate-100">
+      // AP-041: inside a workflow, the accent follows the section on screen (index.css).
+      data-section={section}
+      className="technical-grid min-h-screen bg-background text-text-primary">
       <AppHeader
         health={health}
         theme={theme}
@@ -257,6 +266,7 @@ export function App() {
                 <LazyView>
                   <TestGenerationWorkflowPage
                     onExit={handleExitToStart}
+                    onSectionChange={setGuidedSection}
                     onHandoffToExecution={handleHandoffToExecution}
                     onOpenChainPlan={handleOpenChainPlan}
                   />

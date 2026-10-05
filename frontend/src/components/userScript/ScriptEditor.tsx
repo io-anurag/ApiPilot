@@ -10,13 +10,13 @@ export const CREDENTIALS_NOTE = "Credentials belong in environment values, not i
 export const LINE_ENDING_NOTE = "Saving from this editor stores the text with LF line endings, as a new version that needs a new confirmation.";
 
 const TOKEN_CLASSES: Record<TokenKind, string> = {
-  comment: "italic text-slate-500 dark:text-slate-400",
+  comment: "italic text-muted",
   string: "text-success-700 dark:text-success-300",
   template: "text-success-700 dark:text-success-300",
   number: "text-warning-700 dark:text-warning-300",
   keyword: "font-semibold text-brand-700 dark:text-brand-300",
-  identifier: "text-slate-900 dark:text-slate-100",
-  punctuation: "text-slate-500 dark:text-slate-400",
+  identifier: "text-text-primary",
+  punctuation: "text-muted",
   whitespace: "",
 };
 
@@ -87,7 +87,7 @@ export function ScriptEditor({
             wrap="off"
             onChange={(event) => onChange(event.target.value)}
             onScroll={syncScroll}
-            className={`${TEXT_LAYOUT} absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent focus:outline-none ${highlighting ? "text-transparent caret-slate-900 dark:caret-slate-100" : "text-slate-900 dark:text-slate-100"}`}
+            className={`${TEXT_LAYOUT} absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent focus:outline-none ${highlighting ? "text-transparent caret-text-primary" : "text-text-primary"}`}
           />
         </div>
       </div>

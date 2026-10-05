@@ -53,8 +53,8 @@ export function ThemeToggle({
           onClick={() => onChange(value)}
           className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${
             theme === value
-              ? "bg-amber-100 text-amber-700 dark:bg-indigo-500/20 dark:text-indigo-200"
-              : "text-muted hover:text-slate-900 dark:hover:text-white"
+              ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
+              : "text-muted hover:text-text-primary"
           }`}
         >
           <Icon className="h-3.5 w-3.5" />

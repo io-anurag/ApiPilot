@@ -132,7 +132,7 @@ function RowActionsMenu({ label, items, disabled }: Readonly<{ label: string; it
         aria-expanded={open}
         disabled={disabled}
         onClick={toggleOpen}
-        className="flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-muted hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+        className="flex h-6 w-6 items-center justify-center rounded text-sm font-bold text-muted hover:bg-surface-hover hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
       >
         ⋮
       </button>
@@ -161,7 +161,7 @@ function RowActionsMenu({ label, items, disabled }: Readonly<{ label: string; it
                   setOpen(false);
                   menuItem.onSelect();
                 }}
-                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 ${menuItem.danger ? "text-danger-700 dark:text-danger-300" : "text-slate-700 dark:text-slate-200"}`}
+                className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40 ${menuItem.danger ? "text-danger-700 dark:text-danger-300" : "text-text-secondary"}`}
               >
                 {menuItem.label}
               </button>
@@ -196,7 +196,7 @@ function RequestRow({
   return (
     <li>
       <div
-        className={`group flex items-center gap-2 rounded-md px-2 py-1.5 ${isSelected ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}
+        className={`group flex items-center gap-2 rounded-md px-2 py-1.5 ${isSelected ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-surface-hover"}`}
       >
         <button
           type="button"
@@ -204,7 +204,7 @@ function RequestRow({
           className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
         >
           <HttpMethodBadge method={item.raw.method} />
-          <span className="min-w-0 truncate text-slate-800 dark:text-slate-100">{item.name}</span>
+          <span className="min-w-0 truncate text-text-primary">{item.name}</span>
           {item.wasEdited && (
             <span className="shrink-0 rounded bg-warning-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
               Edited
@@ -253,12 +253,12 @@ function FolderRow({
   const [expanded, setExpanded] = useState(true);
   return (
     <li>
-      <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5">
+      <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-hover">
         <button
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-slate-800 dark:text-slate-100"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-text-primary"
         >
           <span aria-hidden="true" className="shrink-0">
             {expanded ? "▾" : "▸"}

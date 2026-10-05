@@ -4,7 +4,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const SOURCE_CLASSES: Record<string, string> = {
-  RULE: "border border-slate-300 text-slate-700 dark:border-slate-500 dark:text-slate-200",
+  RULE: "border border-border-strong text-text-secondary",
   AI: "border border-brand-300 text-brand-700 dark:border-brand-400 dark:text-brand-200",
 };
 const USER_MODIFIED_CLASSES =
