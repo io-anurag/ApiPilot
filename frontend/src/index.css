@@ -73,9 +73,6 @@
   --color-code-text: #e2e8f0;
   --color-code-border: #334155;
   --color-scrim: #0f172a;
-  /* Text on a solid accent / status fill: white in light, the page background in dark (the
-   * accent steps used as fills in dark are light enough for dark text). */
-  --color-on-solid: #ffffff;
 
   /* Status. The scales keep their steps; 600/700 of success and warning were darkened so white
    * text on a `-600` button passes AA (it was 3.3:1 and 3.2:1). `info` is a steel blue, kept
@@ -131,14 +128,15 @@
   --color-section-execution: var(--solid-execution);
   --color-section-results: var(--solid-results);
 
-  /* Chart series. A categorical palette, ordered so adjacent series differ in hue and lightness
-   * (not red/green), at least 3:1 on the surface; pair every series with a label or marker. */
+  /* Chart series. A categorical palette, at least 3:1 on the surface; pair every series with a
+   * label or marker. The first four avoid status-like hues (no red, orange or amber until series
+   * 5 and 6), so a plain series is not read as a warning or a failure. */
   --color-chart-1: #2563eb;
-  --color-chart-2: #c2410c;
+  --color-chart-2: #a21caf;
   --color-chart-3: #0f766e;
-  --color-chart-4: #a21caf;
-  --color-chart-5: #a16207;
-  --color-chart-6: #475569;
+  --color-chart-4: #475569;
+  --color-chart-5: #c2410c;
+  --color-chart-6: #a16207;
 }
 
 /**
@@ -162,7 +160,6 @@
   --color-text-secondary: #c5cedb;
   --color-muted: #98a4b8;
   --color-text-disabled: #5f6b7e;
-  --color-on-solid: #090b10;
   --color-code-surface: #0b0e14;
   --color-code-text: #e2e8f0;
   --color-code-border: #2b3342;
@@ -177,17 +174,17 @@
   --color-section-analysis: #22d3ee;
   --color-section-scenarios: #818cf8;
   --color-section-ai: #a78bfa;
-  --color-section-dependencies: #e879f9;
+  --color-section-dependencies: #dd86ea;
   --color-section-artifacts: #fb923c;
   --color-section-execution: #2dd4bf;
   --color-section-results: #34d399;
 
   --color-chart-1: #60a5fa;
-  --color-chart-2: #fb923c;
+  --color-chart-2: #dd86ea;
   --color-chart-3: #2dd4bf;
-  --color-chart-4: #e879f9;
-  --color-chart-5: #facc15;
-  --color-chart-6: #94a3b8;
+  --color-chart-4: #94a3b8;
+  --color-chart-5: #fb923c;
+  --color-chart-6: #facc15;
 
   --color-wf-guided: #a5b4fc;
   --color-wf-import: #f0abfc;

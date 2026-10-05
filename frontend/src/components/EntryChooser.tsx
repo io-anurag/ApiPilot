@@ -177,7 +177,7 @@ export function EntryChooser({
               </span>
               <span
                 aria-hidden="true"
-                className={`mt-auto flex h-9 w-9 items-center justify-center self-end rounded-full ${workflow.tone.solid} motion-safe:transition-transform group-hover:translate-x-0.5`}
+                className={`mt-auto flex h-9 w-9 items-center justify-center self-end rounded-full ${workflow.tone.action} motion-safe:transition-transform group-hover:translate-x-0.5`}
               >
                 <ArrowIcon className="h-4 w-4" />
               </span>

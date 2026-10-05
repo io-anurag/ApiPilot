@@ -3397,3 +3397,15 @@ Implementation
       is documented in `index.css`; a product/section split was considered and deferred. Frontend only.
     - Validation: frontend tests, lint and build pass; start screen checked in light and dark in headless Chrome.
     - Version bumped to 19.27.0 (root, backend, frontend, shared-domain).
+64. **AP-041 amended: hierarchy audit; version 19.28.0 (2026-10-05).**
+    - Audit without changing the architecture or the palette. Workflow tokens are now a small cue only: the card arrow is
+      an outlined circle (was a filled one; `tone.solid` became `tone.action`, `--color-on-solid` removed) and the hover
+      border is lighter. Workflow vs status distance is at least 10.0 (light) and 5.9 (dark, against the pale `info`);
+      two workflow tokens equal a section hex (Guided = Scenarios, Import = Dependencies), kept because they appear only
+      on the start screen, tab markers and the palette. Chart series were reordered so the first four avoid status-like hues
+      (blue, fuchsia, teal, slate; orange and gold are 5 and 6); the one chart in use (series 1) is not its page's section
+      colour. The dark Dependencies fuchsia was desaturated (OKLab chroma 0.207 to 0.166, in line with the other accents).
+    - Validation: in headless Chrome, every section in both themes passes AA for primary, hover, selected, link, tab and
+      focus states (narrowest: selected text 4.94:1, dark Scenarios; focus ring 3.97:1, light Specification). Frontend tests,
+      lint and build pass.
+    - Version bumped to 19.28.0 (root, backend, frontend, shared-domain).

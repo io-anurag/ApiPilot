@@ -68,6 +68,14 @@ convention, always labelled); only PATCH, which followed the section, was fixed.
 (indigo, blue, violet) share hue families with Scenarios, Specification and AI; they appear only as small identity cues
 on the start screen, tab markers and the palette.
 
+## Hierarchy audit (19.28.0)
+
+Hierarchy: section (accent on navigation, icons, primary actions, focus) > workflow (small identity cue: tile, marker,
+outlined arrow) > status (labelled badges). Dark Dependencies is #DD86EA (was #E879F9, chroma 0.207 to 0.166). Charts: series
+order is blue, fuchsia, teal, slate, orange, gold; series 1-4 avoid status-like hues. Dark `info` (#9DB6D6) is 5.9 from
+the Guided and Quick workflow tokens; it is only a base token no component uses (badges use the `info-*` scale), so it was
+left. Resolved-colour AA check in Chrome: all 8 sections x 2 themes pass.
+
 ## Known limits
 
 - Results emerald and `success` green are adjacent hues; they are separated by labels and placement, not hue alone.
