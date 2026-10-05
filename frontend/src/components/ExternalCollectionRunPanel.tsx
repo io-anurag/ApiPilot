@@ -877,7 +877,8 @@ export function ExternalCollectionRunPanel({
       {startError && <ErrorState message={startError} />}
 
       {run && (
-        <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3">
+        <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Results</p>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={RUN_STATUS_LABEL[run.status]} tone={runStatusTone(run.status)} />
             <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />

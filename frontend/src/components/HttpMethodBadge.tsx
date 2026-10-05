@@ -2,7 +2,7 @@ const METHOD_CLASSES: Record<string, string> = {
   GET: "bg-info-100 text-info-700 dark:bg-info-500/15 dark:text-info-100",
   POST: "bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-100",
   PUT: "bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-100",
-  PATCH: "bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200",
+  PATCH: "bg-chart-4/15 text-chart-4",
   DELETE: "bg-danger-100 text-danger-700 dark:bg-danger-500/15 dark:text-danger-100",
 };
 const DEFAULT_METHOD_CLASSES = "bg-surface-strong text-text-secondary";

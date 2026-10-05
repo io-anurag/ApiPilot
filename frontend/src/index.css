@@ -235,6 +235,14 @@
 }
 
 /**
+
+ * NAMING: `brand-*` means "the accent of the section on screen", not a fixed product colour. Use it
+ * for interaction and context (buttons, active tabs, focus, selection, progress). Never use it for
+ * a state (use success/warning/danger/info), for something with its own fixed identity (HTTP
+ * methods use the chart/status tokens, the AI-suggested badge uses `section-ai`, workflows use
+ * `wf-*`), or for decoration. Splitting it into separate product and section scales was
+ * considered and deferred: with no section set it already resolves to the product accent.
+ *
  * The `brand` scale every component already uses (buttons, tabs, focus rings, selected states,
  * tinted panels) is derived from the current section, so it follows `data-section` with no change
  * to the components. It is declared on the root and on every section element so that each one
@@ -355,12 +363,12 @@
 }
 
 @layer utilities {
-  /* A faint accent glow at the top of the page over a faint neutral grid. The glow takes the
-   * current section's accent (kept very low so it stays a hint, not a background colour); it is
-   * anchored to the top and does not repeat, so long pages fade back to the background token. */
+  /* A neutral grid with a small, very faint section-accent glow behind the page header only. The
+   * grid carries no colour; the glow is a hint of where you are, not a background colour, and is
+   * anchored to the top without repeating so the rest of the page is the plain neutral. */
   .technical-grid {
     background-image:
-      radial-gradient(70rem 26rem at 75% -6rem, color-mix(in srgb, var(--section-accent) 7%, transparent), transparent 70%),
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 4%, transparent), transparent 70%),
       linear-gradient(to right, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px),
       linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px);
     background-size: 100% 100%, 28px 28px, 28px 28px;
@@ -369,7 +377,7 @@
 
   :root[data-theme="dark"] .technical-grid {
     background-image:
-      radial-gradient(70rem 28rem at 75% -6rem, color-mix(in srgb, var(--section-accent) 12%, transparent), transparent 70%),
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 7%, transparent), transparent 70%),
       linear-gradient(to right, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px),
       linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px);
   }

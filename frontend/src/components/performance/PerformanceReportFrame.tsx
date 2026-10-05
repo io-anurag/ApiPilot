@@ -29,7 +29,7 @@ export function PerformanceReportFrame({ client, runId }: Readonly<{ client: Pic
   }, [runId, fetchReport]);
 
   return (
-    <section aria-labelledby="performance-report-title" data-section="results" className="space-y-3">
+    <section aria-labelledby="performance-report-title" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="performance-report-title" className="text-base font-semibold">
           Report · run <span className="font-mono">{runId.slice(0, 8)}</span>

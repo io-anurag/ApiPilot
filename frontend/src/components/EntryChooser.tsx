@@ -148,10 +148,10 @@ export function EntryChooser({
               aria-label={workflow.title}
               aria-describedby={`entry-${workflow.id}-description`}
               onClick={() => onSelect(workflow.id)}
-              className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border p-5 text-left shadow-sm motion-safe:transition-colors ${
+              className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border p-5 text-left motion-safe:transition-colors ${
                 workflow.recommended
-                  ? "border-wf-guided/50 bg-wf-guided/5"
-                  : "border-border bg-surface"
+                  ? "border-border-strong bg-surface shadow-md"
+                  : "border-border bg-surface shadow-sm"
               } ${workflow.tone.border} ${FOCUS_RING}`}
             >
               <span className="flex w-full items-start justify-between gap-2">
@@ -161,7 +161,7 @@ export function EntryChooser({
                   <WorkflowIcon name={workflow.icon} className="h-6 w-6" />
                 </span>
                 {workflow.recommended && (
-                  <span className="rounded-sm border border-wf-guided/60 bg-wf-guided/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-wf-guided">
+                  <span className="rounded-sm border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
                     Recommended
                   </span>
                 )}

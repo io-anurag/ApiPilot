@@ -53,7 +53,7 @@ export function ThemeToggle({
           onClick={() => onChange(value)}
           className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1 focus-visible:ring-offset-surface ${
             theme === value
-              ? "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
+              ? "bg-surface-strong text-text-primary"
               : "text-muted hover:text-text-primary"
           }`}
         >

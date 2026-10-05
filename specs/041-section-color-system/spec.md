@@ -58,6 +58,16 @@ Dark neutrals: `#090B10` / `#11151C` / `#181D26` / `#202631` family, no pure bla
 `info` moved from cyan to a steel blue (`#476A96`) so it no longer matches Analysis. `success-600/700` and
 `warning-600/700` were darkened so white text on a `-600` button passes AA.
 
+## Refinement (19.27.0)
+
+Perceptual distance (OKLab x100, lower is more similar): Execution/Results 3.9 light / 5.2 dark, Scenarios/AI 7.5 / 5.4,
+Results/success 5.0 / 5.2, Artifacts/warning 4.1 / n.a. Dependencies amber (#B45309 / #FBBF24) equals the warning status
+exactly, and gold variants are 3.4 to 4.7 from it, so Dependencies remains fuchsia. Execution and Results keep their hues
+and Results panels carry a text label and accent bar. Semantics: HTTP method colours remain status/chart tokens (a pre-existing
+convention, always labelled); only PATCH, which followed the section, was fixed. Residual: three workflow tokens
+(indigo, blue, violet) share hue families with Scenarios, Specification and AI; they appear only as small identity cues
+on the start screen, tab markers and the palette.
+
 ## Known limits
 
 - Results emerald and `success` green are adjacent hues; they are separated by labels and placement, not hue alone.

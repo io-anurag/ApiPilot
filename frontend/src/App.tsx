@@ -250,6 +250,7 @@ export function App() {
                 activeTab={activeTab}
                 onChange={handleTabChange}
                 label="Top-level views"
+                accent="neutral"
               />
             )}
             {/* Deliberately NOT gated on `started`: once the guided workflow has been reached, it

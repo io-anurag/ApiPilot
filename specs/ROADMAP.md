@@ -3385,3 +3385,15 @@ Implementation
       screen and the first six guided stages. Later stages, Import & Run and the performance screens were checked by
       tests and computed styles only.
     - Version bumped to 19.26.0 (root, backend, frontend, shared-domain).
+63. **AP-041 amended: semantics refinement; version 19.27.0 (2026-10-05).**
+    - Section, workflow and status colour were audited for mixing. Measured in OKLab, the closest section pairs are
+      Execution/Results (3.9 light, 5.2 dark) and Scenarios/AI; fuchsia Dependencies is not a close pair to AI, and the
+      proposed amber was identical to the warning status (distance 0.0), so Dependencies stays fuchsia and no hue changed.
+      Results panels gained a non-colour cue (a "Results" label and an accent bar). The PATCH method badge (was
+      section-coloured) uses a fixed chart token and the AI-suggested badge uses `section-ai`. Top-level tabs, which switch
+      workflows, use a neutral active treatment (`Tabs accent="neutral"`); the theme toggle is neutral; the Recommended
+      workflow card is marked by a stronger border, elevation and a neutral badge instead of a coloured fill; the page glow
+      was reduced to about half its strength and the grid is neutral. `brand-*` meaning (accent of the section on screen)
+      is documented in `index.css`; a product/section split was considered and deferred. Frontend only.
+    - Validation: frontend tests, lint and build pass; start screen checked in light and dark in headless Chrome.
+    - Version bumped to 19.27.0 (root, backend, frontend, shared-domain).
