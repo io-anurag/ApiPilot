@@ -14,7 +14,7 @@ Findings come from reading the repository on 2026-10-10 (commit 6dc667e, version
 
 ## R2. Calculator placement
 
-**Decision**: Pure functions under `backend/src/coverage/`, types in `packages/shared-domain/src/coverage.ts`, exposed by a thin router. The frontend fetches a computed snapshot.
+**Decision**: Pure functions under `backend/src/apiCoverage/`, types in `packages/shared-domain/src/coverage.ts`, exposed by a thin router. The frontend fetches a computed snapshot.
 
 **Rationale**: The inputs (`ApiModel`, review workspace, run results with `itemId`) and helpers (`itemIdForScenario` in `backend/src/postman/identifiers.ts`) are backend-side. Computing there avoids shipping raw run results and sensitive `rawCapture` to the browser and keeps one implementation for screen and export.
 
@@ -117,3 +117,14 @@ AI scenarios are mapped by the same fields; their `provenance.source` is carried
 
 - AI-generated explanations or proposed scenarios (optional in the request; deferred; would route through `AIProvider` under a separate spec).
 - Persisting coverage history, URL-addressable state, a security/authorization scenario category, extending `ApiModel` for `oneOf`/`anyOf`/`nullable`, an aggregate "overall" score.
+
+## R13. Refinement findings (2026-10-10)
+
+Read from the working-tree implementation. Decisions are in [coverage-rules.md](coverage-rules.md); open items in [decision-log.md](decision-log.md).
+
+- **Over-attribution.** `mapScenario` credits `op:` and every carried field from any scenario with scope `any` (`scenarioMapping.ts:87,99-102`), so one failing scenario can fail unrelated requirements. **Decision**: status-code scope for exercised and case requirements; schema checks decide only `response-schema`.
+- **Category model.** `categoryCoverageFor` counts (operation, group) existence and has no runtime figure (`summarize.ts:213`). **Decision**: partition requirements by group; counts of requirements, never scenarios.
+- **Failure causes.** Evidence already distinguishes `noResponse`, `edited` and `not-evaluated` internally (`evidence.ts`, `classify.ts`) but exposes them only as a note. **Decision**: typed cause in the contract.
+- **Not-attempted reasons.** Guided runs record `NotAttemptedReason` (`execution.ts:48-54`); uploaded runs record only the outcome. **Decision**: show the reason where recorded, otherwise `never-run`.
+- **Run combining.** Latest-per-scenario can mix runs and environments (`evidence.ts:154-173`). **Decision**: disclose all contributors; restriction by environment is D-2.
+- **Stale.** Not derivable: runs carry no revision or contract hash and scenario ids are random per generation. **Decision**: specify fields and display now; production waits on D-1.

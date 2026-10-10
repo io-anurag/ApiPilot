@@ -8,6 +8,8 @@
 
 Add a deterministic coverage calculator and a Coverage view. The calculator reads three things that already exist in a session: the workflow's `ApiModel`, its reviewed scenarios, and the uploaded-collection runs whose request results carry an `itemId` derived from a scenario ID. It produces two separate coverage dimensions (specification, runtime-verified), a six-state classification per requirement, ranked gaps and recommendations. Nothing is stored; the result is recomputed on demand per request.
 
+**Refinement 2026-10-10.** [coverage-rules.md](coverage-rules.md) tightens the model (two coverage levels, check scopes, typed failure causes, requirement-partition categories with runtime figures, stale reason, "passing verification" naming). A first implementation already exists uncommitted in the working tree, so this plan adds a **rework phase** (below) instead of restarting. Open decisions are in [decision-log.md](decision-log.md).
+
 Repository analysis ([research.md](research.md)) changes the scope in six ways that the spec could not know:
 
 1. There is no "Results" navigation group. Coverage becomes a catalog view in the `results` section (R1).
@@ -45,7 +47,7 @@ Repository analysis ([research.md](research.md)) changes the scope in six ways t
 |---|---|
 | I Specification is source of truth; XIV No silent assumptions | Eligible items come only from `ApiModel`. Constructs that cannot be measured are listed with a reason (FR-017, R6), never ignored or guessed. |
 | II Deterministic before AI; III AI is not the authority | No AI in any count or status. Recommendations are rule-derived. Optional AI explanation is deferred (out of scope, R12). |
-| IX Separation of concerns; X Domain model first | Types in `packages/shared-domain/src/coverage.ts`; pure calculator in `backend/src/coverage/`; thin route; frontend view-model separate from JSX. |
+| IX Separation of concerns; X Domain model first | Types in `packages/shared-domain/src/coverage.ts`; pure calculator in `backend/src/apiCoverage/`; thin route; frontend view-model separate from JSX. |
 | XIII Provenance and traceability; XXVI Specification traceability | Every requirement carries its mapping (scenario IDs, rule, target) and evidence refs (run ID, result `itemId`). |
 | XVI / XXIV Deterministic, reproducible | Sorted iteration, stable element IDs, no clocks or randomness inside the calculator (time is an input). |
 | XVII Security and privacy; XVIII No secrets in artifacts; XX No sensitive logging | Coverage carries identifiers, counts and outcomes only; never request/response bodies or `rawCapture`. Export uses the same rule. Logs carry counts and durations only. |
@@ -89,7 +91,7 @@ packages/shared-domain/src/
 
 backend/src/
 ├── openapi/buildApiModel.ts            # MOD: merge path-level parameters (R5)
-├── coverage/                           # NEW, framework-independent
+├── apiCoverage/                        # NEW (exists in working tree), framework-independent
 │   ├── specRevision.ts                 # canonical ApiModel -> sha256 fingerprint
 │   ├── elements.ts                     # ApiModel -> CoverageRequirement[] with stable ids + eligibility
 │   ├── scenarioMapping.ts              # scenario -> requirement ids (rule/target/assertion based)
@@ -109,15 +111,15 @@ frontend/src/
 ├── services/coverageClient.ts          # NEW: result-union client, stale-response guard
 ├── hooks/useCoverage.ts                # NEW: load/refresh, request-sequence guard
 ├── pages/CoveragePage.tsx              # NEW
-├── components/coverage/                # NEW: CoverageNotice, MetricGroup, CoverageBars,
+├── components/apiCoverage/                # NEW: CoverageNotice, MetricGroup, CoverageBars,
 │   │                                   #      GapsTable, GapFilters, Recommendations, coverageViewModel.ts
 ├── components/workflowCatalog.ts       # MOD: new "coverage" view in section "results"
 ├── App.tsx                             # MOD: mount view; onOpenCoverage hand-off
 ├── components/ScenarioReviewStage.tsx  # MOD: link to Coverage
 └── components/ExternalCollectionRunPanel.tsx  # MOD: link to Coverage from results
 
-backend/tests/unit/coverage/*.test.ts, backend/tests/integration/coverage.test.ts
-frontend/tests/unit/coverage/*.test.tsx, packages/shared-domain/tests/unit/coverage.test.ts
+backend/tests/unit/apiCoverage/*.test.ts, backend/tests/integration/coverage.test.ts
+frontend/tests/unit/apiCoverage/*.test.tsx, packages/shared-domain/tests/unit/coverage.test.ts
 docs/USER_MANUAL.md, docs/architecture.md, specs/ROADMAP.md, package.json versions
 ```
 
@@ -132,7 +134,26 @@ docs/USER_MANUAL.md, docs/architecture.md, specs/ROADMAP.md, package.json versio
 5. **Prioritization and recommendations (US3, US4)**: documented scoring, gap de-duplication.
 6. **Route and export**: `GET /api/coverage`, export route, filter parity (FR-024, FR-037).
 7. **Frontend (US3, US6, US7)**: client, hook with request-sequence guard, page, chart, table, filters, notices; catalog entry; contextual links; palette entry comes free from the catalog. Light/dark and empty/error states.
+7b. **Refinement rework** (next section), after phases 1 to 7 exist and before Finish.
 8. **Finish**: docs (USER_MANUAL, architecture), ROADMAP entry, feature version bump via `npm run version:bump -- feature` (19.39.0 → 19.40.0), full `npm test`, `npm run lint`, `npm run build`. Changes are left uncommitted for review.
+
+## Refinement Rework (2026-10-10)
+
+Maps each difference in coverage-rules.md section 15 to the code that changes. Tests first (the checklist cases), then code; no new dependency, no new persistence.
+
+| # | Change | Modules |
+|---|---|---|
+| 1, 2 | Check scopes: `operation`, exercised and case requirements judged by the `status-code` check only; `operation` credited by positive-group scenarios only (D-3) | `scenarioMapping.ts`, `classify.ts` |
+| 3, 6 | Operation profile: OC1 to OC5 (OC3 named "with passing verification"), scenario verdicts and counts, no single status | `shared-domain/coverage.ts`, `summarize.ts`, `calculateCoverage.ts` |
+| 4 | Retire `scenario-category` kind; category figures partition requirements by `group`; add runtime counts, unclassified line, security unavailable | `elements.ts`, `summarize.ts` (`categoryCoverageFor`), `coverage.ts` |
+| 5, 7 | Typed `cause` on requirements and evidence; surface `blocked-by-dependency`, `run-cancelled`, `not-reached` from guided `NotAttemptedReason` | `evidence.ts`, `classify.ts`, `coverage.ts` |
+| 8 | Gap types `insufficient` and `stale` (needs re-execution) | `coverageQuery.ts`, `filterSnapshot.ts`, `contracts/coverage-routes.md` |
+| 9 | Restrict latest-per-scenario to the newest qualifying run's environment; list excluded runs (D-2 resolved) | `evidence.ts`, `coverageService.ts`, `renderCoverageHtml.ts` |
+| 10 | Assertion card: passed / failed / not evaluated | `calculateCoverage.ts`, metric card |
+| - | Stale carries `staleReason`, `staleSince`, `reExecutionRequired`; still never produced (D-1) | `coverage.ts`, `classify.ts` (type and display only) |
+| - | Frontend: operation counts strip, category section, expandable requirement detail, scope label, out-of-date snapshot state, run-mode selector | `components/apiCoverage/*`, `CoveragePage.tsx`, `useCoverage.ts` |
+
+**Gate**: D-1 (stale production) and D-4 (security) are not implemented; their contracts and displays only. D-3, D-6 and D-7 are resolved by clarification (2026-10-10); no merge gate remains except D-1 and D-4 staying unimplemented.
 
 ## Risks and Notes
 
@@ -141,6 +162,7 @@ docs/USER_MANUAL.md, docs/architecture.md, specs/ROADMAP.md, package.json versio
 - **Scenario IDs are random per generation.** Cross-regeneration reconciliation uses a derived stable key (method + path + rule + target + variant) for requirement mapping; evidence still joins by scenario ID, so regeneration orphans old evidence, which is reported as unattributed and never counted as verified (R4). Runs record no specification revision, so the system does not claim those results are from an earlier specification; it says "possibly".
 - **Security-sensitivity is inferred from declared security requirements only** and is labelled as a heuristic (R8).
 - **Reference-quality caveat.** Research was done by reading code. The "scenario edited after run" note depends on timestamps in `ReviewScenario.history`; if absent the note is omitted and nothing else changes (R4).
+- **Refinement lowers some current figures** (strict group crediting, status-only check scope). Existing coverage tests encode the old behaviour and must be updated deliberately, not weakened.
 - **Stale state is reserved.** It stays in the contract and UI vocabulary but no rule in this feature produces it (clarified 2026-10-10).
 
 ## Complexity Tracking

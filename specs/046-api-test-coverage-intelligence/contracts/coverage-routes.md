@@ -14,9 +14,9 @@ Query parameters, all optional:
 | `method` | HTTP method, repeatable | Filter operations table, gaps and recommendations |
 | `q` | text, max 200 chars | Case-insensitive substring match on path |
 | `state` | `CoverageState`, repeatable | Filter by requirement state |
-| `category` | `positive \| negative \| boundary \| security` | Filter by scenario category group |
+| `category` | `positive \| negative \| boundary \| security` | Restrict requirements to the group; `security` returns 400 `category_unavailable` with the reason (additive) |
 | `priority` | `high \| medium \| low`, repeatable | Filter by priority |
-| `gapKind` | `missing \| failed` | Missing coverage versus executed failure |
+| `gapKind` | `missing \| failed \| insufficient \| stale` | Missing coverage, executed failure, inconclusive evidence, or evidence needing re-execution (additive; `stale` is accepted but yields no rows until decision D-1) |
 | `sort` | `priority \| method \| path \| specification \| runtime` | Default `priority` |
 | `order` | `asc \| desc` | Default per sort key |
 
@@ -38,6 +38,7 @@ Filtering narrows `operations`, `gaps`, `recommendations` and the filter-sensiti
 - No `NaN`, `Infinity` or missing percentage: zero denominators yield `percentage: null` and `available: false`.
 - No request or response bodies, header values, URLs with query strings, tokens, cookies, `rawCapture` or environment variable values appear in the body.
 - A run whose results cannot be joined to a current scenario contributes only to `execution.unattributedResults` and a notice.
+- The snapshot names the evidence mode, contributing runs and environments; exports repeat them.
 - Rejected review scenarios never count; accepted and pending counts are reported in `context.scenarioCounts`.
 
 ## `GET /api/coverage/export`

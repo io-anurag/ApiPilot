@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>API Test Coverage - mock (AP-046)</title>
+<title>API Test Coverage - mock (AP-046, refined)</title>
 <style>
   :root {
     --bg: #f6f8fa; --surface: #fff; --strong: #eef1f5; --border: #d8dee6; --text: #14202e; --muted: #5b6878;
     --accent: #047857; --ok: #15803d; --okbg: #dcfce7; --warn: #92400e; --warnbg: #fef3c7; --danger: #b91c1c; --dangerbg: #fee2e2;
-    --info: #36557a; --infobg: #dfe8f4; --c-spec: #2563eb; --c-rt: #0f766e; --c-fail: #b91c1c; --c-gap: #cbd5e1;
+    --info: #36557a; --infobg: #dfe8f4; --c-spec: #2563eb; --c-rt: #0f766e; --c-fail: #b91c1c; --c-inc: #b45309; --c-gap: #cbd5e1;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0d1117; --surface: #161b22; --strong: #1f2630; --border: #30363d; --text: #e6edf3; --muted: #9aa7b8;
       --accent: #34d399; --ok: #4ade80; --okbg: #12301e; --warn: #fbbf24; --warnbg: #3a2e10; --danger: #f87171; --dangerbg: #3a1717;
-      --info: #9db8dc; --infobg: #172a46; --c-spec: #60a5fa; --c-rt: #2dd4bf; --c-fail: #f87171; --c-gap: #3b4656;
+      --info: #9db8dc; --infobg: #172a46; --c-spec: #60a5fa; --c-rt: #2dd4bf; --c-fail: #f87171; --c-inc: #fbbf24; --c-gap: #3b4656;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0d1117; --surface: #161b22; --strong: #1f2630; --border: #30363d; --text: #e6edf3; --muted: #9aa7b8;
     --accent: #34d399; --ok: #4ade80; --okbg: #12301e; --warn: #fbbf24; --warnbg: #3a2e10; --danger: #f87171; --dangerbg: #3a1717;
-    --info: #9db8dc; --infobg: #172a46; --c-spec: #60a5fa; --c-rt: #2dd4bf; --c-fail: #f87171; --c-gap: #3b4656;
+    --info: #9db8dc; --infobg: #172a46; --c-spec: #60a5fa; --c-rt: #2dd4bf; --c-fail: #f87171; --c-inc: #fbbf24; --c-gap: #3b4656;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
@@ -28,12 +28,14 @@
   main { max-width: 1240px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
   button, select, input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
   button { cursor: pointer; }
-  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible, th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled, select:disabled { cursor: not-allowed; opacity: .55; }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible, th button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   :root[data-theme="dark"] button.primary { color: #04130d; }
   a { color: var(--accent); }
   .banner { background: var(--infobg); color: var(--info); border: 1px solid var(--info); border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .banner .spacer { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .sim { display: inline-block; border: 1px dashed var(--warn); color: var(--warn); background: var(--warnbg); border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 700; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
   .pad { padding: 14px 18px; }
   .head { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 16px 18px; }
@@ -47,9 +49,11 @@
   .notice.warn { background: var(--warnbg); color: var(--warn); border-color: var(--warn); }
   .notice.bad { background: var(--dangerbg); color: var(--danger); border-color: var(--danger); }
   .notice strong { white-space: nowrap; }
+  .scope { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .scope b { color: var(--text); }
   .groups { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
   @media (max-width: 960px) { .groups { grid-template-columns: 1fr; } }
-  .gtitle { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 18px 0; }
+  .gtitle { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 18px 0; gap: 8px; flex-wrap: wrap; }
   .gtitle h2 { margin: 0; font-size: 14px; }
   .gtitle span { font-size: 12px; color: var(--muted); }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--border); border-top: 1px solid var(--border); margin-top: 12px; }
@@ -57,20 +61,36 @@
   .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .tile .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .tile .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .tile .v.na { font-size: 14px; font-weight: 600; color: var(--muted); }
   .tile .s { font-size: 12px; color: var(--muted); }
   .tile .bar { height: 6px; background: var(--strong); border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .tile .bar b { display: block; height: 100%; }
   .split { font-size: 11px; color: var(--muted); }
   h3 { margin: 0 0 4px; font-size: 14px; }
+  h2.sec { margin: 0 0 2px; font-size: 16px; }
   .sub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
   .break { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 960px) { .break { grid-template-columns: 1fr; } }
-  .stack { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--c-gap); }
+  .cats { display: grid; gap: 14px; grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 1100px) { .cats { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .cats { grid-template-columns: 1fr; } }
+  .cat { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+  .cat.sel { outline: 2px solid var(--accent); }
+  .cat.unavail { border-style: dashed; background: var(--strong); }
+  .cat .fig { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .cat .fig b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--c-gap); }
   .stack i { display: block; height: 100%; }
   .stack i + i { border-left: 2px solid var(--surface); }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .stack.sm { height: 8px; min-width: 90px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-top: 2px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   .legend b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .opc { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .opc div { background: var(--surface); padding: 10px 14px; }
+  .opc .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .opc .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .opc .s { font-size: 12px; color: var(--muted); }
   .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 12px; }
   .filters label { display: grid; gap: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .filters input, .filters select { text-transform: none; letter-spacing: 0; font-size: 13px; }
@@ -80,23 +100,29 @@
   th button { all: unset; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
   td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   td.nw { white-space: nowrap; }
+  tr.detail > td { background: var(--strong); padding: 12px 18px 16px; }
+  table.inner { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-top: 6px; }
+  table.inner td, table.inner th { padding: 5px 8px; }
   .m { display: inline-block; min-width: 56px; text-align: center; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 700; color: #fff; }
   .GET { background: #2563eb; } .POST { background: #15803d; } .PUT { background: #b45309; } .PATCH { background: #a21caf; } .DELETE { background: #dc2626; }
   .pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid; }
-  .s-verified { background: var(--okbg); color: var(--ok); border-color: var(--ok); }
-  .s-failed { background: var(--dangerbg); color: var(--danger); border-color: var(--danger); }
-  .s-gen { background: var(--infobg); color: var(--info); border-color: var(--info); }
-  .s-inc { background: var(--warnbg); color: var(--warn); border-color: var(--warn); }
-  .s-stale { background: var(--strong); color: var(--muted); border-color: var(--muted); border-style: dashed; }
-  .s-none { background: transparent; color: var(--text); border-color: var(--muted); }
+  .s-V { background: var(--okbg); color: var(--ok); border-color: var(--ok); }
+  .s-F { background: var(--dangerbg); color: var(--danger); border-color: var(--danger); }
+  .s-G { background: var(--infobg); color: var(--info); border-color: var(--info); }
+  .s-I { background: var(--warnbg); color: var(--warn); border-color: var(--warn); }
+  .s-S { background: var(--strong); color: var(--muted); border-color: var(--muted); border-style: dashed; }
+  .s-N { background: transparent; color: var(--text); border-color: var(--muted); }
+  .chip { display: inline-block; border-radius: 4px; padding: 0 6px; font-size: 11px; border: 1px solid var(--border); color: var(--muted); margin: 0 4px 2px 0; white-space: nowrap; }
+  .chip.ok { color: var(--ok); border-color: var(--ok); } .chip.bad { color: var(--danger); border-color: var(--danger); } .chip.none { color: var(--text); border-style: dashed; }
   .p-high { background: var(--dangerbg); color: var(--danger); border-color: var(--danger); }
   .p-med { background: var(--warnbg); color: var(--warn); border-color: var(--warn); }
   .p-low { background: var(--strong); color: var(--muted); border-color: var(--border); }
   .frac { font-variant-numeric: tabular-nums; }
   .frac small { color: var(--muted); }
   .missing { margin: 0; padding-left: 16px; font-size: 12px; color: var(--muted); }
-  .rowact { display: flex; gap: 8px; font-size: 12px; white-space: nowrap; }
-  .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .rowact { display: flex; gap: 8px; font-size: 12px; white-space: nowrap; flex-wrap: wrap; align-items: center; }
+  .rowact button { padding: 2px 8px; font-size: 12px; }
+  .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); gap: 8px; flex-wrap: wrap; }
   .recs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: r; }
   .recs li { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: grid; gap: 4px; counter-increment: r; }
   .recs li .t { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -120,17 +146,19 @@
 <body>
 <main>
   <div class="banner" role="note">
-    <strong>Mock</strong> for AP-046. All values are simulated in this page; nothing is read or sent anywhere. In the product every figure derives from the session's real specification, scenarios and runs. Not the final design.
+    <span><strong>MOCK · SIMULATED DATA</strong> for AP-046 (refined 2026-10-10). Every figure below is computed in this page from a small invented dataset of operations, scenarios and runs; nothing is read from, or sent to, a repository, backend or runtime. In the product each figure derives from the session's real specification, scenarios and runs under <span class="mono">coverage-rules.md</span>. Not the final design.</span>
     <span class="spacer">
       <label>Simulate state
         <select id="scenario" aria-label="Simulated data state">
-          <option value="partial">Partial execution with a failure</option>
+          <option value="partial">Partial execution with failures</option>
           <option value="specOnly">Specification only (no scenarios)</option>
           <option value="generated">Generated, not executed</option>
           <option value="stale">Specification changed (unattributed results)</option>
+          <option value="staleEv">Preview: stale evidence (needs decision D-1, not produced yet)</option>
+          <option value="outdated">Out-of-date snapshot (recalculation failed)</option>
           <option value="loading">Loading</option>
           <option value="noWorkflow">No active specification</option>
-          <option value="error">Error</option>
+          <option value="error">Error (no snapshot)</option>
         </select>
       </label>
       <button id="theme" aria-pressed="false">Toggle dark theme</button>
@@ -139,18 +167,18 @@
 
   <div id="loading" class="card pad hidden" aria-busy="true"><div class="skel"></div><p class="note">Calculating coverage...</p></div>
   <div id="nowf" class="card empty hidden"><h2>No active specification</h2><p>Coverage is calculated from a specification and its generated scenarios. Start the guided workflow and upload a specification.</p><button class="primary">Go to specification step</button></div>
-  <div id="err" class="card hidden"><div class="pad"><div class="notice bad" role="alert"><strong>Coverage unavailable.</strong> The coverage service did not respond. This is not an empty result. <button style="margin-left:auto">Retry</button></div></div></div>
+  <div id="err" class="card hidden"><div class="pad"><div class="notice bad" role="alert"><strong>Coverage unavailable.</strong> The coverage service did not respond and no earlier snapshot exists. This is not an empty result. <button style="margin-left:auto">Retry</button></div></div></div>
 
   <div id="app">
     <header class="card head">
       <div>
-        <h1>API Test Coverage</h1>
+        <h1>API Test Coverage <span class="sim">simulated data</span></h1>
         <p>How much of the API your generated tests cover, and how much of that is proven by real runs.</p>
         <div class="ctx" id="ctx"></div>
       </div>
       <div class="actions">
-        <label class="note">Evaluate run
-          <select id="run" aria-label="Run used for runtime verification"></select>
+        <label class="note">Evaluate
+          <select id="run" aria-label="Evaluate: evidence used for runtime verification"></select>
         </label>
         <button id="recalc">Recalculate</button>
         <button id="exp-f">Export filtered (HTML)</button>
@@ -160,29 +188,44 @@
     </header>
 
     <div id="notices" style="display:grid;gap:8px"></div>
+    <div class="scope" id="scope" aria-live="polite"></div>
+
+    <section class="card pad" aria-labelledby="oc">
+      <h2 class="sec" id="oc">Operation-level counts</h2>
+      <p class="sub">Unit: operations (unique method + path in this revision). Having a generated scenario is not the same as being fully covered: see the requirement states below. "With passing verification" and "with failures" can both apply to one operation.</p>
+      <div class="opc" id="opc"></div>
+    </section>
 
     <section aria-labelledby="g1" class="groups">
       <div class="card"><div class="gtitle"><h2 id="g1">Specification coverage</h2><span>a qualifying generated scenario exists</span></div><div class="tiles" id="spec-tiles"></div></div>
       <div class="card"><div class="gtitle"><h2>Runtime-verified coverage</h2><span>actual execution evidence passed</span></div><div class="tiles" id="rt-tiles"></div></div>
     </section>
 
+    <section class="card pad" aria-labelledby="cg">
+      <h2 class="sec" id="cg">Coverage by scenario category</h2>
+      <p class="sub">Each requirement belongs to one category. Both figures count classified, testable requirements of that category (never scenarios) and are never combined into a score.</p>
+      <div class="cats" id="cats"></div>
+      <p class="note" id="unclass" style="margin:10px 0 0"></p>
+    </section>
+
     <section class="card pad" aria-labelledby="bk">
-      <h2 id="bk" style="margin:0 0 2px;font-size:16px">Coverage breakdown</h2>
-      <p class="sub">Each bar shows verified, executed-failed, generated-not-verified and uncovered items. Counts are listed under every bar.</p>
+      <h2 class="sec" id="bk">Requirement breakdown</h2>
+      <p class="sub">Each bar partitions the eligible requirements of one kind into verified, executed-failed, inconclusive, generated-not-executed and not covered. Counts are listed under every bar.</p>
       <div class="break" id="break"></div>
     </section>
 
     <section class="card pad" aria-labelledby="gp">
-      <h2 id="gp" style="margin:0 0 2px;font-size:16px">Coverage gaps</h2>
-      <p class="sub">Priority is a heuristic from declared contract facts, not a security assessment. <a href="#rules">How priority is scored</a></p>
+      <h2 class="sec" id="gp">Coverage gaps</h2>
+      <p class="sub">Priority is a heuristic from declared contract facts and execution results, not a security assessment. <a href="#rules">How priority is scored</a></p>
       <div class="filters" role="search">
         <label>Endpoint<input id="f-q" type="search" placeholder="path contains..." /></label>
         <label>Method<select id="f-m"><option value="">All</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
-        <label>State<select id="f-s"><option value="">All</option><option value="failed">Executed, failed</option><option value="gen">Generated, not executed</option><option value="inc">Inconclusive</option><option value="stale">Stale</option><option value="none">Not covered</option><option value="verified">Verified</option></select></label>
+        <label>Requirement state<select id="f-s"><option value="">All</option><option value="F">Executed, failed</option><option value="G">Generated, not executed</option><option value="I">Inconclusive</option><option value="S">Stale: re-run required (reserved)</option><option value="N">Not covered</option><option value="V">Verified</option></select></label>
         <label>Category<select id="f-c"><option value="">All</option><option value="positive">Positive</option><option value="negative">Negative</option><option value="boundary">Boundary</option><option value="security" disabled>Security (unavailable)</option></select></label>
         <label>Priority<select id="f-p"><option value="">All</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></label>
-        <label>Gap type<select id="f-k"><option value="">All</option><option value="missing">Missing coverage</option><option value="failed">Failed verification</option></select></label>
+        <label>Gap type<select id="f-k"><option value="">All</option><option value="missing">Missing coverage</option><option value="failed">Failed verification</option><option value="insufficient">Insufficient evidence</option><option value="stale">Needs re-execution (stale)</option></select></label>
         <button id="f-reset">Reset filters</button>
+        <label style="grid-auto-flow:column;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px"><input id="f-ver" type="checkbox" style="padding:0" /> Show verified requirements in details</label>
       </div>
       <div class="scroll">
         <table>
@@ -192,8 +235,7 @@
             <th scope="col"><button data-sort="path" aria-label="Sort by endpoint">Endpoint</button></th>
             <th scope="col"><button data-sort="spec" aria-label="Sort by specification coverage">Specification</button></th>
             <th scope="col"><button data-sort="rt" aria-label="Sort by runtime verification">Runtime verified</button></th>
-            <th scope="col">State</th>
-            <th scope="col">Missing coverage</th>
+            <th scope="col">Requirement states and scenarios</th>
             <th scope="col"><button data-sort="prio" aria-label="Sort by priority">Priority</button></th>
             <th scope="col">Actions</th>
           </tr></thead>
@@ -201,38 +243,47 @@
         </table>
       </div>
       <div id="norows" class="empty hidden"><h2>No operations match these filters</h2><button id="norows-reset">Reset filters</button></div>
-      <div class="pager"><span id="count"></span><span>Filters and sort are kept when you switch views and reset on a full page refresh.</span></div>
+      <div class="pager"><span id="count"></span><span>Filters, sort and selected evidence are kept when you switch views and reset on a full page refresh.</span></div>
     </section>
 
     <section class="two">
       <div class="card pad" aria-labelledby="rc">
-        <h2 id="rc" style="margin:0 0 2px;font-size:16px">Recommended next tests</h2>
-        <p class="sub">Ranked by the same rules as priority. Each one traces to a specific gap.</p>
+        <h2 class="sec" id="rc">Recommended next tests</h2>
+        <p class="sub">Each one traces to a specific requirement gap in the current scope. Priority is the heuristic above.</p>
         <ol class="recs" id="recs"></ol>
       </div>
       <div style="display:grid;gap:16px;align-content:start">
         <div class="card pad">
           <h3>Out of scope</h3>
-          <p class="sub">Operations not selected for generation. They are not gaps.</p>
+          <p class="sub">Operations not selected for generation. Not gaps; excluded from every denominator.</p>
           <ul class="list" id="oos"></ul>
         </div>
         <div class="card pad">
           <h3>Not measurable</h3>
-          <p class="sub">Excluded from every denominator, with the reason.</p>
+          <p class="sub">Elements that cannot be reliably measured. Excluded from every denominator, with the reason.</p>
           <ul class="list" id="nm"></ul>
-          <p class="note"><b>Security / authorization:</b> unavailable. No scenario category identifies authorization intent yet.</p>
+          <p class="note"><b>Security / authorization:</b> unavailable. No scenario category identifies authorization intent yet; it is not shown as 0%.</p>
         </div>
         <div class="card pad" id="rules">
-          <h3>Metric and priority definitions</h3>
+          <h3>Definitions</h3>
+          <details><summary>Requirement states</summary><ul class="list">
+            <li><b>Not covered</b>: no scenario targets it.</li>
+            <li><b>Generated, not executed</b>: mapped, no attributable result (never run, not in the selected run, or blocked).</li>
+            <li><b>Executed, failed</b>: a check relevant to this requirement was evaluated and failed.</li>
+            <li><b>Verified</b>: a relevant check was evaluated and passed on an unedited request.</li>
+            <li><b>Inconclusive</b>: result exists but proves nothing (timeout, check not evaluated, edited request, no relevant check).</li>
+            <li><b>Stale</b>: evidence exists but the requirement's contract changed after the run. Always shows the reason and needs re-execution; never shown as not executed. Reserved; not produced yet.</li>
+            <li>Precedence: not covered, generated, then failed over verified over inconclusive.</li>
+          </ul></details>
           <details><summary>Denominators</summary><ul class="list">
-            <li>Operations: selected operations.</li>
-            <li>Parameters: documented parameters, path- and operation-level merged, overrides counted once.</li>
-            <li>Response codes: documented codes; ranges and <span class="mono">default</span> count as their own key.</li>
-            <li>Assertions: evaluated assertions, excluding could-not-evaluate.</li>
+            <li>Operations: eligible (selected) operations.</li>
+            <li>Parameters, request schemas, response schemas, response codes: eligible requirements of that kind; ranges and <span class="mono">default</span> count as their own response keys.</li>
+            <li>Assertions: evaluated assertions, excluding not-evaluated, edited-request and no-response results.</li>
+            <li>Categories: eligible requirements of that category.</li>
           </ul></details>
           <details><summary>Priority factors</summary><ul class="list">
-            <li>Missing runtime verification, missing specification coverage, executed failure.</li>
-            <li>Destructive method, declared security requirement, contract complexity.</li>
+            <li>Executed failure, requirements without a scenario, no scenarios at all, generated-not-executed, inconclusive.</li>
+            <li>Destructive method, write method, declared security requirement, contract complexity.</li>
             <li>Failure history: not available, so not used.</li>
           </ul></details>
         </div>
@@ -246,175 +297,581 @@
   var $ = function (id) { return document.getElementById(id); };
   var root = document.documentElement;
 
-  // ---- simulated data (mock only) ----
-  var OPS = [
-    { m: "POST",   p: "/api/v1/orders",            spec: [4,5], rt: [2,5], st: "failed",   miss: ["Documented 400 and 422 responses not verified", "quantity lower-bound scenario missing"], prio: "high", cat: ["positive","negative","boundary"], failed: true },
-    { m: "PATCH",  p: "/api/v1/users/{id}",        spec: [3,4], rt: [1,4], st: "gen",      miss: ["Nullable-field cases not measurable", "403 response has no scenario"], prio: "high", cat: ["positive","negative"], sec: true },
-    { m: "GET",    p: "/api/v1/products/{id}",     spec: [5,5], rt: [4,5], st: "verified", miss: ["Documented 404 response not verified"], prio: "med", cat: ["positive","negative"] },
-    { m: "DELETE", p: "/api/v1/orders/{id}",       spec: [2,4], rt: [0,4], st: "none",     miss: ["200 success scenario", "404 not-found scenario", "Declared bearer security not exercised"], prio: "high", cat: ["positive"], sec: true },
-    { m: "GET",    p: "/api/v1/orders",            spec: [4,4], rt: [4,4], st: "verified", miss: [], prio: "low", cat: ["positive","boundary"] },
-    { m: "PUT",    p: "/api/v1/products/{id}",     spec: [3,6], rt: [1,6], st: "inc",      miss: ["Response schema evaluated nowhere", "maxLength on name untested"], prio: "med", cat: ["positive","boundary"] },
-    { m: "GET",    p: "/api/v1/users",             spec: [3,3], rt: [3,3], st: "verified", miss: [], prio: "low", cat: ["positive"] }
-  ];
-  var ORDER = { high: 0, med: 1, low: 2 };
-  var PLBL = { high: "High", med: "Medium", low: "Low" };
-  var SLBL = { verified: "Verified", failed: "Executed, failed", gen: "Generated, not executed", inc: "Inconclusive", stale: "Stale", none: "Not covered" };
+  // ================= simulated dataset (mock only, never production data) =================
+  var RUNS = { 3: "2026-10-10 14:32", 2: "2026-10-10 13:05", 1: "2026-10-10 11:40" };
+  var ENV = "Staging (non-prod)";
+  // Result: s = status check, c = schema check: p passed, f failed, n could not be evaluated, - no such check.
+  // Flags: t = no response (timeout), e = request edited before the run, b = not attempted (dependency not met).
+  function sc(id, name, g, rv, runs) { return { id: id, name: name, g: g, rv: rv, runs: runs || {} }; }
+  function r(s, c, x) { var o = { s: s, c: c }; if (x) { for (var k in x) { o[k] = x[k]; } } return o; }
+  // Requirement: kind (op, param, pcase, reqschema, code, respschema), group (positive, negative, boundary, u = unclassified),
+  // links = [scenarioId, scope] where scope s = status check, c = schema check.
+  function q(kind, g, label, links) { return { kind: kind, g: g, label: label, links: links || [] }; }
 
-  var SCEN = {
-    partial: {
-      ctx: { spec: "Orders API", rev: "v2.4.1 · rev 9f3a1c", env: "Staging (non-prod)", last: "2026-10-10 14:32", runs: "3 runs", scen: "52 scenarios (46 accepted, 6 pending)" },
-      spec: [["Operations", 6, 7, ""], ["Parameters", 14, 19, ""], ["Request schemas", 17, 26, ""], ["Response schemas", 5, 9, ""]],
-      rt:   [["Operations verified", 3, 7, ""], ["Response codes verified", 9, 21, ""], ["Assertions evaluated and passed", 71, 84, "13 failed"], ["Last qualifying execution", null, null, "2026-10-10 14:32"]],
-      br: [["Operations", 3, 1, 3, 0, 7], ["Parameters", 8, 2, 4, 5, 19], ["Schema elements", 9, 3, 8, 6, 26]],
-      notices: [["info", "Evidence", "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence."], ["warn", "Edited requests", "2 results came from edited requests and are shown as inconclusive."]],
-      runs: ["Latest qualifying run per scenario (default)", "Run #3 · 14:32", "Run #2 · 13:05", "Run #1 · 11:40"],
-      opsMod: function (o) { return o; }
-    },
-    specOnly: {
-      ctx: { spec: "Orders API", rev: "v2.4.1 · rev 9f3a1c", env: "No execution yet", last: "None", runs: "0 runs", scen: "0 scenarios" },
-      spec: [["Operations", 0, 7, ""], ["Parameters", 0, 19, ""], ["Request schemas", 0, 26, ""], ["Response schemas", 0, 9, ""]],
-      rt:   [["Operations verified", 0, 7, "unavailable until tests run"], ["Response codes verified", 0, 21, ""], ["Assertions evaluated and passed", null, null, "no assertions evaluated"], ["Last qualifying execution", null, null, "None"]],
-      br: [["Operations", 0, 0, 0, 7, 7], ["Parameters", 0, 0, 0, 19, 19], ["Schema elements", 0, 0, 0, 26, 26]],
-      notices: [["info", "Evidence", "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence."], ["warn", "No scenarios", "No tests have been generated for this specification. <a href=\"#\">Go to scenario generation</a>"]],
-      runs: ["No runs available"],
-      opsMod: function (o) { return Object.assign({}, o, { spec: [0, o.spec[1]], rt: [0, o.rt[1]], st: "none", failed: false, miss: ["No scenarios generated"].concat([]) }); }
-    },
-    generated: {
-      ctx: { spec: "Orders API", rev: "v2.4.1 · rev 9f3a1c", env: "No execution yet", last: "None", runs: "0 runs", scen: "52 scenarios (46 accepted, 6 pending)" },
-      spec: [["Operations", 6, 7, ""], ["Parameters", 14, 19, ""], ["Request schemas", 17, 26, ""], ["Response schemas", 5, 9, ""]],
-      rt:   [["Operations verified", 0, 7, "generated, not executed"], ["Response codes verified", 0, 21, ""], ["Assertions evaluated and passed", null, null, "no assertions evaluated"], ["Last qualifying execution", null, null, "None"]],
-      br: [["Operations", 0, 0, 6, 1, 7], ["Parameters", 0, 0, 14, 5, 19], ["Schema elements", 0, 0, 17, 9, 26]],
-      notices: [["info", "Evidence", "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence."], ["info", "Not executed", "52 scenarios are generated but not executed. <a href=\"#\">Run them in Import &amp; Run</a>"]],
-      runs: ["No runs available"],
-      opsMod: function (o) { return Object.assign({}, o, { rt: [0, o.rt[1]], st: o.spec[0] ? "gen" : "none", failed: false }); }
-    },
-    stale: {
-      ctx: { spec: "Orders API", rev: "v2.5.0 · rev c71e08 (changed)", env: "Staging (non-prod)", last: "None for this revision", runs: "3 runs, 214 unattributed results", scen: "49 scenarios (regenerated)" },
-      spec: [["Operations", 6, 7, ""], ["Parameters", 13, 19, ""], ["Request schemas", 16, 26, ""], ["Response schemas", 5, 9, ""]],
-      rt:   [["Operations verified", 0, 7, "no attributable evidence"], ["Response codes verified", 0, 21, ""], ["Assertions evaluated and passed", null, null, "no attributable evidence"], ["Last qualifying execution", null, null, "None for this revision"]],
-      br: [["Operations", 0, 0, 6, 1, 7], ["Parameters", 0, 0, 13, 6, 19], ["Schema elements", 0, 0, 16, 10, 26]],
-      notices: [["info", "Evidence", "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence."], ["warn", "Unattributed results", "The specification changed (rev 9f3a1c to c71e08) and scenarios were regenerated. 214 results no longer match a current scenario (possibly from an earlier specification) and are not counted as verified. Re-run the collection to verify this revision."]],
-      runs: ["No attributable runs for this revision"],
-      opsMod: function (o) { return Object.assign({}, o, { rt: [0, o.rt[1]], st: o.spec[0] ? "gen" : "none", failed: false }); }
-    }
+  var OPS = [
+    { m: "POST", p: "/api/v1/orders", sec: 1,
+      sc: [
+        sc("o1", "Valid order (happy path)", "positive", "accepted", { 3: r("p", "p"), 1: r("p", "f", { n: "response missing required field createdAt" }) }),
+        sc("o2", "quantity = 0 (below minimum 1)", "boundary", "accepted", { 3: r("f", "-", { n: "expected 400, received 201" }) }),
+        sc("o3", "quantity = 100 (at maximum)", "boundary", "pending", {}),
+        sc("o4", "customerId missing", "negative", "accepted", { 3: r("p", "-"), 2: r("f", "-", { n: "expected 422, received 400" }) })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["o1", "s"]]),
+        q("param", "positive", "Idempotency-Key (header, optional) exercised", [["o1", "s"]]),
+        q("reqschema", "positive", "customerId exercised", [["o1", "s"]]),
+        q("reqschema", "positive", "quantity exercised", [["o1", "s"]]),
+        q("reqschema", "negative", "customerId: required (missing)", [["o4", "s"]]),
+        q("reqschema", "negative", "quantity: type integer (wrong type)", []),
+        q("reqschema", "boundary", "quantity: minimum 1 (below)", [["o2", "s"]]),
+        q("reqschema", "boundary", "quantity: maximum 100 (at limit)", [["o3", "s"]]),
+        q("code", "positive", "201 Created", [["o1", "s"]]),
+        q("respschema", "positive", "201 schema conformance", [["o1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["o2", "s"]]),
+        q("code", "negative", "422 Unprocessable Entity", [["o4", "s"]]),
+        q("code", "negative", "401 Unauthorized", []),
+        q("code", "u", "500 Internal Server Error", [])
+      ] },
+    { m: "PATCH", p: "/api/v1/users/{id}", sec: 1,
+      sc: [
+        sc("u1", "Update display name", "positive", "accepted", { 3: r("p", "p") }),
+        sc("u2", "email with invalid format", "negative", "accepted", { 3: r("-", "-", { t: 1, n: "no response: request timed out after 30 s" }), 2: r("p", "-") }),
+        sc("u3", "age as string (wrong type)", "negative", "accepted", { 3: r("p", "-") })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["u1", "s"]]),
+        q("param", "positive", "id (path) exercised", [["u1", "s"]]),
+        q("reqschema", "positive", "displayName exercised", [["u1", "s"]]),
+        q("reqschema", "negative", "email: format email (invalid)", [["u2", "s"]]),
+        q("reqschema", "negative", "age: type integer (wrong type)", [["u3", "s"]]),
+        q("reqschema", "boundary", "displayName: maxLength 80 (at limit)", []),
+        q("code", "positive", "200 OK", [["u1", "s"]]),
+        q("respschema", "positive", "200 schema conformance", [["u1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["u2", "s"], ["u3", "s"]]),
+        q("code", "negative", "403 Forbidden", []),
+        q("code", "negative", "404 Not Found", [])
+      ] },
+    { m: "GET", p: "/api/v1/products/{id}", sec: 0,
+      sc: [
+        sc("p1", "Existing product", "positive", "accepted", { 1: r("p", "p") }),
+        sc("p2", "id with invalid format", "negative", "accepted", { 3: r("f", "-", { n: "expected 400, received 404" }) })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["p1", "s"]]),
+        q("param", "positive", "id (path) exercised", [["p1", "s"]]),
+        q("pcase", "negative", "id: format uuid (invalid)", [["p2", "s"]]),
+        q("code", "positive", "200 OK", [["p1", "s"]]),
+        q("respschema", "positive", "200 schema conformance", [["p1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["p2", "s"]]),
+        q("code", "negative", "404 Not Found", [])
+      ] },
+    { m: "DELETE", p: "/api/v1/orders/{id}", sec: 1,
+      sc: [
+        sc("d1", "Delete existing order", "positive", "accepted", { 3: r("-", "-", { b: 1, n: "not attempted: dependency not met (setup request failed)" }) }),
+        sc("d2", "id with invalid format", "negative", "pending", {})
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["d1", "s"]]),
+        q("param", "positive", "id (path) exercised", [["d1", "s"]]),
+        q("pcase", "negative", "id: format uuid (invalid)", [["d2", "s"]]),
+        q("code", "positive", "204 No Content", [["d1", "s"]]),
+        q("code", "negative", "400 Bad Request", [["d2", "s"]]),
+        q("code", "negative", "401 Unauthorized", []),
+        q("code", "negative", "404 Not Found", [])
+      ] },
+    { m: "GET", p: "/api/v1/orders", sec: 0,
+      sc: [
+        sc("l1", "List orders (defaults)", "positive", "accepted", { 2: r("p", "p") }),
+        sc("l2", "limit = 100 (at maximum)", "boundary", "accepted", { 3: r("p", "p"), 2: r("f", "-", { n: "expected 200, received 400" }) }),
+        sc("l3", "limit = 0 (below minimum 1)", "boundary", "accepted", { 3: r("p", "-") }),
+        sc("l4", "sort = unknown (invalid enum)", "negative", "accepted", { 3: r("p", "-") })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["l1", "s"]]),
+        q("param", "positive", "limit (query) exercised", [["l1", "s"]]),
+        q("param", "positive", "sort (query) exercised", [["l1", "s"]]),
+        q("param", "positive", "page (query) exercised", [["l1", "s"]]),
+        q("pcase", "boundary", "limit: maximum 100 (at limit)", [["l2", "s"]]),
+        q("pcase", "boundary", "limit: minimum 1 (below)", [["l3", "s"]]),
+        q("pcase", "negative", "sort: enum (invalid value)", [["l4", "s"]]),
+        q("code", "positive", "200 OK", [["l1", "s"]]),
+        q("respschema", "positive", "200 schema conformance", [["l1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["l3", "s"], ["l4", "s"]]),
+        q("code", "u", "default (error response)", [])
+      ] },
+    { m: "PUT", p: "/api/v1/products/{id}", sec: 1,
+      sc: [
+        sc("f1", "Replace product", "positive", "accepted", { 3: r("p", "n", { n: "schema assertion could not be evaluated (response was not JSON)" }) }),
+        sc("f2", "name at maxLength 120", "boundary", "accepted", { 3: r("p", "p", { e: 1, n: "request edited in Import & Run before the run" }) }),
+        sc("f3", "name missing", "negative", "pending", { 3: r("p", "-") })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["f1", "s"]]),
+        q("param", "positive", "id (path) exercised", [["f1", "s"]]),
+        q("reqschema", "positive", "name exercised", [["f1", "s"]]),
+        q("reqschema", "positive", "price exercised", [["f1", "s"]]),
+        q("reqschema", "boundary", "name: maxLength 120 (at limit)", [["f2", "s"]]),
+        q("reqschema", "negative", "name: required (missing)", [["f3", "s"]]),
+        q("code", "positive", "200 OK", [["f1", "s"]]),
+        q("respschema", "positive", "200 schema conformance", [["f1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["f3", "s"]]),
+        q("code", "negative", "404 Not Found", [])
+      ] },
+    { m: "GET", p: "/api/v1/users", sec: 0,
+      sc: [
+        sc("g1", "List users", "positive", "accepted", { 1: r("p", "p") }),
+        sc("g2", "page = abc (wrong type)", "negative", "accepted", { 3: r("p", "-") })
+      ],
+      rq: [
+        q("op", "positive", "Happy path exercised", [["g1", "s"]]),
+        q("param", "positive", "page (query) exercised", [["g1", "s"]]),
+        q("param", "positive", "pageSize (query) exercised", [["g1", "s"]]),
+        q("pcase", "negative", "page: type integer (wrong type)", [["g2", "s"]]),
+        q("code", "positive", "200 OK", [["g1", "s"]]),
+        q("respschema", "positive", "200 schema conformance", [["g1", "c"]]),
+        q("code", "negative", "400 Bad Request", [["g2", "s"]])
+      ] },
+    { m: "GET", p: "/api/v1/reports", sec: 0, sc: [],
+      rq: [
+        q("op", "positive", "Happy path exercised", []),
+        q("param", "positive", "from (query) exercised", []),
+        q("param", "positive", "to (query) exercised", []),
+        q("code", "positive", "200 OK", []),
+        q("code", "negative", "400 Bad Request", [])
+      ] }
+  ];
+  var OUT_OF_SCOPE = ["GET /api/v1/health", "POST /api/v1/webhooks/ingest"];
+  var NOT_MEASURABLE = [
+    ["POST /api/v1/orders", "<span class=\"mono\">oneOf</span> payment branches (dropped by the model)"],
+    ["PATCH /api/v1/users/{id}", "nullable fields (not retained by the model)"],
+    ["GET /api/v1/products/{id}", "404 response schema contains a circular <span class=\"mono\">$ref</span>"],
+    ["GET /api/v1/reports", "200 response schema contains a circular <span class=\"mono\">$ref</span>"]
+  ];
+  var REJECTED_SCENARIOS = 2;
+  // Preview only: requirements whose contract changed after the run (needs decision D-1 to exist in the product).
+  var STALE_PREVIEW = {
+    "PATCH /api/v1/users/{id}|displayName exercised": "displayName: maxLength changed from 80 to 100 after run #3",
+    "PATCH /api/v1/users/{id}|200 schema conformance": "200 response schema gained required field updatedAt after run #3"
   };
 
-  var state = { sort: "prio", dir: 1, q: "", m: "", s: "", c: "", p: "", k: "" };
+  var byId = {};
+  OPS.forEach(function (o) { o.key = o.m + " " + o.p; o.sc.forEach(function (s) { s.op = o; byId[s.id] = s; }); });
 
-  function pct(n, d) { return d === 0 ? "not available" : (Math.round(n / d * 1000) / 10) + "%"; }
-  function esc(t) { return String(t).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+  var MODES = {
+    partial:   { noScen: false, noRuns: false, unattributed: 0, rev: "9f3a1c", changed: false, outdated: false },
+    specOnly:  { noScen: true,  noRuns: true,  unattributed: 0, rev: "9f3a1c", changed: false, outdated: false },
+    generated: { noScen: false, noRuns: true,  unattributed: 0, rev: "9f3a1c", changed: false, outdated: false },
+    stale:     { noScen: false, noRuns: true,  unattributed: 214, rev: "c71e08", changed: true, outdated: false },
+    staleEv:   { noScen: false, noRuns: false, unattributed: 0, rev: "b20d44", changed: true, outdated: false, staleEv: true },
+    outdated:  { noScen: false, noRuns: false, unattributed: 0, rev: "9f3a1c", changed: false, outdated: true }
+  };
 
-  function tile(t, color) {
-    if (t[1] === null) return '<div class="tile"><div class="k">' + t[0] + '</div><div class="v" style="font-size:16px">' + esc(t[3]) + '</div></div>';
-    var w = t[2] ? (t[1] / t[2] * 100) : 0;
-    return '<div class="tile"><div class="k">' + t[0] + '</div><div class="v">' + t[1] + '<small> / ' + t[2] + '</small></div>' +
-      '<div class="s">' + pct(t[1], t[2]) + (t[3] ? " · " + t[3] : "") + '</div>' +
-      '<div class="bar" role="img" aria-label="' + t[0] + ': ' + t[1] + ' of ' + t[2] + '"><b style="width:' + w + '%;background:' + color + '"></b></div></div>';
+  var SLBL = { V: "Verified", F: "Executed, failed", G: "Generated, not executed", I: "Inconclusive", S: "Stale: re-run required", N: "Not covered" };
+  var CAUSE = {
+    "assertion-failed": "assertion failed", "transport-error": "transport error (no response)", "check-not-evaluated": "check not evaluated",
+    "no-relevant-check": "no relevant check", "request-edited": "request edited", "blocked-by-dependency": "blocked by dependency",
+    "never-run": "never run", "not-in-selected-run": "not in selected run"
+  };
+  var GLBL = { positive: "Positive", negative: "Negative", boundary: "Boundary", u: "Unclassified" };
+  var KLBL = { op: "operation", param: "parameter", pcase: "parameter case", reqschema: "request schema", code: "response code", respschema: "response schema" };
+  var PLBL = { high: "High", med: "Medium", low: "Low" };
+  var VLBL = { p: "Passed", f: "Failed", i: "Inconclusive", x: "Not executed" };
+  var VCLS = { p: "V", f: "F", i: "I", x: "G" };
+
+  var mode, st = { sel: "lq", sort: "prio", dir: 1, q: "", m: "", s: "", c: "", p: "", k: "", ver: false, open: {} };
+
+  // ================= calculation (mirrors coverage-rules.md; mock-only) =================
+  function counted(s) { return !mode.noScen && s.rv !== "rejected"; }
+
+  // The selected evidence for one scenario: { res, runN, blocked, elsewhere } or null when the mode has no runs.
+  function evidenceOf(s) {
+    if (mode.noRuns) { return { res: null, runN: null, blocked: false, elsewhere: false }; }
+    var res = null, runN = null, blocked = false, elsewhere = false, n;
+    var order = [3, 2, 1];
+    for (var i = 0; i < order.length; i++) {
+      n = order[i];
+      var x = s.runs[n];
+      if (!x) { continue; }
+      if (st.sel === "lq") {
+        if (x.b) { blocked = true; continue; }
+        if (!res) { res = x; runN = n; }
+      } else if (String(n) === String(st.sel)) {
+        if (x.b) { blocked = true; } else { res = x; runN = n; }
+      } else { elsewhere = true; }
+    }
+    return { res: res, runN: runN, blocked: blocked, elsewhere: elsewhere };
   }
 
-  function bar(b) {
-    var tot = b[5] || 1;
-    var seg = function (n, c) { return n ? '<i style="width:' + (n / tot * 100) + '%;background:' + c + '"></i>' : ""; };
-    return '<div><h3>' + b[0] + '</h3><div class="stack" role="img" aria-label="' + b[0] + ': ' + b[1] + ' verified, ' + b[2] + ' executed failed, ' + b[3] + ' generated not verified, ' + b[4] + ' not covered, of ' + b[5] + '">' +
-      seg(b[1], "var(--c-rt)") + seg(b[2], "var(--c-fail)") + seg(b[3], "var(--c-spec)") + '</div>' +
-      '<div class="legend"><span><i style="background:var(--c-rt)"></i>Verified <b>' + b[1] + '</b></span><span><i style="background:var(--c-fail)"></i>Failed <b>' + b[2] + '</b></span><span><i style="background:var(--c-spec)"></i>Generated <b>' + b[3] + '</b></span><span><i style="background:var(--c-gap)"></i>Not covered <b>' + b[4] + '</b></span></div></div>';
+  // What one result establishes for the checks in `scope` (s, c or a = every defined check).
+  function verdictOf(res, scope) {
+    if (res.e) { return { v: "i", cause: "request-edited" }; }
+    if (res.t) { return { v: "i", cause: "transport-error" }; }
+    var checks = scope === "s" ? [res.s] : scope === "c" ? [res.c] : [res.s, res.c];
+    checks = checks.filter(function (c) { return c !== "-"; });
+    if (checks.indexOf("f") >= 0) { return { v: "f", cause: "assertion-failed" }; }
+    if (checks.length === 0) { return { v: "i", cause: "no-relevant-check" }; }
+    if (checks.indexOf("n") >= 0) { return { v: "i", cause: "check-not-evaluated" }; }
+    return { v: "p" };
   }
 
-  function visibleOps(ops) {
-    var f = ops.filter(function (o) {
-      if (state.q && o.p.toLowerCase().indexOf(state.q.toLowerCase()) < 0) return false;
-      if (state.m && o.m !== state.m) return false;
-      if (state.s && o.st !== state.s) return false;
-      if (state.c && o.cat.indexOf(state.c) < 0) return false;
-      if (state.p && o.prio !== state.p) return false;
-      if (state.k === "failed" && o.st !== "failed") return false;
-      if (state.k === "missing" && !(o.st === "none" || o.st === "gen" || o.st === "inc" || o.st === "stale" || o.miss.length)) return false;
-      return true;
+  function scenarioVerdict(s) {
+    var ev = evidenceOf(s);
+    if (!ev.res) { return { v: "x", cause: ev.blocked ? "blocked-by-dependency" : (st.sel !== "lq" && ev.elsewhere ? "not-in-selected-run" : "never-run"), runN: null }; }
+    var v = verdictOf(ev.res, "a");
+    return { v: v.v, cause: v.cause, runN: ev.runN, note: ev.res.n };
+  }
+
+  function evalReq(rq, opKey) {
+    var maps = rq.links.map(function (l) { return { s: byId[l[0]], scope: l[1] }; }).filter(function (m) { return counted(m.s); });
+    var out = { rq: rq, mapped: maps.length, acc: 0, pen: 0, tally: { p: 0, f: 0, i: 0, x: 0 }, refs: [], state: "N", cause: "", reason: "No generated scenario targets this requirement.", scen: [] };
+    if (maps.length === 0) { return out; }
+    var firstI = null, anyBlocked = false, anyElsewhere = false;
+    maps.forEach(function (m) {
+      if (m.s.rv === "accepted") { out.acc++; } else if (m.s.rv === "pending") { out.pen++; }
+      out.scen.push(m.s);
+      var ev = evidenceOf(m.s);
+      if (!ev.res) { out.tally.x++; if (ev.blocked) { anyBlocked = true; } if (ev.elsewhere) { anyElsewhere = true; } return; }
+      var v = verdictOf(ev.res, m.scope);
+      out.tally[v.v]++;
+      out.refs.push({ id: m.s.id, v: v.v, cause: v.cause, runN: ev.runN, note: ev.res.n });
+      if (v.v === "i" && !firstI) { firstI = v; }
     });
-    var key = state.sort, d = state.dir;
-    f.sort(function (a, b) {
+    if (out.refs.length === 0) {
+      out.state = "G";
+      out.cause = anyBlocked ? "blocked-by-dependency" : (st.sel !== "lq" && anyElsewhere ? "not-in-selected-run" : "never-run");
+      out.reason = "A scenario exists but no attributable execution result is in the selected evidence.";
+    } else if (out.tally.f > 0) {
+      out.state = "F"; out.cause = "assertion-failed";
+      var f = out.refs.filter(function (x) { return x.v === "f"; })[0];
+      out.reason = "Run #" + f.runN + ", scenario " + f.id + (f.note ? ": " + f.note : "") + ".";
+    } else if (out.tally.p > 0) {
+      out.state = "V"; out.reason = "A relevant check was evaluated and passed.";
+    } else {
+      out.state = "I"; out.cause = firstI.cause; out.reason = "Evidence exists but proves nothing: " + CAUSE[firstI.cause] + ".";
+    }
+    var why = mode.staleEv && out.refs.length ? STALE_PREVIEW[opKey + "|" + rq.label] : null;
+    if (why) { out.state = "S"; out.cause = ""; out.staleReason = why; out.reason = "Stale: " + why + ". Re-execution required; the earlier result is kept as a reference and is not counted as verified."; }
+    return out;
+  }
+
+  function priorityOf(o, evs) {
+    var f = [], score = 0, n;
+    function add(p, t) { score += p; f.push(t); }
+    n = evs.filter(function (e) { return e.state === "F"; }).length; if (n) { add(4, "executed failure (" + n + ")"); }
+    if (o.sc.filter(counted).length === 0) { add(2, "no generated scenarios"); }
+    n = evs.filter(function (e) { return e.state === "N"; }).length; if (n) { add(2, n + " without a scenario"); }
+    n = evs.filter(function (e) { return e.state === "G"; }).length; if (n) { add(1, n + " not executed"); }
+    n = evs.filter(function (e) { return e.state === "I"; }).length; if (n) { add(1, n + " inconclusive"); }
+    n = evs.filter(function (e) { return e.state === "S"; }).length; if (n) { add(1, n + " need re-execution"); }
+    if (o.m === "DELETE") { add(2, "destructive method"); } else if (o.m !== "GET") { add(1, "write method"); }
+    if (o.sec) { add(1, "declares security"); }
+    n = o.rq.filter(function (x) { return x.g === "negative" || x.g === "boundary"; }).length; if (n >= 5) { add(1, "complex contract (" + n + " constraint cases)"); }
+    return { score: score, band: score >= 6 ? "high" : score >= 3 ? "med" : "low", factors: f };
+  }
+
+  function build() {
+    var all = OPS.map(function (o) {
+      var evs = o.rq.map(function (z) { return evalReq(z, o.key); });
+      return { o: o, evs: evs, prio: priorityOf(o, evs) };
+    });
+    var kept = [];
+    all.forEach(function (x) {
+      var evs = st.c ? x.evs.filter(function (e) { return e.rq.g === st.c; }) : x.evs;
+      if (st.c && evs.length === 0) { return; }
+      var scs = x.o.sc.filter(counted).filter(function (s) { return !st.c || s.g === st.c; });
+      var row = { o: x.o, key: x.o.key, evsAll: x.evs, evs: evs, scs: scs, prio: x.prio };
+      row.fr = evs.filter(function (e) { return e.rq.kind !== "op"; });
+      row.spec = [row.fr.filter(function (e) { return e.state !== "N"; }).length, row.fr.length];
+      row.rt = [row.fr.filter(function (e) { return e.state === "V"; }).length, row.fr.length];
+      row.counts = { V: 0, F: 0, G: 0, I: 0, S: 0, N: 0 };
+      evs.forEach(function (e) { row.counts[e.state]++; });
+      row.sv = { p: 0, f: 0, i: 0, x: 0 };
+      row.svs = scs.map(function (s) { var v = scenarioVerdict(s); row.sv[v.v]++; return { s: s, v: v }; });
+      if (st.q && x.o.p.toLowerCase().indexOf(st.q.toLowerCase()) < 0) { return; }
+      if (st.m && x.o.m !== st.m) { return; }
+      if (st.p && x.prio.band !== st.p) { return; }
+      if (st.s) { row.match = evs.filter(function (e) { return e.state === st.s; }); if (!row.match.length) { return; } }
+      if (st.k) {
+        var fam = { missing: ["N", "G"], failed: ["F"], insufficient: ["I"], stale: ["S"] }[st.k];
+        row.match = evs.filter(function (e) { return fam.indexOf(e.state) >= 0 && (!st.s || e.state === st.s); });
+        if (!row.match.length) { return; }
+      }
+      kept.push(row);
+    });
+    return { all: all, kept: kept };
+  }
+
+  function sortRows(rows) {
+    var d = st.dir;
+    rows.sort(function (a, b) {
       var x, y;
-      if (key === "prio") { x = ORDER[a.prio]; y = ORDER[b.prio]; }
-      else if (key === "spec") { x = a.spec[0] / a.spec[1]; y = b.spec[0] / b.spec[1]; }
-      else if (key === "rt") { x = a.rt[0] / a.rt[1]; y = b.rt[0] / b.rt[1]; }
-      else { x = a[key === "path" ? "p" : "m"]; y = b[key === "path" ? "p" : "m"]; }
-      var r = x < y ? -1 : x > y ? 1 : 0;
-      return (r || (a.m + a.p < b.m + b.p ? -1 : 1)) * d;
+      if (st.sort === "prio") { x = -a.prio.score; y = -b.prio.score; }
+      else if (st.sort === "spec") { x = a.spec[1] ? a.spec[0] / a.spec[1] : -1; y = b.spec[1] ? b.spec[0] / b.spec[1] : -1; }
+      else if (st.sort === "rt") { x = a.rt[1] ? a.rt[0] / a.rt[1] : -1; y = b.rt[1] ? b.rt[0] / b.rt[1] : -1; }
+      else if (st.sort === "path") { x = a.o.p; y = b.o.p; }
+      else { x = a.o.m; y = b.o.m; }
+      var c = x < y ? -1 : x > y ? 1 : 0;
+      return (c || (a.key < b.key ? -1 : 1)) * d;
     });
-    return f;
   }
 
+  // ================= rendering helpers =================
+  function pct(n, d) { return d === 0 ? "not available (0 eligible)" : (Math.round(n / d * 1000) / 10) + "%"; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]; }); }
+  function pill(s, extra) { return '<span class="pill s-' + s + '">' + SLBL[s] + '</span>' + (extra ? ' <span class="note">' + esc(extra) + '</span>' : ""); }
+
+  function tile(label, n, d, extra, color) {
+    if (d === 0) {
+      return '<div class="tile"><div class="k">' + label + '</div><div class="v na">not available</div><div class="s">0 eligible' + (extra ? " · " + extra : "") + '</div></div>';
+    }
+    return '<div class="tile"><div class="k">' + label + '</div><div class="v">' + n + '<small> / ' + d + '</small></div>' +
+      '<div class="s">' + pct(n, d) + (extra ? " · " + extra : "") + '</div>' +
+      '<div class="bar" role="img" aria-label="' + label + ': ' + n + ' of ' + d + '"><b style="width:' + (n / d * 100) + '%;background:' + color + '"></b></div></div>';
+  }
+
+  var SEG = [["V", "Verified", "var(--c-rt)"], ["F", "Failed", "var(--c-fail)"], ["I", "Inconclusive", "var(--c-inc)"], ["S", "Stale: re-run required", "var(--muted)"], ["G", "Generated, not executed", "var(--c-spec)"], ["N", "Not covered", "var(--c-gap)"]];
+  function stack(counts, total, cls) {
+    var segs = SEG.filter(function (g) { return g[0] !== "N" && counts[g[0]]; }).map(function (g) { return '<i style="width:' + (counts[g[0]] / total * 100) + '%;background:' + g[2] + '"></i>'; }).join("");
+    var label = SEG.map(function (g) { return counts[g[0]] + " " + g[1].toLowerCase(); }).join(", ");
+    return '<div class="stack ' + (cls || "") + '" role="img" aria-label="' + label + ', of ' + total + '">' + segs + '</div>';
+  }
+  function legend(counts) {
+    return '<div class="legend">' + SEG.map(function (g) { return '<span><i style="background:' + g[2] + '"></i>' + g[1] + ' <b>' + counts[g[0]] + '</b></span>'; }).join("") + '</div>';
+  }
+  function countStates(evs) { var c = { V: 0, F: 0, G: 0, I: 0, S: 0, N: 0 }; evs.forEach(function (e) { c[e.state]++; }); return c; }
+
+  // ================= main render =================
   var current;
   function render() {
-    var sc = SCEN[current];
-    var ops = OPS.map(sc.opsMod);
-    var c = sc.ctx;
-    $("ctx").innerHTML = '<span>Specification <b>' + c.spec + '</b></span><span>Revision <b>' + c.rev + '</b></span><span>Environment <b>' + c.env + '</b></span><span>Last qualifying execution <b>' + c.last + '</b></span><span><b>' + c.runs + '</b></span><span><b>' + c.scen + '</b></span>';
-    $("run").innerHTML = sc.runs.map(function (r) { return "<option>" + r + "</option>"; }).join("");
-    $("notices").innerHTML = sc.notices.map(function (n) { return '<div class="notice ' + n[0] + '" role="note"><strong>' + n[1] + '</strong><span>' + n[2] + '</span></div>'; }).join("");
-    $("spec-tiles").innerHTML = sc.spec.map(function (t) { return tile(t, "var(--c-spec)"); }).join("") + '<div class="tile"><div class="k">Accepted / pending</div><div class="v" style="font-size:16px">' + (current === "specOnly" ? "0 / 0" : current === "stale" ? "43 / 6" : "46 / 6") + '</div><div class="s">scenarios contributing</div></div>';
-    $("rt-tiles").innerHTML = sc.rt.map(function (t) { return tile(t, "var(--c-rt)"); }).join("");
-    $("break").innerHTML = sc.br.map(bar).join("");
-    $("oos").innerHTML = current === "specOnly" ? "<li>None</li>" : '<li class="mono">GET /api/v1/health</li><li class="mono">POST /api/v1/webhooks/ingest</li>';
-    $("nm").innerHTML = '<li><span class="mono">POST /api/v1/orders</span>: <span class="mono">oneOf</span> payment branches (dropped by the model)</li><li><span class="mono">PATCH /api/v1/users/{id}</span>: nullable fields (not retained)</li><li><span class="mono">GET /api/v1/reports</span>: circular <span class="mono">$ref</span></li>';
+    mode = MODES[current];
+    var b = build();
+    var rows = b.kept; sortRows(rows);
+    var evsInScope = []; rows.forEach(function (r0) { evsInScope = evsInScope.concat(r0.evs); });
+    var allEvsOfKept = []; rows.forEach(function (r0) { allEvsOfKept = allEvsOfKept.concat(r0.evsAll); });
 
-    var vis = visibleOps(ops);
-    $("rows").innerHTML = vis.map(function (o) {
-      var miss = o.miss.length ? '<ul class="missing">' + o.miss.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : '<span class="note">None</span>';
-      var st = (o.st === "failed" ? "failed" : o.st);
-      return '<tr><td class="nw"><span class="m ' + o.m + '">' + o.m + '</span></td><td class="mono nw">' + esc(o.p) + '</td>' +
-        '<td class="nw frac">' + o.spec[0] + '<small> / ' + o.spec[1] + '</small><div class="split">' + pct(o.spec[0], o.spec[1]) + '</div></td>' +
-        '<td class="nw frac">' + o.rt[0] + '<small> / ' + o.rt[1] + '</small><div class="split">' + pct(o.rt[0], o.rt[1]) + '</div></td>' +
-        '<td><span class="pill s-' + (st === "gen" ? "gen" : st === "inc" ? "inc" : st === "none" ? "none" : st) + '">' + SLBL[st] + '</span></td>' +
-        '<td>' + miss + '</td><td><span class="pill p-' + o.prio + '">' + PLBL[o.prio] + '</span></td>' +
-        '<td class="rowact"><a href="#">Operation</a><a href="#">' + (o.st === "failed" ? "Failing result" : "Scenarios") + '</a></td></tr>';
+    // --- header context
+    var usedRuns = {}, lastRun = null, lastTs = null;
+    var scAll = []; OPS.forEach(function (o) { o.sc.filter(counted).forEach(function (s) { scAll.push(s); }); });
+    scAll.forEach(function (s) { var e = evidenceOf(s); if (e.res) { usedRuns[e.runN] = (usedRuns[e.runN] || 0) + 1; if (!lastTs || RUNS[e.runN] > lastTs) { lastTs = RUNS[e.runN]; lastRun = e.runN; } } });
+    var runList = Object.keys(usedRuns).sort().reverse();
+    var acc = scAll.filter(function (s) { return s.rv === "accepted"; }).length, pen = scAll.filter(function (s) { return s.rv === "pending"; }).length;
+    var evText = mode.noRuns ? "none" : (st.sel === "lq" ? "latest qualifying result per scenario, from " + runList.map(function (n) { return "run #" + n + " (" + usedRuns[n] + ")"; }).join(", ") : "single run #" + st.sel);
+    var ctx = [
+      ["Specification", "Orders API"],
+      ["Revision", "rev " + mode.rev + (mode.changed ? " (changed)" : "")],
+      ["Operations", OPS.length + OUT_OF_SCOPE.length + " in spec · " + OPS.length + " eligible · " + OUT_OF_SCOPE.length + " out of scope"],
+      ["Environment", mode.noRuns ? "No execution for this revision" : ENV],
+      ["Evidence", evText],
+      ["Scenarios", scAll.length + " counted (" + acc + " accepted, " + pen + " pending) · " + REJECTED_SCENARIOS + " rejected, not counted"]
+    ];
+    $("ctx").innerHTML = ctx.map(function (c) { return '<span>' + c[0] + ' <b>' + esc(c[1]) + '</b></span>'; }).join("");
+
+    // --- run selector (real runs only)
+    var sel = $("run");
+    if (mode.noRuns) { sel.innerHTML = "<option>No attributable runs</option>"; sel.disabled = true; }
+    else {
+      sel.disabled = false;
+      sel.innerHTML = '<option value="lq">Latest qualifying result per scenario (default)</option>' + [3, 2, 1].map(function (n) { return '<option value="' + n + '">Single run #' + n + ' · ' + RUNS[n].slice(11) + '</option>'; }).join("");
+      sel.value = String(st.sel);
+    }
+
+    // --- notices
+    var notices = [["info", "Evidence", "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence."]];
+    if (mode.noScen) { notices.push(["warn", "No scenarios", "No tests have been generated for this specification. <a href=\"#\">Go to scenario generation</a>"]); }
+    else if (mode.noRuns && !mode.changed) { notices.push(["info", "Not executed", scAll.length + " counted scenarios are generated but not executed. <a href=\"#\">Run them in Import &amp; Run</a>"]); }
+    if (mode.changed) { notices.push(["warn", "Unattributed results", "The specification changed (rev 9f3a1c to c71e08) and scenarios were regenerated. " + mode.unattributed + " results no longer match a current scenario (possibly from an earlier specification) and are not counted as verified. Re-run the collection to verify this revision."]); }
+    if (mode.staleEv) { notices.push(["warn", "Preview: stale evidence", "Simulated for review only. In this release no rule produces Stale (decision D-1). Stale requirements have earlier evidence that no longer matches their contract, so each shows its reason and needs re-execution; they are not counted as verified and are not labelled not-executed."]); }
+    if (mode.outdated) { notices.push(["warn", "Out-of-date snapshot", "Recalculation failed. Showing the snapshot calculated at 14:32; figures may not reflect later runs or edits. <button id=\"retry\">Retry</button>"]); }
+    if (!mode.noRuns && st.sel === "lq" && runList.length > 1) { notices.push(["info", "Combined evidence", "Latest-per-scenario mode combines results from runs " + runList.map(function (n) { return "#" + n; }).join(", ") + " (same environment). Select a single run to see one run in isolation."]); }
+    var edited = 0; scAll.forEach(function (s) { var e = evidenceOf(s); if (e.res && e.res.e) { edited++; } });
+    if (edited) { notices.push(["warn", "Edited requests", edited + " result came from a request edited before the run; it is shown as inconclusive and excluded from assertion totals."]); }
+    $("notices").innerHTML = notices.map(function (n) { return '<div class="notice ' + n[0] + '" role="note"><strong>' + n[1] + '</strong><span>' + n[2] + '</span></div>'; }).join("");
+
+    // --- scope label
+    var active = [];
+    if (st.q) { active.push("endpoint contains \"" + esc(st.q) + "\""); }
+    if (st.m) { active.push("method " + st.m); }
+    if (st.s) { active.push("state " + SLBL[st.s].toLowerCase()); }
+    if (st.c) { active.push("category " + st.c); }
+    if (st.p) { active.push("priority " + PLBL[st.p].toLowerCase()); }
+    if (st.k) { active.push("gap type " + st.k); }
+    $("scope").innerHTML = active.length
+      ? 'Scope: <b>filtered, ' + rows.length + ' of ' + OPS.length + ' eligible operations</b> (' + active.join("; ") + ') · evidence: ' + esc(mode.noRuns ? "none" : st.sel === "lq" ? "latest per scenario" : "run #" + st.sel)
+      : 'Scope: <b>all ' + OPS.length + ' eligible operations</b> · evidence: ' + esc(mode.noRuns ? "none" : st.sel === "lq" ? "latest per scenario" : "run #" + st.sel);
+
+    // --- operation-level counts (OC1..OC5)
+    var oc1 = rows.length;
+    var oc2 = rows.filter(function (x) { return x.scs.length > 0; }).length;
+    var oc3 = rows.filter(function (x) { return x.sv.p > 0; }).length;
+    var oc4 = rows.filter(function (x) { return x.sv.f > 0; }).length;
+    var oc5 = oc1 - oc2;
+    $("opc").innerHTML = [
+      ["Eligible operations", oc1, "OC1 · denominator for the rest"],
+      ["With generated scenarios", oc2 + " / " + oc1, pct(oc2, oc1) + " · OC2"],
+      ["With passing verification", oc3 + " / " + oc1, pct(oc3, oc1) + " · at least one passed scenario · OC3"],
+      ["With execution failures", oc4 + " / " + oc1, pct(oc4, oc1) + " · at least one failed scenario · OC4"],
+      ["With no generated scenarios", oc5 + " / " + oc1, pct(oc5, oc1) + " · OC5 (OC2 + OC5 = OC1)"]
+    ].map(function (t) { return '<div><div class="k">' + t[0] + '</div><div class="v">' + t[1] + '</div><div class="s">' + t[2] + '</div></div>'; }).join("");
+
+    // --- spec and runtime cards
+    function kind(k) { return evsInScope.filter(function (e) { return e.rq.kind === k; }); }
+    var par = kind("param"), rqs = kind("reqschema"), rsp = kind("respschema"), cod = kind("code");
+    var cov = function (a) { return a.filter(function (e) { return e.state !== "N"; }).length; };
+    var ver = function (a) { return a.filter(function (e) { return e.state === "V"; }).length; };
+    $("spec-tiles").innerHTML =
+      tile("Operation coverage", oc2, oc1, "operations with a scenario", "var(--c-spec)") +
+      tile("Parameter coverage", cov(par), par.length, "", "var(--c-spec)") +
+      tile("Request-schema coverage", cov(rqs), rqs.length, "", "var(--c-spec)") +
+      tile("Response-schema coverage", cov(rsp), rsp.length, "", "var(--c-spec)") +
+      '<div class="tile"><div class="k">Accepted / pending scenarios</div><div class="v na" style="color:var(--text)">' + acc + " / " + pen + '</div><div class="s">contributing (rejected: not counted)</div></div>';
+
+    // assertion totals from the selected evidence of scenarios in scope (excluding edited, no-response, not attempted)
+    var ap = 0, af = 0, an = 0;
+    rows.forEach(function (x) { x.scs.forEach(function (s) {
+      var e = evidenceOf(s); if (!e.res || e.res.e || e.res.t) { return; }
+      [e.res.s, e.res.c].forEach(function (c) { if (c === "p") { ap++; } else if (c === "f") { af++; } else if (c === "n") { an++; } });
+    }); });
+    var lastTxt = "none", lastSub = "", lastN = null;
+    rows.forEach(function (x) { x.scs.forEach(function (s) { var e = evidenceOf(s); if (e.res && (lastN === null || RUNS[e.runN] > RUNS[lastN])) { lastN = e.runN; } }); });
+    if (lastN !== null) { lastTxt = RUNS[lastN]; lastSub = "run #" + lastN + " · " + ENV; }
+    $("rt-tiles").innerHTML =
+      tile("Operations with passing verification", oc3, oc1, mode.noRuns ? "nothing executed yet" : "not a completeness measure", "var(--c-rt)") +
+      tile("Verified response codes", ver(cod), cod.length, "", "var(--c-rt)") +
+      (ap + af === 0
+        ? '<div class="tile"><div class="k">Assertion outcomes</div><div class="v na">not available</div><div class="s">no assertions evaluated' + (an ? " · " + an + " not evaluated" : "") + '</div></div>'
+        : tile("Assertions passed", ap, ap + af, af + " failed · " + an + " not evaluated (outside denominator)", "var(--c-rt)")) +
+      '<div class="tile"><div class="k">Last qualifying execution</div><div class="v na" style="color:var(--text)">' + esc(lastTxt) + '</div><div class="s">' + esc(lastSub || (mode.changed ? "none for this revision" : "none")) + '</div></div>';
+
+    // --- category section (all groups, over the kept operations' requirements)
+    var catHtml = ["positive", "negative", "boundary"].map(function (g) {
+      var evs = allEvsOfKept.filter(function (e) { return e.rq.g === g; });
+      var c = countStates(evs), d = evs.length;
+      var coveredN = d - c.N;
+      var body = d === 0
+        ? '<div class="fig"><span>Specification</span><b>not available (0 eligible)</b></div><div class="fig"><span>Runtime-verified</span><b>not available (0 eligible)</b></div>'
+        : '<div class="fig"><span>Specification coverage</span><b>' + coveredN + ' / ' + d + ' · ' + pct(coveredN, d) + '</b></div>' +
+          '<div class="fig"><span>Runtime-verified</span><b>' + c.V + ' / ' + d + ' · ' + pct(c.V, d) + '</b></div>' + stack(c, d) + legend(c);
+      return '<div class="cat' + (st.c === g ? " sel" : "") + '"><h3>' + GLBL[g] + (g === "positive" ? " / happy path" : g === "negative" ? " / invalid input" : " / edge conditions") + '</h3>' + body + '</div>';
     }).join("");
-    $("norows").classList.toggle("hidden", vis.length > 0);
-    $("cap").textContent = "Operations, showing " + vis.length + " of " + ops.length;
-    $("count").textContent = vis.length + " of " + ops.length + " operations";
+    var secDecl = rows.filter(function (x) { return x.o.sec; }).length;
+    catHtml += '<div class="cat unavail"><h3>Security / authorization</h3><div class="fig"><span>Specification</span><b>Unavailable</b></div><div class="fig"><span>Runtime-verified</span><b>Unavailable</b></div>' +
+      '<p class="note" style="margin:0">No scenario category identifies authorization intent, so this is not measured. It is not 0%.</p>' +
+      '<p class="note" style="margin:0">' + secDecl + ' of ' + rows.length + ' operations declare a security requirement (declared in the specification, not tested).</p></div>';
+    $("cats").innerHTML = catHtml;
+    var uc = allEvsOfKept.filter(function (e) { return e.rq.g === "u"; });
+    $("unclass").innerHTML = 'Unclassified: <b>' + uc.length + '</b> requirement' + (uc.length === 1 ? "" : "s") + ' (' + uc.map(function (e) { return esc(e.rq.label); }).join("; ") + ') are excluded from category denominators; they stay in response-code coverage as their own keys. Unclassified scenarios: 0.';
 
-    var recs = vis.filter(function (o) { return o.miss.length; }).slice(0, 4);
-    $("recs").innerHTML = recs.length ? recs.map(function (o) {
-      return '<li><div class="t"><span class="m ' + o.m + '">' + o.m + '</span><span class="mono">' + esc(o.p) + '</span><span class="pill p-' + o.prio + '">' + PLBL[o.prio] + '</span></div>' +
-        '<div class="why"><b>Requirement:</b> ' + esc(o.miss[0]) + '</div>' +
-        '<div class="ev"><b>Evidence:</b> ' + o.spec[0] + ' of ' + o.spec[1] + ' specification items covered, ' + o.rt[0] + ' verified' + (o.failed ? ", 1 executed failure (run #3)" : "") + '</div>' +
-        '<div class="rat"><b>Why this priority:</b> ' + (o.m === "DELETE" ? "destructive method, unverified, declared security" : o.failed ? "executed failure on a write operation" : "documented response without verification") + ' (heuristic)</div>' +
-        '<div class="rowact"><button>' + (o.st === "none" ? "Generate scenario" : "Review scenario") + '</button></div></li>';
-    }).join("") : '<li class="note">No recommendations for the current filters.</li>';
+    // --- requirement breakdown bars
+    var bars = [["Parameters", par], ["Request-schema elements", rqs], ["Response codes", cod]];
+    $("break").innerHTML = bars.map(function (bb) {
+      var c = countStates(bb[1]); var d = bb[1].length;
+      return '<div><h3>' + bb[0] + '</h3>' + (d ? stack(c, d) + legend(c) : '<p class="note">not available (0 eligible)</p>') + '</div>';
+    }).join("");
+
+    // --- side lists
+    $("oos").innerHTML = OUT_OF_SCOPE.map(function (k) { return '<li class="mono">' + k + '</li>'; }).join("");
+    $("nm").innerHTML = NOT_MEASURABLE.map(function (n) { return '<li><span class="mono">' + n[0] + '</span>: ' + n[1] + '</li>'; }).join("");
+
+    // --- gaps table
+    var html = "";
+    rows.forEach(function (x) {
+      var o = x.o, isOpen = !!st.open[x.key];
+      var need = x.evs.filter(function (e) { return e.state !== "V"; }).sort(function (a, b) { return "FNISG".indexOf(a.state) - "FNISG".indexOf(b.state); });
+      var needTxt = need.length ? '<ul class="missing">' + need.slice(0, 2).map(function (e) { return '<li>' + SLBL[e.state] + ': ' + esc(e.rq.label) + '</li>'; }).join("") + (need.length > 2 ? '<li>+' + (need.length - 2) + ' more in details</li>' : "") + '</ul>' : '<span class="note">All requirements verified</span>';
+      var chips = (x.scs.length === 0 ? '<span class="chip none">No scenarios</span>' : "") + (x.sv.p ? '<span class="chip ok">Has passed scenario</span>' : "") + (x.sv.f ? '<span class="chip bad">Has failed scenario</span>' : "");
+      var profile = x.evs.length ? stack(x.counts, x.evs.length, "sm") : "";
+      var cnt = "V " + x.counts.V + " · F " + x.counts.F + " · I " + x.counts.I + " · G " + x.counts.G + " · N " + x.counts.N;
+      var failLink = x.counts.F ? '<a href="#">Failing result</a>' : "";
+      html += '<tr><td class="nw"><span class="m ' + o.m + '">' + o.m + '</span></td><td class="mono nw">' + esc(o.p) + '</td>' +
+        '<td class="nw frac">' + x.spec[0] + '<small> / ' + x.spec[1] + '</small><div class="split">' + pct(x.spec[0], x.spec[1]).replace("not available (0 eligible)", "n/a") + '</div></td>' +
+        '<td class="nw frac">' + x.rt[0] + '<small> / ' + x.rt[1] + '</small><div class="split">' + pct(x.rt[0], x.rt[1]).replace("not available (0 eligible)", "n/a") + '</div></td>' +
+        '<td>' + chips + profile + '<div class="split" title="Requirement states: V verified, F executed failed, I inconclusive, G generated not executed, N not covered">' + cnt + '</div>' +
+        '<div class="split">Scenarios: ' + x.sv.p + ' passed · ' + x.sv.f + ' failed · ' + x.sv.i + ' inconclusive · ' + x.sv.x + ' not executed</div>' + needTxt +
+        (st.s || st.k ? '<div class="split"><b>' + x.match.length + '</b> matching requirement' + (x.match.length === 1 ? "" : "s") + '</div>' : "") + '</td>' +
+        '<td><span class="pill p-' + x.prio.band + '">' + PLBL[x.prio.band] + '</span><div class="split">score ' + x.prio.score + ' (heuristic)</div><div class="split">' + esc(x.prio.factors.join("; ") || "no gap factors") + '</div></td>' +
+        '<td class="rowact"><button data-open="' + esc(x.key) + '" aria-expanded="' + isOpen + '">' + (isOpen ? "Hide details" : "Details") + '</button><a href="#">Operation</a>' + (x.scs.length ? '<a href="#">Scenarios</a>' : "") + failLink + '</td></tr>';
+      if (isOpen) { html += '<tr class="detail"><td colspan="7">' + detail(x) + '</td></tr>'; }
+    });
+    $("rows").innerHTML = html;
+    document.querySelectorAll("th button[data-sort]").forEach(function (bn) {
+      var th = bn.parentNode; th.setAttribute("aria-sort", bn.getAttribute("data-sort") === st.sort ? (st.dir === 1 ? "ascending" : "descending") : "none");
+    });
+    $("norows").classList.toggle("hidden", rows.length > 0);
+    $("cap").textContent = "Operations, showing " + rows.length + " of " + OPS.length + " eligible";
+    $("count").textContent = rows.length + " of " + OPS.length + " eligible operations";
+
+    // --- recommendations (from gaps in scope)
+    var order = { F: 0, N: 1, S: 2, I: 3, G: 4 };
+    var recRows = rows.filter(function (x) { return x.evs.some(function (e) { return e.state !== "V"; }); }).slice().sort(function (a, b) { return b.prio.score - a.prio.score || (a.key < b.key ? -1 : 1); }).slice(0, 5);
+    $("recs").innerHTML = recRows.length ? recRows.map(function (x) {
+      var e = x.evs.filter(function (z) { return z.state !== "V"; }).sort(function (a, b) { return order[a.state] - order[b.state]; })[0];
+      var action = e.state === "F" ? "Open failing result" : e.state === "N" ? "Generate scenario" : e.state === "I" ? "Review scenario" : e.state === "S" ? "Re-run in Import & Run" : "Run in Import & Run";
+      var evTxt = e.state === "S" ? "stale: " + e.staleReason + " (earlier result: " + e.refs.map(function (rf) { return "scenario " + rf.id + " run #" + rf.runN; }).join(", ") + ")" : e.state === "N" ? "no scenario targets it" : e.state === "G" ? "scenario " + e.scen.map(function (s) { return s.id; }).join(", ") + " " + CAUSE[e.cause] : e.refs.map(function (rf) { return "scenario " + rf.id + " in run #" + rf.runN + " (" + VLBL[rf.v].toLowerCase() + (rf.note ? ": " + rf.note : "") + ")"; }).join("; ");
+      return '<li><div class="t"><span class="m ' + x.o.m + '">' + x.o.m + '</span><span class="mono">' + esc(x.o.p) + '</span><span class="pill p-' + x.prio.band + '">' + PLBL[x.prio.band] + '</span></div>' +
+        '<div class="why"><b>Requirement:</b> ' + esc(e.rq.label) + ' (' + KLBL[e.rq.kind] + ', ' + GLBL[e.rq.g].toLowerCase() + ')</div>' +
+        '<div class="why"><b>Current state:</b> ' + SLBL[e.state] + (e.cause ? ' · ' + CAUSE[e.cause] : "") + '</div>' +
+        '<div class="ev"><b>Evidence:</b> ' + esc(evTxt) + '</div>' +
+        '<div class="rat"><b>Why this priority:</b> ' + esc(x.prio.factors.join("; ")) + ' (heuristic)</div>' +
+        '<div class="rowact"><button>' + action + '</button></div></li>';
+    }).join("") : '<li class="note">No recommendations in the current scope.</li>';
   }
 
+  function detail(x) {
+    var show = x.evs.filter(function (e) { return st.ver || e.state !== "V"; });
+    var scn = x.svs.map(function (z) {
+      return '<tr><td class="mono">' + z.s.id + '</td><td>' + esc(z.s.name) + '</td><td>' + GLBL[z.s.g] + '</td><td>' + z.s.rv + '</td><td><span class="pill s-' + VCLS[z.v.v] + '">' + VLBL[z.v.v] + '</span>' + (z.v.cause ? ' <span class="note">' + CAUSE[z.v.cause] + '</span>' : "") + '</td><td>' + (z.v.runN ? "run #" + z.v.runN : "none") + '</td><td class="note">' + esc(z.v.note || "") + '</td></tr>';
+    }).join("");
+    var rqs = show.map(function (e) {
+      var t = e.tally, mapped = e.mapped;
+      var tally = mapped ? t.p + " passed · " + t.f + " failed · " + t.i + " inconclusive · " + t.x + " not executed of " + mapped : "no scenario";
+      return '<tr><td>' + esc(e.rq.label) + '<div class="note">' + KLBL[e.rq.kind] + '</div></td><td>' + GLBL[e.rq.g] + '</td>' +
+        '<td>' + (mapped ? "Covered<div class=\"note\">" + e.acc + " accepted, " + e.pen + " pending</div>" : "Not covered") + '</td>' +
+        '<td>' + pill(e.state) + (e.cause ? '<div class="note">' + CAUSE[e.cause] + '</div>' : "") + '</td>' +
+        '<td class="note">' + tally + '</td><td class="note">' + esc(e.reason) + '</td></tr>';
+    }).join("");
+    return '<h3>Scenarios of ' + esc(x.key) + '</h3><div class="scroll"><table class="inner"><thead><tr><th>Id</th><th>Scenario</th><th>Category</th><th>Review</th><th>Verdict</th><th>Evidence</th><th>Note</th></tr></thead><tbody>' + (scn || '<tr><td colspan="7" class="note">No scenarios generated for this operation.</td></tr>') + '</tbody></table></div>' +
+      '<h3 style="margin-top:12px">Requirements (' + show.length + ' of ' + x.evs.length + (st.ver ? "" : ", non-verified only") + ')</h3><div class="scroll"><table class="inner"><thead><tr><th>Requirement</th><th>Category</th><th>Specification</th><th>Runtime state</th><th>Mapped scenarios</th><th>Reason / evidence</th></tr></thead><tbody>' +
+      (rqs || '<tr><td colspan="6" class="note">Every requirement in this scope is verified.</td></tr>') + '</tbody></table></div>';
+  }
+
+  // ================= view switching and events =================
   function setView(v) {
-    ["app"].forEach(function (id) { $(id).classList.toggle("hidden", v !== "app"); });
+    $("app").classList.toggle("hidden", v !== "app");
     $("loading").classList.toggle("hidden", v !== "loading");
     $("nowf").classList.toggle("hidden", v !== "noWorkflow");
     $("err").classList.toggle("hidden", v !== "error");
   }
-
   function pick(v) {
     if (v === "loading" || v === "noWorkflow" || v === "error") { setView(v); return; }
-    current = v; setView("app"); render();
+    current = v; st.sel = "lq"; setView("app"); render();
   }
-
   $("scenario").addEventListener("change", function (e) { pick(e.target.value); });
   $("theme").addEventListener("click", function () {
     var dark = root.getAttribute("data-theme") !== "dark";
     root.setAttribute("data-theme", dark ? "dark" : "light");
     $("theme").setAttribute("aria-pressed", String(dark));
   });
+  $("run").addEventListener("change", function (e) { st.sel = e.target.value; render(); });
+  $("recalc").addEventListener("click", function () { render(); });
   [["f-q", "q"], ["f-m", "m"], ["f-s", "s"], ["f-c", "c"], ["f-p", "p"], ["f-k", "k"]].forEach(function (p) {
-    $(p[0]).addEventListener("input", function (e) { state[p[1]] = e.target.value; render(); });
+    $(p[0]).addEventListener("input", function (e) { st[p[1]] = e.target.value; render(); });
   });
-  function reset() { state.q = state.m = state.s = state.c = state.p = state.k = ""; ["f-q", "f-m", "f-s", "f-c", "f-p", "f-k"].forEach(function (i) { $(i).value = ""; }); render(); }
+  $("f-ver").addEventListener("change", function (e) { st.ver = e.target.checked; render(); });
+  function reset() { st.q = st.m = st.s = st.c = st.p = st.k = ""; ["f-q", "f-m", "f-s", "f-c", "f-p", "f-k"].forEach(function (i) { $(i).value = ""; }); render(); }
   $("f-reset").addEventListener("click", reset); $("norows-reset").addEventListener("click", reset);
-  document.querySelectorAll("th button[data-sort]").forEach(function (b) {
-    b.addEventListener("click", function () {
-      var k = b.getAttribute("data-sort");
-      if (state.sort === k) state.dir = -state.dir; else { state.sort = k; state.dir = 1; }
+  document.querySelectorAll("th button[data-sort]").forEach(function (bn) {
+    bn.addEventListener("click", function () {
+      var k = bn.getAttribute("data-sort");
+      if (st.sort === k) { st.dir = -st.dir; } else { st.sort = k; st.dir = 1; }
       render();
     });
   });
-  document.querySelectorAll("a[href='#']").forEach(function (a) { a.addEventListener("click", function (e) { e.preventDefault(); }); });
-  document.addEventListener("click", function (e) { if (e.target.tagName === "A" && e.target.getAttribute("href") === "#") e.preventDefault(); });
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (t.tagName === "A" && t.getAttribute("href") === "#") { e.preventDefault(); return; }
+    if (t.getAttribute && t.getAttribute("data-open")) { var k = t.getAttribute("data-open"); st.open[k] = !st.open[k]; render(); }
+    if (t.id === "retry") { current = "partial"; $("scenario").value = "partial"; render(); }
+  });
 
   current = "partial"; render();
 })();

@@ -103,11 +103,14 @@ export function ExternalCollectionsPage({
   preload,
   onExit,
   onOpenChainPlan,
+  onOpenCoverage,
 }: Readonly<{
   preload?: ImportPreload | null;
   onExit?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the run panel's ordered selection. */
   onOpenChainPlan?: (planId: string) => void;
+  /** AP-046: opens the Coverage view from the run results. */
+  onOpenCoverage?: () => void;
 }>) {
   const [uploadedCollections, setUploadedCollections] = useState<
     UploadedCollectionSummary[]
@@ -569,6 +572,7 @@ export function ExternalCollectionsPage({
               : undefined
           }
           onOpenChainPlan={onOpenChainPlan}
+          onOpenCoverage={onOpenCoverage}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) =>

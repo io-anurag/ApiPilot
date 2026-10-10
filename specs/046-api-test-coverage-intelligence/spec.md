@@ -17,7 +17,26 @@ Two principles govern every number shown:
 1. **Specification coverage** (a qualifying generated scenario exists for a requirement) and **runtime-verified coverage** (an actual execution produced sufficient evidence for it) are always separate, and generation alone never counts as verification.
 2. Every figure is computed deterministically from real application data, with its numerator, denominator and basis retained. No AI is involved in any count, percentage or verification status, and no demo data is ever substituted.
 
+**Normative definitions.** Every counting rule, state, denominator and control behavior below is defined precisely in [coverage-rules.md](./coverage-rules.md). Open decisions are in [decision-log.md](./decision-log.md); verification cases are in [acceptance-checklist.md](./acceptance-checklist.md).
+
 ## Clarifications
+
+### Session 2026-10-10 (refinement)
+
+- Q: Is "coverage" one thing? → A: No. Two levels are defined separately: **operation coverage** (unit: unique `METHOD /path` within a revision; five metrics OC1 to OC5) and **requirement-level coverage** (unit: a stable, traceable requirement with its own state). An operation with one generated scenario is counted as having generated scenarios and is never reported as fully covered.
+- Q: How are positive, negative, boundary and security coverage defined? → A: Each requirement belongs to exactly one group; each category's spec and runtime-verified figures are computed over the eligible requirements of that group. Response keys other than exact `2xx`/`4xx` are shown as "unclassified" and excluded from category denominators. Security stays unavailable (never zero) until scenarios carry explicit authorization intent.
+- Q: What is the status of an operation with mixed outcomes? → A: It has no single status. It shows a requirement-state profile, scenario verdict counts and membership in both "runtime-verified" and "with execution failures" where both apply. Each requirement is judged only by the checks relevant to it, so a failing scenario never invalidates unrelated requirements and a passing scenario never hides a failing one.
+- Q: How are assertion failure, transport error, infrastructure failure and not-evaluated assertions told apart? → A: By a typed `cause` shown beside the state. Only a relevant evaluated check that failed yields "Executed, failed".
+- Q: Which executions feed runtime figures? → A: Either the latest qualifying result per scenario (default, may span runs and is disclosed as such) or one selected run. All views and exports read the same snapshot.
+- Q: Can evidence survive a specification change? → A: In this release, only through the join to the current generation's scenarios (unchanged from the earlier clarification). The materiality rule (per-requirement contract hash) is specified but not enabled; enabling it needs decision D-1.
+- Q: What do category figures count? → A: Classified testable requirements, never scenarios.
+- Q: How is Stale different from Generated, not executed? → A: Stale means evidence exists but no longer matches the current contract; it carries a reason and a re-execution flag and is never shown as unexecuted. It remains reserved until decision D-1.
+- Q: When latest-per-scenario finds results from different environments, what happens? → A: Only runs from the same environment as the newest qualifying run are combined; excluded runs are listed with the reason (D-2 resolved).
+- Q: What proves the happy path and exercised parameters? → A: Only positive-group (valid-request) scenarios; negative and boundary scenarios never credit them (D-3 resolved).
+- Q: Where do `default`, `5xx`, `3xx` and range keys such as `2XX` belong? → A: Unclassified: counted in response-code coverage as their own keys, excluded from every category denominator, shown as an "Unclassified: n" line (D-6 resolved).
+- Q: When several scenarios map to one requirement and disagree, what is its state? → A: A failure outranks a pass, and the requirement shows an evidence tally so passes stay visible (D-7 resolved).
+- Q: Does a review edit after a run invalidate that run's evidence? → A: No. Evidence stays valid with a visible "scenario edited after run" note, accepted knowing a verification may describe a request that has since changed (D-9 confirmed).
+- Q: Do the summary cards follow filters? → A: Yes, as FR-024 already states; each shows a scope label so a filtered figure is never mistaken for the full figure.
 
 ### Session 2026-10-10
 
@@ -129,6 +148,25 @@ The engineer reaches Coverage from the results area and from scenario review and
 
 ---
 
+### User Story 8 - Read mixed outcomes and category coverage without being misled (Priority: P1)
+
+The engineer sees, for an operation that has a passing happy path, a failing invalid-input scenario and an unexecuted boundary scenario, exactly which requirements are verified, which failed and which remain unexecuted, and sees positive, negative, boundary and security coverage as separate, honest figures.
+
+**Why this priority**: Without it a single green or red status would hide the real picture, defeating the purpose of separating specification coverage from verification.
+
+**Independent Test**: Use a fixture with that operation; confirm per-requirement states, scenario verdict counts, OC3 and OC4 membership, category figures and the "Unavailable" security entry.
+
+**Acceptance Scenarios**:
+
+1. **Given** the mixed operation, **When** Coverage is calculated, **Then** it is in both runtime-verified and with-failures counts, its exercised parameters and documented success code are `verified`, the requirement targeted by the failing scenario is `executed-failed` with cause assertion failed, the boundary requirement is `generated-not-executed`, and no single status is shown.
+2. **Given** a happy-path scenario whose status check passed and whose schema check failed, **When** Coverage is calculated, **Then** its parameters and success code are `verified` and only its response-schema requirement is `executed-failed`.
+3. **Given** a scenario that timed out, **When** Coverage is calculated, **Then** its requirements are `inconclusive` with cause transport error and none is `executed-failed`.
+4. **Given** an operation with one generated scenario, **When** Coverage is calculated, **Then** it counts once in "with generated scenarios" and its requirement coverage shows the remaining uncovered requirements.
+5. **Given** no scenario carries authorization intent, **When** the category section renders, **Then** security shows "Unavailable" with its reason, and positive, negative and boundary show spec and runtime figures whose denominators are their own eligible requirements.
+6. **Given** two runs with different outcomes for a scenario, **When** the user switches between latest-per-scenario and one run, **Then** every figure changes together and the header names the contributing runs.
+
+---
+
 ### User Story 7 - Empty, error and theme states (Priority: P3)
 
 Every state (loading, empty, error, stale, incomplete) is explained, and the view is fully usable in both light and dark themes.
@@ -158,6 +196,13 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - Very large specifications: the view remains responsive and does not block interaction.
 - A newer selection (different specification, run or filter) made while an earlier calculation is in flight: the earlier result must not overwrite the newer one.
 - Documented responses using ranges or defaults (for example `2XX`, `default`): handled explicitly, not matched to arbitrary specific codes.
+- An operation with passing, failing, inconclusive and unexecuted scenarios at once: no single status; counted in both runtime-verified and with-failures.
+- A request that received no response (timeout, connectivity failure): inconclusive, never an assertion failure; an infrastructure request failure (for example an OAuth2 token fetch) is a run notice and its dependants are generated-not-executed with cause blocked by dependency.
+- A scenario that passed on its status check but failed its schema check: only the response-schema requirement fails.
+- A scenario failed in an older run and passed in a newer one: latest-per-scenario reports it passed; the older failure remains visible only through run selection.
+- Results from more than one environment: latest-per-scenario uses only the newest qualifying run's environment; the other runs are listed as excluded with the reason. A single selected run is always evaluated as is.
+- A requirement mapped by several scenarios with different results: failure outranks pass, and the evidence tally shows all of them.
+- Documented keys `default`, `2XX`/`4XX`, `5xx`, `3xx`: unclassified for category purposes, still counted in the response-code metric as their own keys.
 - Security scenarios: no scenario category currently identifies authorization intent, so security/authorization coverage is "unavailable" until reliable classification exists, rather than inferred from ordinary successful requests.
 
 ## Requirements *(mandatory)*
@@ -169,7 +214,7 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **FR-001**: The system MUST compute all counts, percentages and verification states deterministically from specification, scenario and execution data, with no AI involvement; identical inputs MUST yield identical outputs.
 - **FR-002**: The system MUST keep specification coverage and runtime-verified coverage as separate dimensions; a generated scenario MUST NOT contribute to runtime-verified coverage.
 - **FR-003**: A scenario MUST count toward specification coverage of a contract element only when its relationship to that element can be established from its recorded target; otherwise it counts only toward the operation it belongs to. Scenarios in review state pending or accepted MUST count; rejected scenarios MUST NOT. Each specification-coverage figure MUST show how many of its contributing scenarios are accepted versus pending.
-- **FR-004**: Each requirement MUST be in exactly one of these states: Not covered, Generated not executed, Executed failed, Verified, Inconclusive, Stale, with the precedence between states defined and documented.
+- **FR-004**: Each requirement MUST be in exactly one of these states: Not covered, Generated not executed, Executed failed, Verified, Inconclusive, Stale, with the precedence between states defined and documented (coverage-rules.md §6). Each non-verified executed or unexecuted state MUST also show a typed cause (for example assertion failed, transport error, check not evaluated, request edited, blocked by dependency, never run).
 - **FR-005**: A requirement MUST be Verified only when its scenario was executed, the result is attributable to it, the checks relevant to that dimension were actually evaluated and passed, and the evidence belongs to the selected specification revision and test context. A successful HTTP response alone MUST NOT suffice.
 - **FR-006**: Executed failures MUST be reported separately from missing coverage and MUST never be labeled as untested.
 - **FR-007**: Every metric MUST retain and display its numerator, denominator and calculation basis; percentage = covered eligible items ÷ eligible items × 100; a zero denominator MUST yield an explicit "not available" state.
@@ -184,7 +229,7 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **FR-013**: Request-schema coverage MUST track, where reliably analyzable, properties, required/optional status, numeric and string constraints, formats, enum values, nullability, array items, nested objects and composition branches, using stable element identifiers; a property merely present in a body MUST NOT be treated as proof of boundary or branch coverage.
 - **FR-014**: Response-schema coverage MUST distinguish documented from observed-and-verified, and MUST NOT mark a schema verified merely because a body was received.
 - **FR-015**: Response-code coverage MUST, for each documented success and error code, show documented, scenario generated, executed, expected outcome verified, and actual outcome matched or failed, and MUST distinguish an absent test from an unexecuted test from an unobserved runtime response.
-- **FR-016**: Scenario-category coverage MUST support positive, negative, boundary and security/authorization categories, derived from existing scenario classification; where a category cannot be reliably classified it MUST be shown as unknown or unavailable.
+- **FR-016**: Scenario-category coverage MUST support positive, negative, boundary and security/authorization categories, derived from existing scenario classification; where a category cannot be reliably classified it MUST be shown as unknown or unavailable. Details in FR-043.
 - **FR-017**: Schema-branch coverage MUST identify testable branches for supported constructs and MUST list unsupported constructs and the reason they are not measurable, never silently ignoring them.
 
 **Dashboard**
@@ -194,8 +239,8 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **FR-020**: The view MUST show a notice stating "Generated scenarios contribute to specification coverage. Runtime-verified coverage requires qualifying execution evidence.", plus a specific explanation whenever data is stale, incomplete or unavailable.
 - **FR-021**: The view MUST show separate metric groups for specification coverage (operations, parameters, request schemas, response schemas) and runtime-verified coverage (operations verified, response codes verified, contract assertions evaluated and passed, last qualifying execution), each with numerator, denominator and percentage where applicable.
 - **FR-022**: The view MUST show compact breakdowns of operation, parameter and schema coverage that separate specification coverage, runtime-verified coverage and remaining gaps, with textual counts and accessible labels.
-- **FR-023**: The view MUST show a sortable, filterable gaps table with method, endpoint, specification coverage, runtime verification, missing coverage, priority and actions, filterable by method, endpoint, coverage state, scenario category, priority and missing-versus-failed.
-- **FR-024**: Filtering MUST update the table and the summary values it affects consistently, and filter, sort and selected-run state MUST be retained while the user switches between application views within a session, and MUST reset on a full browser refresh.
+- **FR-023**: The view MUST show a sortable, filterable gaps table with method, endpoint, specification coverage, runtime verification, missing coverage, priority and actions, filterable by method, endpoint, coverage state, scenario category, priority and gap type (missing, failed, insufficient evidence, needs re-execution). Each operation row MUST be expandable to its requirements, scenarios and evidence.
+- **FR-024**: Filtering MUST update the table and the summary values it affects consistently (cards, breakdowns, category section, recommendations and exports all use the filtered scope and show a scope label naming it), and filter, sort and selected-run state MUST be retained while the user switches between application views within a session, and MUST reset on a full browser refresh.
 - **FR-025**: The view MUST show a ranked list of recommended next tests, each with operation, uncovered requirement, reason, supporting evidence, priority with rationale, and an action; recommendations MUST be deterministic and traceable to actual gaps.
 - **FR-026**: Rows and recommendations MUST link to the operation detail or related scenario/result, preserving specification and run context.
 - **FR-027**: Contextual links to Coverage MUST be offered from scenario generation/review and from execution results.
@@ -226,6 +271,19 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **FR-040**: Existing workflows (generation, review, export, execution, performance, failure analysis) MUST continue to behave as before.
 - **FR-041**: Metric definitions, denominators, state precedence, prioritization rules and every unsupported or unmeasurable dimension with its reason MUST be documented.
 
+**Refinement requirements (2026-10-10; rules in [coverage-rules.md](./coverage-rules.md))**
+
+- **FR-042 (two levels)**: The system MUST report operation-level coverage as five separate counts over eligible operations: total eligible, with generated scenarios, with passing verification (≥1 passed scenario; deliberately not called "verified"), with execution failures (≥1 failed scenario), with no generated scenarios. Invariants: with-scenarios plus no-scenarios equals total; runtime-verified and with-failures are not mutually exclusive and are shown together. The system MUST also report requirement-level coverage, where each requirement has a stable id, specification source, kind, group, applicable operation, specification state, runtime state with cause, mapped scenarios, evidence, and, when excluded, a measurability reason. An operation with a generated scenario MUST NOT be presented as fully covered.
+- **FR-043 (categories)**: The view MUST show positive, negative, boundary and security/authorization coverage. Each requirement belongs to exactly one group (or "unclassified" for response keys other than exact `2xx`/`4xx`). For each available category the view MUST show specification coverage and runtime-verified coverage as numerator/denominator/percentage over that group's eligible requirements, plus its failed, inconclusive, generated-not-executed and not-covered counts. A category with no eligible requirements MUST read "not available (0 eligible)". Security MUST read "Unavailable" with its reason, never 0%, and MUST NOT be inferred from declared authentication or successful requests. Unclassified requirements and scenarios MUST be listed with counts and excluded from category denominators.
+- **FR-044 (check scope)**: A requirement MUST be judged only by the checks relevant to it (status-code check for exercised, case and response-code requirements; schema-conformance check for response-schema requirements). The `operation` (happy path) and exercised-parameter/property requirements MUST be credited only by positive-group scenarios. A failing scenario MUST NOT change the state of a requirement it does not exercise or whose relevant check passed; a passing scenario MUST NOT hide the failure of another requirement.
+- **FR-045 (mixed outcomes)**: An operation MUST NOT be assigned a single verification status. Its row MUST show the requirement-state profile, scenario verdict counts (passed, failed, inconclusive, not executed), membership in OC3 (with passing verification) and OC4 (with execution failures), and the number of requirements still unexecuted or uncovered. When several scenarios map to one requirement, the state follows the documented precedence and the requirement MUST show an evidence tally.
+- **FR-046 (failure causes)**: An assertion failure, a transport error (no response), an unevaluated check, an edited request, a dependency-blocked or cancelled run and an infrastructure-request failure MUST be distinguishable by a typed cause. Only an evaluated, failed relevant check yields "Executed, failed".
+- **FR-047 (run selection)**: The view MUST support "latest qualifying result per scenario" (default) and "single run". Latest-per-scenario MUST combine only runs whose environment (name and tier) equals that of the newest qualifying run; runs from other environments MUST be excluded and listed with that reason. The mode, contributing run ids and environment MUST be shown in the header and in every export. Cards, breakdowns, gaps, recommendations, operation detail, filters and exports MUST be derived from the same snapshot for the chosen mode. Results from different runs MUST NOT be combined by any rule other than the documented per-scenario latest.
+- **FR-048 (evidence validity)**: Evidence MUST remain valid only as defined in coverage-rules.md §9.1 for this release. The contract-hash materiality rule in §9.2 is specified but MUST NOT be enabled until decision D-1 is made; the Stale state MUST NOT be produced before then. When it is produced, a stale requirement MUST carry a reason naming the changed contract fragment, the time or revision it became stale, and a re-execution-required flag, and MUST never be displayed or counted as generated-not-executed or verified.
+- **FR-049 (controls)**: Every control on the view MUST be bound to snapshot data and behave as defined in coverage-rules.md §13: run selector, Recalculate, each filter, reset, sort, row expansion, operation/scenario/result links, generate/review actions, exports, and theme. A link MUST be absent when its target does not exist. No control may be decorative in the product.
+- **FR-050 (UI states)**: The view MUST distinguish loading, no active workflow, empty, error and out-of-date snapshot (a previous snapshot retained after a failed recalculation, labelled with its time). "Out-of-date snapshot" MUST NOT be labelled "stale", which is reserved for the requirement state.
+- **FR-051 (assertion figures)**: The assertion card MUST show passed, failed and not-evaluated counts, with not-evaluated outside the denominator, computed from the selected evidence excluding edited and no-response results.
+
 ### Key Entities
 
 - **Coverage Requirement**: A single measurable contract element (operation, parameter, request-schema element, response code, response-schema element, schema branch, scenario category) with a stable identifier tied to a specification revision and a calculation basis.
@@ -252,6 +310,10 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **SC-009**: An exported view matches the on-screen figures for the same scope in 100% of tested cases, with no secrets present.
 - **SC-010**: The view meets the application's accessibility and theming standards in both themes: all status labels are readable and meaning is never color-only.
 - **SC-011**: All existing automated tests continue to pass.
+- **SC-012**: For every snapshot, with-scenarios plus no-scenarios equals eligible operations, runtime-verified and with-failures never exceed with-scenarios, every numerator is at most its denominator, and a category's covered, executed-failed, inconclusive, generated-not-executed and not-covered counts sum to its denominator.
+- **SC-013**: In fixtures with mixed outcomes, 0 cases in which a failing scenario changes the state of a requirement whose relevant check passed, or a passing scenario changes the state of a failing requirement.
+- **SC-014**: Zero cases in which a transport error, unevaluated check, edited request or dependency block is labelled "Executed, failed", or in which a request that is only generated or only partly evaluated is labelled "Verified".
+- **SC-015**: The same snapshot yields identical figures on the dashboard, in operation detail and in both export formats for the same run selection and filter scope.
 
 ## Assumptions
 

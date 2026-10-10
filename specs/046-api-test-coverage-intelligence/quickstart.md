@@ -15,10 +15,10 @@ npm run build
 
 Expected: all green. Coverage-specific suites:
 
-- `backend/tests/unit/coverage/` — element extraction, scenario mapping, evidence join, state precedence, metrics (zero denominators), prioritization, recommendations, filter/sort parity, export rendering, determinism (same input twice → identical output).
+- `backend/tests/unit/apiCoverage/` — element extraction, scenario mapping, evidence join, state precedence, metrics (zero denominators), prioritization, recommendations, filter/sort parity, export rendering, determinism (same input twice → identical output).
 - `backend/tests/unit/openapi/` — path-level parameter merge and the no-path-level regression.
 - `backend/tests/integration/coverage.test.ts` — `GET /api/coverage` and `/export`: 200, 400, 404, 409, redaction (a fixture run containing `rawCapture` must not leak into the body).
-- `frontend/tests/unit/coverage/` — states (loading, empty, no-workflow, error), filters and sorting, metric cards with counts, stale-response guard, navigation links, both themes.
+- `frontend/tests/unit/apiCoverage/` — states (loading, empty, no-workflow, error), filters and sorting, metric cards with counts, stale-response guard, navigation links, both themes.
 - `frontend/tests/unit/` catalog tests — `workflowCatalog`, `sectionCatalog`, `App`, `EntryChooser`, `paletteCommands` updated for the new view.
 
 No test uses a real model, network or the clock directly; the clock is injected.
@@ -38,7 +38,10 @@ Prerequisites: `npm install`, `npm run dev`, a sample OpenAPI 3.x file with at l
 9. **Export.** Export filtered and unfiltered HTML and JSON. Figures match the screen for the chosen scope; definitions and denominators are present; no tokens, cookies or bodies appear.
 10. **Themes (I).** Toggle light/dark. Check cards, bars, table, filters, notices and status labels are legible, focus rings are visible, and every status has a text label as well as colour.
 11. **Not measurable.** Use a spec with `oneOf` and a circular `$ref`. Expect them listed as "not measurable" with reasons, absent from denominators. Security/authorization shows "unavailable".
-12. **Regression.** Run the existing guided workflow, Import & Run, performance and failure-analysis flows; behaviour is unchanged (apart from additional scenarios for path-level parameters in specs that declare them).
+12. **Mixed outcomes and categories (refinement).** Make one happy-path scenario pass, one invalid-input scenario fail, leave a boundary scenario unexecuted. Expect the operation in both "with passing verification" and "with execution failures", no single status, per-requirement states, and positive/negative/boundary figures whose state counts sum to their denominators; security "Unavailable".
+13. **Failure causes.** Force a timeout and an unevaluated check. Expect "Inconclusive" with the cause shown, never "Executed, failed".
+14. **Run selection.** Run twice with different results; compare latest-per-scenario with a single run. The header names contributing runs and every figure changes together.
+15. **Regression.** Run the existing guided workflow, Import & Run, performance and failure-analysis flows; behaviour is unchanged (apart from additional scenarios for path-level parameters in specs that declare them).
 
 ## Pass criteria
 

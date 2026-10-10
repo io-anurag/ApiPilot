@@ -1111,6 +1111,57 @@ and session-scoped.
 - **Privacy.** The snapshot carries only a name, method, path template, status and duration: no header, cookie, token, query,
   body, resolved URL or `rawCapture`. It is not logged.
 
+### API test coverage intelligence (AP-046)
+
+A deterministic view of how much of an API the generated scenarios cover (specification coverage) and how much real runs have
+verified (runtime-verified coverage). No AI is involved in any count, percentage or state; nothing is stored. The contract is in
+`packages/shared-domain/src/coverage.ts`, the calculator in `backend/src/apiCoverage/`, the routes in `backend/src/api/coverage.ts`
+(`GET /api/coverage`, `GET /api/coverage/export`, session-scoped, read-only, `Cache-Control: no-store`), and the view in
+`frontend/src/pages/CoveragePage.tsx` with `components/apiCoverage/`.
+
+- **Pipeline.** `calculateCoverage` is a pure function of the workflow's `ApiModel`, its scenarios with review state, the stored
+  runs and an injected clock. `elements.ts` turns each selected operation into measurable requirements with stable, revision-free
+  ids (`op:`, `param:`, `reqprop:`, `resp:`, `respschema:`, with `#`-suffixed cases for required, type, enum values,
+  format and boundary values), a category `group` and a specification `source` pointer, and lists what it cannot measure; `scenarioMapping.ts` maps each scenario to requirements from its
+  rule, target and assertions; `evidence.ts` joins run results to scenarios; `classify.ts` applies the state precedence;
+  `summarize.ts` and `prioritize.ts` derive metrics, gaps, priorities and recommendations; `filterSnapshot.ts` applies the view
+  filter once for the screen and both exports.
+- **Definitions.** A requirement is covered when a non-rejected scenario is mapped to it, and verified only when an executed
+  scenario's relevant checks were all evaluated and passed. The relevant checks are scoped (coverage-rules.md 5.2): a response
+  code uses the scenario's status assertion for that code, a response schema its schema-conformance assertion, and the happy path,
+  exercised fields and invalid-input cases the scenario's status checks, so a failing schema check never fails a requirement it
+  did not exercise. The happy path and exercised fields are credited only by positive-group scenarios; response codes and
+  schemas by any scenario asserting them. A scenario's own verdict (passed, failed, inconclusive, not executed) uses every check
+  and feeds the operation-level counts; scenario counts are never a numerator or denominator of a coverage metric. Categories
+  partition requirements by `group` (exact `2xx` positive, exact `4xx` negative, every other response key unclassified) and are
+  counted in requirements; security is unavailable.
+  Group membership (positive, negative, boundary) comes from the rule id, not the `category` field, because an at-boundary value
+  is schema-conformant and carries category `positive`. Boundary elements match on the value a scenario carries, so a boundary
+  scenario the designer deduplicated into the baseline one still covers it. Every denominator is documented in the metric's
+  `basis`.
+- **Evidence.** The UI produces `UploadedCollectionExecutionRun`s, which carry no scenario id or assertion type. A result joins
+  to a scenario by `itemId === itemIdForScenario(scenarioId)` and each assertion is recovered from `assertionTestPlan`'s test
+  names, so generation and execution cannot disagree. Latest-per-scenario evidence combines only runs from the environment (name
+  and tier) of the newest qualifying result and returns the rest as excluded; a selected run is evaluated as is. Guided `ExecutionRun`s join by `scenarioId` and `assertionIndex` and are
+  supported by the same interface, though the UI does not start them. A `not-attempted` result is never evidence; an edited
+  request, a missing response or an unevaluated check is inconclusive, each with a typed `cause`; the recorded reason of a
+  not-attempted result (dependency not met, cancelled, run ended) explains an unexecuted requirement. Results that join to no current scenario are counted as
+  unattributed and never used: runs record no specification revision, so the system cannot tell an earlier specification's
+  results from an unrelated collection's and does not claim to. The `stale` state is reserved in the contract with a reason, a since-marker and a re-execution flag, but no rule produces it:
+  that needs the run to record a revision and per-requirement contract hashes (decision D-1 in `specs/046-.../decision-log.md`).
+- **Revision.** SHA-256 of the normalized contract, excluding `info`, computed per request and not stored. Each requirement also
+  carries a `contractHash` of its own fragment.
+- **Prioritization.** An additive heuristic (state, kind, method, declared security, contract complexity), documented in
+  `prioritize.ts`. Gaps are grouped by shared cause so one problem is one gap.
+- **Model change.** `buildApiModel` now merges path-item-level parameters into every operation of the path item, an
+  operation-level parameter overriding on name and location. Before, `pathItem.parameters` was never read, so those parameters
+  were missing from the model and from generated scenarios.
+- **Privacy.** Snapshots, exports and logs carry identifiers, counts and outcomes only: no header, body, URL, cookie, token or
+  `rawCapture`. The HTML export escapes every interpolated value.
+- **Navigation.** No router exists, so Coverage is a `results`-section view beside the five workflows (`RESULTS_VIEWS` in
+  `workflowCatalog.ts`), in the tab menu, palette and help dialog but not on the start screen. Filters live in the page, which
+  stays mounted, so they survive switching views and reset on a full refresh.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither

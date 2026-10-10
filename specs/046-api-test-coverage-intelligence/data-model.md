@@ -1,5 +1,7 @@
 # Data Model: API Test Coverage Intelligence (AP-046)
 
+> **Refinement 2026-10-10**: [coverage-rules.md](./coverage-rules.md) is stricter than this document in several places (operation-level counts OC1 to OC5, typed failure causes, scenario verdicts, requirement-partition category coverage with runtime figures, check scopes). Its §15 lists the differences. Where they conflict, coverage-rules.md wins; this file is updated when the types change.
+
 All types live in `packages/shared-domain/src/coverage.ts` and are exported from its `index.ts`. No new persistence: every value is derived per request.
 
 ## Enumerations
@@ -109,3 +111,16 @@ None. `GET /api/coverage` reads the current session workflow and the run reposit
 - `runId` query must belong to a run visible to the session, else `404 run_not_found`.
 - Filter parameters are validated against closed enumerations; unknown values return `400 invalid_filter`.
 - Snapshot invariants asserted in tests: `numerator <= denominator`; every `CoverageGap.requirementIds` exists; every `EvidenceRef.scenarioId` exists in the model; no snapshot field contains a header value, body, URL query string, or `rawCapture`.
+
+## Refinement deltas (2026-10-10; authority: [coverage-rules.md](coverage-rules.md))
+
+Additive unless noted. All in `packages/shared-domain/src/coverage.ts`.
+
+- `CoverageRequirement`: add `group: "positive" | "negative" | "boundary" | "unclassified"` (replaces optional `categoryGroup`) and `source` (specification location). Remove kind `scenario-category` (breaking, but within the unreleased type).
+- `CoverageRequirementResult`: add `cause?: CoverageCause`, `tally: { passed, failed, inconclusive, notExecuted }`, and for stale `staleReason?`, `staleSince?`, `reExecutionRequired?`.
+- `CoverageCause`: `assertion-failed | transport-error | check-not-evaluated | no-relevant-check | request-edited | blocked-by-dependency | run-cancelled | not-reached | never-run | not-in-selected-run`.
+- `CoverageEvidenceRef`: add `cause?`; keep `note`.
+- `OperationCoverage`: add `scenarioVerdicts: { passed, failed, inconclusive, notExecuted }` and `scenarioCount`; keep `stateCounts`. No single-status field.
+- `CoverageSnapshot`: add `operationCounts: { eligible, withScenarios, withPassingVerification, withFailures, withNoScenarios }`; `categoryCoverage` becomes `{ group, available, eligible, specCovered, verified, counts: Record<CoverageState, number>, reason? }[]` plus `unclassified: { requirements: { operationKey, label }[], scenarios: number }`; `execution.evidenceMode: "latest-per-scenario" | "single-run"`, `execution.evidenceByRun: { runId, scenarios }[]`, `execution.environments[]`; assertion metric `{ passed, failed, notEvaluated }`.
+- `CoverageFilter.gapKind`: `"missing" | "failed" | "insufficient" | "stale"`.
+- Invariants asserted in tests: `withScenarios + withNoScenarios = eligible`; `withPassingVerification` and `withFailures` are each at most `withScenarios`; per category `sum(counts) = eligible`; scenario verdicts sum to `scenarioCount`.
