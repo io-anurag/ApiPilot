@@ -81,12 +81,24 @@ async function findRequestRowButton(name: string): Promise<HTMLElement> {
   });
 }
 
+/** Picks the uploaded collection, then opens one of the page's steps (AP-042). */
+async function selectCollectionAndOpen(step: "review" | "run") {
+  fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+  fireEvent.click(screen.getByTestId(`import-run-step-${step}`));
+}
+
+/** The Run step's "Start run" for a collection already past the unverified-content gate, then back
+ * to the Run step from Results (a started run moves the page to Results). */
+function backToRun() {
+  fireEvent.click(screen.getByRole("button", { name: "Run again" }));
+}
+
 describe("ExternalCollectionsPage", () => {
   it("loads the newly selected request's own fields into the editor, not the previously selected request's", async () => {
     stubFetch();
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     fireEvent.click(await findRequestRowButton("Get widget"));
     expect(await screen.findByLabelText("URL")).toHaveValue("https://api.example.com/widgets");
 
@@ -101,15 +113,14 @@ describe("ExternalCollectionsPage", () => {
     stubFetch();
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     fireEvent.click(await findRequestRowButton("Get widget"));
     expect(await screen.findByLabelText("URL")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "✕ Close" }));
     expect(await screen.findByText(/Select a request from the collection/)).toBeInTheDocument();
-    // The tree itself, and the run panel's checklist, stay visible — only the editor closed.
+    // The tree itself stays visible — only the editor closed.
     expect(await findRequestRowButton("Get widget")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Include Get widget in this run/)).toBeInTheDocument();
 
     fireEvent.click(await findRequestRowButton("Get widget"));
     expect(await screen.findByLabelText("URL")).toBeInTheDocument();
@@ -119,7 +130,7 @@ describe("ExternalCollectionsPage", () => {
     stubFetch();
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     await findRequestRowButton("Get widget");
 
     fireEvent.click(screen.getByRole("button", { name: "Variables" }));
@@ -143,7 +154,7 @@ describe("ExternalCollectionsPage", () => {
     ]);
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     await findRequestRowButton("Get widget");
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add request" }));
@@ -164,7 +175,7 @@ describe("ExternalCollectionsPage", () => {
     ]);
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     await findRequestRowButton("Get widget");
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Get widget" }));
@@ -186,7 +197,7 @@ describe("ExternalCollectionsPage", () => {
     ]);
     render(<ExternalCollectionsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
     await findRequestRowButton("Get widget");
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Get widget" }));
@@ -205,7 +216,7 @@ describe("ExternalCollectionsPage", () => {
       },
     ]);
     render(<ExternalCollectionsPage />);
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("run");
 
     fireEvent.click(await screen.findByRole("button", { name: "Move Get widget down" }));
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
@@ -231,7 +242,7 @@ describe("ExternalCollectionsPage", () => {
       },
     ]);
     render(<ExternalCollectionsPage />);
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("review");
 
     await findRequestRowButton("Get widget");
     fireEvent.click(screen.getByRole("button", { name: "Actions for Get widget" }));
@@ -295,7 +306,7 @@ describe("ExternalCollectionsPage", () => {
     );
 
     render(<ExternalCollectionsPage />);
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("run");
 
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(await screen.findByTestId("unverified-content-dialog")).toBeInTheDocument();
@@ -303,6 +314,7 @@ describe("ExternalCollectionsPage", () => {
     await screen.findByTestId("external-collection-run-summary");
     expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
     expect(startCallCount).toBe(1);
+    backToRun();
 
     // Regression: the page's own cached `uploadedCollections` list previously never learned about
     // the confirmation, so this second click re-showed the dialog (purely client-side, no request
@@ -377,7 +389,7 @@ describe("ExternalCollectionsPage", () => {
     );
 
     render(<ExternalCollectionsPage />);
-    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    await selectCollectionAndOpen("run");
 
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(await screen.findByTestId("unverified-content-dialog")).toBeInTheDocument();
@@ -389,11 +401,101 @@ describe("ExternalCollectionsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm and run" }));
     await screen.findByTestId("external-collection-run-summary");
     expect(startCallCount).toBe(2);
+    backToRun();
 
     // The real regression check: a third run click must skip the unverified-content dialog
     // entirely — it was already recorded on call 1, not call 2.
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
     await waitFor(() => expect(startCallCount).toBe(3));
+  });
+});
+
+describe("ExternalCollectionsPage steps (AP-042)", () => {
+  function startedRunFetch() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const json = (body: unknown) => ({ ok: true, status: 200, json: () => Promise.resolve(body) });
+        if (url === "/api/external-collections") return json({ uploadedCollections: [uploadedCollectionSummary()] });
+        if (url.endsWith("/collection")) return json({ collectionView: collectionView() });
+        if (url.endsWith("/execution/runs")) return json({ runs: [] });
+        if (url.endsWith("/execution/start") && init?.method === "POST") {
+          return json({
+            run: {
+              id: "run-1",
+              source: "uploaded",
+              uploadedCollectionSetId: "uc-1",
+              uploadedCollectionSnapshot: { name: "My collection", tier: "local" },
+              status: "completed",
+              startedAt: "2026-01-01T00:00:00.000Z",
+              completedAt: "2026-01-01T00:00:01.000Z",
+              summary: { total: 0, passed: 0, failed: 0, notAttempted: 0, durationMs: 0 },
+              results: [],
+              cancelRequested: false,
+            },
+          });
+        }
+        throw new Error(`Unexpected fetch: ${url} ${init?.method ?? "GET"}`);
+      }),
+    );
+  }
+
+  it("opens on the Collection step with the hero, and keeps later steps locked until a collection is selected", async () => {
+    stubFetch();
+    render(<ExternalCollectionsPage />);
+
+    expect(screen.getByTestId("import-run-hero")).toHaveAttribute("data-compact", "false");
+    expect(screen.getByTestId("import-run-step-collection").closest("li")).toHaveAttribute("aria-current", "step");
+    // Both files are part of the import (collection and environment).
+    expect(screen.getByLabelText("Collection (.json)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Environment (.json)")).toBeInTheDocument();
+    for (const step of ["review", "run", "results"]) {
+      expect(screen.getByTestId(`import-run-step-${step}`)).toHaveAttribute("aria-disabled", "true");
+    }
+    expect(screen.getByTestId("import-run-step-review")).toHaveTextContent("Select a collection first");
+
+    fireEvent.click(screen.getByTestId("import-run-step-review"));
+    expect(screen.getByTestId("import-run-step-collection").closest("li")).toHaveAttribute("aria-current", "step");
+  });
+
+  it("compacts the hero and shows the collection bar once the Review step opens, and can return to pick another", async () => {
+    stubFetch();
+    render(<ExternalCollectionsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /My collection/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review requests →" }));
+
+    expect(screen.getByTestId("import-run-hero")).toHaveAttribute("data-compact", "true");
+    const bar = await screen.findByTestId("import-run-collection-bar");
+    expect(bar).toHaveTextContent("My collection");
+    await waitFor(() => expect(bar).toHaveTextContent("2 requests · 0 folders · 0 variables"));
+    expect(screen.queryByText("Run order")).not.toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: "Change collection" }));
+    expect(screen.getByTestId("import-run-hero")).toHaveAttribute("data-compact", "false");
+  });
+
+  it("keeps Results locked until a run exists, then moves to Results when a run starts and back with Run again", async () => {
+    startedRunFetch();
+    render(<ExternalCollectionsPage />);
+    await selectCollectionAndOpen("run");
+
+    expect(screen.getByTestId("import-run-step-results")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByTestId("import-run-step-results")).toHaveTextContent("Start a run first");
+    await waitFor(() =>
+      expect(screen.getByTestId("external-collection-launch-card")).toHaveTextContent("2 of 2 selected"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    await screen.findByTestId("external-collection-run-summary");
+    expect(screen.getByTestId("import-run-step-results").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(screen.queryByRole("button", { name: "Start run" })).not.toBeInTheDocument();
+
+    backToRun();
+    expect(screen.getByRole("button", { name: "Start run" })).toBeInTheDocument();
+    // The finished run is still reachable from the stepper.
+    fireEvent.click(screen.getByTestId("import-run-step-results"));
+    expect(screen.getByTestId("external-collection-run-summary")).toBeInTheDocument();
   });
 });

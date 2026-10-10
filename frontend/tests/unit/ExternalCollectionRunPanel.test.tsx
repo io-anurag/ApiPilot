@@ -517,3 +517,294 @@ describe("ExternalCollectionRunPanel — AI failure analysis (AP-031)", () => {
     }
   });
 });
+
+describe("ExternalCollectionRunPanel views (AP-042)", () => {
+  function stubRunFetch(runs: unknown[] = []) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/execution/runs")) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ runs }) };
+        }
+        if (url.includes("/failure-analyses")) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ analyses: [], inProgress: null }) };
+        }
+        return { ok: true, status: 200, json: () => Promise.resolve({ inProgress: null, plans: [] }) };
+      }),
+    );
+  }
+
+  it("run view shows the order and launch card, without results or history", async () => {
+    stubRunFetch();
+    render(
+      <ExternalCollectionRunPanel
+        view="run"
+        uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+        requests={[requestView()]}
+      />,
+    );
+    expect(screen.getByTestId("external-collection-launch-card")).toHaveTextContent("1 of 1 selected");
+    expect(screen.getByLabelText(/Include Get widget in this run/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start run" })).toBeInTheDocument();
+    expect(screen.queryByText("Run history")).not.toBeInTheDocument();
+  });
+
+  describe("run view's setup card (like a plan's Run setup)", () => {
+    const write = (id: string, name: string, method: string, url: string) =>
+      requestView({
+        id,
+        name,
+        raw: { method, url, headers: [] },
+        resolved: { method, url, headers: [] },
+      });
+
+    it("states readiness, the target and the run's facts", () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01", requestDelayMs: 250 })}
+          requests={[requestView()]}
+          runOrder={["item-1"]}
+          onOpenChainPlan={vi.fn()}
+        />,
+      );
+      const card = within(screen.getByTestId("external-collection-launch-card"));
+      expect(card.getByRole("heading", { name: "Ready to run on My collection (local)" })).toBeInTheDocument();
+      const facts = within(screen.getByTestId("run-launch-facts"));
+      expect(facts.getByText("1 of 1 selected")).toBeInTheDocument();
+      expect(facts.getByText("Custom order")).toBeInTheDocument();
+      expect(facts.getByText("local")).toBeInTheDocument();
+      expect(facts.getByText("250 ms")).toBeInTheDocument();
+      expect(card.getByRole("button", { name: "Start run" })).toBeEnabled();
+      expect(screen.getByTestId("run-hosts")).toHaveTextContent("example.test");
+    });
+
+    it("warns about the requests that change data, per method, and says when there are none", () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+          requests={[
+            requestView(),
+            write("w1", "Create widget", "POST", "https://example.test/widgets"),
+            write("w2", "Delete widget", "DELETE", "https://example.test/widgets/1"),
+          ]}
+        />,
+      );
+      const writes = within(screen.getByTestId("run-writes"));
+      expect(writes.getByText(/2 requests change data on My collection/)).toBeInTheDocument();
+      expect(writes.getByText("Creates")).toBeInTheDocument();
+      expect(writes.getByText("Deletes")).toBeInTheDocument();
+
+      // Deselecting both writes leaves a read-only run.
+      fireEvent.click(screen.getByLabelText(/Include Create widget in this run/));
+      fireEvent.click(screen.getByLabelText(/Include Delete widget in this run/));
+      expect(screen.getByTestId("run-writes")).toHaveTextContent("The selected requests only read data");
+    });
+
+    it("lists unresolved variables and every distinct host", () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+          requests={[
+            requestView({ unresolvedVariables: ["token", "baseUrl"] }),
+            write("w3", "Other host", "GET", "https://other.test:8443/x"),
+            write("w4", "Variable host", "GET", "{{baseUrl}}/y"),
+          ]}
+        />,
+      );
+      expect(screen.getByTestId("run-unresolved")).toHaveTextContent("2 without a value: baseUrl, token");
+      expect(screen.getByTestId("run-hosts")).toHaveTextContent("example.test");
+      expect(screen.getByTestId("run-hosts")).toHaveTextContent("other.test:8443");
+      expect(screen.getByTestId("run-hosts")).toHaveTextContent("{{baseUrl}}");
+    });
+
+    it("says plainly when nothing is selected, and blocks Start run", () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+          requests={[requestView()]}
+        />,
+      );
+      fireEvent.click(screen.getByLabelText(/Include Get widget in this run/));
+      expect(screen.getByRole("heading", { name: "Not ready to run yet" })).toBeInTheDocument();
+      expect(screen.getByTestId("run-blocked")).toHaveTextContent("No requests are selected. Tick at least one in Run order.");
+      expect(screen.getByRole("button", { name: "Start run" })).toBeDisabled();
+    });
+
+    it("shows the confirmation right under Start run, before the facts, not at the end of the card", async () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection()}
+          requests={[requestView()]}
+          onOpenChainPlan={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+      const dialog = await screen.findByTestId("unverified-content-dialog");
+      const start = screen.getByRole("button", { name: "Start run" });
+      const facts = screen.getByTestId("run-launch-facts");
+      const loadTest = screen.getByRole("region", { name: "Load test instead" });
+      expect(start.compareDocumentPosition(dialog) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(dialog.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(dialog.compareDocumentPosition(loadTest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("notes an unverified collection, and offers load testing separately from running", () => {
+      stubRunFetch();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection()}
+          requests={[requestView()]}
+          onOpenChainPlan={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(/unverified, so you will be asked to confirm/)).toBeInTheDocument();
+      const loadTest = within(screen.getByRole("region", { name: "Load test instead" }));
+      expect(loadTest.getByText(/This does not run anything/)).toBeInTheDocument();
+      expect(loadTest.getByRole("button", { name: "Create request-chain plan" })).toBeInTheDocument();
+    });
+
+    it("shows the last run in one line with a link to the results", async () => {
+      stubRunFetch([{ ...completedRun(), results: undefined }]);
+      const onViewResults = vi.fn();
+      render(
+        <ExternalCollectionRunPanel
+          view="run"
+          uploadedCollection={uploadedCollection({ confirmedAt: "2026-01-01" })}
+          requests={[requestView()]}
+          onViewResults={onViewResults}
+        />,
+      );
+      const line = await screen.findByTestId("run-launch-last-run");
+      expect(line).toHaveTextContent("Completed");
+      fireEvent.click(within(line).getByRole("button", { name: "View results" }));
+      expect(onViewResults).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("results view shows the run history and a Run again action, without the order or Start run", async () => {
+    stubRunFetch([{ ...completedRun(), results: undefined }]);
+    const onRunAgain = vi.fn();
+    render(
+      <ExternalCollectionRunPanel
+        view="results"
+        uploadedCollection={uploadedCollection()}
+        requests={[requestView()]}
+        onRunAgain={onRunAgain}
+      />,
+    );
+    expect(await screen.findByText("Run history")).toBeInTheDocument();
+    expect(screen.getByText(/Select a run from the history/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start run" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Include Get widget in this run/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run again" }));
+    expect(onRunAgain).toHaveBeenCalledTimes(1);
+  });
+
+  it("hidden view renders nothing but still reports whether the collection has runs", async () => {
+    stubRunFetch([{ ...completedRun(), results: undefined }]);
+    const onHasRunsChange = vi.fn();
+    const { container } = render(
+      <ExternalCollectionRunPanel
+        view="hidden"
+        uploadedCollection={uploadedCollection()}
+        onHasRunsChange={onHasRunsChange}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    await waitFor(() => expect(onHasRunsChange).toHaveBeenLastCalledWith(true));
+  });
+});
+
+describe("ExternalCollectionRunPanel PDF report (AP-043)", () => {
+  function stubReportFetch(report: { ok: boolean; status?: number; body?: unknown; disposition?: string }) {
+    const run = completedRun();
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        calls.push(url);
+        if (url.endsWith("/report.pdf") || url.endsWith("/report.html")) {
+          if (!report.ok) return { ok: false, status: report.status ?? 409, json: () => Promise.resolve(report.body) };
+          return {
+            ok: true,
+            status: 200,
+            blob: () => Promise.resolve(new Blob(["%PDF-1.3"], { type: "application/pdf" })),
+            headers: new Headers({ "Content-Disposition": report.disposition ?? 'attachment; filename="apipilot-run-report-My-collection-run-1.pdf"' }),
+          };
+        }
+        if (url.endsWith("/execution/runs")) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ runs: [{ ...run, results: undefined }] }) };
+        }
+        if (url.endsWith(`/execution/runs/${run.id}`)) {
+          return { ok: true, status: 200, json: () => Promise.resolve({ run }) };
+        }
+        return { ok: true, status: 200, json: () => Promise.resolve({ analyses: [], inProgress: null, plans: [] }) };
+      }),
+    );
+    return { calls, run };
+  }
+
+  async function openResults() {
+    render(<ExternalCollectionRunPanel view="results" uploadedCollection={uploadedCollection()} requests={[requestView()]} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Completed/ }));
+    return screen.findByRole("button", { name: "Download PDF report" });
+  }
+
+  it("offers the report only once a finished run is open, and downloads it as a file", async () => {
+    const { calls, run } = stubReportFetch({ ok: true });
+    const createObjectURL = vi.fn(() => "blob:report");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    const clicked: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.download);
+    });
+
+    render(<ExternalCollectionRunPanel view="results" uploadedCollection={uploadedCollection()} requests={[requestView()]} />);
+    expect(screen.queryByRole("button", { name: "Download PDF report" })).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Completed/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download PDF report" }));
+
+    await waitFor(() => expect(clicked).toEqual(["apipilot-run-report-My-collection-run-1.pdf"]));
+    expect(calls).toContain(`/api/external-collections/uc-1/execution/runs/${run.id}/report.pdf`);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    click.mockRestore();
+  });
+
+  it("downloads the HTML report from its own button, naming the file the server suggests", async () => {
+    const { calls, run } = stubReportFetch({ ok: true, disposition: 'attachment; filename="apipilot-run-report-My-collection-run-1.html"' });
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:report"), revokeObjectURL: vi.fn() }));
+    const clicked: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.download);
+    });
+
+    render(<ExternalCollectionRunPanel view="results" uploadedCollection={uploadedCollection()} requests={[requestView()]} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Completed/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download HTML report" }));
+
+    await waitFor(() => expect(clicked).toEqual(["apipilot-run-report-My-collection-run-1.html"]));
+    expect(calls).toContain(`/api/external-collections/uc-1/execution/runs/${run.id}/report.html`);
+    expect(calls.some((url) => url.endsWith("/report.pdf"))).toBe(false);
+    click.mockRestore();
+  });
+
+  it("shows the server's reason when the report cannot be made, instead of a broken file", async () => {
+    stubReportFetch({ ok: false, status: 409, body: { error: "run_in_progress", message: "A report is available once the run has finished." } });
+    fireEvent.click(await openResults());
+    expect(await screen.findByTestId("run-report-error")).toHaveTextContent("A report is available once the run has finished.");
+  });
+});

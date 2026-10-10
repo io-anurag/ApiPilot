@@ -11,6 +11,7 @@ import type {
 } from "@apipilot/shared-domain";
 import {
   cancelUploadedCollectionExecution,
+  downloadUploadedCollectionRunReport,
   fetchUploadedCollectionRun,
   fetchUploadedCollectionRuns,
   getFailureAnalysisInProgress,
@@ -24,6 +25,8 @@ import { FailureAnalysisPanel, IN_PROGRESS_POLL_MS } from "./FailureAnalysisPane
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
+import { CollectionRunSetupCard } from "./CollectionRunSetupCard";
+import { summarizeCollectionRun } from "../utils/collectionRunSetup";
 import { BUTTON_STYLES } from "./controlStyles";
 import { SeededPlans } from "./requestChain/SeededPlans";
 import { SeedPlanDialog } from "./requestChain/SeedPlanDialog";
@@ -247,7 +250,7 @@ function UnverifiedContentDialog({
       data-testid="unverified-content-dialog"
       className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
     >
-      <p className="text-sm text-warning-700 dark:text-warning-100">
+      <p className="text-left text-sm text-warning-700 hyphens-none dark:text-warning-100">
         This collection&apos;s requests, and any embedded pre-request/test scripts, were{" "}
         <strong>not generated or verified by ApiPilot</strong>. They will execute exactly as
         authored, with the same real network access Postman/Newman itself would give them.
@@ -277,7 +280,7 @@ function RiskTierConfirmationBanner({
       data-testid="risk-tier-confirmation-banner"
       className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
     >
-      <p className="text-sm text-warning-700 dark:text-warning-100">
+      <p className="text-left text-sm text-warning-700 hyphens-none dark:text-warning-100">
         This run targets a <strong>{requirement.environmentTier}</strong> environment
         {requirement.destructiveOperations.length > 0 && " and includes destructive requests"}.
       </p>
@@ -448,7 +451,7 @@ function RunOrderChecklist({
       <span className="sr-only" aria-live="polite">
         {announcement}
       </span>
-      <ul className="max-h-56 space-y-0.5 overflow-y-auto">
+      <ul className="max-h-96 space-y-0.5 overflow-y-auto">
         {requests.map((item, index) => {
           const isDropTarget = dropIndex === index && draggedIndex !== -1 && draggedIndex !== index;
           let dropIndicator = "border-y-2 border-transparent";
@@ -588,6 +591,11 @@ export function ExternalCollectionRunPanel({
   onRunOrderChange,
   onConfirmed,
   onOpenChainPlan,
+  view = "all",
+  onRunStarted,
+  onHasRunsChange,
+  onRunAgain,
+  onViewResults,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
   /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
@@ -610,6 +618,18 @@ export function ExternalCollectionRunPanel({
   onConfirmed?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the selected requests, in run order. */
   onOpenChainPlan?: (planId: string) => void;
+  /** Which part to show (AP-042): `run` is the order and launch card, `results` the run and its
+   * history, `hidden` nothing (the component stays mounted so state and polling carry on), and the
+   * default `all` the original single panel. */
+  view?: "all" | "run" | "results" | "hidden";
+  /** Called once a run has started, so the page can move to its results. */
+  onRunStarted?: () => void;
+  /** Reports whether the collection has any run, in this session or its history. */
+  onHasRunsChange?: (hasRuns: boolean) => void;
+  /** Results view: returns to the run setup. */
+  onRunAgain?: () => void;
+  /** Run view: opens the results (the last run line's link). */
+  onViewResults?: () => void;
 }>) {
   const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
   const [seedingChainPlan, setSeedingChainPlan] = useState(false);
@@ -617,6 +637,8 @@ export function ExternalCollectionRunPanel({
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState<"pdf" | "html" | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [showUnverifiedDialog, setShowUnverifiedDialog] = useState(false);
   const [pendingRiskTierConfirmation, setPendingRiskTierConfirmation] =
     useState<ExecutionConfirmationRequirement | null>(null);
@@ -774,6 +796,7 @@ export function ExternalCollectionRunPanel({
     setPendingRiskTierConfirmation(null);
     setRun(result.run);
     refreshHistory();
+    onRunStarted?.();
   }
 
   function handleRunClick() {
@@ -810,6 +833,15 @@ export function ExternalCollectionRunPanel({
 
   const runDisabled = starting || run?.status === "in-progress" || (requests.length > 0 && selectedIds.size === 0);
 
+  async function handleDownloadReport(format: "pdf" | "html") {
+    if (!run) return;
+    setDownloadingReport(format);
+    setReportError(null);
+    const result = await downloadUploadedCollectionRunReport(uploadedCollection.id, run.id, format);
+    setDownloadingReport(null);
+    if (!result.ok) setReportError(result.message);
+  }
+
   async function handleCancel() {
     setCancelling(true);
     const result = await cancelUploadedCollectionExecution(uploadedCollection.id);
@@ -818,6 +850,212 @@ export function ExternalCollectionRunPanel({
   }
 
   const seedOrder = orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id);
+  const hasRuns = run !== null || runHistory.length > 0;
+  useEffect(() => {
+    onHasRunsChange?.(hasRuns);
+  }, [hasRuns, onHasRunsChange]);
+
+  // Hidden keeps this component mounted, so an in-progress run keeps polling and the run order and
+  // history survive a visit to another step; it just renders nothing.
+  if (view === "hidden") return null;
+
+  const startButton = (
+    <button type="button" onClick={handleRunClick} disabled={runDisabled} className={BUTTON_STYLES.primary}>
+      {starting ? "Starting…" : "Start run"}
+    </button>
+  );
+  const chainPlanButton = onOpenChainPlan && (
+    <button
+      type="button"
+      onClick={() => setSeedingChainPlan(true)}
+      disabled={selectedIds.size === 0 || requests.length === 0}
+      className={BUTTON_STYLES.secondary}
+    >
+      Create request-chain plan
+    </button>
+  );
+  // AP-037 phase two (US5): the plans seeded from collections, opened in Performance Plans.
+  const seededPlans = onOpenChainPlan && (
+    <SeededPlans
+      seedKind="collection"
+      onOpen={onOpenChainPlan}
+      emptyText="None yet."
+    />
+  );
+  const setup = summarizeCollectionRun({ orderedRequests, selectedIds });
+  const newestRun = [...runHistory, ...(run ? [run] : [])].sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+  const lastRunText = newestRun
+    ? `${new Date(newestRun.startedAt).toLocaleString()} · ${RUN_STATUS_LABEL[newestRun.status]}`
+    : null;
+  const orderBlock = requests.length > 0 && (
+    <RunOrderChecklist
+      requests={orderedRequests}
+      selectedIds={selectedIds}
+      onToggle={toggleSelected}
+      onReset={reset}
+      canReset={selectedIds.size < requests.length || runOrder !== undefined}
+      disabled={starting || run?.status === "in-progress"}
+      placements={placements}
+      onMove={onRunOrderChange ? moveInRunOrder : undefined}
+    />
+  );
+  const gates = (
+    <>
+      {showUnverifiedDialog && (
+        <UnverifiedContentDialog
+          onConfirm={() => performStart(true, true)}
+          onDecline={() => setShowUnverifiedDialog(false)}
+        />
+      )}
+      {pendingRiskTierConfirmation && (
+        <RiskTierConfirmationBanner
+          requirement={pendingRiskTierConfirmation}
+          onConfirm={() => performStart(true)}
+          onCancel={() => setPendingRiskTierConfirmation(null)}
+        />
+      )}
+      {startError && <ErrorState message={startError} />}
+    </>
+  );
+  const resultsBlock = run && (
+    <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
+      <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Results</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge label={RUN_STATUS_LABEL[run.status]} tone={runStatusTone(run.status)} />
+        <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />
+        {run.status === "in-progress" && (
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={cancelling || run.cancelRequested}
+            className={BUTTON_STYLES.secondary}
+          >
+            {run.cancelRequested || cancelling ? "Cancelling…" : "Cancel run"}
+          </button>
+        )}
+      </div>
+      <RunOverview run={run} />
+      <ul className="divide-y divide-border">
+        {run.results.map((result, index) => (
+          <ExternalCollectionResultRow
+            key={`${result.requestName}-${index}`}
+            result={result}
+            collectionTier={uploadedCollection.tier}
+            failureAnalysis={failureAnalysisBinding(index)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+  const historyBlock = <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectHistoryRun} />;
+  const chainPlanDialog = seedingChainPlan && onOpenChainPlan && (
+    <SeedPlanDialog
+      source={{ kind: "collection", collectionId: uploadedCollection.id, orderedRequestIds: seedOrder }}
+      defaultName={uploadedCollection.name}
+      onCancel={() => setSeedingChainPlan(false)}
+      onSeeded={(planId) => {
+        setSeedingChainPlan(false);
+        onOpenChainPlan(planId);
+      }}
+    />
+  );
+
+  if (view === "run") {
+    return (
+      <section
+        data-testid="external-collection-run-panel"
+        className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start"
+      >
+        <div className="min-w-0">
+          {orderBlock || (
+            <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted">
+              Every request in the collection runs, in the collection&apos;s own order.
+            </p>
+          )}
+        </div>
+        <CollectionRunSetupCard
+          collection={uploadedCollection}
+          setup={setup}
+          totalRequests={requests.length}
+          customOrder={runOrder !== undefined}
+          inProgress={run?.status === "in-progress"}
+          starting={starting}
+          startDisabled={runDisabled}
+          onStart={handleRunClick}
+          lastRunText={lastRunText}
+          onViewResults={hasRuns ? onViewResults : undefined}
+          loadTest={
+            onOpenChainPlan ? (
+              <section aria-labelledby="launch-plan-title" className="space-y-2">
+                <h4 id="launch-plan-title" className="text-sm font-semibold text-text-primary">
+                  Load test instead
+                </h4>
+                <p className="text-left text-xs text-muted hyphens-none">
+                  Turn the selected requests into a request-chain plan, then open it in Performance Plans to
+                  load-test them. This does not run anything.
+                </p>
+                {chainPlanButton}
+                <div className="space-y-1 pt-1">
+                  <h5 className="text-xs font-semibold uppercase text-muted">Plans from collections</h5>
+                  {seededPlans}
+                </div>
+              </section>
+            ) : undefined
+          }
+          gates={gates}
+        />
+        {chainPlanDialog}
+      </section>
+    );
+  }
+
+  if (view === "results") {
+    return (
+      <section
+        data-testid="external-collection-run-panel"
+        className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">{uploadedCollection.name}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            {run && run.status !== "in-progress" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadReport("html")}
+                  disabled={downloadingReport !== null}
+                  title="One self-contained HTML file with the run's overview, failures and results. Request and response headers and bodies are not included."
+                  className={BUTTON_STYLES.secondary}
+                >
+                  {downloadingReport === "html" ? "Preparing HTML…" : "Download HTML report"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadReport("pdf")}
+                  disabled={downloadingReport !== null}
+                  title="A PDF of this run's outcomes. Request and response headers and bodies are not included."
+                  className={BUTTON_STYLES.secondary}
+                >
+                  {downloadingReport === "pdf" ? "Preparing PDF…" : "Download PDF report"}
+                </button>
+              </>
+            )}
+            {onRunAgain && (
+              <button type="button" onClick={onRunAgain} className={BUTTON_STYLES.secondary}>
+                Run again
+              </button>
+            )}
+          </div>
+        </div>
+        {reportError && <ErrorState message={reportError} testId="run-report-error" />}
+        {resultsBlock || (
+          <p className="text-sm text-muted">Select a run from the history to see its results.</p>
+        )}
+        {historyBlock}
+      </section>
+    );
+  }
+
   return (
     <section
       data-testid="external-collection-run-panel"
@@ -826,99 +1064,16 @@ export function ExternalCollectionRunPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-text-primary">{uploadedCollection.name}</h3>
         <div className="flex flex-wrap items-center gap-2">
-          {onOpenChainPlan && (
-            <button type="button" onClick={() => setSeedingChainPlan(true)} disabled={selectedIds.size === 0 || requests.length === 0} className={BUTTON_STYLES.secondary}>
-              Create request-chain plan
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleRunClick}
-            disabled={runDisabled}
-            className={BUTTON_STYLES.primary}
-          >
-            {starting ? "Starting…" : "Start run"}
-          </button>
+          {chainPlanButton}
+          {startButton}
         </div>
       </div>
-      {onOpenChainPlan && (
-        // AP-037 phase two (US5): the plans seeded from collections, opened in Performance Plans.
-        <SeededPlans seedKind="collection" onOpen={onOpenChainPlan} emptyText="No request-chain plan has been created from a collection yet. Select requests and choose Create request-chain plan." />
-      )}
-
-      {requests.length > 0 && (
-        <RunOrderChecklist
-          requests={orderedRequests}
-          selectedIds={selectedIds}
-          onToggle={toggleSelected}
-          onReset={reset}
-          canReset={selectedIds.size < requests.length || runOrder !== undefined}
-          disabled={starting || run?.status === "in-progress"}
-          placements={placements}
-          onMove={onRunOrderChange ? moveInRunOrder : undefined}
-        />
-      )}
-
-      {showUnverifiedDialog && (
-        <UnverifiedContentDialog
-          onConfirm={() => performStart(true, true)}
-          onDecline={() => setShowUnverifiedDialog(false)}
-        />
-      )}
-
-      {pendingRiskTierConfirmation && (
-        <RiskTierConfirmationBanner
-          requirement={pendingRiskTierConfirmation}
-          onConfirm={() => performStart(true)}
-          onCancel={() => setPendingRiskTierConfirmation(null)}
-        />
-      )}
-
-      {startError && <ErrorState message={startError} />}
-
-      {run && (
-        <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Results</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={RUN_STATUS_LABEL[run.status]} tone={runStatusTone(run.status)} />
-            <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />
-            {run.status === "in-progress" && (
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={cancelling || run.cancelRequested}
-                className={BUTTON_STYLES.secondary}
-              >
-                {run.cancelRequested || cancelling ? "Cancelling…" : "Cancel run"}
-              </button>
-            )}
-          </div>
-          <RunOverview run={run} />
-          <ul className="divide-y divide-border">
-            {run.results.map((result, index) => (
-              <ExternalCollectionResultRow
-                key={`${result.requestName}-${index}`}
-                result={result}
-                collectionTier={uploadedCollection.tier}
-                failureAnalysis={failureAnalysisBinding(index)}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <RunHistory runs={runHistory} selectedRunId={run?.id} onSelect={handleSelectHistoryRun} />
-      {seedingChainPlan && onOpenChainPlan && (
-        <SeedPlanDialog
-          source={{ kind: "collection", collectionId: uploadedCollection.id, orderedRequestIds: seedOrder }}
-          defaultName={uploadedCollection.name}
-          onCancel={() => setSeedingChainPlan(false)}
-          onSeeded={(planId) => {
-            setSeedingChainPlan(false);
-            onOpenChainPlan(planId);
-          }}
-        />
-      )}
+      {seededPlans}
+      {orderBlock}
+      {gates}
+      {resultsBlock}
+      {historyBlock}
+      {chainPlanDialog}
     </section>
   );
 }

@@ -128,6 +128,18 @@
   --color-section-execution: var(--solid-execution);
   --color-section-results: var(--solid-results);
 
+  /* HTTP method identity. Solid, saturated fills that are the same in both themes (not part of the
+   * theme-aware sets above), so a method is instantly recognisable. Labels sit on them in white, or
+   * in the always-dark `code-surface` on the three bright fills (PUT, HEAD, OPTIONS); every pairing is
+   * at least 4.8:1. Closest pair of hues (OKLab): 0.20. See components/httpMethodStyles.ts. */
+  --color-method-get: #2563eb;
+  --color-method-post: #15803d;
+  --color-method-put: #f59e0b;
+  --color-method-patch: #a21caf;
+  --color-method-delete: #dc2626;
+  --color-method-head: #22d3ee;
+  --color-method-options: #a3e635;
+
   /* Chart series. A categorical palette, at least 3:1 on the surface; pair every series with a
    * label or marker. The first four avoid status-like hues (no red, orange or amber until series
    * 5 and 6), so a plain series is not read as a warning or a failure. */

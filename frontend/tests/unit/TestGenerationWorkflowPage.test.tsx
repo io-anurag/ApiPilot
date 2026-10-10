@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TestGenerationWorkflowPage } from "../../src/pages/TestGenerationWorkflowPage";
+import { openPhase } from "./workflowTrackerTestUtils";
 
 const emptyApiModel = {
   operations: [],
@@ -216,6 +217,10 @@ describe("TestGenerationWorkflowPage", () => {
       expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
     );
     expect(screen.getByTestId("stage-status-apiReview")).toHaveTextContent("Active");
+    expect(screen.getByTestId("workflow-position")).toHaveTextContent(
+      "Step 3 of 11 · Prepare › API Review",
+    );
+    openPhase("execute");
     expect(screen.getByTestId("stage-status-postmanGeneration")).toHaveTextContent(
       "Not yet reached",
     );
@@ -400,6 +405,7 @@ describe("TestGenerationWorkflowPage", () => {
 
     // The retry banner lives on the AI Enhancement stage's own view instead, reachable via
     // "view" since the workflow already advanced past it.
+    openPhase("design");
     fireEvent.click(screen.getByTestId("stage-status-aiEnhancement"));
     expect(screen.getByTestId("ai-enhancement-partial")).toBeInTheDocument();
     expect(screen.queryByTestId("ai-enhancement-skipped")).not.toBeInTheDocument();
@@ -468,11 +474,13 @@ describe("TestGenerationWorkflowPage", () => {
       expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
     );
 
+    openPhase("prepare");
     fireEvent.click(screen.getByTestId("stage-status-apiReview"));
     expect(screen.getByTestId("api-review-stage")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     expect(screen.getByTestId("read-only-stage-notice")).toBeInTheDocument();
 
+    openPhase("design");
     fireEvent.click(screen.getByTestId("stage-status-deterministicGeneration"));
     expect(screen.getByTestId("deterministic-generation-summary")).toHaveTextContent(
       "2 baseline scenarios generated",
@@ -483,6 +491,7 @@ describe("TestGenerationWorkflowPage", () => {
       "1 AI-suggested scenario added to review",
     );
 
+    openPhase("organize");
     fireEvent.click(screen.getByTestId("stage-status-dependencyAnalysis"));
     expect(screen.getByTestId("dependency-analysis-summary")).toHaveTextContent(
       "1 relationship found",
@@ -492,12 +501,14 @@ describe("TestGenerationWorkflowPage", () => {
       screen.getByTestId("dependency-analysis-batching-limitation"),
     ).toHaveTextContent("could not be checked by AI");
 
+    openPhase("prepare");
     fireEvent.click(screen.getByTestId("stage-status-upload"));
     expect(screen.getByTestId("upload-stage-summary")).toHaveTextContent("valid.yaml");
 
     fireEvent.click(screen.getByTestId("stage-status-analysis"));
     expect(screen.getByTestId("analysis-stage-summary")).toBeInTheDocument();
 
+    openPhase("organize");
     fireEvent.click(screen.getByTestId("stage-status-workflowReview"));
     expect(screen.getByTestId("workflow-review-stage")).toBeInTheDocument();
   });

@@ -28,6 +28,9 @@ export interface SummaryPanelSegment {
   label: string;
   count: number;
   tone: SummaryTone;
+  /** A solid fill for the bar and dot, for a segment whose colour is its own identity (an HTTP
+   * method) rather than a status; its count then uses the primary text colour. */
+  fillClass?: string;
 }
 
 export interface SummaryPanelAction {
@@ -59,7 +62,7 @@ export function SummaryBreakdown({ segments }: Readonly<{ segments: SummaryPanel
           .map((segment) => (
             <div
               key={segment.key}
-              className={BAR_TONE_CLASSES[segment.tone]}
+              className={segment.fillClass ?? BAR_TONE_CLASSES[segment.tone]}
               style={{ width: `${(segment.count / total) * 100}%` }}
             />
           ))}
@@ -70,11 +73,13 @@ export function SummaryBreakdown({ segments }: Readonly<{ segments: SummaryPanel
             <dt className="flex items-center gap-2 text-text-secondary">
               <span
                 aria-hidden="true"
-                className={`h-2 w-2 shrink-0 rounded-full ${BAR_TONE_CLASSES[segment.tone]}`}
+                className={`h-2 w-2 shrink-0 rounded-full ${segment.fillClass ?? BAR_TONE_CLASSES[segment.tone]}`}
               />
               {segment.label}
             </dt>
-            <dd className={`font-semibold ${TEXT_TONE_CLASSES[segment.tone]}`}>{segment.count}</dd>
+            <dd className={`font-semibold ${segment.fillClass ? "text-text-primary" : TEXT_TONE_CLASSES[segment.tone]}`}>
+              {segment.count}
+            </dd>
           </div>
         ))}
       </dl>

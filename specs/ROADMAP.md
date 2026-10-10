@@ -3409,3 +3409,129 @@ Implementation
       focus states (narrowest: selected text 4.94:1, dark Scenarios; focus ring 3.97:1, light Specification). Frontend tests,
       lint and build pass.
     - Version bumped to 19.28.0 (root, backend, frontend, shared-domain).
+65. **Guided-workflow stage tracker grouped into phases; version 19.29.0 (2026-10-10).**
+    - The 11-stage tracker (one horizontally scrolling row with inline lock text) became four phase tiles (Prepare,
+      Design, Organize, Execute) with a "Step N of 11 · Phase › Stage" line. Only the phase on screen lists its
+      stages; other phases open on a tile click and the list returns to the current phase when the stage on screen
+      changes phase. Lock reasons moved to a tooltip (hover and keyboard focus, `aria-describedby`). Phases are a
+      presentation grouping in `workflowStageViewModel.ts`; stage order, statuses and the API are unchanged, and
+      Performance Testing does not hold the Execute phase back from reading Complete.
+    - Colour: the tracker's chips, tiles and banners use one set of token classes (success, warning, brand tints over
+      the neutral surfaces) with no `dark:` overrides, so a status keeps the same hue in light and dark. The shared
+      `StatusBadge` and the rest of the app keep their existing per-theme treatment.
+    - Not included: the "Back" button from the preview (no defined meaning for it in the workflow).
+    - Validation: frontend and repository tests, lint and build pass. No browser check of the new layout in light or
+      dark was run.
+    - Version bumped to 19.29.0 (root, backend, frontend, shared-domain).
+66. **API Review paginator; version 19.30.0 (2026-10-10).**
+    - The API Review operation table is shown a page at a time (25, 50 or 100 per page; default 25) when a
+      specification has more than 25 operations, using a new reusable `Pagination` component (First, Previous, Next,
+      Last, page-size select, "Showing a-b of n"). Selection state lives above the page: checks persist across pages, and
+      Select all, the summary and Continue cover every operation. Changing the page size returns to page 1. Frontend
+      only; no API or contract change.
+    - Validation: frontend and repository tests, lint and build pass. No browser check was run.
+    - Version bumped to 19.30.0 (root, backend, frontend, shared-domain).
+67. **Import & Run Collection in four steps; version 19.31.0 (2026-10-10).**
+    - The single long screen (full-height hero, tree and editor, run panel and results stacked) became four steps
+      shown one at a time in a clickable stepper: Collection, Review requests, Run, Results. The hero is kept: full on
+      Collection around the import card (collection file, environment file, name and tier, unchanged), compact on the
+      other steps above a collection bar (name, tier, Unverified, counts, Change collection). Run holds the run order and
+      a sticky launch card (Start run, Create request-chain plan, seeded plans, the confirmation gates); Results holds the
+      run, its history and Run again. Starting a run moves to Results. Results stays locked until the collection has a
+      run; Review and Run until a collection is selected.
+    - `ExternalCollectionRunPanel` gained a `view` prop (default `all`, the original layout) and stays mounted while
+      hidden, so polling, run order and history persist across steps. The decorative path strip on this screen was
+      replaced by the stepper (the component remains in use on other screens). Frontend only; no API or contract change.
+    - Validation: frontend and repository tests, lint and build pass. No browser check of the new layout in light or
+      dark was run.
+    - Version bumped to 19.31.0 (root, backend, frontend, shared-domain).
+68. **Dynamic variables by autocomplete in the request editor; version 19.32.0 (2026-10-10).**
+    - The request editor's "Random value" dropdown and Insert button (under the URL, each header value and the body)
+      were removed. Typing `{{$` in those fields now opens the same suggestion list the request-chain editor uses
+      (`ReferenceField`): the 48 Postman dynamic variables with their descriptions, narrowing as the name is typed;
+      arrow keys with Enter or Tab, or a click, complete `{{$name}}`. Only the token is stored and the backend generates
+      the value at run time, as before. The catalog moved to `postmanDynamicVariables.ts` and is tested against the
+      shared-domain supported set. Frontend only; no API or contract change.
+    - Not included: suggestions for the collection's own `{{variables}}` (only dynamic variables are offered here).
+    - Validation: frontend and repository tests, lint and build pass. No browser check was run.
+    - Version bumped to 19.32.0 (root, backend, frontend, shared-domain).
+69. **Header name combo box in the request editor; version 19.33.0 (2026-10-10).**
+    - The header-name field in the request editor is now a combo box: a dropdown button (or the Down key) opens the full
+      list of standard HTTP request headers (about 50, with a short description, including common `X-` conventions and
+      `Idempotency-Key`); typing narrows it (names starting with the text first, then names containing it); arrow keys with
+      Enter or Tab, or a click, pick one. It only suggests: any header name can be typed and nothing is validated against the
+      list. New reusable `SuggestionCombobox` and the `httpRequestHeaders.ts` catalog. The list is a fixed 28rem wide with each name on one line (it was as narrow as the field, which wrapped names such as
+      `X-Correlation-ID`), and opens above the field when there is little room below. Frontend only; no API or contract change.
+    - Validation: frontend tests, lint and build pass; the full repository run showed 5 backend timeouts under load
+      (execution, confirmation-gate and failure-analysis suites) that pass when those files are run alone. No browser check.
+    - Version bumped to 19.33.0 (root, backend, frontend, shared-domain).
+70. **Clearer Run launch card and readable method badges; version 19.34.0 (2026-10-10).**
+    - The Run step's launch card (AP-042) is split into two labelled parts: "Run now" (how many requests, once, in the order
+      shown, on which tier; the unverified-collection note; Start run; where results open) and "Load test instead" (what
+      Create request-chain plan does, that it runs nothing, and the plans already made from collections). With nothing
+      selected it says so in words and Start run stays disabled.
+    - HTTP method badges (`HttpMethodBadge`, used across the app) were faint in light mode and unreadable in dark. The label is
+      now always the primary text colour on a tint and border of the method's hue, with no `dark:` overrides, so both themes
+      share one treatment and contrast does not depend on a pale or dark label variant.
+    - Frontend only; no API or contract change. Validation: frontend and repository tests, lint and build pass. No browser check.
+    - Version bumped to 19.34.0 (root, backend, frontend, shared-domain).
+71. **HTTP method colours reviewed; version 19.35.0 (2026-10-10).**
+    - Review of GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS. Measured as OKLab distance between the hue colours, GET and
+      PATCH were 0.08 apart (steel blue against slate) and PUT and DELETE 0.10 (brown-orange against red); HEAD and OPTIONS were
+      one identical neutral; the tinted badges were also dull against the page.
+    - New palette: solid, saturated fills from new static `method-*` tokens in `index.css`, the same in both themes: GET blue
+      (#2563eb), POST green (#15803d), PUT amber (#f59e0b), PATCH fuchsia (#a21caf), DELETE red (#dc2626), HEAD cyan (#22d3ee),
+      OPTIONS lime (#a3e635); other methods stay neutral. Labels are white on the dark fills and the always-dark `code-surface`
+      on the three bright ones, at least 4.8:1 everywhere (measured); the closest pair of hues is 0.20. A faint inner ring keeps
+      a bright fill visible on a light surface.
+    - Defined once in `httpMethodStyles.ts`, read by `HttpMethodBadge`, the API-review method breakdown (whose PATCH was still the
+      section accent and whose GET used the info status colour) and the Performance Plan mock page, which had its own copy. No
+      `dark:` overrides.
+    - Frontend only; no API or contract change. Validation: frontend and repository tests, lint and build pass; the generated CSS
+      contains the new utilities. No browser check.
+    - Version bumped to 19.35.0 (root, backend, frontend, shared-domain).
+72. **Run step setup card; version 19.36.0 (2026-10-10).**
+    - The Run step's right-hand panel (AP-042) now follows a performance plan's Run setup card (AP-040): a ready headline with
+      the reason it cannot start, Start run, the last run in one line with View results, a facts grid (requests selected,
+      order, tier, delay between requests), the hosts the selected requests reach, unresolved variables, and a writes warning
+      by method (or "only read data"), then "Load test instead" and the existing confirmations. The panel is 24rem wide and
+      scrolls inside itself when tall. Computed in `utils/collectionRunSetup.ts` from the requests and the selection; frontend
+      only, no API or contract change, and no run behaviour changed.
+    - The card's text is left-aligned (the app justifies paragraphs by default, which stretched words in the narrow column) and the
+      unverified-content and risk-tier confirmations now appear directly under Start run, before the facts, where the click that
+      opens them is, instead of at the end of the card.
+    - Validation: frontend and repository tests, lint and build pass. No browser check.
+    - Version bumped to 19.36.0 (root, backend, frontend, shared-domain).
+73. **PDF report for a collection run; version 19.37.0 (2026-10-10).**
+    - The Results step has **Download PDF report** for a finished (or cancelled) run. New route
+      `GET /api/external-collections/:id/execution/runs/:runId/report.pdf` (attachment, ASCII file name, `no-store`; 404 for an
+      unknown run or one of another collection, 409 while in progress). The report has the run's facts, a summary, a results
+      table with each outcome as a word and its reason, and a Failures section; it never includes request or response headers
+      or bodies or variables, and says so. Built by the pure `buildRunReportModel` and drawn by `renderRunReportPdf`; the same
+      run renders to the same bytes. Spec: `specs/043-run-report-pdf/spec.md`.
+    - New dependency: `pdfkit` (MIT, pure JavaScript, offline) in the backend workspace, plus `@types/pdfkit` for
+      development; lockfile updated through npm. Non-Latin text is drawn as `?` (standard fonts).
+    - Validation: backend unit and integration tests, frontend tests, lint and build pass. The rendered PDF was not looked at in
+      a viewer (none available here); only its drawing instructions were inspected.
+    - Version bumped to 19.37.0 (root, backend, frontend, shared-domain).
+74. **Self-contained HTML report for a collection run; version 19.38.0 (2026-10-10).**
+    - Modelled on the structure of the open-source reportingLabs reporter (MIT; design and code are ApiPilot's own). New
+      `GET .../execution/runs/:runId/report.html` and a **Download HTML report** button beside the PDF on the Results step. One
+      file with inline styles and a few lines of script: pass-rate and count tiles, a run strip, Needs attention, Failure
+      clusters (with plain-language reasons), Slowest requests, By method, Run details, and every request expandable with
+      filters; light and dark with a switch; prints cleanly. No network request (a `default-src 'none'` policy), every
+      run-derived value escaped, and no headers, bodies or variables. Built from the same report model as the PDF, plus derived
+      insights. Applies to Import & Run Collection, which is also where guided-workflow collections are run. Spec:
+      `specs/044-run-report-html/spec.md`.
+    - The PDF (AP-043) was brought to the same content: it now also has the pass rate, run strip, failure clusters with
+      explanations, slowest requests and the method breakdown, and its table shows each reason and passed-test count; the
+      reason explanations and method colours moved to one shared place. Only the filters, expandable rows and theme switch are
+      HTML-only.
+    - The PDF was then redrawn to match the HTML's visual design as well (header with chips, separate tiles, bordered cards in
+      the same order, the two side-by-side pairs, the same strip, tables and colours), from downloaded samples that showed it
+      as a flat list. The same samples showed `\u2014` in request names printing as `?`; the PDF now draws the whole WinAnsi
+      range (dashes, quotes, bullet, ellipsis) and only replaces what the font cannot draw.
+    - Left out for now, as agreed: run history and trends, bug-report and Slack/Teams text, CSV/JSON export, `report.json`.
+    - Validation: backend unit and integration tests, frontend tests, lint and build pass; the page was rendered in headless
+      Chrome in light and dark and inspected. The filter and theme switch and the PDF layout were not exercised in a viewer.
+    - Version bumped to 19.38.0 (root, backend, frontend, shared-domain).

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EntryFeatureIcon } from "../components/EntryFeatureIcon";
+import { HttpMethodBadge } from "../components/HttpMethodBadge";
 
 type EndpointState = "ready" | "attention" | "removed";
 
@@ -131,14 +132,6 @@ const ENDPOINTS: readonly MockEndpoint[] = [
       "The specification has no documented completion status. Choose an expected success status before generating the script.",
   },
 ];
-
-const METHOD_CLASSES: Record<MockEndpoint["method"], string> = {
-  GET: "bg-info-50 text-info-700 dark:bg-info-500/15 dark:text-info-100",
-  POST: "bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-100",
-  PUT: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-100",
-  PATCH: "bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-100",
-  DELETE: "bg-danger-50 text-danger-700 dark:bg-danger-500/15 dark:text-danger-100",
-};
 
 const STATE_LABELS: Record<EndpointState, string> = {
   ready: "Ready",
@@ -284,11 +277,7 @@ export function PerformancePlanScaleMockPage() {
                         >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${METHOD_CLASSES[endpoint.method]}`}
-                              >
-                                {endpoint.method}
-                              </span>
+                              <HttpMethodBadge method={endpoint.method} />
                               <span className="font-mono text-xs text-text-primary">
                                 {endpoint.path}
                               </span>
@@ -327,11 +316,7 @@ export function PerformancePlanScaleMockPage() {
               <h2 className="font-semibold">Selected endpoint</h2>
             </div>
             <div className="flex items-center gap-2">
-              <span
-                className={`rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${METHOD_CLASSES[selected.method]}`}
-              >
-                {selected.method}
-              </span>
+              <HttpMethodBadge method={selected.method} />
               <code className="text-xs">{selected.path}</code>
             </div>
             <p className="text-sm text-muted">{selected.detail}</p>

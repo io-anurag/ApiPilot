@@ -103,7 +103,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
                 {runs.cancelling ? "Cancelling…" : "Cancel run"}
               </button>
             ) : (
-              <button type="button" className={HERO_PRIMARY} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id)}>
+              <button type="button" className={HERO_PRIMARY} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id).then((started) => started && onViewRuns())}>
                 {runs.starting ? "Starting…" : `Start run on ${environment?.name ?? "…"}`}
               </button>
             )}

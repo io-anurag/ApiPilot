@@ -4,6 +4,7 @@ import { AnalysisSummary } from "./AnalysisSummary";
 import { ErrorState } from "./ErrorState";
 import { OperationDetail } from "./OperationDetail";
 import { OperationList } from "./OperationList";
+import { Pagination, pageCount } from "./Pagination";
 import { SummaryPanel } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
 import {
@@ -11,6 +12,10 @@ import {
   type WorkflowResult,
 } from "../services/testGenerationWorkflowClient";
 import { groupOperationsByMethod } from "../utils/operationMethodGroups";
+
+/** Operations per page. A huge specification has hundreds; rendering them all makes the stage very
+ * long. Selection ("Select all", the summary) always spans every operation, not just the page. */
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 /** What the summary panel says about the scope "Continue" will carry forward. */
 function scopeDescription(
@@ -56,11 +61,20 @@ export function ApiReviewStage({
   const [checkedKeys, setCheckedKeys] = useState<ReadonlySet<string>>(
     () => new Set(selectedOperationKeys ?? []),
   );
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
   const [continuing, setContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const allKeys = useMemo(() => apiModel.operations.map(toOperationKey), [apiModel.operations]);
   const total = allKeys.length;
+  // Clamped rather than stored-and-reset, so a smaller list or larger page size can never leave
+  // the view on a page that no longer exists.
+  const currentPage = Math.min(page, pageCount(total, pageSize));
+  const pageOperations = useMemo(
+    () => apiModel.operations.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [apiModel.operations, currentPage, pageSize],
+  );
   const checkedCount = checkedKeys.size;
   const allChecked = total > 0 && checkedCount === total;
   // Gated only when there is something to choose: a specification with no operations must still
@@ -133,7 +147,7 @@ export function ApiReviewStage({
           </div>
         )}
         <OperationList
-          operations={apiModel.operations}
+          operations={pageOperations}
           selected={selected}
           onSelect={setSelected}
           inclusion={
@@ -159,6 +173,21 @@ export function ApiReviewStage({
             </div>
           )}
         />
+        {total > PAGE_SIZE_OPTIONS[0] && (
+          <Pagination
+            testId="api-review-pagination"
+            noun="operations"
+            page={currentPage}
+            pageSize={pageSize}
+            total={total}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        )}
         {error && <ErrorState testId="api-review-error" message={error} />}
       </div>
       <SummaryPanel

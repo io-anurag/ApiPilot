@@ -479,8 +479,22 @@ generated scripts on the server"), gated behind the FR-007 confirmation above an
 this feature; it does not apply to ApiPilot-generated artifacts, AI output, or uploaded OpenAPI
 specifications, and no new sandboxing layer was introduced.
 
+A finished uploaded-collection run can be downloaded as a PDF (AP-043) or as one self-contained HTML file (AP-044):
+`GET /api/external-collections/:id/execution/runs/:runId/report.pdf` and `.../report.html` (one handler, both formats).
+`renderRunReportHtml` (`runReportHtml.ts`) escapes every run-derived value, ships a `default-src 'none'` policy and
+adds only the derived `buildRunInsights` (pass rate, failure clusters, slowest requests, method breakdown) to the same model.
+The PDF details are: The route is thin; the report content is
+built by the pure `buildRunReportModel` (`backend/src/externalCollections/runReport.ts`, outcomes only, never headers
+or bodies) and drawn by `renderRunReportPdf` (`runReportPdf.ts`, `pdfkit`, standard fonts, deterministic: dates from the
+run). `pdfkit` is the only PDF dependency and is used only there.
+
 The frontend's "Import & Run Collection" view (`frontend/src/pages/ExternalCollectionsPage.tsx`) is
-a sibling top-level view to the guided workflow. `App.tsx` starts on an entry chooser; the tab bar
+a sibling top-level view to the guided workflow. Inside it (AP-042) a four-step bar (`ImportRunStepper`,
+step rules in `importRunSteps.ts`: Collection, Review requests, Run, Results) shows one step at a time; the
+hero (`ImportRunHero`) is full on Collection and compact on the rest. `ExternalCollectionRunPanel` takes a
+`view` (`run`, `results`, `hidden`, default `all`) and stays mounted on every step, so an in-progress run
+keeps polling and the run order and history survive moving between steps. It is presentation state only:
+no API or contract change. `App.tsx` starts on an entry chooser; the tab bar
 between the two views is hidden while the guided workflow is in progress and shown for "Import &
 Run Collection" and after the hand-off. Visibility is toggled rather than unmounting, so switching
 views keeps each one's in-progress state. The guided workflow page stays mounted for the rest of
@@ -1193,8 +1207,11 @@ AI-vs-deterministic provenance indicators; `Dialog`/`ConfirmDialog` and `Tabs` f
 chrome; `EmptyState`, `ErrorState`, and `Skeleton` for the loading/empty/error triad; and
 `controlStyles.ts` for shared button/input variants. `WorkflowStageTracker.tsx` is the one reusable
 workflow-progress indicator, presenting the product's real eleven-stage order (Upload through
-Performance Testing) with completed/active/pending/locked status and an explanation for why a locked stage is
-unavailable, rather than each page building its own progress display. Every status/decision
+Performance Testing) as four phase tiles (Prepare, Design, Organize, Execute; `WORKFLOW_PHASES` in
+`workflowStageViewModel.ts`, presentation only, the stage order and state machine are unchanged) with the
+sub-stages of one phase listed beneath, and a tooltip explaining why a locked stage is unavailable, rather than
+each page building its own progress display. Its colour classes resolve through theme-aware tokens with no
+`dark:` overrides, so light and dark share the same hues. Every status/decision
 indicator carries a text label or icon in addition to color, and every interactive element is
 keyboard-operable with a visible focus indicator (constitution/CLAUDE.md §38).
 
