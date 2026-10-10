@@ -928,6 +928,35 @@ for as long as your session stays active. A run in progress when the backend sto
 as cancelled and is not started again. Deleting a script keeps its past runs and reports; a
 script with a run in progress cannot be deleted.
 
+## 6a. Live run dashboard
+
+While a run is in progress, a live dashboard shows how it is going. It appears in the same place for the three kinds of run
+you can start: a **performance plan run** (on Runs & reports), a **Run k6 Script** run (in the run activity area) and an
+**Import & Run Collection** run (in the Results step). It is the same dashboard for all three.
+
+- **Counters.** Requests done, failures, virtual users and elapsed time, refreshed about once a second without reloading the
+  page, plus the average and 95th-percentile duration for the whole run so far. A collection run is sequential, so it shows
+  "n of N requests" and the name of the request being sent, and leaves out virtual users and percentiles; a figure a run
+  cannot supply is left out, never shown as zero.
+- **State.** The badge says Live, Completed, Cancelled or Failed. If no reply arrives for 10 seconds, the dashboard says its
+  figures are **stale**, since when, and keeps the last values until the connection returns. Reloading the page in the
+  middle of a run shows the run so far.
+- **Graph.** Requests per second and failures per second on a labelled left axis, virtual users on a labelled right axis, and
+  elapsed time along the bottom (the axis spans the planned run, so you see how much is left). Gridlines mark every tick. Move
+  the pointer over the graph to read off any second. For a plan with several chains, **By chain** draws one line per chain
+  instead of the total. A second graph beneath shows the average response time per second. The lines differ by style and are
+  named in a legend, not only by colour, and a table of the plotted values sits under the graph. After about 30 minutes, older
+  seconds are merged into wider steps (the graph says so); totals do not change.
+- **Latest requests.** The 15 most recent completed requests, newest first, with the time into the run, step, method, path,
+  HTTP status and duration. It is a sample, not a log. Paths are shown as written in the plan or collection (for example
+  `/orders/{{id}}`), never with a query string, header, cookie, token or body.
+- **After the run.** The graph and final totals stay on the dashboard of a finished run, and the k6 HTML reports and the
+  collection HTML and PDF reports include the graph. Runs from before this feature show no graph in their k6 report, and
+  the latest-requests list is empty once the backend has restarted.
+
+The dashboard only reads: it never starts, stops or changes a run and sends nothing to the target. Live figures are kept in
+memory and nothing is sent to a third party.
+
 ## 7. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a

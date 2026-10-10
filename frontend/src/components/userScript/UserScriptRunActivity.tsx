@@ -4,8 +4,9 @@ import type { UserScriptStartInput } from "../../services/userScriptClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { CodeBlock } from "../CodeBlock";
 import { StatusBadge } from "../StatusBadge";
+import { LiveRunDashboard } from "../liveRun/LiveRunDashboard";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
-import { formatDuration, runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
+import { runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import { LOAD_ORIGIN } from "./UserScriptRunTrigger";
 
@@ -22,57 +23,38 @@ export function UserScriptRunActivity({
   client: PerformanceRunsClient<UserScriptRun, UserScriptRunSummary, UserScriptStartInput>;
 }>) {
   const { run, inProgress, runs: history, reportRunId, showReport, cancelling, cancel } = runs;
-  const progress = run?.progress;
-  const elapsedMs = progress?.elapsedMs ?? 0;
-  const plannedMs = run?.plannedDurationMs ?? null;
 
   return (
     <div className="space-y-5">
       {run && inProgress && (
-        <section aria-labelledby="user-script-live-title" className="space-y-4 rounded-lg border border-border bg-surface p-5" data-testid="user-script-live">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h3 id="user-script-live-title" className="text-base font-semibold">
-                Run <span className="font-mono">{run.id.slice(0, 8)}</span>
-              </h3>
-              <StatusBadge {...runStatusLabel(run)} />
-            </div>
-            <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void cancel()}>
-              {cancelling || run.cancelRequested ? "Cancelling…" : "Cancel run"}
-            </button>
-          </div>
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-xs font-semibold text-muted">TARGET</span>
-            <span className="font-semibold">{run.environment.name}</span>
-            <StatusBadge label={`Tier: ${run.environment.tier}`} tone={TIER_TONE[run.environment.tier]} />
-            <span className="break-all font-mono text-xs">{run.environment.baseUrl}</span>
-            <span className="text-xs text-muted">{LOAD_ORIGIN}</span>
-          </p>
-          <p className="text-xs text-muted">
-            Hosts written in the script: {run.snapshot.hostsFound.length === 0 ? "none found" : run.snapshot.hostsFound.join(", ")}. ApiPilot cannot restrict where the script sends requests.
-          </p>
-          <p className="text-sm">
-            <strong className="font-mono">{formatDuration(elapsedMs)}</strong> <span className="text-muted">elapsed</span>
-            {plannedMs !== null && (
-              <>
-                {" "}
-                <span className="text-muted">of</span> <strong className="font-mono">{formatDuration(plannedMs)}</strong> <span className="text-muted">planned</span>
-              </>
-            )}
-          </p>
-          <dl className="grid grid-cols-3 gap-3">
-            {[
-              ["Virtual users", progress?.currentVirtualUsers ?? 0],
-              ["Requests so far", progress?.requestsSoFar ?? 0],
-              ["Failures so far", progress?.failuresSoFar ?? 0],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-border bg-chrome p-3">
-                <dt className="text-xs font-semibold text-muted">{label}</dt>
-                <dd className="font-mono text-xl font-semibold">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        <div className="space-y-4" data-testid="user-script-live">
+          <section aria-labelledby="user-script-live-title" className="space-y-2 rounded-lg border border-border bg-surface p-5">
+            <h3 id="user-script-live-title" className="sr-only">
+              Target of run {run.id.slice(0, 8)}
+            </h3>
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs font-semibold text-muted">TARGET</span>
+              <span className="font-semibold">{run.environment.name}</span>
+              <StatusBadge label={`Tier: ${run.environment.tier}`} tone={TIER_TONE[run.environment.tier]} />
+              <span className="break-all font-mono text-xs">{run.environment.baseUrl}</span>
+              <span className="text-xs text-muted">{LOAD_ORIGIN}</span>
+            </p>
+            <p className="text-xs text-muted">
+              Hosts written in the script: {run.snapshot.hostsFound.length === 0 ? "none found" : run.snapshot.hostsFound.join(", ")}. ApiPilot cannot restrict where the script sends requests.
+            </p>
+          </section>
+          <LiveRunDashboard
+            key={run.id}
+            kind="user-script"
+            runId={run.id}
+            meta={`Run ${run.id.slice(0, 8)} · ${run.snapshot.scriptName} · started ${new Date(run.startedAt).toLocaleTimeString()}`}
+            actions={
+              <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void cancel()}>
+                {cancelling || run.cancelRequested ? "Cancelling…" : "Cancel run"}
+              </button>
+            }
+          />
+        </div>
       )}
 
       {run && !inProgress && run.status === "failed" && (
@@ -82,6 +64,10 @@ export function UserScriptRunActivity({
           </h3>
           {run.failure?.k6Message ? <CodeBlock label="k6's message (at most 2,000 characters)" content={run.failure.k6Message} /> : <p className="text-sm text-muted">k6 printed no error message.</p>}
         </section>
+      )}
+
+      {reportRunId && !(inProgress && run?.id === reportRunId) && (
+        <LiveRunDashboard key={reportRunId} kind="user-script" runId={reportRunId} meta={`Run ${reportRunId.slice(0, 8)}`} />
       )}
 
       {reportRunId && <PerformanceReportFrame client={client} runId={reportRunId} />}

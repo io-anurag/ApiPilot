@@ -1,3 +1,4 @@
+import type { StoredLiveSeries } from "./liveRun";
 import type {
   LatencyPercentiles,
   LatencySummary,
@@ -260,6 +261,8 @@ export interface UserScriptResult {
   findings: UserScriptFinding[];
   findingsRulesetVersion: number;
   latencyPrecision: "within-1-percent";
+  /** AP-045: the run's per-second series, kept so the graph stays after the run; absent on runs from before it. */
+  liveSeries?: StoredLiveSeries;
 }
 
 /** One execution of a user script against one environment (spec Key Entities, research R9). */

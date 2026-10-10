@@ -6,6 +6,7 @@ import {
   InvalidLoadProfileError,
   InvalidOrderError,
   InvalidThresholdError,
+  InvalidLiveQueryError,
   PerformanceRunNotFoundError,
   QuickTestExistsError,
   StepNotFoundError,
@@ -53,6 +54,7 @@ export function fail(req: Request, res: Response, startedAt: number, status: num
 export function handleKnownError(req: Request, res: Response, startedAt: number, err: unknown): void {
   if (err instanceof PlanSourceUnavailableError) return fail(req, res, startedAt, err.statusCode, err.code, err.message);
   if (err instanceof InvalidOrderError) return fail(req, res, startedAt, 400, "invalid_order", err.message);
+  if (err instanceof InvalidLiveQueryError) return fail(req, res, startedAt, 400, "invalid_query", err.message);
   if (err instanceof InvalidLoadProfileError) return fail(req, res, startedAt, 400, "invalid_load_profile", err.message);
   if (err instanceof InvalidThresholdError) return fail(req, res, startedAt, 400, "invalid_threshold", err.message);
   if (err instanceof EnvironmentNotFoundError) return fail(req, res, startedAt, 404, "environment_not_found", err.message);

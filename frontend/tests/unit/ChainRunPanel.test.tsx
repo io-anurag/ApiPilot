@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import type { LiveRunResult } from "../../src/services/liveRunClient";
+import { liveSnapshot } from "./liveRunFixtures";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { analyzeChainPlan, type ChainRun, type ChainRunSummary, type Environment, type ScriptStatus } from "@apipilot/shared-domain";
 import { ChainRunPanel } from "../../src/components/requestChain/ChainRunPanel";
 import type { PerformanceRuns } from "../../src/components/performance/usePerformanceRuns";
 import { chainRunsClient } from "../../src/services/requestChainClient";
 import { lifecyclePlan, PLAN_ID } from "./requestChainFixtures";
+
+vi.mock("../../src/services/liveRunClient", () => ({ fetchLiveRun: vi.fn(async (): Promise<LiveRunResult> => ({ ok: true, snapshot: liveSnapshot({ runId: "r1", chains: [] }) })) }));
 
 /** AP-037 (FR-031, FR-035, Clarification 2026-10-03); AP-040 (the Runs & reports tab: runs, report, last run, restore). */
 
@@ -108,11 +112,12 @@ describe("ChainRunPanel", () => {
     expect(showReport).toHaveBeenCalledWith("r1");
   });
 
-  it("shows the run in progress with its figures and Cancel", () => {
+  it("shows the run in progress with its live figures and Cancel", async () => {
     const cancel = vi.fn(async () => undefined);
     const run = { ...finishedRun(), status: "in-progress" as const, progress: { elapsedMs: 12_000, requestsSoFar: 40, failuresSoFar: 1 } } as unknown as ChainRun;
     renderPanel({ runs: runs({ run, inProgress: true, cancel }) });
-    expect(screen.getByRole("status")).toHaveTextContent("Running · 12 s · 40 requests · 1 failures");
+    expect(await screen.findByTestId("live-run-dashboard")).toHaveAttribute("data-status", "live");
+    expect(await screen.findByText("120")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel run" }));
     expect(cancel).toHaveBeenCalledTimes(1);
   });

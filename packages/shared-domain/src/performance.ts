@@ -7,6 +7,7 @@
  * clash with other feature contracts in this package carry a `Performance` prefix (for example
  * `PerformanceFailureCategory`, since `FailureCategory` belongs to AP-017's `execution.ts`).
  */
+import type { StoredLiveSeries } from "./liveRun";
 
 /**
  * Where a plan was built (AP-032, specs/032-quick-performance-test data-model.md): the guided
@@ -709,6 +710,8 @@ export interface PerformanceResult {
   findings: PerformanceFinding[];
   findingsRulesetVersion: number;
   latencyPrecision: "within-1-percent";
+  /** AP-045: the run's per-second series, kept so the graph stays after the run; absent on runs from before it. */
+  liveSeries?: StoredLiveSeries;
 }
 
 /** One execution of a generated script against one environment (data-model.md). */

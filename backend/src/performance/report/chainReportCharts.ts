@@ -1,4 +1,4 @@
-import type { StepTimelinePoint, TimelinePoint } from "@apipilot/shared-domain";
+import type { StepTimelinePoint, StoredLiveSeries, TimelinePoint } from "@apipilot/shared-domain";
 import { clock, countScale, escapeHtml, formatCount, latencyScale, ms, timeTickMs } from "./renderHtmlReport";
 
 /**
@@ -176,6 +176,90 @@ export function latencyChart(points: TimelinePoint[], bucketMs: number, p95Limit
     { cls: "l-lat", text: `p95 latency · peak ${ms(peak)} at ${clock(peakPoint.offsetMs)} · ${scale.note}` },
     ...(p95Limit === null ? [] : [{ cls: "limit dash", text: `Threshold ${ms(p95Limit)}` }]),
   ])}${chart}`;
+}
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/** The most points for which the per-second figures are also listed in a table (a stored series can hold 1,800). */
+const LIVE_TABLE_LIMIT = 120;
+
+/**
+ * Styles for the per-second chart where the report's own stylesheet does not define the chart classes
+ * (the user-script report). Scoped to `.live-series`, so nothing else in a report changes, and added to a
+ * report only when it has the chart, so reports without one stay byte-identical (AP-045 FR-014).
+ */
+export const LIVE_SERIES_STYLE = `
+.live-series{--ls-rate:#56675f;--ls-fail:#d03b3b;--ls-vus:#1baf7a;--ls-vus-fill:rgba(27,175,122,.16)}
+@media (prefers-color-scheme: dark){.live-series{--ls-rate:#95aaa2;--ls-fail:#f06a6a;--ls-vus:#34d399;--ls-vus-fill:rgba(52,211,153,.18)}}
+.live-series .legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;margin:0 0 8px}.live-series .legend span{display:inline-flex;align-items:center;gap:6px}
+.live-series .sw{display:inline-block;width:18px;height:0;border-top:3px solid var(--ls-rate)}.live-series .sw.dash{border-top-style:dashed}
+.live-series .sw.l-fail{border-top-color:var(--ls-fail)}.live-series .sw.l-vus{border-top-color:var(--ls-vus)}
+.live-series .line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.live-series .l-rate{stroke:var(--ls-rate)}.live-series .l-fail{stroke:var(--ls-fail)}.live-series .l-vus{stroke:var(--ls-vus)}
+.live-series .d2{stroke-dasharray:7 3}.live-series .area-vus{fill:var(--ls-vus-fill)}.live-series .dot-lat{fill:var(--ls-rate)}
+.live-series p.note{margin:8px 0 0}
+`;
+
+/**
+ * Requests per second, failed requests per second and (when the run has them) virtual users, from the
+ * series stored on a finished k6 run. Empty when the run has no series, so older reports do not change.
+ * Points are one second wide until a long run was merged into wider steps; the plotted rate is the
+ * step's requests divided by its width. The two rates differ by dash style as well as colour, and a
+ * collapsed table lists the figures for short series.
+ */
+export function liveSeriesChart(live: StoredLiveSeries | undefined): string {
+  if (!live || live.points.length === 0) return "";
+  const width = Math.max(1, Math.floor(live.bucketSeconds) || 1);
+  const bucketMs = width * 1000;
+  const points = live.points;
+  const offsets = points.map((point) => point.second * 1000);
+  const rate = points.map((point) => round2(point.requests / width));
+  const failed = points.map((point) => round2(point.failures / width));
+  const peak = Math.max(0, ...rate);
+  const failing = points.filter((point) => point.failures > 0).length;
+  const unit = width === 1 ? "second" : `${width}-second step`;
+  const tip = (index: number) => {
+    const point = points[index];
+    return `${clock(offsets[index])}–${clock(offsets[index] + bucketMs)} · ${formatCount(point.requests)} requests, ${formatCount(point.failures)} failed`;
+  };
+  const chart = lineChart({
+    offsets,
+    bucketMs,
+    series: [
+      { label: "Requests per second", values: rate, className: "l-rate" },
+      { label: "Failed requests per second", values: failed, className: "l-fail d2" },
+    ],
+    scale: countScale(peak, TOP, TOP + PLOT_HEIGHT),
+    tips: points.map((_, index) => tip(index)),
+    summary: `Requests and failed requests per second over time; peak ${formatCount(peak)} requests per second; ${failing} of ${points.length} ${points.length === 1 ? unit : `${unit}s`} had failures.`,
+  });
+  const legend = legendOf([
+    { cls: "l-rate", text: `Requests/s (solid line) · peak ${formatCount(peak)}` },
+    { cls: "l-fail dash", text: `Failed/s (dashed line) · ${formatCount(failing)} of ${formatCount(points.length)} ${points.length === 1 ? unit : `${unit}s`} had failures` },
+  ]);
+  const withUsers = points.some((point) => point.virtualUsers !== null);
+  const usersPeak = Math.max(0, ...points.map((point) => point.virtualUsers ?? 0));
+  const users = withUsers
+    ? `${legendOf([{ cls: "l-vus", text: `Virtual users · peak ${formatCount(usersPeak)}` }])}${lineChart({
+        offsets,
+        bucketMs,
+        series: [{ label: "Virtual users", values: points.map((point) => point.virtualUsers), className: "l-vus", area: true }],
+        scale: countScale(usersPeak, TOP, TOP + PLOT_HEIGHT),
+        tips: points.map((point, index) => `${clock(offsets[index])}–${clock(offsets[index] + bucketMs)} · ${point.virtualUsers === null ? "no virtual user count" : `${formatCount(point.virtualUsers)} virtual users`}`),
+        summary: `Virtual users over time; peak ${formatCount(usersPeak)}.`,
+      })}`
+    : "";
+  const note =
+    width === 1
+      ? '<p class="small muted note">One point per second; a request counts in the second it finished.</p>'
+      : `<p class="small muted note">This run was long, so points are merged into wider steps of ${formatCount(width)} seconds. Each plotted rate is the requests in a step divided by ${formatCount(width)}; the table below, when shown, lists the counts.</p>`;
+  const table =
+    points.length > LIVE_TABLE_LIMIT
+      ? ""
+      : `<details class="data"><summary>Figures per ${unit}</summary><div class="scroll"><table class="phases"><thead><tr><th class="num">At</th><th class="num">Requests</th><th class="num">Failed</th><th class="num">Requests/s</th>${withUsers ? '<th class="num">Virtual users</th>' : ""}</tr></thead><tbody>${points
+          .map((point, index) => `<tr><td class="num">${clock(offsets[index])}</td><td class="num">${formatCount(point.requests)}</td><td class="num">${formatCount(point.failures)}</td><td class="num">${formatCount(rate[index])}</td>${withUsers ? `<td class="num">${point.virtualUsers === null ? "—" : formatCount(point.virtualUsers)}</td>` : ""}</tr>`)
+          .join("")}</tbody></table></div></details>`;
+  return `<div class="live-series">${legend}${chart}${users}${note}${table}</div>`;
 }
 
 export interface StepLine {

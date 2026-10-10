@@ -104,3 +104,44 @@ describe("external collections: PDF run report (AP-043)", () => {
     expect(unknownHtml.status).toBe(404);
   }, 60_000);
 });
+
+describe("external collections: per-second graph in the reports (AP-045 US4)", () => {
+  let targetServer: TargetServer;
+  beforeEach(() => {
+    targetServer = new TargetServer();
+  });
+  afterEach(async () => {
+    await targetServer.stop();
+  });
+
+  it("draws the graph in the HTML report of a real run and renders the same PDF bytes twice", async () => {
+    const baseUrl = await targetServer.start();
+    targetServer.configure("GET", "/widgets/1", { status: 200, body: { id: 1 } });
+    const agent = request.agent(createApp());
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "My collection")
+      .field("tier", "local")
+      .attach("collection", Buffer.from(JSON.stringify(collection())), "collection.json")
+      .attach("environment", Buffer.from(JSON.stringify(environment(baseUrl))), "environment.json");
+    const collectionId = uploaded.body.uploadedCollection.id as string;
+    const started = await agent.post(`/api/external-collections/${collectionId}/execution/start`).send({ confirmed: true });
+    const runId = started.body.run.id as string;
+    await pollUntilSettled(agent, collectionId, runId);
+
+    const html = await agent.get(`/api/external-collections/${collectionId}/execution/runs/${runId}/report.html`);
+    expect(html.text).toContain('<h2 id="series-h">Requests per second</h2>');
+    expect(html.text).toContain("1 requests, 0 failed");
+    const download = () =>
+      agent
+        .get(`/api/external-collections/${collectionId}/execution/runs/${runId}/report.pdf`)
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        });
+    const [first, second] = [(await download()).body as Buffer, (await download()).body as Buffer];
+    expect(first.equals(second)).toBe(true);
+  }, 60_000);
+});

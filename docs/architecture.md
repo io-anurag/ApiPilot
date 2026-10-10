@@ -1083,6 +1083,34 @@ upload / editor save
   with the name, so named requests are counted by the `ip` address they reached. The timeline
   doubles its bucket width when no planned duration is known.
 
+### Live run dashboard (AP-045)
+
+One shared dashboard for the three run kinds that can be started: request-chain plan runs, Run k6 Script runs and Import &
+Run Collection runs (the AP-031/032/036 runs are read-only history). The contract is `LiveRunSnapshot` in
+`packages/shared-domain/src/liveRun.ts`; one read route per kind returns it
+(`GET /api/chain-plans/runs/:runId/live`, `GET /api/user-scripts/runs/:runId/live`,
+`GET /api/external-collections/:id/execution/runs/:runId/live`, query `since` and `bucket`), all `Cache-Control: no-store`
+and session-scoped.
+
+- **k6 kinds.** `backend/src/performance/live/` holds a bounded per-second series (`liveSeries.ts`, at most 1,800 points, older
+  seconds merged pairwise and never dropped, `bucketSeconds` says how wide a point is), a 15-entry newest-first ring
+  (`recentRing.ts`), the pure `buildSnapshot`, and an in-memory registry (`liveRunRegistry.ts`). Both aggregates
+  (`aggregate.ts`, `userScriptAggregate.ts`) feed the series and ring from the metrics points they already read, so no new k6
+  option or output is added. A chain request's step, method and status come from its `http_req_duration` point (verified
+  against real k6: the same tags as `http_reqs`); its path is the plan's template (`liveStepInfo.ts`), never a resolved URL.
+  A finished run keeps serving its in-memory view; otherwise the stored `liveSeries` on the result (written once, with the
+  final result, not at every checkpoint) is used.
+- **Collection kind.** No k6 and no live record: the snapshot is derived from the settled results
+  (`externalCollections/liveSnapshot.ts`, series from the pure `runSeries.ts`, shared with both reports). The planned total,
+  the request in flight and each request's authored path are held in memory by `liveRunState.ts` (not stored, no schema
+  change).
+- **Transport.** Polling every second with a cursor, answered from memory. Trade-off: one request per second per open
+  dashboard against a push channel's extra moving parts (constitution XXVII, XXX).
+- **Frontend.** `components/liveRun/` (dashboard, SVG chart with a values table, latest-requests table, `useLiveRun` with
+  stale handling, view model) and `services/liveRunClient.ts`, mounted in the three run panels.
+- **Privacy.** The snapshot carries only a name, method, path template, status and duration: no header, cookie, token, query,
+  body, resolved URL or `rawCapture`. It is not logged.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither

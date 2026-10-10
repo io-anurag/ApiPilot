@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { analyzeChainPlan, type ChainRun, type ChainRunSummary, type Environment, type ScriptStatus } from "@apipilot/shared-domain";
 import { RunLaunchCard } from "../../src/components/requestChain/RunLaunchCard";
 import type { PerformanceRuns } from "../../src/components/performance/usePerformanceRuns";
@@ -133,6 +133,20 @@ describe("RunLaunchCard", () => {
     expect(state.start).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Start run on Local stub" }));
     expect(state.start).toHaveBeenCalledWith("e1");
+  });
+
+  it("opens Runs & reports once the run has started, and stays on Run setup when it did not", async () => {
+    const started = renderCard(runs());
+    fireEvent.click(screen.getByRole("button", { name: "Start run on Local stub" }));
+    await waitFor(() => expect(started).toHaveBeenCalledTimes(1));
+  });
+
+  it("stays on Run setup when the run could not be started", async () => {
+    const state = runs({ start: vi.fn(async () => false) });
+    const onViewRuns = renderCard(state);
+    fireEvent.click(screen.getByRole("button", { name: "Start run on Local stub" }));
+    await waitFor(() => expect(state.start).toHaveBeenCalled());
+    expect(onViewRuns).not.toHaveBeenCalled();
   });
 
   it.each([

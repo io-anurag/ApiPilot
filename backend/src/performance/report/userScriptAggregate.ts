@@ -6,6 +6,7 @@ import type {
   RequestGroupResult,
   RequestPhase,
   StepTimelinePoint,
+  StoredLiveSeries,
   TimelinePoint,
   UserScriptResult,
   UserScriptRunProgress,
@@ -15,6 +16,9 @@ import { isWriteMethod, REQUEST_PHASES, USER_SCRIPT_FINDINGS_RULESET_VERSION, US
 import { compareCodeUnits } from "../../postman/ordering";
 import type { MetricType, ParsedLine } from "../k6/metricsStream";
 import { timelineBucketMs } from "./aggregate";
+import { latencyOf, type LiveParts } from "../live/buildSnapshot";
+import { createLiveSeries } from "../live/liveSeries";
+import { createRecentRing, pathOfUrl } from "../live/recentRing";
 import { LatencyHistogram } from "./histogram";
 
 /**
@@ -158,6 +162,10 @@ export interface UserScriptAggregate {
   toResult(endMs: number): UserScriptResult;
   /** Request groups seen so far; read by the run to know whether anything was measured. */
   readonly requestCount: number;
+  /** AP-045: the live dashboard's figures at `nowMs`, from memory; nothing is recomputed or stored. */
+  liveParts(nowMs: number): LiveParts;
+  /** AP-045 US4: the whole run's series for the finished result (at most 1,800 points). */
+  storedLiveSeries(endMs: number): StoredLiveSeries;
 }
 
 export function createUserScriptAggregate(options: { plannedDurationMs: number | null; startedAtMs: number }): UserScriptAggregate {
@@ -181,6 +189,10 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
   let dataSent = 0;
   let dataReceived = 0;
   let currentVirtualUsers = 0;
+  // AP-045: the live dashboard's bounded series and latest-requests ring, fed from the same points.
+  const liveSeries = createLiveSeries({ withVirtualUsers: true });
+  const liveRing = createRecentRing();
+  const secondOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - startedAtMs) / 1000));
 
   const indexOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - startedAtMs) / bucketMs));
 
@@ -287,6 +299,28 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
     if (type === "trend") stats.histogram.add(value);
   }
 
+  /**
+   * One latest-requests entry from a request's duration point (AP-045 research R6). A named request
+   * is shown by its name, with no path, since k6 replaces its `url` tag with the name; an unnamed
+   * one by its host and path. The query, user info and fragment are never kept.
+   */
+  function pushRecent(tags: Record<string, string>, durationMs: number, timeMs: number): void {
+    const { displayName, named } = displayNameOf(tags);
+    const status = Number(tags.status ?? "0");
+    const code = Number.isFinite(status) ? status : 0;
+    const source = tags.name !== undefined && tags.name !== "" ? tags.name : (tags.url ?? "");
+    const parsed = named ? null : parseUrl(source);
+    liveRing.push({
+      second: secondOf(timeMs),
+      chain: named ? displayName : (parsed?.host ?? ""),
+      method: (tags.method ?? "").toUpperCase(),
+      path: named ? "" : pathOfUrl(source),
+      status: code === 0 ? null : code,
+      failed: tags.expected_response === "false" || code === 0,
+      durationMs: round2(durationMs),
+    });
+  }
+
   function add(line: ParsedLine): void {
     if (line.kind === "declaration") {
       declared.set(line.name, line.metricType);
@@ -298,6 +332,7 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
     if (metric === "vus") {
       currentVirtualUsers = value;
       runBucket(bucketIndex(timeMs)).virtualUsers = value;
+      liveSeries.recordVirtualUsers(secondOf(timeMs), value);
       return;
     }
     if (metric === "iterations") {
@@ -361,6 +396,7 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
       }
       runBucket(index).requests += 1;
       groupBucket(group, index).requests += 1;
+      liveSeries.recordRequest(secondOf(timeMs));
       recordHost(tags);
       return;
     }
@@ -369,11 +405,14 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
       totals.histogram.add(value);
       runBucket(index).histogram.add(value);
       groupBucket(group, index).histogram.add(value);
+      liveSeries.recordLatency(secondOf(timeMs), value);
+      pushRecent(tags, value, timeMs);
       return;
     }
     if (metric === "http_req_failed") {
       const failed = value > 0;
       if (failed) {
+        liveSeries.recordFailure(secondOf(timeMs));
         group.failures += 1;
         totals.failures += 1;
         runBucket(index).errors += 1;
@@ -490,6 +529,22 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
     toResult,
     get requestCount() {
       return totals.requests;
+    },
+    liveParts(nowMs) {
+      const elapsedMs = Math.max(0, nowMs - startedAtMs);
+      return {
+        elapsedMs,
+        totals: { requests: totals.requests, failures: totals.failures },
+        currentVirtualUsers,
+        latency: latencyOf(totals.histogram),
+        chains: [],
+        series: liveSeries.view(Math.floor(elapsedMs / 1000)),
+        recent: liveRing.list(),
+      };
+    },
+    storedLiveSeries(endMs) {
+      const view = liveSeries.view(Math.floor(Math.max(0, endMs - startedAtMs) / 1000));
+      return { bucketSeconds: view.bucketSeconds, points: view.points };
     },
   };
 }

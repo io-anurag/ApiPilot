@@ -4,6 +4,8 @@ import type {
   UploadedCollectionExecutionRun,
   UploadedRequestResult,
 } from "@apipilot/shared-domain";
+import type { LiveSeriesView } from "../performance/live/liveSeries";
+import { runSeries } from "./runSeries";
 
 /**
  * The content of a downloadable run report, derived from a finished uploaded-collection run. Built
@@ -39,6 +41,8 @@ export interface RunReportModel {
   completedAt?: string;
   summary: { total: number; passed: number; failed: number; notAttempted: number; durationMs: number };
   rows: RunReportRow[];
+  /** Requests and failures per second (AP-045), derived from the results so older runs have it too. */
+  series: LiveSeriesView;
 }
 
 const STATUS_LABEL: Record<ExecutionRunStatus, string> = {
@@ -121,9 +125,22 @@ function toRow(result: UploadedRequestResult, index: number): RunReportRow {
   };
 }
 
+/**
+ * How long the run lasted for the graph's time axis: completion minus start, or, for a run without a
+ * completion time, the end of the last result. Derived from the run only, never from the clock.
+ */
+function runElapsedMs(run: UploadedCollectionExecutionRun, startMs: number): number {
+  const end = run.completedAt
+    ? Date.parse(run.completedAt)
+    : Math.max(startMs, ...run.results.map((result) => Date.parse(result.startedAt) + Math.max(0, result.durationMs)));
+  return Number.isFinite(end) && Number.isFinite(startMs) ? Math.max(0, end - startMs) : 0;
+}
+
 /** Pure: the same run always gives the same model. */
 export function buildRunReportModel(run: UploadedCollectionExecutionRun): RunReportModel {
+  const startMs = Date.parse(run.startedAt);
   return {
+    series: runSeries(run.results, startMs, runElapsedMs(run, startMs)),
     collectionName: run.uploadedCollectionSnapshot.name,
     tier: run.uploadedCollectionSnapshot.tier,
     runId: run.id,

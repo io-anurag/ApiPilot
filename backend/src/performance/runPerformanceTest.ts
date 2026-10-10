@@ -9,6 +9,8 @@ import { createRunDirectory, removeRunDirectory } from "./k6/runDirectory";
 import { parseMetricsLine } from "./k6/metricsStream";
 import { buildChildEnv } from "./k6/runner";
 import type { PerformanceRunner, RunnerHandle } from "./k6/runnerTypes";
+import { finishLiveSnapshotSource, registerLiveSnapshotSource } from "./live/liveRunRegistry";
+import { liveStepInfoFromChain } from "./live/liveStepInfo";
 import { createAggregate } from "./report/aggregate";
 import { deriveFindings } from "./report/findings";
 import { layoutFromChainSnapshot, type RunLayout } from "./report/runLayout";
@@ -110,9 +112,14 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
   const { sessionId, run } = input;
   const repository = getPerformanceRunRepository();
   const startedAtMs = Date.parse(run.startedAt);
-  const aggregate = createAggregate(sourceOf(run), run.plannedDurationMs, startedAtMs);
+  const aggregate = createAggregate(sourceOf(run), run.plannedDurationMs, startedAtMs, run.planSource === "chain" ? { steps: liveStepInfoFromChain(run.snapshot) } : {});
+  // AP-045: only request-chain runs can be started today, and only they have a live view.
+  if (run.planSource === "chain") {
+    registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "chain", plannedDurationMs: run.plannedDurationMs, parts: aggregate.liveParts });
+  }
   const settle = (settlement: PerformanceRunSettlement, result?: PerformanceResult) => {
     const settled = repository.settle(sessionId, run.id, settlement, input.now().toISOString(), result);
+    finishLiveSnapshotSource(run.id, settled.status === "in-progress" ? "failed" : settled.status, input.now().getTime());
     touch(sessionId);
     logger.info("performance_run_settled", {
       runId: run.id,
@@ -199,7 +206,8 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
     liveHandles.delete(run.id);
     if (!userCancelled && repository.isCancelRequested(sessionId, run.id)) userCancelled = true;
     const endMs = input.now().getTime();
-    const result = withReportFields(aggregate.toResult(endMs), run);
+    // AP-045 US4: the series is stored once, with the finished result, not with every checkpoint.
+    const result = { ...withReportFields(aggregate.toResult(endMs), run), liveSeries: aggregate.storedLiveSeries(endMs) };
     repository.checkpoint(sessionId, run.id, { progress: aggregate.progress(endMs) });
     if (stderrLines > 0) logger.info("performance_run_stderr", { runId: run.id, lineCount: stderrLines });
 

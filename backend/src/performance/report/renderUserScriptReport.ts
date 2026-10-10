@@ -1,5 +1,6 @@
 import type { RequestGroupResult, UserScriptResult, UserScriptRun, UserScriptThreshold } from "@apipilot/shared-domain";
 import { bytes, clock, escapeHtml, formatCount, ms, PHASE_TEXT, pct, REPORT_CSP, STYLE, timelineSvg, timelineTable } from "./renderHtmlReport";
+import { LIVE_SERIES_STYLE, liveSeriesChart } from "./chainReportCharts";
 import { OTHER_REQUESTS } from "./userScriptAggregate";
 
 /**
@@ -232,6 +233,7 @@ export function renderUserScriptReport(run: UserScriptRun): string {
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>ApiPilot k6 script report · run ${escapeHtml(run.id.slice(0, 8))}</title>`,
     `<style>${STYLE}</style>`,
+    ...(result?.liveSeries?.points.length ? [`<style>${LIVE_SERIES_STYLE}</style>`] : []),
     "</head>",
     "<body>",
     `<h1>k6 script report · run ${escapeHtml(run.id.slice(0, 8))} ${statusBadge(run)}</h1>`,
@@ -252,6 +254,7 @@ export function renderUserScriptReport(run: UserScriptRun): string {
   }
   const groups = [...result.requestGroups, ...(result.otherRequests ? [result.otherRequests] : [])];
   const { points, bucketMs } = result.timeline;
+  const live = liveSeriesChart(result.liveSeries);
   const body = [
     tiles(result),
     "<h2>Thresholds</h2>",
@@ -264,6 +267,7 @@ export function renderUserScriptReport(run: UserScriptRun): string {
     '<p class="small muted">Each panel has its own scale. Hover over an interval for its figures.</p>',
     timelineSvg(points, bucketMs),
     timelineTable(points, bucketMs),
+    ...(live ? ["<h2>Requests per second</h2>", live] : []),
     "<h2>By request name</h2>",
     '<div class="scroll"><table><thead><tr><th>Request name</th><th class="num">Requests</th><th class="num">Req/s</th><th class="num">Failure rate</th><th class="num">Min</th><th class="num">p50</th><th class="num">p90</th><th class="num">p95</th><th class="num">p99</th><th class="num">Max</th><th>Statuses received</th></tr></thead>',
     `<tbody>${groupRows(groups)}</tbody></table></div>`,

@@ -8,6 +8,8 @@ import { appendResult, isCancelRequested, settleRun } from "./uploadedCollection
 import { findEditedItemIds } from "./editedItems";
 import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
 import { toStoredVariableValues } from "./variableValueText";
+import { pathOfTemplate } from "../performance/live/recentRing";
+import { beginCollectionLive, setCollectionInFlight } from "./liveRunState";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
 
@@ -96,6 +98,9 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
       orderedItems = orderedItemIds.flatMap((id) => itemsById.get(id) ?? []);
     }
 
+    // AP-045: how many requests this run will send, and each one's authored path (variables unresolved).
+    beginCollectionLive(runId, orderedItems.length, new Map(orderedItems.map((item) => [item.id, pathOfTemplate(item.request.url.toString())])));
+
     const collectionJson = collection.toJSON();
     const collectionAuth = collectionJson.auth;
     const collectionEvents = collectionJson.event;
@@ -121,6 +126,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
 
       const item = orderedItems[index];
       const startedAt = new Date().toISOString();
+      setCollectionInFlight(runId, item.name);
       const itemOutcome = await runSingleItem({
         item: toRawItem(item),
         collectionAuth,
@@ -151,6 +157,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
           item.id,
         ),
       );
+      setCollectionInFlight(runId, null);
       attempted = index + 1;
     }
 

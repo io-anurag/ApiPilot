@@ -2,6 +2,7 @@ import type { ChainPlan, ChainPlanAnalysis, ChainRun, ChainRunSummary, Environme
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
+import { LiveRunDashboard } from "../liveRun/LiveRunDashboard";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
@@ -77,6 +78,20 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-5">
+        {runs.run && runs.inProgress && (
+          <LiveRunDashboard
+            key={runs.run.id}
+            kind="chain"
+            runId={runs.run.id}
+            meta={`${runs.run.environment.name} · ${runs.run.snapshot.planName} · started ${new Date(runs.run.startedAt).toLocaleTimeString()}`}
+            actions={
+              <button type="button" className={BUTTON_STYLES.danger} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
+                {runs.cancelling ? "Cancelling…" : "Cancel run"}
+              </button>
+            }
+          />
+        )}
+
         <section aria-labelledby="chain-runs-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
           <div className="px-5 py-4">
             <h3 id="chain-runs-title" className="text-base font-semibold">
@@ -130,6 +145,10 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
           )}
         </section>
 
+        {runs.reportRunId && !(runs.inProgress && runs.run?.id === runs.reportRunId) && (
+          <LiveRunDashboard key={runs.reportRunId} kind="chain" runId={runs.reportRunId} meta={`Run ${runs.reportRunId.slice(0, 8)}`} />
+        )}
+
         {runs.reportRunId && (
           <div className="rounded-2xl border border-border bg-surface p-5">
             <PerformanceReportFrame client={runsClient} runId={runs.reportRunId} />
@@ -138,22 +157,12 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
       </div>
 
       <aside aria-label="Run actions" className="space-y-4 lg:sticky lg:top-4">
-        {(runs.inProgress || runs.error) && (
+        {runs.error && (
           <section aria-labelledby="chain-active-run-title" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
             <h3 id="chain-active-run-title" className={SECTION_LABEL}>
-              {runs.inProgress ? "Run in progress" : "Run"}
+              Run
             </h3>
-            {runs.run && runs.inProgress && (
-              <p className="text-sm" role="status">
-                Running · {Math.round((runs.run.progress?.elapsedMs ?? 0) / 1000)} s · {runs.run.progress?.requestsSoFar ?? 0} requests · {runs.run.progress?.failuresSoFar ?? 0} failures
-              </p>
-            )}
-            {runs.inProgress && (
-              <button type="button" className={`${BUTTON_STYLES.danger} ${FULL_BUTTON}`} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
-                {runs.cancelling ? "Cancelling…" : "Cancel run"}
-              </button>
-            )}
-            {runs.error && <ErrorState message={runs.error} testId="chain-run-error" />}
+            <ErrorState message={runs.error} testId="chain-run-error" />
           </section>
         )}
 

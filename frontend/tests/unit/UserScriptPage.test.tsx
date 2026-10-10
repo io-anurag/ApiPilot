@@ -4,6 +4,7 @@ import type { UserScript, UserScriptRun } from "@apipilot/shared-domain";
 import { EntryChooser } from "../../src/components/EntryChooser";
 import { CONFIRM_CANNOT_RESTRICT, CONFIRM_NOT_VERIFIED, CONFIRM_RUN_TIME_HOSTS } from "../../src/components/userScript/ScriptConfirmDialog";
 import { UserScriptPage } from "../../src/pages/UserScriptPage";
+import { liveSnapshot } from "./liveRunFixtures";
 import { environment, stubFetch } from "./performanceFixtures";
 
 /** AP-034 US1 (FR-001, FR-003, FR-004, FR-012 to FR-014, FR-019, FR-023; tasks T027). */
@@ -149,7 +150,10 @@ describe("UserScriptPage", () => {
 
   it("starts a run with the shown SHA-256 and shows live progress", async () => {
     const script = userScript({ confirmed: true, confirmation: { sha256: SHA, confirmedAt: "x", hostsStated: [] } });
-    const calls = stubFetch(routes(script, { [`POST ${BASE}/${script.id}/runs`]: () => [200, { run: liveRun() }] }));
+    const calls = stubFetch(routes(script, {
+      [`POST ${BASE}/${script.id}/runs`]: () => [200, { run: liveRun() }],
+      [`GET ${BASE}/runs/${liveRun().id}/live`]: () => [200, liveSnapshot({ kind: "user-script", runId: liveRun().id, chains: [] })],
+    }));
     render(<UserScriptPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
     fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
@@ -158,7 +162,7 @@ describe("UserScriptPage", () => {
     fireEvent.click(button);
     const live = await screen.findByTestId("user-script-live");
     expect(calls.find((call) => call.method === "POST" && call.url.endsWith("/runs"))!.body).toEqual({ environmentId: "env-1", scriptSha256: SHA });
-    expect(within(live).getByText("120")).toBeInTheDocument();
+    expect(await within(live).findByText("120")).toBeInTheDocument();
     expect(within(live).getByText("perf-local")).toBeInTheDocument();
   });
 });

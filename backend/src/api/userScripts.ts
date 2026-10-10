@@ -12,6 +12,7 @@ import {
   UserScriptRefusedError,
   UserScriptRunInProgressError,
 } from "../performance/errors";
+import { getUserScriptLiveSnapshot, parseLiveCursor } from "../performance/live/liveRunService";
 import { renderUserScriptReport } from "../performance/report/renderUserScriptReport";
 import { cancelLiveRun } from "../performance/runPerformanceTest";
 import { EXAMPLE_SCRIPT } from "../performance/userScript/exampleScript";
@@ -30,6 +31,7 @@ import {
   replaceUserScriptContent,
   saveUserScriptSettings,
 } from "../performance/userScript/userScriptStore";
+import { getSessionId } from "../session/sessionContext";
 import { reaffirmSession } from "../session/sessionMiddleware";
 import { fail, handleKnownError, logReceived, logSucceeded } from "./performanceHttp";
 
@@ -168,6 +170,17 @@ export function createUserScriptsRouter(deps: UserScriptRunDependencies): Router
     route((req, res, startedAt) => {
       requireUuid(req.params.runId, "run");
       res.status(200).json({ run: getUserScriptRun(req.params.runId) });
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  // AP-045: the live dashboard's read-only snapshot, answered from memory while the run is live.
+  router.get(
+    `${BASE}/runs/:runId/live`,
+    route((req, res, startedAt) => {
+      requireUuid(req.params.runId, "run");
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json(getUserScriptLiveSnapshot(getSessionId(), req.params.runId, deps.now().getTime(), parseLiveCursor(req.query)));
       logSucceeded(req, startedAt, 200);
     }),
   );

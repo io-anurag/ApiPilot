@@ -6,6 +6,7 @@ import {
   type RunReportModel,
   type RunReportRow,
 } from "./runReport";
+import { NO_REQUESTS_NOTE, buildSeriesChart, layoutSeriesChart } from "./runSeriesChart";
 
 /** Every piece of text from the run (names, messages) is untrusted: it comes from an uploaded file. */
 export function escapeHtml(text: string): string {
@@ -99,6 +100,11 @@ details.row[open]>summary{background:var(--subtle)}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .colhead span:nth-child(5),.colhead span:nth-child(6){text-align:right}
 .colhead{display:grid;grid-template-columns:2rem 4.5rem minmax(0,1fr) 7rem 3.5rem 5rem;gap:8px;padding:4px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+.chart svg{width:100%;height:auto;display:block}.chart .g{stroke:var(--border);stroke-width:1}.chart .t{fill:var(--muted);font:11px var(--mono)}
+.chart .req{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}.chart .fl{fill:none;stroke:var(--fail);stroke-width:2;stroke-dasharray:6 3;stroke-linejoin:round}
+.chart .mk{fill:var(--fail)}.chart .dot{fill:var(--accent)}
+.sw{display:inline-block;width:18px;height:0;border-top:3px solid var(--accent);vertical-align:middle;margin-right:6px}.sw.dash{border-top:3px dashed var(--fail)}
+.chart details{margin-top:8px}.chart summary{cursor:pointer;font-size:12px}.chart .scroll{overflow-x:auto;max-height:260px}
 footer{margin-top:18px;color:var(--muted);font-size:12px}
 @media (max-width:640px){.colhead{grid-template-columns:1.6rem 4rem minmax(0,1fr) 6rem}.colhead .hide-sm{display:none}details.row>summary{grid-template-columns:1.6rem 4rem minmax(0,1fr) 6rem}details.row>summary .hide-sm{display:none}}
 @media print{body{background:#fff}.no-print{display:none}details.row .detail{display:block}.card,.tile{break-inside:avoid}}
@@ -145,6 +151,45 @@ function resultRow(row: RunReportRow): string {
   return `<details class="row" data-outcome="${row.outcome === "Passed" ? "pass" : row.outcome === "Failed" ? "fail" : "skip"}">
 <summary><span class="muted num">${row.position}</span>${methodBadge(row.method)}<span class="mono" style="overflow-wrap:anywhere">${e(row.name)}</span>${outcomeBadge(row)}<span class="num hide-sm">${row.statusCode ?? "-"}</span><span class="num hide-sm">${e(duration(row))}</span></summary>
 <div class="detail">${body.join("")}</div></details>`;
+}
+
+export const CHART_BOX = { x: 56, y: 12, w: 648, h: 170 };
+const CHART_TABLE_LIMIT = 120;
+
+const pts = (line: readonly (readonly [number, number])[]) => line.map(([px, py]) => `${px},${py}`).join(" ");
+
+/** The per-second graph as inline SVG from the shared layout (the PDF draws the same one), with a text alternative. */
+export function seriesChartHtml(series: RunReportModel["series"]): string {
+  const chart = buildSeriesChart(series);
+  if (!chart) return `<p class="empty">${e(NO_REQUESTS_NOTE)}</p>`;
+  const layout = layoutSeriesChart(chart, CHART_BOX);
+  const bottom = CHART_BOX.y + CHART_BOX.h;
+  const parts: string[] = [];
+  for (const mark of layout.yMarks) {
+    parts.push(`<line class="g" x1="${CHART_BOX.x}" y1="${mark.y}" x2="${CHART_BOX.x + CHART_BOX.w}" y2="${mark.y}"></line>`);
+    parts.push(`<text class="t" x="${CHART_BOX.x - 8}" y="${mark.y + 4}" text-anchor="end">${e(mark.label)}</text>`);
+  }
+  for (const mark of layout.xMarks) {
+    parts.push(`<line class="g" x1="${mark.x}" y1="${CHART_BOX.y}" x2="${mark.x}" y2="${bottom}"></line>`);
+    parts.push(`<text class="t" x="${mark.x}" y="${bottom + 16}" text-anchor="middle">${e(mark.label)}</text>`);
+  }
+  parts.push(`<text class="t" x="${CHART_BOX.x + CHART_BOX.w / 2}" y="${bottom + 34}" text-anchor="middle">Elapsed time (mm:ss) · requests per second</text>`);
+  if (chart.points.length === 1) {
+    parts.push(`<circle class="dot" cx="${layout.requestsLine[0][0]}" cy="${layout.requestsLine[0][1]}" r="4"></circle>`);
+  } else {
+    parts.push(`<polyline class="req" points="${pts(layout.requestsLine)}"></polyline>`);
+    parts.push(`<polyline class="fl" points="${pts(layout.failuresLine)}"></polyline>`);
+  }
+  for (const [mx, my] of layout.failureMarkers) parts.push(`<rect class="mk" x="${mx - 3}" y="${my - 3}" width="6" height="6"></rect>`);
+  const table =
+    chart.points.length > CHART_TABLE_LIMIT
+      ? ""
+      : `<details><summary>Figures per ${chart.bucketSeconds === 1 ? "second" : `${chart.bucketSeconds}-second step`}</summary><div class="scroll"><table><thead><tr><th class="num">From (s)</th><th class="num">Requests</th><th class="num">Failed</th><th class="num">Requests/s</th></tr></thead><tbody>${chart.points
+          .map((point) => `<tr><td class="num">${point.second}</td><td class="num">${point.requests}</td><td class="num">${point.failures}</td><td class="num">${point.requestsPerSecond}</td></tr>`)
+          .join("")}</tbody></table></div></details>`;
+  return `<div class="chart"><div class="legend"><span class="sw"></span>Requests per second (solid) · peak ${chart.peak} &nbsp; <span class="sw dash"></span>Failed per second (dashed, square marks) · ${chart.failingSteps} of ${chart.points.length} with failures</div>
+<svg viewBox="0 0 720 ${bottom + 42}" role="img" aria-label="${e(chart.summary)}">${parts.join("")}</svg>
+<div class="legend">${e(chart.note)}</div>${table}</div>`;
 }
 
 /**
@@ -252,6 +297,8 @@ ${tile("Duration", `${summary.durationMs} ms`)}
 <div class="strip" role="img" aria-label="${e(`${summary.passed} passed, ${summary.failed} failed, ${summary.notAttempted} not attempted, in run order`)}">${strip}</div>
 <div class="legend">One cell per request, in run order: green passed, red failed, grey not attempted. Hover a cell for its name. Tests: ${insights.tests.passed} passed, ${insights.tests.failed} failed.</div>
 </section>
+
+<section class="card" aria-labelledby="series-h"><h2 id="series-h">Requests per second</h2>${seriesChartHtml(model.series)}</section>
 
 <section class="card" aria-labelledby="attention-h"><h2 id="attention-h">Needs attention</h2>${attention}</section>
 

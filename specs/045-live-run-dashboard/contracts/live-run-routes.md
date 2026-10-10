@@ -13,7 +13,8 @@ error shape; no stack traces or paths.
 
 ## Request
 
-- `since` (optional, integer >= 0, default 0): return only the `series.points` whose bucket ends at or after `since`. Used to fetch the whole run on first load or reload (`since=0`) and only new points afterwards. If thinning changed `series.bucketSeconds` since the client's last reply, the whole series is returned and the client replaces its points.
+- `since` (optional, integer >= 0, default 0): return only the `series.points` whose bucket ends at or after `since` (a run that has ended returns its whole series). Used to fetch the whole run on first load or reload (`since=0`) and only recent points afterwards (the reply's `nextSince` is 10 seconds before its newest bucket, because k6 can deliver late points). 
+- `bucket` (optional, integer >= 1): the `series.bucketSeconds` the client holds. If thinning changed it, the whole series is returned and the client replaces its points. Invalid `bucket` returns 400 `invalid_query`.
 - Invalid `since` returns 400 `invalid_query`.
 
 ## Responses

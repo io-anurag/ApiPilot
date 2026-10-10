@@ -13,6 +13,14 @@ export class PerformanceRunNotFoundError extends Error {
   }
 }
 
+/** `400 invalid_query` (AP-045 live routes): `since` or `bucket` is not a whole number in range. */
+export class InvalidLiveQueryError extends Error {
+  constructor(parameter: string) {
+    super(`'${parameter}' must be a whole number.`);
+    this.name = "InvalidLiveQueryError";
+  }
+}
+
 /** `400 invalid_load_profile` (data-model.md validation rules). */
 export class InvalidLoadProfileError extends Error {
   constructor(reason: string) {

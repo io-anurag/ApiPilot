@@ -133,4 +133,20 @@ describe("renderUserScriptReport (FR-030 to FR-036)", () => {
     expect(html).toContain("recorded no request measurements");
     expect(html).not.toContain("SECRET-k6-text");
   });
+
+  it("adds the per-second chart (and its own styles) only when the run has a stored series (AP-045 US4)", () => {
+    const base = runWith(basicLines());
+    const plain = renderUserScriptReport(base);
+    expect(plain).not.toContain("live-series");
+    const series = { bucketSeconds: 1, points: [{ second: 0, requests: 3, failures: 0, virtualUsers: 1 }, { second: 1, requests: 5, failures: 1, virtualUsers: 2 }] };
+    const html = renderUserScriptReport({ ...base, result: { ...base.result!, liveSeries: series } });
+    expect(html).toContain('class="live-series"');
+    expect(html).toContain("Requests/s (solid line) · peak 5");
+    expect(html).toContain("1 of 2 seconds had failures");
+    // The figures drawn are the stored ones: hover text and the table carry each point's counts.
+    expect(html).toContain("00:00–00:01 · 3 requests, 0 failed");
+    expect(html).toContain("00:01–00:02 · 5 requests, 1 failed");
+    expect(html).toContain('<td class="num">00:01</td><td class="num">5</td><td class="num">1</td><td class="num">5</td><td class="num">2</td>');
+    expect(html.match(/\.live-series\{--ls-rate/g)).toHaveLength(2);
+  });
 });

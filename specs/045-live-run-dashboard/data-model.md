@@ -26,7 +26,7 @@ What one poll returns for one run.
 
 ## LivePoint
 
-`{ second: number, requests: number, failures: number, virtualUsers: number | null }`. One per bucket of the run (`series.bucketSeconds`, 1 s until thinned); `requests` and `failures` count that bucket only, so the chart plots `requests / bucketSeconds`. Seconds with no requests are present with zeros while the run is live, so a stall is visible.
+`{ second: number, requests: number, failures: number, virtualUsers: number | null, latencyMs?: number | null, byGroup?: Record<string, number> }`. `latencyMs` is the mean duration of the requests that completed in the bucket (null when none did); `byGroup` is requests per chain, with the ids and labels in `series.groups` (present for a plan with 2 to 8 chains). One per bucket of the run (`series.bucketSeconds`, 1 s until thinned); `requests` and `failures` count that bucket only, so the chart plots `requests / bucketSeconds`. Seconds with no requests are present with zeros while the run is live, so a stall is visible.
 
 ## RecentRequest
 
@@ -39,7 +39,7 @@ What one poll returns for one run.
 
 ## Additions to existing records (all optional or additive)
 
-- `UploadedCollectionExecutionRun.plannedTotal?: number` and `.inFlightRequestName?: string | null` (collection runs).
+- Collection runs: the planned total, the request in flight and each request's authored path are held in memory (`externalCollections/liveRunState.ts`) while the run is held, not added to `UploadedCollectionExecutionRun` (decided during implementation: no schema change and no extra write per request). A finished run with no held state shows `plannedRequests` from its results and empty paths.
 - `PerformanceResult.liveSeries?` and `UserScriptResult.liveSeries?`: `{ bucketSeconds: number, points: LivePoint[] }`, at most 1,800 points, absent on older runs (US4).
 - Collection runs store no series: it is derived from `results` on demand for the live snapshot and for both reports, so it is identical in all three and exists for older runs too. `RunReportModel` gains `series: LivePoint[]` (virtual users null).
 
@@ -57,4 +57,4 @@ What one poll returns for one run.
 
 - `requests >= failures` in every point and in totals.
 - Final `totals` equal the run record's totals (SC-002); a test asserts this per kind.
-- Points are ordered by `second` with no duplicates; `nextSince` is greater than every returned second.
+- Points are ordered by `second` with no duplicates; `nextSince` is 10 seconds before the newest bucket: k6 stamps a point with the time of its request but writes in batches, so a late point can still arrive for a recent second. The next poll asks for those buckets again and the client replaces a point with the same `second`. A run that has ended returns its whole series whatever `since` says. The client sends the `bucketSeconds` it holds as the `bucket` query value so the server can return the whole series when thinning changed it.
