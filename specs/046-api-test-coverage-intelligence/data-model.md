@@ -1,0 +1,109 @@
+# Data Model: API Test Coverage Intelligence (AP-046)
+
+All types live in `packages/shared-domain/src/coverage.ts` and are exported from its `index.ts`. No new persistence: every value is derived per request.
+
+## Enumerations
+
+- `CoverageDimensionKind`: `operation | parameter | request-schema | response-code | response-schema | scenario-category`.
+- `CoverageState` (exactly one per requirement): `not-covered | generated-not-executed | executed-failed | verified | inconclusive | stale`.
+- `ScenarioCategoryGroup`: `positive | negative | boundary | security`.
+- `Priority`: `high | medium | low`.
+
+### State precedence (documented, applied in `classify.ts`)
+
+Evaluated top-down for one requirement, over the attributable evidence of its mapped scenarios:
+
+1. No mapped scenario → `not-covered`.
+2. Mapped scenarios exist, no attributable executed result → `generated-not-executed`.
+3. All attributable evidence belongs to scenarios edited or regenerated after the run → `stale`.
+4. At least one attributable, non-stale result failed a check relevant to this requirement → `executed-failed` (a failure outranks a pass).
+5. At least one attributable, non-stale result passed every relevant check that was evaluated, and no relevant check was `could-not-evaluate` → `verified`.
+6. Otherwise (response received but no relevant check evaluated, `could-not-evaluate`, edited item, or `not-attempted` only) → `inconclusive`.
+
+"Relevant check" per dimension: operation = any result received; parameter = result of a scenario that targets it and whose status assertion passed; request-schema element = same, targeted scenario; response-code = the `status-code` assertion for that code; response-schema = the `schema-conformance` assertion. Runtime-verified never follows from a received response alone.
+
+## Entities
+
+### CoverageRequirement
+| Field | Meaning |
+|---|---|
+| `id` | Stable element id, e.g. `op:POST /orders`, `param:GET /users/{id}:path:id`, `reqprop:POST /orders:application/json:items[].qty`, `resp:GET /users/{id}:404` |
+| `kind` | `CoverageDimensionKind` |
+| `operationKey` | `"METHOD /path"` (matches `toOperationKey()`) |
+| `label` | Human label |
+| `contractHash` | SHA-256 of this element's normalized fragment |
+| `measurable` | `true`, or `{ reason, issueRef? }` when not measurable (excluded from denominators) |
+| `applicable` | `false` for e.g. boundary categories on unconstrained operations (excluded from that category's denominator) |
+
+### CoverageMapping
+`requirementId`, `scenarioIds[]` (all contributors, deduplicated, sorted), `rules[]`, `sources[]` (`RULE | AI`), `reviewStates[]`. Absent when the relationship cannot be established.
+
+### EvidenceRef
+`runId`, `runKind` (`uploaded | guided`), `scenarioId`, `itemId?`, `outcome`, `checks[]` (`{ kind: status-code|schema-conformance, outcome }`), `startedAt`. Never carries headers, bodies, URLs or `rawCapture`.
+
+### CoverageState record (per requirement)
+`requirementId`, `state`, `reason` (text), `mappedScenarioCount`, `evidence: EvidenceRef[]` (bounded, sorted), `staleReason?`.
+
+### CoverageMetric
+`id`, `dimension: "specification" | "runtime"`, `kind`, `numerator`, `denominator`, `percentage: number | null` (`null` when denominator is 0), `available: boolean`, `basis` (text defining what qualifies for numerator and denominator).
+
+Rule: `percentage = denominator === 0 ? null : round1(numerator / denominator * 100)`; `numerator <= denominator` is asserted; no NaN or Infinity can be produced.
+
+### CoverageGap
+`id`, `operationKey`, `requirementIds[]` (grouped so one underlying gap is one record), `kind`, `state`, `reason`, `evidence[]`, `categoryGroup?`, `priority`, `priorityRationale: { score, factors[] }`.
+
+### Recommendation
+`rank`, `gapId`, `operationKey`, `requirement` (label), `why`, `evidence[]`, `priority`, `rationale`, `action: { type: "review-scenario" | "generate-scenario" | "open-result", target }`.
+
+### OperationCoverage (table row)
+`operationKey`, `method`, `path`, `specification: {covered, total}`, `runtime: {verified, total}`, `failedCount`, `states` (count per `CoverageState`), `missing[]` (short labels), `priority`, `categoryGroups[]`.
+
+### NotMeasurable
+`kind`, `location`, `reason`, `issueKind` (`AnalysisIssue.kind`), listed in the snapshot so limits are visible.
+
+### CoverageSnapshot
+| Field | Meaning |
+|---|---|
+| `specification` | `{ name, version, revision (sha256), operationCount }` |
+| `context` | `{ workflowId, generatedAt?, selectedOperationCount, scenarioCounts: { total, accepted, pending, rejected, rule, ai } }` |
+| `execution` | `{ source(s), selectedRunId?, runIds[], lastQualifyingExecutionAt?, environment? { name, tier }, unattributedResults }` |
+| `metrics` | `CoverageMetric[]` (spec + runtime groups, see spec FR-021) |
+| `operations` | `OperationCoverage[]` |
+| `gaps` | `CoverageGap[]` |
+| `recommendations` | `Recommendation[]` |
+| `notMeasurable` | `NotMeasurable[]` |
+| `categoryCoverage` | per group `{ group, covered, applicable, available, reason? }`; `security` is `available:false` |
+| `notices` | `{ code, severity, message }[]` for stale, incomplete, unattributed, unavailable conditions |
+| `calculatedAt` | injected clock value; the only time-dependent field, excluded from determinism comparisons |
+
+No overall score field exists by design (FR-010).
+
+## Metric denominators (documented, FR-008)
+
+| Metric | Numerator | Denominator |
+|---|---|---|
+| Operations (spec) | selected operations with ≥1 mapped, non-rejected scenario | selected operations |
+| Operations (runtime) | operations in state `verified` for their operation requirement | selected operations |
+| Parameters (spec) | documented parameters targeted by ≥1 scenario | documented parameters, path+operation level merged, overrides counted once |
+| Request schemas (spec) | measurable request-schema elements with ≥1 mapped scenario | measurable, applicable request-schema elements |
+| Response schemas (spec) | documented response schemas with a mapped schema-conformance scenario | documented response schemas |
+| Response codes (runtime) | documented codes in state `verified` | documented codes (ranges and `default` counted as their own key) |
+| Contract assertions (runtime) | evaluated assertions that passed | evaluated assertions (excludes `could-not-evaluate`) |
+| Category (spec) | operations with ≥1 scenario in the group | operations where the group is applicable |
+
+Scenario counts are never used as a numerator or denominator of any coverage metric.
+
+## Additions to existing records
+
+- `buildApiModel`: operation `parameters` now include path-level parameters, operation-level overriding on `(name, in)`. No type change.
+- No change to `TestScenario`, `ExecutionRun`, `UploadedCollectionExecutionRun`, or any persisted table.
+
+## Server-side state
+
+None. `GET /api/coverage` reads the current session workflow and the run repositories, computes, and returns. The clock is injected for tests.
+
+## Validation rules
+
+- `runId` query must belong to a run visible to the session, else `404 run_not_found`.
+- Filter parameters are validated against closed enumerations; unknown values return `400 invalid_filter`.
+- Snapshot invariants asserted in tests: `numerator <= denominator`; every `CoverageGap.requirementIds` exists; every `EvidenceRef.scenarioId` exists in the model; no snapshot field contains a header value, body, URL query string, or `rawCapture`.
