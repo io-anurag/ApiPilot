@@ -128,7 +128,7 @@ docs/USER_MANUAL.md, docs/architecture.md, specs/ROADMAP.md, package.json versio
 1. **Foundations**: shared-domain `coverage.ts`; spec-revision fingerprint; element extraction; metric math; state precedence. Unit tests for spec tests 1, 7, 11.
 2. **Specification coverage (US1)**: scenario mapping for operation, parameter, request schema, response code/schema, category; deduplication; the `buildApiModel` path-level fix with its own tests (tests 6, 8, 9, 10).
 3. **Runtime evidence (US2)**: evidence join for uploaded runs and guided `ExecutionRun`s; state classification incl. failed/inconclusive/not-attempted (tests 2–5, 13).
-4. **Staleness and run selection (US5)**: revision comparison, edit-after-run rule, latest-qualifying-run rule (test 12).
+4. **Unattributed evidence and run selection (US5)**: unattributed-result reporting, review-edit note, latest-qualifying-run rule (test 12).
 5. **Prioritization and recommendations (US3, US4)**: documented scoring, gap de-duplication.
 6. **Route and export**: `GET /api/coverage`, export route, filter parity (FR-024, FR-037).
 7. **Frontend (US3, US6, US7)**: client, hook with request-sequence guard, page, chart, table, filters, notices; catalog entry; contextual links; palette entry comes free from the catalog. Light/dark and empty/error states.
@@ -138,9 +138,10 @@ docs/USER_MANUAL.md, docs/architecture.md, specs/ROADMAP.md, package.json versio
 
 - **Evidence attribution for uploaded runs is inferential.** A result is attributed to a scenario only when `itemId === itemIdForScenario(scenarioId)`; the assertion kind comes from Newman test names. Results that cannot be joined are counted and surfaced as "unattributed evidence", never used (R3).
 - **Workflow is in-memory per session.** After idle expiry or restart there is no `ApiModel` to compute from; the view must show a specific "no active specification" state with a recovery action, not an error or zeros (R4).
-- **Scenario IDs are random per generation.** Cross-regeneration reconciliation uses a derived stable key (method + path + rule + target + variant) for requirement mapping; evidence still joins by scenario ID, so regeneration correctly orphans old evidence as stale (R4).
+- **Scenario IDs are random per generation.** Cross-regeneration reconciliation uses a derived stable key (method + path + rule + target + variant) for requirement mapping; evidence still joins by scenario ID, so regeneration orphans old evidence, which is reported as unattributed and never counted as verified (R4). Runs record no specification revision, so the system does not claim those results are from an earlier specification; it says "possibly".
 - **Security-sensitivity is inferred from declared security requirements only** and is labelled as a heuristic (R8).
-- **Reference-quality caveat.** Research was done by reading code; the staleness-after-edit rule depends on timestamps in `ReviewScenario.history`, to be verified in the first Phase 4 task before relying on it (R4).
+- **Reference-quality caveat.** Research was done by reading code. The "scenario edited after run" note depends on timestamps in `ReviewScenario.history`; if absent the note is omitted and nothing else changes (R4).
+- **Stale state is reserved.** It stays in the contract and UI vocabulary but no rule in this feature produces it (clarified 2026-10-10).
 
 ## Complexity Tracking
 

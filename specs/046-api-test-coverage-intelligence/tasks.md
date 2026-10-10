@@ -19,7 +19,7 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 - **[Story]**: US1 to US7, matching spec.md
 - Paths are repository-relative. Conventions: pure domain code in `backend/src/coverage/`, thin router in `backend/src/api/`, client in `frontend/src/services/`, Tailwind v4 semantic tokens only (no hex, no arbitrary values), no `console` (use the logger), no new dependencies, no commits (leave changes for review).
 
-**Clarified decisions in force** (spec Clarifications 2026-10-10): pending and accepted scenarios count and rejected never do, with the accepted/pending split shown; edited requests are Inconclusive; a changed specification makes all earlier evidence stale as a whole; unselected operations are out of scope and not gaps; view state resets on full refresh and is kept across tab switches.
+**Clarified decisions in force** (spec Clarifications 2026-10-10): pending and accepted scenarios count and rejected never do, with the accepted/pending split shown; edited requests are Inconclusive; results that no longer join to a current scenario are never counted as verified and are reported as unattributed (the Stale state is kept in the contract but reserved, not produced); a review edit after a run does not invalidate evidence; unselected operations are out of scope and not gaps; view state resets on full refresh and is kept across tab switches.
 
 ---
 
@@ -52,7 +52,7 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 
 ### Tests for US1
 
-- [ ] T010 [P] [US1] `backend/tests/unit/coverage/scenarioMapping.test.ts`: operation with no scenario is not covered; ten scenarios on one parameter count once; `enum-positive-variant` covers the specific enum value; `required-field-*` covers the required flag; boundary rules cover min/max elements; response code covered only by exact `expectedStatusCode` match (`2XX`/`default` match only themselves); schema element covered only with a paired `status-code` + `schema-conformance` assertion; cookie parameters documented but uncovered; rejected scenarios excluded, pending included with accepted/pending counts.
+- [ ] T010 [P] [US1] `backend/tests/unit/coverage/scenarioMapping.test.ts`: operation with no scenario is not covered; ten scenarios on one parameter count once; `enum-positive-variant` covers the specific enum value; `required-field-*` covers the required flag; boundary rules cover min/max elements; response code covered only by exact `expectedStatusCode` match (`2XX`/`default` match only themselves); schema element covered only with a paired `status-code` + `schema-conformance` assertion; cookie parameters documented but uncovered; rejected scenarios excluded, pending included with accepted/pending counts; scenario group (positive, negative, boundary) is derived from `provenance.rule`, not the `category` field, so at-boundary variants count as boundary and each scenario belongs to exactly one group.
 - [ ] T011 [P] [US1] `backend/tests/integration/coverage.test.ts` (Supertest): `GET /api/coverage` 200 for spec-only (real zeros, notices), 409 `no_active_workflow` without a workflow, response never contains bodies, header values or `rawCapture`.
 - [ ] T012 [P] [US1] `frontend/tests/unit/coverage/CoveragePage.spec.test.tsx`: metric cards show numerator, denominator and percentage; zero denominator renders "not available" (never NaN); notice text exact; no-workflow empty state with recovery link; error state is not rendered as empty coverage.
 
@@ -60,8 +60,8 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 
 - [ ] T013 [US1] Implement `backend/src/coverage/scenarioMapping.ts` per research R7 (rule id + `targetLocation`/`targetField` + assertions → requirement ids; deterministic, sorted, deduplicated; carries `source` and review state).
 - [ ] T014 [US1] Implement `backend/src/coverage/calculateCoverage.ts` (pure orchestrator: workflow snapshot, runs, clock → `CoverageSnapshot`) for the specification dimension: metrics per data-model denominators, `OperationCoverage[]`, category groups (security `available:false` with reason), `scenarioCounts`, notices, spec-revision block.
-- [ ] T015 [US1] Implement `backend/src/api/coverage.ts` (`GET /api/coverage`, thin: read current workflow via `getCurrentWorkflow`, call the calculator, map typed errors to `409 no_active_workflow` and `400 invalid_filter`, log counts/duration only) and register it in `backend/src/app.ts`.
-- [ ] T016 [P] [US1] Create `frontend/src/services/coverageClient.ts` (result-union convention, `createLogger`) and `frontend/src/hooks/useCoverage.ts` (explicit `loading | success | empty | no-workflow | error` and a request-sequence guard so a stale response never overwrites a newer one).
+- [ ] T015 [US1] Implement `backend/src/api/coverage.ts` (`GET /api/coverage`, thin: read current workflow via `getCurrentWorkflow`, call the calculator, map typed errors to `409 no_active_workflow`, log counts/duration only) and register it in `backend/src/app.ts`.
+- [ ] T016 [P] [US1] Create `frontend/src/services/coverageClient.ts` (result-union convention, `createLogger`) and `frontend/src/hooks/useCoverage.ts` (explicit `loading | success | empty | no-workflow | error` and a request-sequence guard so a stale response never overwrites a newer one) with tests in `frontend/tests/unit/coverage/useCoverage.test.tsx`: a slow earlier response does not overwrite a newer one (FR-035).
 - [ ] T017 [P] [US1] Create `frontend/src/components/coverage/coverageViewModel.ts` (pure formatting: percentages, "not available", state labels and tones) and tests in `frontend/tests/unit/coverage/coverageViewModel.test.ts`.
 - [ ] T018 [US1] Create `frontend/src/components/coverage/CoverageNotice.tsx`, `MetricGroup.tsx` (reusing `StatTile`) and `CoverageBars.tsx` (SVG, `fill-chart-N`/semantic tokens, accessible counts table, separates specification, runtime and remaining gap) following `components/liveRun/LiveRunChart.tsx`.
 - [ ] T019 [US1] Create `frontend/src/pages/CoveragePage.tsx` (header with spec name, revision, context; notice; metric groups; breakdown; out-of-scope list; not-measurable list; recalculate action) using `Skeleton`, `EmptyState`, `ErrorState`.
@@ -80,12 +80,12 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 ### Tests for US2
 
 - [ ] T021 [P] [US2] `backend/tests/unit/coverage/evidence.test.ts`: uploaded-run join by `itemIdForScenario`, assertion kind from the exported test-name helpers; guided `ExecutionRun` join by `scenarioId` and `assertionIndex`; `not-attempted` is not evidence; edited item (`wasEdited`) → inconclusive; unjoinable results counted as `unattributedResults`; no rawCapture in output.
-- [ ] T022 [P] [US2] Extend `backend/tests/unit/coverage/calculateCoverage.test.ts`: generated-only adds zero runtime verification; passing evaluated checks verify; failed assertion not counted as verified; executed failure not labelled untested; 200 response with no evaluated schema assertion leaves the schema inconclusive; determinism (same input twice, identical output ignoring `calculatedAt`).
+- [ ] T022 [P] [US2] Extend `backend/tests/unit/coverage/calculateCoverage.test.ts`: generated-only adds zero runtime verification; passing evaluated checks verify; failed assertion not counted as verified; executed failure not labelled untested; 200 response with no evaluated schema assertion leaves the schema inconclusive; determinism (same input twice, identical output ignoring `calculatedAt`); element ids are unchanged when an unrelated part of the specification changes and when scenario order changes (FR-034); the snapshot has no aggregate or overall score field (FR-010).
 - [ ] T023 [P] [US2] `frontend/tests/unit/coverage/StateBadge.test.tsx`: all six states carry a text label and distinct tone (not colour only).
 
 ### Implementation for US2
 
-- [ ] T024 [US2] Implement `backend/src/coverage/evidence.ts` (`EvidenceSource` for uploaded and guided runs; reads uploaded runs through the existing run repository for the session; import test-name helpers from `backend/src/postman/` rather than copying strings; `itemIdForScenario` from `backend/src/postman/identifiers.ts`).
+- [ ] T024 [US2] Implement `backend/src/coverage/evidence.ts` (`EvidenceSource` for uploaded and guided runs; reads the runs of all uploaded collections in the session through the existing run repository, joins by `itemId`, and counts every unjoined result in `unattributedResults`; import test-name helpers from `backend/src/postman/` rather than copying strings; `itemIdForScenario` from `backend/src/postman/identifiers.ts`).
 - [ ] T025 [US2] Wire evidence and `classify` into `calculateCoverage.ts`: runtime metrics (operations verified, response codes verified, contract assertions evaluated and passed), per-requirement `CoverageState`, `lastQualifyingExecutionAt`, execution context (environment name and tier only).
 - [ ] T026 [P] [US2] Create `frontend/src/components/coverage/StateBadge.tsx` (wraps `StatusBadge`; text + tone per state) and render runtime metric group, "generated, not executed" labelling and the failed-result links in `CoveragePage.tsx`.
 
@@ -108,7 +108,7 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 ### Implementation for US3
 
 - [ ] T030 [US3] Implement `backend/src/coverage/prioritize.ts` (documented weights in code and a header comment: missing runtime verification, missing specification coverage, executed failure, destructive method, declared security, contract complexity; bands High/Medium/Low) and gap grouping in `calculateCoverage.ts`.
-- [ ] T031 [US3] Implement `backend/src/coverage/filterSnapshot.ts` and the query parsing/validation in `backend/src/api/coverage.ts` per contracts/coverage-routes.md.
+- [ ] T031 [US3] Implement `backend/src/coverage/filterSnapshot.ts` and the query parsing/validation in `backend/src/api/coverage.ts` per contracts/coverage-routes.md, including mapping `InvalidCoverageFilterError` to `400 invalid_filter`.
 - [ ] T032 [P] [US3] Create `frontend/src/components/coverage/GapFilters.tsx` and `GapsTable.tsx` (`HttpMethodBadge`, `Pagination`, monospace paths, horizontal scroll, actions) and extend `coverageClient.ts`/`useCoverage.ts` with filter parameters.
 
 ---
@@ -129,10 +129,10 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 
 **Goal**: Honest staleness and run selection.
 
-**Independent Test**: Re-upload a changed spec: all earlier evidence is stale; run twice: counts unchanged; select an older run: evaluated against it.
+**Independent Test**: Re-upload a changed spec: earlier results are reported as unattributed and none counts as verified; run twice: counts unchanged; select an older run: evaluated against it.
 
-- [ ] T036 [P] [US5] Tests in `backend/tests/unit/coverage/staleness.test.ts`: after regeneration, earlier results are unattributed and the whole earlier evidence set is stale with none verified; repeated runs do not double-count; latest qualifying run per scenario is the default; `runId` selects one run; unknown `runId` → `RunNotFoundError`.
-- [ ] T037 [US5] Verify first whether `ReviewScenario.history` carries timestamps (read `backend/src/testDesign/` review model and `packages/shared-domain/src/testScenarioReview.ts`); record the finding as a comment in `staleness.ts`. Implement `backend/src/coverage/staleness.ts` and the run-selection rule; surface a specific stale notice and `execution.runIds`/`selectedRunId`; add `runId` handling and `404 run_not_found` to `backend/src/api/coverage.ts`.
+- [ ] T036 [P] [US5] Tests in `backend/tests/unit/coverage/unattributed.test.ts`: after regeneration, earlier results that join to no current scenario are never counted as verified and are reported in `unattributedResults` with the "possibly from an earlier specification" explanation; results of an unrelated collection are treated the same; a review edit after a run does not invalidate evidence and sets `scenarioEditedAfterRun`; repeated runs do not double-count; latest qualifying run per scenario is the default; `runId` selects one run; unknown `runId` → `RunNotFoundError`; the Stale state is accepted by the classifier but never produced.
+- [ ] T037 [US5] Implement `backend/src/coverage/unattributed.ts` (unattributed-result accounting and the `scenarioEditedAfterRun` note, using `ReviewScenario.history` timestamps only if present; if absent, omit the note and record that in a comment) and the run-selection rule; surface a specific unattributed notice and `execution.runIds`/`selectedRunId`; add `runId` handling and `404 run_not_found` to `backend/src/api/coverage.ts`.
 - [ ] T038 [P] [US5] Add a run selector and stale/unattributed notices to `CoveragePage.tsx`; test in `frontend/tests/unit/coverage/RunSelector.test.tsx`.
 
 ---
@@ -160,12 +160,12 @@ description: "Task list for API Test Coverage Intelligence (AP-046)"
 
 ## Phase 10: Polish and cross-cutting
 
-- [ ] T046 [P] Performance check: unit test in `backend/tests/unit/coverage/performance.test.ts` building a 500-operation fixture and asserting the calculation completes well under the 3 s budget and issues no repeated model traversal per row (SC-006).
+- [ ] T046 [P] Performance check: unit test in `backend/tests/unit/coverage/performance.test.ts` building a 500-operation fixture and asserting the calculation completes well under the 3 s budget and issues no repeated model traversal per row (SC-006), plus a frontend test in `frontend/tests/unit/coverage/GapsTable.performance.test.tsx` rendering a 500-row fixture and asserting filter and sort changes apply within the 1 s budget; "usable" means the metric groups and first table page are rendered.
 - [ ] T047 [P] Security check: test in `backend/tests/unit/coverage/redaction.test.ts` that no snapshot or export field contains header values, bodies, URL query strings, tokens, cookies or `rawCapture` for a fixture whose runs include them (FR-036).
 - [ ] T048 Documentation: add a Coverage section to `docs/USER_MANUAL.md` (definitions, six states, limits, refresh behaviour) and `docs/architecture.md` (calculator, evidence join, staleness, prioritization weights, unsupported constructs and unavailable dimensions); add the AP-046 entry to `specs/ROADMAP.md` and note the path-level parameter fix on the AP-002/AP-003 entries.
-- [ ] T049 Update the plan and data model for the clarifications (out-of-scope field, whole-specification staleness replacing the per-scenario rule (b) wording in research R4) in `specs/046-api-test-coverage-intelligence/plan.md`, `research.md`, `data-model.md`.
+- [x] T049 Update the plan and data model for the clarifications (out-of-scope field, unattributed-evidence rule replacing the per-scenario staleness rules in research R4, reserved Stale state, review-edit note) in `specs/046-api-test-coverage-intelligence/plan.md`, `research.md`, `data-model.md`. Done during `/speckit-analyze` remediation, before implementation.
 - [ ] T050 Version bump: `npm run version:bump -- feature` (19.39.0 → 19.40.0 across root, backend, frontend, shared-domain); let npm update `package-lock.json`; record the version in the ROADMAP entry.
-- [ ] T051 Validate: `npm test`, `npm run lint`, `npm run build`; run quickstart.md manual steps 1–12; report honestly any step not run. Do not commit; leave changes for review.
+- [ ] T051 Validate: `npm test`, `npm run lint`, `npm run build`; run quickstart.md manual steps 1–12; report honestly any step not run. Explicitly confirm the existing regression suites still pass: `backend/tests/unit/openapi`, `backend/tests/unit/testDesign`, `backend/tests/integration/testModels.test.ts`, `backend/tests/integration/execution/executionRuns.test.ts`, and the frontend `App.test`, `workflowCatalog.test` and external-collection page tests (FR-040). Do not commit; leave changes for review.
 
 ---
 

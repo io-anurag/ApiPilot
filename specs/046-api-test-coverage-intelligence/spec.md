@@ -24,7 +24,8 @@ Two principles govern every number shown:
 - Q: Where should Coverage appear, given the described "Results" navigation group? → A: Resolved as an assumption (see Assumptions): Coverage is added to the application's existing post-run results area following its current navigation conventions; no new top-level category is introduced.
 - Q: Should a generated scenario still awaiting human review count toward specification coverage? → A: Yes. Pending and accepted scenarios count; rejected scenarios never count; the accepted/pending split is shown beside each specification-coverage figure.
 - Q: When a request edited before a run is executed, how should its scenario count for runtime verification? → A: Inconclusive. The run is shown as evidence, but nothing it exercised counts as verified.
-- Q: After a changed specification is uploaded, is earlier execution evidence stale for the whole specification or per operation? → A: Whole specification. Earlier results are not attributable to the regenerated scenarios, so all of it is stale; no per-operation carry-over.
+- Q: After a changed specification is uploaded, how is earlier execution evidence treated? → A: As a whole, never per operation. Runs record no specification revision, so results that no longer match a scenario of the current specification are never counted as verified and are reported as "unattributed, possibly from an earlier specification", with a count. The Stale state is kept in the contract and interface for attributable evidence flagged for revalidation, but this feature does not produce it for regenerated specifications.
+- Q: Does editing a scenario in the review step after a run invalidate its earlier run evidence? → A: No. The evidence stays attributable by scenario ID and a visible "scenario edited after run" note is shown. This is separate from requests edited in Import & Run, which are Inconclusive.
 - Q: When only some operations were selected for generation, what forms the coverage denominator? → A: The selected operations only. Unselected operations are listed separately as out of scope and are not counted as gaps.
 - Q: Should filters, sort order and selected run survive a full browser refresh? → A: No. They reset on refresh and are retained while switching tabs within the session; no URL or local-storage state is added.
 
@@ -99,15 +100,15 @@ The engineer sees an ordered list of missing or unverified coverage items, each 
 
 ### User Story 5 - Specification changes and repeated runs stay honest (Priority: P2)
 
-When the specification changes, coverage is recalculated for the new revision and evidence from the old revision is marked stale rather than silently carried over. When a scenario is run several times, it is not double-counted.
+When the specification changes, coverage is recalculated for the new revision and evidence from the old revision is never silently carried over: results that no longer match a current scenario are reported as unattributed and are not counted as verified. When a scenario is run several times, it is not double-counted.
 
 **Why this priority**: Prevents misleading verification claims over time.
 
-**Independent Test**: Run tests, change a requirement in the specification, reload, and confirm all earlier execution evidence becomes stale and nothing from it counts as verified; run the same scenario twice and confirm counts do not double.
+**Independent Test**: Run tests, change a requirement in the specification, reload, and confirm earlier results are reported as unattributed and nothing from them counts as verified; run the same scenario twice and confirm counts do not double.
 
 **Acceptance Scenarios**:
 
-1. **Given** evidence from revision A, **When** a changed specification (revision B) is uploaded and scenarios are regenerated, **Then** all of revision A's evidence is shown as "Stale" and none of it is counted as verified.
+1. **Given** evidence from revision A, **When** a changed specification (revision B) is uploaded and scenarios are regenerated, **Then** all of revision A's results are reported as unattributed (possibly from an earlier specification), with their count, and none of them is counted as verified.
 2. **Given** a scenario executed in two runs, **When** coverage is calculated, **Then** the requirement counts once and its state derives from the defined run-selection rule (latest qualifying run by default, with the selected run indicated).
 
 ---
@@ -149,7 +150,8 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - Path-level and operation-level parameters that share name and location: the operation-level one overrides, counted once.
 - Parameters, schemas or branches the system cannot reliably map to scenarios (unresolved or circular references, `oneOf`/`anyOf`/`allOf`, discriminators, callbacks, links, webhooks): shown as "not measurable" with the reason, excluded from denominators, and listed so the gap in measurement is visible.
 - Scenarios whose target element cannot be determined: not counted toward element-level coverage; counted at operation level only where the operation is known.
-- Executions run against an environment or specification revision other than the selected one: marked stale or excluded with an explanation.
+- Executions run against an environment or specification revision other than the selected one: reported as unattributed or excluded, with an explanation.
+- A scenario edited in the review step after it was run: its evidence stays attributable and a "scenario edited after run" note is shown; it is not invalidated.
 - Executions imported from external collections with no link to generated scenarios: not used as evidence.
 - A scenario passed its HTTP call but evaluated no assertions: "Inconclusive".
 - A request edited by the user before it was run: its result is shown as evidence but is "Inconclusive", because the request that ran may differ from the generated scenario.
@@ -206,7 +208,7 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 
 **Workflow states and data integrity**
 
-- **FR-031**: Coverage records MUST be tied to a specification revision; on revision change, specification coverage MUST be recalculated and incompatible execution evidence MUST be marked Stale, never silently carried forward to changed requirements. When a changed specification is uploaded and scenarios are regenerated, all execution evidence from the earlier specification MUST be treated as stale as a whole; per-operation carry-over of verification is not supported.
+- **FR-031**: Coverage records MUST be tied to a specification revision; on revision change, specification coverage MUST be recalculated and execution results that cannot be joined to a scenario of the current specification MUST NOT be counted as verified and MUST be reported as unattributed (possibly from an earlier specification), with a count and an explanation, never silently carried forward to changed requirements. The treatment is for the specification as a whole; per-operation carry-over of verification is not supported. The Stale state is retained for attributable evidence flagged for revalidation; no current rule produces it for regenerated specifications.
 - **FR-032**: The system MUST define and display which run determines verification state (latest qualifying run by default, or an explicitly selected run) and MUST keep earlier runs available where the existing system retains them.
 - **FR-033**: Empty specifications, missing history, malformed or unresolvable schemas and incomplete evidence MUST produce specific empty, warning or error states with recovery actions, and MUST NOT be replaced by sample data.
 - **FR-034**: Element identifiers MUST be stable across re-renders, recalculations and runs, and MUST account for the specification revision rather than relying on list position or display labels.
@@ -245,7 +247,7 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **SC-004**: Zero occurrences of NaN, Infinity or blank in any metric, including zero-denominator cases.
 - **SC-005**: Identical inputs produce byte-identical metrics and recommendation ordering across repeated calculations.
 - **SC-006**: For a specification of 500 operations, the view becomes usable within 3 seconds of data availability, and filter or sort changes reflect within 1 second.
-- **SC-007**: After a specification change, 100% of evidence from the earlier specification is shown as stale and 0% is counted as verified.
+- **SC-007**: After a specification change, 0% of results that no longer match a current scenario are counted as verified, and 100% of them are reported as unattributed with a count.
 - **SC-008**: Every recommendation shows operation, requirement, reason, evidence, priority rationale and an action; none lacks a traceable source gap.
 - **SC-009**: An exported view matches the on-screen figures for the same scope in 100% of tested cases, with no secrets present.
 - **SC-010**: The view meets the application's accessibility and theming standards in both themes: all status labels are readable and meaning is never color-only.

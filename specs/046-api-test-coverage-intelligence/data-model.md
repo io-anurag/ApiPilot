@@ -15,7 +15,7 @@ Evaluated top-down for one requirement, over the attributable evidence of its ma
 
 1. No mapped scenario → `not-covered`.
 2. Mapped scenarios exist, no attributable executed result → `generated-not-executed`.
-3. All attributable evidence belongs to scenarios edited or regenerated after the run → `stale`.
+3. `stale` is reserved: it is part of the contract for attributable evidence flagged for revalidation, but no rule in this feature produces it. Results that join to no current scenario never enter classification; they are counted in `execution.unattributedResults` (clarified 2026-10-10).
 4. At least one attributable, non-stale result failed a check relevant to this requirement → `executed-failed` (a failure outranks a pass).
 5. At least one attributable, non-stale result passed every relevant check that was evaluated, and no relevant check was `could-not-evaluate` → `verified`.
 6. Otherwise (response received but no relevant check evaluated, `could-not-evaluate`, edited item, or `not-attempted` only) → `inconclusive`.
@@ -66,7 +66,8 @@ Rule: `percentage = denominator === 0 ? null : round1(numerator / denominator * 
 |---|---|
 | `specification` | `{ name, version, revision (sha256), operationCount }` |
 | `context` | `{ workflowId, generatedAt?, selectedOperationCount, scenarioCounts: { total, accepted, pending, rejected, rule, ai } }` |
-| `execution` | `{ source(s), selectedRunId?, runIds[], lastQualifyingExecutionAt?, environment? { name, tier }, unattributedResults }` |
+| `execution` | `{ source(s), selectedRunId?, runIds[], lastQualifyingExecutionAt?, environment? { name, tier }, unattributedResults }`; `unattributedResults` counts results that join to no current scenario (never verified, reported as possibly from an earlier specification) |
+| `scenarioEditedAfterRun` | Per scenario id: true when the scenario was edited in review after its run; informational note only, evidence is not invalidated |
 | `metrics` | `CoverageMetric[]` (spec + runtime groups, see spec FR-021) |
 | `operations` | `OperationCoverage[]` |
 | `gaps` | `CoverageGap[]` |
@@ -74,6 +75,7 @@ Rule: `percentage = denominator === 0 ? null : round1(numerator / denominator * 
 | `notMeasurable` | `NotMeasurable[]` |
 | `categoryCoverage` | per group `{ group, covered, applicable, available, reason? }`; `security` is `available:false` |
 | `notices` | `{ code, severity, message }[]` for stale, incomplete, unattributed, unavailable conditions |
+| `outOfScopeOperations` | Operation keys not selected for generation; excluded from every denominator and not gaps |
 | `calculatedAt` | injected clock value; the only time-dependent field, excluded from determinism comparisons |
 
 No overall score field exists by design (FR-010).
