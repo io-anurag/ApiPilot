@@ -54,6 +54,10 @@ The header shows a live connection indicator — **Connecting…**, **Connected*
 light/dark theme toggle. Your choice is remembered on that browser; until you choose
 explicitly, ApiPilot follows your operating system's light/dark preference.
 
+Each part of the workflow has its own accent colour (for example blue for the specification, violet for AI
+enhancement, teal for execution), shown on the stage tracker, tabs and primary buttons. Colour never carries a
+result on its own: success, warnings and failures always have a text label and use their own green, amber and red.
+
 The header also has two shortcuts:
 
 - **Command palette** (the search button showing **Ctrl K**, or **⌘ K** on macOS, or that key
@@ -104,6 +108,17 @@ Within the guided workflow, every step below is reached in this fixed order, and
 completed step can be revisited read-only (or, for the two review stages, reopened) by
 clicking its chip in the stage tracker at the top of the page.
 
+The tracker groups the eleven steps into four phases so it stays compact: **Prepare** (Upload,
+Analysis, API Review), **Design** (Deterministic Generation, AI Enhancement, Scenario Review),
+**Organize** (Dependency Analysis, Workflow Review) and **Execute** (Postman Generation, Execution,
+Performance Testing). A line above the tiles gives your position ("Step 3 of 11 · Prepare › API
+Review"). Each tile shows its progress ("2 of 3 done"), **Complete**, **Locked** or **Needs to be
+redone**, and the steps of the phase you are in are listed under the tiles. Select any tile to list
+the steps of another phase (select it again to hide them); the list returns to your current phase
+when you move to a step in a different one. Hover over, or tab to, a **Not yet reached** step to see
+what must be completed first. The tracker looks the same in light and dark mode; only the
+lightness adapts.
+
 ```text
 Upload → Analysis → API Review → Deterministic Generation → AI Enhancement
   → Scenario Review → Dependency Analysis → Workflow Review → Postman Generation
@@ -111,7 +126,7 @@ Upload → Analysis → API Review → Deterministic Generation → AI Enhanceme
   → Performance Testing (optional; opens once Postman Generation is complete)
 ```
 
-Each stage chip shows one of: **Not yet reached**, **Active**, **Complete**, **Needs to
+Each step chip shows one of: **Not yet reached**, **Active**, **Complete**, **Needs to
 be redone** (a later edit made this stage stale), **Skipped**, or **Partially
 completed**.
 
@@ -151,6 +166,10 @@ Check the operations you want to test. Only the checked operations, and the sche
 use, go on to Deterministic Generation and AI Enhancement, so leaving out operations you
 don't care about also makes AI enhancement faster. Use **Select all** to include every
 operation. **Continue** stays disabled until at least one operation is checked.
+
+A specification with more than 25 operations is shown a page at a time. Use **Previous**, **Next**,
+**«** and **»**, or **Per page** (25, 50 or 100), under the table. Your checks are kept when you
+change page, and **Select all** and the summary count every operation, not just the page on screen.
 
 Your selection is fixed once you continue: revisiting this stage shows it read-only. To
 test a different set of operations, start a new workflow. Operations you left out are
@@ -351,9 +370,18 @@ that hand-off, nothing you do in the guided workflow affects it. Use **← Back 
 return to the start screen; your selection and run order are kept for when you choose
 **Import & Run Collection** again.
 
+The area is four steps, shown in a bar across the top: **Collection**, **Review requests**,
+**Run** and **Results**. One step is on screen at a time. Select a step to open it; a step you
+cannot open yet says why ("Select a collection first", "Start a run first"). **Collection** is the
+introduction with the import form. On the other steps that header shrinks to a title and a bar
+with the collection's name, tier, **Unverified** badge, counts and **Change collection**.
+**Review requests** is the collection editor (section 4.3), **Run** holds the run order and a
+launch card with **Start run** (section 4.4), and **Results** shows the run and the run history
+with **Run again**. Starting a run moves you to **Results**.
+
 ### 4.1 Upload
 
-Provide a name (unique among your uploads), a risk tier (Local / Dev / QA / Staging /
+On the **Collection** step, provide a name (unique among your uploads), a risk tier (Local / Dev / QA / Staging /
 Production — the same vocabulary as a guided-workflow environment), your Postman
 Collection v2.1 JSON file, and your Postman Environment JSON file. Both files are
 validated immediately: a malformed collection, a collection with no requests at all, or a
@@ -388,7 +416,13 @@ what will be sent, before anything runs.
   three tabs — **Headers**, **Body**, and **Tests** (the request's own `pm.test(...)`
   script, previously invisible pre-run). A tabbed resolved (variable-substituted) preview
   — **Request**, **Body**, **Tests** — stays visible below as you edit, and lists any
-  variables that request still leaves unresolved. Saving an edit updates ApiPilot's
+  variables that request still leaves unresolved. To use a random value, type `{{$` in the URL, a
+  header value or the body: a list of the Postman dynamic variables (`$guid`, `$randomEmail`, and the
+  rest) appears and narrows as you type. Choose one with the arrow keys and Enter or Tab, or click
+  it, and it is completed as `{{$name}}`. Only that token is saved; the value is generated each time
+  the request runs. The header name is a combo box too: select its arrow (or press the Down key)
+  to see the standard HTTP request headers with a short description, or type to narrow the list;
+  any other name can still be typed. Saving an edit updates ApiPilot's
   stored copy of the collection (the file you uploaded is not changed), and any run made
   with the edit applied marks that request as edited in its results.
 - **Headers added by authentication**: if a request's authentication (its own, or
@@ -435,6 +469,18 @@ A collection generated by the guided workflow gets this same editor once you've 
 it through the hand-off (section 3.10).
 
 ### 4.4 Running it
+
+On the **Run** step, the card on the right works like a performance plan's Run setup. At the top it
+says whether a run can start (**Ready to run on NAME (tier)**, **Run in progress** or **Not ready to
+run yet**, with the reason), has **Start run**, and gives the last run in one line with **View results**.
+Below are the run's facts (requests selected, order, tier, delay between requests), the **Hosts** the
+selected requests will reach, the **Variables** that have no value yet (set them under Variables in
+Review requests), and a **Writes** warning that counts the selected requests that create, replace, update
+or delete data, by method, with each one listed; if there are none it says the run only reads data. A
+collection you have not confirmed yet says it will ask before its first run. Under that, **Load test
+instead** has **Create request-chain plan**, which turns the selected requests into a plan to open in
+Performance Plans, and lists the plans already made from collections; it does not run anything. Starting
+is always your click: nothing is sent before it, and the results open on the next step.
 
 Before clicking **Start run**, you can optionally use the run panel's checklist to select
 which requests actually run this time — leave everything checked to run the whole
@@ -490,6 +536,22 @@ distinguishes it from one you cancelled yourself.
 You can upload and keep multiple named collection/environment pairs at once, switch
 between them, and remove one you no longer need — removing a collection never changes
 the results of a run you already completed against it.
+
+On the **Results** step, once a run has finished (or been cancelled), **Download HTML report** saves
+the run as a single self-contained web page: pass rate and counts, a strip with one cell per request,
+**Needs attention** (the failed requests and why), **Failure clusters** (failures with the same cause,
+grouped, with a plain-language explanation), the **Slowest requests**, a breakdown by method, the run's
+details, and every request, each one expandable to its failed tests, with filters for failed, passed and
+not attempted. It opens in any browser, follows light or dark mode (with a switch), prints cleanly,
+and makes no network requests, so it can be attached to a ticket or emailed. **Download PDF report**
+saves a PDF of that run with the same content as the HTML report: the run's details, the pass rate and
+counts, the run strip, **Needs attention**, **Failure clusters** with their explanations, the **Slowest
+requests**, the breakdown by method, and a table of every request with its outcome, status code, time, reason
+and passed-test count. Only the parts that need a web page (the filters, expanding a request and the theme
+switch) are left out. It lists
+outcomes only. Request and response headers and bodies, and your variables, are not included in either
+report, so they are safe to share. It is made on the backend and nothing leaves your machine. A name in a non-Latin script
+appears approximately (as `?`) in the PDF.
 
 ### 4.5 Asking why a request failed
 

@@ -1,15 +1,6 @@
 import type { ApiOperation } from "@apipilot/shared-domain";
-import type { SummaryPanelSegment, SummaryTone } from "../components/SummaryPanel";
-
-/** Mirrors `HttpMethodBadge`'s per-method tone convention, so a method's color means the same
- * thing in a `SummaryPanel` breakdown as it does on every method badge elsewhere in the app. */
-const METHOD_TONE: Record<string, SummaryTone> = {
-  GET: "info",
-  POST: "success",
-  PUT: "warning",
-  PATCH: "brand",
-  DELETE: "danger",
-};
+import type { SummaryPanelSegment } from "../components/SummaryPanel";
+import { METHOD_FILL_CLASSES } from "../components/httpMethodStyles";
 
 const METHOD_ORDER = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -32,6 +23,9 @@ export function groupOperationsByMethod(
     key: method,
     label: method,
     count: counts.get(method) ?? 0,
-    tone: METHOD_TONE[method] ?? "neutral",
+    // The same hues as `HttpMethodBadge` (httpMethodStyles.ts), so a method's colour means the same
+    // thing in this breakdown as on every badge; a method without one stays neutral.
+    tone: "neutral",
+    fillClass: METHOD_FILL_CLASSES[method],
   }));
 }

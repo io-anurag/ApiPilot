@@ -97,7 +97,7 @@ export function SetupItem({
             aria-expanded={open}
             aria-controls={bodyId}
             aria-label={`${open ? "Hide" : "Edit"} ${title}`}
-            className="shrink-0 rounded-lg border border-border bg-surface px-3 py-1 text-sm font-medium hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:hover:bg-white/10"
+            className="shrink-0 rounded-lg border border-border bg-surface px-3 py-1 text-sm font-medium hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             onClick={() => setOpen(!open)}
           >
             {open ? "Hide" : "Edit"}

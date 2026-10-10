@@ -6,7 +6,7 @@
  * needed here.
  */
 export function Skeleton({
-  className = "h-4 w-full rounded bg-slate-200 dark:bg-slate-600",
+  className = "h-4 w-full rounded bg-surface-strong",
 }: Readonly<{ className?: string }>) {
   return (
     <span aria-hidden="true" data-testid="skeleton" className={`inline-block animate-pulse ${className}`} />

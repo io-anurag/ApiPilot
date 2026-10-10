@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { CollectionRequestView, ImpliedAuthHeader } from "@apipilot/shared-domain";
 import type { RequestEdit } from "../services/externalCollectionsClient";
 import { BUTTON_STYLES } from "./controlStyles";
@@ -6,7 +6,10 @@ import { ErrorState } from "./ErrorState";
 import { CodeBlock } from "./CodeBlock";
 import { VariableHighlightedText } from "./VariableHighlightedText";
 import { RequestAuthEditor, RequestVariablesSection } from "./RequestAuthSections";
-import { PostmanDynamicVariablePicker } from "./PostmanDynamicVariablePicker";
+import { ReferenceField } from "./requestChain/ReferenceField";
+import { POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS } from "./postmanDynamicVariables";
+import { SuggestionCombobox } from "./SuggestionCombobox";
+import { HTTP_REQUEST_HEADERS } from "./httpRequestHeaders";
 import { initialAuthDraft, toRequestAuthEdit, type AuthDraft } from "../utils/authDraft";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -23,22 +26,6 @@ interface HeaderRow {
 
 function toHeaderRows(headers: Array<{ key: string; value: string }>): HeaderRow[] {
   return headers.length > 0 ? headers.map((h) => ({ ...h })) : [{ key: "", value: "" }];
-}
-
-function insertDynamicVariable(
-  element: HTMLInputElement | HTMLTextAreaElement | null,
-  value: string,
-  variable: string,
-  setValue: (next: string) => void,
-) {
-  const token = `{{${variable}}}`;
-  const start = element?.selectionStart ?? value.length;
-  const end = element?.selectionEnd ?? value.length;
-  setValue(`${value.slice(0, start)}${token}${value.slice(end)}`);
-  queueMicrotask(() => {
-    element?.focus();
-    element?.setSelectionRange(start + token.length, start + token.length);
-  });
 }
 
 /** Where the auth behind `impliedAuthHeader` is defined, for the Headers tab note (FR-002a). */
@@ -108,9 +95,6 @@ export function RequestEditorPanel({
   const [previewTab, setPreviewTab] = useState<PreviewTab>("Request");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const urlInput = useRef<HTMLInputElement>(null);
-  const bodyInput = useRef<HTMLTextAreaElement>(null);
-  const headerValueInputs = useRef<Array<HTMLInputElement | null>>([]);
 
   function updateHeaderRow(index: number, patch: Partial<HeaderRow>) {
     setHeaderRows((current) =>
@@ -185,26 +169,19 @@ export function RequestEditorPanel({
               </option>
             ))}
           </select>
-          <label htmlFor="request-editor-url" className="sr-only">
-            URL
-          </label>
-          <input
-            id="request-editor-url"
-            type="text"
-            ref={urlInput}
+          <ReferenceField
+            label="URL"
             value={url}
+            onChange={setUrl}
+            suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
             disabled={locked}
-            onChange={(event) => setUrl(event.target.value)}
-            className="flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+            monospace
           />
         </div>
-        <PostmanDynamicVariablePicker
-          fieldLabel="URL"
-          disabled={locked}
-          onInsert={(variable) =>
-            insertDynamicVariable(urlInput.current, url, variable, setUrl)
-          }
-        />
+        <p className="text-xs text-muted">
+          Type {"{{$"} in the URL, a header value or the body to pick a random value; it is
+          generated when the request runs.
+        </p>
         {error && <ErrorState message={error} />}
       </div>
 
@@ -220,7 +197,7 @@ export function RequestEditorPanel({
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            className={`${TAB_BUTTON} ${activeTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+            className={`${TAB_BUTTON} ${activeTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-text-secondary"}`}
           >
             {tab}
             {tab === "Headers" && activeHeaderCount > 0 && (
@@ -246,40 +223,29 @@ export function RequestEditorPanel({
           <div className="space-y-2">
             {headerRows.map((row, index) => (
               <div key={index} className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="header name"
-                  value={row.key}
-                  disabled={locked}
-                  onChange={(event) =>
-                    updateHeaderRow(index, { key: event.target.value })
-                  }
-                  className="w-48 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-                <input
-                  type="text"
+                {/* Wide enough for the longest standard name (Access-Control-Request-Headers) in full. */}
+                <div className="w-full sm:w-80">
+                  <SuggestionCombobox
+                    label={`Header ${index + 1} name`}
+                    placeholder="header name"
+                    value={row.key}
+                    onChange={(key) => updateHeaderRow(index, { key })}
+                    options={HTTP_REQUEST_HEADERS.map((header) => ({
+                      name: header.name,
+                      detail: header.detail,
+                    }))}
+                    disabled={locked}
+                    monospace
+                  />
+                </div>
+                <ReferenceField
+                  label={`Header ${index + 1} value`}
                   placeholder="value"
-                  ref={(element) => {
-                    headerValueInputs.current[index] = element;
-                  }}
                   value={row.value}
+                  onChange={(value) => updateHeaderRow(index, { value })}
+                  suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
                   disabled={locked}
-                  onChange={(event) =>
-                    updateHeaderRow(index, { value: event.target.value })
-                  }
-                  className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-                <PostmanDynamicVariablePicker
-                  fieldLabel={`header ${index + 1} value`}
-                  disabled={locked}
-                  onInsert={(variable) =>
-                    insertDynamicVariable(
-                      headerValueInputs.current[index],
-                      row.value,
-                      variable,
-                      (value) => updateHeaderRow(index, { value }),
-                    )
-                  }
+                  monospace
                 />
                 <button
                   type="button"
@@ -303,9 +269,9 @@ export function RequestEditorPanel({
               + Add header
             </button>
             {request.impliedAuthHeader && (
-              <div className="space-y-1 rounded-md border border-border bg-slate-50 px-3 py-2 dark:bg-white/5">
+              <div className="space-y-1 rounded-md border border-border bg-surface-subtle px-3 py-2">
                 <p className="text-sm wrap-anywhere">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="font-semibold text-text-primary">
                     Auth adds:
                   </span>{" "}
                   <span className="font-mono">
@@ -352,27 +318,18 @@ export function RequestEditorPanel({
 
         {activeTab === "Body" && (
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor="request-editor-body"
-              className="text-xs font-medium text-muted"
-            >
+            <span aria-hidden="true" className="text-xs font-medium text-muted">
               Raw body
-            </label>
-            <textarea
-              id="request-editor-body"
-              rows={10}
-              ref={bodyInput}
+            </span>
+            <ReferenceField
+              label="Raw body"
               value={body}
+              onChange={setBody}
+              suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
               disabled={locked}
-              onChange={(event) => setBody(event.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            <PostmanDynamicVariablePicker
-              fieldLabel="body"
-              disabled={locked}
-              onInsert={(variable) =>
-                insertDynamicVariable(bodyInput.current, body, variable, setBody)
-              }
+              multiline
+              monospace
+              rows={10}
             />
           </div>
         )}
@@ -421,7 +378,7 @@ export function RequestEditorPanel({
                 role="tab"
                 aria-selected={previewTab === tab}
                 onClick={() => setPreviewTab(tab)}
-                className={`${TAB_BUTTON} ${previewTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-slate-700 dark:hover:text-slate-200"}`}
+                className={`${TAB_BUTTON} ${previewTab === tab ? "border-brand-600 text-brand-700 dark:text-brand-300" : "border-transparent text-muted hover:text-text-secondary"}`}
               >
                 {tab}
               </button>

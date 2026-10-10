@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import {
   WORKFLOW_STAGE_ORDER,
   type StageStatus,
@@ -11,6 +11,7 @@ import { AiEnhancementStage } from "../../src/components/AiEnhancementStage";
 import { WorkflowReviewStage } from "../../src/components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../../src/components/PostmanGenerationStage";
 import { Tabs } from "../../src/components/Tabs";
+import { openPhase } from "./workflowTrackerTestUtils";
 
 function workflowWithStatuses(
   statuses: Partial<Record<string, StageStatus>>,
@@ -43,6 +44,7 @@ describe("Test generation workflow accessibility", () => {
       />,
     );
     expect(screen.getByTestId("stage-status-upload")).toHaveTextContent("Complete");
+    openPhase("design");
     expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
       "Needs to be redone",
     );
@@ -55,6 +57,7 @@ describe("Test generation workflow accessibility", () => {
         onViewStage={() => {}}
       />,
     );
+    openPhase("design");
     const button = screen.getByTestId("stage-status-scenarioReview");
     expect(button.tagName).toBe("BUTTON");
   });
@@ -158,9 +161,24 @@ describe("Test generation workflow accessibility", () => {
         })}
       />,
     );
-    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
+    openPhase("design");
+    // The reason is text (shown on hover and keyboard focus), tied to its stage by aria-describedby.
+    expect(screen.getByTestId("stage-lock-reason-deterministicGeneration")).toHaveTextContent(
       "Complete API Review first",
     );
+    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveAttribute(
+      "aria-describedby",
+      "stage-lock-reason-deterministicGeneration",
+    );
+  });
+
+  it("makes each phase tile a native button that reports whether its stages are listed", () => {
+    render(<WorkflowStageTracker workflow={workflowWithStatuses({ apiReview: "active" })} />);
+    const prepare = within(screen.getByTestId("phase-tile-prepare")).getByRole("button");
+    expect(prepare).toHaveAttribute("aria-expanded", "true");
+    const design = within(screen.getByTestId("phase-tile-design")).getByRole("button");
+    expect(design).toHaveAttribute("aria-expanded", "false");
+    expect(design).toHaveAttribute("aria-controls", "phase-stages-design");
   });
 
   it("keeps every tab a native, keyboard-focusable button with a visible focus ring (spec 027 FR-011)", () => {

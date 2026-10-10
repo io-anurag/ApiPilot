@@ -109,7 +109,7 @@ export function PlanIssues({ plan, analysis, environmentChosen, onGoToStep }: Re
         <ul className="flex flex-wrap gap-2">
           {analysis.hosts.map((host) => (
             <li key={host}>
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-white/10">{host === "{{baseUrl}}" ? "{{baseUrl}} (the environment's base URL)" : host}</code>
+              <code className="rounded bg-surface-strong px-1.5 py-0.5 font-mono text-xs">{host === "{{baseUrl}}" ? "{{baseUrl}} (the environment's base URL)" : host}</code>
             </li>
           ))}
         </ul>

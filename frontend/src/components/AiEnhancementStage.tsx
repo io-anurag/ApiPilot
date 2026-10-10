@@ -88,7 +88,7 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
       <output aria-live="polite" className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         {preparing ? (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-text-primary">
               Preparing the local model
             </span>
             <span className="text-xs text-muted">
@@ -98,7 +98,7 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
           </>
         ) : (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-text-primary">
               Generating scenarios
             </span>
             <span className="text-xs text-muted">
@@ -140,7 +140,7 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
     >
       <div className="space-y-1.5">
         <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
-          <span className="font-medium text-slate-800 dark:text-slate-200">
+          <span className="font-medium text-text-primary">
             {currentIndex >= 0
               ? `Processing batch ${currentIndex + 1} of ${progress.totalBatches}…`
               : `${settledCount} of ${progress.totalBatches} ${progress.totalBatches === 1 ? "unit" : "batches"} complete`}
@@ -165,7 +165,7 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
           aria-valuenow={percentComplete}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+          className="h-1.5 overflow-hidden rounded-full bg-surface-strong"
         >
           <div
             className="h-full rounded-full bg-brand-500 transition-[width] duration-500 ease-out"
@@ -487,8 +487,8 @@ export function AiEnhancementStage({
       data-testid="ai-enhancement-stage"
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">Enhance With Local AI</h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <h2 className="text-base font-semibold text-text-primary">Enhance With Local AI</h2>
+      <p className="text-sm text-text-secondary">
         Enhance the deterministic baseline with semantic AI-generated scenarios.
       </p>
       <div className="flex flex-wrap items-center gap-2">

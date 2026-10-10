@@ -13,7 +13,7 @@ export function CodeBlock({ label, content }: Readonly<{ label?: string; content
       {label && <p className="text-xs font-semibold uppercase text-muted">{label}</p>}
       <pre
         data-testid="code-block"
-        className="max-h-96 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-slate-900 p-3 font-mono text-xs text-slate-100"
+        className="max-h-96 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-code-surface p-3 font-mono text-xs text-code-text"
       >
         <code>{content}</code>
       </pre>

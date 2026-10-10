@@ -7,16 +7,16 @@ export function TestScenarioReviewSummary({
   summary: ReviewWorkspaceWire["summary"];
 }) {
   return (
-    <dl data-testid="review-summary" className="flex flex-wrap gap-x-6 gap-y-2 rounded-md border border-border bg-slate-50 dark:bg-white/5 px-4 py-3 text-sm">
+    <dl data-testid="review-summary" className="flex flex-wrap gap-x-6 gap-y-2 rounded-md border border-border bg-surface-subtle px-4 py-3 text-sm">
       <div className="flex items-baseline gap-1">
         <dt className="text-muted">Total</dt>
-        <dd data-testid="review-summary-total" className="font-semibold text-slate-900 dark:text-white">
+        <dd data-testid="review-summary-total" className="font-semibold text-text-primary">
           {summary.total}
         </dd>
       </div>
       <div className="flex items-baseline gap-1">
         <dt className="text-muted">Pending</dt>
-        <dd data-testid="review-summary-pending" className="font-semibold text-slate-900 dark:text-white">
+        <dd data-testid="review-summary-pending" className="font-semibold text-text-primary">
           {summary.pending}
         </dd>
       </div>

@@ -23,8 +23,8 @@ export interface WorkflowTone {
   readonly marker: string;
   /** Icon tile: tinted background, border and icon colour. */
   readonly tile: string;
-  /** Solid round affordance (the card's arrow). */
-  readonly solid: string;
+  /** Quiet round affordance (the card's arrow): outlined, never a filled circle. */
+  readonly action: string;
   /** Card hover/focus border. */
   readonly border: string;
 }
@@ -53,8 +53,8 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-guided",
       tile: "border-wf-guided/30 bg-wf-guided/10 text-wf-guided",
-      solid: "bg-wf-guided text-white dark:text-slate-950",
-      border: "hover:border-wf-guided/60",
+      action: "border border-wf-guided/40 bg-surface text-wf-guided",
+      border: "hover:border-wf-guided/40",
     },
   },
   {
@@ -68,8 +68,8 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-import",
       tile: "border-wf-import/30 bg-wf-import/10 text-wf-import",
-      solid: "bg-wf-import text-white dark:text-slate-950",
-      border: "hover:border-wf-import/60",
+      action: "border border-wf-import/40 bg-surface text-wf-import",
+      border: "hover:border-wf-import/40",
     },
   },
   {
@@ -83,8 +83,8 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-quick",
       tile: "border-wf-quick/30 bg-wf-quick/10 text-wf-quick",
-      solid: "bg-wf-quick text-white dark:text-slate-950",
-      border: "hover:border-wf-quick/60",
+      action: "border border-wf-quick/40 bg-surface text-wf-quick",
+      border: "hover:border-wf-quick/40",
     },
   },
   {
@@ -98,8 +98,8 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-plans",
       tile: "border-wf-plans/30 bg-wf-plans/10 text-wf-plans",
-      solid: "bg-wf-plans text-white dark:text-slate-950",
-      border: "hover:border-wf-plans/60",
+      action: "border border-wf-plans/40 bg-surface text-wf-plans",
+      border: "hover:border-wf-plans/40",
     },
   },
   {
@@ -113,8 +113,8 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     tone: {
       marker: "bg-wf-k6",
       tile: "border-wf-k6/30 bg-wf-k6/10 text-wf-k6",
-      solid: "bg-wf-k6 text-white dark:text-slate-950",
-      border: "hover:border-wf-k6/60",
+      action: "border border-wf-k6/40 bg-surface text-wf-k6",
+      border: "hover:border-wf-k6/40",
     },
   },
 ];

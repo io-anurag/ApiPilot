@@ -57,7 +57,7 @@ export function OperationList({
     <ul data-testid="operation-list" className="overflow-hidden divide-y divide-border rounded-lg border border-border">
       <li
         aria-hidden="true"
-        className={`grid items-center gap-3 border-b border-border bg-slate-50 py-2 text-xs font-semibold text-muted dark:bg-white/5 ${ROW_GRID_COLUMNS} ${
+        className={`grid items-center gap-3 border-b border-border bg-surface-subtle py-2 text-xs font-semibold text-muted ${ROW_GRID_COLUMNS} ${
           inclusion ? "pl-10 pr-3" : "px-3"
         }`}
       >
@@ -73,12 +73,12 @@ export function OperationList({
             type="button"
             onClick={() => onSelect(operation)}
             aria-pressed={isSelected}
-            className={`grid items-center gap-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
+            className={`grid items-center gap-3 py-2 text-left text-sm hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
               inclusion ? "min-w-0 flex-1 pr-3" : "w-full px-3"
             } ${isSelected ? EXPANDED_ROW_RING : ""}`}
           >
             <HttpMethodBadge method={operation.method} />
-            <span className="min-w-0 truncate font-mono text-slate-800 dark:text-slate-200" title={operation.path}>
+            <span className="min-w-0 truncate font-mono text-text-primary" title={operation.path}>
               {operation.path}
             </span>
           </button>

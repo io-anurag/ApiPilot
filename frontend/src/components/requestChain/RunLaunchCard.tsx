@@ -11,12 +11,12 @@ import { runBlockedReason, STATUS_TEXT, summarizeChains, type ChainRunProps } fr
 
 const HERO_BUTTON = "inline-flex min-h-11 items-center rounded-lg px-5 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 const HERO_PRIMARY = `${HERO_BUTTON} bg-brand-600 text-white hover:bg-brand-700`;
-const HERO_SECONDARY = `${HERO_BUTTON} border border-border bg-surface hover:bg-slate-50 dark:hover:bg-white/10`;
+const HERO_SECONDARY = `${HERO_BUTTON} border border-border bg-surface hover:bg-surface-hover`;
 const HERO_DANGER = `${HERO_BUTTON} bg-danger-600 text-white hover:bg-danger-700`;
 
 function Fact({ label, children, mono = true }: Readonly<{ label: string; children: ReactNode; mono?: boolean }>) {
   return (
-    <div className="bg-slate-50 px-6 py-3 dark:bg-slate-900">
+    <div className="bg-surface-subtle px-6 py-3">
       <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className={`mt-0.5 break-words text-sm font-semibold ${mono ? "font-mono" : ""}`}>{children}</dd>
     </div>
@@ -53,7 +53,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
         <div className="flex min-w-72 flex-1 items-center gap-4">
           <span
             aria-hidden="true"
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border text-xl font-bold ${ready ? "border-success-500 bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-100" : "border-border bg-slate-100 text-muted dark:bg-white/10"}`}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border text-xl font-bold ${ready ? "border-success-500 bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-100" : "border-border bg-surface-strong text-muted"}`}
           >
             {ready ? "✓" : "–"}
           </span>
@@ -103,7 +103,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
                 {runs.cancelling ? "Cancelling…" : "Cancel run"}
               </button>
             ) : (
-              <button type="button" className={HERO_PRIMARY} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id)}>
+              <button type="button" className={HERO_PRIMARY} disabled={blocked !== null || runs.starting} onClick={() => environment && void runs.start(environment.id).then((started) => started && onViewRuns())}>
                 {runs.starting ? "Starting…" : `Start run on ${environment?.name ?? "…"}`}
               </button>
             )}
@@ -134,7 +134,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
       </dl>
 
       <div className="grid gap-4 border-t border-border p-6 text-sm sm:grid-cols-[3fr_2fr]">
-        <section aria-labelledby="run-chains-title" className="rounded-xl border border-border bg-slate-50 p-4 dark:bg-slate-900">
+        <section aria-labelledby="run-chains-title" className="rounded-xl border border-border bg-surface-subtle p-4">
           <h4 id="run-chains-title" className="text-sm font-semibold">
             Chains <span className="font-normal text-muted">· run in order on every iteration</span>
           </h4>
@@ -152,7 +152,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
             ))}
           </ul>
         </section>
-        <section aria-labelledby="run-hosts-title" className="space-y-3 rounded-xl border border-border bg-slate-50 p-4 dark:bg-slate-900">
+        <section aria-labelledby="run-hosts-title" className="space-y-3 rounded-xl border border-border bg-surface-subtle p-4">
           <div>
             <h4 id="run-hosts-title" className="text-sm font-semibold">
               Hosts

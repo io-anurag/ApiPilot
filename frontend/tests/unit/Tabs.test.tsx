@@ -25,6 +25,19 @@ describe("Tabs", () => {
     expect(onChange).toHaveBeenCalledWith("two");
   });
 
+  it("keeps the active tab off the section accent when the tabs switch workflows (AP-041)", () => {
+    const { rerender } = render(
+      <Tabs tabs={TABS} activeTab="one" onChange={() => {}} label="Test tabs" />,
+    );
+    expect(screen.getByRole("button", { name: "One" }).className).toContain("text-brand-700");
+
+    rerender(<Tabs tabs={TABS} activeTab="one" onChange={() => {}} label="Test tabs" accent="neutral" />);
+    const active = screen.getByRole("button", { name: "One" });
+    expect(active.className).toContain("border-text-primary");
+    expect(active.className).not.toContain("text-brand-700");
+    expect(active).toHaveAttribute("aria-current", "page");
+  });
+
   it("labels the tab list for assistive technology", () => {
     render(<Tabs tabs={TABS} activeTab="one" onChange={() => {}} label="Test tabs" />);
     expect(screen.getByRole("navigation", { name: "Test tabs" })).toBeInTheDocument();

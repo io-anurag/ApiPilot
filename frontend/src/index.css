@@ -10,42 +10,84 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /**
- * Project design tokens (CLAUDE.md §29). Tailwind v4 CSS-first configuration — no
- * tailwind.config.js (CLAUDE.md §27). Values are a developer-tool-appropriate, low-decoration
- * palette (CLAUDE.md §28) shared by every screen in the guided workflow.
+ * ApiPilot colour system (AP-041) — the single authoritative token definition. Tailwind v4
+ * CSS-first configuration, no tailwind.config.js (CLAUDE.md §27). Components consume the semantic
+ * tokens below; they do not reference Tailwind palette colours or hex values.
  *
- * AP-038 (Design A): headings use the sans display face, the light background is cool-neutral,
- * and each top-level workflow has one colour (`--color-wf-*`) used wherever that workflow is
- * shown — always beside its name, never as the only signal (spec FR-002, FR-005). Every value
- * meets WCAG AA as text on its theme's surface (038 research.md D2).
+ *   SHARED NEUTRAL FOUNDATION  +  SECTION ACCENT  +  SEMANTIC STATUS
+ *
+ *   - Neutrals (background, surface*, border*, text-*) carry almost all of the UI and are the
+ *     same in every section.
+ *   - A section accent answers "where am I?". It is applied with `data-section` (see
+ *     components/sectionCatalog.ts) and appears only as a small accent: active navigation,
+ *     section icons, active tabs, selected controls, focus rings, progress, primary actions.
+ *   - Status colours answer "what happened?". They are independent of the section and a section
+ *     colour is never used to mean success, warning, failure or information.
+ *   - A dedicated chart palette keeps data series distinguishable without relying on red/green.
+ *
+ * Every text/background pairing here was checked against WCAG 2.1 AA (4.5:1 text, 3:1 non-text)
+ * in both themes; see specs/041-section-color-system/contrast.md.
  */
+
+/* Raw section hues. `--solid-*` is the light-theme accent and is theme-invariant: it is the fill
+ * behind white text on primary actions, and the base the `brand` scale is derived from, so it
+ * must pass 4.5:1 with white in both themes. Nothing outside this file reads these directly. */
+:root {
+  --solid-spec: #2563eb;
+  --solid-analysis: #0e7490;
+  --solid-scenarios: #4f46e5;
+  --solid-ai: #7c3aed;
+  --solid-dependencies: #a21caf;
+  --solid-artifacts: #c2410c;
+  --solid-execution: #0f766e;
+  --solid-results: #047857;
+
+  /* Default section (no `data-section`): the product accent, Specification blue. */
+  --section-solid: var(--solid-spec);
+  --section-accent: var(--color-section-spec);
+}
+
 @theme {
   --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --font-display: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
 
-  --color-brand-50: #eefcf8;
-  --color-brand-100: #d7f7eb;
-  --color-brand-200: #aceed9;
-  --color-brand-300: #72dfc2;
-  --color-brand-400: #35c5a2;
-  --color-brand-500: #11a982;
-  --color-brand-600: #078366;
-  --color-brand-700: #086a55;
-  --color-brand-800: #0b5547;
-  --color-brand-900: #0b443a;
+  /* Neutral foundation (light). `muted` is the muted-text token (kept under its original name,
+   * `text-muted`, which is used throughout). */
+  --color-background: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-subtle: #f8fafc;
+  --color-surface-strong: #eaeff5;
+  --color-surface-hover: #f1f5f9;
+  --color-chrome: #ffffff;
+  --color-border: #e1e7ef;
+  --color-border-strong: #cbd5e1;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-muted: #5b6878;
+  --color-text-disabled: #94a3b8;
+  /* Code and payload panels stay dark in both themes (a code block reads as a terminal); the
+   * scrim dims the page behind a dialog. */
+  --color-code-surface: #0f172a;
+  --color-code-text: #e2e8f0;
+  --color-code-border: #334155;
+  --color-scrim: #0f172a;
 
+  /* Status. The scales keep their steps; 600/700 of success and warning were darkened so white
+   * text on a `-600` button passes AA (it was 3.3:1 and 3.2:1). `info` is a steel blue, kept
+   * apart from the cyan Analysis section. */
   --color-success-50: #f0fdf4;
   --color-success-100: #dcfce7;
   --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-  --color-success-700: #15803d;
+  --color-success-600: #15803d;
+  --color-success-700: #166534;
 
   --color-warning-50: #fffbeb;
   --color-warning-100: #fef3c7;
   --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-  --color-warning-700: #b45309;
+  --color-warning-600: #b45309;
+  --color-warning-700: #92400e;
 
   --color-danger-50: #fef2f2;
   --color-danger-100: #fee2e2;
@@ -53,20 +95,14 @@
   --color-danger-600: #dc2626;
   --color-danger-700: #b91c1c;
 
-  --color-info-50: #ecfeff;
-  --color-info-100: #cffafe;
-  --color-info-500: #06b6d4;
-  --color-info-600: #0891b2;
-  --color-info-700: #0e7490;
+  --color-info-50: #f1f5fb;
+  --color-info-100: #dfe8f4;
+  --color-info-500: #6785ad;
+  --color-info-600: #476a96;
+  --color-info-700: #36557a;
 
-  --color-surface: #ffffff;
-  --color-background: #f6f8fb;
-  --color-muted: #5b6878;
-  --color-border: #e1e7ef;
-  --color-chrome: #ffffff;
-
-  /* Workflow hues never reuse a status hue (success green, warning amber, danger red, info cyan)
-   * or the brand teal, so a workflow colour cannot be read as a status (038 FR-002). */
+  /* Workflow identity on the start screen only (tiles, tab markers) — AP-038. They are not the
+   * accent of a screen: that is the section. Distinct from every status hue. */
   --color-wf-guided: #4f46e5;
   --color-wf-import: #a21caf;
   --color-wf-quick: #1d4ed8;
@@ -74,29 +110,93 @@
   --color-wf-k6: #be185d;
 }
 
+/* Tokens that must always be emitted, even when no utility references them yet. */
+@theme static {
+  /* Status, as a single semantic colour per state (text, icons, borders). */
+  --color-success: var(--color-success-600);
+  --color-warning: var(--color-warning-600);
+  --color-danger: var(--color-danger-600);
+  --color-info: var(--color-info-600);
+
+  /* Section accents. Theme-aware; each passes 4.5:1 as text on its theme's surfaces. */
+  --color-section-spec: var(--solid-spec);
+  --color-section-analysis: var(--solid-analysis);
+  --color-section-scenarios: var(--solid-scenarios);
+  --color-section-ai: var(--solid-ai);
+  --color-section-dependencies: var(--solid-dependencies);
+  --color-section-artifacts: var(--solid-artifacts);
+  --color-section-execution: var(--solid-execution);
+  --color-section-results: var(--solid-results);
+
+  /* HTTP method identity. Solid, saturated fills that are the same in both themes (not part of the
+   * theme-aware sets above), so a method is instantly recognisable. Labels sit on them in white, or
+   * in the always-dark `code-surface` on the three bright fills (PUT, HEAD, OPTIONS); every pairing is
+   * at least 4.8:1. Closest pair of hues (OKLab): 0.20. See components/httpMethodStyles.ts. */
+  --color-method-get: #2563eb;
+  --color-method-post: #15803d;
+  --color-method-put: #f59e0b;
+  --color-method-patch: #a21caf;
+  --color-method-delete: #dc2626;
+  --color-method-head: #22d3ee;
+  --color-method-options: #a3e635;
+
+  /* Chart series. A categorical palette, at least 3:1 on the surface; pair every series with a
+   * label or marker. The first four avoid status-like hues (no red, orange or amber until series
+   * 5 and 6), so a plain series is not read as a warning or a failure. */
+  --color-chart-1: #2563eb;
+  --color-chart-2: #a21caf;
+  --color-chart-3: #0f766e;
+  --color-chart-4: #475569;
+  --color-chart-5: #c2410c;
+  --color-chart-6: #a16207;
+}
+
 /**
- * Dark-mode surface tokens (spec 027 FR-008, research.md D2). Scoped to the shell and shared
- * components (StatusBadge/HttpMethodBadge/ProvenanceBadge/controlStyles/WorkflowStageTracker/
- * EmptyState/ErrorState/Dialog/Tabs, and AppHeader which is already dark by design) — per-page
- * content dark-mode is out of this feature's scope (FR-014) and is applied by later,
- * per-page-content specs. Redefining these custom properties means every existing `bg-surface`,
- * `bg-background`, `text-muted`, and `border-border` utility automatically follows; raw
- * `slate-*`/`white` utilities do not (Tailwind's built-in palette isn't theme-aware), so those
- * are handled per component with explicit `dark:` variants instead.
- */
-/**
- * `data-theme` is always set to a resolved "light" or "dark" before first paint — by the inline
- * script in index.html on load (falling back to prefers-color-scheme only when there's no stored
- * choice) and by useTheme.ts thereafter — so these tokens only need to key off the attribute, not
- * prefers-color-scheme directly.
+ * Dark theme. `data-theme` is always set to a resolved "light" or "dark" before first paint — by
+ * the inline script in index.html on load (falling back to prefers-color-scheme only when there is
+ * no stored choice) and by useTheme.ts thereafter — so these only need to key off the attribute.
+ * The neutral foundation is a very dark blue-grey, never pure black. Accents are lightened so
+ * they read as text on it.
  */
 :root[data-theme="dark"] {
-  /* AP-038: navy dark palette (Design A), replacing the earlier green-black surfaces. */
-  --color-surface: #0f182b;
-  --color-background: #070d1a;
-  --color-muted: #94a1b8;
-  --color-border: #22304a;
-  --color-chrome: #0a1222;
+  --color-background: #090b10;
+  --color-surface: #11151c;
+  --color-surface-elevated: #181d26;
+  --color-surface-subtle: #161b23;
+  --color-surface-strong: #202631;
+  --color-surface-hover: #1c222c;
+  --color-chrome: #0d1016;
+  --color-border: #262d39;
+  --color-border-strong: #3a4352;
+  --color-text-primary: #f3f6fa;
+  --color-text-secondary: #c5cedb;
+  --color-muted: #98a4b8;
+  --color-text-disabled: #5f6b7e;
+  --color-code-surface: #0b0e14;
+  --color-code-text: #e2e8f0;
+  --color-code-border: #2b3342;
+  --color-scrim: #05070a;
+
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #9db6d6;
+
+  --color-section-spec: #60a5fa;
+  --color-section-analysis: #22d3ee;
+  --color-section-scenarios: #818cf8;
+  --color-section-ai: #a78bfa;
+  --color-section-dependencies: #dd86ea;
+  --color-section-artifacts: #fb923c;
+  --color-section-execution: #2dd4bf;
+  --color-section-results: #34d399;
+
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #dd86ea;
+  --color-chart-3: #2dd4bf;
+  --color-chart-4: #94a3b8;
+  --color-chart-5: #fb923c;
+  --color-chart-6: #facc15;
 
   --color-wf-guided: #a5b4fc;
   --color-wf-import: #f0abfc;
@@ -106,96 +206,95 @@
 }
 
 /**
- * AP-038: one colour scheme per workflow. While a workflow is open, App sets `data-workflow` on
- * <main>, and the `brand` scale every component already uses (buttons, the active tab, the stage
- * tracker, focus rings, provenance and tinted panels) takes that workflow's hue, the same hue as
- * its start-screen tile (`--color-wf-*` is the 700 step in light and the 300 step in dark). The
- * start screen keeps the product's teal brand. Success, warning, danger and info keep their own
- * tokens, so no workflow hue ever reads as a status (spec FR-002, FR-027). Each scale is
- * Tailwind's own; every step this app draws text or white-on-colour with meets or beats the teal
- * scale's contrast (038 research D2).
+ * Section selection. `data-section` on any element re-points the accent for everything inside it;
+ * with none, the product accent (Specification blue) applies. `--section-accent` is the
+ * theme-aware accent (text, icons, borders); `--section-solid` is the AA-with-white fill.
  */
-:root {
-  --color-glow: #1d4ed8;
+[data-section="spec"] {
+  --section-solid: var(--solid-spec);
+  --section-accent: var(--color-section-spec);
+}
+[data-section="analysis"] {
+  --section-solid: var(--solid-analysis);
+  --section-accent: var(--color-section-analysis);
+}
+[data-section="scenarios"] {
+  --section-solid: var(--solid-scenarios);
+  --section-accent: var(--color-section-scenarios);
+}
+[data-section="ai"] {
+  --section-solid: var(--solid-ai);
+  --section-accent: var(--color-section-ai);
+}
+[data-section="dependencies"] {
+  --section-solid: var(--solid-dependencies);
+  --section-accent: var(--color-section-dependencies);
+}
+[data-section="artifacts"] {
+  --section-solid: var(--solid-artifacts);
+  --section-accent: var(--color-section-artifacts);
+}
+[data-section="execution"] {
+  --section-solid: var(--solid-execution);
+  --section-accent: var(--color-section-execution);
+}
+[data-section="results"] {
+  --section-solid: var(--solid-results);
+  --section-accent: var(--color-section-results);
 }
 
-:root[data-theme="dark"] {
-  --color-glow: #3b82f6;
+/**
+
+ * NAMING: `brand-*` means "the accent of the section on screen", not a fixed product colour. Use it
+ * for interaction and context (buttons, active tabs, focus, selection, progress). Never use it for
+ * a state (use success/warning/danger/info), for something with its own fixed identity (HTTP
+ * methods use the chart/status tokens, the AI-suggested badge uses `section-ai`, workflows use
+ * `wf-*`), or for decoration. Splitting it into separate product and section scales was
+ * considered and deferred: with no section set it already resolves to the product accent.
+ *
+ * The `brand` scale every component already uses (buttons, tabs, focus rings, selected states,
+ * tinted panels) is derived from the current section, so it follows `data-section` with no change
+ * to the components. It is declared on the root and on every section element so that each one
+ * re-resolves it against its own accent (a custom property that references another is resolved
+ * where it is declared, not where it is used). Steps 600-900 are fills and stay on the AA-with-
+ * white base in both themes; in dark, 200-500 become the lightened accent so `dark:text-brand-300`,
+ * `dark:border-brand-400` and focus rings read on dark surfaces.
+ */
+:root,
+[data-section] {
+  --brand-50: color-mix(in oklab, var(--section-solid) 7%, white);
+  --brand-100: color-mix(in oklab, var(--section-solid) 15%, white);
+  --brand-200: color-mix(in oklab, var(--section-solid) 30%, white);
+  --brand-300: color-mix(in oklab, var(--section-solid) 55%, white);
+  --brand-400: color-mix(in oklab, var(--section-solid) 75%, white);
+  --brand-500: color-mix(in oklab, var(--section-solid) 90%, white);
+  --brand-600: var(--section-solid);
+  --brand-700: color-mix(in oklab, var(--section-solid) 82%, black);
+  --brand-800: color-mix(in oklab, var(--section-solid) 64%, black);
+  --brand-900: color-mix(in oklab, var(--section-solid) 48%, black);
 }
 
-[data-workflow="guided-workflow"] {
-  /* indigo */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
-  --color-glow: var(--color-brand-600);
+:root[data-theme="dark"],
+:root[data-theme="dark"] [data-section] {
+  --brand-200: color-mix(in oklab, var(--section-accent) 70%, white);
+  --brand-300: var(--section-accent);
+  --brand-400: var(--section-accent);
+  --brand-500: var(--section-accent);
 }
 
-[data-workflow="import-collection"] {
-  /* fuchsia */
-  --color-brand-50: #fdf4ff;
-  --color-brand-100: #fae8ff;
-  --color-brand-200: #f5d0fe;
-  --color-brand-300: #f0abfc;
-  --color-brand-400: #e879f9;
-  --color-brand-500: #d946ef;
-  --color-brand-600: #c026d3;
-  --color-brand-700: #a21caf;
-  --color-brand-800: #86198f;
-  --color-brand-900: #701a75;
-  --color-glow: var(--color-brand-600);
-}
-
-[data-workflow="quick-performance"] {
-  /* blue */
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
-  --color-glow: var(--color-brand-600);
-}
-
-[data-workflow="performance-plans"] {
-  /* violet */
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-200: #ddd6fe;
-  --color-brand-300: #c4b5fd;
-  --color-brand-400: #a78bfa;
-  --color-brand-500: #8b5cf6;
-  --color-brand-600: #7c3aed;
-  --color-brand-700: #6d28d9;
-  --color-brand-800: #5b21b6;
-  --color-brand-900: #4c1d95;
-  --color-glow: var(--color-brand-600);
-}
-
-[data-workflow="user-script"] {
-  /* pink */
-  --color-brand-50: #fdf2f8;
-  --color-brand-100: #fce7f3;
-  --color-brand-200: #fbcfe8;
-  --color-brand-300: #f9a8d4;
-  --color-brand-400: #f472b6;
-  --color-brand-500: #ec4899;
-  --color-brand-600: #db2777;
-  --color-brand-700: #be185d;
-  --color-brand-800: #9d174d;
-  --color-brand-900: #831843;
-  --color-glow: var(--color-brand-600);
+/* `inline` makes each utility read `var(--brand-*)` at the element using it, so it resolves
+ * against the nearest section. */
+@theme inline {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
 }
 
 @layer base {
@@ -208,12 +307,8 @@
     margin: 0;
     font-family: var(--font-sans);
     background-color: var(--color-background);
-    color: #121a26;
+    color: var(--color-text-primary);
     text-rendering: optimizeLegibility;
-  }
-
-  :root[data-theme="dark"] body {
-    color: #e6ecf5;
   }
 
   button,
@@ -254,13 +349,13 @@
   }
 
   ::selection {
-    background: #aceed9;
-    color: #0b443a;
+    background: var(--brand-200);
+    color: var(--color-text-primary);
   }
 
   :root[data-theme="dark"] ::selection {
-    background: #078366;
-    color: #eefcf8;
+    background: color-mix(in oklab, var(--section-accent) 40%, transparent);
+    color: var(--color-text-primary);
   }
 }
 
@@ -277,23 +372,23 @@
 }
 
 @layer utilities {
-  /* AP-038 (Design A): a soft blue glow at the top of the page over a faint neutral grid. The
-   * glow is anchored to the top and does not repeat, so long pages fade back to the plain
-   * background token. */
+  /* A neutral grid with a small, very faint section-accent glow behind the page header only. The
+   * grid carries no colour; the glow is a hint of where you are, not a background colour, and is
+   * anchored to the top without repeating so the rest of the page is the plain neutral. */
   .technical-grid {
     background-image:
-      radial-gradient(70rem 26rem at 75% -6rem, color-mix(in srgb, var(--color-glow) 7%, transparent), transparent 70%),
-      linear-gradient(to right, rgb(91 104 120 / 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(91 104 120 / 0.05) 1px, transparent 1px);
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 4%, transparent), transparent 70%),
+      linear-gradient(to right, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px);
     background-size: 100% 100%, 28px 28px, 28px 28px;
     background-repeat: no-repeat, repeat, repeat;
   }
 
   :root[data-theme="dark"] .technical-grid {
     background-image:
-      radial-gradient(70rem 28rem at 75% -6rem, color-mix(in srgb, var(--color-glow) 20%, transparent), transparent 70%),
-      linear-gradient(to right, rgb(148 161 184 / 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(148 161 184 / 0.04) 1px, transparent 1px);
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 7%, transparent), transparent 70%),
+      linear-gradient(to right, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px);
   }
 }
 

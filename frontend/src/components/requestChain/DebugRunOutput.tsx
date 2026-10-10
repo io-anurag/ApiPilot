@@ -117,7 +117,7 @@ function Masked({ text }: Readonly<{ text: MaskedText }>) {
         }
         return (
           <span key={index} className="whitespace-nowrap">
-            <span className="rounded bg-slate-200 px-1 text-slate-700 dark:bg-slate-500/30 dark:text-slate-100" data-testid="masked-value" title={segment.label}>
+            <span className="rounded bg-surface-strong px-1 text-text-secondary" data-testid="masked-value" title={segment.label}>
               ••••••<span className="sr-only"> masked: {segment.label}</span>
             </span>
             {segment.revealable && state && (
@@ -151,7 +151,7 @@ function BodyBlock({ body, label }: Readonly<{ body: DebugBody; label: string }>
         {label}
         {body.contentType ? <span className="ml-2 font-normal normal-case">{body.contentType}</span> : null}
       </p>
-      <pre data-testid="debug-body" className="max-h-96 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-slate-900 p-3 font-mono text-xs text-slate-100">
+      <pre data-testid="debug-body" className="max-h-96 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-code-surface p-3 font-mono text-xs text-code-text">
         <code>
           <Masked text={body.text} />
         </code>

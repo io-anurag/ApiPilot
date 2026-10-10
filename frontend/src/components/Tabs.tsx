@@ -11,16 +11,26 @@ export interface TabItem<T extends string> {
  * `App.tsx`'s top-level view switcher so any future tabbed panel reuses the same markup instead
  * of hand-rolling its own `aria-current`/focus-ring styling again.
  */
+const ACTIVE_CLASSES = {
+  section: "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300",
+  neutral: "border-text-primary text-text-primary",
+} as const;
+
 export function Tabs<T extends string>({
   tabs,
   activeTab,
   onChange,
   label,
+  accent = "section",
 }: Readonly<{
   tabs: ReadonlyArray<TabItem<T>>;
   activeTab: T;
   onChange: (tabId: T) => void;
   label: string;
+  /** `section` (default) tints the active tab with the current section accent. `neutral` is for
+   * tabs that switch between workflows rather than sections (AP-041): the workflow marker carries
+   * identity and the active tab is shown in the neutral text colour. */
+  accent?: "section" | "neutral";
 }>) {
   return (
     <nav
@@ -43,8 +53,8 @@ export function Tabs<T extends string>({
           aria-current={activeTab === tab.id ? "page" : undefined}
           className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
             activeTab === tab.id
-              ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
-              : "border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              ? ACTIVE_CLASSES[accent]
+              : "border-transparent text-text-secondary hover:text-text-primary"
           }`}
         >
           {tab.markerClassName && (

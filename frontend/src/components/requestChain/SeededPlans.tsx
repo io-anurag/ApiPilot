@@ -30,7 +30,7 @@ export function SeededPlans({ seedKind, onOpen, emptyText }: Readonly<{ seedKind
 
   if (state.kind === "loading") return null;
   if (state.kind === "error") return <ErrorState message="The plans could not be loaded." detail={state.message} testId="seeded-plans-error" />;
-  if (state.plans.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
+  if (state.plans.length === 0) return <p className="text-left text-sm text-muted hyphens-none">{emptyText}</p>;
   return (
     <ul className="divide-y divide-border rounded-md border border-border" aria-label="Plans seeded from this source" data-testid="seeded-plans">
       {state.plans.map((plan) => (

@@ -35,6 +35,7 @@ import { AnalysisSummary } from "../components/AnalysisSummary";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import { STAGE_SECTIONS, type SectionId } from "../components/sectionCatalog";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
@@ -161,11 +162,14 @@ const HOME_FEATURES: {
  */
 export function TestGenerationWorkflowPage({
   onExit,
+  onSectionChange,
   onHandoffToExecution,
   onOpenChainPlan,
 }: Readonly<{
   /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
   onExit?: () => void;
+  /** AP-041: reports the colour section of the stage on screen (the page itself stays neutral). */
+  onSectionChange?: (section: SectionId) => void;
   /** Fired the moment the workflow reaches the `execution` stage with a generated Postman
    * artifact — the guided workflow no longer runs collections itself (requirement 4); it hands
    * off to "Import & Run Collection" instead. */
@@ -332,6 +336,11 @@ export function TestGenerationWorkflowPage({
   const postmanGenerationAlwaysActionable =
     displayStageId === "postmanGeneration" || displayStageId === "performanceTesting";
 
+  const displaySection: SectionId = displayStageId ? STAGE_SECTIONS[displayStageId] : "spec";
+  useEffect(() => {
+    onSectionChange?.(displaySection);
+  }, [displaySection, onSectionChange]);
+
   if (loading) {
     return (
       <div
@@ -405,7 +414,7 @@ export function TestGenerationWorkflowPage({
         <div className="relative isolate overflow-hidden">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-slate-400/5"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
           />
           <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
@@ -417,7 +426,7 @@ export function TestGenerationWorkflowPage({
                   />
                   <span>Specification to executable tests</span>
                 </p>
-                <h2 className="max-w-3xl font-display text-4xl font-semibold tracking-tight leading-[1.1] text-slate-950 sm:text-5xl dark:text-white">
+                <h2 className="max-w-3xl font-display text-4xl font-semibold tracking-tight leading-[1.1] text-text-primary sm:text-5xl">
                   Turn an OpenAPI specification into a test suite
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-muted">
@@ -445,11 +454,11 @@ export function TestGenerationWorkflowPage({
                 ))}
               </dl>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
-              <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
+            <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+              <div className="h-1 bg-brand-600" />
+              <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  <p className="text-sm font-semibold text-text-primary">
                     New test generation run
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
@@ -460,7 +469,7 @@ export function TestGenerationWorkflowPage({
               </div>
               <div className="space-y-4 p-5 sm:p-6">
                 <div className="space-y-1">
-                  <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">
+                  <h3 className="font-display text-lg font-semibold text-text-primary">
                     Upload specification
                   </h3>
                   <p className="text-sm leading-6 text-muted">
@@ -476,13 +485,13 @@ export function TestGenerationWorkflowPage({
                   className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
                     dragActive
                       ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15"
-                      : "border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-white/5 dark:hover:bg-brand-500/10"
+                      : "border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"
                   } ${uploading ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
                     <UploadIcon className="h-5 w-5" />
                   </div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                  <p className="text-sm font-medium text-text-primary">
                     Drag and drop your specification here
                   </p>
                   <p className="text-xs text-muted">or click to browse your files</p>
@@ -549,7 +558,7 @@ export function TestGenerationWorkflowPage({
             ) : (
               <output
                 data-testid="read-only-stage-notice"
-                className="block rounded-md border border-border bg-slate-50 px-3 py-2 text-sm text-muted dark:bg-white/5"
+                className="block rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-muted"
               >
                 Read-only view of a completed stage — nothing here can be changed.
               </output>
@@ -674,7 +683,7 @@ function ExecutionHandoffNotice({
       data-testid="execution-handoff-notice"
       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 shadow-sm"
     >
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-sm text-text-secondary">
         The Postman collection has been generated. Run it against a real environment from
         &quot;Import &amp; Run Collection&quot;.
       </p>
@@ -715,11 +724,11 @@ function UploadAnalysisSummary({
       data-testid={`${stageId}-stage-summary`}
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+      <h2 className="text-base font-semibold text-text-primary">
         {isUpload ? "Specification Uploaded" : "Specification Analysis"}
       </h2>
       {isUpload && (
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-text-secondary">
           {specificationFilename}
         </p>
       )}
@@ -738,10 +747,10 @@ function DeterministicGenerationSummary({
       data-testid="deterministic-generation-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+      <h2 className="text-base font-semibold text-text-primary">
         Deterministic Test Suite Generated
       </h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-sm text-text-secondary">
         {scenarioCount} baseline scenario{scenarioCount === 1 ? "" : "s"} generated from
         the reviewed specification.
       </p>
@@ -767,10 +776,10 @@ function DependencyAnalysisSummary({
       data-testid="dependency-analysis-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+      <h2 className="text-base font-semibold text-text-primary">
         Dependency Analysis
       </h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-sm text-text-secondary">
         {graph.relationships.length} relationship
         {graph.relationships.length === 1 ? "" : "s"} found; {workflows.length}{" "}
         integration workflow{workflows.length === 1 ? "" : "s"} assembled.
@@ -821,7 +830,7 @@ function DeterministicGenerationTrigger({
       data-testid="deterministic-generation-stage"
       className="space-y-3 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+      <h2 className="text-base font-semibold text-text-primary">
         Generate Deterministic Test Suite
       </h2>
       <button

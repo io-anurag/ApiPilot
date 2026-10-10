@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { VersionBadge } from "./VersionBadge";
 
 const ICON_BUTTON =
-  "flex h-8 items-center justify-center gap-2 rounded-full border border-border bg-surface text-muted hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-chrome dark:hover:text-white";
+  "flex h-8 items-center justify-center gap-2 rounded-full border border-border bg-surface text-muted hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-chrome";
 
 /**
  * The application shell's single header (spec 027 FR-001), extracted from App.tsx so every page
@@ -36,7 +36,7 @@ export function AppHeader({
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-chrome text-slate-950 shadow-sm dark:text-white">
+    <header className="sticky top-0 z-20 border-b border-border bg-chrome text-text-primary shadow-sm">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface">
           <img
@@ -48,7 +48,7 @@ export function AppHeader({
         </div>
         <div className="min-w-0 leading-tight">
           <div className="flex min-w-0 items-center gap-2.5">
-            <h1 className="truncate font-display text-lg font-bold tracking-tight text-slate-950 dark:text-white">
+            <h1 className="truncate font-display text-lg font-bold tracking-tight text-text-primary">
               ApiPilot
             </h1>
             {/* Narrow screens keep the controls on the right reachable before the version. */}

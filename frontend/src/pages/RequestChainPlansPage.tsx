@@ -158,7 +158,7 @@ export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit
         {actionError && <ErrorState message={actionError} testId="chain-plans-action-error" />}
         {state.kind === "loading" && (
           <div role="status" aria-label="Loading plans">
-            <Skeleton className="h-24 w-full rounded bg-slate-200 dark:bg-slate-600" />
+            <Skeleton className="h-24 w-full rounded bg-surface-strong" />
           </div>
         )}
         {state.kind === "error" && (
@@ -186,7 +186,7 @@ export function RequestChainPlansPage({ onExit, openRequest }: Readonly<{ onExit
                 {state.plans.map((plan) => (
                   <tr key={plan.id}>
                     <td className="py-2 pr-4">
-                      <span className="font-medium text-slate-900 dark:text-slate-100">{plan.name}</span>
+                      <span className="font-medium text-text-primary">{plan.name}</span>
                       <span className="block text-xs text-muted">{plan.seedSource ? SEED_LABELS[plan.seedSource] : "Built by you"}</span>
                     </td>
                     <td className="py-2 pr-4 tabular-nums">{plan.chainCount}</td>

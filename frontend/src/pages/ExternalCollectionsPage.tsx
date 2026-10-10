@@ -33,11 +33,9 @@ import { ErrorState } from "../components/ErrorState";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
-import {
-  EntryFeatureIcon,
-  type EntryFeatureIconName,
-} from "../components/EntryFeatureIcon";
-import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
+import { ImportRunCollectionBar, ImportRunHero } from "../components/ImportRunHero";
+import { ImportRunStepper } from "../components/ImportRunStepper";
+import { resolveStep, type ImportRunStepId } from "../components/importRunSteps";
 import type { ImportPreload } from "../services/importPreload";
 import type { RunOrder } from "../utils/runOrder";
 
@@ -77,6 +75,10 @@ function findRequest(
   return search(view.items, view.folders);
 }
 
+function countFolders(folders: CollectionFolderView[]): number {
+  return folders.reduce((total, folder) => total + 1 + countFolders(folder.folders), 0);
+}
+
 /** `containerId: "root"` targets `view` itself; otherwise the matching folder. */
 function containerOf(
   view: CollectionView,
@@ -87,6 +89,11 @@ function containerOf(
 }
 
 /**
+ * Four steps (AP-042) — Collection, Review requests, Run, Results — one on screen at a time, so a
+ * large collection no longer pushes the run controls far below the fold. The Collection step is the
+ * original hero around the import card; later steps shrink it to a header. The run panel stays
+ * mounted on every step (hidden outside Run and Results) so a run in progress keeps polling.
+ *
  * Standalone "Import & Run Collection" entry point (FR-011, research.md D9) — reachable with no
  * prior OpenAPI upload and no dependency on `TestGenerationWorkflowPage`'s state. Extended (AP-028
  * specs/028-collection-editor-ui) with the pre-run collection browser, variable panel, and request
@@ -113,6 +120,8 @@ export function ExternalCollectionsPage({
     undefined,
   );
   const [locked, setLocked] = useState(false);
+  const [requestedStep, setRequestedStep] = useState<ImportRunStepId>("collection");
+  const [hasRuns, setHasRuns] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
   const [mainView, setMainView] = useState<"request" | "variables">("request");
   const [addRequestDialog, setAddRequestDialog] = useState<{
@@ -193,6 +202,8 @@ export function ExternalCollectionsPage({
   }
 
   const selected = uploadedCollections.find((c) => c.id === selectedId);
+  const progress = { hasCollection: !!selected, hasRuns: !!selected && hasRuns };
+  const step = resolveStep(requestedStep, progress);
   const selectedRequest =
     collectionView && selectedRequestId
       ? findRequest(collectionView, selectedRequestId)
@@ -369,69 +380,17 @@ export function ExternalCollectionsPage({
           </button>
         </div>
       )}
-      <section className="relative isolate overflow-hidden">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-slate-400/5"
-        />
-        <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-                <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
-                <span>Bring your own collection</span>
-              </p>
-              <h2 className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white">
-                Run an existing collection against your API
-              </h2>
-              <p className="max-w-2xl text-base leading-7 text-muted">
-                Import a Postman collection and environment without first uploading an
-                OpenAPI specification. Review its requests, choose an order, and
-                explicitly trigger each run.
-              </p>
-            </div>
-            <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
-              {(
-                [
-                  {
-                    label: "IMPORT",
-                    description: "Use a collection you already trust",
-                    icon: "import",
-                  },
-                  {
-                    label: "REVIEW",
-                    description: "Edit requests before execution",
-                    icon: "review",
-                  },
-                  {
-                    label: "CONTROL",
-                    description: "Choose exactly what runs",
-                    icon: "control",
-                  },
-                ] as const satisfies ReadonlyArray<{
-                  label: string;
-                  description: string;
-                  icon: EntryFeatureIconName;
-                }>
-              ).map(({ label, description, icon }, index) => (
-                <div
-                  key={label}
-                  className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}
-                >
-                  <EntryFeatureIcon name={icon} />
-                  <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">
-                    {label}
-                  </dt>
-                  <dd className="text-xs text-muted">{description}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
-            <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-            <div className="flex items-center justify-between border-b border-border bg-slate-50 dark:bg-white/5 px-5 py-3">
+      <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />
+      <ImportRunHero
+        compact={step !== "collection"}
+        // Always mounted (hidden by the hero on later steps), so a half-filled upload form and the
+        // list's selection survive a visit to another step.
+        aside={
+          <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+            <div className="h-1 bg-brand-600" />
+            <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                <p className="text-sm font-semibold text-text-primary">
                   Import a Postman collection
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
@@ -454,20 +413,42 @@ export function ExternalCollectionsPage({
                   onRemoved={handleRemoved}
                 />
               </div>
+              {selected && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+                  <p className="text-xs text-muted">Selected: {selected.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => setRequestedStep("review")}
+                    className={BUTTON_STYLES.primary}
+                  >
+                    Review requests →
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          <WorkflowPathPreview
-            steps={[
-              { label: "Collection", icon: "collection" },
-              { label: "Review Requests", icon: "design" },
-              { label: "Run", icon: "run" },
-              { label: "Results", icon: "performance" },
-            ]}
-          />
-        </div>
-      </section>
+        }
+      />
 
-      {selected && collectionView && (
+      {step !== "collection" && selected && (
+        <ImportRunCollectionBar
+          collection={selected}
+          requestCount={collectionView ? requestPlacements.length : undefined}
+          folderCount={collectionView ? countFolders(collectionView.folders) : undefined}
+          variableCount={collectionView?.variables.length}
+          onChange={() => setRequestedStep("collection")}
+        />
+      )}
+
+      {step === "review" && selected && !collectionView && (
+        viewError ? (
+          <ErrorState message={viewError} />
+        ) : (
+          <p role="status" className="text-sm text-muted">Loading the collection…</p>
+        )
+      )}
+
+      {step === "review" && selected && collectionView && (
         <section className="space-y-3">
           {viewError && <ErrorState message={viewError} />}
           {moveNotice && (
@@ -559,11 +540,24 @@ export function ExternalCollectionsPage({
               )}
             </div>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button type="button" onClick={() => setRequestedStep("collection")} className={BUTTON_STYLES.secondary}>
+              ← Collection
+            </button>
+            <button type="button" onClick={() => setRequestedStep("run")} className={BUTTON_STYLES.primary}>
+              Set up run →
+            </button>
+          </div>
         </section>
       )}
 
       {selected && (
         <ExternalCollectionRunPanel
+          view={step === "run" ? "run" : step === "results" ? "results" : "hidden"}
+          onRunStarted={() => setRequestedStep("results")}
+          onHasRunsChange={setHasRuns}
+          onRunAgain={() => setRequestedStep("run")}
+          onViewResults={() => setRequestedStep("results")}
           uploadedCollection={selected}
           requests={requestPlacements.map((placement) => placement.request)}
           placements={collectionView ? runOrderPlacements : undefined}
@@ -585,6 +579,14 @@ export function ExternalCollectionsPage({
             )
           }
         />
+      )}
+
+      {step === "run" && selected && (
+        <div className="flex justify-start">
+          <button type="button" onClick={() => setRequestedStep("review")} className={BUTTON_STYLES.secondary}>
+            ← Review requests
+          </button>
+        </div>
       )}
 
       {addRequestDialog && (

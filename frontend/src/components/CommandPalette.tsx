@@ -112,7 +112,7 @@ export function CommandPalette({
             setActiveIndex(0);
           }}
           onKeyDown={handleKeyDown}
-          className="w-full bg-transparent text-sm text-slate-900 placeholder:text-muted focus:outline-none dark:text-slate-100"
+          className="w-full bg-transparent text-sm text-text-primary placeholder:text-muted focus:outline-none"
         />
         <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted sm:inline">
           Esc
@@ -135,8 +135,8 @@ export function CommandPalette({
               onClick={() => onRun(command)}
               className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm ${
                 index === active
-                  ? "bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white"
-                  : "text-slate-700 dark:text-slate-200"
+                  ? "bg-surface-strong text-text-primary"
+                  : "text-text-secondary"
               }`}
             >
               <CommandIcon command={command} />

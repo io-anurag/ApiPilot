@@ -413,19 +413,22 @@ describe("App", () => {
     });
   });
 
-  it("gives the open workflow its own colour scheme, and the start screen the brand one (AP-038 FR-027)", async () => {
+  it("sets the section accent from the open workflow, and leaves the start screen on the product accent (AP-041)", async () => {
     stubFetch();
     const { container } = render(<App />);
     const main = container.querySelector("main") as HTMLElement;
     await screen.findByTestId("entry-chooser");
-    expect(main).not.toHaveAttribute("data-workflow");
+    expect(main).not.toHaveAttribute("data-section");
 
     fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
     await screen.findByText("Import a Postman collection");
-    expect(main).toHaveAttribute("data-workflow", "import-collection");
+    expect(main).toHaveAttribute("data-section", "execution");
+
+    fireEvent.click(screen.getByRole("button", { name: "Run k6 Script" }));
+    expect(main).toHaveAttribute("data-section", "scenarios");
 
     fireEvent.click(screen.getByRole("button", { name: "Quick Performance Test" }));
-    expect(main).toHaveAttribute("data-workflow", "quick-performance");
+    expect(main).toHaveAttribute("data-section", "execution");
 
     fireEvent.click(
       await screen.findByRole("button", {
@@ -433,6 +436,17 @@ describe("App", () => {
       }),
     );
     await screen.findByTestId("entry-chooser");
-    expect(main).not.toHaveAttribute("data-workflow");
+    expect(main).not.toHaveAttribute("data-section");
+  });
+
+  it("starts the guided workflow in the Specification section (AP-041)", async () => {
+    stubFetch();
+    const { container } = render(<App />);
+    const main = container.querySelector("main") as HTMLElement;
+    await screen.findByTestId("entry-chooser");
+
+    fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
+    await screen.findByLabelText("Upload OpenAPI specification");
+    expect(main).toHaveAttribute("data-section", "spec");
   });
 });

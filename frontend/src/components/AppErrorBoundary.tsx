@@ -67,7 +67,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     const { message, copy } = this.state;
 
     return (
-      <main className="grid min-h-screen place-items-center bg-background px-4 py-10 text-slate-900 dark:text-slate-100">
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-10 text-text-primary">
         <section
           role="alert"
           data-testid="app-error-boundary"
@@ -107,7 +107,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
           <details className="rounded-md border border-border text-sm">
             <summary className="cursor-pointer rounded-md px-3 py-2 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">Technical details</summary>
             <div className="space-y-2 border-t border-border px-3 py-3">
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded bg-slate-100 p-2 font-mono text-xs dark:bg-white/10">{message}</pre>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded bg-surface-strong p-2 font-mono text-xs">{message}</pre>
               <p className="text-xs text-muted">This message is recorded in the backend log. If the page fails again after a reload, report it with this message.</p>
             </div>
           </details>

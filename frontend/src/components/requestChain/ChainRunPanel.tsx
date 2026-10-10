@@ -157,7 +157,7 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
           </section>
         )}
 
-        <section aria-labelledby="chain-last-run-title" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+        <section aria-labelledby="chain-last-run-title" data-section="results" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
           <h3 id="chain-last-run-title" className={SECTION_LABEL}>
             Last run
           </h3>

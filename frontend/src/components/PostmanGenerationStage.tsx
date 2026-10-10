@@ -87,11 +87,11 @@ export function PostmanGenerationStage({
     >
       <h2
         id="postman-generation-heading"
-        className="text-base font-semibold text-slate-900 dark:text-white"
+        className="text-base font-semibold text-text-primary"
       >
         Generate a Postman Collection
       </h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-sm text-text-secondary">
         Exports the approved scenarios as a runnable collection, a companion environment,
         and a README. Nothing is executed and no credential is written into the
         collection.

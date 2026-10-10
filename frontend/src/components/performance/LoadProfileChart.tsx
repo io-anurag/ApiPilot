@@ -42,10 +42,10 @@ export function LoadProfileChart({ stages }: Readonly<{ stages: readonly Pick<Lo
             </text>
           </g>
         ))}
-        <path d={area} className="fill-brand-500/15" />
-        <path d={line} fill="none" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="stroke-brand-600 dark:stroke-brand-300" />
+        <path d={area} className="fill-chart-1/15" />
+        <path d={line} fill="none" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="stroke-chart-1" />
         {points.slice(1).map((point) => (
-          <circle key={point.seconds} cx={x(point.seconds)} cy={y(point.virtualUsers)} r={3} className="fill-brand-600 dark:fill-brand-300" />
+          <circle key={point.seconds} cx={x(point.seconds)} cy={y(point.virtualUsers)} r={3} className="fill-chart-1" />
         ))}
         {xTicks.map((tick, index) => (
           <text key={tick} x={x(tick)} y={HEIGHT - 6} textAnchor={index === 0 ? "start" : index === xTicks.length - 1 ? "end" : "middle"} fontSize={10} className="fill-muted font-mono">

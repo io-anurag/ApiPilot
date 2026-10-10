@@ -1,6 +1,9 @@
-import { useId, useState } from "react";
-import { BUTTON_STYLES } from "./controlStyles";
+import type { ReferenceSuggestion } from "./requestChain/ReferenceField";
 
+/**
+ * The Postman dynamic variables a collection request can use. They are written as `{{$name}}` and
+ * generated each time the request runs, so the editor only ever stores the token, never a value.
+ */
 interface DynamicVariable {
   name: string;
   description: string;
@@ -11,7 +14,7 @@ interface DynamicVariableCategory {
   variables: readonly DynamicVariable[];
 }
 
-const DYNAMIC_VARIABLE_CATEGORIES: readonly DynamicVariableCategory[] = [
+export const DYNAMIC_VARIABLE_CATEGORIES: readonly DynamicVariableCategory[] = [
   {
     name: "Common",
     variables: [
@@ -102,53 +105,8 @@ const DYNAMIC_VARIABLE_CATEGORIES: readonly DynamicVariableCategory[] = [
   },
 ];
 
-export function PostmanDynamicVariablePicker({
-  fieldLabel,
-  disabled,
-  onInsert,
-}: Readonly<{
-  fieldLabel: string;
-  disabled: boolean;
-  onInsert: (name: string) => void;
-}>) {
-  const id = useId();
-  const [variable, setVariable] = useState(
-    DYNAMIC_VARIABLE_CATEGORIES[0].variables[0].name,
+/** The same catalog as autocomplete suggestions, in catalog order. */
+export const POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS: readonly ReferenceSuggestion[] =
+  DYNAMIC_VARIABLE_CATEGORIES.flatMap((category) =>
+    category.variables.map((entry) => ({ name: entry.name, detail: entry.description })),
   );
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label htmlFor={id} className="sr-only">
-        Random value for {fieldLabel}
-      </label>
-      <select
-        id={id}
-        aria-label={`Random value for ${fieldLabel}`}
-        value={variable}
-        disabled={disabled}
-        onChange={(event) => setVariable(event.target.value)}
-        className="min-w-56 rounded-md border border-border bg-surface px-2 py-1 text-xs font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {DYNAMIC_VARIABLE_CATEGORIES.map((category) => (
-          <optgroup key={category.name} label={category.name}>
-            {category.variables.map((entry) => (
-              <option key={entry.name} value={entry.name}>
-                {entry.name} - {entry.description}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onInsert(variable)}
-        aria-label={`Insert ${variable} into ${fieldLabel}`}
-        className={BUTTON_STYLES.secondary}
-      >
-        Insert
-      </button>
-      <span className="text-xs text-muted">Generated when this request runs.</span>
-    </div>
-  );
-}

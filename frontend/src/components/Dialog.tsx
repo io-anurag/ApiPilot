@@ -70,7 +70,7 @@ export function Dialog({
     // The backdrop's click is a pointer convenience only (Escape is the keyboard equivalent), so
     // it carries no key handler of its own.
     <div
-      className="fixed inset-0 z-50 flex overflow-y-auto bg-slate-900/40 p-4"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-scrim/40 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onBackdropClick?.();
       }}

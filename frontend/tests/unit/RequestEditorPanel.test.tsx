@@ -68,23 +68,109 @@ describe("RequestEditorPanel", () => {
     );
   });
 
-  it("inserts a selected Postman dynamic variable into the URL", () => {
-    render(
-      <RequestEditorPanel
-        request={request()}
-        locked={false}
-        onSave={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+  describe("dynamic variable autocomplete", () => {
+    function renderEditor() {
+      render(
+        <RequestEditorPanel
+          request={request()}
+          locked={false}
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+    }
 
-    fireEvent.change(screen.getByLabelText("Random value for URL"), {
-      target: { value: "$randomEmail" },
+    it("lists matching Postman dynamic variables as {{$ is typed in the URL, and completes the chosen one", () => {
+      renderEditor();
+      const url = screen.getByLabelText("URL");
+
+      fireEvent.change(url, { target: { value: "{{baseUrl}}/widgets/{{$randomEm" } });
+      const options = within(screen.getByRole("listbox", { name: "References for URL" })).getAllByRole("option");
+      expect(options).toHaveLength(1);
+      expect(options[0]).toHaveTextContent("{{$randomEmail}}");
+      expect(options[0]).toHaveTextContent("Email address");
+
+      fireEvent.keyDown(url, { key: "Enter" });
+      expect(url).toHaveValue("{{baseUrl}}/widgets/{{$randomEmail}}");
     });
-    fireEvent.click(screen.getByRole("button", { name: "Insert $randomEmail into URL" }));
 
-    expect(screen.getByLabelText("URL")).toHaveValue(
-      "{{baseUrl}}/widgets{{$randomEmail}}",
+    it("lists every dynamic variable for a bare {{$ and narrows as the name is typed", () => {
+      renderEditor();
+      const url = screen.getByLabelText("URL");
+
+      const list = () => within(screen.getByRole("listbox", { name: "References for URL" }));
+
+      fireEvent.change(url, { target: { value: "{{$" } });
+      expect(list().getAllByRole("option").length).toBeGreaterThan(40);
+
+      fireEvent.change(url, { target: { value: "{{$randomFirst" } });
+      expect(list().getAllByRole("option")).toHaveLength(1);
+      fireEvent.mouseDown(list().getByRole("option"));
+      expect(url).toHaveValue("{{$randomFirstName}}");
+    });
+
+    it("offers nothing for an ordinary variable name", () => {
+      renderEditor();
+      const url = screen.getByLabelText("URL");
+      fireEvent.change(url, { target: { value: "{{baseUrl" } });
+      expect(screen.queryByRole("listbox", { name: "References for URL" })).not.toBeInTheDocument();
+    });
+
+    it("works in a header value and in the body", () => {
+      renderEditor();
+      const header = screen.getByLabelText("Header 1 value");
+      fireEvent.change(header, { target: { value: "Bearer {{$guid" } });
+      fireEvent.keyDown(header, { key: "Tab" });
+      expect(header).toHaveValue("Bearer {{$guid}}");
+
+      fireEvent.click(within(screen.getByRole("tablist", { name: "Request editor sections" })).getByRole("tab", { name: /Body/ }));
+      const body = screen.getByLabelText("Raw body");
+      fireEvent.change(body, { target: { value: '{"id": "{{$randomUU' } });
+      fireEvent.keyDown(body, { key: "Enter" });
+      expect(body).toHaveValue('{"id": "{{$randomUUID}}');
+    });
+
+    it("saves the token as typed", () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+      const url = screen.getByLabelText("URL");
+      fireEvent.change(url, { target: { value: "{{baseUrl}}/{{$randomInt" } });
+      fireEvent.keyDown(url, { key: "Enter" });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect(onSave).toHaveBeenCalledWith(
+        "item-1",
+        expect.objectContaining({ url: "{{baseUrl}}/{{$randomInt}}" }),
+      );
+    });
+
+    it("no longer shows the dropdown picker", () => {
+      renderEditor();
+      expect(screen.queryByLabelText("Random value for URL")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Insert / })).not.toBeInTheDocument();
+    });
+  });
+
+  it("offers standard header names in a combo box for the header name, and keeps custom names", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+
+    const name = screen.getByRole("combobox", { name: "Header 1 name" });
+    expect(name).toHaveValue("Authorization");
+    fireEvent.mouseDown(screen.getByRole("button", { name: "Show all options for Header 1 name" }));
+    fireEvent.mouseDown(within(screen.getByRole("listbox", { name: "Options for Header 1 name" })).getByText("Content-Type"));
+    expect(name).toHaveValue("Content-Type");
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add header" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Header 2 name" }), { target: { value: "X-Tenant" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      "item-1",
+      expect.objectContaining({
+        headers: [
+          { key: "Content-Type", value: "Bearer {{token}}" },
+          { key: "X-Tenant", value: "" },
+        ],
+      }),
     );
   });
 

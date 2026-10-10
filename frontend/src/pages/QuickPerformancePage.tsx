@@ -169,7 +169,7 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
         <div className="flex justify-start">{backButton}</div>
       )}
       {state.kind === "loading" && (
-        <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />
+        <Skeleton className="h-40 w-full rounded bg-surface-strong" />
       )}
 
       {state.kind === "none" && (
@@ -179,7 +179,7 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
         >
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-100/70 blur-3xl dark:bg-slate-400/5"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
           />
           <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
@@ -193,7 +193,7 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
                 </p>
                 <h2
                   id="quick-upload-title"
-                  className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-slate-950 sm:text-5xl dark:text-white"
+                  className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl"
                 >
                   Turn an OpenAPI specification into a load test
                 </h2>
@@ -219,11 +219,11 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
                 ))}
               </dl>
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-300 bg-surface shadow-[6px_6px_0_0_var(--color-border)] dark:border-slate-700">
-              <div className="h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-800" />
-              <div className="flex items-center justify-between border-b border-border bg-slate-50 px-5 py-3 dark:bg-white/5">
+            <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+              <div className="h-1 bg-brand-600" />
+              <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  <p className="text-sm font-semibold text-text-primary">
                     New quick performance test
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
@@ -234,7 +234,7 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
               </div>
               <div className="space-y-4 p-5 sm:p-6">
                 <div className="space-y-1">
-                  <h3 className="font-display text-lg font-semibold text-slate-950 dark:text-white">
+                  <h3 className="font-display text-lg font-semibold text-text-primary">
                     Upload specification
                   </h3>
                   <p className="text-sm leading-6 text-muted">
@@ -244,12 +244,12 @@ export function QuickPerformancePage({ onExit, onOpenChainPlan }: Readonly<{ onE
                 </div>
                 <label
                   htmlFor="quick-performance-specification-upload"
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-slate-50 opacity-60 dark:bg-white/5" : "cursor-pointer border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-white/5 dark:hover:bg-brand-500/10"}`}
+                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-surface-subtle opacity-60" : "cursor-pointer border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"}`}
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
                     <UploadIcon className="h-5 w-5" />
                   </span>
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                  <span className="text-sm font-medium text-text-primary">
                     Drag and drop your specification here
                   </span>
                   <span className="text-xs text-muted">

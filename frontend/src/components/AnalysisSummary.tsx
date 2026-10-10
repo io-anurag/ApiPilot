@@ -3,18 +3,18 @@ import type { AnalysisSummary as AnalysisSummaryType } from "@apipilot/shared-do
 export function AnalysisSummary({ summary }: Readonly<{ summary: AnalysisSummaryType }>) {
   return (
     <section data-testid="analysis-summary" className="space-y-3">
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-700 dark:text-slate-300">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-text-secondary">
         <div className="flex items-baseline gap-1">
           <dt className="text-muted">Operations</dt>
-          <dd className="font-semibold text-slate-900 dark:text-white">{summary.operationCount}</dd>
+          <dd className="font-semibold text-text-primary">{summary.operationCount}</dd>
         </div>
         <div className="flex items-baseline gap-1">
           <dt className="text-muted">Schemas</dt>
-          <dd className="font-semibold text-slate-900 dark:text-white">{summary.schemaCount}</dd>
+          <dd className="font-semibold text-text-primary">{summary.schemaCount}</dd>
         </div>
         <div className="flex items-baseline gap-1">
           <dt className="text-muted">Security schemes</dt>
-          <dd className="font-semibold text-slate-900 dark:text-white">{summary.securitySchemeCount}</dd>
+          <dd className="font-semibold text-text-primary">{summary.securitySchemeCount}</dd>
         </div>
       </dl>
       {summary.issues.length > 0 && (

@@ -55,20 +55,20 @@ function FilePickerField({
         className={`relative flex items-center gap-2.5 rounded-md border border-dashed px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-1 ${
           file
             ? "border-brand-300 bg-brand-50/50 dark:border-brand-500 dark:bg-brand-500/15"
-            : "cursor-pointer border-slate-300 dark:border-slate-700 bg-surface hover:border-brand-400 hover:bg-brand-50/30 dark:hover:bg-brand-500/10"
+            : "cursor-pointer border-border-strong bg-surface hover:border-brand-400 hover:bg-brand-50/30 dark:hover:bg-brand-500/10"
         }`}
       >
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
             file
-              ? "border-brand-200 bg-white text-brand-700 dark:border-brand-500 dark:bg-white/5 dark:text-brand-300"
-              : "border-border bg-slate-50 dark:bg-white/5 text-muted"
+              ? "border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300"
+              : "border-border bg-surface-subtle text-muted"
           }`}
         >
           <FileIcon className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-200">
+          <span className="block truncate text-sm font-medium text-text-primary">
             {file ? file.name : "Choose file"}
           </span>
           <span className="block truncate text-xs text-muted">

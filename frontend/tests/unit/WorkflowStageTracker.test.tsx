@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import {
   WORKFLOW_STAGE_ORDER,
   type StageStatus,
   type TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
 import { WorkflowStageTracker } from "../../src/components/WorkflowStageTracker";
+import { WORKFLOW_PHASES, getPhaseOfStage } from "../../src/components/workflowStageViewModel";
+import { openPhase } from "./workflowTrackerTestUtils";
 
 function workflowWithStatuses(
   statuses: Partial<Record<string, StageStatus>>,
@@ -30,11 +32,14 @@ describe("WorkflowStageTracker", () => {
   it("shows a semantic icon for every workflow sub-stage", () => {
     render(<WorkflowStageTracker workflow={workflowWithStatuses({})} />);
 
-    for (const stageId of WORKFLOW_STAGE_ORDER) {
-      expect(screen.getByTestId(`stage-icon-${stageId}`)).toHaveAttribute(
-        "aria-hidden",
-        "true",
-      );
+    for (const phase of WORKFLOW_PHASES) {
+      openPhase(phase.id);
+      for (const stageId of phase.stages) {
+        expect(screen.getByTestId(`stage-icon-${stageId}`)).toHaveAttribute(
+          "aria-hidden",
+          "true",
+        );
+      }
     }
   });
 
@@ -51,10 +56,12 @@ describe("WorkflowStageTracker", () => {
     );
     expect(screen.getByTestId("stage-status-upload")).toHaveTextContent("Complete");
     expect(screen.getByTestId("stage-status-apiReview")).toHaveTextContent("Active");
+    openPhase("design");
     expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
       "Needs to be redone",
     );
     expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent("Skipped");
+    openPhase("execute");
     expect(screen.getByTestId("stage-status-postmanGeneration")).toHaveTextContent(
       "Not yet reached",
     );
@@ -70,10 +77,11 @@ describe("WorkflowStageTracker", () => {
         })}
       />,
     );
-    expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
+    openPhase("design");
+    expect(screen.getByTestId("stage-lock-reason-deterministicGeneration")).toHaveTextContent(
       "Complete API Review first",
     );
-    // The lock reason is additional text alongside the status label, not a replacement for it.
+    // The lock reason is a tooltip alongside the status label, not a replacement for it.
     expect(screen.getByTestId("stage-status-deterministicGeneration")).toHaveTextContent(
       "Not yet reached",
     );
@@ -83,6 +91,7 @@ describe("WorkflowStageTracker", () => {
     render(
       <WorkflowStageTracker workflow={workflowWithStatuses({ execution: "skipped" })} />,
     );
+    openPhase("execute");
     expect(screen.getByText("Execution")).toBeInTheDocument();
     expect(screen.getByTestId("stage-status-execution")).toHaveTextContent("Skipped");
   });
@@ -93,6 +102,7 @@ describe("WorkflowStageTracker", () => {
         workflow={workflowWithStatuses({ aiEnhancement: "partial" })}
       />,
     );
+    openPhase("design");
     expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent(
       "Partially completed",
     );
@@ -162,12 +172,14 @@ describe("WorkflowStageTracker", () => {
       />,
     );
 
+    openPhase("design");
     fireEvent.click(screen.getByTestId("stage-status-scenarioReview"));
     expect(onViewStage).toHaveBeenCalledWith("scenarioReview");
     expect(screen.getByTestId("stage-status-scenarioReview")).toHaveTextContent(
       "revisit",
     );
 
+    openPhase("prepare");
     expect(screen.getByTestId("stage-status-apiReview").tagName).toBe("BUTTON");
     fireEvent.click(screen.getByTestId("stage-status-apiReview"));
     expect(onViewStage).toHaveBeenCalledWith("apiReview");
@@ -192,9 +204,8 @@ describe("WorkflowStageTracker", () => {
     expect(
       screen.getByTestId("stage-status-workflowReview").closest("li"),
     ).toHaveAttribute("aria-current", "step");
-    expect(
-      screen.getByTestId("stage-status-apiReview").closest("li"),
-    ).not.toHaveAttribute("aria-current");
+    expect(screen.getByTestId("phase-tile-organize")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByTestId("phase-tile-prepare")).not.toHaveAttribute("aria-current");
 
     // Clicking "back" to view a completed stage (apiReview) must move the highlight there too —
     // it must not stay pinned to the true active stage (workflowReview) while its content is no
@@ -210,9 +221,10 @@ describe("WorkflowStageTracker", () => {
       "aria-current",
       "step",
     );
-    expect(
-      screen.getByTestId("stage-status-workflowReview").closest("li"),
-    ).not.toHaveAttribute("aria-current");
+    // The tracker follows the stage on screen into its phase, so Organize's chips are unlisted.
+    expect(screen.queryByTestId("stage-status-workflowReview")).not.toBeInTheDocument();
+    expect(screen.getByTestId("phase-tile-prepare")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByTestId("phase-tile-organize")).not.toHaveAttribute("aria-current");
   });
 
   it("offers a read-only view of completed deterministicGeneration, aiEnhancement, and dependencyAnalysis stages", () => {
@@ -229,7 +241,8 @@ describe("WorkflowStageTracker", () => {
       "deterministicGeneration",
       "aiEnhancement",
       "dependencyAnalysis",
-    ]) {
+    ] as const) {
+      openPhase(getPhaseOfStage(stageId).id);
       const badge = screen.getByTestId(`stage-status-${stageId}`);
       expect(badge.tagName).toBe("BUTTON");
       fireEvent.click(badge);
@@ -248,7 +261,8 @@ describe("WorkflowStageTracker", () => {
     });
     render(<WorkflowStageTracker workflow={workflow} onViewStage={onViewStage} />);
 
-    for (const stageId of ["upload", "analysis", "postmanGeneration"]) {
+    for (const stageId of ["upload", "analysis", "postmanGeneration"] as const) {
+      openPhase(getPhaseOfStage(stageId).id);
       const badge = screen.getByTestId(`stage-status-${stageId}`);
       expect(badge.tagName).toBe("BUTTON");
       fireEvent.click(badge);
@@ -256,6 +270,7 @@ describe("WorkflowStageTracker", () => {
       expect(badge).toHaveTextContent("view");
     }
 
+    openPhase("prepare");
     const activeBadge = screen.getByTestId("stage-status-apiReview");
     expect(activeBadge.tagName).toBe("BUTTON");
     fireEvent.click(activeBadge);
@@ -325,8 +340,97 @@ describe("WorkflowStageTracker", () => {
         onViewStage={vi.fn()}
       />,
     );
+    openPhase("execute");
     expect(screen.getByTestId("stage-status-performanceTesting")).toHaveTextContent(
-      "Not yet reached — Complete Postman Generation first",
+      "Not yet reached",
     );
+    expect(screen.getByTestId("stage-lock-reason-performanceTesting")).toHaveTextContent(
+      "Complete Postman Generation first",
+    );
+  });
+
+  describe("phase grouping", () => {
+    it("shows the position in the 11-step workflow and lists only the phase on screen", () => {
+      render(
+        <WorkflowStageTracker
+          workflow={workflowWithStatuses({
+            upload: "complete",
+            analysis: "complete",
+            apiReview: "active",
+          })}
+        />,
+      );
+      expect(screen.getByTestId("workflow-position")).toHaveTextContent(
+        "Step 3 of 11 · Prepare › API Review",
+      );
+      expect(screen.getByTestId("phase-tile-prepare")).toHaveAttribute("aria-current", "step");
+      expect(screen.getByTestId("phase-tile-prepare")).toHaveTextContent("2 of 3 done");
+      expect(screen.getByTestId("phase-tile-design")).toHaveTextContent("Locked");
+      expect(screen.getByTestId("stage-status-analysis")).toBeInTheDocument();
+      expect(screen.queryByTestId("stage-status-aiEnhancement")).not.toBeInTheDocument();
+    });
+
+    it("collapses a finished phase to one Complete tile that can be opened to view its stages", () => {
+      render(
+        <WorkflowStageTracker
+          workflow={{
+            ...workflowWithStatuses({
+              upload: "complete",
+              analysis: "complete",
+              apiReview: "complete",
+              deterministicGeneration: "active",
+            }),
+            activeStageId: "deterministicGeneration",
+          }}
+          onViewStage={vi.fn()}
+        />,
+      );
+      expect(screen.getByTestId("phase-tile-prepare")).toHaveTextContent("Complete");
+      expect(screen.queryByTestId("stage-status-upload")).not.toBeInTheDocument();
+
+      openPhase("prepare");
+      expect(screen.getByTestId("stage-status-upload")).toHaveTextContent("Complete — view");
+      // Opening another phase's tile does not move the highlight off the stage on screen.
+      expect(screen.getByTestId("phase-tile-design")).toHaveAttribute("aria-current", "step");
+    });
+
+    it("lets the open phase be collapsed again, and follows the workflow when its phase changes", () => {
+      const onViewStage = vi.fn();
+      const design = workflowWithStatuses({
+        apiReview: "complete",
+        deterministicGeneration: "active",
+      });
+      design.activeStageId = "deterministicGeneration";
+      const { rerender } = render(
+        <WorkflowStageTracker workflow={design} onViewStage={onViewStage} />,
+      );
+
+      const designToggle = within(screen.getByTestId("phase-tile-design")).getByRole("button");
+      fireEvent.click(designToggle);
+      expect(designToggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByTestId("stage-status-deterministicGeneration")).not.toBeInTheDocument();
+
+      openPhase("prepare");
+      const organize = workflowWithStatuses({
+        apiReview: "complete",
+        deterministicGeneration: "complete",
+        aiEnhancement: "complete",
+        scenarioReview: "complete",
+        dependencyAnalysis: "active",
+      });
+      organize.activeStageId = "dependencyAnalysis";
+      rerender(<WorkflowStageTracker workflow={organize} onViewStage={onViewStage} />);
+      expect(screen.getByTestId("stage-status-dependencyAnalysis")).toBeInTheDocument();
+      expect(screen.queryByTestId("stage-status-upload")).not.toBeInTheDocument();
+    });
+
+    it("rolls a stale stage up as 'Needs to be redone' on its phase tile", () => {
+      render(
+        <WorkflowStageTracker
+          workflow={workflowWithStatuses({ scenarioReview: "stale", apiReview: "complete" })}
+        />,
+      );
+      expect(screen.getByTestId("phase-tile-design")).toHaveTextContent("Needs to be redone");
+    });
   });
 });

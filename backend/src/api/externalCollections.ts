@@ -34,6 +34,9 @@ import { findEditedItemIds, serializeWithEditMarkers } from "../externalCollecti
 import { addFolder, addRequest, deleteItem, moveItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import { resolveRunOrder } from "../externalCollections/runOrder";
+import { buildRunReportModel, reportFileName } from "../externalCollections/runReport";
+import { renderRunReportPdf } from "../externalCollections/runReportPdf";
+import { renderRunReportHtml } from "../externalCollections/runReportHtml";
 import { parseRequestAuthEdit } from "../externalCollections/requestAuthEdit";
 import {
   CollectionLockedError,
@@ -628,6 +631,51 @@ export function createExternalCollectionsRouter(): Router {
       throw err;
     }
   });
+
+  /**
+   * Downloadable reports of a finished run (AP-043 PDF, AP-044 HTML): outcomes only, never request or
+   * response headers or bodies. Both are built from the same report model on the server, from the
+   * stored run, so nothing is sent anywhere and the two always agree.
+   */
+  const REPORT_FORMATS = {
+    pdf: { contentType: "application/pdf", extension: "pdf" },
+    html: { contentType: "text/html; charset=utf-8", extension: "html" },
+  } as const;
+
+  for (const format of ["pdf", "html"] as const) {
+    router.get(`/external-collections/:id/execution/runs/:runId/report.${format}`, async (req, res, next) => {
+      const startedAt = logRequestReceived(req.method, req.path);
+      try {
+        const run = getUploadedRun(req.params.runId);
+        if (run.uploadedCollectionSetId !== req.params.id) throw new RunNotFoundError(req.params.runId);
+        if (run.status === "in-progress") {
+          logRequestFailed(req.method, req.path, startedAt, 409, "run_in_progress");
+          res.status(409).json({ error: "run_in_progress", message: "A report is available once the run has finished." });
+          return;
+        }
+        const model = buildRunReportModel(run);
+        const body = format === "pdf" ? await renderRunReportPdf(model) : Buffer.from(renderRunReportHtml(model), "utf-8");
+        res
+          .status(200)
+          .set({
+            "Content-Type": REPORT_FORMATS[format].contentType,
+            "Content-Disposition": `attachment; filename="${reportFileName(model, REPORT_FORMATS[format].extension)}"`,
+            "Content-Length": String(body.length),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+          })
+          .send(body);
+        logRequestSucceeded(req.method, req.path, startedAt, 200);
+      } catch (err) {
+        if (err instanceof RunNotFoundError) {
+          logRequestFailed(req.method, req.path, startedAt, 404, "run_not_found");
+          res.status(404).json({ error: "run_not_found", message: err.message });
+          return;
+        }
+        next(err);
+      }
+    });
+  }
 
   return router;
 }

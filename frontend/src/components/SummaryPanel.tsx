@@ -7,7 +7,7 @@ export type SummaryTone = "brand" | "neutral" | "info" | "success" | "warning" |
 
 const BAR_TONE_CLASSES: Record<SummaryTone, string> = {
   brand: "bg-brand-500",
-  neutral: "bg-slate-400 dark:bg-slate-500",
+  neutral: "bg-muted",
   info: "bg-info-500",
   success: "bg-success-500",
   warning: "bg-warning-500",
@@ -16,7 +16,7 @@ const BAR_TONE_CLASSES: Record<SummaryTone, string> = {
 
 const TEXT_TONE_CLASSES: Record<SummaryTone, string> = {
   brand: "text-brand-700 dark:text-brand-300",
-  neutral: "text-slate-700 dark:text-slate-300",
+  neutral: "text-text-secondary",
   info: "text-info-700 dark:text-info-400",
   success: "text-success-700 dark:text-success-400",
   warning: "text-warning-700 dark:text-warning-400",
@@ -28,6 +28,9 @@ export interface SummaryPanelSegment {
   label: string;
   count: number;
   tone: SummaryTone;
+  /** A solid fill for the bar and dot, for a segment whose colour is its own identity (an HTTP
+   * method) rather than a status; its count then uses the primary text colour. */
+  fillClass?: string;
 }
 
 export interface SummaryPanelAction {
@@ -52,14 +55,14 @@ export function SummaryBreakdown({ segments }: Readonly<{ segments: SummaryPanel
     <div data-testid="summary-breakdown" className="space-y-3">
       <div
         aria-hidden="true"
-        className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"
+        className="flex h-2 w-full overflow-hidden rounded-full bg-surface-strong"
       >
         {segments
           .filter((segment) => segment.count > 0)
           .map((segment) => (
             <div
               key={segment.key}
-              className={BAR_TONE_CLASSES[segment.tone]}
+              className={segment.fillClass ?? BAR_TONE_CLASSES[segment.tone]}
               style={{ width: `${(segment.count / total) * 100}%` }}
             />
           ))}
@@ -67,14 +70,16 @@ export function SummaryBreakdown({ segments }: Readonly<{ segments: SummaryPanel
       <dl className="space-y-1.5 text-sm">
         {segments.map((segment) => (
           <div key={segment.key} className="flex items-center justify-between gap-3">
-            <dt className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <dt className="flex items-center gap-2 text-text-secondary">
               <span
                 aria-hidden="true"
-                className={`h-2 w-2 shrink-0 rounded-full ${BAR_TONE_CLASSES[segment.tone]}`}
+                className={`h-2 w-2 shrink-0 rounded-full ${segment.fillClass ?? BAR_TONE_CLASSES[segment.tone]}`}
               />
               {segment.label}
             </dt>
-            <dd className={`font-semibold ${TEXT_TONE_CLASSES[segment.tone]}`}>{segment.count}</dd>
+            <dd className={`font-semibold ${segment.fillClass ? "text-text-primary" : TEXT_TONE_CLASSES[segment.tone]}`}>
+              {segment.count}
+            </dd>
           </div>
         ))}
       </dl>
@@ -113,7 +118,7 @@ export function SummaryPanel({
     >
       <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <div>
-        <p className="font-display text-4xl font-semibold tracking-tight text-slate-950 dark:text-white">
+        <p className="font-display text-4xl font-semibold tracking-tight text-text-primary">
           {statValue}
         </p>
         <p className="text-sm text-muted">{statLabel}</p>

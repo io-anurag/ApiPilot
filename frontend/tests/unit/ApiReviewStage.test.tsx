@@ -114,3 +114,61 @@ describe("ApiReviewStage operation selection", () => {
     expect(summaryPanel().getByText(/All 3 discovered operations were carried/)).toBeInTheDocument();
   });
 });
+
+describe("ApiReviewStage pagination", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const many: ApiModel = {
+    operations: Array.from({ length: 60 }, (_, index) => operation("get", `/items/${index + 1}`)),
+    securitySchemes: {},
+    summary: { operationCount: 60, schemaCount: 0, securitySchemeCount: 0, issues: [] },
+  };
+
+  it("shows no paginator for a short specification", () => {
+    render(<ApiReviewStage apiModel={apiModel} onAdvanced={vi.fn()} />);
+    expect(screen.queryByTestId("api-review-pagination")).not.toBeInTheDocument();
+  });
+
+  it("lists one page of operations and moves between pages", () => {
+    render(<ApiReviewStage apiModel={many} onAdvanced={vi.fn()} />);
+    const pagination = within(screen.getByTestId("api-review-pagination"));
+    expect(pagination.getByText("Showing 1–25 of 60 operations")).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox", { name: /^Include / })).toHaveLength(25);
+    expect(screen.queryByRole("checkbox", { name: "Include GET /items/26" })).not.toBeInTheDocument();
+    expect(pagination.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    fireEvent.click(pagination.getByRole("button", { name: "Next" }));
+    expect(pagination.getByText("Showing 26–50 of 60 operations")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Include GET /items/26" })).toBeInTheDocument();
+
+    fireEvent.click(pagination.getByRole("button", { name: "Last page" }));
+    expect(pagination.getByText("Showing 51–60 of 60 operations")).toBeInTheDocument();
+    expect(pagination.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+
+  it("keeps the selection across pages, with Select all and the summary spanning every operation", () => {
+    render(<ApiReviewStage apiModel={many} onAdvanced={vi.fn()} />);
+    const pagination = within(screen.getByTestId("api-review-pagination"));
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include GET /items/1" }));
+    fireEvent.click(pagination.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include GET /items/26" }));
+    expect(summaryStat("of 60 operations selected")).toBe("2");
+
+    fireEvent.click(pagination.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("checkbox", { name: "Include GET /items/1" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all (60)" }));
+    expect(summaryStat("of 60 operations selected")).toBe("60");
+  });
+
+  it("returns to the first page when the page size changes", () => {
+    render(<ApiReviewStage apiModel={many} onAdvanced={vi.fn()} />);
+    const pagination = within(screen.getByTestId("api-review-pagination"));
+    fireEvent.click(pagination.getByRole("button", { name: "Next" }));
+
+    fireEvent.change(pagination.getByLabelText("Per page"), { target: { value: "50" } });
+    expect(pagination.getByText("Showing 1–50 of 60 operations")).toBeInTheDocument();
+    expect(pagination.getByText("Page 1 of 2")).toBeInTheDocument();
+  });
+});

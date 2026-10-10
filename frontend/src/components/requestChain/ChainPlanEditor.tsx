@@ -186,7 +186,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
   if (!draft || !analysis || !view) {
     return (
       <div role="status" aria-label="Loading plan">
-        <Skeleton className="h-40 w-full rounded bg-slate-200 dark:bg-slate-600" />
+        <Skeleton className="h-40 w-full rounded bg-surface-strong" />
       </div>
     );
   }
@@ -349,7 +349,7 @@ export function ChainPlanEditor({ planId, onOpenPlan, onBack }: Readonly<{ planI
       <p className="sr-only" role="status" aria-live="polite" data-testid="chain-plan-announcement">
         {announcement}
       </p>
-      {announcement && !announcementQuiet && <p className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm dark:bg-white/5">{announcement}</p>}
+      {announcement && !announcementQuiet && <p className="rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm">{announcement}</p>}
       {saveError && <ErrorState message={saveError} testId="chain-plan-save-error" />}
 
       <PendingBar
