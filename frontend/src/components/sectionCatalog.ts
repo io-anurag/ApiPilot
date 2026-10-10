@@ -1,5 +1,5 @@
 import type { WorkflowStageId } from "@apipilot/shared-domain";
-import type { EntryChoice } from "./workflowCatalog";
+import type { TopLevelView } from "./workflowCatalog";
 
 /**
  * Section identity (AP-041). A section answers "where am I?"; it is set with a `data-section`
@@ -38,9 +38,10 @@ export const STAGE_SECTIONS: Readonly<Record<WorkflowStageId, SectionId>> = {
  * The section a top-level workflow opens in. The guided workflow has none of its own: its section
  * follows the stage on screen (reported by the page), so it is absent here.
  */
-export const WORKFLOW_SECTIONS: Readonly<Record<Exclude<EntryChoice, "guided-workflow">, SectionId>> = {
+export const WORKFLOW_SECTIONS: Readonly<Record<Exclude<TopLevelView, "guided-workflow">, SectionId>> = {
   "import-collection": "execution",
   "quick-performance": "execution",
   "performance-plans": "execution",
   "user-script": "scenarios",
+  coverage: "results",
 };

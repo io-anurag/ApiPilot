@@ -36,9 +36,12 @@ import { groupScenarioCategories } from "../utils/scenarioCategoryGroups";
 export function ScenarioReviewStage({
   workflow,
   onAdvanced,
+  onOpenCoverage,
 }: Readonly<{
   workflow: TestGenerationWorkflow;
   onAdvanced: (result: WorkflowResult) => void;
+  /** AP-046: opens the Coverage view, so the remaining gaps can be read without leaving the workflow. */
+  onOpenCoverage?: () => void;
 }>) {
   const reviewWorkspace = workflow.reviewWorkspace as unknown as ReviewWorkspaceWire;
   /** For `TestScenarioReviewDetail`'s security note — `undefined` when `apiModel` isn't loaded
@@ -205,9 +208,21 @@ export function ScenarioReviewStage({
       className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
       <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-text-primary">
-          Review Generated Scenarios
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-text-primary">
+            Review Generated Scenarios
+          </h2>
+          {onOpenCoverage && (
+            <button
+              type="button"
+              onClick={onOpenCoverage}
+              title="See which operations, parameters and responses these scenarios cover, and what is still missing."
+              className={BUTTON_STYLES.secondary}
+            >
+              View coverage
+            </button>
+          )}
+        </div>
         <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
         <AiEnhancementOutcomeSummary workflow={workflow} />
         {/* A disabled fieldset natively disables every control inside it — row selection,

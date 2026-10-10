@@ -2,10 +2,19 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog } from "./Dialog";
 import { WorkflowIcon } from "./WorkflowIcon";
 import { filterCommands, type Command } from "./paletteCommands";
-import { workflowById } from "./workflowCatalog";
+import { isResultsView, workflowById } from "./workflowCatalog";
 
 function CommandIcon({ command }: Readonly<{ command: Command }>) {
   if (command.kind === "workflow") {
+    if (isResultsView(command.id)) {
+      return (
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-section-results/30 bg-section-results/10 text-section-results">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+            <path d="M5 20V10m7 10V4m7 16v-7" />
+          </svg>
+        </span>
+      );
+    }
     const workflow = workflowById(command.id);
     return (
       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${workflow.tone.tile}`}>

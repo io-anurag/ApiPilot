@@ -1,5 +1,5 @@
 import type { Theme } from "../hooks/useTheme";
-import { WORKFLOWS, type EntryChoice } from "./workflowCatalog";
+import { RESULTS_VIEWS, WORKFLOWS, type TopLevelView } from "./workflowCatalog";
 
 /**
  * Pure helpers behind the command palette (AP-038 US3, research.md D7): which commands exist,
@@ -8,7 +8,7 @@ import { WORKFLOWS, type EntryChoice } from "./workflowCatalog";
  */
 
 export type Command =
-  | { readonly kind: "workflow"; readonly id: EntryChoice; readonly label: string }
+  | { readonly kind: "workflow"; readonly id: TopLevelView; readonly label: string }
   | { readonly kind: "back-to-start"; readonly label: "Back to start" }
   | {
       readonly kind: "theme";
@@ -16,7 +16,7 @@ export type Command =
       readonly label: "Switch to light theme" | "Switch to dark theme";
     };
 
-/** The fixed command list for the current state (FR-015): the five workflows in tab order,
+/** The fixed command list for the current state (FR-015): the five workflows in tab order, then the results views (AP-046),
  * "Back to start" only while a workflow view is shown, and the opposite theme. */
 export function buildCommands({
   workflowShown,
@@ -27,6 +27,7 @@ export function buildCommands({
     id: workflow.id,
     label: workflow.title,
   }));
+  for (const view of RESULTS_VIEWS) commands.push({ kind: "workflow", id: view.id, label: view.title });
   if (workflowShown) commands.push({ kind: "back-to-start", label: "Back to start" });
   commands.push(
     theme === "light"

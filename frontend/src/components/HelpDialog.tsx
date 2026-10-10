@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { Dialog } from "./Dialog";
-import { WORKFLOWS } from "./workflowCatalog";
+import { RESULTS_VIEWS, WORKFLOWS } from "./workflowCatalog";
 
 /**
  * The header's help dialog (AP-038 US4, FR-021): the keyboard shortcuts and what each workflow is
@@ -71,6 +71,15 @@ export function HelpDialog({
               <span>
                 <span className="font-medium text-text-primary">{workflow.title}</span>
                 <span className="block hyphens-auto text-justify text-muted">{workflow.description}</span>
+              </span>
+            </li>
+          ))}
+          {RESULTS_VIEWS.map((view) => (
+            <li key={view.id} className="flex gap-3 text-sm">
+              <span aria-hidden="true" className={`mt-1.5 h-2 w-2 shrink-0 rounded-sm ${view.marker}`} />
+              <span>
+                <span className="font-medium text-text-primary">{view.title}</span>
+                <span className="block hyphens-auto text-justify text-muted">{view.description}</span>
               </span>
             </li>
           ))}
