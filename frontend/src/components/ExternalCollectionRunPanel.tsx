@@ -23,6 +23,7 @@ import { CodeBlock } from "./CodeBlock";
 import { ErrorState } from "./ErrorState";
 import { FailureAnalysisPanel, IN_PROGRESS_POLL_MS } from "./FailureAnalysisPanel";
 import { HttpMethodBadge } from "./HttpMethodBadge";
+import { LiveRunDashboard } from "./liveRun/LiveRunDashboard";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { CollectionRunSetupCard } from "./CollectionRunSetupCard";
@@ -921,20 +922,23 @@ export function ExternalCollectionRunPanel({
     <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
       <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Results</p>
       <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge label={RUN_STATUS_LABEL[run.status]} tone={runStatusTone(run.status)} />
         <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />
-        {run.status === "in-progress" && (
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={cancelling || run.cancelRequested}
-            className={BUTTON_STYLES.secondary}
-          >
-            {run.cancelRequested || cancelling ? "Cancelling…" : "Cancel run"}
-          </button>
-        )}
       </div>
-      <RunOverview run={run} />
+      <LiveRunDashboard
+        key={run.id}
+        kind="collection"
+        runId={run.id}
+        collectionId={uploadedCollection.id}
+        meta={`${uploadedCollection.name} · started ${new Date(run.startedAt).toLocaleTimeString()}`}
+        actions={
+          run.status === "in-progress" ? (
+            <button type="button" onClick={handleCancel} disabled={cancelling || run.cancelRequested} className={BUTTON_STYLES.danger}>
+              {run.cancelRequested || cancelling ? "Cancelling…" : "Cancel run"}
+            </button>
+          ) : undefined
+        }
+      />
+      {run.status !== "in-progress" && <RunOverview run={run} />}
       <ul className="divide-y divide-border">
         {run.results.map((result, index) => (
           <ExternalCollectionResultRow

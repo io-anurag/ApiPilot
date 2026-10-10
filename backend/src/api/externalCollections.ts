@@ -34,6 +34,9 @@ import { findEditedItemIds, serializeWithEditMarkers } from "../externalCollecti
 import { addFolder, addRequest, deleteItem, moveItem, renameItem, reorderContainer } from "../externalCollections/collectionStructure";
 import { assertCollectionNotRunning } from "../externalCollections/runLock";
 import { resolveRunOrder } from "../externalCollections/runOrder";
+import { buildCollectionLiveSnapshot } from "../externalCollections/liveSnapshot";
+import { InvalidLiveQueryError } from "../performance/errors";
+import { parseLiveCursor } from "../performance/live/liveRunService";
 import { buildRunReportModel, reportFileName } from "../externalCollections/runReport";
 import { renderRunReportPdf } from "../externalCollections/runReportPdf";
 import { renderRunReportHtml } from "../externalCollections/runReportHtml";
@@ -623,6 +626,31 @@ export function createExternalCollectionsRouter(): Router {
       res.status(200).json({ run });
       logRequestSucceeded(req.method, req.path, startedAt, 200);
     } catch (err) {
+      if (err instanceof RunNotFoundError) {
+        logRequestFailed(req.method, req.path, startedAt, 404, "run_not_found");
+        res.status(404).json({ error: "run_not_found", message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  // AP-045: the live dashboard's read-only snapshot, derived from the run's settled results.
+  router.get("/external-collections/:id/execution/runs/:runId/live", (req, res) => {
+    const startedAt = logRequestReceived(req.method, req.path);
+    try {
+      const cursor = parseLiveCursor(req.query);
+      const run = getUploadedRun(req.params.runId);
+      if (run.uploadedCollectionSetId !== req.params.id) throw new RunNotFoundError(req.params.runId);
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json(buildCollectionLiveSnapshot(run, Date.now(), cursor));
+      logRequestSucceeded(req.method, req.path, startedAt, 200);
+    } catch (err) {
+      if (err instanceof InvalidLiveQueryError) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_query");
+        res.status(400).json({ error: "invalid_query", message: err.message });
+        return;
+      }
       if (err instanceof RunNotFoundError) {
         logRequestFailed(req.method, req.path, startedAt, 404, "run_not_found");
         res.status(404).json({ error: "run_not_found", message: err.message });

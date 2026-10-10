@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live run dashboard - mock (AP-045)</title>
+<style>
+  :root {
+    --bg: #f6f8fa; --surface: #fff; --strong: #eef1f5; --border: #d8dee6; --text: #14202e; --muted: #5b6878;
+    --brand: #0f766e; --ok: #15803d; --okbg: #dcfce7; --warn: #b45309; --danger: #dc2626; --dangerbg: #fee2e2;
+    --info: #2563eb; --infobg: #dbeafe; --vu: #7c3aed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --surface: #161b22; --strong: #1f2630; --border: #30363d; --text: #e6edf3; --muted: #8b98a8;
+      --brand: #2dd4bf; --ok: #4ade80; --okbg: #12301e; --warn: #fbbf24; --danger: #f87171; --dangerbg: #3a1717;
+      --info: #60a5fa; --infobg: #172a46; --vu: #a78bfa;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --surface: #161b22; --strong: #1f2630; --border: #30363d; --text: #e6edf3; --muted: #8b98a8;
+    --brand: #2dd4bf; --ok: #4ade80; --okbg: #12301e; --warn: #fbbf24; --danger: #f87171; --dangerbg: #3a1717;
+    --info: #60a5fa; --infobg: #172a46; --vu: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  .banner { background: var(--infobg); color: var(--info); border: 1px solid var(--info); border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .banner button { margin-left: auto; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; }
+  button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 18px; }
+  .head h2 { margin: 0; font-size: 18px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
+  .live { background: var(--dangerbg); color: var(--danger); }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
+  .done { background: var(--okbg); color: var(--ok); }
+  .cancelled { background: var(--strong); color: var(--muted); }
+  .stale { background: #fef3c7; color: var(--warn); }
+  @keyframes pulse { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
+  .spacer { margin-left: auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--border); border-top: 1px solid var(--border); }
+  .tile { background: var(--surface); padding: 12px 18px; }
+  .tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tile .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .v.bad { color: var(--danger); }
+  .tile .s { font-size: 12px; color: var(--muted); }
+  .grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .pad { padding: 14px 18px; }
+  h3 { margin: 0 0 4px; font-size: 14px; }
+  .sub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--muted); font-size: 10px; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .m { display: inline-block; min-width: 52px; text-align: center; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 700; color: #fff; }
+  .GET { background: #2563eb; } .POST { background: #15803d; } .PUT { background: #b45309; } .DELETE { background: #dc2626; }
+  .st-ok { color: var(--ok); font-weight: 600; } .st-bad { color: var(--danger); font-weight: 600; }
+  .steps li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .steps ul { list-style: none; margin: 0; padding: 0; }
+  .bar { height: 6px; background: var(--strong); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar b { display: block; height: 100%; background: var(--brand); }
+  details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .states { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner" role="note">
+    <strong>Mock</strong> for AP-045. Numbers are simulated in this page; nothing is sent anywhere. Not the final design.
+    <label class="spacer">State shown:
+      <select id="state" aria-label="Dashboard state to preview">
+        <option value="live">Live</option><option value="stale">Stale (connection lost)</option>
+        <option value="done">Completed</option><option value="cancelled">Cancelled</option><option value="waiting">Just started (no points yet)</option>
+      </select>
+    </label>
+    <button id="theme" type="button">Toggle theme</button>
+  </div>
+
+  <section class="card" aria-labelledby="t">
+    <div class="head">
+      <h2 id="t">Run in progress</h2>
+      <span id="pill" class="pill live">Live</span>
+      <span class="note">Setup Run &middot; Smoke profile &middot; started 4:15:39 PM</span>
+      <button id="cancel" class="danger spacer" type="button">Cancel run</button>
+    </div>
+    <div class="tiles" role="group" aria-label="Run figures">
+      <div class="tile"><div class="k">Requests done</div><div class="v" id="reqs">0</div><div class="s" id="rps">0 req/s</div></div>
+      <div class="tile"><div class="k">Failures</div><div class="v" id="fails">0</div><div class="s" id="rate">0.0% of requests</div></div>
+      <div class="tile"><div class="k">Virtual users</div><div class="v" id="vus">0</div><div class="s">peak 10</div></div>
+      <div class="tile"><div class="k">Elapsed</div><div class="v mono" id="el">00:00</div><div class="s">of 01:00</div></div>
+      <div class="tile"><div class="k">Avg duration</div><div class="v" id="avg">0 ms</div><div class="s" id="p95">p95 0 ms</div></div>
+    </div>
+    <div class="bar" aria-hidden="true" style="border-radius:0"><b id="prog" style="width:0"></b></div>
+  </section>
+
+  <div class="grid">
+    <section class="card pad" aria-labelledby="gt">
+      <h3 id="gt">Requests over time</h3>
+      <p class="sub" id="gsub">Requests per second, failures per second and virtual users, one point per second.</p>
+      <div class="legend" aria-hidden="true">
+        <span><i style="border-color:var(--brand)"></i>Requests/s</span>
+        <span><i style="border-color:var(--danger);border-top-style:dashed"></i>Failures/s</span>
+        <span><i style="border-color:var(--vu);border-top-style:dotted"></i>Virtual users</span>
+      </div>
+      <svg id="chart" viewBox="0 0 640 260" role="img" aria-labelledby="gt gsub"></svg>
+      <div id="empty" class="note" hidden>Waiting for the first figures from the run&hellip;</div>
+      <details style="margin-top:8px"><summary>Show values as a table</summary>
+        <div class="scroll"><table><thead><tr><th>Second</th><th>Requests/s</th><th>Failures/s</th><th>Virtual users</th></tr></thead><tbody id="tbl"></tbody></table></div>
+      </details>
+    </section>
+
+    <section class="card pad steps" aria-labelledby="ct">
+      <h3 id="ct">Chains</h3>
+      <p class="sub">Requests and failures so far, per chain.</p>
+      <ul id="chains"></ul>
+    </section>
+  </div>
+
+  <section class="card pad" aria-labelledby="rt">
+    <h3 id="rt">Latest requests</h3>
+    <p class="sub">A sample of the most recent 15 completed requests, newest first, not every request. Headers, cookies, tokens and bodies are never shown.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Chain / step</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th></tr></thead>
+        <tbody id="recent"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="note">Other states: Completed and Cancelled stop updating and keep the final graph; Stale says since when figures stopped arriving; Loading, Error and Empty use the shared panels.</p>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  document.getElementById("theme").addEventListener("click", function () {
+    var dark = getComputedStyle(root).getPropertyValue("--bg").trim() === "#0d1117";
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+  });
+  var chains = [
+    ["GET", "/health", "health"], ["GET", "/health/live", "health/live"], ["GET", "/health/ready", "health/ready"],
+    ["GET", "/version", "version"], ["POST", "/orders", "orders"], ["GET", "/orders/42", "orders"], ["PUT", "/orders/42", "orders"], ["DELETE", "/orders/42", "orders"]
+  ];
+  var counts = chains.map(function () { return { r: 0, f: 0 }; });
+  var points = [], recent = [], total = 0, failed = 0, dur = [], t = 0, DUR = 60, timer = null, state = "live";
+  var $ = function (id) { return document.getElementById(id); };
+  function seed(n) { var x = 7; return function () { x = (x * 16807) % 2147483647; return x / 2147483647; }; }
+  var rnd = seed();
+  function step() {
+    t++;
+    var vu = Math.min(10, Math.round(t / 4));
+    var rps = Math.round(vu * 9 + rnd() * 12);
+    var fl = t > 25 && t < 34 ? Math.round(rps * 0.15 * rnd()) : (rnd() < 0.05 ? 1 : 0);
+    total += rps; failed += fl;
+    points.push({ t: t, rps: rps, fl: fl, vu: vu });
+    for (var i = 0; i < rps; i++) { var c = Math.floor(rnd() * chains.length); counts[c].r++; if (i < fl) counts[c].f++; }
+    for (var j = 0; j < 4; j++) {
+      var k = Math.floor(rnd() * chains.length), bad = rnd() < (t > 25 && t < 34 ? 0.3 : 0.03), d = Math.round(40 + rnd() * 180 + (bad ? 400 : 0));
+      dur.push(d);
+      recent.unshift({ t: t, chain: chains[k][2], m: chains[k][0], p: chains[k][1], s: bad ? 500 : (chains[k][0] === "POST" ? 201 : 200), d: d });
+    }
+    recent.length = Math.min(recent.length, 15);
+  }
+  function fmt(s) { return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+  function draw() {
+    var W = 640, H = 260, L = 36, R = 30, T = 10, B = 24, w = W - L - R, h = H - T - B;
+    var maxY = Math.max(20, Math.ceil(Math.max.apply(null, points.map(function (p) { return p.rps; }).concat([1])) / 20) * 20);
+    var maxV = 10, svg = "";
+    for (var g = 0; g <= 4; g++) {
+      var y = T + h - (g / 4) * h;
+      svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" stroke="var(--border)"/><text x="' + (L - 4) + '" y="' + (y + 3) + '" text-anchor="end">' + Math.round(maxY * g / 4) + '</text>';
+      svg += '<text x="' + (W - R + 4) + '" y="' + (y + 3) + '">' + Math.round(maxV * g / 4) + '</text>';
+    }
+    for (var s = 0; s <= DUR; s += 10) svg += '<text x="' + (L + s / DUR * w) + '" y="' + (H - 6) + '" text-anchor="middle">' + s + 's</text>';
+    function line(key, max, color, dash) {
+      if (!points.length) return "";
+      var d = points.map(function (p, i) { return (i ? "L" : "M") + (L + p.t / DUR * w).toFixed(1) + " " + (T + h - p[key] / max * h).toFixed(1); }).join(" ");
+      return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-dasharray="' + dash + '"/>';
+    }
+    svg += line("vu", maxV, "var(--vu)", "2 3") + line("rps", maxY, "var(--brand)", "0") + line("fl", maxY, "var(--danger)", "6 3");
+    var last = points[points.length - 1];
+    if (last) svg += '<circle cx="' + (L + last.t / DUR * w) + '" cy="' + (T + h - last.rps / maxY * h) + '" r="3.5" fill="var(--brand)"/>';
+    $("chart").innerHTML = svg;
+    $("empty").hidden = points.length > 0;
+    $("tbl").innerHTML = points.slice(-10).reverse().map(function (p) { return "<tr><td>" + p.t + "</td><td>" + p.rps + "</td><td>" + p.fl + "</td><td>" + p.vu + "</td></tr>"; }).join("");
+  }
+  function render() {
+    var last = points[points.length - 1] || { rps: 0, vu: 0 };
+    $("reqs").textContent = total.toLocaleString(); $("rps").textContent = last.rps + " req/s";
+    $("fails").textContent = failed; $("fails").className = "v" + (failed ? " bad" : "");
+    $("rate").textContent = (total ? (failed / total * 100).toFixed(1) : "0.0") + "% of requests";
+    $("vus").textContent = last.vu; $("el").textContent = fmt(t); $("prog").style.width = (t / DUR * 100) + "%";
+    var avg = dur.length ? Math.round(dur.reduce(function (a, b) { return a + b; }, 0) / dur.length) : 0;
+    var sorted = dur.slice().sort(function (a, b) { return a - b; });
+    $("avg").textContent = avg + " ms"; $("p95").textContent = "p95 " + (sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0) + " ms";
+    var max = Math.max.apply(null, counts.map(function (c) { return c.r; }).concat([1]));
+    $("chains").innerHTML = chains.map(function (c, i) {
+      return '<li><div style="flex:1"><span class="m ' + c[0] + '">' + c[0] + '</span> <span class="mono">' + c[1] + '</span><div class="bar"><b style="width:' + (counts[i].r / max * 100) + '%"></b></div></div><div class="note" style="text-align:right">' + counts[i].r + ' req<br>' + counts[i].f + ' failed</div></li>';
+    }).join("");
+    $("recent").innerHTML = recent.map(function (r) {
+      var bad = r.s >= 400;
+      return '<tr><td class="mono">' + fmt(r.t) + '</td><td>' + r.chain + '</td><td><span class="m ' + r.m + '">' + r.m + '</span></td><td class="mono">' + r.p + '</td><td class="' + (bad ? "st-bad" : "st-ok") + '">' + (bad ? "Failed " : "OK ") + r.s + '</td><td class="mono">' + r.d + ' ms</td></tr>';
+    }).join("");
+    draw();
+  }
+  function setState(s) {
+    state = s;
+    var pill = $("pill"), title = $("t"), cancel = $("cancel");
+    var map = { live: ["Live", "pill live", "Run in progress"], stale: ["Stale: no figures since 00:" + String(Math.max(t - 3, 0)).padStart(2, "0"), "pill stale", "Run in progress"], done: ["Completed", "pill done", "Run completed"], cancelled: ["Cancelled at " + fmt(t), "pill cancelled", "Run cancelled"], waiting: ["Live", "pill live", "Run in progress"] };
+    pill.textContent = map[s][0]; pill.className = map[s][1]; title.textContent = map[s][2];
+    cancel.hidden = !(s === "live" || s === "stale" || s === "waiting");
+    clearInterval(timer);
+    if (s === "waiting") { t = 0; total = failed = 0; points = []; recent = []; dur = []; counts.forEach(function (c) { c.r = c.f = 0; }); render(); return; }
+    if (s === "done" || s === "cancelled") { if (t < 30) { while (t < (s === "done" ? DUR : 40)) step(); } if (s === "done") while (t < DUR) step(); render(); setState2(map[s]); return; }
+    if (s === "stale") { if (t < 20) while (t < 20) step(); render(); return; }
+    if (t >= DUR) { t = 0; total = failed = 0; points = []; recent = []; dur = []; counts.forEach(function (c) { c.r = c.f = 0; }); }
+    timer = setInterval(function () { if (t >= DUR) { setState("done"); $("state").value = "done"; return; } step(); render(); }, 700);
+    render();
+  }
+  function setState2(m) { $("pill").textContent = m[0]; }
+  $("state").addEventListener("change", function (e) { setState(e.target.value); });
+  $("cancel").addEventListener("click", function () { setState("cancelled"); $("state").value = "cancelled"; });
+  setState("live");
+})();
+</script>
+</body>
+</html>

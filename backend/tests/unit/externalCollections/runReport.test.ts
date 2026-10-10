@@ -1,8 +1,10 @@
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import type { UploadedCollectionExecutionRun, UploadedRequestResult } from "@apipilot/shared-domain";
 import { buildRunInsights, buildRunReportModel, formatReportTime, reportFileName } from "../../../src/externalCollections/runReport";
-import { escapeHtml, renderRunReportHtml } from "../../../src/externalCollections/runReportHtml";
-import { renderRunReportPdf, toPdfText } from "../../../src/externalCollections/runReportPdf";
+import { CHART_BOX, escapeHtml, renderRunReportHtml } from "../../../src/externalCollections/runReportHtml";
+import { pdfChartBox, renderRunReportPdf, toPdfText } from "../../../src/externalCollections/runReportPdf";
+import { NO_REQUESTS_NOTE, buildSeriesChart, layoutSeriesChart } from "../../../src/externalCollections/runSeriesChart";
 
 function result(overrides: Partial<UploadedRequestResult> = {}): UploadedRequestResult {
   return {
@@ -35,6 +37,8 @@ function run(results: UploadedRequestResult[], overrides: Partial<UploadedCollec
   };
 }
 
+/** The width of a card's content in the PDF (A4 595 less 48 margins and 12 padding on each side). */
+const CONTENT_WIDTH_PDF = 595 - 96 - 24;
 const pageCount = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type \/Page(?!s)/g) ?? []).length;
 
 describe("buildRunReportModel", () => {
@@ -229,5 +233,120 @@ describe("renderRunReportHtml", () => {
 
   it("escapes the five HTML-significant characters", () => {
     expect(escapeHtml(`<a href="x">&'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;");
+  });
+});
+
+describe("per-second graph of the reports (AP-045 US4, FR-014)", () => {
+  // Finished at 10:00:00.4, .9 (second 0), 10:00:01.5 (second 1; failed), none in second 2, 10:00:03.2 (second 3).
+  const at = (offsetMs: number, durationMs: number, extra: Partial<UploadedRequestResult> = {}) =>
+    result({ startedAt: new Date(Date.parse("2026-01-01T10:00:00.000Z") + offsetMs).toISOString(), durationMs, ...extra });
+  const results = [
+    at(0, 400),
+    at(300, 600),
+    at(1200, 300, { outcome: "failed", failureCategory: "assertion-failed", testOutcomes: [] }),
+    at(3000, 200),
+    at(3500, 0, { outcome: "not-attempted", notAttemptedReason: "run-ended-before-reached", testOutcomes: [] }),
+  ];
+  const model = buildRunReportModel(run(results));
+
+  /** Every path the PDF drew with at least three points, as steps from its first point, in each content stream. */
+  function pdfPaths(pdf: Buffer): [number, number][][] {
+    const raw = pdf.toString("latin1");
+    const paths: [number, number][][] = [];
+    for (const match of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+      let content: string;
+      try {
+        content = inflateSync(Buffer.from(match[1], "latin1")).toString("latin1");
+      } catch {
+        continue;
+      }
+      let current: [number, number][] = [];
+      for (const line of content.split("\n")) {
+        const move = /^(-?[\d.]+) (-?[\d.]+) ([ml])$/.exec(line.trim());
+        if (move) {
+          if (move[3] === "m") {
+            if (current.length >= 3) paths.push(current);
+            current = [];
+          }
+          current.push([Number(move[1]), Number(move[2])]);
+        }
+      }
+      if (current.length >= 3) paths.push(current);
+    }
+    return paths.map((path) => path.map(([px, py]) => [px - path[0][0], py - path[0][1]] as [number, number]));
+  }
+
+  it("adds the per-second series to the model, deriving the duration from the run only", () => {
+    expect(model.series.bucketSeconds).toBe(1);
+    expect(model.series.points.map((point) => [point.second, point.requests, point.failures, point.virtualUsers])).toEqual([
+      [0, 2, 0, null],
+      [1, 1, 1, null],
+      [2, 0, 0, null],
+      [3, 1, 0, null],
+    ]);
+    // Without a completion time the axis ends at the last result's end (3.2 s), not at the clock.
+    const open = buildRunReportModel(run(results, { status: "in-progress", completedAt: undefined }));
+    expect(open.series.points).toHaveLength(4);
+    expect(buildRunReportModel(run(results))).toEqual(model);
+  });
+
+  it("builds the plotted figures once: rates, axis ticks and a summary that state the series", () => {
+    const chart = buildSeriesChart(model.series)!;
+    expect(chart.points.map((point) => point.requestsPerSecond)).toEqual([2, 1, 0, 1]);
+    expect(chart.points.map((point) => point.failuresPerSecond)).toEqual([0, 1, 0, 0]);
+    expect(chart.axisMax).toBe(2);
+    expect(chart.yTicks.map((tick) => tick.label)).toEqual(["0", "1", "2"]);
+    expect(chart.summary).toContain("4 requests, 1 failed; peak 2 requests per second; 1 of 4 seconds had failures");
+    // Merged steps: the rate is the step's requests divided by its width, and the note says so.
+    const merged = buildSeriesChart({ bucketSeconds: 4, points: [{ second: 0, requests: 8, failures: 4, virtualUsers: null }, { second: 4, requests: 2, failures: 0, virtualUsers: null }] })!;
+    expect(merged.points.map((point) => [point.requestsPerSecond, point.failuresPerSecond])).toEqual([[2, 1], [0.5, 0]]);
+    expect(merged.note).toContain("merged into wider steps of 4 seconds");
+  });
+
+  it("draws the same figures in the HTML and the PDF", async () => {
+    const chart = buildSeriesChart(model.series)!;
+    const layout = layoutSeriesChart(chart, CHART_BOX);
+    const html = renderRunReportHtml(model);
+    const points = (line: readonly (readonly [number, number])[]) => line.map(([px, py]) => `${px},${py}`).join(" ");
+    expect(html).toContain(`<polyline class="req" points="${points(layout.requestsLine)}"></polyline>`);
+    expect(html).toContain(`<polyline class="fl" points="${points(layout.failuresLine)}"></polyline>`);
+    expect(html).toContain(`aria-label="${escapeHtml(chart.summary)}"`);
+    for (const mark of [...layout.yMarks.map((entry) => entry.label), ...layout.xMarks.map((entry) => entry.label)]) expect(html).toContain(`>${mark}</text>`);
+    // Non-colour cues: dashed line, square markers where there were failures, and a text table.
+    expect(html).toContain("dasharray");
+    expect(html).toContain('class="mk"');
+    expect(html).toContain("<details><summary>Figures per second</summary>");
+
+    // The PDF draws paths with the same shape from the same layout (its own box), to the rounding of 0.1.
+    const pdfLayout = layoutSeriesChart(chart, pdfChartBox(0, 0, CONTENT_WIDTH_PDF));
+    const drawn = pdfPaths(await renderRunReportPdf(model));
+    const stepsOf = (line: readonly (readonly [number, number])[]) => line.map(([px, py]) => [px - line[0][0], py - line[0][1]] as [number, number]);
+    const drawsLike = (line: readonly (readonly [number, number])[]) => {
+      const expected = stepsOf(line);
+      return drawn.some((path) => path.length === expected.length && path.every(([px, py], index) => Math.abs(px - expected[index][0]) < 0.25 && Math.abs(py - expected[index][1]) < 0.25));
+    };
+    expect(drawsLike(pdfLayout.requestsLine)).toBe(true);
+    expect(drawsLike(pdfLayout.failuresLine)).toBe(true);
+    // The two lines differ, so one cannot stand in for the other.
+    expect(stepsOf(pdfLayout.requestsLine)).not.toEqual(stepsOf(pdfLayout.failuresLine));
+  });
+
+  it("renders the same bytes for the same run, and an older run (nothing extra stored) still has the graph", async () => {
+    expect(renderRunReportHtml(model)).toBe(renderRunReportHtml(buildRunReportModel(run(results))));
+    const first = await renderRunReportPdf(model);
+    expect(first.equals(await renderRunReportPdf(buildRunReportModel(run(results))))).toBe(true);
+    const html = renderRunReportHtml(model);
+    expect(html).toContain('<h2 id="series-h">Requests per second</h2>');
+    expect(html).toContain("<svg viewBox");
+    expect(html).not.toContain(NO_REQUESTS_NOTE);
+  });
+
+  it("states that no requests were sent instead of drawing an empty graph", async () => {
+    const none = buildRunReportModel(run([result({ outcome: "not-attempted", notAttemptedReason: "cancelled", durationMs: 0, responseStatusCode: undefined, testOutcomes: [] })]));
+    const html = renderRunReportHtml(none);
+    expect(html).toContain(NO_REQUESTS_NOTE);
+    expect(html).not.toContain('class="req"');
+    expect(buildSeriesChart(none.series)).toBeNull();
+    expect((await renderRunReportPdf(none)).subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 });

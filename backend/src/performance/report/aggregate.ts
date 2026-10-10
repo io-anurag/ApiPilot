@@ -8,12 +8,17 @@ import type {
   RunProgress,
   StepResult,
   StepTimelinePoint,
+  StoredLiveSeries,
   TimelinePoint,
 } from "@apipilot/shared-domain";
 import { PERFORMANCE_FINDINGS_RULESET_VERSION, REQUEST_PHASES } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
 import { statusMatches } from "../plan/expectedStatuses";
 import type { MetricsPoint } from "../k6/metricsStream";
+import { latencyOf, type LiveParts } from "../live/buildSnapshot";
+import { createLiveSeries } from "../live/liveSeries";
+import type { LiveStepInfo } from "../live/liveStepInfo";
+import { createRecentRing } from "../live/recentRing";
 import { LatencyHistogram } from "./histogram";
 import { isRunLayout, layoutFromPlan, type RunLayout } from "./runLayout";
 
@@ -114,6 +119,15 @@ export interface PerformanceAggregate {
   toResult(endMs: number): PerformanceResult;
   /** AP-037 FR-018: the Once before load step that failed, if any (research R12). */
   setupFailure(): { stepId: string; reason: string } | null;
+  /** AP-045: the live dashboard's figures at `nowMs`, from memory; nothing is recomputed or stored. */
+  liveParts(nowMs: number): LiveParts;
+  /** AP-045 US4: the whole run's series for the finished result (at most 1,800 points). */
+  storedLiveSeries(endMs: number): StoredLiveSeries;
+}
+
+export interface AggregateLiveOptions {
+  /** Step id to its chain, name, method and path template (AP-045 research R5). Absent: the layout's own method, no path. */
+  steps?: ReadonlyMap<string, LiveStepInfo>;
 }
 
 /**
@@ -122,7 +136,7 @@ export interface PerformanceAggregate {
  * `apipilot_check`, `apipilot_data`, refreshes by `setup_step`) add result fields only for a layout
  * that has setup steps or data sets, so a legacy run's result is unchanged.
  */
-export function createAggregate(source: PerformancePlan | RunLayout, plannedDurationMs: number, runStartMs: number): PerformanceAggregate {
+export function createAggregate(source: PerformancePlan | RunLayout, plannedDurationMs: number, runStartMs: number, liveOptions: AggregateLiveOptions = {}): PerformanceAggregate {
   const layout = isRunLayout(source) ? source : layoutFromPlan(source);
   const steps = new Map<string, StepStats>();
   const journeys = new Map<string, JourneyStats>();
@@ -185,6 +199,16 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
   const setupOutcomes = new Map<string, { outcome: "ok" | "failed"; reason: string | null; latencyMs: number | null }>();
   const refreshBySetupStep = new Map<string, { stepId: string; refreshed: number; failed: number }>();
   const dataTakes = new Map<number, { takes: number; wrapped: boolean }>();
+  // AP-045: the live dashboard's bounded series and latest-requests ring, fed from the same points.
+  const liveSeries = createLiveSeries({
+    withVirtualUsers: true,
+    groups: layout.journeys.map((journey) => ({
+      id: journey.id,
+      label: journey.steps.map((step) => liveOptions.steps?.get(step.stepId)?.chainName).find((label) => label !== undefined) ?? journey.id,
+    })),
+  });
+  const liveRing = createRecentRing();
+  const secondOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - runStartMs) / 1000));
 
   const bucketIndex = (timeMs: number) => Math.max(0, Math.floor((timeMs - runStartMs) / bucketMs));
   const bucketAt = (index: number): Bucket => {
@@ -204,12 +228,29 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
     return bucket;
   };
 
+  /** One latest-requests entry from a request's duration point, which carries the same `status` and `method` tags as `http_reqs` (AP-045 R5). */
+  function pushRecent(step: StepStats, point: MetricsPoint): void {
+    const info = liveOptions.steps?.get(step.stepId);
+    const status = Number(point.tags.status ?? "0");
+    const code = Number.isFinite(status) ? status : 0;
+    liveRing.push({
+      second: secondOf(point.timeMs),
+      chain: info?.stepName ?? step.stepId,
+      method: info?.method ?? step.method,
+      path: info?.path ?? "",
+      status: code === 0 ? null : code,
+      failed: classifyFailure(code, point.tags.error_code, step.expected) !== null,
+      durationMs: Math.round(point.value * 100) / 100,
+    });
+  }
+
   function ingest(point: MetricsPoint): void {
     const { metric, tags } = point;
     const index = bucketIndex(point.timeMs);
     if (metric === "vus") {
       currentVirtualUsers = point.value;
       bucketAt(index).virtualUsers = point.value;
+      liveSeries.recordVirtualUsers(secondOf(point.timeMs), point.value);
       return;
     }
     if (metric === "iterations") {
@@ -292,6 +333,7 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
         step.requests += 1;
         journey.requests += 1;
         requests += 1;
+        liveSeries.recordRequest(secondOf(point.timeMs), step.journeyId);
         const bucket = bucketAt(index);
         bucket.requests += 1;
         const stepBucket = stepBucketAt(step, index);
@@ -303,6 +345,7 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
           step.failures += 1;
           journey.failures += 1;
           failures += 1;
+          liveSeries.recordFailure(secondOf(point.timeMs));
           bucket.errors += 1;
           const statusKey = Number.isFinite(status) ? String(status) : "0";
           step.byStatus.set(statusKey, (step.byStatus.get(statusKey) ?? 0) + 1);
@@ -329,6 +372,8 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
         total.add(point.value);
         bucketAt(index).histogram.add(point.value);
         stepBucketAt(step, index).histogram.add(point.value);
+        liveSeries.recordLatency(secondOf(point.timeMs), point.value);
+        pushRecent(step, point);
         return;
       case "checks":
         step.checksTotal += 1;
@@ -504,5 +549,28 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
     return null;
   }
 
-  return { ingest, progress, toResult, setupFailure };
+  function liveParts(nowMs: number): LiveParts {
+    const elapsedMs = Math.max(0, nowMs - runStartMs);
+    const chainRows = layout.journeys.map((journey) => {
+      const stats = journeys.get(journey.id)!;
+      const name = journey.steps.map((step) => liveOptions.steps?.get(step.stepId)?.chainName).find((label) => label !== undefined);
+      return { id: journey.id, label: name ?? journey.id, requests: stats.requests, failures: stats.failures };
+    });
+    return {
+      elapsedMs,
+      totals: { requests, failures },
+      currentVirtualUsers,
+      latency: latencyOf(total),
+      chains: chainRows,
+      series: liveSeries.view(Math.floor(elapsedMs / 1000)),
+      recent: liveRing.list(),
+    };
+  }
+
+  function storedLiveSeries(endMs: number): StoredLiveSeries {
+    const view = liveSeries.view(Math.floor(Math.max(0, endMs - runStartMs) / 1000));
+    return { bucketSeconds: view.bucketSeconds, points: view.points, ...(view.groups ? { groups: view.groups } : {}) };
+  }
+
+  return { ingest, progress, toResult, setupFailure, liveParts, storedLiveSeries };
 }

@@ -14,6 +14,7 @@ import { parseMetricsLine } from "../k6/metricsStream";
 import { createRunDirectory, removeRunDirectory } from "../k6/runDirectory";
 import { buildUserScriptChildEnv, buildUserScriptK6Args } from "../k6/runner";
 import type { K6Probe, PerformanceRunner } from "../k6/runnerTypes";
+import { finishLiveSnapshotSource, registerLiveSnapshotSource } from "../live/liveRunRegistry";
 import { createUserScriptAggregate } from "../report/userScriptAggregate";
 import { withUserScriptReportFields } from "../report/userScriptFindings";
 import { registerLiveRun, unregisterLiveRun } from "../runPerformanceTest";
@@ -134,9 +135,12 @@ async function runUserScript(input: RunUserScriptInput): Promise<void> {
   const startedAtMs = Date.parse(run.startedAt);
   const aggregate = createUserScriptAggregate({ plannedDurationMs: run.plannedDurationMs, startedAtMs });
   const stderr = createStderrFilter();
+  // AP-045: the live dashboard reads this run's figures from memory.
+  registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "user-script", plannedDurationMs: run.plannedDurationMs, parts: aggregate.liveParts });
 
   const settle = (settlement: UserScriptRunSettlement, result?: UserScriptResult) => {
     const settled = repository.settle(sessionId, run.id, settlement, deps.now().toISOString(), result);
+    finishLiveSnapshotSource(run.id, settled.status === "in-progress" ? "failed" : settled.status, deps.now().getTime());
     touch(sessionId);
     const counts = stderr.counts();
     logger.info("user_script_run_settled", {
@@ -154,6 +158,8 @@ async function runUserScript(input: RunUserScriptInput): Promise<void> {
     const meaning = exitMeaningOf(exitCode);
     return withUserScriptReportFields(aggregate.toResult(endMs), { ...run, exitMeaning: meaning }, exitCode);
   };
+  // AP-045 US4: the series is stored once, with the finished result, not with every checkpoint.
+  const finalResultAt = (endMs: number, exitCode: number | null) => ({ ...resultAt(endMs, exitCode), liveSeries: aggregate.storedLiveSeries(endMs) });
 
   let runDir: string | undefined;
   try {
@@ -221,16 +227,16 @@ async function runUserScript(input: RunUserScriptInput): Promise<void> {
       return;
     }
     if (metricsUnreadable) {
-      settle({ status: "failed", failure: { category: "metrics-unreadable" }, exitCode: exit.exitCode, exitMeaning: exitMeaningOf(exit.exitCode) }, resultAt(endMs, exit.exitCode));
+      settle({ status: "failed", failure: { category: "metrics-unreadable" }, exitCode: exit.exitCode, exitMeaning: exitMeaningOf(exit.exitCode) }, finalResultAt(endMs, exit.exitCode));
       return;
     }
     if (userCancelled || exit.cancelled) {
-      settle({ status: "cancelled", cancelReason: "user-requested", exitCode: null, exitMeaning: null }, resultAt(endMs, null));
+      settle({ status: "cancelled", cancelReason: "user-requested", exitCode: null, exitMeaning: null }, finalResultAt(endMs, null));
       return;
     }
     const status = settledStatusOf(exit.exitCode, aggregate.requestCount);
     const exitMeaning = exitMeaningOf(exit.exitCode);
-    const result = aggregate.requestCount > 0 ? resultAt(endMs, exit.exitCode) : undefined;
+    const result = aggregate.requestCount > 0 ? finalResultAt(endMs, exit.exitCode) : undefined;
     if (status === "failed") {
       const k6Message = stderr.keptErrorText();
       settle({ status: "failed", failure: { category: "k6-exited-with-error", ...(k6Message ? { k6Message } : {}) }, exitCode: exit.exitCode, exitMeaning }, result);

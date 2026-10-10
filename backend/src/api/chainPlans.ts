@@ -14,6 +14,7 @@ import { restoreRun } from "../performance/chain/restore";
 import { parseSeedSource, seedPlan } from "../performance/chain/seed/seedService";
 import { chainRunSnapshot } from "../performance/chain/runSnapshot";
 import { ChainPlanNotFoundError, ChainRunInProgressError, DataSetNotFoundError, DataSetTooLargeError, InvalidChainPlanError, PerformanceRunNotFoundError, PlanHasBlockersError } from "../performance/errors";
+import { getChainLiveSnapshot, parseLiveCursor } from "../performance/live/liveRunService";
 import { renderChainReport } from "../performance/report/renderChainReport";
 import { cancelLiveRun, startPerformanceRun } from "../performance/runPerformanceTest";
 import { getChainScript } from "../performance/scriptStore";
@@ -114,6 +115,16 @@ export function createChainPlansRouter(deps: PerformanceTestingDependencies): Ro
     `${BASE}/runs/:runId`,
     chainRoute((req, res, startedAt) => {
       res.status(200).json({ run: chainRunOf(req.params.runId) });
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  // AP-045: the live dashboard's read-only snapshot, answered from memory while the run is live.
+  router.get(
+    `${BASE}/runs/:runId/live`,
+    chainRoute((req, res, startedAt) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json(getChainLiveSnapshot(getSessionId(), runIdOf(req.params.runId), deps.now().getTime(), parseLiveCursor(req.query)));
       logSucceeded(req, startedAt, 200);
     }),
   );

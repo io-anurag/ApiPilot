@@ -1,5 +1,5 @@
 import type { ChainRun, ChainRunSnapshotStep, PerformanceResult, StepResult } from "@apipilot/shared-domain";
-import { latencyChart, stepLatencyChart, throughputChart, virtualUsersChart } from "./chainReportCharts";
+import { latencyChart, liveSeriesChart, stepLatencyChart, throughputChart, virtualUsersChart } from "./chainReportCharts";
 import { CHAIN_STYLE } from "./chainReportStyle";
 import { bytes, clock, escapeHtml, formatCount, ms, PHASE_TEXT, pct, REPORT_CSP, timelineTable } from "./renderHtmlReport";
 
@@ -195,6 +195,7 @@ function chartsSection(run: ChainRun, result: PerformanceResult, results: Map<st
       return timeline ? [{ label: step.name, timeline }] : [];
     });
   const perStep = stepLatencyChart(lines, points, bucketMs);
+  const live = liveSeriesChart(result.liveSeries);
   return [
     '<section id="charts" class="card"><h2>Latency over time <span class="small muted">p95 of every request in the run</span></h2>',
     latencyChart(points, bucketMs, limit),
@@ -204,6 +205,7 @@ function chartsSection(run: ChainRun, result: PerformanceResult, results: Map<st
     `<section class="card"><h2>Throughput</h2>${throughputChart(points, bucketMs)}</section>`,
     "</div>",
     perStep ? `<section class="card"><h2>Latency by step <span class="small muted">p95 per interval, one scale</span></h2>${perStep}</section>` : "",
+    live ? `<section id="live-series" class="card"><h2>Requests per second <span class="small muted">every second of the run</span></h2>${live}</section>` : "",
     `<section class="card">${timelineTable(points, bucketMs)}</section>`,
   ].join("");
 }

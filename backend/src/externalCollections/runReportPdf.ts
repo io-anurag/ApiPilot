@@ -7,6 +7,7 @@ import {
   type RunReportModel,
   type RunReportRow,
 } from "./runReport";
+import { NO_REQUESTS_NOTE, buildSeriesChart, layoutSeriesChart, type ChartBox, type SeriesChart } from "./runSeriesChart";
 
 type Doc = InstanceType<typeof PDFDocument>;
 
@@ -95,6 +96,45 @@ function methodBadge(d: Doc, method: string, x: number, y: number): void {
 
 function divider(d: Doc, x: number, y: number, w: number): void {
   d.moveTo(x, y).lineTo(x + w, y).strokeColor(BORDER).lineWidth(0.5).stroke();
+}
+
+const CHART_LEFT = 30;
+const CHART_PLOT_HEIGHT = 110;
+
+/** The plot area inside a card item at (x, y) of width w. */
+export function pdfChartBox(x: number, y: number, w: number): ChartBox {
+  return { x: x + CHART_LEFT, y: y + 4, w: w - CHART_LEFT - 6, h: CHART_PLOT_HEIGHT };
+}
+
+/** Draws the per-second graph from the shared layout and returns the height it used. */
+function drawSeriesChart(d: Doc, chart: SeriesChart, x: number, y: number, w: number): number {
+  const box = { x: x + CHART_LEFT, y: y + 4, w: w - CHART_LEFT - 6, h: CHART_PLOT_HEIGHT };
+  const layout = layoutSeriesChart(chart, box);
+  const bottom = box.y + box.h;
+  for (const mark of layout.yMarks) {
+    d.moveTo(box.x, mark.y).lineTo(box.x + box.w, mark.y).strokeColor(BORDER).lineWidth(0.5).stroke();
+    block(d, mark.label, x, mark.y - 4, CHART_LEFT - 6, { size: 7, colour: MUTED, align: "right", oneLine: true });
+  }
+  for (const mark of layout.xMarks) {
+    d.moveTo(mark.x, box.y).lineTo(mark.x, bottom).strokeColor(BORDER).lineWidth(0.5).stroke();
+    block(d, mark.label, mark.x - 15, bottom + 3, 30, { size: 7, colour: MUTED, align: "center", oneLine: true });
+  }
+  block(d, "Elapsed time (mm:ss) · requests per second", box.x, bottom + 14, box.w, { size: 7, colour: MUTED, align: "center", oneLine: true });
+  if (chart.points.length === 1) {
+    d.circle(layout.requestsLine[0][0], layout.requestsLine[0][1], 3).fill(ACCENT);
+  } else {
+    const line = (points: readonly (readonly [number, number])[], colour: string, dashed: boolean) => {
+      d.moveTo(points[0][0], points[0][1]);
+      for (const [px, py] of points.slice(1)) d.lineTo(px, py);
+      if (dashed) d.dash(4, { space: 2.5 });
+      d.lineWidth(1.2).strokeColor(colour).stroke();
+      if (dashed) d.undash();
+    };
+    line(layout.requestsLine, ACCENT, false);
+    line(layout.failuresLine, FAIL, true);
+  }
+  for (const [mx, my] of layout.failureMarkers) d.rect(mx - 2, my - 2, 4, 4).fill(FAIL);
+  return CHART_PLOT_HEIGHT + 28;
 }
 
 function rowsOf<T>(rows: readonly T[], draw: (row: T) => Item): Item[] {
@@ -264,6 +304,21 @@ export function renderRunReportPdf(model: RunReportModel): Promise<Buffer> {
       (d, x, y, w) =>
         block(d, `One cell per request, in run order: green passed, red failed, grey not attempted. Tests: ${insights.tests.passed} passed, ${insights.tests.failed} failed.`, x, y, w, { size: 8, colour: MUTED }) + 2,
     ]);
+
+    // ---- Requests per second: the same layout the HTML report draws, as vector shapes
+    {
+      const chart = buildSeriesChart(model.series);
+      card(
+        "Requests per second",
+        chart
+          ? [
+              (d, x, y, w) => block(d, `Solid line: requests per second (peak ${chart.peak}). Dashed line with square marks: failed requests per second (${chart.failingSteps} of ${chart.points.length} with failures).`, x, y, w, { size: 8, colour: MUTED }) + 4,
+              (d, x, y, w) => drawSeriesChart(d, chart, x, y, w),
+              (d, x, y, w) => block(d, chart.note, x, y, w, { size: 8, colour: MUTED }) + 2,
+            ]
+          : [note(NO_REQUESTS_NOTE)],
+      );
+    }
 
     // ---- Needs attention
     {
