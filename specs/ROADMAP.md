@@ -3546,7 +3546,7 @@ Implementation
       (`liveRunState.ts`) instead of being added to the stored run record, so there is no schema change.
     - Validation (2026-10-10): `npm test` (349 files, 2,845 tests passed, 10 skipped), `npm run lint` and `npm run build` pass. Beyond the tests, a real k6 run of a user script and of a request-chain plan was driven against a local mock target: the live totals, the run result, the progress and the stored series agreed, no secret or query reached the snapshot or the report, and the user-script dashboard was inspected in headless Chrome (desktop and 360 px, light and dark). That check found and fixed three defects: the latest-requests list had no step column for script and collection runs; the graph's right-hand labels were clipped and its text unreadable at 360 px; and the poll cursor could skip points k6 delivers late (so the client's graph summed to 172 of 216 requests). The cursor now re-asks for the last 10 seconds, and an ended run returns its whole series. Not exercised in a browser: the collection run's dashboard (integration test only) and the PDF layout.
     - Rework against the mock (2026-10-10), after a live browser session: the dashboard now follows `mock.html` (heading card with a pulsing Live pill, run details and Cancel run; counters joined edge to edge with rate, failure share, peak virtual users and p95 sub-lines; the graph beside a per-chain card; a Time column in the latest requests). The graph has a labelled left axis (requests per second), a labelled right axis (virtual users), gridlines and tick values, a time axis spanning the planned run, a legend, a hover read-out, a Total / By chain switch (one line per chain), and a second graph of average response time. `LivePoint` gained optional `latencyMs` and `byGroup`. The live panel for plan runs moved to the wide column; the duplicate status badge on collection results was removed.
-76. **AP-046 API test coverage intelligence; version 19.40.0 (2026-10-10).**
+76. **AP-046 API test coverage intelligence; version 19.41.0 (2026-10-11).**
     - A Coverage view (`API Test Coverage`, a results-section view in the tab menu, palette and help dialog, with "View coverage"
       links in scenario review and in a run's results) that keeps two dimensions apart: specification coverage (a qualifying
       generated scenario exists; pending and accepted count, rejected never) and runtime-verified coverage (an executed scenario's
@@ -3587,4 +3587,8 @@ Implementation
       was started through the API), and screen readers. Not exercised: a real browser
       session in light and dark (jsdom checks that only theme tokens and text labels are used, not contrast), and a run through
       the real Import & Run flow against a live API.
-    - Version bumped to 19.40.0 (root, backend, frontend, shared-domain).
+    - Placement follow-up (19.41.0): the start screen and Import & Run Collection show a coverage summary entry (disabled with a
+      reason when there is no specification, an unavailable state on failure), the Coverage view uses the shared hero header, hides
+      Recalculate and Export until a snapshot exists, and shows one primary action at a time through a two-step path. The start screen's workflow colours were made visible in both themes (solid colour edge on each card, 20% tinted icon tiles with a 60% border, elevated card surface, stronger control borders). Mock:
+      `specs/046-api-test-coverage-intelligence/mock-placement.html`. Not exercised: a real browser session in light and dark.
+    - Version bumped to 19.41.0 (root, backend, frontend, shared-domain).

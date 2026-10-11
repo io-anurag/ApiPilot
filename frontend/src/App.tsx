@@ -19,6 +19,7 @@ import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
 import type { OpenChainPlanRequest } from "./pages/RequestChainPlansPage";
 import { ActiveViewContext } from "./components/requestChain/activeView";
+import { useCoverageEntry } from "./hooks/useCoverageEntry";
 import { useTheme } from "./hooks/useTheme";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
@@ -90,6 +91,9 @@ export function App() {
   // visible only once a path is picked, see EntryChooser).
   const [started, setStarted] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("guided-workflow");
+  // AP-046: the start screen and Import & Run Collection show what is known about coverage; it is
+  // read only while one of them is on screen, and again whenever the user comes back to one.
+  const coverageEntry = useCoverageEntry(!started || activeTab === "import-collection");
   // The guided workflow hides the tab menu while in progress so the user completes it before
   // switching away; "Import & Run Collection" never needs that since it is a self-contained,
   // one-shot action rather than a multi-stage flow.
@@ -271,7 +275,7 @@ export function App() {
           </LazyView>
         ) : (
           <ActiveViewContext.Provider value={started ? activeTab : "start"}>
-            {!started && <EntryChooser onSelect={handleSelect} />}
+            {!started && <EntryChooser onSelect={handleSelect} coverage={coverageEntry} onOpenCoverage={handleOpenCoverage} />}
             {started && tabsVisible && (
               <Tabs
                 tabs={TABS}
@@ -310,6 +314,7 @@ export function App() {
                     preload={importPreload}
                     onExit={handleExitToStart}
                     onOpenChainPlan={handleOpenChainPlan}
+                    coverage={coverageEntry}
                     onOpenCoverage={handleOpenCoverage}
                   />
                 </LazyView>

@@ -20,3 +20,10 @@ export const BUTTON_STYLES = {
   ghost:
     "text-sm font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus-visible:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-brand-300 dark:hover:text-brand-200",
 } as const;
+
+/**
+ * The one look of the start screen's controls: the artifact buttons, the card arrows and the
+ * coverage entry button. A workflow colour appears only on a marker dot or an icon, never on the box.
+ */
+export const ENTRY_CONTROL =
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-border-strong bg-background text-sm font-medium text-text-secondary motion-safe:transition-colors hover:border-brand-500 hover:text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:text-text-disabled disabled:hover:border-border-strong disabled:hover:text-text-disabled";

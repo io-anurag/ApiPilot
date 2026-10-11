@@ -1,3 +1,6 @@
+import { CoverageEntryCard } from "./apiCoverage/CoverageEntryCard";
+import type { CoverageEntryState } from "./apiCoverage/coverageViewModel";
+import { ENTRY_CONTROL } from "./controlStyles";
 import { EntryIllustration } from "./EntryIllustration";
 import { ArtifactProductIcon, WorkflowIcon } from "./WorkflowIcon";
 import {
@@ -63,7 +66,15 @@ function InfoIcon() {
  */
 export function EntryChooser({
   onSelect,
-}: Readonly<{ onSelect: (choice: EntryChoice) => void }>) {
+  coverage = { status: "loading" },
+  onOpenCoverage,
+}: Readonly<{
+  onSelect: (choice: EntryChoice) => void;
+  /** AP-046: what is known about coverage, shown in the Results entry under the workflow cards. */
+  coverage?: CoverageEntryState;
+  /** AP-046: opens the Coverage results view; the Results entry is shown only when this is given. */
+  onOpenCoverage?: () => void;
+}>) {
   return (
     <div data-testid="entry-chooser" className="space-y-12 py-2 lg:py-6">
       <section aria-label="Start from an artifact" className="space-y-8">
@@ -81,7 +92,7 @@ export function EntryChooser({
             <p className="max-w-xl text-lg leading-8 text-muted">
               Build an explainable test suite from an OpenAPI specification, or go
               straight to running a Postman collection, a quick load test, or a k6 script
-              of your own.
+              of your own. Then see how much of the API your tests cover.
             </p>
           </div>
 
@@ -92,7 +103,7 @@ export function EntryChooser({
           {ARTIFACT_CHOICES.map((artifact) => (
             <fieldset
               key={artifact.id}
-              className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm"
+              className={`min-w-0 rounded-xl border border-l-4 border-border-strong bg-surface-elevated p-4 shadow-sm ${workflowById(artifact.workflows[0]).tone.edgeLeft}`}
             >
               <legend className="float-left flex w-full items-center gap-2.5 text-sm font-semibold text-text-primary">
                 <ArtifactProductIcon name={artifact.icon} className="h-5 w-5 shrink-0" />
@@ -107,11 +118,11 @@ export function EntryChooser({
                       type="button"
                       aria-label={`${workflow.title}, for ${artifact.phrase}`}
                       onClick={() => onSelect(id)}
-                      className={`inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium text-text-secondary motion-safe:transition-colors hover:text-text-primary ${workflow.tone.border} ${FOCUS_RING}`}
+                      className={`${ENTRY_CONTROL} px-3 py-1.5`}
                     >
                       <span
                         aria-hidden="true"
-                        className={`h-2 w-2 shrink-0 rounded-sm ${workflow.tone.marker}`}
+                        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${workflow.tone.marker}`}
                       />
                       {workflow.title}
                     </button>
@@ -148,11 +159,9 @@ export function EntryChooser({
               aria-label={workflow.title}
               aria-describedby={`entry-${workflow.id}-description`}
               onClick={() => onSelect(workflow.id)}
-              className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border p-5 text-left motion-safe:transition-colors ${
-                workflow.recommended
-                  ? "border-border-strong bg-surface shadow-md"
-                  : "border-border bg-surface shadow-sm"
-              } ${workflow.tone.border} ${FOCUS_RING}`}
+              className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border border-t-4 border-border-strong bg-surface-elevated p-5 text-left motion-safe:transition-colors ${
+                workflow.recommended ? "shadow-md" : "shadow-sm"
+              } ${workflow.tone.edgeTop} ${workflow.tone.border} ${FOCUS_RING}`}
             >
               <span className="flex w-full items-start justify-between gap-2">
                 <span
@@ -177,7 +186,7 @@ export function EntryChooser({
               </span>
               <span
                 aria-hidden="true"
-                className={`mt-auto flex h-9 w-9 items-center justify-center self-end rounded-full ${workflow.tone.action} motion-safe:transition-transform group-hover:translate-x-0.5`}
+                className={`${ENTRY_CONTROL} ${workflow.tone.action} mt-auto h-9 w-9 self-end group-hover:border-brand-500`}
               >
                 <ArrowIcon className="h-4 w-4" />
               </span>
@@ -185,6 +194,8 @@ export function EntryChooser({
           ))}
         </div>
       </section>
+
+      {onOpenCoverage && <CoverageEntryCard entry={coverage} onOpen={onOpenCoverage} variant="strip" />}
     </div>
   );
 }

@@ -960,9 +960,13 @@ memory and nothing is sent to a third party.
 ## 6b. Coverage
 
 **Coverage** shows how much of your API the generated tests cover and how much of that real runs have proved. Open it from
-the **Coverage** tab, from **View coverage** in Review Generated Scenarios or in a run's results, or with Ctrl+K and
-**API Test Coverage**. It needs a specification from the guided workflow; without one it tells you so and offers a link to
-the specification step.
+the **Coverage** tab, from the **API Test Coverage** entry under the workflow cards on the start screen, from the **Feeds API
+Test Coverage** panel in Import & Run Collection, from **View coverage** in Review Generated Scenarios or in a run's results, or
+with Ctrl+K and **API Test Coverage**. The start screen entry and the panel show the current figures once a specification exists;
+before that their button is disabled and says what is needed. It needs a specification from the guided workflow; without one the
+page says so and offers one action, **Start the Guided Workflow**. Once scenarios exist and nothing has run, the one action is
+**Go to Import & Run**, and after a run it becomes **Run again in Import & Run**. **Recalculate** and the export links appear
+only when there is something to calculate.
 
 Two kinds of coverage are always shown apart, and generating a test never counts as verifying it:
 

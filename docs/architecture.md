@@ -1159,8 +1159,16 @@ verified (runtime-verified coverage). No AI is involved in any count, percentage
 - **Privacy.** Snapshots, exports and logs carry identifiers, counts and outcomes only: no header, body, URL, cookie, token or
   `rawCapture`. The HTML export escapes every interpolated value.
 - **Navigation.** No router exists, so Coverage is a `results`-section view beside the five workflows (`RESULTS_VIEWS` in
-  `workflowCatalog.ts`), in the tab menu, palette and help dialog but not on the start screen. Filters live in the page, which
-  stays mounted, so they survive switching views and reset on a full refresh.
+  `workflowCatalog.ts`), in the tab menu, palette and help dialog. Filters live in the page, which stays mounted, so they survive
+  switching views and reset on a full refresh.
+- **Entry points.** The start screen and Import & Run Collection also show a read-only summary of coverage
+  (`components/apiCoverage/CoverageEntryCard.tsx`, a `strip` under the workflow cards and a `panel` beside the run flow, absent on
+  the run-results step, which has its own "View coverage" action). Both read one `useCoverageEntry` call in `App.tsx`, which reuses
+  `useCoverage` on the unfiltered query and is active only while one of them is on screen, so the figures are the Coverage view's
+  own and are refetched on return. A missing specification disables the button and says why in text; a failed request is shown as
+  unavailable, never as no specification or zero. The Coverage view uses the same hero header as the other views, shows
+  Recalculate and Export only once a snapshot exists, and carries one primary action at a time through `CoverageSteps`
+  (specification and scenarios first, then a run).
 
 ## Security, privacy, and operational constraints
 

@@ -2,9 +2,10 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import type { CoverageFilter, CoverageSortKey, CoverageSnapshot } from "@apipilot/shared-domain";
 import { ActiveViewContext } from "../components/requestChain/activeView";
 import { BUTTON_STYLES } from "../components/controlStyles";
-import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
+import { CoverageHero } from "../components/apiCoverage/CoverageHero";
+import { CoverageSteps, type CoverageNeed } from "../components/apiCoverage/CoverageSteps";
 import { CategoryCoverage } from "../components/apiCoverage/CategoryCoverage";
 import { CoverageBars } from "../components/apiCoverage/CoverageBars";
 import { CoverageNotices } from "../components/apiCoverage/CoverageNotice";
@@ -41,15 +42,9 @@ function Header({
   const spec = snapshot?.specification;
   const exec = snapshot?.execution;
   return (
-    <header className="space-y-3 rounded-lg border border-border bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 className="font-display text-2xl font-bold tracking-tight text-text-primary">API Test Coverage</h2>
-          <p className="text-sm text-muted">
-            How much of the API your generated tests cover, and how much of that real runs have verified.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <CoverageHero
+      actions={
+        <>
           {snapshot && exec && exec.availableRuns.length > 0 && (
             <label className="flex items-center gap-2 text-xs font-semibold text-muted">
               Evaluate run
@@ -67,11 +62,12 @@ function Header({
               </select>
             </label>
           )}
-          <button type="button" onClick={onRecalculate} disabled={loading} className={BUTTON_STYLES.secondary}>
-            {loading ? "Calculating..." : "Recalculate"}
-          </button>
+          {/* Nothing to recalculate or export until a snapshot exists. */}
           {snapshot && (
             <>
+              <button type="button" onClick={onRecalculate} disabled={loading} className={BUTTON_STYLES.secondary}>
+                {loading ? "Calculating..." : "Recalculate"}
+              </button>
               <a
                 href={coverageExportUrl(exportQuery, "html", "filtered")}
                 download
@@ -82,13 +78,17 @@ function Header({
               <a href={coverageExportUrl(exportQuery, "json", "all")} download className={`${BUTTON_STYLES.secondary} inline-block`}>
                 Export all (JSON)
               </a>
+              {/* Before the first run the steps below carry this action; once runs exist it is "again". */}
+              {exec && exec.runIds.length > 0 && (
+                <button type="button" onClick={() => onOpenWorkflow("import-collection")} className={BUTTON_STYLES.primary}>
+                  Run again in Import &amp; Run
+                </button>
+              )}
             </>
           )}
-          <button type="button" onClick={() => onOpenWorkflow("import-collection")} className={BUTTON_STYLES.primary}>
-            Go to Import &amp; Run
-          </button>
-        </div>
-      </div>
+        </>
+      }
+    >
       {spec && exec && snapshot && (
         <dl data-testid="coverage-context" className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
           <div>
@@ -133,7 +133,7 @@ function Header({
           </div>
         </dl>
       )}
-    </header>
+    </CoverageHero>
   );
 }
 
@@ -234,14 +234,10 @@ export function CoveragePage({
     return (
       <div data-testid="coverage-page" className="space-y-4">
         {header}
-        <EmptyState
-          testId="coverage-no-workflow"
-          message="No active specification"
-          description="Coverage is calculated from a specification and its generated scenarios. Upload a specification in the guided workflow first."
-        />
-        <button type="button" onClick={() => onOpenWorkflow("guided-workflow")} className={BUTTON_STYLES.primary}>
-          Go to the specification step
-        </button>
+        <div data-testid="coverage-no-workflow" className="space-y-3">
+          <p className="text-sm font-semibold text-text-primary">No active specification</p>
+          <CoverageSteps need="specification" onOpenWorkflow={onOpenWorkflow} />
+        </div>
       </div>
     );
   }
@@ -269,6 +265,10 @@ export function CoveragePage({
   const specMetrics = snapshot.metrics.filter((m) => m.dimension === "specification" && m.id !== "spec-response-codes");
   const runtimeMetrics = snapshot.metrics.filter((m) => m.dimension === "runtime");
   const filtered = isFiltered(filter);
+  const counted = snapshot.context.scenarioCounts.accepted + snapshot.context.scenarioCounts.pending;
+  let need: CoverageNeed | null = null;
+  if (counted === 0) need = "scenarios";
+  else if (snapshot.execution.runIds.length === 0) need = "run";
 
   return (
     <div data-testid="coverage-page" className="space-y-4" aria-busy={loading}>
@@ -285,12 +285,12 @@ export function CoveragePage({
         </ErrorState>
       )}
       <CoverageNotices notices={snapshot.notices} />
-      {snapshot.notices.some((n) => n.code === "no-scenarios") && (
-        <div>
-          <button type="button" onClick={() => onOpenWorkflow("guided-workflow")} className={BUTTON_STYLES.primary}>
-            Go to scenario generation
-          </button>
-        </div>
+      {need && (
+        <CoverageSteps
+          need={need}
+          scenarioSummary={`${snapshot.context.scenarioCounts.total} scenarios (${snapshot.context.scenarioCounts.accepted} accepted, ${snapshot.context.scenarioCounts.pending} pending).`}
+          onOpenWorkflow={onOpenWorkflow}
+        />
       )}
       <p data-testid="coverage-scope" aria-live="polite" className="text-xs text-muted">
         Scope: <span className="font-semibold text-text-primary">{scopeLabel(snapshot, filter, filtered)}</span> · Evidence:{" "}

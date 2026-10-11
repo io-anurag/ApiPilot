@@ -215,3 +215,60 @@ export function formatRatio(numerator: number, denominator: number): string {
   if (denominator === 0) return "not available (0 eligible)";
   return `${Math.round((numerator / denominator) * 1000) / 10}%`;
 }
+
+/** One headline figure of the entry summary: numerator, denominator and a percentage that is `null` when the denominator is 0. */
+export interface CoverageEntryFigure {
+  numerator: number;
+  denominator: number;
+  percentage: number | null;
+}
+
+/**
+ * What the start screen and Import & Run Collection know about coverage (AP-046). It is a read of the
+ * same snapshot the Coverage view shows, never a second calculation, so the figures cannot disagree.
+ * A failed request is `error`, never `no-spec` or zero (FR-039).
+ */
+export type CoverageEntryState =
+  | { status: "loading" }
+  | { status: "no-spec" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      specification: string;
+      specOperations: CoverageEntryFigure | null;
+      runtimeOperations: CoverageEntryFigure | null;
+      gaps: number;
+      highPriorityGaps: number;
+      hasRun: boolean;
+    };
+
+function figureOf(snapshot: CoverageSnapshot, id: string): CoverageEntryFigure | null {
+  const metric = snapshot.metrics.find((m) => m.id === id);
+  return metric ? { numerator: metric.numerator, denominator: metric.denominator, percentage: metric.percentage } : null;
+}
+
+export function coverageEntryState(
+  snapshot: CoverageSnapshot | null,
+  problem: { kind: "no-workflow" | "error"; message: string } | null,
+): CoverageEntryState {
+  if (snapshot) {
+    const { name, version } = snapshot.specification;
+    return {
+      status: "ready",
+      specification: version ? `${name} v${version}` : name,
+      specOperations: figureOf(snapshot, "spec-operations"),
+      runtimeOperations: figureOf(snapshot, "runtime-operations"),
+      gaps: snapshot.totals.gaps,
+      highPriorityGaps: snapshot.gaps.filter((gap) => gap.priority === "high").length,
+      hasRun: snapshot.execution.runIds.length > 0,
+    };
+  }
+  if (problem?.kind === "no-workflow") return { status: "no-spec" };
+  if (problem) return { status: "error", message: problem.message };
+  return { status: "loading" };
+}
+
+/** A figure as text: "78%", or "not available" when nothing is eligible (never 0%). */
+export function entryPercentage(figure: CoverageEntryFigure | null): string {
+  return figure?.percentage == null ? "not available" : `${figure.percentage}%`;
+}

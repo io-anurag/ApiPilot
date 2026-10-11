@@ -31,12 +31,16 @@ export type ArtifactIconName = "openapi" | "postman" | "k6";
 export interface WorkflowTone {
   /** Small colour square shown beside the workflow's name (tabs, palette, artifact controls). */
   readonly marker: string;
-  /** Icon tile: tinted background, border and icon colour. */
+  /** Icon tile: tinted background, border and icon colour (20% tint, 60% border: visible on light and dark). */
   readonly tile: string;
-  /** Quiet round affordance (the card's arrow): outlined, never a filled circle. */
+  /** Colour of the card's arrow icon; its box is the shared `ENTRY_CONTROL`. */
   readonly action: string;
   /** Card hover/focus border. */
   readonly border: string;
+  /** Solid top edge of a workflow card: the colour that identifies it at a glance, in both themes. */
+  readonly edgeTop: string;
+  /** Solid left edge of an artifact card, taken from the workflow that artifact leads to first. */
+  readonly edgeLeft: string;
 }
 
 export interface WorkflowEntry {
@@ -62,9 +66,11 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     recommended: true,
     tone: {
       marker: "bg-wf-guided",
-      tile: "border-wf-guided/30 bg-wf-guided/10 text-wf-guided",
-      action: "border border-wf-guided/40 bg-surface text-wf-guided",
-      border: "hover:border-wf-guided/40",
+      tile: "border-wf-guided/60 bg-wf-guided/20 text-wf-guided",
+      action: "text-wf-guided",
+      border: "hover:border-wf-guided",
+      edgeTop: "border-t-wf-guided",
+      edgeLeft: "border-l-wf-guided",
     },
   },
   {
@@ -77,9 +83,11 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     recommended: false,
     tone: {
       marker: "bg-wf-import",
-      tile: "border-wf-import/30 bg-wf-import/10 text-wf-import",
-      action: "border border-wf-import/40 bg-surface text-wf-import",
-      border: "hover:border-wf-import/40",
+      tile: "border-wf-import/60 bg-wf-import/20 text-wf-import",
+      action: "text-wf-import",
+      border: "hover:border-wf-import",
+      edgeTop: "border-t-wf-import",
+      edgeLeft: "border-l-wf-import",
     },
   },
   {
@@ -92,9 +100,11 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     recommended: false,
     tone: {
       marker: "bg-wf-quick",
-      tile: "border-wf-quick/30 bg-wf-quick/10 text-wf-quick",
-      action: "border border-wf-quick/40 bg-surface text-wf-quick",
-      border: "hover:border-wf-quick/40",
+      tile: "border-wf-quick/60 bg-wf-quick/20 text-wf-quick",
+      action: "text-wf-quick",
+      border: "hover:border-wf-quick",
+      edgeTop: "border-t-wf-quick",
+      edgeLeft: "border-l-wf-quick",
     },
   },
   {
@@ -107,9 +117,11 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     recommended: false,
     tone: {
       marker: "bg-wf-plans",
-      tile: "border-wf-plans/30 bg-wf-plans/10 text-wf-plans",
-      action: "border border-wf-plans/40 bg-surface text-wf-plans",
-      border: "hover:border-wf-plans/40",
+      tile: "border-wf-plans/60 bg-wf-plans/20 text-wf-plans",
+      action: "text-wf-plans",
+      border: "hover:border-wf-plans",
+      edgeTop: "border-t-wf-plans",
+      edgeLeft: "border-l-wf-plans",
     },
   },
   {
@@ -122,9 +134,11 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     recommended: false,
     tone: {
       marker: "bg-wf-k6",
-      tile: "border-wf-k6/30 bg-wf-k6/10 text-wf-k6",
-      action: "border border-wf-k6/40 bg-surface text-wf-k6",
-      border: "hover:border-wf-k6/40",
+      tile: "border-wf-k6/60 bg-wf-k6/20 text-wf-k6",
+      action: "text-wf-k6",
+      border: "hover:border-wf-k6",
+      edgeTop: "border-t-wf-k6",
+      edgeLeft: "border-l-wf-k6",
     },
   },
 ];

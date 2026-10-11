@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   breakdownFor,
   breakdownLabel,
+  coverageEntryState,
+  entryPercentage,
   formatFraction,
   formatPercentage,
   formatTimestamp,
   presentStates,
 } from "../../../src/components/apiCoverage/coverageViewModel";
-import { requirement, stateCounts } from "./coverageFixtures";
+import { requirement, snapshot, stateCounts } from "./coverageFixtures";
 
 describe("coverageViewModel", () => {
   it("words an unavailable percentage instead of showing NaN", () => {
@@ -58,5 +60,28 @@ describe("coverageViewModel", () => {
       ["generated-not-executed", 3],
       ["verified", 2],
     ]);
+  });
+});
+
+describe("coverageEntryState (AP-046 entry summary)", () => {
+  it("summarises the snapshot's own figures and whether any run produced evidence", () => {
+    const state = coverageEntryState(snapshot(), null);
+    expect(state.status).toBe("ready");
+    if (state.status !== "ready") return;
+    expect(state.specification).toBe("Orders API v1.0.0");
+    expect(state.hasRun).toBe(true);
+    expect(state.gaps).toBe(snapshot().totals.gaps);
+  });
+
+  it("separates a missing specification, a failure and a first load", () => {
+    expect(coverageEntryState(null, { kind: "no-workflow", message: "none" })).toEqual({ status: "no-spec" });
+    expect(coverageEntryState(null, { kind: "error", message: "down" })).toEqual({ status: "error", message: "down" });
+    expect(coverageEntryState(null, null)).toEqual({ status: "loading" });
+  });
+
+  it("words an unavailable percentage as not available, never 0%", () => {
+    expect(entryPercentage({ numerator: 0, denominator: 0, percentage: null })).toBe("not available");
+    expect(entryPercentage(null)).toBe("not available");
+    expect(entryPercentage({ numerator: 1, denominator: 4, percentage: 25 })).toBe("25%");
   });
 });

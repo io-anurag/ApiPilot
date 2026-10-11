@@ -22,7 +22,13 @@ const FEATURES = [
 export function ImportRunHero({
   compact,
   aside,
-}: Readonly<{ compact: boolean; aside?: ReactNode }>) {
+  extra,
+}: Readonly<{
+  compact: boolean;
+  aside?: ReactNode;
+  /** Shown under the feature list on the full header only (AP-046: the coverage entry). */
+  extra?: ReactNode;
+}>) {
   return (
     <header data-testid="import-run-hero" data-compact={compact} className="relative isolate overflow-hidden">
       {!compact && (
@@ -35,10 +41,10 @@ export function ImportRunHero({
         className={
           compact
             ? "py-2"
-            : "grid min-h-[calc(100vh-14rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16"
+            : "grid min-h-[calc(100vh-14rem)] content-center items-stretch gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16"
         }
       >
-        <div className={compact ? "space-y-1" : "space-y-8"}>
+        <div className={compact ? "space-y-1" : "flex flex-col justify-between gap-8"}>
           <div className={compact ? "space-y-1" : "space-y-4"}>
             <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
               <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
@@ -75,6 +81,7 @@ export function ImportRunHero({
               ))}
             </dl>
           )}
+          {!compact && extra && <div>{extra}</div>}
         </div>
         {/* Kept mounted when compact (hidden, not removed) so the aside's form state survives. */}
         {aside && <div className={compact ? "hidden" : "contents"}>{aside}</div>}

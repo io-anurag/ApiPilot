@@ -64,6 +64,51 @@ describe("EntryChooser (AP-038 US1)", () => {
     expect(screen.getAllByText("Recommended")).toHaveLength(1);
   });
 
+  it("shows what coverage needs, with a disabled button and the reason in text, when there is no specification (AP-046)", () => {
+    render(<EntryChooser onSelect={vi.fn()} coverage={{ status: "no-spec" }} onOpenCoverage={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 2, name: "API Test Coverage" })).toBeInTheDocument();
+    const open = screen.getByRole("button", { name: "Open Coverage" });
+    expect(open).toBeDisabled();
+    expect(open).toHaveAccessibleDescription("Needs a specification from the Guided Workflow.");
+  });
+
+  it("shows live figures and opens the Coverage view once a specification exists (AP-046)", () => {
+    const onOpenCoverage = vi.fn();
+    render(
+      <EntryChooser
+        onSelect={vi.fn()}
+        onOpenCoverage={onOpenCoverage}
+        coverage={{
+          status: "ready",
+          specification: "Petstore v1.2.0",
+          specOperations: { numerator: 18, denominator: 23, percentage: 78.3 },
+          runtimeOperations: { numerator: 0, denominator: 23, percentage: 0 },
+          gaps: 9,
+          highPriorityGaps: 3,
+          hasRun: false,
+        }}
+      />,
+    );
+    const card = within(screen.getByTestId("coverage-entry-strip"));
+    expect(card.getByText("78.3%")).toBeInTheDocument();
+    expect(card.getByText("18 of 23 operations")).toBeInTheDocument();
+    expect(card.getByText("No run yet")).toBeInTheDocument();
+    expect(card.getByText("3 high priority")).toBeInTheDocument();
+    fireEvent.click(card.getByRole("button", { name: "Open Coverage" }));
+    expect(onOpenCoverage).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a coverage failure as unavailable, not as missing specification or zero (AP-046)", () => {
+    render(<EntryChooser onSelect={vi.fn()} coverage={{ status: "error", message: "unreachable" }} onOpenCoverage={vi.fn()} />);
+    expect(screen.getByText("Coverage is unavailable: unreachable")).toBeInTheDocument();
+    expect(screen.queryByText(/Needs a specification/)).not.toBeInTheDocument();
+  });
+
+  it("omits the coverage entry when no handler is given", () => {
+    render(<EntryChooser onSelect={vi.fn()} />);
+    expect(screen.queryByRole("heading", { name: "API Test Coverage" })).not.toBeInTheDocument();
+  });
+
   it("hides the decorative illustration from assistive technology", () => {
     render(<EntryChooser onSelect={vi.fn()} />);
     const illustrationLabel = screen.getByText("Postman collection", { selector: "span" });

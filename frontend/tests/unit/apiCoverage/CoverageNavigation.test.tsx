@@ -94,7 +94,7 @@ describe("Coverage in the results section (AP-046)", () => {
     render(<App />);
     await openCoverageFromPalette();
     await screen.findByTestId("gaps-table");
-    fireEvent.click(screen.getByRole("button", { name: "Go to Import & Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run again in Import & Run" }));
     const nav = screen.getByRole("navigation", { name: "Top-level views" });
     expect(within(nav).getByRole("button", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page");
   });

@@ -60,8 +60,44 @@ describe("CoveragePage: states", () => {
     const { onOpenWorkflow } = renderPage();
     expect(await screen.findByTestId("coverage-no-workflow")).toHaveTextContent("No active specification");
     expect(screen.queryByTestId("spec-metrics")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Go to the specification step" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start the Guided Workflow" }));
     expect(onOpenWorkflow).toHaveBeenCalledWith("guided-workflow");
+  });
+
+  it("offers one action and no recalculate or export when there is no specification", async () => {
+    fetchMock.mockResolvedValue({ ok: false, error: "no_active_workflow", message: "There is no active specification." });
+    renderPage();
+    await screen.findByTestId("coverage-no-workflow");
+    expect(screen.queryByRole("button", { name: "Recalculate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Export/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Import & Run/ })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("coverage-steps")).getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("does not offer recalculate while the first calculation is loading", () => {
+    fetchMock.mockReturnValue(new Promise(() => undefined));
+    renderPage();
+    expect(screen.queryByRole("button", { name: /Recalculat/ })).not.toBeInTheDocument();
+  });
+
+  it("makes running the tests the one next step once scenarios exist but nothing has run", async () => {
+    const base = snapshot();
+    fetchMock.mockResolvedValue(ok(snapshot({ execution: { ...base.execution, runIds: [] } })));
+    const { onOpenWorkflow } = renderPage();
+    const steps = await screen.findByTestId("coverage-steps");
+    expect(steps).toHaveTextContent("Step 1 · done");
+    fireEvent.click(within(steps).getByRole("button", { name: "Go to Import & Run" }));
+    expect(onOpenWorkflow).toHaveBeenCalledWith("import-collection");
+    expect(screen.getByRole("button", { name: "Recalculate" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Run again in Import & Run" })).not.toBeInTheDocument();
+  });
+
+  it("drops the steps and offers running again once a run has produced evidence", async () => {
+    fetchMock.mockResolvedValue(ok());
+    renderPage();
+    await screen.findByTestId("spec-metrics");
+    expect(screen.queryByTestId("coverage-steps")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run again in Import & Run" })).toBeInTheDocument();
   });
 
   it("shows a failure as an error with a retry, never as empty coverage", async () => {
@@ -312,7 +348,7 @@ describe("CoveragePage: runs, export and navigation", () => {
   it("navigates to the execution workflow and from rows to scenarios and results", async () => {
     const { onOpenWorkflow } = renderPage();
     await screen.findByTestId("gaps-table");
-    fireEvent.click(screen.getByRole("button", { name: "Go to Import & Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run again in Import & Run" }));
     expect(onOpenWorkflow).toHaveBeenLastCalledWith("import-collection");
     const post = screen.getAllByTestId("gap-row").find((r) => r.dataset.operation === "POST /orders") as HTMLElement;
     fireEvent.click(within(post).getByRole("button", { name: "Open scenarios" }));
