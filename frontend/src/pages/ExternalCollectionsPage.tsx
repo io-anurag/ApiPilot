@@ -107,7 +107,10 @@ export function ExternalCollectionsPage({
   onOpenChainPlan,
   coverage,
   onOpenCoverage,
+  openRunRequest,
 }: Readonly<{
+  /** AP-046: Coverage's "Open results": a new `token` selects the collection holding `runId` and opens that run's results. */
+  openRunRequest?: Readonly<{ runId: string; token: number }>;
   preload?: ImportPreload | null;
   onExit?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the run panel's ordered selection. */
@@ -161,6 +164,38 @@ export function ExternalCollectionsPage({
       cancelled = true;
     };
   }, []);
+
+  // A run belongs to one uploaded collection and the list does not say which, so look it up.
+  const [openRunId, setOpenRunId] = useState<string | undefined>(undefined);
+  const [runLookupNotice, setRunLookupNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openRunRequest) return;
+    let cancelled = false;
+    setRunLookupNotice(null);
+    (async () => {
+      const listed = await fetchUploadedCollections();
+      if (cancelled) return;
+      if (!listed.ok) {
+        setRunLookupNotice(`The run could not be opened: ${listed.message}`);
+        return;
+      }
+      setUploadedCollections(listed.uploadedCollections);
+      for (const candidate of listed.uploadedCollections) {
+        const history = await fetchUploadedCollectionRuns(candidate.id);
+        if (cancelled) return;
+        if (history.ok && history.runs.some((run) => run.id === openRunRequest.runId)) {
+          setSelectedId(candidate.id);
+          setOpenRunId(openRunRequest.runId);
+          setRequestedStep("results");
+          return;
+        }
+      }
+      setRunLookupNotice("That run is no longer available in Import & Run, so its results cannot be opened.");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openRunRequest]);
 
   const refreshCollectionView = useCallback(async (id: string) => {
     const result = await fetchUploadedCollectionView(id);
@@ -394,6 +429,11 @@ export function ExternalCollectionsPage({
           </button>
         </div>
       )}
+      {runLookupNotice && (
+        <output data-testid="run-lookup-notice" className="block rounded-md border border-warning-600 bg-surface px-3 py-2 text-sm text-text-primary">
+          {runLookupNotice}
+        </output>
+      )}
       <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />
       <ImportRunHero
         compact={step !== "collection"}
@@ -587,6 +627,8 @@ export function ExternalCollectionsPage({
           }
           onOpenChainPlan={onOpenChainPlan}
           onOpenCoverage={onOpenCoverage}
+          openRunId={openRunId}
+          onOpenRunHandled={() => setOpenRunId(undefined)}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) =>

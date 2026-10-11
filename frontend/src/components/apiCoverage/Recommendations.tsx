@@ -3,7 +3,7 @@ import { BUTTON_STYLES } from "../controlStyles";
 import { EmptyState } from "../EmptyState";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { PriorityBadge } from "./CoverageBadges";
-import { CAUSE_LABELS } from "./coverageViewModel";
+import { CAUSE_LABELS, type OpenWorkflow } from "./coverageViewModel";
 
 const ACTION_LABEL: Record<CoverageRecommendation["action"]["type"], string> = {
   "generate-scenario": "Go to scenario generation",
@@ -33,7 +33,7 @@ export function Recommendations({
   onOpenWorkflow,
 }: Readonly<{
   recommendations: readonly CoverageRecommendation[];
-  onOpenWorkflow: (view: "guided-workflow" | "import-collection") => void;
+  onOpenWorkflow: OpenWorkflow;
 }>) {
   if (recommendations.length === 0) {
     return <EmptyState testId="recommendations-empty" message="No recommendations for the current view." description="Every requirement in view is verified, or the filters match no gap." />;
@@ -69,7 +69,11 @@ export function Recommendations({
             <button
               type="button"
               className={BUTTON_STYLES.secondary}
-              onClick={() => onOpenWorkflow(rec.action.type === "open-result" || rec.action.type === "re-run" ? "import-collection" : "guided-workflow")}
+              onClick={() =>
+                rec.action.type === "open-result" || rec.action.type === "re-run"
+                  ? onOpenWorkflow("import-collection", { runId: rec.action.type === "open-result" ? rec.action.runId : undefined })
+                  : onOpenWorkflow("guided-workflow")
+              }
             >
               {ACTION_LABEL[rec.action.type]}
             </button>

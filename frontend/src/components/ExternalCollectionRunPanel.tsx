@@ -598,6 +598,8 @@ export function ExternalCollectionRunPanel({
   onRunAgain,
   onViewResults,
   onOpenCoverage,
+  openRunId,
+  onOpenRunHandled,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
   /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
@@ -634,6 +636,10 @@ export function ExternalCollectionRunPanel({
   onRunAgain?: () => void;
   /** Run view: opens the results (the last run line's link). */
   onViewResults?: () => void;
+  /** AP-046: a run of this collection to open in the results (Coverage's "Open results"). */
+  openRunId?: string;
+  /** Called once `openRunId` has been loaded (or could not be), so the request is not replayed. */
+  onOpenRunHandled?: () => void;
 }>) {
   const [run, setRun] = useState<UploadedCollectionExecutionRun | null>(null);
   const [seedingChainPlan, setSeedingChainPlan] = useState(false);
@@ -731,6 +737,12 @@ export function ExternalCollectionRunPanel({
     setPendingRiskTierConfirmation(null);
     refreshHistory();
   }, [uploadedCollection.id]);
+
+  // After the collection-change reset above, so a run requested together with a collection switch survives it.
+  useEffect(() => {
+    if (!openRunId) return;
+    handleSelectHistoryRun(openRunId).finally(() => onOpenRunHandled?.());
+  }, [openRunId]);
 
   useEffect(() => {
     if (run?.status !== "in-progress") return;

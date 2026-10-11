@@ -6,7 +6,7 @@ import { HttpMethodBadge } from "../HttpMethodBadge";
 import { Pagination } from "../Pagination";
 import { PriorityBadge, StateBadge } from "./CoverageBadges";
 import { OperationRequirements } from "./OperationRequirements";
-import { formatFraction, formatPercentage, presentStates } from "./coverageViewModel";
+import { formatFraction, formatPercentage, presentStates, resultRunForOperation, type OpenWorkflow } from "./coverageViewModel";
 
 const PAGE_SIZES = [10, 25, 50] as const;
 const COLUMN_COUNT = 7;
@@ -79,6 +79,7 @@ export function GapsTable({
   onReset,
   filtered,
   showVerified,
+  availableRuns,
   onOpenWorkflow,
 }: Readonly<{
   operations: readonly OperationCoverage[];
@@ -92,7 +93,9 @@ export function GapsTable({
   onReset: () => void;
   filtered: boolean;
   showVerified: boolean;
-  onOpenWorkflow: (view: "guided-workflow" | "import-collection") => void;
+  /** Every run available to select, newest first; decides which run an operation's result link opens. */
+  availableRuns: readonly { id: string }[];
+  onOpenWorkflow: OpenWorkflow;
 }>) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
@@ -196,7 +199,7 @@ export function GapsTable({
                     </td>
                     <td className="px-3 py-2"><PriorityBadge priority={row.priority} /></td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-col items-start gap-1">
+                      <div className="flex flex-col items-start gap-1 whitespace-nowrap">
                         <button
                           type="button"
                           aria-expanded={isOpen}
@@ -209,7 +212,15 @@ export function GapsTable({
                           Open scenarios
                         </button>
                         {(row.failedCount > 0 || row.runtime.verified > 0) && (
-                          <button type="button" onClick={() => onOpenWorkflow("import-collection")} className={BUTTON_STYLES.ghost}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenWorkflow("import-collection", {
+                                runId: resultRunForOperation(scenarios, row.operationKey, availableRuns, row.failedCount > 0),
+                              })
+                            }
+                            className={BUTTON_STYLES.ghost}
+                          >
                             {row.failedCount > 0 ? "Open failing result" : "Open results"}
                           </button>
                         )}

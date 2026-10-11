@@ -6,11 +6,34 @@ import type {
   CoveragePriority,
   CoverageRequirementGroup,
   CoverageRequirementResult,
+  CoverageScenarioResult,
   CoverageSnapshot,
   CoverageState,
   ScenarioVerdict,
 } from "@apipilot/shared-domain";
 import type { StatusTone } from "../StatusBadge";
+
+/** Opens a workflow from Coverage; `runId` asks Import & Run to open that run's results. */
+export type OpenWorkflow = (view: "guided-workflow" | "import-collection", options?: { runId?: string }) => void;
+
+/**
+ * The run behind an operation's result, for "Open results" / "Open failing result": the newest run
+ * (`availableRuns` is newest first) that supplied evidence for one of its scenarios, restricted to
+ * failing scenarios when `failedOnly`. `undefined` when no run did.
+ */
+export function resultRunForOperation(
+  scenarios: readonly CoverageScenarioResult[],
+  operationKey: string,
+  availableRuns: readonly { id: string }[],
+  failedOnly: boolean,
+): string | undefined {
+  const runIds = new Set(
+    scenarios
+      .filter((s) => s.operationKey === operationKey && s.runId !== undefined && (!failedOnly || s.verdict === "failed"))
+      .map((s) => s.runId),
+  );
+  return availableRuns.find((run) => runIds.has(run.id))?.id;
+}
 
 /**
  * Pure presentation helpers for the coverage view. No domain decisions live here: every number,

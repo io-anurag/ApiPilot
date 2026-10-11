@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ExportResult } from "@apipilot/shared-domain";
+import type { ExportResult, WorkflowStageId } from "@apipilot/shared-domain";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { AppHeader } from "./components/AppHeader";
 import { Tabs, type TabItem } from "./components/Tabs";
@@ -100,6 +100,10 @@ export function App() {
   // why this must survive "Back to start" even though `started` itself does not.
   const [guidedWorkflowMounted, setGuidedWorkflowMounted] = useState(false);
   const [guidedSection, setGuidedSection] = useState<SectionId>("spec");
+  // Coverage's "Open results" asks Import & Run to open the results of that run.
+  const [importRunRequest, setImportRunRequest] = useState<{ runId: string; token: number }>();
+  // Coverage's "Open scenarios" asks the guided workflow to show its scenario review stage.
+  const [guidedStageRequest, setGuidedStageRequest] = useState<{ stageId: WorkflowStageId; token: number }>();
   // Same idea for "Import & Run Collection": once reached it stays mounted, so "Back to start"
   // keeps its in-memory state (selection, per-run order, an in-progress run's view).
   const [importCollectionMounted, setImportCollectionMounted] = useState(false);
@@ -185,11 +189,14 @@ export function App() {
   }
 
   /** Coverage's own links back into the workflows: same behaviour as picking that tab. */
-  function handleOpenWorkflowFromCoverage(view: "guided-workflow" | "import-collection") {
+  function handleOpenWorkflowFromCoverage(view: "guided-workflow" | "import-collection", options?: { runId?: string }) {
     if (view === "guided-workflow") {
+      setGuidedStageRequest((prev) => ({ stageId: "scenarioReview", token: (prev?.token ?? 0) + 1 }));
       handleSelect(view);
       setTabsVisible(true);
     } else {
+      const runId = options?.runId;
+      if (runId) setImportRunRequest((prev) => ({ runId, token: (prev?.token ?? 0) + 1 }));
       handleSelect(view);
     }
   }
@@ -302,6 +309,7 @@ export function App() {
                     onHandoffToExecution={handleHandoffToExecution}
                     onOpenChainPlan={handleOpenChainPlan}
                     onOpenCoverage={handleOpenCoverage}
+                    stageRequest={guidedStageRequest}
                   />
                 </LazyView>
               </div>
@@ -315,6 +323,7 @@ export function App() {
                     onOpenChainPlan={handleOpenChainPlan}
                     coverage={coverageEntry}
                     onOpenCoverage={handleOpenCoverage}
+                    openRunRequest={importRunRequest}
                   />
                 </LazyView>
               </div>

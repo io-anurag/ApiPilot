@@ -8,8 +8,31 @@ import {
   formatPercentage,
   formatTimestamp,
   presentStates,
+  resultRunForOperation,
 } from "../../../src/components/apiCoverage/coverageViewModel";
-import { requirement, snapshot, stateCounts } from "./coverageFixtures";
+import { requirement, scenario, snapshot, stateCounts } from "./coverageFixtures";
+
+describe("resultRunForOperation", () => {
+  const runs = [{ id: "run-2" }, { id: "run-1" }]; // newest first
+  const scenarios = [
+    scenario({ scenarioId: "a", operationKey: "POST /orders", verdict: "failed", runId: "run-1" }),
+    scenario({ scenarioId: "b", operationKey: "POST /orders", verdict: "passed", runId: "run-2" }),
+    scenario({ scenarioId: "c", operationKey: "GET /orders", verdict: "not-executed" }),
+  ];
+
+  it("opens the newest run with evidence for the operation", () => {
+    expect(resultRunForOperation(scenarios, "POST /orders", runs, false)).toBe("run-2");
+  });
+
+  it("restricts to failing scenarios for a failing result, even when a newer run passed", () => {
+    expect(resultRunForOperation(scenarios, "POST /orders", runs, true)).toBe("run-1");
+  });
+
+  it("has no run when the operation has no executed scenario", () => {
+    expect(resultRunForOperation(scenarios, "GET /orders", runs, false)).toBeUndefined();
+    expect(resultRunForOperation(scenarios, "DELETE /orders/{id}", runs, true)).toBeUndefined();
+  });
+});
 
 describe("coverageViewModel", () => {
   it("words an unavailable percentage instead of showing NaN", () => {

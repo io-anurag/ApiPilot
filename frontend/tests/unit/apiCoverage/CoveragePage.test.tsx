@@ -354,6 +354,7 @@ describe("CoveragePage: runs, export and navigation", () => {
     fireEvent.click(within(post).getByRole("button", { name: "Open scenarios" }));
     expect(onOpenWorkflow).toHaveBeenLastCalledWith("guided-workflow");
     fireEvent.click(within(post).getByRole("button", { name: "Open failing result" }));
-    expect(onOpenWorkflow).toHaveBeenLastCalledWith("import-collection");
+    // The run holding the operation's failing scenario, so Import & Run can open its results.
+    expect(onOpenWorkflow).toHaveBeenLastCalledWith("import-collection", { runId: "run-2" });
   });
 });

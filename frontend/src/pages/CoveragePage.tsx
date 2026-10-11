@@ -14,13 +14,19 @@ import { GapsTable } from "../components/apiCoverage/GapsTable";
 import { MetricGroup, lastExecutionExtra } from "../components/apiCoverage/MetricGroup";
 import { OperationCounts } from "../components/apiCoverage/OperationCounts";
 import { Recommendations } from "../components/apiCoverage/Recommendations";
-import { evidenceLabel, formatTimestamp, scopeLabel } from "../components/apiCoverage/coverageViewModel";
+import { evidenceLabel, formatTimestamp, scopeLabel, type OpenWorkflow } from "../components/apiCoverage/coverageViewModel";
 import { useCoverage } from "../hooks/useCoverage";
 import { coverageExportUrl, type CoverageQueryParams } from "../services/coverageClient";
 
 /** The latest-qualifying-result default for the run selector. */
 const LATEST_RUN = "";
 const TEXT_DEBOUNCE_MS = 250;
+/** Run labels are user-supplied collection names; the native select popup widens to the longest option. */
+const RUN_LABEL_MAX = 28;
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
 
 function Header({
   snapshot,
@@ -37,7 +43,7 @@ function Header({
   onRecalculate: () => void;
   loading: boolean;
   exportQuery: CoverageQueryParams;
-  onOpenWorkflow: (view: "guided-workflow" | "import-collection") => void;
+  onOpenWorkflow: OpenWorkflow;
 }>) {
   const spec = snapshot?.specification;
   const exec = snapshot?.execution;
@@ -55,8 +61,8 @@ function Header({
               >
                 <option value={LATEST_RUN}>Latest qualifying result per scenario</option>
                 {exec.availableRuns.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {`Single run: ${run.label} · ${formatTimestamp(run.startedAt)}`}
+                  <option key={run.id} value={run.id} title={`${run.label} · ${formatTimestamp(run.startedAt)}`}>
+                    {`${truncate(run.label, RUN_LABEL_MAX)} · ${formatTimestamp(run.startedAt)}`}
                   </option>
                 ))}
               </select>
@@ -193,7 +199,7 @@ function SideLists({ snapshot }: Readonly<{ snapshot: CoverageSnapshot }>) {
  */
 export function CoveragePage({
   onOpenWorkflow,
-}: Readonly<{ onOpenWorkflow: (view: "guided-workflow" | "import-collection") => void }>) {
+}: Readonly<{ onOpenWorkflow: OpenWorkflow }>) {
   const active = useContext(ActiveViewContext) === "coverage";
   const [filter, setFilter] = useState<CoverageFilter>(EMPTY_FILTER);
   const [runId, setRunId] = useState(LATEST_RUN);
@@ -360,6 +366,7 @@ export function CoveragePage({
           onSort={onSort}
           onReset={reset}
           filtered={filtered}
+          availableRuns={snapshot.execution.availableRuns}
           onOpenWorkflow={onOpenWorkflow}
         />
       </section>

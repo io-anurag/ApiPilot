@@ -166,6 +166,7 @@ export function TestGenerationWorkflowPage({
   onHandoffToExecution,
   onOpenChainPlan,
   onOpenCoverage,
+  stageRequest,
 }: Readonly<{
   /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
   onExit?: () => void;
@@ -182,6 +183,10 @@ export function TestGenerationWorkflowPage({
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: opens the Coverage view from scenario review. */
   onOpenCoverage?: () => void;
+  /** The user deliberately asked for a stage (e.g. Coverage's "Open scenarios"). A new `token`
+   * shows that stage; when present on mount it also replaces the automatic hand-off to Import &
+   * Run that otherwise follows resuming a workflow already at `execution`. */
+  stageRequest?: Readonly<{ stageId: WorkflowStageId; token: number }>;
 }>) {
   const [workflow, setWorkflow] = useState<TestGenerationWorkflow | null>(null);
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
@@ -220,8 +225,8 @@ export function TestGenerationWorkflowPage({
       if (cancelled) return;
       if (result.ok && result.workflow) {
         setWorkflow(result.workflow);
-        setViewedStageId(result.workflow.activeStageId);
-        maybeHandoff(result.workflow);
+        setViewedStageId(stageRequest?.stageId ?? result.workflow.activeStageId);
+        if (!stageRequest) maybeHandoff(result.workflow);
       } else if (result.ok && result.sessionExpired) {
         setSessionExpired(true);
       }
@@ -231,6 +236,14 @@ export function TestGenerationWorkflowPage({
       cancelled = true;
     };
   }, []);
+
+  // The mount effect above already honours a request present at mount; this applies later ones.
+  const appliedRequestToken = useRef(stageRequest?.token);
+  useEffect(() => {
+    if (!stageRequest || appliedRequestToken.current === stageRequest.token) return;
+    appliedRequestToken.current = stageRequest.token;
+    setViewedStageId(stageRequest.stageId);
+  }, [stageRequest]);
 
   function handleAdvanced(result: WorkflowResult) {
     if (!result.ok) return;

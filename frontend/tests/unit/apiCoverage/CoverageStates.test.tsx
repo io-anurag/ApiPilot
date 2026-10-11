@@ -78,7 +78,7 @@ describe("CoveragePage: workflow states (use cases A, B, C, D, E, G)", () => {
     expect(delRow).not.toHaveTextContent("Executed, failed");
     expect(delRow).toHaveTextContent("Generated, not executed");
     fireEvent.click(screen.getAllByRole("button", { name: "Open failing result" })[0]);
-    expect(onOpenWorkflow).toHaveBeenCalledWith("import-collection");
+    expect(onOpenWorkflow).toHaveBeenCalledWith("import-collection", { runId: "run-2" });
   });
 
   it("E: explains results that no longer match any scenario, without counting them", async () => {

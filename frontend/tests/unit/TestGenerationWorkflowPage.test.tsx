@@ -621,6 +621,22 @@ describe("TestGenerationWorkflowPage", () => {
       );
     });
 
+    it("shows the requested stage instead of handing off or landing on execution (Coverage's Open scenarios)", async () => {
+      stubExecutionFetch(executionWorkflow());
+      const onHandoffToExecution = vi.fn();
+
+      render(
+        <TestGenerationWorkflowPage
+          onHandoffToExecution={onHandoffToExecution}
+          stageRequest={{ stageId: "scenarioReview", token: 1 }}
+        />,
+      );
+
+      await waitFor(() => expect(screen.queryByText(/loading/i)).not.toBeInTheDocument());
+      expect(screen.queryByTestId("execution-handoff-notice")).not.toBeInTheDocument();
+      expect(onHandoffToExecution).not.toHaveBeenCalled();
+    });
+
     it("the handoff notice's own button re-triggers the handoff on demand", async () => {
       stubExecutionFetch(executionWorkflow());
       const onHandoffToExecution = vi.fn();
