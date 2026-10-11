@@ -24,7 +24,12 @@ export function CoverageHero({
             How much of the API your generated tests cover, and how much of that real runs have verified.
           </p>
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {/* A full-width toolbar under the title: run selector at the start, commands at the end. */}
+        {actions && (
+          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface px-3 py-2">
+            {actions}
+          </div>
+        )}
       </div>
       {children}
     </header>

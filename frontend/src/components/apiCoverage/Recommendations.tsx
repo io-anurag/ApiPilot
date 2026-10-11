@@ -1,9 +1,13 @@
+import { useState } from "react";
 import type { CoverageRecommendation } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
 import { EmptyState } from "../EmptyState";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { PriorityBadge } from "./CoverageBadges";
 import { CAUSE_LABELS, type OpenWorkflow } from "./coverageViewModel";
+
+/** Recommendations are ranked, so the top few matter most; the rest sit behind a toggle. */
+const INITIAL_VISIBLE = 5;
 
 const ACTION_LABEL: Record<CoverageRecommendation["action"]["type"], string> = {
   "generate-scenario": "Go to scenario generation",
@@ -35,12 +39,15 @@ export function Recommendations({
   recommendations: readonly CoverageRecommendation[];
   onOpenWorkflow: OpenWorkflow;
 }>) {
+  const [showAll, setShowAll] = useState(false);
   if (recommendations.length === 0) {
     return <EmptyState testId="recommendations-empty" message="No recommendations for the current view." description="Every requirement in view is verified, or the filters match no gap." />;
   }
+  const visible = showAll ? recommendations : recommendations.slice(0, INITIAL_VISIBLE);
   return (
+    <div className="space-y-3">
     <ol data-testid="recommendations" className="space-y-3">
-      {recommendations.map((rec) => {
+      {visible.map((rec) => {
         const [method, ...path] = rec.operationKey.split(" ");
         return (
           <li key={rec.gapId} data-testid="recommendation" className="space-y-1.5 rounded-lg border border-border bg-surface p-3">
@@ -81,5 +88,16 @@ export function Recommendations({
         );
       })}
     </ol>
+    {recommendations.length > INITIAL_VISIBLE && (
+      <button
+        type="button"
+        aria-expanded={showAll}
+        onClick={() => setShowAll((current) => !current)}
+        className={BUTTON_STYLES.ghost}
+      >
+        {showAll ? `Show top ${INITIAL_VISIBLE} only` : `Show all ${recommendations.length} recommendations`}
+      </button>
+    )}
+    </div>
   );
 }

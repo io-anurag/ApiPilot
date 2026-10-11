@@ -626,7 +626,9 @@ export function ExternalCollectionsPage({
               : undefined
           }
           onOpenChainPlan={onOpenChainPlan}
-          onOpenCoverage={onOpenCoverage}
+          // Without a specification Coverage can only explain that it has nothing to show, so the
+          // results do not offer it (the entry card beside the run flow says why instead).
+          onOpenCoverage={coverage?.status === "no-spec" ? undefined : onOpenCoverage}
           openRunId={openRunId}
           onOpenRunHandled={() => setOpenRunId(undefined)}
           onConfirmed={() =>

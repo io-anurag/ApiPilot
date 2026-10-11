@@ -8,13 +8,14 @@ import { CoverageHero } from "../components/apiCoverage/CoverageHero";
 import { CoverageSteps, type CoverageNeed } from "../components/apiCoverage/CoverageSteps";
 import { CategoryCoverage } from "../components/apiCoverage/CategoryCoverage";
 import { CoverageBars } from "../components/apiCoverage/CoverageBars";
+import { CoverageContext } from "../components/apiCoverage/CoverageContext";
 import { CoverageNotices } from "../components/apiCoverage/CoverageNotice";
 import { EMPTY_FILTER, GapFilters, isFiltered } from "../components/apiCoverage/GapFilters";
 import { GapsTable } from "../components/apiCoverage/GapsTable";
 import { MetricGroup, lastExecutionExtra } from "../components/apiCoverage/MetricGroup";
 import { OperationCounts } from "../components/apiCoverage/OperationCounts";
 import { Recommendations } from "../components/apiCoverage/Recommendations";
-import { evidenceLabel, formatTimestamp, scopeLabel, type OpenWorkflow } from "../components/apiCoverage/coverageViewModel";
+import { formatTimestamp, scopeLabel, type OpenWorkflow } from "../components/apiCoverage/coverageViewModel";
 import { useCoverage } from "../hooks/useCoverage";
 import { coverageExportUrl, type CoverageQueryParams } from "../services/coverageClient";
 
@@ -45,13 +46,13 @@ function Header({
   exportQuery: CoverageQueryParams;
   onOpenWorkflow: OpenWorkflow;
 }>) {
-  const spec = snapshot?.specification;
   const exec = snapshot?.execution;
   return (
     <CoverageHero
       actions={
+        snapshot ? (
         <>
-          {snapshot && exec && exec.availableRuns.length > 0 && (
+          {exec && exec.availableRuns.length > 0 && (
             <label className="flex items-center gap-2 text-xs font-semibold text-muted">
               Evaluate run
               <select
@@ -68,9 +69,7 @@ function Header({
               </select>
             </label>
           )}
-          {/* Nothing to recalculate or export until a snapshot exists. */}
-          {snapshot && (
-            <>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               <button type="button" onClick={onRecalculate} disabled={loading} className={BUTTON_STYLES.secondary}>
                 {loading ? "Calculating..." : "Recalculate"}
               </button>
@@ -90,56 +89,11 @@ function Header({
                   Run again in Import &amp; Run
                 </button>
               )}
-            </>
-          )}
+          </div>
         </>
+        ) : undefined
       }
-    >
-      {spec && exec && snapshot && (
-        <dl data-testid="coverage-context" className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted">
-          <div>
-            <dt className="inline font-semibold">Specification </dt>
-            <dd className="inline text-text-primary">
-              {spec.name}
-              {spec.version ? ` v${spec.version}` : ""}
-            </dd>
-          </div>
-          <div>
-            <dt className="inline font-semibold">Revision </dt>
-            <dd className="inline font-mono text-text-primary">{spec.revision.slice(0, 10)}</dd>
-          </div>
-          <div>
-            <dt className="inline font-semibold">{exec.environments.length > 0 ? "Run context " : "Environment "}</dt>
-            <dd className="inline text-text-primary">
-              {exec.environments.length > 0 ? exec.environments.map((e) => `${e.name} (${e.tier})`).join(", ") : "No execution yet"}
-            </dd>
-          </div>
-          <div data-testid="coverage-evidence">
-            <dt className="inline font-semibold">Evidence </dt>
-            <dd className="inline text-text-primary">{evidenceLabel(snapshot)}</dd>
-          </div>
-          {exec.excludedRuns.length > 0 && (
-            <div data-testid="coverage-excluded-runs">
-              <dt className="inline font-semibold">Excluded runs </dt>
-              <dd className="inline text-text-primary">
-                {exec.excludedRuns.map((r) => `${r.runId} (${r.reason}: ${r.environment.name}, ${r.environment.tier})`).join(", ")}
-              </dd>
-            </div>
-          )}
-          <div>
-            <dt className="inline font-semibold">Last qualifying execution </dt>
-            <dd className="inline text-text-primary">{formatTimestamp(exec.lastQualifyingExecutionAt)}</dd>
-          </div>
-          <div>
-            <dt className="inline font-semibold">Scenarios </dt>
-            <dd className="inline text-text-primary">
-              {snapshot.context.scenarioCounts.accepted} accepted, {snapshot.context.scenarioCounts.pending} pending (
-              {snapshot.context.scenarioCounts.rejected} rejected, not counted)
-            </dd>
-          </div>
-        </dl>
-      )}
-    </CoverageHero>
+    />
   );
 }
 
@@ -147,12 +101,21 @@ function SideLists({ snapshot }: Readonly<{ snapshot: CoverageSnapshot }>) {
   return (
     <div className="space-y-4">
       <section className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="text-sm font-semibold text-text-primary">Out of scope</h3>
+        <h3 className="text-sm font-semibold text-text-primary">
+          Out of scope
+          {snapshot.outOfScopeOperations.length > 0 && <span className="ml-1 font-normal text-muted">({snapshot.outOfScopeOperations.length})</span>}
+        </h3>
         <p className="mb-2 text-xs text-muted">Operations not selected for generation. They are not counted as gaps.</p>
         {snapshot.outOfScopeOperations.length === 0 ? (
           <p className="text-xs text-muted">None. Every operation is in scope.</p>
         ) : (
-          <ul data-testid="out-of-scope" className="space-y-0.5 font-mono text-xs text-text-secondary">
+          // Can hold hundreds of operations: scroll inside the card; focusable so the keyboard can scroll it.
+          <ul
+            data-testid="out-of-scope"
+            tabIndex={0}
+            aria-label="Out-of-scope operations"
+            className="max-h-60 space-y-0.5 overflow-y-auto rounded-md font-mono text-xs text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
             {snapshot.outOfScopeOperations.map((key) => (
               <li key={key}>{key}</li>
             ))}
@@ -241,7 +204,18 @@ export function CoveragePage({
       <div data-testid="coverage-page" className="space-y-4">
         {header}
         <div data-testid="coverage-no-workflow" className="space-y-3">
-          <p className="text-sm font-semibold text-text-primary">No active specification</p>
+          <div className="space-y-1 rounded-lg border border-border bg-surface p-4">
+            <p className="text-sm font-semibold text-text-primary">No active specification</p>
+            <p className="text-sm text-text-secondary">
+              Coverage measures your tests against an OpenAPI specification loaded in the Guided Workflow, and matches run
+              results from Import &amp; Run Collection to the scenarios generated from it.
+            </p>
+            <p className="text-sm text-text-secondary">
+              A collection run on its own has no specification to be measured against. The same applies when the session
+              was restarted or expired, because the specification and scenarios are not kept. Start the Guided Workflow with
+              the specification, then run its collection.
+            </p>
+          </div>
           <CoverageSteps need="specification" onOpenWorkflow={onOpenWorkflow} />
         </div>
       </div>
@@ -290,6 +264,7 @@ export function CoveragePage({
           </button>
         </ErrorState>
       )}
+      <CoverageContext snapshot={snapshot} scope={scopeLabel(snapshot, filter, filtered)} filtered={filtered} onReset={reset} />
       <CoverageNotices notices={snapshot.notices} />
       {need && (
         <CoverageSteps
@@ -298,19 +273,6 @@ export function CoveragePage({
           onOpenWorkflow={onOpenWorkflow}
         />
       )}
-      <p data-testid="coverage-scope" aria-live="polite" className="text-xs text-muted">
-        Scope: <span className="font-semibold text-text-primary">{scopeLabel(snapshot, filter, filtered)}</span> · Evidence:{" "}
-        <span className="font-semibold text-text-primary">{evidenceLabel(snapshot)}</span>
-        {filtered && (
-          <>
-            {" "}
-            ·{" "}
-            <button type="button" onClick={reset} className="font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
-              Reset filters
-            </button>
-          </>
-        )}
-      </p>
       <OperationCounts counts={snapshot.operationCounts} />
       <div className="grid gap-4 lg:grid-cols-2">
         <MetricGroup

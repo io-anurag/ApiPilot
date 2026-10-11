@@ -155,6 +155,11 @@ export function GapsTable({
             {visible.map((row) => {
               const isOpen = open.has(row.operationKey);
               const v = row.scenarioVerdicts;
+              // Any run that produced a result for the operation, including inconclusive ones
+              // (edited before the run), not only runs that verified or failed something.
+              const resultRunId =
+                resultRunForOperation(scenarios, row.operationKey, availableRuns, row.failedCount > 0) ??
+                resultRunForOperation(scenarios, row.operationKey, availableRuns, false);
               return (
                 <Fragment key={row.operationKey}>
                   <tr data-testid="gap-row" data-operation={row.operationKey} className="border-t border-border align-top">
@@ -211,14 +216,10 @@ export function GapsTable({
                         <button type="button" onClick={() => onOpenWorkflow("guided-workflow")} className={BUTTON_STYLES.ghost}>
                           Open scenarios
                         </button>
-                        {(row.failedCount > 0 || row.runtime.verified > 0) && (
+                        {resultRunId !== undefined && (
                           <button
                             type="button"
-                            onClick={() =>
-                              onOpenWorkflow("import-collection", {
-                                runId: resultRunForOperation(scenarios, row.operationKey, availableRuns, row.failedCount > 0),
-                              })
-                            }
+                            onClick={() => onOpenWorkflow("import-collection", { runId: resultRunId })}
                             className={BUTTON_STYLES.ghost}
                           >
                             {row.failedCount > 0 ? "Open failing result" : "Open results"}

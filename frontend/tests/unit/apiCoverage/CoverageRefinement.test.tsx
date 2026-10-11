@@ -107,7 +107,7 @@ describe("CoveragePage: refined view", () => {
     renderPage();
     expect(await screen.findByTestId("operation-counts")).toBeInTheDocument();
     expect(screen.getByTestId("category-coverage")).toBeInTheDocument();
-    expect(screen.getByTestId("coverage-scope")).toHaveTextContent("Scope: All 4 eligible operations");
+    expect(screen.getByTestId("coverage-scope")).toHaveTextContent("All 4 eligible operations");
     expect(screen.getByTestId("coverage-evidence")).toHaveTextContent("Latest qualifying result per scenario from run-2 (9)");
   });
 

@@ -133,6 +133,25 @@ describe("ExternalCollectionsPage: Coverage's open-run request", () => {
     expect(screen.queryByTestId("run-lookup-notice")).not.toBeInTheDocument();
   });
 
+  it("offers View coverage on the results, but not when there is no specification to measure against", async () => {
+    const routes = [
+      { match: (url: string) => url.endsWith("/execution/runs/run-9"), response: { run: failedRun } },
+      { match: (url: string) => url.endsWith("/execution/runs"), response: { runs: [runSummary] } },
+    ];
+    stubFetch(routes);
+    const { unmount } = render(
+      <ExternalCollectionsPage openRunRequest={{ runId: "run-9", token: 1 }} coverage={{ status: "loading" }} onOpenCoverage={vi.fn()} />,
+    );
+    expect(await screen.findByText("Create widget")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View coverage" })).toBeInTheDocument();
+    unmount();
+
+    stubFetch(routes);
+    render(<ExternalCollectionsPage openRunRequest={{ runId: "run-9", token: 1 }} coverage={{ status: "no-spec" }} onOpenCoverage={vi.fn()} />);
+    expect(await screen.findByText("Create widget")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View coverage" })).not.toBeInTheDocument();
+  });
+
   it("says so when no collection holds the run, instead of failing silently", async () => {
     stubFetch();
     render(<ExternalCollectionsPage openRunRequest={{ runId: "run-gone", token: 1 }} />);

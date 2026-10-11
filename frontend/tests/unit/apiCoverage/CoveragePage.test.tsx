@@ -58,7 +58,10 @@ describe("CoveragePage: states", () => {
   it("explains a missing specification with a recovery action, not as zero coverage", async () => {
     fetchMock.mockResolvedValue({ ok: false, error: "no_active_workflow", message: "There is no active specification." });
     const { onOpenWorkflow } = renderPage();
-    expect(await screen.findByTestId("coverage-no-workflow")).toHaveTextContent("No active specification");
+    const empty = await screen.findByTestId("coverage-no-workflow");
+    expect(empty).toHaveTextContent("No active specification");
+    // Says why a collection run on its own is not enough.
+    expect(empty).toHaveTextContent("A collection run on its own has no specification to be measured against");
     expect(screen.queryByTestId("spec-metrics")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start the Guided Workflow" }));
     expect(onOpenWorkflow).toHaveBeenCalledWith("guided-workflow");

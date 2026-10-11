@@ -13,6 +13,9 @@ h1{margin:0;font-size:20px}h2{margin:0 0 8px;font-size:15px}p{margin:4px 0}.mute
 table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border)}
 td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}.mono{font-family:ui-monospace,Consolas,monospace}
 .note{border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:6px 0}.note.warning{border-color:var(--warn);color:var(--warn)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.group{border:1px solid var(--border);border-radius:8px;padding:10px 12px}.group.wide{grid-column:1/-1}
+h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}dl{margin:0}dt{font-size:12px;color:var(--muted)}dd{margin:0 0 8px;word-break:break-word}dd:last-child{margin-bottom:0}
+.notes ul{margin:4px 0 0;padding-left:18px}.notes li{margin:3px 0}
 .tag{display:inline-block;border:1px solid var(--muted);border-radius:999px;padding:0 8px;font-size:11px;font-weight:700}
 `;
 
@@ -58,9 +61,9 @@ export function renderCoverageHtml(snapshot: CoverageSnapshot, scopeLabel: strin
   const evidenceLine = exec.evidenceMode === "single-run"
     ? `single run ${e(exec.selectedRunId ?? "")}`
     : `latest qualifying result per scenario from ${exec.evidenceByRun.map((r) => `run ${e(r.runId)} (${r.scenarios})`).join(", ") || "no run"}`;
-  const excludedLine = exec.excludedRuns.length
-    ? `Excluded: ${exec.excludedRuns.map((r) => `run ${e(r.runId)} (${e(r.reason)}: ${e(r.environment.name)}, ${e(r.environment.tier)})`).join(", ")}.`
-    : "";
+  const excludedRuns = exec.excludedRuns
+    .map((r) => `run ${e(r.runId)} (${e(r.reason)}: ${e(r.environment.name)}, ${e(r.environment.tier)})`)
+    .join(", ");
   const gapRows = snapshot.gaps
     .map(
       (g) =>
@@ -76,22 +79,27 @@ export function renderCoverageHtml(snapshot: CoverageSnapshot, scopeLabel: strin
   const notMeasurableRows = snapshot.notMeasurable
     .map((n) => `<tr><td>${e(n.operationKey ?? "document")}</td><td>${e(n.label)}</td><td>${e(n.reason)}</td></tr>`)
     .join("");
-  const notices = snapshot.notices
-    .map((n) => `<div class="note ${e(n.severity)}">${e(n.message)}</div>`)
-    .join("");
-
+  const warnings = snapshot.notices.filter((n) => n.severity === "warning");
+  const notes = snapshot.notices.filter((n) => n.severity === "info");
+  const noticeHtml = `${warnings.map((n) => `<div class="note warning"><strong>Attention:</strong> ${e(n.message)}</div>`).join("")}${
+    notes.length ? `<div class="note notes"><h3>Notes</h3><ul>${notes.map((n) => `<li>${e(n.message)}</li>`).join("")}</ul></div>` : ""
+  }`;
+  const item = (label: string, value: string): string => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+  const counts = snapshot.context.scenarioCounts;
+  const runContext = exec.environments.length ? exec.environments.map((x) => `${e(x.name)} (${e(x.tier)})`).join(", ") : "No execution yet";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>API Test Coverage - ${e(spec.name)}</title><style>${STYLE}</style></head>
 <body><main>
 <section><h1>API Test Coverage</h1>
-<p>${e(spec.name)}${spec.version ? ` v${e(spec.version)}` : ""} <span class="muted mono">revision ${e(spec.revision.slice(0, 12))}</span></p>
-<p class="muted">${e(scopeLabel)}. Calculated ${e(snapshot.calculatedAt)}.</p>
-<p class="muted">Scenarios: ${snapshot.context.scenarioCounts.accepted} accepted, ${snapshot.context.scenarioCounts.pending} pending, ${snapshot.context.scenarioCounts.rejected} rejected (rejected scenarios never count).
-Evidence: ${evidenceLine}${exec.lastQualifyingExecutionAt ? `, last qualifying execution ${e(exec.lastQualifyingExecutionAt)}` : ", no qualifying execution"}.
-${exec.environments.length ? `Environment: ${exec.environments.map((x) => `${e(x.name)} (${e(x.tier)})`).join(", ")}.` : ""} ${excludedLine}
-Unattributed results: ${exec.unattributedResults} (possibly from an earlier specification; never counted as verified).</p>
-${notices}</section>
+<p class="muted">Calculated ${e(snapshot.calculatedAt)}.</p></section>
+<section><h2>Evaluation context</h2><div class="grid">
+<div class="group"><h3>Specification</h3><dl>${item("Name", `${e(spec.name)}${spec.version ? ` v${e(spec.version)}` : ""}`)}${item("Revision", `<span class="mono">${e(spec.revision.slice(0, 12))}</span>`)}</dl></div>
+<div class="group"><h3>Execution evidence</h3><dl>${item("Evidence", evidenceLine)}${item(exec.environments.length ? "Run context" : "Environment", runContext)}${item("Last qualifying execution", exec.lastQualifyingExecutionAt ? e(exec.lastQualifyingExecutionAt) : "None")}${excludedRuns ? item("Excluded runs", excludedRuns) : ""}${item("Unattributed results", `${exec.unattributedResults} (possibly from an earlier specification; never counted as verified)`)}</dl></div>
+<div class="group"><h3>Scenarios</h3><dl>${item("Counted in coverage", `${counts.accepted} accepted, ${counts.pending} pending (${counts.rejected} rejected, not counted)`)}</dl></div>
+<div class="group wide"><h3>Scope of this view</h3><dl>${item("Showing", e(scopeLabel))}</dl></div>
+</div></section>
+<section><h2>About these figures</h2>${noticeHtml}</section>
 <section><h2>Metrics and definitions</h2><table><thead><tr><th>Metric</th><th>Dimension</th><th>Count</th><th>Percentage</th><th>Numerator and denominator</th></tr></thead><tbody>${metricRows}</tbody></table>
 <p class="muted">Specification coverage means a qualifying generated scenario exists. Runtime-verified coverage requires qualifying execution evidence. No overall score is computed.</p></section>
 <section><h2>Operation-level counts</h2><p class="mono">Eligible ${oc.eligible}; with generated scenarios ${oc.withScenarios}; with passing verification ${oc.withPassingVerification}; with execution failures ${oc.withFailures}; with no scenarios ${oc.withNoScenarios}.</p>
@@ -102,7 +110,7 @@ ${notices}</section>
 <section><h2>Coverage gaps</h2><table><thead><tr><th>Operation</th><th>State</th><th>Priority</th><th>Gap</th><th>Rationale</th><th>Evidence</th></tr></thead><tbody>${gapRows}</tbody></table></section>
 <section><h2>Recommended next tests</h2><table><thead><tr><th>#</th><th>Operation</th><th>Requirement</th><th>Why</th><th>Priority</th><th>Action</th></tr></thead><tbody>${recRows}</tbody></table></section>
 <section><h2>Not measurable</h2><table><thead><tr><th>Operation</th><th>Element</th><th>Reason</th></tr></thead><tbody>${notMeasurableRows || '<tr><td colspan="3">None</td></tr>'}</tbody></table>
-${snapshot.outOfScopeOperations.length ? `<p class="muted">Out of scope (not selected for generation): ${snapshot.outOfScopeOperations.map(e).join(", ")}</p>` : ""}</section>
+${snapshot.outOfScopeOperations.length ? `<p class="muted">Out of scope (${snapshot.outOfScopeOperations.length}, not selected for generation): ${snapshot.outOfScopeOperations.map(e).join(", ")}</p>` : ""}</section>
 </main></body></html>`;
 }
 

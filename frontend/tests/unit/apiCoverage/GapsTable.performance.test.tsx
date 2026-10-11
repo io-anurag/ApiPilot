@@ -11,7 +11,7 @@ describe("GapsTable at 500 operations", () => {
     const onSort = vi.fn();
     const started = performance.now();
     render(
-      <GapsTable operations={operations} totalOperations={500} sort="priority" order="asc" onSort={onSort} onReset={vi.fn()} filtered={false} onOpenWorkflow={vi.fn()} />,
+      <GapsTable operations={operations} requirements={[]} scenarios={[]} gaps={[]} availableRuns={[]} showVerified={false} totalOperations={500} sort="priority" order="asc" onSort={onSort} onReset={vi.fn()} filtered={false} onOpenWorkflow={vi.fn()} />,
     );
     expect(screen.getAllByTestId("gap-row")).toHaveLength(10);
     fireEvent.click(screen.getByRole("button", { name: /Endpoint/ }));
