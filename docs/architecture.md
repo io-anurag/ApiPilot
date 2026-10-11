@@ -693,7 +693,8 @@ approved TestModel + approved IntegrationWorkflows + selection
 
 > **Retired in AP-037 phase two (19.19.0).** The quick test keeps only its specification upload and
 > status (`POST|GET /api/quick-performance`), as a seeding source; its plan, script and run trigger
-> are gone. Its earlier runs are read only.
+> are gone. Its earlier runs are read only. Its page was removed in AP-047: the upload now lives in the
+> Performance path's Source step.
 
 AP-032 (`specs/032-quick-performance-test`) builds the same `PerformancePlan` straight from an
 uploaded specification, as a standalone route family (`/api/quick-performance`) like Import & Run.
@@ -949,8 +950,9 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   provenance only. A separate encrypted copy of the plan as run is read only by restore.
   `createAggregate` takes a `RunLayout`: `layoutFromPlan` reproduces the legacy inputs exactly, and
   `layoutFromChainSnapshot` adds setup steps, checks and data sets.
-- **Frontend.** `pages/RequestChainPlansPage.tsx` (the **Performance Plans** tab) lists plans and
-  opens `requestChain/ChainPlanEditor`:
+- **Frontend.** Since AP-047 the **Performance** tab (`pages/PerformancePage.tsx`, below) lists plans and
+  opens them as the path's Plan, Load and Run steps over `requestChain/useChainPlanSession`, which holds
+  what `ChainPlanEditor` used to (the editor and `RequestChainPlansPage` were removed). The parts:
   - a chain tree and a step editor with Request, Extract, Checks and Settings sections, laid out
     as a viewport-high workbench (19.22.0): the tree (collapsible chains, a filter from six steps)
     and the editor scroll independently, the step's actions (`StepActions`) sit in the editor
@@ -959,7 +961,7 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   - `ReferenceField`, an ARIA combobox offering `{{` suggestions;
   - the plan check, data sets, run setup and `ChainRunPanel`.
 
-  `SeedPlanDialog` is opened from the quick page, the guided stage and the collection run panel.
+  `SeedPlanDialog` is opened from the guided stage and the collection run panel.
   All calls go through `services/requestChainClient.ts`.
 
 - **Run setup redesign (AP-040, 19.25.0, `specs/040-run-setup-launch-card`).** Frontend only. The Run
@@ -1170,6 +1172,42 @@ verified (runtime-verified coverage). No AI is involved in any count, percentage
   Recalculate and Export only once a snapshot exists, and carries one primary action at a time through `CoverageSteps`
   (specification and scenarios first, then a run).
 
+### Unified Performance tab (AP-047)
+
+One **Performance** tab replaced Quick Performance Test and Performance Plans (`specs/047-unified-performance-tab`). Plans, runs, reports
+and every stored value are unchanged; the journey is merged, not the model. The only backend addition is
+`POST /api/chain-plans/:planId/reselect`.
+
+- **The path.** `pages/PerformancePage.tsx` shows `components/performance/PerformanceHome` (source picker, saved plans, recent
+  runs, earlier runs) or, once a source is picked, `path/PerformancePath` with five steps: Source, Operations, Plan, Load, Run.
+  The pure rules (which step a source opens on, which steps can be selected, whether Next is available and why not, the state
+  transitions) are in `path/pathState.ts` and tested without rendering; `hooks/usePerformancePath.ts` is a reducer over them.
+  Nothing is persisted: the state lives in the mounted page, which `App` keeps mounted across "Back to start" and tab switches, and
+  `App` is told only whether a draft exists so the start screen can say so.
+- **Reusing the plan editor.** The editor's load/save/analysis state moved into `requestChain/useChainPlanSession` (a whole-plan
+  save with a revision check and a queue, local plan analysis on every edit, environments, runs, script, debug run, restore), and its
+  tab bodies into `ChainsPane`, `SetupPane` and `RunPane`. The Plan step hosts the chains, Load the configuration, Run the launch
+  card and the runs; nothing was rebuilt, so every rule of specs 037 to 040 still holds.
+- **Sources.** A specification uses the session's uploaded specification (`hooks/useQuickTest`, the existing
+  `/api/quick-performance` routes), the guided workflow is read for a summary only (`hooks/useGuidedWorkflowSummary`; workflows
+  are seeded whole), a collection uses `path/CollectionRequests`, and an empty plan is created at once. Every source ends in the
+  existing seed or create call; a plan is created when the engineer first moves past Operations.
+- **Reselect.** `backend/src/performance/chain/seed/reselectService.ts` applies a changed operation selection to a plan seeded from
+  a specification. It seeds the same specification again with the new selection and merges by operation key: removed operations'
+  steps go (a chain only seeding filled goes with them), newly selected ones are appended (a token step joins the Credentials chain,
+  a new one first), a step the engineer kept is never rewritten, a chain the engineer made stays, and ids come from the plan's own
+  counters, so none is reused. A merge that would remove a step whose content the engineer changed is refused with
+  `edited_steps_would_be_removed` and the step names until the request carries `confirmRemoveEdited`. `reset` rebuilds the chains
+  and drops the engineer's own. Data sets, load profile, run-wide thresholds, environment, name and runs are untouched; a threshold
+  on a removed step goes with it. Refusals (`plan_revision_conflict`, `plan_source_not_supported`, `plan_source_changed`) change
+  nothing. This narrows specs/037 FR-026 ("never re-derived") to the operations the engineer selects; a changed source alone still
+  changes nothing. What counts as edited is derived from fields the plan already stores (`isChainEdited`, `isEngineerChain`,
+  `seededOperationKeys`, `isPlanEdited` in `packages/shared-domain/src/requestChain.ts`).
+- **No new gate before a run.** The launch card names the target and lists every write beside Start, as before (AP-029, AP-040);
+  nothing is sent until Start (constitution XVII).
+- **Recent runs.** There is no cross-plan runs read, so the entry screen reads the runs of the ten most recently updated plans and
+  merges them by start time.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -1320,9 +1358,10 @@ any backend, contract or shared-domain change (its FR-025). Three mechanisms car
   attribute. Every component, already written against `brand`, therefore takes the workflow's
   hue without per-component code (FR-027, research D13).
 - **One workflow catalog.** `components/workflowCatalog.ts` is the single ordered list of the
-  five views: id, start-screen title, the unchanged tab label, description, icon and literal
-  Tailwind tone classes. It also holds the three artifact choices (OpenAPI → Guided Workflow and
-  Quick performance test; Postman → Import & Run; k6 → Run k6 Script). `App.tsx` builds its tabs
+  four workflows (AP-047 merged the two performance entries into **Performance**): id, start-screen
+  title, tab label, description, icon and literal Tailwind tone classes. It also holds the three
+  artifact choices (OpenAPI → Guided Workflow and Performance; Postman → Import & Run; k6 → Run k6
+  Script). `App.tsx` builds its tabs
   from it, and `EntryChooser`, `CommandPalette` and `HelpDialog` read it.
 - **A palette that reuses the existing navigation.** `App` owns the theme (`useTheme` was lifted
   out of `AppHeader`) and the palette's open state. One document `keydown` listener uses the pure

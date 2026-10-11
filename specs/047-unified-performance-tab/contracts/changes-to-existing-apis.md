@@ -15,7 +15,7 @@
 | Top-level view ids | `quick-performance`, `performance-plans` | `performance` |
 | Tab label | "Quick Performance Test", "Performance Plans" | "Performance" |
 | Start-screen cards | two | one |
-| Handover from other views | `onOpenChainPlan(planId)` opens Performance Plans | `onOpenPerformancePlan(planId)` opens Performance on the Plan step |
+| Handover from other views | `onOpenChainPlan(planId)` opens Performance Plans | `onOpenChainPlan(planId)` (name unchanged) opens Performance on the Plan step |
 | Test ids | `quick-performance-page`, `request-chain-plans-page`, `quick-performance-plan` | `performance-page`, `performance-path`, `performance-home`; plan-editor test ids kept |
 | Palette commands | one per old tab | one "Performance" |
 

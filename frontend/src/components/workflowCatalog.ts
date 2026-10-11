@@ -1,5 +1,5 @@
 /**
- * The five top-level views and the three artifacts that lead into them (AP-038, research.md D4):
+ * The four top-level workflows, the results views and the three artifacts that lead into them (AP-038, research.md D4):
  * the single source the start screen, the top tab menu, the command palette and the help dialog
  * all read, so a title, description or colour cannot drift between them. Presentation metadata
  * only — not domain data, so it lives here rather than in shared-domain.
@@ -11,13 +11,12 @@
 export type EntryChoice =
   | "guided-workflow"
   | "import-collection"
-  | "quick-performance"
-  | "performance-plans"
+  | "performance"
   | "user-script";
 
 /**
  * Views that present results rather than start a workflow (AP-046). They appear in the tab menu,
- * the command palette and the help dialog beside the five workflows, but not on the start screen:
+ * the command palette and the help dialog beside the four workflows, but not on the start screen:
  * a results view needs a specification and runs that a workflow produces first.
  */
 export type ResultsViewId = "coverage";
@@ -25,7 +24,7 @@ export type ResultsViewId = "coverage";
 /** Anything the top tab menu can show. */
 export type TopLevelView = EntryChoice | ResultsViewId;
 
-export type WorkflowIconName = "guided" | "import" | "quick" | "plans" | "script";
+export type WorkflowIconName = "guided" | "import" | "performance" | "script";
 export type ArtifactIconName = "openapi" | "postman" | "k6";
 
 export interface WorkflowTone {
@@ -91,29 +90,12 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     },
   },
   {
-    id: "quick-performance",
-    title: "Quick performance test",
-    tabLabel: "Quick Performance Test",
+    id: "performance",
+    title: "Performance",
+    tabLabel: "Performance",
     description:
-      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
-    icon: "quick",
-    recommended: false,
-    tone: {
-      marker: "bg-wf-quick",
-      tile: "border-wf-quick/60 bg-wf-quick/20 text-wf-quick",
-      action: "text-wf-quick",
-      border: "hover:border-wf-quick",
-      edgeTop: "border-t-wf-quick",
-      edgeLeft: "border-l-wf-quick",
-    },
-  },
-  {
-    id: "performance-plans",
-    title: "Performance plans",
-    tabLabel: "Performance Plans",
-    description:
-      "Design multi-step k6 journeys that pass data between requests and verify each response.",
-    icon: "plans",
+      "Turn a specification, a guided workflow or a collection into a k6 load test: pick a source, review the plan, set the load and run.",
+    icon: "performance",
     recommended: false,
     tone: {
       marker: "bg-wf-plans",
@@ -183,7 +165,7 @@ export const ARTIFACT_CHOICES: readonly ArtifactChoice[] = [
     label: "OpenAPI specification",
     phrase: "an OpenAPI specification",
     icon: "openapi",
-    workflows: ["guided-workflow", "quick-performance"],
+    workflows: ["guided-workflow", "performance"],
   },
   {
     id: "postman",

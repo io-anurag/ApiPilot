@@ -17,7 +17,7 @@ import {
 } from "./components/paletteCommands";
 import { Skeleton } from "./components/Skeleton";
 import { toImportPreload, type ImportPreload } from "./services/importPreload";
-import type { OpenChainPlanRequest } from "./pages/RequestChainPlansPage";
+import type { OpenPerformancePlanRequest } from "./pages/PerformancePage";
 import { ActiveViewContext } from "./components/requestChain/activeView";
 import { useCoverageEntry } from "./hooks/useCoverageEntry";
 import { useTheme } from "./hooks/useTheme";
@@ -31,11 +31,8 @@ const TestGenerationWorkflowPage = lazy(() =>
 const ExternalCollectionsPage = lazy(() =>
   import("./pages/ExternalCollectionsPage").then((m) => ({ default: m.ExternalCollectionsPage })),
 );
-const QuickPerformancePage = lazy(() =>
-  import("./pages/QuickPerformancePage").then((m) => ({ default: m.QuickPerformancePage })),
-);
-const RequestChainPlansPage = lazy(() =>
-  import("./pages/RequestChainPlansPage").then((m) => ({ default: m.RequestChainPlansPage })),
+const PerformancePage = lazy(() =>
+  import("./pages/PerformancePage").then((m) => ({ default: m.PerformancePage })),
 );
 const UserScriptPage = lazy(() =>
   import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
@@ -66,7 +63,8 @@ type ActiveTab = TopLevelView;
 /** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
  * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
  * adds the quick performance test as the third, AP-034 Run k6 Script, and AP-037 request-chain
- * Performance Plans. AP-038 reads labels and colours from the shared workflow catalog. */
+ * Performance Plans; AP-047 merges the last two into one Performance view. AP-038 reads labels and
+ * colours from the shared workflow catalog. */
 const TABS: Array<TabItem<ActiveTab>> = [
   ...WORKFLOWS.map((workflow) => ({
     id: workflow.id as ActiveTab,
@@ -105,17 +103,19 @@ export function App() {
   // Same idea for "Import & Run Collection": once reached it stays mounted, so "Back to start"
   // keeps its in-memory state (selection, per-run order, an in-progress run's view).
   const [importCollectionMounted, setImportCollectionMounted] = useState(false);
-  // AP-032: the quick performance test, like Import & Run, stays mounted once reached so "Back to
-  // start" keeps its plan on screen (FR-025); its state also lives on the server for the session.
-  const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
+  // AP-047: Performance (formerly the quick performance test and Performance Plans), like Import &
+  // Run, stays mounted once reached so "Back to start" and tab switches keep its draft, open plan, step
+  // and run progress (FR-021); the uploaded specification and the plans also live on the server.
+  const [performanceMounted, setPerformanceMounted] = useState(false);
+  // Whether Performance holds an unfinished test with no plan yet, so the start screen can say so (AP-047 FR-019).
+  const [performanceDraft, setPerformanceDraft] = useState(false);
   // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
   const [userScriptMounted, setUserScriptMounted] = useState(false);
   // AP-046: the Coverage view stays mounted once reached, so its filters and sort survive switching
   // views (they reset on a full page refresh).
   const [coverageMounted, setCoverageMounted] = useState(false);
-  // AP-037: request-chain plans stay mounted once reached; a seeding entry point opens one by id.
-  const [performancePlansMounted, setPerformancePlansMounted] = useState(false);
-  const [openChainPlanRequest, setOpenChainPlanRequest] = useState<OpenChainPlanRequest | null>(null);
+  // AP-037: a seeding entry point opens a plan by id; since AP-047 it opens in Performance, on the Plan step.
+  const [openChainPlanRequest, setOpenChainPlanRequest] = useState<OpenPerformancePlanRequest | null>(null);
   const openChainPlanNonce = useRef(0);
   // AP-036: mounted when a collection's run panel hands its selection over, then kept like the others.
   const [importPreload, setImportPreload] = useState<ImportPreload | null>(null);
@@ -159,22 +159,21 @@ export function App() {
     const mounters: Record<ActiveTab, (mounted: boolean) => void> = {
       "guided-workflow": setGuidedWorkflowMounted,
       "import-collection": setImportCollectionMounted,
-      "quick-performance": setQuickPerformanceMounted,
+      performance: setPerformanceMounted,
       "user-script": setUserScriptMounted,
-      "performance-plans": setPerformancePlansMounted,
       coverage: setCoverageMounted,
     };
     mounters[view](true);
   }
 
-  /** AP-037 FR-020: an entry point seeded a request-chain plan; show it in Performance Plans. */
+  /** AP-037 FR-020: an entry point seeded a request-chain plan; show it in Performance, on its Plan step. */
   function handleOpenChainPlan(planId: string) {
     openChainPlanNonce.current += 1;
     setOpenChainPlanRequest({ planId, nonce: openChainPlanNonce.current });
     setStarted(true);
-    setActiveTab("performance-plans");
+    setActiveTab("performance");
     setTabsVisible(true);
-    setPerformancePlansMounted(true);
+    setPerformanceMounted(true);
   }
 
   /** AP-046: open Coverage from a contextual link (scenario review, run results) or the palette. */
@@ -275,7 +274,7 @@ export function App() {
           </LazyView>
         ) : (
           <ActiveViewContext.Provider value={started ? activeTab : "start"}>
-            {!started && <EntryChooser onSelect={handleSelect} coverage={coverageEntry} onOpenCoverage={handleOpenCoverage} />}
+            {!started && <EntryChooser onSelect={handleSelect} coverage={coverageEntry} onOpenCoverage={handleOpenCoverage} performanceDraft={performanceDraft} />}
             {started && tabsVisible && (
               <Tabs
                 tabs={TABS}
@@ -320,17 +319,10 @@ export function App() {
                 </LazyView>
               </div>
             )}
-            {quickPerformanceMounted && (
-              <div hidden={!started || activeTab !== "quick-performance"}>
+            {performanceMounted && (
+              <div hidden={!started || activeTab !== "performance"}>
                 <LazyView>
-                  <QuickPerformancePage onExit={handleExitToStart} onOpenChainPlan={handleOpenChainPlan} />
-                </LazyView>
-              </div>
-            )}
-            {performancePlansMounted && (
-              <div hidden={!started || activeTab !== "performance-plans"}>
-                <LazyView>
-                  <RequestChainPlansPage onExit={handleExitToStart} openRequest={openChainPlanRequest} />
+                  <PerformancePage onExit={handleExitToStart} openRequest={openChainPlanRequest} onDraftChange={setPerformanceDraft} />
                 </LazyView>
               </div>
             )}

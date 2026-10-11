@@ -13,8 +13,8 @@ Only what both backend and frontend need (CLAUDE.md §4).
 ```text
 ReselectMode            = "merge" | "reset"
 ReselectRequest         = { revision: number; mode: ReselectMode; selectedOperationKeys: string[]; confirmRemoveEdited?: boolean }
-ReselectEditedRemoval   = { chainId: string; operationKey: string; reasons: ("step-changed" | "step-added")[] }
-ReselectOutcome         = { view: ChainPlanView; added: string[]; removed: string[]; keptEdited: string[] }
+ReselectEditedRemoval   = { chainId: string; stepId: string; stepName: string; operationKey: string; reasons: "step-changed"[] }
+ReselectOutcome         = ChainPlanView & { added: string[]; removed: string[]; keptEdited: string[] }   // the PUT /:planId response shape plus the three lists
 ```
 
 `ReselectEditedRemoval` is what the "this would remove edited steps" refusal lists (FR-016).

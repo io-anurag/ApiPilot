@@ -23,7 +23,7 @@ describe("EntryChooser (AP-038 US1)", () => {
 
     expect(names("OpenAPI specification")).toEqual([
       "Guided Workflow, for an OpenAPI specification",
-      "Quick performance test, for an OpenAPI specification",
+      "Performance, for an OpenAPI specification",
     ]);
     expect(names("Postman collection")).toEqual(["Import & Run Collection, for a Postman collection"]);
     expect(names("k6 script")).toEqual(["Run k6 Script, for a k6 script"]);
@@ -33,20 +33,20 @@ describe("EntryChooser (AP-038 US1)", () => {
     const onSelect = vi.fn();
     render(<EntryChooser onSelect={onSelect} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Quick performance test, for an OpenAPI specification" }));
-    fireEvent.click(screen.getByRole("button", { name: "Quick performance test" }));
+    fireEvent.click(screen.getByRole("button", { name: "Performance, for an OpenAPI specification" }));
+    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
     fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection, for a Postman collection" }));
     fireEvent.click(screen.getByRole("button", { name: "Run k6 Script, for a k6 script" }));
 
     expect(onSelect.mock.calls).toEqual([
-      ["quick-performance"],
-      ["quick-performance"],
+      ["performance"],
+      ["performance"],
       ["import-collection"],
       ["user-script"],
     ]);
   });
 
-  it("shows the five cards in tab order, each named by its title and described by its sentence (FR-011)", () => {
+  it("shows the four cards in tab order, each named by its title and described by its sentence (FR-011)", () => {
     const onSelect = vi.fn();
     render(<EntryChooser onSelect={onSelect} />);
 
@@ -56,6 +56,15 @@ describe("EntryChooser (AP-038 US1)", () => {
       fireEvent.click(card);
     }
     expect(onSelect.mock.calls.map(([id]) => id)).toEqual(WORKFLOWS.map((w) => w.id));
+  });
+
+  it("says in text on the Performance card that a draft test is in progress, and only then (AP-047 FR-019)", () => {
+    const { rerender } = render(<EntryChooser onSelect={vi.fn()} />);
+    expect(screen.queryByText("Draft in progress")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Performance" })).not.toHaveAccessibleDescription(/Draft in progress/);
+    rerender(<EntryChooser onSelect={vi.fn()} performanceDraft />);
+    expect(screen.getByText("Draft in progress")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Performance" })).toHaveAccessibleDescription(/Draft in progress/);
   });
 
   it("marks only the guided workflow as recommended, in text", () => {

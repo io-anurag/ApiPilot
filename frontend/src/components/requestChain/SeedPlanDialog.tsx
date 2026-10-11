@@ -1,10 +1,9 @@
-import { useEffect, useId, useState } from "react";
-import type { Environment } from "@apipilot/shared-domain";
-import { fetchEnvironments } from "../../services/environmentsClient";
+import { useId, useState } from "react";
 import { seedPlan, type SeedSourceInput } from "../../services/requestChainClient";
 import { BUTTON_STYLES } from "../controlStyles";
 import { Dialog } from "../Dialog";
 import { ErrorState } from "../ErrorState";
+import { EnvironmentForCredentials } from "../performance/EnvironmentForCredentials";
 
 const SOURCE_TEXT: Record<SeedSourceInput["kind"], string> = {
   specification: "the uploaded specification: one step per operation, from its positive scenario",
@@ -26,16 +25,9 @@ export function SeedPlanDialog({
 }: Readonly<{ source: SeedSourceInput; defaultName: string; onSeeded: (planId: string) => void; onCancel: () => void }>) {
   const id = useId();
   const [name, setName] = useState(defaultName);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
   const [environmentId, setEnvironmentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void fetchEnvironments().then((result) => {
-      if (result.ok) setEnvironments(result.environments);
-    });
-  }, []);
 
   async function handleCreate() {
     setBusy(true);
@@ -65,20 +57,7 @@ export function SeedPlanDialog({
           </label>
           <input id={`${id}-name`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={name} onChange={(event) => setName(event.target.value)} />
         </div>
-        <div className="space-y-1">
-          <label htmlFor={`${id}-environment`} className="text-sm font-medium">
-            Environment for credentials (optional)
-          </label>
-          <select id={`${id}-environment`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={environmentId} onChange={(event) => setEnvironmentId(event.target.value)}>
-            <option value="">None: literal credentials are not kept</option>
-            {environments.map((environment) => (
-              <option key={environment.id} value={environment.id}>
-                {environment.name} ({environment.tier})
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted">A credential written as text in the source is moved into this environment as a secret value. Without one, it is dropped and listed so you can set it.</p>
-        </div>
+        <EnvironmentForCredentials environmentId={environmentId} onChange={setEnvironmentId} />
         {error && <ErrorState message={error} testId="seed-plan-error" />}
         <div className="flex justify-end gap-2">
           <button type="button" className={BUTTON_STYLES.secondary} onClick={onCancel}>

@@ -142,7 +142,7 @@ the retired quick plan as "Quick performance test".
 **Decision**: One entry `performance` (tab label "Performance") reusing the plans tone (`wf-plans`). Remove the quick
 entry and its token only after confirming nothing else reads `wf-quick` (the grep found only the catalogue and
 the two token blocks). Keep the legacy label text, because it describes historical runs. `onOpenChainPlan` stays as
-the handover from other views, renamed to `onOpenPerformancePlan`, and now opens the unified tab on the Plan step
+the handover from other views, keeping its name so no consumer changes, and now opens the unified tab on the Plan step
 (spec 037 FR-020 intent preserved). The "spec path hand-over" from the old Quick page disappears with the page.
 
 ## R11. Backend quick-performance routes
@@ -168,3 +168,16 @@ Change-operations panel reuses the same component. Counts always show chosen of 
 `ChainSeedEntryPoints.test.tsx`, `CountedOperationList.test.tsx`, `LegacyRunsView.test.tsx`,
 `WriteOperationSummary.test.tsx` and `performanceFixtures.ts` reference the old ids or pages. They are updated, not
 deleted; any test that is removed is replaced by one asserting the same behaviour through the unified tab.
+
+### R10 inventory (T002, 2026-10-11)
+
+References to the old ids and pages before the merge: `App.tsx`, `EntryIllustration.tsx`, `ExternalCollectionRunPanel.tsx`,
+`CountedOperationList.tsx` (comment only), `PerformanceTestingStage.tsx`, `SeededPlans.tsx`, `sectionCatalog.ts`,
+`workflowCatalog.ts`, `index.css`, `ExternalCollectionsPage.tsx`, `QuickPerformancePage.tsx`, `RequestChainPlansPage.tsx`,
+`TestGenerationWorkflowPage.tsx`, `legacyRunsClient.ts` (historical label, kept), `quickPerformanceClient.ts` (kept), eleven
+test files, `packages/shared-domain/src/performance.ts` (comments), `docs/USER_MANUAL.md`, `docs/architecture.md`.
+`--color-wf-quick` was read only by `workflowCatalog.ts` and defined in `index.css` (light and dark); both are removed.
+The merge removed `QuickPerformancePage`, `RequestChainPlansPage`, `ChainPlanEditor` and `PlansIntro`. The editor's state and tab bodies
+live on in `useChainPlanSession`, `ChainsPane`, `SetupPane` and `RunPane`, and its 19 tests became `PerformancePlanEditing.test.tsx`
+(pending bar and Runs-tab label assertions are replaced by the Run step's launch card, which carries the same blockers).
+

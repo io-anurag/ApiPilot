@@ -12,6 +12,7 @@ import { addDataSet, previewDataSet, removeDataSet, replaceDataSetFile, runCopyW
 import { generateChainScript } from "../performance/chain/generateScript";
 import { restoreRun } from "../performance/chain/restore";
 import { parseSeedSource, seedPlan } from "../performance/chain/seed/seedService";
+import { reselectPlan } from "../performance/chain/seed/reselectService";
 import { chainRunSnapshot } from "../performance/chain/runSnapshot";
 import { ChainPlanNotFoundError, ChainRunInProgressError, DataSetNotFoundError, DataSetTooLargeError, InvalidChainPlanError, PerformanceRunNotFoundError, PlanHasBlockersError } from "../performance/errors";
 import { getChainLiveSnapshot, parseLiveCursor } from "../performance/live/liveRunService";
@@ -216,6 +217,23 @@ export function createChainPlansRouter(deps: PerformanceTestingDependencies): Ro
         durationMs: Date.now() - saveStarted,
       });
       res.status(200).json({ ...view, movedCredentials });
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  // AP-047: apply a changed operation selection to a plan seeded from a specification (contracts/reselect-api.md).
+  router.post(
+    `${BASE}/:planId/reselect`,
+    chainRoute((req, res, startedAt) => {
+      const outcome = reselectPlan(planIdOf(req.params.planId), req.body, deps.now().toISOString());
+      logger.info("chain_plan_reselected", {
+        planId: outcome.plan.id,
+        mode: (req.body as { mode?: string } | undefined)?.mode,
+        addedCount: outcome.added.length,
+        removedCount: outcome.removed.length,
+        keptEditedCount: outcome.keptEdited.length,
+      });
+      res.status(200).json(outcome);
       logSucceeded(req, startedAt, 200);
     }),
   );

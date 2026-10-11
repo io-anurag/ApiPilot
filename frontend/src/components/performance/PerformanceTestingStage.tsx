@@ -4,7 +4,7 @@ import { SeedFromSource } from "../requestChain/SeededPlans";
  * The Performance Testing stage (AP-029, specs/031-k6-performance-testing). Since AP-037 phase two
  * (specs/037-request-chain-performance US5, FR-036) the guided plan is retired: the stage seeds a
  * request-chain plan from the approved workflows, or opens one seeded before, and the plan is built,
- * run and reported in Performance Plans.
+ * run and reported in Performance.
  */
 export function PerformanceTestingStage({ onOpenChainPlan }: Readonly<{ onOpenChainPlan: (planId: string) => void }>) {
   return (

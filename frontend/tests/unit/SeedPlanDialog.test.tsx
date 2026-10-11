@@ -32,11 +32,11 @@ describe("SeedPlanDialog", () => {
   it("shows why seeding failed", async () => {
     stubFetch({
       ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [] }],
-      ["POST /api/chain-plans/seed"]: () => [404, { error: "quick_test_not_found", message: "Upload a specification in Quick performance test first." }],
+      ["POST /api/chain-plans/seed"]: () => [404, { error: "quick_test_not_found", message: "Upload a specification in Performance first." }],
     });
     render(<SeedPlanDialog source={{ kind: "specification" }} defaultName="x" onSeeded={() => undefined} onCancel={() => undefined} />);
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
-    expect(await screen.findByTestId("seed-plan-error")).toHaveTextContent("Upload a specification in Quick performance test first.");
+    expect(await screen.findByTestId("seed-plan-error")).toHaveTextContent("Upload a specification in Performance first.");
   });
 });
 

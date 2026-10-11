@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeChainPlan,
   chainRunOrder,
+  isChainEdited,
+  isEngineerChain,
+  isPlanEdited,
   namesAvailableAt,
   parseReferences,
+  seededOperationKeys,
   SUPPORTED_DYNAMIC_VARIABLES,
   summarizeChainWrites,
   type Chain,
@@ -290,5 +294,43 @@ describe("summarizeChainWrites", () => {
       ["s2", "creates", "Lifecycle"],
       ["s4", "creates", "Lifecycle"],
     ]);
+  });
+});
+
+/** AP-047 (specs/047-unified-performance-tab research R3): what counts as an edit to a seeded plan. */
+describe("edit state of a seeded plan", () => {
+  const seeded = (id: string, key: string, overrides: Partial<ChainStep> = {}) =>
+    step({ id, source: { kind: "operation", operationKey: key, label: key, passwordFields: [] }, seedDigest: "d", ...overrides });
+  const chain = (id: string, steps: ChainStep[]): Chain => ({ id, name: id, steps });
+
+  it("a seeded chain is edited when a step changed or the engineer added a step to it", () => {
+    expect(isChainEdited(chain("c1", [seeded("s1", "GET /a")]))).toBe(false);
+    expect(isChainEdited(chain("c1", [seeded("s1", "GET /a", { changed: true })]))).toBe(true);
+    expect(isChainEdited(chain("c1", [seeded("s1", "GET /a"), step({ id: "s2" })]))).toBe(true);
+  });
+
+  it("a chain with no seeded step is the engineer's own, including an empty one", () => {
+    expect(isEngineerChain(chain("c2", [step({ id: "s2" })]))).toBe(true);
+    expect(isEngineerChain(chain("c2", []))).toBe(true);
+    expect(isEngineerChain(chain("c1", [seeded("s1", "GET /a")]))).toBe(false);
+  });
+
+  it("lists the seeded operation keys once each, in plan order, leaving out a security scheme's token step", () => {
+    const keys = seededOperationKeys({
+      chains: [
+        chain("c1", [seeded("s1", "securityScheme:oauth"), seeded("s2", "POST /login")]),
+        chain("c2", [seeded("s3", "GET /a"), step({ id: "s4" })]),
+        chain("c3", [seeded("s5", "GET /a")]),
+      ],
+    });
+    expect(keys).toEqual(["POST /login", "GET /a"]);
+  });
+
+  it("the plan is edited by a changed step, an engineer chain or reordered seeded chains, and not otherwise", () => {
+    const untouched = { chains: [chain("c1", [seeded("s1", "GET /a")]), chain("c2", [seeded("s2", "GET /b")])] };
+    expect(isPlanEdited(untouched)).toBe(false);
+    expect(isPlanEdited({ chains: [chain("c1", [seeded("s1", "GET /a", { changed: true })])] })).toBe(true);
+    expect(isPlanEdited({ chains: [...untouched.chains, chain("c3", [step({ id: "s3" })])] })).toBe(true);
+    expect(isPlanEdited({ chains: [untouched.chains[1], untouched.chains[0]] })).toBe(true);
   });
 });

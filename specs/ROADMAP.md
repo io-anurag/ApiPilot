@@ -3592,3 +3592,40 @@ Implementation
       Recalculate and Export until a snapshot exists, and shows one primary action at a time through a two-step path. The start screen's workflow colours were made visible in both themes (solid colour edge on each card, 20% tinted icon tiles with a 60% border, elevated card surface, stronger control borders). Mock:
       `specs/046-api-test-coverage-intelligence/mock-placement.html`. Not exercised: a real browser session in light and dark.
     - Version bumped to 19.41.0 (root, backend, frontend, shared-domain).
+
+77. **AP-047 Unified Performance tab; version 19.42.0 (2026-10-11).**
+    - Quick Performance Test and Performance Plans are one **Performance** tab (one catalogue entry, one start-screen card). The
+      entry screen shows four sources (OpenAPI specification, guided workflow, Postman collection, empty plan) with the saved plans,
+      the recent runs and the earlier runs of the retired plan kinds. A source opens a five-step path, Source, Operations (named
+      Workflows or Requests for those sources, skipped for an empty plan), Plan, Load and Run, which hosts the existing plan editor's
+      parts (chains, configuration, launch card, results) instead of rebuilding them: the editor's state moved into
+      `useChainPlanSession` and its tab bodies into `ChainsPane`, `SetupPane` and `RunPane`. A specification opens on Operations when
+      one is uploaded already and on Source when not; an opened plan lands on Plan with every step reachable; Next states why it is
+      unavailable; Back and tab switches keep everything. An unfinished test with no plan is kept as a draft (Resume or Discard on the
+      entry screen, a text badge on the start card) and replacing it asks first. Uploading a different specification asks first and
+      keeps plans, runs and reports.
+    - **Change operations** and **Reset to seed** for a plan seeded from a specification: `POST /api/chain-plans/:planId/reselect`
+      (the only backend addition; additive, no stored-data change) seeds the same specification again with the new selection and
+      merges by operation key, keeping the engineer's edits, never rewriting a kept step, appending new chains, and using the plan's
+      own id counters. A merge that would remove a step the engineer changed is refused with the step names until confirmed; reset
+      rebuilds the chains and keeps the name, data sets, load profile, run-wide thresholds, environment and runs. Refused, with
+      nothing changed, for a stale revision, a plan not seeded from a specification, and a specification that is no longer the one
+      the plan was seeded from. This narrows specs/037 FR-026 to the operations the engineer selects.
+    - Spec, plan, tasks, contract and mock: `specs/047-unified-performance-tab/` (the clarifications record four decisions: the Run
+      step keeps the launch card's named target and listed writes with no extra confirmation gate; the guided workflow is seeded
+      whole; one additive backend operation; reset keeps data sets, load profile and run-wide thresholds). Documentation:
+      `docs/USER_MANUAL.md` section 5, `docs/architecture.md` "Unified Performance tab (AP-047)".
+    - Validation (2026-10-11): `npm run lint` and `npm run build` pass; `npm test` passes (388 files, 3,287 tests, 10 skipped on the
+      first full run; a second run had one timing test in AP-046's GapsTable miss its one-second budget under load and pass alone).
+      The baseline before the change was 3,158 tests passing. 24 integration tests cover reselect, 11 unit tests its pure core, and
+      the path, entry screen, sources, drafts and plan editing have their own component tests (the plan editor's 19 tests were
+      moved onto the path). Live browser session (headless Chrome driven over the DevTools protocol against the real backend):
+      start screen with one Performance card, entry screen, upload, operations with a filter, plan creation, plan editing, Change
+      operations, Load, Run (launch card), back to the plans, in light and dark and at 390 px. It found and fixed two phone-width
+      defects: the plans table's `sr-only` Actions header escaped its scroll container and made the page scroll sideways (the old
+      Plans page had the same latent defect), and the chain workbench grid grew past the screen below `lg`. Not exercised: a real run
+      (no k6 was started, so the run, progress and result states are covered by the existing run-panel tests only), the guided-workflow
+      and collection sources against the real backend, the App-level hand-over from Import & Run or the guided workflow into
+      Performance, screen readers, and the usability target SC-009. Pre-existing and not changed: at phone width the top tab menu and
+      the command palette are wider than the screen.
+    - Version bumped to 19.42.0 (root, backend, frontend, shared-domain).

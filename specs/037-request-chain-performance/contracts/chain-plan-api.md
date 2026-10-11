@@ -27,6 +27,10 @@ and a think time of 1,000 ms.
 - `422 invalid_plan { field: "name" }`.
 - `409 plan_limit_exceeded` (50 plans per session).
 
+### `POST /api/chain-plans/:planId/reselect` (AP-047)
+Changes the operation selection of a plan seeded from a specification, keeping the engineer's edits or rebuilding
+the chains. Specified in `specs/047-unified-performance-tab/contracts/reselect-api.md`.
+
 ### `POST /api/chain-plans/seed`
 Body:
 ```json

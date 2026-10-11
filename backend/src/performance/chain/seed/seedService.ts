@@ -58,7 +58,7 @@ function selectedKeysOf(apiModel: ApiModel, keys: readonly string[] | undefined)
 function readSource(source: SeedSourceInput, name: string, now: string): Omit<SeedInput, "environment"> {
   if (source.kind === "specification") {
     const test = getQuickTest();
-    if (!test) throw new PlanSourceUnavailableError(404, "quick_test_not_found", "Upload a specification in Quick performance test first.");
+    if (!test) throw new PlanSourceUnavailableError(404, "quick_test_not_found", "Upload a specification in Performance first.");
     const selectedOperationKeys = selectedKeysOf(test.apiModel, source.selectedOperationKeys);
     return seedFromSpecification({ ...contextFromQuickTest(test), selectedOperationKeys }, test.specification.filename, name, now);
   }

@@ -23,10 +23,10 @@ Postman, received from a teammate, or hand-authored — you can instead import a
 directly, without uploading an OpenAPI specification at all. See
 [section 4](#4-importing-and-running-your-own-postman-collection).
 
-If you want to know how an API behaves under load, build a **performance plan**: chains of
-requests you write and edit, as in Postman or JMeter, run with your own k6. A plan can start
-empty, or be created once from an uploaded specification (the **Quick performance test**,
-[section 5](#5-quick-performance-test)), from the guided workflow's approved workflows
+If you want to know how an API behaves under load, use **Performance**
+([section 5](#5-performance)): build a **performance plan**, chains of requests you write and
+edit, as in Postman or JMeter, run with your own k6. A plan can start empty, or be created once
+from an uploaded specification, from the guided workflow's approved workflows
 ([section 3.11](#311-performance-testing-optional)), or from the requests of an imported
 collection ([section 5a](#5a-performance-test-from-a-postman-collection)). After that the plan is
 yours. See [section 5b](#5b-performance-plans-request-chains).
@@ -76,32 +76,31 @@ the kind of input you may already hold and the workflows that accept it:
 
 | You have | Workflows offered |
 |---|---|
-| An OpenAPI specification | Guided Workflow, Quick performance test |
+| An OpenAPI specification | Guided Workflow, Performance |
 | A Postman collection | Import & Run Collection |
 | A k6 script | Run k6 Script |
 
-Each workflow name there is a button. Under **Launch a test session**, the five workflows also
+Each workflow name there is a button. Under **Launch a test session**, the four workflows also
 appear as cards, with **Guided Workflow** marked **Recommended**. A workflow opens the same way
 whether you choose it from an artifact box, its card, its tab or the command palette. Each
 workflow keeps one colour everywhere it appears (cards, tabs, palette), always next to its name:
-indigo for Guided Workflow, fuchsia for Import & Run Collection, blue for the Quick performance
-test, violet for Performance plans and pink for Run k6 Script. While a workflow is open, its pages take on its colour throughout: buttons, the
+indigo for Guided Workflow, fuchsia for Import & Run Collection, violet for Performance and pink
+for Run k6 Script. While a workflow is open, its pages take on its colour throughout: buttons, the
 active tab, the progress tracker and highlights. The start screen keeps ApiPilot's teal. These
 colours are never used for statuses: green, amber, red and cyan always mean success, warning, failure and information.
 Paragraph text is justified, evenly spread between its margins.
 
 ## 3. The guided workflow
 
-The start screen offers five paths: **Guided Workflow** (described in this section, including
+The start screen offers four paths: **Guided Workflow** (described in this section, including
 the optional performance test in section 3.11),
 **Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)),
-**Quick performance test** (described in [section 5](#5-quick-performance-test)),
-**Performance plans** (described in [section 5b](#5b-performance-plans-request-chains)) and
+**Performance** (described in [section 5](#5-performance)) and
 **Run k6 Script** (described in [section 6](#6-run-k6-script)).
 While the guided workflow is in progress the tab bar is hidden so you can finish it; use
 **← Back to start** to return to the start screen at any time. Nothing is discarded —
 choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
-are in **Import & Run Collection**, the **Quick performance test**, **Performance Plans** or **Run k6 Script**, each of which has its own
+are in **Import & Run Collection**, **Performance** or **Run k6 Script**, each of which has its own
 **← Back to start** too, and switching between the views never discards any one's state.
 
 Within the guided workflow, every step below is reached in this fixed order, and a
@@ -353,13 +352,13 @@ test** on the Execution notice, or the **Performance Testing** chip. Choose **Cr
 plan** to create a performance plan from the workflows you approved: one chain per workflow, with
 each workflow variable extracted by the step that produces it and passed as `{{name}}` to the steps
 that use it, then one single-step chain for each other operation in the API review selection.
-Credential requests become **Once before load** steps. The plan opens in **Performance Plans**,
+Credential requests become **Once before load** steps. The plan opens in **Performance**,
 where you edit, run and report it ([section 5b](#5b-performance-plans-request-chains)); it is never
 re-derived from the workflow.
 
 The stage also lists the plans already created from the guided workflow, each with **Open**. Runs
 recorded from the guided plan this stage held before version 19.19.0 are listed read only under
-**Earlier runs** in Performance Plans.
+**Earlier runs** in Performance.
 
 ## 4. Importing and running your own Postman collection
 
@@ -470,7 +469,7 @@ it through the hand-off (section 3.10).
 
 ### 4.4 Running it
 
-On the **Run** step, the card on the right works like a performance plan's Run setup. At the top it
+On the **Run** step, the card on the right works like the launch card of Performance's Run step. At the top it
 says whether a run can start (**Ready to run on NAME (tier)**, **Run in progress** or **Not ready to
 run yet**, with the reason), has **Start run**, and gives the last run in one line with **View results**.
 Below are the run's facts (requests selected, order, tier, delay between requests), the **Hosts** the
@@ -479,7 +478,7 @@ Review requests), and a **Writes** warning that counts the selected requests tha
 or delete data, by method, with each one listed; if there are none it says the run only reads data. A
 collection you have not confirmed yet says it will ask before its first run. Under that, **Load test
 instead** has **Create request-chain plan**, which turns the selected requests into a plan to open in
-Performance Plans, and lists the plans already made from collections; it does not run anything. Starting
+Performance, and lists the plans already made from collections; it does not run anything. Starting
 is always your click: nothing is sent before it, and the results open on the next step.
 
 Before clicking **Start run**, you can optionally use the run panel's checklist to select
@@ -614,39 +613,95 @@ Treat the result as a starting point for your own investigation.
   request no longer exists, your edit is discarded rather than silently reapplied to a
   different request.
 
-## 5. Quick performance test
+## 5. Performance
 
-Choose **Quick performance test** on the start screen (or its tab, once the tab bar is visible)
-to load-test an API straight from its OpenAPI specification. It skips API Review, scenario
-review, AI enhancement, workflow review and Postman generation, and it never reads or changes a
-guided workflow you have in progress; both can exist side by side.
+Choose **Performance** on the start screen (or its tab, once the tab bar is visible) to load-test an
+API. One tab covers the whole journey, from a source to a running k6 test. It replaces the separate
+**Quick Performance Test** and **Performance Plans** tabs of earlier versions; your plans, runs and
+reports are unchanged. Nothing is sent to any system until you press **Start** on the last step.
 
-**Upload.** Upload one OpenAPI 3.x YAML file. The same checks as the guided workflow apply
-(size limit, YAML, OpenAPI version), with the same error messages, and nothing is created when
-the file is rejected. ApiPilot then generates positive scenarios only, with its fixed rules and
-no AI.
+**The entry screen.** It shows four sources side by side with your work:
+- **OpenAPI specification**: one step for each operation you choose, from its generated positive
+  scenario.
+- **Guided workflow**: one chain for each approved workflow, then one step for each other operation.
+- **Postman collection**: the requests you select from a collection imported in Import & Run
+  Collection, in its own run order.
+- **Empty plan**: you write every step yourself.
 
-**Choosing operations.** Every analyzed operation is listed with a checkbox, all checked at first.
-Uncheck the ones to leave out, or use **Select all** to clear or restore the whole list. The plan
-is created from the checked operations only, and **Create request-chain plan** is unavailable
-while none is checked. Credential requests the checked operations need are still added.
+Below the sources are your saved plans (**Open**, **Duplicate** and **Delete**; deleting a plan keeps its
+runs and reports), the **Recent runs** of your most recently updated plans (the last ten plans are
+read), and **Earlier runs**, runs recorded before request-chain plans, read only. With no plan yet, only
+the sources and an introduction are shown.
 
-**Creating a plan.** Choose **Create request-chain plan** to create a performance plan from the
-specification: one single-step chain per chosen operation, from its positive scenario, with credential
-requests (an OAuth2 token, a login) as **Once before load** steps. Operations with no positive
-scenario are listed in the plan's seeding report. Because no one reviewed these generated
-requests, read each step, and the write steps listed at the run trigger, before you run. The plan
-opens in **Performance Plans** ([section 5b](#5b-performance-plans-request-chains)). The page also
-lists the plans already created from a specification, each with **Open**.
+**Five steps.** Picking a source opens a path of five steps: **Source**, **Operations**, **Plan**,
+**Load** and **Run**. The step you are on is marked, steps you have finished are ticked, and any step you
+have reached can be selected again. **Next** is unavailable until the step is complete, and the reason is
+written beside it; **Back** moves without discarding anything.
+- A specification opens on **Operations** when one is already uploaded in this session (**Source** stays
+  one click away), and on **Source** with the upload ready when it is not.
+- The guided workflow and a collection open on **Workflows** and **Requests**.
+- An empty plan is created at once and opens on **Plan**; **Operations** is shown as skipped.
+- A saved plan you open lands on **Plan**, and every step can be selected, so you can go straight to
+  **Load** or **Run**.
 
-**Starting again.** **New specification** replaces the current quick test after you confirm.
-Plans already created from it, runs and reports are kept. **← Back to start** returns to the
-start screen and keeps the quick test for your session. The quick test lives in memory: a backend
-restart loses it (plans, runs, reports and environments are kept), and you upload the
-specification again.
+**1. Source.** Upload one OpenAPI 3.x YAML file. The same checks as the guided workflow apply (size
+limit, YAML, OpenAPI version), with the same error messages, and nothing is created when the file is
+rejected. The specification you uploaded earlier in the session is offered for reuse with its file name
+and operation count. **Upload a different specification** asks first: plans already created from the old
+one, runs and reports are kept, and the selection starts again from the new specification. Once a plan
+exists, the source is fixed and this step only shows what the plan was seeded from; to use another source,
+start a new test from the entry screen.
 
-Before version 19.19.0 the quick test held its own plan and runs. Those runs are listed read only
-under **Earlier runs** in Performance Plans.
+**2. Operations, Workflows or Requests.**
+- For a specification, every analyzed operation is listed with a checkbox, all checked at first. **Filter**
+  by path, operation ID or method, **Select all** to clear or restore the whole list, and **Select shown**
+  or **Clear shown** to act on the rows the filter leaves. Credential requests the checked operations need
+  are added as well. You can also choose an environment that credentials typed as text in the source
+  move into; without one they are not kept and are listed in the seeding report. **Next** creates the plan
+  from the checked operations and saves it.
+- For the guided workflow, a read-only summary says how many approved workflows and other operations will
+  be seeded. Workflows are seeded whole; you cannot pick one by one. It also says what to finish first when
+  the guided workflow has not reached Postman generation.
+- For a collection, choose the collection and then its requests, all checked at first, with the same
+  filter and **Select all**. Reordering is done on the Plan step.
+
+**3. Plan.** Name the plan and edit its chains and steps exactly as described in
+[section 5b](#5b-performance-plans-request-chains). Every edit is saved as you make it, and the header
+shows **Saved**, **Saving…** or **Not saved**. For a plan seeded from a specification:
+- **Change operations…** lists the specification's operations with the plan's current selection. **Apply to
+  plan** removes the operations you deselected, adds the newly selected ones at the end, and keeps your edits
+  to the steps that stay, in your order. Cancelling changes nothing. If applying would remove a step you
+  edited, the steps are named and you are asked first; **Cancel** leaves the plan and the selection as they
+  were. A threshold set on a step that is removed goes with it.
+- **Edited by you** appears once you have changed, added or reordered steps after seeding.
+- **Reset to seed…** (offered only for an edited plan) rebuilds the chains from the operations the plan was
+  seeded with, after you confirm. You lose your edits to steps, their order, any chains you added and
+  thresholds on steps that no longer exist. The plan's name, data sets, load profile, run-wide thresholds,
+  environment and saved runs are kept.
+- Both are unavailable, with the reason shown, when the uploaded specification is not the one the plan was
+  seeded from, or none is uploaded. A plan seeded from the guided workflow, a collection or built empty keeps
+  its steps; add and remove them directly.
+
+**4. Load.** The plan's own configuration: target environment, load profile (smoke, load, stress, spike or
+soak starting profiles, or your own stages), thresholds, default think time, data sets and the k6 script.
+Each part saves as you change it.
+
+**5. Run.** A launch card says whether a run can start (**Ready to run on NAME (tier)**, **Run in progress** or
+**Not ready to run yet**, with the reason), names the target environment, lists the chains, the hosts and
+every write step beside **Start run**, and offers **Start debug run**. There is no extra confirmation: reading
+the card is the check, and nothing is sent until you press **Start run**. Below it are the run's progress,
+**Runs & reports** with **Run again**, **Restore** and the report. **← Back** returns to **Load**.
+
+**Leaving and coming back.** **← Plans** returns to the entry screen. For a test with no plan yet, your source
+choice and selection are kept as a **draft**: the entry screen shows **Draft in progress** with **Resume** and
+**Discard**, and the Performance card on the start screen says the same in text. Choosing another source, or
+opening a saved plan, while a draft exists asks before it replaces the draft. A plan is saved as you edit it,
+so leaving a plan keeps no draft. **← Back to start** and switching to another tab keep everything, including
+the step you were on and a run in progress, for your session.
+
+**Where things live.** The uploaded specification is held in memory for your session (a backend restart loses
+it; plans, runs, reports and environments are kept), and you upload it again. Plans are saved on this machine.
+Runs recorded by the earlier Quick Performance Test before version 19.19.0 appear under **Earlier runs**.
 
 ## 5a. Performance test from a Postman collection
 
@@ -657,39 +712,40 @@ folder, in run order. Recognised `pm.environment.set(...)` statements become ext
 recognised status assertions become expected statuses, and inherited auth becomes an
 `Authorization` header. Credential requests become **Once before load** steps. Creating the plan
 reads the collection only: it runs no script and sends no request, and a seeding report lists
-everything that was not carried over, such as pre-request scripts. The plan opens in
-**Performance Plans** ([section 5b](#5b-performance-plans-request-chains)) and is never compared
+everything that was not carried over, such as pre-request scripts. You can also start from a collection
+directly in **Performance** (**Postman collection** source). The plan opens in
+**Performance** ([section 5b](#5b-performance-plans-request-chains)) and is never compared
 with the collection again: editing or removing the collection leaves it unchanged.
 
 The run panel also lists the plans already created from collections, each with **Open**. The
 **Collection Performance Test** tab of earlier versions is gone; its runs are listed read only
-under **Earlier runs** in Performance Plans.
+under **Earlier runs** in Performance.
 
 ## 5b. Performance plans: request chains
 
 A **performance plan** is a load test you build and own outright, as in Postman or JMeter. It
 holds one or more **chains**. A chain is an ordered list of **steps**, and every step is a concrete
-request you can edit freely. Open the **Performance Plans** tab (or choose **Performance plans** on
-the start screen) to list your plans, start an empty one, open, duplicate or delete one. Plans are
+request you can edit freely. Open **Performance** (or choose it on the start screen) to list your
+plans, start an empty one, open, duplicate or delete one ([section 5](#5-performance)). Plans are
 saved on this machine, so they are still there after ApiPilot restarts, for as long as your
 browser session lasts.
 
-An open plan is laid out like the other performance screens. **Before you can run** lists what
-still blocks a run (plan problems, the target environment, the script, k6), each with the action
-that fixes it, above the **Chains**, **Run setup** and **Runs & reports** tabs. The bar at the top
+An open plan is shown as the **Plan**, **Load** and **Run** steps of the Performance path. The header
 says **Saved**, **Saving…** or **Not saved**. **Not saved** means the last change was refused: the
-message under the bar says why, and the script cannot be generated until it is fixed. A row you add
-with **+ Add header** (or a query or form row) and leave empty is not saved.
+message under the plan's name says why, and the script cannot be generated until it is fixed. What still
+blocks a run is shown where it is fixed: **Plan check** on the Plan step lists plan problems, **Load**
+holds the target environment and the script, and the launch card on **Run** says why **Start run** is
+unavailable. A row you add with **+ Add header** (or a query or form row) and leave empty is not saved.
 
 **Earlier runs.** Before version 19.19.0 the guided workflow, the quick performance test and the
 Collection Performance Test each held a derived plan of their own. Those plans are gone, but their
-runs are not: when your session has any, the plans list shows them under **Earlier runs**, with the
+runs are not: when your session has any, the entry screen shows them under **Earlier runs**, with the
 note "Recorded before request-chain plans: you can open the report, but it cannot be run again or
 restored." **View report** opens each report exactly as it was rendered.
 
 **Starting from something you already have.** Each existing entry point can seed a first draft:
-- **Quick performance test**: after uploading a specification, choose **Create request-chain plan**.
-  You get one single-step chain per operation, from its positive scenario.
+- **Performance, OpenAPI specification**: upload a specification and choose the operations. You get one
+  single-step chain per chosen operation, from its positive scenario.
 - **Guided workflow**: on the Performance Testing stage, choose **Create request-chain plan**. You
   get one chain per approved workflow, with its variables already extracted and referenced, then one
   single-step chain per other operation.
@@ -710,7 +766,7 @@ with no positive scenario. After seeding, the plan is yours: it is never compare
 re-derived from or overwritten by its source. Each seeded step shows where it came from, and is
 marked **Changed** once you edit it. A step you add is marked **Added by you**.
 
-**The Chains tab.** On a wide screen the chain list and the step editor sit side by side in a
+**The chains (Plan step).** On a wide screen the chain list and the step editor sit side by side in a
 frame as tall as the window, and each scrolls on its own, so the page does not grow with the plan
 and the step you pick is always beside its editor. In the list, select a chain's name to collapse
 or expand it (**Collapse all** and **Expand all** act on every chain), and once a plan has six or
@@ -766,7 +822,7 @@ moves it into a secret value of the target environment, and the step keeps only 
 are told which value was moved and where. Without a target environment, the save is refused until
 you choose one.
 
-**Data sets.** Under **Run setup**, add up to five CSV files: UTF-8, a header row, at most 5 MiB,
+**Data sets.** On the **Load** step, add up to five CSV files: UTF-8, a header row, at most 5 MiB,
 100,000 rows and 50 columns. Each column is a `{{name}}` you can use in any step. Choose **Next row
 per iteration** (rows in file order, shared by all virtual users) or **One row per virtual user**.
 Rows wrap to the first when they run out. Once before load steps use the first row. Mark columns
@@ -775,7 +831,7 @@ and nothing is kept. Data set files are encrypted on this machine and reach k6 o
 lasts. Note that a downloaded copy of a script that reads a data set cannot be run in **Run k6
 Script**, which never lets a script open files.
 
-**Running.** A launch card leads **Run setup**; it shows the last run in one line, and **Run again**, **Restore** and the report are in **Runs & reports**. Its headline says whether a run can start, and it holds **Start run** and **Start debug run**, a strip with the target, profile, duration, peak virtual users, think time and script, the chains, hosts and data sets the run uses, and the write warning with every write operation listed. Under it, the **Configuration** card lists the parts of the plan: choose the target environment, the load profile, thresholds and
+**Running.** A launch card leads the **Run** step; it shows the last run in one line, and **Run again**, **Restore** and the report are in **Runs & reports**, below it. Its headline says whether a run can start, and it holds **Start run** and **Start debug run**, a strip with the target, profile, duration, peak virtual users, think time and script, the chains, hosts and data sets the run uses, and the write warning with every write operation listed. Under it, the **Configuration** card lists the parts of the plan: choose the target environment, the load profile, thresholds and
 the default think time, and open **Edit** on Thresholds or Data sets, then generate the script. The load profile shows a chart of the planned virtual users over time, drawn from the stages you entered (k6 starts at one virtual user and ramps to each stage's target); it recommends nothing. Nothing is sent until you start the run. If a
 Once before load step fails, the load never starts and the run ends as failed, naming that step.
 The report shows each chain and step with its figures, each check's and extractor's counts, the
@@ -789,7 +845,7 @@ plans per session.
 
 **Debug run.** When a run does not do what you expect, for example a step reports that a value
 could not be extracted and the steps after it never ran, use **Debug run**, in the launch card at the top of
-**Run setup**, beside **Start run**. The card describes the target once for
+the **Run** step, beside **Start run**. The card describes the target once for
 both runs. A chain that only has **Once before load** steps is marked, because the load run skips it
 and the Debug run does not. It runs every chain **once**, in order, and shows here each
 request that was sent and each response that came back, so you can see what the target really
@@ -931,7 +987,7 @@ script with a run in progress cannot be deleted.
 ## 6a. Live run dashboard
 
 While a run is in progress, a live dashboard shows how it is going. It appears in the same place for the three kinds of run
-you can start: a **performance plan run** (on Runs & reports), a **Run k6 Script** run (in the run activity area) and an
+you can start: a **performance plan run** (on the Run step), a **Run k6 Script** run (in the run activity area) and an
 **Import & Run Collection** run (in the Results step). It is the same dashboard for all three.
 
 - **Counters.** Requests done, failures, virtual users and elapsed time, refreshed about once a second without reloading the
@@ -1169,8 +1225,10 @@ Variable and credential values are encrypted before being stored.
 | Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` (README Configuration). An earlier explanation is kept |
 | Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
 | "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
-| **Generate script** stays disabled | **Before you can run** lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the plan says **Not saved** | Choose **Show** to go to the problem, or fix the error shown under the plan's bar |
-| Quick performance test: a new upload asks to replace the current one | A session has one quick test at a time | Confirm to replace it; plans created from it, runs and reports are kept |
+| **Generate script** stays disabled | **Plan check** on the Plan step lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the header says **Not saved** | Choose **Go to step** in Plan check to go to the problem, or fix the error shown under the plan's name |
+| Performance: uploading a different specification asks to replace the current one | A session holds one uploaded specification at a time | Confirm to replace it; plans created from it, runs and reports are kept |
+| Performance: **Change operations…** is disabled | The uploaded specification is not the one the plan was seeded from, or none is uploaded (the reason is shown beside the button) | Upload the specification the plan was seeded from, from the entry screen, then open the plan again |
+| Performance: **Draft in progress** on the start screen | A test with no plan yet was left | Choose Performance and **Resume**, or **Discard** it |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the plan check lists which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Run k6 Script: "Imports a module from a URL" | The script imports from `https://…`, such as jslib.k6.io | Copy the helper you need into the script; remote code is never loaded |

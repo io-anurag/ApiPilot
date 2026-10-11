@@ -52,7 +52,7 @@ function InfoIcon() {
 /**
  * The very first thing a user sees (AP-038, Design A "Artifact hero"): a compact hero whose
  * artifact choices (borrowed from Design C) point each kind of input at the workflows that accept
- * it, then the five top-level workflows as equal, colour-coded cards. Shown only until a choice is
+ * it, then the four top-level workflows as equal, colour-coded cards. Shown only until a choice is
  * made — after that the top tab menu takes over navigation (App.tsx).
  *
  * Every control calls the same `onSelect`, so a workflow opened from its artifact, its card, its
@@ -68,8 +68,11 @@ export function EntryChooser({
   onSelect,
   coverage = { status: "loading" },
   onOpenCoverage,
+  performanceDraft = false,
 }: Readonly<{
   onSelect: (choice: EntryChoice) => void;
+  /** AP-047: a performance test was started and not finished; the Performance card says so, in text (FR-019). */
+  performanceDraft?: boolean;
   /** AP-046: what is known about coverage, shown in the Results entry under the workflow cards. */
   coverage?: CoverageEntryState;
   /** AP-046: opens the Coverage results view; the Results entry is shown only when this is given. */
@@ -91,7 +94,7 @@ export function EntryChooser({
             </h2>
             <p className="max-w-xl text-lg leading-8 text-muted">
               Build an explainable test suite from an OpenAPI specification, or go
-              straight to running a Postman collection, a quick load test, or a k6 script
+              straight to running a Postman collection, a load test, or a k6 script
               of your own. Then see how much of the API your tests cover.
             </p>
           </div>
@@ -151,13 +154,13 @@ export function EntryChooser({
           </p>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {WORKFLOWS.map((workflow) => (
             <button
               key={workflow.id}
               type="button"
               aria-label={workflow.title}
-              aria-describedby={`entry-${workflow.id}-description`}
+              aria-describedby={workflow.id === "performance" && performanceDraft ? `entry-${workflow.id}-description entry-${workflow.id}-draft` : `entry-${workflow.id}-description`}
               onClick={() => onSelect(workflow.id)}
               className={`group flex min-h-60 flex-col items-start gap-3 rounded-xl border border-t-4 border-border-strong bg-surface-elevated p-5 text-left motion-safe:transition-colors ${
                 workflow.recommended ? "shadow-md" : "shadow-sm"
@@ -184,6 +187,14 @@ export function EntryChooser({
               >
                 {workflow.description}
               </span>
+              {workflow.id === "performance" && performanceDraft && (
+                <span
+                  id={`entry-${workflow.id}-draft`}
+                  className="rounded-sm border border-warning-500 bg-warning-100 px-1.5 py-0.5 text-xs font-semibold text-warning-700 dark:bg-warning-500/15 dark:text-warning-100"
+                >
+                  Draft in progress
+                </span>
+              )}
               <span
                 aria-hidden="true"
                 className={`${ENTRY_CONTROL} ${workflow.tone.action} mt-auto h-9 w-9 self-end group-hover:border-brand-500`}

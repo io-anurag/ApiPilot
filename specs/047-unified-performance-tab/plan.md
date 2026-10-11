@@ -113,7 +113,7 @@ backend/src/
 backend/tests/                           # + contract and unit tests for reselect
 
 frontend/src/
-├── App.tsx                              # one `performance` view; onOpenPerformancePlan; merged mount flag
+├── App.tsx                              # one `performance` view; `onOpenChainPlan` keeps its name and opens the Plan step; mount flag
 ├── components/
 │   ├── workflowCatalog.ts, sectionCatalog.ts, EntryIllustration.tsx   # one entry, reuse plans tone
 │   └── performance/path/                # new
@@ -123,14 +123,19 @@ frontend/src/
 │       ├── PlanStep.tsx, LoadStep.tsx, RunStep.tsx   # host the extracted plan panes
 │       ├── ChangeOperationsPanel.tsx    # side panel, reuses OperationSelection
 │       ├── DraftBanner.tsx
+│       ├── PerformancePath.tsx          # header, stepper, step body, Back and Next
+│       ├── EnvironmentForCredentials.tsx   # shared with SeedPlanDialog
 │       └── pathState.ts                 # pure: step gating, entry step, transitions (unit-testable)
 ├── components/requestChain/
 │   ├── useChainPlanSession.ts           # new: extracted from ChainPlanEditor (load, save, analysis, runs, environments)
 │   ├── ChainPlanEditor.tsx              # becomes a thin composition, kept while Phase 1 lands, then removed
 │   ├── OperationSelection.tsx           # + text and method filters
-│   └── PlansIntro.tsx, SeedPlanDialog.tsx   # reused or retired as the path takes over
+│   ├── ChainsPane.tsx, SetupPane.tsx, RunPane.tsx   # new: tab bodies extracted from ChainPlanEditor, hosted by the path steps
+│   └── PlansIntro.tsx, SeedPlanDialog.tsx   # PlansIntro retired; SeedPlanDialog stays for the other entry points
+├── components/performance/
+│   ├── PerformanceHome.tsx, RecentRuns.tsx   # new: picker, plans table, recent runs (fan-out over 10 plans), legacy runs
 ├── pages/
-│   ├── PerformancePage.tsx              # new: home (picker, plans, runs, legacy runs) and the path
+│   ├── PerformancePage.tsx              # new: hosts the home and the path
 │   ├── QuickPerformancePage.tsx, RequestChainPlansPage.tsx   # removed after parity
 ├── services/requestChainClient.ts       # + reselectPlan()
 └── hooks/usePerformancePath.ts          # new: PathState reducer over pathState.ts, in memory
@@ -145,15 +150,16 @@ so it is unit-tested without rendering (CLAUDE.md §25, §43).
 
 ## Delivery phases
 
-| Phase | Stories | Content | Backend |
+| Increment | Stories | Content | Backend |
 |---|---|---|---|
-| 1 | US1, US2, US5, US6, empty plan from US4 | Unified tab shell, entry screen, path with specification and empty plan sources, hook extraction, catalogue and routing merge, draft parking, spec replacement, reshaped tests | none |
-| 2 | US3 | Reselect endpoint and shared helpers, Change operations panel, merge, edited-removal warning, Reset to seed | one endpoint |
-| 3 | rest of US4 | Collection and workflow sources in the path, handover wiring from Import & Run and the guided workflow | none |
+| 1 (MVP) | US1, US2 | Unified tab shell, entry screen, path with the specification source, hook and pane extraction, saved plans and recent runs, open-plan flow, catalogue and routing merge, reshaped tests | reworded message only |
+| 2 | US3 | Reselect endpoint and shared helpers, Change operations panel, merge, edited-removal warning, Reset to seed, source-changed guard | one endpoint |
+| 3 | US4 | Empty plan, collection and workflow sources in the path, hand-over wiring from Import & Run and the guided workflow | none |
+| 4 | US5, then US6 | Draft parking and Resume, Start-screen badge, specification replacement | none |
 
-Each phase is shippable alone. Until Phase 2 lands, returning to Operations on an existing plan is read-only with a
-note that changing operations arrives with the merge; the old tabs are removed in Phase 1 only after parity is shown
-by the reshaped tests.
+Each increment is shippable alone once increment 1 is complete. The two old tabs keep working, untouched, until the
+removal task at the end of US2 (T030); nothing is demoed or merged before US1 and US2 are both done. Until increment 2
+lands, Operations on an existing plan is a read-only summary (T029).
 
 ## Risks
 

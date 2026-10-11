@@ -640,3 +640,73 @@ export function analyzeChainPlan(plan: Pick<ChainPlan, "chains" | "dataSets" | "
     extractedNames: [...places.entries()].map(([name, list]) => ({ name, stepIds: list.map((place) => place.stepId) })),
   };
 }
+
+/**
+ * AP-047 (specs/047-unified-performance-tab research R3): the engineer's edits to a plan seeded from a
+ * source, read from fields the plan already stores, so no stored value changes. A seeded chain is
+ * *edited* when any of its steps was changed after seeding or the engineer added a step to it. A chain
+ * with no seeded step is the engineer's own; it is never part of the source selection.
+ */
+const seededSourceKinds = new Set<StepSource["kind"]>(["operation", "workflow", "collection"]);
+
+export function isChainEdited(chain: Chain): boolean {
+  return chain.steps.some((step) => step.changed || step.source.kind === "added");
+}
+
+/** A chain with no seeded step, including an empty one: created by the engineer, not by seeding. */
+export function isEngineerChain(chain: Chain): boolean {
+  return !chain.steps.some((step) => seededSourceKinds.has(step.source.kind));
+}
+
+/** The operation keys of the plan's seeded steps, in plan order; a security scheme's token step is not an operation. */
+export function seededOperationKeys(plan: Pick<ChainPlan, "chains">): string[] {
+  const keys: string[] = [];
+  for (const step of plan.chains.flatMap((chain) => chain.steps)) {
+    if (step.source.kind !== "operation" || step.source.operationKey.startsWith("securityScheme:")) continue;
+    if (!keys.includes(step.source.operationKey)) keys.push(step.source.operationKey);
+  }
+  return keys;
+}
+
+/**
+ * Whether the plan differs from how it was seeded: any chain edited, any chain of the engineer's own, or
+ * the seeded chains reordered (they were created in id order, so ids out of order mean a move).
+ */
+export function isPlanEdited(plan: Pick<ChainPlan, "chains">): boolean {
+  if (plan.chains.some((chain) => isChainEdited(chain) || isEngineerChain(chain))) return true;
+  const ids = plan.chains.map((chain) => Number(chain.id.replace(/^c/, "")));
+  return ids.some((id, index) => index > 0 && id < ids[index - 1]);
+}
+
+// ------------------------------------------------------------------------------------------------
+// AP-047 reselect (specs/047-unified-performance-tab contracts/reselect-api.md)
+// ------------------------------------------------------------------------------------------------
+
+/** `merge` keeps the engineer's edits; `reset` rebuilds the chains from the selection. */
+export type ReselectMode = "merge" | "reset";
+
+export interface ReselectRequest {
+  /** The plan revision the engineer was looking at. */
+  revision: number;
+  mode: ReselectMode;
+  /** The operations the plan should be seeded from, as "METHOD /path"; applied in specification order. */
+  selectedOperationKeys: string[];
+  /** `merge` only: the engineer confirmed removing steps they had edited. */
+  confirmRemoveEdited?: boolean;
+}
+
+/** An edited step a merge would remove, listed in the refusal so the engineer can decide (FR-016). */
+export interface ReselectEditedRemoval {
+  chainId: string;
+  stepId: string;
+  stepName: string;
+  operationKey: string;
+  reasons: "step-changed"[];
+}
+
+/** The saved plan like `PUT /:planId` returns it, with what the call added, removed and kept as edited. */
+export interface ReselectOutcome extends ChainPlanView {
+  added: string[];
+  removed: string[];
+  keptEdited: string[];
+}

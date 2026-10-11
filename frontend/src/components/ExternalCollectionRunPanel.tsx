@@ -878,7 +878,7 @@ export function ExternalCollectionRunPanel({
       Create request-chain plan
     </button>
   );
-  // AP-037 phase two (US5): the plans seeded from collections, opened in Performance Plans.
+  // AP-037 phase two (US5): the plans seeded from collections, opened in Performance.
   const seededPlans = onOpenChainPlan && (
     <SeededPlans
       seedKind="collection"
@@ -998,7 +998,7 @@ export function ExternalCollectionRunPanel({
                   Load test instead
                 </h4>
                 <p className="text-left text-xs text-muted hyphens-none">
-                  Turn the selected requests into a request-chain plan, then open it in Performance Plans to
+                  Turn the selected requests into a request-chain plan, then open it in Performance to
                   load-test them. This does not run anything.
                 </p>
                 {chainPlanButton}

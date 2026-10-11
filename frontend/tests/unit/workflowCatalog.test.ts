@@ -6,12 +6,11 @@ import {
 } from "../../src/components/workflowCatalog";
 
 describe("workflowCatalog (AP-038 research.md D4)", () => {
-  it("lists the five top-level views in tab order, with the tab labels unchanged (FR-013)", () => {
+  it("lists the four workflows in tab order, with the one Performance tab replacing the two earlier ones (FR-013, AP-047 FR-001)", () => {
     expect(WORKFLOWS.map((w) => [w.id, w.tabLabel])).toEqual([
       ["guided-workflow", "Guided Workflow"],
       ["import-collection", "Import & Run Collection"],
-      ["quick-performance", "Quick Performance Test"],
-      ["performance-plans", "Performance Plans"],
+      ["performance", "Performance"],
       ["user-script", "Run k6 Script"],
     ]);
   });
@@ -20,13 +19,19 @@ describe("workflowCatalog (AP-038 research.md D4)", () => {
     expect(WORKFLOWS.map((w) => w.title)).toEqual([
       "Guided Workflow",
       "Import & Run Collection",
-      "Quick performance test",
-      "Performance plans",
+      "Performance",
       "Run k6 Script",
     ]);
-    expect(workflowById("quick-performance").description).toBe(
-      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
+    expect(workflowById("performance").description).toBe(
+      "Turn a specification, a guided workflow or a collection into a k6 load test: pick a source, review the plan, set the load and run.",
     );
+  });
+
+  it("offers one performance entry on the start screen and none of the two it replaces (AP-047 SC-006)", () => {
+    const ids = WORKFLOWS.map((w) => w.id as string);
+    expect(ids.filter((id) => id.includes("performance"))).toEqual(["performance"]);
+    expect(ids).not.toContain("quick-performance");
+    expect(ids).not.toContain("performance-plans");
   });
 
   it("recommends only the guided workflow", () => {
@@ -41,7 +46,7 @@ describe("workflowCatalog (AP-038 research.md D4)", () => {
 
   it("points each artifact only at workflows that exist and accept it (FR-009)", () => {
     expect(ARTIFACT_CHOICES.map((a) => [a.id, a.workflows])).toEqual([
-      ["openapi", ["guided-workflow", "quick-performance"]],
+      ["openapi", ["guided-workflow", "performance"]],
       ["postman", ["import-collection"]],
       ["k6", ["user-script"]],
     ]);
