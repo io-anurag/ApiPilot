@@ -15,6 +15,16 @@ export type EntryChoice =
   | "performance-plans"
   | "user-script";
 
+/**
+ * Views that present results rather than start a workflow (AP-046). They appear in the tab menu,
+ * the command palette and the help dialog beside the five workflows, but not on the start screen:
+ * a results view needs a specification and runs that a workflow produces first.
+ */
+export type ResultsViewId = "coverage";
+
+/** Anything the top tab menu can show. */
+export type TopLevelView = EntryChoice | ResultsViewId;
+
 export type WorkflowIconName = "guided" | "import" | "quick" | "plans" | "script";
 export type ArtifactIconName = "openapi" | "postman" | "k6";
 
@@ -118,6 +128,30 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
     },
   },
 ];
+
+export interface ResultsViewEntry {
+  readonly id: ResultsViewId;
+  readonly title: string;
+  readonly tabLabel: string;
+  readonly description: string;
+  /** Colour square beside the name, from the results section token. */
+  readonly marker: string;
+}
+
+export const RESULTS_VIEWS: readonly ResultsViewEntry[] = [
+  {
+    id: "coverage",
+    title: "API Test Coverage",
+    tabLabel: "Coverage",
+    description:
+      "See how much of the API your generated tests cover and how much real runs have verified, with the gaps to close next.",
+    marker: "bg-section-results",
+  },
+];
+
+export function isResultsView(view: TopLevelView): view is ResultsViewId {
+  return RESULTS_VIEWS.some((entry) => entry.id === view);
+}
 
 export interface ArtifactChoice {
   readonly id: "openapi" | "postman" | "k6";

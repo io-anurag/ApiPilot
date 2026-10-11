@@ -4,7 +4,7 @@ import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
 import { AppHeader } from "./components/AppHeader";
 import { Tabs, type TabItem } from "./components/Tabs";
 import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
-import { WORKFLOWS } from "./components/workflowCatalog";
+import { RESULTS_VIEWS, WORKFLOWS, isResultsView, type TopLevelView } from "./components/workflowCatalog";
 import { WORKFLOW_SECTIONS, type SectionId } from "./components/sectionCatalog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
@@ -39,6 +39,7 @@ const RequestChainPlansPage = lazy(() =>
 const UserScriptPage = lazy(() =>
   import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
 );
+const CoveragePage = lazy(() => import("./pages/CoveragePage").then((m) => ({ default: m.CoveragePage })));
 const PerformancePlanScaleMockPage = lazy(() =>
   import("./pages/PerformancePlanScaleMockPage").then((m) => ({ default: m.PerformancePlanScaleMockPage })),
 );
@@ -59,17 +60,21 @@ function LazyView({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-type ActiveTab = EntryChoice;
+type ActiveTab = TopLevelView;
 
 /** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
  * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
  * adds the quick performance test as the third, AP-034 Run k6 Script, and AP-037 request-chain
  * Performance Plans. AP-038 reads labels and colours from the shared workflow catalog. */
-const TABS: Array<TabItem<ActiveTab>> = WORKFLOWS.map((workflow) => ({
-  id: workflow.id,
-  label: workflow.tabLabel,
-  markerClassName: workflow.tone.marker,
-}));
+const TABS: Array<TabItem<ActiveTab>> = [
+  ...WORKFLOWS.map((workflow) => ({
+    id: workflow.id as ActiveTab,
+    label: workflow.tabLabel,
+    markerClassName: workflow.tone.marker,
+  })),
+  // AP-046: a results view, not a workflow; it is in the tab menu and palette, not on the start screen.
+  ...RESULTS_VIEWS.map((view) => ({ id: view.id as ActiveTab, label: view.tabLabel, markerClassName: view.marker })),
+];
 
 export function App() {
   const showPerformancePlanScaleMock =
@@ -101,6 +106,9 @@ export function App() {
   const [quickPerformanceMounted, setQuickPerformanceMounted] = useState(false);
   // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
   const [userScriptMounted, setUserScriptMounted] = useState(false);
+  // AP-046: the Coverage view stays mounted once reached, so its filters and sort survive switching
+  // views (they reset on a full page refresh).
+  const [coverageMounted, setCoverageMounted] = useState(false);
   // AP-037: request-chain plans stay mounted once reached; a seeding entry point opens one by id.
   const [performancePlansMounted, setPerformancePlansMounted] = useState(false);
   const [openChainPlanRequest, setOpenChainPlanRequest] = useState<OpenChainPlanRequest | null>(null);
@@ -150,6 +158,7 @@ export function App() {
       "quick-performance": setQuickPerformanceMounted,
       "user-script": setUserScriptMounted,
       "performance-plans": setPerformancePlansMounted,
+      coverage: setCoverageMounted,
     };
     mounters[view](true);
   }
@@ -162,6 +171,24 @@ export function App() {
     setActiveTab("performance-plans");
     setTabsVisible(true);
     setPerformancePlansMounted(true);
+  }
+
+  /** AP-046: open Coverage from a contextual link (scenario review, run results) or the palette. */
+  function handleOpenCoverage() {
+    setStarted(true);
+    setActiveTab("coverage");
+    setTabsVisible(true);
+    setCoverageMounted(true);
+  }
+
+  /** Coverage's own links back into the workflows: same behaviour as picking that tab. */
+  function handleOpenWorkflowFromCoverage(view: "guided-workflow" | "import-collection") {
+    if (view === "guided-workflow") {
+      handleSelect(view);
+      setTabsVisible(true);
+    } else {
+      handleSelect(view);
+    }
   }
 
   function handleSelect(choice: EntryChoice) {
@@ -199,7 +226,8 @@ export function App() {
   function runCommand(command: Command) {
     setPaletteOpen(false);
     if (command.kind === "workflow") {
-      if (started && tabsVisible) handleTabChange(command.id);
+      if (isResultsView(command.id)) handleOpenCoverage();
+      else if (started && tabsVisible) handleTabChange(command.id);
       else handleSelect(command.id);
     } else if (command.kind === "back-to-start") {
       handleExitToStart();
@@ -270,6 +298,7 @@ export function App() {
                     onSectionChange={setGuidedSection}
                     onHandoffToExecution={handleHandoffToExecution}
                     onOpenChainPlan={handleOpenChainPlan}
+                    onOpenCoverage={handleOpenCoverage}
                   />
                 </LazyView>
               </div>
@@ -281,6 +310,7 @@ export function App() {
                     preload={importPreload}
                     onExit={handleExitToStart}
                     onOpenChainPlan={handleOpenChainPlan}
+                    onOpenCoverage={handleOpenCoverage}
                   />
                 </LazyView>
               </div>
@@ -296,6 +326,13 @@ export function App() {
               <div hidden={!started || activeTab !== "performance-plans"}>
                 <LazyView>
                   <RequestChainPlansPage onExit={handleExitToStart} openRequest={openChainPlanRequest} />
+                </LazyView>
+              </div>
+            )}
+            {coverageMounted && (
+              <div hidden={!started || activeTab !== "coverage"}>
+                <LazyView>
+                  <CoveragePage onOpenWorkflow={handleOpenWorkflowFromCoverage} />
                 </LazyView>
               </div>
             )}

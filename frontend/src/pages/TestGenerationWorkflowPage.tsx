@@ -165,6 +165,7 @@ export function TestGenerationWorkflowPage({
   onSectionChange,
   onHandoffToExecution,
   onOpenChainPlan,
+  onOpenCoverage,
 }: Readonly<{
   /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
   onExit?: () => void;
@@ -179,6 +180,8 @@ export function TestGenerationWorkflowPage({
   ) => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the approved workflows. */
   onOpenChainPlan?: (planId: string) => void;
+  /** AP-046: opens the Coverage view from scenario review. */
+  onOpenCoverage?: () => void;
 }>) {
   const [workflow, setWorkflow] = useState<TestGenerationWorkflow | null>(null);
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
@@ -615,7 +618,7 @@ export function TestGenerationWorkflowPage({
             <DependencyAnalysisSummary dependencyAnalysis={workflow.dependencyAnalysis} />
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
-            <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} />
+            <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} onOpenCoverage={onOpenCoverage} />
           )}
           {displayStageId === "workflowReview" && workflow.dependencyAnalysis && (
             <WorkflowReviewStage

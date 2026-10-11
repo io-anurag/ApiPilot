@@ -802,6 +802,20 @@ describe("ExternalCollectionRunPanel PDF report (AP-043)", () => {
     click.mockRestore();
   });
 
+  it("links the run results to Coverage (AP-046), and only where Coverage is wired", async () => {
+    stubReportFetch({ ok: true });
+    const onOpenCoverage = vi.fn();
+    const { unmount } = render(
+      <ExternalCollectionRunPanel view="results" uploadedCollection={uploadedCollection()} requests={[requestView()]} onOpenCoverage={onOpenCoverage} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "View coverage" }));
+    expect(onOpenCoverage).toHaveBeenCalledTimes(1);
+    unmount();
+    render(<ExternalCollectionRunPanel view="results" uploadedCollection={uploadedCollection()} requests={[requestView()]} />);
+    await screen.findByRole("button", { name: /Completed/ });
+    expect(screen.queryByRole("button", { name: "View coverage" })).not.toBeInTheDocument();
+  });
+
   it("shows the server's reason when the report cannot be made, instead of a broken file", async () => {
     stubReportFetch({ ok: false, status: 409, body: { error: "run_in_progress", message: "A report is available once the run has finished." } });
     fireEvent.click(await openResults());

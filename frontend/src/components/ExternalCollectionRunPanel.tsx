@@ -597,6 +597,7 @@ export function ExternalCollectionRunPanel({
   onHasRunsChange,
   onRunAgain,
   onViewResults,
+  onOpenCoverage,
 }: Readonly<{
   uploadedCollection: UploadedCollectionSummary;
   /** Every request in the loaded collection, flattened (`flattenCollectionRequests`) — powers the
@@ -619,6 +620,8 @@ export function ExternalCollectionRunPanel({
   onConfirmed?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the selected requests, in run order. */
   onOpenChainPlan?: (planId: string) => void;
+  /** AP-046: opens the Coverage view, so a run's results can be read as coverage of the specification. */
+  onOpenCoverage?: () => void;
   /** Which part to show (AP-042): `run` is the order and launch card, `results` the run and its
    * history, `hidden` nothing (the component stays mounted so state and polling carry on), and the
    * default `all` the original single panel. */
@@ -1043,6 +1046,16 @@ export function ExternalCollectionRunPanel({
                   {downloadingReport === "pdf" ? "Preparing PDF…" : "Download PDF report"}
                 </button>
               </>
+            )}
+            {onOpenCoverage && (
+              <button
+                type="button"
+                onClick={onOpenCoverage}
+                title="See how these results change the coverage of the specification."
+                className={BUTTON_STYLES.secondary}
+              >
+                View coverage
+              </button>
             )}
             {onRunAgain && (
               <button type="button" onClick={onRunAgain} className={BUTTON_STYLES.secondary}>

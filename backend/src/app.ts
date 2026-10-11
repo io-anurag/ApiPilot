@@ -20,6 +20,7 @@ import {
   testGenerationWorkflowRouter,
 } from "./api/testGenerationWorkflow";
 import { externalCollectionsRouter } from "./api/externalCollections";
+import { coverageRouter } from "./api/coverage";
 import { createFailureAnalysisRouter, failureAnalysisRouter } from "./api/failureAnalysis";
 import { createPerformanceTestingRouter, type PerformanceTestingDependencies } from "./api/performanceTesting";
 import { createQuickPerformanceRouter } from "./api/quickPerformance";
@@ -135,6 +136,7 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // Standalone route family (FR-011) — mounted independently of testGenerationWorkflowRouter;
   // no active TestGenerationWorkflow is required for any endpoint below.
   app.use("/api", externalCollectionsRouter);
+  app.use("/api", coverageRouter);
   const performanceDependencies = { ...defaultPerformanceDependencies(), ...options?.performance };
   // AP-029, AP-032 and AP-036: the runs recorded from the guided, quick and collection plans, read
   // only since AP-037 phase two retired those plans (specs/037-request-chain-performance FR-037).

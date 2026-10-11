@@ -218,6 +218,17 @@ function extractParameters(rawParams: unknown): Parameter[] {
   return parameters;
 }
 
+/**
+ * Merges path-item-level parameters with an operation's own (OpenAPI 3.x: an operation-level
+ * parameter overrides a path-level one with the same `name` + `in`). Path-level parameters that
+ * are not overridden come first, then the operation's own, preserving declaration order within
+ * each group. Previously `pathItem.parameters` was never read (specs/046 research R5).
+ */
+function mergeParameters(pathLevel: Parameter[], operationLevel: Parameter[]): Parameter[] {
+  const overridden = new Set(operationLevel.map((p) => `${p.location}:${p.name}`));
+  return [...pathLevel.filter((p) => !overridden.has(`${p.location}:${p.name}`)), ...operationLevel];
+}
+
 function extractRequestBody(rawBody: unknown): RequestBody | undefined {
   if (!isPlainObject(rawBody)) return undefined;
   return {
@@ -327,6 +338,7 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
   if (isPlainObject(paths)) {
     for (const [path, pathItem] of Object.entries(paths)) {
       if (!isPlainObject(pathItem)) continue;
+      const pathLevelParameters = extractParameters(pathItem.parameters);
       for (const method of HTTP_METHODS) {
         const operation = pathItem[method];
         if (!isPlainObject(operation)) continue;
@@ -358,7 +370,7 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
 
         const requestBody = extractRequestBody(operation.requestBody);
         const responses = extractResponses(operation.responses);
-        const parameters = extractParameters(operation.parameters);
+        const parameters = mergeParameters(pathLevelParameters, extractParameters(operation.parameters));
 
         if (requestBody) {
           for (const schema of Object.values(requestBody.contentTypes)) schemaCount += countSchemas(schema);

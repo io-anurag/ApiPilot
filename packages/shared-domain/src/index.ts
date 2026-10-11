@@ -39,3 +39,4 @@ export * from "./dynamicVariables";
 export * from "./requestChain";
 export * from "./chainDebugRun";
 export * from "./liveRun";
+export * from "./coverage";

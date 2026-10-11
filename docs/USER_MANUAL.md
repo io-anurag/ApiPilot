@@ -957,6 +957,80 @@ you can start: a **performance plan run** (on Runs & reports), a **Run k6 Script
 The dashboard only reads: it never starts, stops or changes a run and sends nothing to the target. Live figures are kept in
 memory and nothing is sent to a third party.
 
+## 6b. Coverage
+
+**Coverage** shows how much of your API the generated tests cover and how much of that real runs have proved. Open it from
+the **Coverage** tab, from **View coverage** in Review Generated Scenarios or in a run's results, or with Ctrl+K and
+**API Test Coverage**. It needs a specification from the guided workflow; without one it tells you so and offers a link to
+the specification step.
+
+Two kinds of coverage are always shown apart, and generating a test never counts as verifying it:
+
+- **Specification coverage**: a qualifying generated scenario exists. Pending and accepted scenarios count, rejected ones
+  never do, and the header shows how many are accepted and how many are pending.
+- **Runtime-verified coverage**: a real run produced evidence. A requirement is verified only when its scenario ran, the
+  checks that matter for it were actually evaluated, and they all passed. A successful response on its own proves nothing.
+
+Every figure shows its count and percentage (a zero denominator shows "not available", never a number). Hover a metric's label
+for exactly what is counted. There is no overall score, because averaging unrelated percentages would mean nothing.
+
+**Two levels.** *Operation-level counts* answer "how many operations": eligible operations, with generated scenarios, with
+passing verification (at least one scenario passed), with execution failures (at least one failed) and with no scenarios. An
+operation can be in both "passing verification" and "execution failures", and neither means the operation is complete: one
+generated scenario makes it count as having scenarios while most of its requirements may still be uncovered. *Requirements*
+(a parameter, a request property or constraint, a documented response code or schema) are what completeness is read from, and
+each has its own state.
+
+**States.** Each requirement is in exactly one state: *Not covered* (no scenario), *Generated, not executed*, *Executed,
+failed* (a failing test is never called untested), *Verified*, *Inconclusive* (it ran but nothing relevant was evaluated, no
+response arrived, or the request was edited before the run) or *Stale: re-run required* (evidence exists but the requirement's
+contract changed after the run; reserved, this version does not produce it, and it is never shown as not executed). A failure
+outranks a pass when one requirement has both, and the requirement shows how many of its scenarios passed, failed or have not
+run. Each state also shows a cause: assertion failed, no response, a check could not be evaluated, request edited, blocked by a
+failed dependency, run cancelled, never run, or not in the selected run. Only an evaluated, failed check is "Executed, failed".
+
+**What a failure affects.** Each requirement is judged only by the checks that matter for it. A scenario whose status check
+passed and whose schema check failed verifies the parameters and the success code it exercised and fails only the response
+schema. A failing scenario never changes a requirement it did not exercise, and a passing one never hides another's failure.
+The happy path and exercised parameters are proved only by scenarios that send a valid request.
+
+**Categories.** *Coverage by scenario category* shows positive, negative and boundary coverage, each as specification
+coverage and runtime-verified coverage over that category's own requirements (never scenarios, so duplicates cannot inflate
+it), with the state counts under a bar. Documented responses such as `default`, `5xx` and ranges are listed as unclassified:
+they stay in response-code coverage but are in no category. Security and authorization is shown as unavailable, not as zero.
+
+**Where the evidence comes from.** Results are matched to scenarios by the id the generated Postman collection gives each
+request, so the evidence is the runs of that collection in **Import & Run Collection**. If you change and re-upload the
+specification, scenarios are regenerated and earlier results no longer match any of them: they are never counted as verified and
+a notice reports how many, "possibly from an earlier specification". If you ran several times, the latest qualifying result
+per scenario decides, combining only runs from the environment of the newest result; runs from another environment are listed
+as excluded. The header names every run the figures come from. **Evaluate run** lets you look at one run instead, in which case
+scenarios that ran only in other runs show as "not in the selected run". Editing a scenario in review after a run does not
+discard its evidence; a note says so.
+
+**What you see.** The evidence notice and a scope line (all operations, or which filter applies); the operation-level counts;
+specification and runtime metric groups (the assertion card shows passed, failed and not-evaluated, the last outside its
+denominator); the category section; a breakdown bar per requirement kind (verified, failed, inconclusive, stale, generated,
+not covered, with counts underneath); a sortable, filterable table of operations whose rows show the requirement states and
+scenario verdicts instead of one status, and expand to each scenario and requirement with its cause, evidence and priority
+rationale; ranked next tests, each with the requirement, why, the evidence and the reason for its priority; operations out of
+scope (not selected at API review, never counted as gaps); and what cannot be measured, with the reason. Filters and sort
+are kept while you switch views and reset when you reload the page. If a recalculation fails, the page keeps the previous
+figures and labels them an out-of-date snapshot with their time; a first failure is an error, never empty coverage. The state
+filter keeps operations with at least one requirement in that state; the category filter recomputes the figures over that
+category; gap types are missing, failed, insufficient evidence and needs re-execution. **Export this view (HTML)** and **Export all (JSON)**
+download exactly what the figures show, with the metric definitions and no request or response content.
+
+**Priority is a heuristic**, not a security assessment. It adds points for the gap's state, a whole operation having no
+scenario, a documented response without one, mutating methods (DELETE 3, PUT and PATCH 2, POST 1), a declared security
+requirement and many constrained fields; at 7 or more it is High, at 3 or more Medium. One underlying gap appears once.
+
+**What is not measured.** Security and authorization coverage is unavailable, because no scenario category identifies
+authorization intent. Cookie parameters, array item constraints, `oneOf` and `anyOf` branches, `nullable` and unresolved or
+circular references are listed as not measurable and left out of every denominator. Response coverage is per documented status
+code and per whole-schema check, not per response property, and the designer asserts one status per scenario, so most
+documented error responses will show as not covered until you add scenarios for them.
+
 ## 7. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
@@ -994,6 +1068,9 @@ Variable and credential values are encrypted before being stored.
 
 ## 9. Limitations to keep in mind
 
+- Coverage (section 6b) measures only what the scenario model can express: it cannot measure security coverage, cookie
+  parameters, array item constraints or `oneOf`/`anyOf` branches, and it matches run results to scenarios only for runs of
+  the collection generated from the current workflow.
 - Only a single OpenAPI 3.x YAML file is supported per workflow (max 10 MB). Swagger 2.0
   and JSON OpenAPI input are not supported.
 - Only same-document `$ref`s are resolved; external references are reported as

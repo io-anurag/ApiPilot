@@ -3546,3 +3546,45 @@ Implementation
       (`liveRunState.ts`) instead of being added to the stored run record, so there is no schema change.
     - Validation (2026-10-10): `npm test` (349 files, 2,845 tests passed, 10 skipped), `npm run lint` and `npm run build` pass. Beyond the tests, a real k6 run of a user script and of a request-chain plan was driven against a local mock target: the live totals, the run result, the progress and the stored series agreed, no secret or query reached the snapshot or the report, and the user-script dashboard was inspected in headless Chrome (desktop and 360 px, light and dark). That check found and fixed three defects: the latest-requests list had no step column for script and collection runs; the graph's right-hand labels were clipped and its text unreadable at 360 px; and the poll cursor could skip points k6 delivers late (so the client's graph summed to 172 of 216 requests). The cursor now re-asks for the last 10 seconds, and an ended run returns its whole series. Not exercised in a browser: the collection run's dashboard (integration test only) and the PDF layout.
     - Rework against the mock (2026-10-10), after a live browser session: the dashboard now follows `mock.html` (heading card with a pulsing Live pill, run details and Cancel run; counters joined edge to edge with rate, failure share, peak virtual users and p95 sub-lines; the graph beside a per-chain card; a Time column in the latest requests). The graph has a labelled left axis (requests per second), a labelled right axis (virtual users), gridlines and tick values, a time axis spanning the planned run, a legend, a hover read-out, a Total / By chain switch (one line per chain), and a second graph of average response time. `LivePoint` gained optional `latencyMs` and `byGroup`. The live panel for plan runs moved to the wide column; the duplicate status badge on collection results was removed.
+76. **AP-046 API test coverage intelligence; version 19.40.0 (2026-10-10).**
+    - A Coverage view (`API Test Coverage`, a results-section view in the tab menu, palette and help dialog, with "View coverage"
+      links in scenario review and in a run's results) that keeps two dimensions apart: specification coverage (a qualifying
+      generated scenario exists; pending and accepted count, rejected never) and runtime-verified coverage (an executed scenario's
+      relevant checks were evaluated and passed). Six states (not covered, generated not executed, executed failed, verified,
+      inconclusive, stale), every figure with numerator, denominator, percentage and basis, no overall score, a sortable and
+      filterable gaps table, ranked next tests, a documented heuristic priority, HTML and JSON export of the current view.
+      Deterministic, no AI, nothing stored, no new dependency. Spec: `specs/046-api-test-coverage-intelligence/spec.md`.
+    - Decisions recorded (spec Clarifications 2026-10-10): an edited request is inconclusive; results that no longer match a
+      current scenario are never counted as verified and are reported as unattributed (runs record no specification revision, so
+      "stale" is kept in the contract but not produced); only selected operations form the denominator; filters reset on a full
+      refresh and survive switching views.
+    - Behaviour change to AP-002 and AP-003: `buildApiModel` now merges path-item-level parameters into each operation, an
+      operation-level parameter overriding on name and location. Before, `pathItem.parameters` was never read, so a specification
+      that declares parameters at path level got no scenarios for them. Output for specifications without path-level parameters
+      is unchanged.
+    - Not measured, and listed in the view with the reason: security and authorization (no scenario category identifies
+      authorization intent), cookie parameters, array item constraints, `oneOf` and `anyOf` branches, `nullable` and unresolved or
+      circular references. Response coverage is per status code and whole-schema check, not per property; the designer asserts
+      one status per scenario, so most documented error responses show as not covered.
+    - Refinement rework (2026-10-10, same unreleased version; `HEAD` is 19.39.0): operation-level counts (with scenarios, with
+      passing verification, with execution failures, with none) kept apart from requirement-level coverage; requirements judged
+      only by their own checks (a failing scenario no longer fails every requirement of its operation, and only positive scenarios
+      prove the happy path); typed failure causes; requirement-based category coverage with runtime figures and an unclassified
+      line; latest-per-scenario evidence limited to one environment with excluded runs listed; out-of-date snapshot state; a
+      distinct Stale state (reserved). Behaviour change: some figures are lower than before. Rules: `coverage-rules.md`; open
+      decisions: `decision-log.md` (D-1 stale production and D-4 security classification remain unimplemented). The run
+      environment is reported as name and tier only (the base URL is no longer included). Validation: `npm run lint` and `npm run build` pass; `npm test` passes
+      (376 files, 3,144 tests, 10 skipped).
+    - Validation (2026-10-10): `npm run lint` and `npm run build` pass; `npm test` passes (371 files, 3,070 tests, 10 skipped; an AP-045 live-route timing test
+      failed once under full-suite load and passed alone and on the rerun). Two end-to-end tests drive a real workflow and a real
+      Newman run (guided and uploaded) and read coverage back. Live browser session (headless Chrome driven over the DevTools
+      protocol against the real backend and a stand-in API): palette and tab navigation, the no-specification state, a real
+      workflow and run, filters, sort, empty-filter reset, run selector, filters kept across a tab switch and reset on reload,
+      real keyboard focus rings, light and dark, phone width (no page overflow, the table scrolls), exports. It found and fixed
+      two defects: directories named `coverage` are in `.gitignore` (`**/coverage/`), which would have left the feature out of a
+      commit and out of ESLint and Tailwind's class scan (unreadable notices in dark mode), so they are now `apiCoverage`; and
+      repeated evidence lines in recommendations. Not exercised live: the real Import & Run results step (the stand-in run
+      was started through the API), and screen readers. Not exercised: a real browser
+      session in light and dark (jsdom checks that only theme tokens and text labels are used, not contrast), and a run through
+      the real Import & Run flow against a live API.
+    - Version bumped to 19.40.0 (root, backend, frontend, shared-domain).
