@@ -1,6 +1,6 @@
 import type { ArtifactIconName, WorkflowIconName } from "./workflowCatalog";
 
-/** Flow-oriented icons for the five workspace workflows. Decorative: the workflow name is visible beside each icon. */
+/** Flow-oriented icons for the workspace workflows. Decorative: the workflow name is visible beside each icon. */
 const PATHS: Record<WorkflowIconName, React.ReactNode> = {
   guided: (
     <>
@@ -16,14 +16,7 @@ const PATHS: Record<WorkflowIconName, React.ReactNode> = {
       <path d="M12 3v8m0 0-3-3m3 3 3-3" />
     </>
   ),
-  quick: (
-    <>
-      <path d="M4 16a8 8 0 0 1 16 0" />
-      <path d="m12 16 4-5M7 19h10" />
-      <circle cx="12" cy="16" r="1" />
-    </>
-  ),
-  plans: (
+  performance: (
     <>
       <rect x="3" y="5" width="5" height="5" rx="1" />
       <rect x="16" y="5" width="5" height="5" rx="1" />

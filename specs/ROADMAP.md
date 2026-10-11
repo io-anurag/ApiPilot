@@ -3546,7 +3546,7 @@ Implementation
       (`liveRunState.ts`) instead of being added to the stored run record, so there is no schema change.
     - Validation (2026-10-10): `npm test` (349 files, 2,845 tests passed, 10 skipped), `npm run lint` and `npm run build` pass. Beyond the tests, a real k6 run of a user script and of a request-chain plan was driven against a local mock target: the live totals, the run result, the progress and the stored series agreed, no secret or query reached the snapshot or the report, and the user-script dashboard was inspected in headless Chrome (desktop and 360 px, light and dark). That check found and fixed three defects: the latest-requests list had no step column for script and collection runs; the graph's right-hand labels were clipped and its text unreadable at 360 px; and the poll cursor could skip points k6 delivers late (so the client's graph summed to 172 of 216 requests). The cursor now re-asks for the last 10 seconds, and an ended run returns its whole series. Not exercised in a browser: the collection run's dashboard (integration test only) and the PDF layout.
     - Rework against the mock (2026-10-10), after a live browser session: the dashboard now follows `mock.html` (heading card with a pulsing Live pill, run details and Cancel run; counters joined edge to edge with rate, failure share, peak virtual users and p95 sub-lines; the graph beside a per-chain card; a Time column in the latest requests). The graph has a labelled left axis (requests per second), a labelled right axis (virtual users), gridlines and tick values, a time axis spanning the planned run, a legend, a hover read-out, a Total / By chain switch (one line per chain), and a second graph of average response time. `LivePoint` gained optional `latencyMs` and `byGroup`. The live panel for plan runs moved to the wide column; the duplicate status badge on collection results was removed.
-76. **AP-046 API test coverage intelligence; version 19.40.0 (2026-10-10).**
+76. **AP-046 API test coverage intelligence; version 19.41.0 (2026-10-11).**
     - A Coverage view (`API Test Coverage`, a results-section view in the tab menu, palette and help dialog, with "View coverage"
       links in scenario review and in a run's results) that keeps two dimensions apart: specification coverage (a qualifying
       generated scenario exists; pending and accepted count, rejected never) and runtime-verified coverage (an executed scenario's
@@ -3587,4 +3587,45 @@ Implementation
       was started through the API), and screen readers. Not exercised: a real browser
       session in light and dark (jsdom checks that only theme tokens and text labels are used, not contrast), and a run through
       the real Import & Run flow against a live API.
-    - Version bumped to 19.40.0 (root, backend, frontend, shared-domain).
+    - Placement follow-up (19.41.0): the start screen and Import & Run Collection show a coverage summary entry (disabled with a
+      reason when there is no specification, an unavailable state on failure), the Coverage view uses the shared hero header, hides
+      Recalculate and Export until a snapshot exists, and shows one primary action at a time through a two-step path. The start screen's workflow colours were made visible in both themes (solid colour edge on each card, 20% tinted icon tiles with a 60% border, elevated card surface, stronger control borders). Mock:
+      `specs/046-api-test-coverage-intelligence/mock-placement.html`. Not exercised: a real browser session in light and dark.
+    - Version bumped to 19.41.0 (root, backend, frontend, shared-domain).
+
+77. **AP-047 Unified Performance tab; version 19.42.0 (2026-10-11).**
+    - Quick Performance Test and Performance Plans are one **Performance** tab (one catalogue entry, one start-screen card). The
+      entry screen shows four sources (OpenAPI specification, guided workflow, Postman collection, empty plan) with the saved plans,
+      the recent runs and the earlier runs of the retired plan kinds. A source opens a five-step path, Source, Operations (named
+      Workflows or Requests for those sources, skipped for an empty plan), Plan, Load and Run, which hosts the existing plan editor's
+      parts (chains, configuration, launch card, results) instead of rebuilding them: the editor's state moved into
+      `useChainPlanSession` and its tab bodies into `ChainsPane`, `SetupPane` and `RunPane`. A specification opens on Operations when
+      one is uploaded already and on Source when not; an opened plan lands on Plan with every step reachable; Next states why it is
+      unavailable; Back and tab switches keep everything. An unfinished test with no plan is kept as a draft (Resume or Discard on the
+      entry screen, a text badge on the start card) and replacing it asks first. Uploading a different specification asks first and
+      keeps plans, runs and reports.
+    - **Change operations** and **Reset to seed** for a plan seeded from a specification: `POST /api/chain-plans/:planId/reselect`
+      (the only backend addition; additive, no stored-data change) seeds the same specification again with the new selection and
+      merges by operation key, keeping the engineer's edits, never rewriting a kept step, appending new chains, and using the plan's
+      own id counters. A merge that would remove a step the engineer changed is refused with the step names until confirmed; reset
+      rebuilds the chains and keeps the name, data sets, load profile, run-wide thresholds, environment and runs. Refused, with
+      nothing changed, for a stale revision, a plan not seeded from a specification, and a specification that is no longer the one
+      the plan was seeded from. This narrows specs/037 FR-026 to the operations the engineer selects.
+    - Spec, plan, tasks, contract and mock: `specs/047-unified-performance-tab/` (the clarifications record four decisions: the Run
+      step keeps the launch card's named target and listed writes with no extra confirmation gate; the guided workflow is seeded
+      whole; one additive backend operation; reset keeps data sets, load profile and run-wide thresholds). Documentation:
+      `docs/USER_MANUAL.md` section 5, `docs/architecture.md` "Unified Performance tab (AP-047)".
+    - Validation (2026-10-11): `npm run lint` and `npm run build` pass; `npm test` passes (388 files, 3,287 tests, 10 skipped on the
+      first full run; a second run had one timing test in AP-046's GapsTable miss its one-second budget under load and pass alone).
+      The baseline before the change was 3,158 tests passing. 24 integration tests cover reselect, 11 unit tests its pure core, and
+      the path, entry screen, sources, drafts and plan editing have their own component tests (the plan editor's 19 tests were
+      moved onto the path). Live browser session (headless Chrome driven over the DevTools protocol against the real backend):
+      start screen with one Performance card, entry screen, upload, operations with a filter, plan creation, plan editing, Change
+      operations, Load, Run (launch card), back to the plans, in light and dark and at 390 px. It found and fixed two phone-width
+      defects: the plans table's `sr-only` Actions header escaped its scroll container and made the page scroll sideways (the old
+      Plans page had the same latent defect), and the chain workbench grid grew past the screen below `lg`. Not exercised: a real run
+      (no k6 was started, so the run, progress and result states are covered by the existing run-panel tests only), the guided-workflow
+      and collection sources against the real backend, the App-level hand-over from Import & Run or the guided workflow into
+      Performance, screen readers, and the usability target SC-009. Pre-existing and not changed: at phone width the top tab menu and
+      the command palette are wider than the screen.
+    - Version bumped to 19.42.0 (root, backend, frontend, shared-domain).

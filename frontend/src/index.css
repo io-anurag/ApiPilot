@@ -105,7 +105,6 @@
    * accent of a screen: that is the section. Distinct from every status hue. */
   --color-wf-guided: #4f46e5;
   --color-wf-import: #a21caf;
-  --color-wf-quick: #1d4ed8;
   --color-wf-plans: #6d28d9;
   --color-wf-k6: #be185d;
 }
@@ -200,7 +199,6 @@
 
   --color-wf-guided: #a5b4fc;
   --color-wf-import: #f0abfc;
-  --color-wf-quick: #93c5fd;
   --color-wf-plans: #c4b5fd;
   --color-wf-k6: #f9a8d4;
 }

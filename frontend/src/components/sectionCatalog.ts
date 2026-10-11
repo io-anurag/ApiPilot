@@ -40,8 +40,7 @@ export const STAGE_SECTIONS: Readonly<Record<WorkflowStageId, SectionId>> = {
  */
 export const WORKFLOW_SECTIONS: Readonly<Record<Exclude<TopLevelView, "guided-workflow">, SectionId>> = {
   "import-collection": "execution",
-  "quick-performance": "execution",
-  "performance-plans": "execution",
+  performance: "execution",
   "user-script": "scenarios",
   coverage: "results",
 };

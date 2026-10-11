@@ -524,7 +524,10 @@ and that the same plan generates a byte-identical script whatever the file's con
   with no positive scenario), each with its source. The report MUST remain viewable from the plan.
   It MUST NOT gate script generation.
 - **FR-026**: After seeding, the plan MUST NOT be re-derived from, validated against or overwritten
-  by its source. A change to the source MUST NOT change the plan.
+  by its source. A change to the source MUST NOT change the plan. (AP-047 narrows this for one case only:
+  when the engineer chooses Change operations or Reset to seed on a plan seeded from a specification, the
+  operations they select are seeded again and merged into the plan, keeping their edits; see
+  `specs/047-unified-performance-tab/contracts/reselect-api.md`. A changed source alone still changes nothing.)
 
 **Security, approval and determinism**
 

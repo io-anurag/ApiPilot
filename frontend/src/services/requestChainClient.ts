@@ -13,6 +13,9 @@ import type {
   K6Readiness,
   MovedCredential,
   PlanBlocker,
+  ReselectEditedRemoval,
+  ReselectOutcome,
+  ReselectRequest,
   ScriptStatus,
 } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
@@ -53,11 +56,16 @@ export interface ChainErrorResult {
   expected?: number;
   found?: number;
   dataSetName?: string;
+  /** `409 edited_steps_would_be_removed`: the edited steps a merge would remove (AP-047). */
+  edited?: ReselectEditedRemoval[];
+  /** `409 plan_source_changed`: the file the plan was seeded from, and the one uploaded now (AP-047). */
+  planSource?: string;
+  currentSource?: string;
 }
 
 export type ChainResult<T> = ({ ok: true } & T) | ChainErrorResult;
 
-const DETAIL_KEYS = ["stepId", "chainId", "field", "header", "limit", "location", "current", "blockers", "runId", "readiness", "reason", "line", "column", "expected", "found", "dataSetName"] as const;
+const DETAIL_KEYS = ["stepId", "chainId", "field", "header", "limit", "location", "current", "blockers", "runId", "readiness", "reason", "line", "column", "expected", "found", "dataSetName", "edited", "planSource", "currentSource"] as const;
 
 async function chainRequest<T>(operation: string, path: string, init: RequestInit | undefined, map: (body: Record<string, unknown>) => T): Promise<ChainResult<T>> {
   let response: Response;
@@ -103,6 +111,20 @@ export const createPlan = (name: string) => chainRequest("createPlan", CHAIN_PLA
 
 export const seedPlan = (input: { name: string; source: SeedSourceInput; environmentId?: string }) =>
   chainRequest("seedPlan", `${CHAIN_PLANS_BASE}/seed`, json("POST", input), toSaved);
+
+/**
+ * AP-047 (specs/047-unified-performance-tab contracts/reselect-api.md): applies a changed operation
+ * selection to a plan seeded from a specification, keeping the engineer's edits (merge) or rebuilding the
+ * chains (reset). A merge that would remove edited steps is refused with `edited_steps_would_be_removed` and
+ * their list until the request carries `confirmRemoveEdited`.
+ */
+export const reselectPlan = (planId: string, input: ReselectRequest) =>
+  chainRequest("reselectPlan", `${planPath(planId)}/reselect`, json("POST", input), (body): ReselectOutcome => ({
+    ...toView(body),
+    added: (body.added ?? []) as string[],
+    removed: (body.removed ?? []) as string[],
+    keptEdited: (body.keptEdited ?? []) as string[],
+  }));
 
 export const fetchPlan = (planId: string) => chainRequest("fetchPlan", planPath(planId), undefined, toView);
 

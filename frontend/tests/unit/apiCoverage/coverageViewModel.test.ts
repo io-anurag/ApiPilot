@@ -2,12 +2,37 @@ import { describe, expect, it } from "vitest";
 import {
   breakdownFor,
   breakdownLabel,
+  coverageEntryState,
+  entryPercentage,
   formatFraction,
   formatPercentage,
   formatTimestamp,
   presentStates,
+  resultRunForOperation,
 } from "../../../src/components/apiCoverage/coverageViewModel";
-import { requirement, stateCounts } from "./coverageFixtures";
+import { requirement, scenario, snapshot, stateCounts } from "./coverageFixtures";
+
+describe("resultRunForOperation", () => {
+  const runs = [{ id: "run-2" }, { id: "run-1" }]; // newest first
+  const scenarios = [
+    scenario({ scenarioId: "a", operationKey: "POST /orders", verdict: "failed", runId: "run-1" }),
+    scenario({ scenarioId: "b", operationKey: "POST /orders", verdict: "passed", runId: "run-2" }),
+    scenario({ scenarioId: "c", operationKey: "GET /orders", verdict: "not-executed" }),
+  ];
+
+  it("opens the newest run with evidence for the operation", () => {
+    expect(resultRunForOperation(scenarios, "POST /orders", runs, false)).toBe("run-2");
+  });
+
+  it("restricts to failing scenarios for a failing result, even when a newer run passed", () => {
+    expect(resultRunForOperation(scenarios, "POST /orders", runs, true)).toBe("run-1");
+  });
+
+  it("has no run when the operation has no executed scenario", () => {
+    expect(resultRunForOperation(scenarios, "GET /orders", runs, false)).toBeUndefined();
+    expect(resultRunForOperation(scenarios, "DELETE /orders/{id}", runs, true)).toBeUndefined();
+  });
+});
 
 describe("coverageViewModel", () => {
   it("words an unavailable percentage instead of showing NaN", () => {
@@ -58,5 +83,28 @@ describe("coverageViewModel", () => {
       ["generated-not-executed", 3],
       ["verified", 2],
     ]);
+  });
+});
+
+describe("coverageEntryState (AP-046 entry summary)", () => {
+  it("summarises the snapshot's own figures and whether any run produced evidence", () => {
+    const state = coverageEntryState(snapshot(), null);
+    expect(state.status).toBe("ready");
+    if (state.status !== "ready") return;
+    expect(state.specification).toBe("Orders API v1.0.0");
+    expect(state.hasRun).toBe(true);
+    expect(state.gaps).toBe(snapshot().totals.gaps);
+  });
+
+  it("separates a missing specification, a failure and a first load", () => {
+    expect(coverageEntryState(null, { kind: "no-workflow", message: "none" })).toEqual({ status: "no-spec" });
+    expect(coverageEntryState(null, { kind: "error", message: "down" })).toEqual({ status: "error", message: "down" });
+    expect(coverageEntryState(null, null)).toEqual({ status: "loading" });
+  });
+
+  it("words an unavailable percentage as not available, never 0%", () => {
+    expect(entryPercentage({ numerator: 0, denominator: 0, percentage: null })).toBe("not available");
+    expect(entryPercentage(null)).toBe("not available");
+    expect(entryPercentage({ numerator: 1, denominator: 4, percentage: 25 })).toBe("25%");
   });
 });

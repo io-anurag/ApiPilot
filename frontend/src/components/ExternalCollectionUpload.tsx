@@ -201,14 +201,16 @@ export function ExternalCollectionUpload({
 
       {error && <ErrorState message={error} />}
 
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={!canSubmit}
-        className={BUTTON_STYLES.primary}
-      >
-        {uploading ? "Uploading…" : "Upload collection"}
-      </button>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className={BUTTON_STYLES.primary}
+        >
+          {uploading ? "Uploading…" : "Upload collection"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { MappingNameRefusal, ScriptProblem } from "@apipilot/shared-domain";
+import type { MappingNameRefusal, ReselectEditedRemoval, ScriptProblem } from "@apipilot/shared-domain";
 
 /**
  * Typed errors for AP-029 k6 performance testing (specs/031-k6-performance-testing). Each maps to
@@ -200,6 +200,33 @@ export class PlanRevisionConflictError extends Error {
   constructor(readonly planId: string) {
     super("The plan was changed since you opened it. It has been reloaded; make your change again.");
     this.name = "PlanRevisionConflictError";
+  }
+}
+
+/** `409 plan_source_not_supported`: reselect applies only to plans seeded from a specification (AP-047). */
+export class PlanSourceNotSupportedError extends Error {
+  constructor() {
+    super("Changing operations is available for plans seeded from a specification.");
+    this.name = "PlanSourceNotSupportedError";
+  }
+}
+
+/** `409 plan_source_changed`: the uploaded specification is no longer the one the plan was seeded from (AP-047). */
+export class PlanSourceChangedError extends Error {
+  constructor(
+    readonly planSource: string,
+    readonly currentSource: string,
+  ) {
+    super(`This plan was seeded from ${planSource}; the uploaded specification is now ${currentSource}.`);
+    this.name = "PlanSourceChangedError";
+  }
+}
+
+/** `409 edited_steps_would_be_removed`: a merge would drop steps the engineer edited, and was not confirmed (AP-047 FR-016). */
+export class EditedStepsWouldBeRemovedError extends Error {
+  constructor(readonly edited: readonly ReselectEditedRemoval[]) {
+    super(`Applying this selection would remove ${edited.length} ${edited.length === 1 ? "step" : "steps"} you edited. Nothing was changed.`);
+    this.name = "EditedStepsWouldBeRemovedError";
   }
 }
 

@@ -7,6 +7,7 @@ import {
   discardDebugRun,
   fetchPlan,
   listPlans,
+  reselectPlan,
   revealDebugValue,
   savePlan,
   scriptDownloadUrl,
@@ -244,5 +245,37 @@ describe("requestChainClient: Debug run (AP-039)", () => {
   it("maps an unavailable value to the contract's code", async () => {
     stubFetch({ [`GET ${BASE}/${PLAN_ID}/debug-runs/${DEBUG_RUN_ID}/values/v9`]: () => [404, { error: "debug_value_not_found", message: "That value is not available." }] });
     expect(await revealDebugValue(PLAN_ID, DEBUG_RUN_ID, "v9")).toMatchObject({ ok: false, error: "debug_value_not_found" });
+  });
+});
+
+describe("requestChainClient: reselect (AP-047)", () => {
+  it("posts the revision, mode and selection, and maps the saved plan with what changed", async () => {
+    const plan = chainPlanFixture({ revision: 4 });
+    const calls = stubFetch({ [`POST ${BASE}/${PLAN_ID}/reselect`]: () => [200, { ...viewOf(plan), added: ["GET /a"], removed: ["GET /b"], keptEdited: ["GET /c"] }] });
+    const result = await reselectPlan(PLAN_ID, { revision: 3, mode: "merge", selectedOperationKeys: ["GET /a", "GET /c"], confirmRemoveEdited: false });
+    expect(calls[0].body).toEqual({ revision: 3, mode: "merge", selectedOperationKeys: ["GET /a", "GET /c"], confirmRemoveEdited: false });
+    expect(result).toMatchObject({ ok: true, added: ["GET /a"], removed: ["GET /b"], keptEdited: ["GET /c"] });
+    if (result.ok) expect(result.plan.revision).toBe(4);
+  });
+
+  it("maps a refusal that lists the edited steps a merge would remove", async () => {
+    const edited = [{ chainId: "c2", stepId: "s2", stepName: "createCustomer", operationKey: "POST /customers", reasons: ["step-changed"] }];
+    stubFetch({ [`POST ${BASE}/${PLAN_ID}/reselect`]: () => [409, { error: "edited_steps_would_be_removed", message: "Applying this selection would remove 1 step you edited. Nothing was changed.", edited }] });
+    const result = await reselectPlan(PLAN_ID, { revision: 3, mode: "merge", selectedOperationKeys: ["GET /a"] });
+    expect(result).toMatchObject({ ok: false, error: "edited_steps_would_be_removed", edited });
+  });
+
+  it("maps a changed source with both file names", async () => {
+    stubFetch({ [`POST ${BASE}/${PLAN_ID}/reselect`]: () => [409, { error: "plan_source_changed", message: "m", planSource: "old.yaml", currentSource: "new.yaml" }] });
+    const result = await reselectPlan(PLAN_ID, { revision: 3, mode: "reset", selectedOperationKeys: ["GET /a"] });
+    expect(result).toMatchObject({ ok: false, error: "plan_source_changed", planSource: "old.yaml", currentSource: "new.yaml" });
+  });
+
+  it("maps a stale revision with the plan as stored now", async () => {
+    const current = viewOf(chainPlanFixture({ revision: 9 }));
+    stubFetch({ [`POST ${BASE}/${PLAN_ID}/reselect`]: () => [409, { error: "plan_revision_conflict", message: "m", current }] });
+    const result = await reselectPlan(PLAN_ID, { revision: 3, mode: "merge", selectedOperationKeys: ["GET /a"] });
+    expect(result).toMatchObject({ ok: false, error: "plan_revision_conflict" });
+    if (!result.ok) expect(result.current?.plan.revision).toBe(9);
   });
 });

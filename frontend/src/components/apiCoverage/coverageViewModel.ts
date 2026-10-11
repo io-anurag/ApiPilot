@@ -6,11 +6,34 @@ import type {
   CoveragePriority,
   CoverageRequirementGroup,
   CoverageRequirementResult,
+  CoverageScenarioResult,
   CoverageSnapshot,
   CoverageState,
   ScenarioVerdict,
 } from "@apipilot/shared-domain";
 import type { StatusTone } from "../StatusBadge";
+
+/** Opens a workflow from Coverage; `runId` asks Import & Run to open that run's results. */
+export type OpenWorkflow = (view: "guided-workflow" | "import-collection", options?: { runId?: string }) => void;
+
+/**
+ * The run behind an operation's result, for "Open results" / "Open failing result": the newest run
+ * (`availableRuns` is newest first) that supplied evidence for one of its scenarios, restricted to
+ * failing scenarios when `failedOnly`. `undefined` when no run did.
+ */
+export function resultRunForOperation(
+  scenarios: readonly CoverageScenarioResult[],
+  operationKey: string,
+  availableRuns: readonly { id: string }[],
+  failedOnly: boolean,
+): string | undefined {
+  const runIds = new Set(
+    scenarios
+      .filter((s) => s.operationKey === operationKey && s.runId !== undefined && (!failedOnly || s.verdict === "failed"))
+      .map((s) => s.runId),
+  );
+  return availableRuns.find((run) => runIds.has(run.id))?.id;
+}
 
 /**
  * Pure presentation helpers for the coverage view. No domain decisions live here: every number,
@@ -214,4 +237,61 @@ export function evidenceLabel(snapshot: CoverageSnapshot): string {
 export function formatRatio(numerator: number, denominator: number): string {
   if (denominator === 0) return "not available (0 eligible)";
   return `${Math.round((numerator / denominator) * 1000) / 10}%`;
+}
+
+/** One headline figure of the entry summary: numerator, denominator and a percentage that is `null` when the denominator is 0. */
+export interface CoverageEntryFigure {
+  numerator: number;
+  denominator: number;
+  percentage: number | null;
+}
+
+/**
+ * What the start screen and Import & Run Collection know about coverage (AP-046). It is a read of the
+ * same snapshot the Coverage view shows, never a second calculation, so the figures cannot disagree.
+ * A failed request is `error`, never `no-spec` or zero (FR-039).
+ */
+export type CoverageEntryState =
+  | { status: "loading" }
+  | { status: "no-spec" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      specification: string;
+      specOperations: CoverageEntryFigure | null;
+      runtimeOperations: CoverageEntryFigure | null;
+      gaps: number;
+      highPriorityGaps: number;
+      hasRun: boolean;
+    };
+
+function figureOf(snapshot: CoverageSnapshot, id: string): CoverageEntryFigure | null {
+  const metric = snapshot.metrics.find((m) => m.id === id);
+  return metric ? { numerator: metric.numerator, denominator: metric.denominator, percentage: metric.percentage } : null;
+}
+
+export function coverageEntryState(
+  snapshot: CoverageSnapshot | null,
+  problem: { kind: "no-workflow" | "error"; message: string } | null,
+): CoverageEntryState {
+  if (snapshot) {
+    const { name, version } = snapshot.specification;
+    return {
+      status: "ready",
+      specification: version ? `${name} v${version}` : name,
+      specOperations: figureOf(snapshot, "spec-operations"),
+      runtimeOperations: figureOf(snapshot, "runtime-operations"),
+      gaps: snapshot.totals.gaps,
+      highPriorityGaps: snapshot.gaps.filter((gap) => gap.priority === "high").length,
+      hasRun: snapshot.execution.runIds.length > 0,
+    };
+  }
+  if (problem?.kind === "no-workflow") return { status: "no-spec" };
+  if (problem) return { status: "error", message: problem.message };
+  return { status: "loading" };
+}
+
+/** A figure as text: "78%", or "not available" when nothing is eligible (never 0%). */
+export function entryPercentage(figure: CoverageEntryFigure | null): string {
+  return figure?.percentage == null ? "not available" : `${figure.percentage}%`;
 }

@@ -22,9 +22,18 @@ describe("renderCoverageHtml (refined export)", () => {
 
   it("states the evidence mode, contributing runs, environment and excluded runs", () => {
     expect(html).toContain("latest qualifying result per scenario from run run-new");
-    expect(html).toContain("Environment: Orders collection (local)");
-    expect(html).toContain("Excluded: run run-prod (different environment");
-    expect(html).toContain("Unattributed results: 0");
+    expect(html).toContain("<dt>Run context</dt><dd>Orders collection (local)</dd>");
+    expect(html).toContain("<dt>Excluded runs</dt><dd>run run-prod (different environment");
+    expect(html).toContain("<dt>Unattributed results</dt><dd>0 ");
+  });
+
+  it("groups the context into labelled boxes and separates warnings from notes, like the Coverage view", () => {
+    for (const title of ["Specification", "Execution evidence", "Scenarios", "Scope of this view"]) {
+      expect(html).toContain(`<h3>${title}</h3>`);
+    }
+    expect(html).toContain("<dd>All operations (no filter applied)</dd>");
+    expect(html).toContain("About these figures");
+    expect(html).toContain('<div class="note notes"><h3>Notes</h3><ul>');
   });
 
   it("includes operation-level counts, category coverage, requirement states and scenario verdicts", () => {

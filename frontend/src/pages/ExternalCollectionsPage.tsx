@@ -33,6 +33,8 @@ import { ErrorState } from "../components/ErrorState";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
+import { CoverageEntryCard } from "../components/apiCoverage/CoverageEntryCard";
+import type { CoverageEntryState } from "../components/apiCoverage/coverageViewModel";
 import { ImportRunCollectionBar, ImportRunHero } from "../components/ImportRunHero";
 import { ImportRunStepper } from "../components/ImportRunStepper";
 import { resolveStep, type ImportRunStepId } from "../components/importRunSteps";
@@ -103,13 +105,19 @@ export function ExternalCollectionsPage({
   preload,
   onExit,
   onOpenChainPlan,
+  coverage,
   onOpenCoverage,
+  openRunRequest,
 }: Readonly<{
+  /** AP-046: Coverage's "Open results": a new `token` selects the collection holding `runId` and opens that run's results. */
+  openRunRequest?: Readonly<{ runId: string; token: number }>;
   preload?: ImportPreload | null;
   onExit?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the run panel's ordered selection. */
   onOpenChainPlan?: (planId: string) => void;
-  /** AP-046: opens the Coverage view from the run results. */
+  /** AP-046: what is known about coverage, shown beside the run flow. */
+  coverage?: CoverageEntryState;
+  /** AP-046: opens the Coverage view from the run results and from the coverage entry. */
   onOpenCoverage?: () => void;
 }>) {
   const [uploadedCollections, setUploadedCollections] = useState<
@@ -156,6 +164,38 @@ export function ExternalCollectionsPage({
       cancelled = true;
     };
   }, []);
+
+  // A run belongs to one uploaded collection and the list does not say which, so look it up.
+  const [openRunId, setOpenRunId] = useState<string | undefined>(undefined);
+  const [runLookupNotice, setRunLookupNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openRunRequest) return;
+    let cancelled = false;
+    setRunLookupNotice(null);
+    (async () => {
+      const listed = await fetchUploadedCollections();
+      if (cancelled) return;
+      if (!listed.ok) {
+        setRunLookupNotice(`The run could not be opened: ${listed.message}`);
+        return;
+      }
+      setUploadedCollections(listed.uploadedCollections);
+      for (const candidate of listed.uploadedCollections) {
+        const history = await fetchUploadedCollectionRuns(candidate.id);
+        if (cancelled) return;
+        if (history.ok && history.runs.some((run) => run.id === openRunRequest.runId)) {
+          setSelectedId(candidate.id);
+          setOpenRunId(openRunRequest.runId);
+          setRequestedStep("results");
+          return;
+        }
+      }
+      setRunLookupNotice("That run is no longer available in Import & Run, so its results cannot be opened.");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openRunRequest]);
 
   const refreshCollectionView = useCallback(async (id: string) => {
     const result = await fetchUploadedCollectionView(id);
@@ -369,6 +409,12 @@ export function ExternalCollectionsPage({
     requestPlacements.map(({ request, ...placement }) => [request.id, placement]),
   );
 
+  // AP-046: the run results step already has its own "View coverage" action.
+  const coverageEntry =
+    onOpenCoverage && coverage ? (
+      <CoverageEntryCard entry={coverage} onOpen={onOpenCoverage} variant="panel" />
+    ) : null;
+
   return (
     <div className="space-y-5">
       {onExit && (
@@ -383,13 +429,19 @@ export function ExternalCollectionsPage({
           </button>
         </div>
       )}
+      {runLookupNotice && (
+        <output data-testid="run-lookup-notice" className="block rounded-md border border-warning-600 bg-surface px-3 py-2 text-sm text-text-primary">
+          {runLookupNotice}
+        </output>
+      )}
       <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />
       <ImportRunHero
         compact={step !== "collection"}
+        extra={coverageEntry}
         // Always mounted (hidden by the hero on later steps), so a half-filled upload form and the
         // list's selection survive a visit to another step.
         aside={
-          <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
+          <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
             <div className="h-1 bg-brand-600" />
             <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
               <div>
@@ -403,7 +455,7 @@ export function ExternalCollectionsPage({
               </div>
               <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
             </div>
-            <div className="space-y-5 p-5 sm:p-6">
+            <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
               <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
               <div className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase text-muted">
@@ -417,7 +469,7 @@ export function ExternalCollectionsPage({
                 />
               </div>
               {selected && (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                   <p className="text-xs text-muted">Selected: {selected.name}</p>
                   <button
                     type="button"
@@ -442,6 +494,8 @@ export function ExternalCollectionsPage({
           onChange={() => setRequestedStep("collection")}
         />
       )}
+
+      {step !== "collection" && step !== "results" && coverageEntry}
 
       {step === "review" && selected && !collectionView && (
         viewError ? (
@@ -572,7 +626,11 @@ export function ExternalCollectionsPage({
               : undefined
           }
           onOpenChainPlan={onOpenChainPlan}
-          onOpenCoverage={onOpenCoverage}
+          // Without a specification Coverage can only explain that it has nothing to show, so the
+          // results do not offer it (the entry card beside the run flow says why instead).
+          onOpenCoverage={coverage?.status === "no-spec" ? undefined : onOpenCoverage}
+          openRunId={openRunId}
+          onOpenRunHandled={() => setOpenRunId(undefined)}
           onConfirmed={() =>
             setUploadedCollections((current) =>
               current.map((c) =>

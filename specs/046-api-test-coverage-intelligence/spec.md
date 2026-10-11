@@ -244,6 +244,7 @@ Every state (loading, empty, error, stale, incomplete) is explained, and the vie
 - **FR-025**: The view MUST show a ranked list of recommended next tests, each with operation, uncovered requirement, reason, supporting evidence, priority with rationale, and an action; recommendations MUST be deterministic and traceable to actual gaps.
 - **FR-026**: Rows and recommendations MUST link to the operation detail or related scenario/result, preserving specification and run context.
 - **FR-027**: Contextual links to Coverage MUST be offered from scenario generation/review and from execution results.
+- **FR-027a**: The start screen and Import & Run Collection MUST each offer a read-only entry to Coverage that shows the current specification and runtime-verified figures once a specification exists, and, without one, a disabled action with the reason in text. A failed read MUST be shown as unavailable, never as no specification or zero. The Coverage view MUST show Recalculate and Export only when a snapshot exists and MUST offer one primary action at a time (start the guided workflow, then run the tests, then run again). Placement is shown in [mock-placement.html](mock-placement.html).
 
 **Prioritization**
 

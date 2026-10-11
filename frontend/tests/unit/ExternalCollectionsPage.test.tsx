@@ -93,6 +93,73 @@ function backToRun() {
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
 }
 
+describe("ExternalCollectionsPage: Coverage's open-run request", () => {
+  const runSummary = {
+    id: "run-9",
+    source: "uploaded",
+    uploadedCollectionSetId: "uc-1",
+    uploadedCollectionSnapshot: { name: "My collection", tier: "local" },
+    status: "completed",
+    startedAt: "2026-01-01T00:00:00.000Z",
+    completedAt: "2026-01-01T00:00:01.000Z",
+    summary: { total: 1, passed: 0, failed: 1, notAttempted: 0, durationMs: 10 },
+    cancelRequested: false,
+  };
+  const failedRun = {
+    ...runSummary,
+    results: [
+      {
+        requestName: "Create widget",
+        requestMethod: "POST",
+        outcome: "failed",
+        failureCategory: "assertion-failed",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        durationMs: 15,
+        responseStatusCode: 500,
+        testOutcomes: [{ name: "Status code is 201", outcome: "failed", detail: "expected 201, got 500" }],
+      },
+    ],
+  };
+
+  it("selects the collection holding the run and opens its results", async () => {
+    stubFetch([
+      { match: (url) => url.endsWith("/execution/runs/run-9"), response: { run: failedRun } },
+      { match: (url) => url.endsWith("/execution/runs"), response: { runs: [runSummary] } },
+    ]);
+    render(<ExternalCollectionsPage openRunRequest={{ runId: "run-9", token: 1 }} />);
+
+    await waitFor(() => expect(screen.getByTestId("import-run-step-results").closest("li")).toHaveAttribute("aria-current", "step"));
+    expect(await screen.findByText("Create widget")).toBeInTheDocument();
+    expect(screen.queryByTestId("run-lookup-notice")).not.toBeInTheDocument();
+  });
+
+  it("offers View coverage on the results, but not when there is no specification to measure against", async () => {
+    const routes = [
+      { match: (url: string) => url.endsWith("/execution/runs/run-9"), response: { run: failedRun } },
+      { match: (url: string) => url.endsWith("/execution/runs"), response: { runs: [runSummary] } },
+    ];
+    stubFetch(routes);
+    const { unmount } = render(
+      <ExternalCollectionsPage openRunRequest={{ runId: "run-9", token: 1 }} coverage={{ status: "loading" }} onOpenCoverage={vi.fn()} />,
+    );
+    expect(await screen.findByText("Create widget")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View coverage" })).toBeInTheDocument();
+    unmount();
+
+    stubFetch(routes);
+    render(<ExternalCollectionsPage openRunRequest={{ runId: "run-9", token: 1 }} coverage={{ status: "no-spec" }} onOpenCoverage={vi.fn()} />);
+    expect(await screen.findByText("Create widget")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View coverage" })).not.toBeInTheDocument();
+  });
+
+  it("says so when no collection holds the run, instead of failing silently", async () => {
+    stubFetch();
+    render(<ExternalCollectionsPage openRunRequest={{ runId: "run-gone", token: 1 }} />);
+
+    expect(await screen.findByTestId("run-lookup-notice")).toHaveTextContent("no longer available");
+  });
+});
+
 describe("ExternalCollectionsPage", () => {
   it("loads the newly selected request's own fields into the editor, not the previously selected request's", async () => {
     stubFetch();

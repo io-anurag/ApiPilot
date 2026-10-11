@@ -28,6 +28,12 @@ function stubFetch() {
           json: () => Promise.resolve({ uploadedCollections: [] }),
         });
       }
+      if (url.includes("/api/chain-plans")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ plans: [] }) });
+      }
+      if (url.includes("/performance/runs") || url.includes("/api/collection-performance/runs") || url.includes("/api/quick-performance/runs")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ runs: [] }) });
+      }
       if (url.includes("/api/quick-performance")) {
         return Promise.resolve({
           ok: false,
@@ -178,33 +184,57 @@ describe("App", () => {
     expect(externalCollectionFetches()).toBe(fetchesBeforeExit);
   });
 
-  it("offers the quick performance test next to Import & Run Collection, with its one-sentence statement (AP-032 FR-001)", async () => {
+  it("offers Performance next to Import & Run Collection, with its one-sentence statement (AP-047 FR-001)", async () => {
     stubFetch();
     render(<App />);
-    const quick = await screen.findByRole("button", { name: "Quick performance test" });
+    const quick = await screen.findByRole("button", { name: "Performance" });
     expect(quick).toHaveTextContent(
-      "Turn an OpenAPI specification into a k6 load test when you need fast signal, not review.",
+      "Turn a specification, a guided workflow or a collection into a k6 load test: pick a source, review the plan, set the load and run.",
     );
+    expect(screen.queryByRole("button", { name: "Quick performance test" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Performance plans" })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Import & Run Collection" }),
     ).toBeInTheDocument();
 
     fireEvent.click(quick);
-    expect(
-      await screen.findByLabelText(
-        "Upload OpenAPI specification for a quick performance test",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Turn what you have into a load test" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /OpenAPI specification/ })).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: "Top-level views" }),
     ).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Exit the quick performance test and return to the start screen",
+        name: "Exit performance testing and return to the start screen",
       }),
     );
     expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+  });
+
+  it("keeps an unfinished Performance test across a tab switch and Back to start, and says so on the start screen (AP-047 FR-019, FR-021)", async () => {
+    stubFetch();
+    render(<App />);
+    expect(screen.queryByText("Draft in progress")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Performance" }));
+    fireEvent.click(await screen.findByRole("button", { name: /OpenAPI specification/ }));
+    const path = await screen.findByTestId("performance-path");
+    expect(path).toBeVisible();
+
+    // Another tab and back: the path is where it was left.
+    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
+    await waitFor(() => expect(screen.getByTestId("performance-path")).not.toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
+    expect(screen.getByTestId("performance-path")).toBeVisible();
+
+    // Back to start: the Performance card says a draft is in progress, and choosing it again resumes the same path.
+    fireEvent.click(screen.getByRole("button", { name: "Exit performance testing and return to the start screen" }));
+    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Performance" })).toHaveAccessibleDescription(/Draft in progress/);
+    expect(screen.getByText("Draft in progress")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
+    expect(screen.getByTestId("performance-path")).toBeVisible();
+    expect(screen.getByTestId("performance-step-source")).toHaveTextContent("Source");
   });
 
   it("re-selecting 'Guided Workflow' after 'Back to start' resumes it instead of silently handing off to Import & Run Collection again (regression)", async () => {
@@ -397,13 +427,9 @@ describe("App", () => {
 
       pressCtrlK();
       fireEvent.click(
-        await screen.findByRole("option", { name: /Quick performance test/ }),
+        await screen.findByRole("option", { name: /^Performance/ }),
       );
-      expect(
-        await screen.findByLabelText(
-          "Upload OpenAPI specification for a quick performance test",
-        ),
-      ).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Turn what you have into a load test" })).toBeInTheDocument();
       expect(
         screen.getByRole("navigation", { name: "Top-level views" }),
       ).toBeInTheDocument();
@@ -427,12 +453,12 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run k6 Script" }));
     expect(main).toHaveAttribute("data-section", "scenarios");
 
-    fireEvent.click(screen.getByRole("button", { name: "Quick Performance Test" }));
+    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
     expect(main).toHaveAttribute("data-section", "execution");
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Exit the quick performance test and return to the start screen",
+        name: "Exit performance testing and return to the start screen",
       }),
     );
     await screen.findByTestId("entry-chooser");

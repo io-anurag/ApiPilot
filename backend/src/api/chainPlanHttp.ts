@@ -8,6 +8,7 @@ import {
   DebugRunBlockedError,
   DebugRunInProgressError,
   DebugValueNotFoundError,
+  EditedStepsWouldBeRemovedError,
   DataSetLimitExceededError,
   DataSetNotFoundError,
   DataSetTooLargeError,
@@ -19,6 +20,8 @@ import {
   PlanHasBlockersError,
   PlanLimitExceededError,
   PlanRevisionConflictError,
+  PlanSourceChangedError,
+  PlanSourceNotSupportedError,
 } from "../performance/errors";
 import { getPlan, viewOf } from "../performance/chain/chainPlanStore";
 import { DataSetInvalidError } from "../performance/chain/csv";
@@ -43,6 +46,9 @@ export function handleChainError(req: Request, res: Response, startedAt: number,
     }
     return fail(req, res, startedAt, 409, "plan_revision_conflict", err.message, current ? { current } : {});
   }
+  if (err instanceof EditedStepsWouldBeRemovedError) return fail(req, res, startedAt, 409, "edited_steps_would_be_removed", err.message, { edited: err.edited });
+  if (err instanceof PlanSourceNotSupportedError) return fail(req, res, startedAt, 409, "plan_source_not_supported", err.message);
+  if (err instanceof PlanSourceChangedError) return fail(req, res, startedAt, 409, "plan_source_changed", err.message, { planSource: err.planSource, currentSource: err.currentSource });
   if (err instanceof InvalidChainPlanError) return fail(req, res, startedAt, 422, "invalid_plan", err.message, { field: err.field });
   if (err instanceof InvalidChainError) return fail(req, res, startedAt, 422, "invalid_chain", err.message, { chainId: err.chainId });
   if (err instanceof InvalidStepError) return fail(req, res, startedAt, 422, "invalid_step", err.message, { stepId: err.stepId, field: err.field });

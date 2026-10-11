@@ -64,7 +64,7 @@ describe("Create request-chain plan from the guided Performance Testing stage", 
     const { rerender } = render(stage("guided-workflow"));
     expect(await screen.findByText("No plan has been created from this source yet.")).toBeInTheDocument();
     plans = [{ id: "w1", name: "Workflow plan", chainCount: 2, stepCount: 4, dataSetCount: 0, seedSource: "workflow", updatedAt: "2026-10-03T10:00:00.000Z" }];
-    rerender(stage("performance-plans"));
+    rerender(stage("performance"));
     rerender(stage("guided-workflow"));
     expect(within(await screen.findByTestId("seeded-plans")).getByRole("button", { name: "Open Workflow plan" })).toBeInTheDocument();
   });

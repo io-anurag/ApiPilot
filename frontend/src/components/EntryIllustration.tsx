@@ -4,7 +4,7 @@ import { workflowById, type EntryChoice } from "./workflowCatalog";
 const OUTPUTS: ReadonlyArray<{ label: string; tone: EntryChoice }> = [
   { label: "Test scenarios", tone: "guided-workflow" },
   { label: "Postman collection", tone: "import-collection" },
-  { label: "k6 performance tests", tone: "quick-performance" },
+  { label: "k6 performance tests", tone: "performance" },
 ];
 
 /**

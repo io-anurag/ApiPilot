@@ -12,7 +12,7 @@ type SeedKind = NonNullable<ChainPlanSummary["seedSource"]>;
  * The request-chain plans already seeded from one kind of source (specs/037-request-chain-performance
  * US5, FR-020): each with its size and an Open action, newest first. Lists nothing while loading, and
  * says so when there is none. Listed again whenever the top-level view changes, since the entry view
- * holding it stays mounted while plans are seeded, renamed or deleted in Performance Plans.
+ * holding it stays mounted while plans are seeded, renamed or deleted in Performance.
  */
 export function SeededPlans({ seedKind, onOpen, emptyText }: Readonly<{ seedKind: SeedKind; onOpen: (planId: string) => void; emptyText: string }>) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; plans: ChainPlanSummary[] }>({ kind: "loading" });
@@ -53,7 +53,7 @@ export function SeededPlans({ seedKind, onOpen, emptyText }: Readonly<{ seedKind
 /**
  * An entry point's performance testing since AP-037 phase two (US5): seed a request-chain plan from
  * this source, or open one seeded from it before. The plan itself, its run and its report live in
- * Performance Plans.
+ * Performance.
  */
 export function SeedFromSource({
   source,

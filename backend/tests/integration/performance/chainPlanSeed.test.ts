@@ -26,6 +26,7 @@ describe("POST /api/chain-plans/seed from a specification", () => {
     const missing = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "specification" } });
     expect(missing.status).toBe(404);
     expect(missing.body.error).toBe("quick_test_not_found");
+    expect(missing.body.message).toBe("Upload a specification in Performance first.");
     expect((await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "nothing" } })).body.error).toBe("invalid_plan");
   });
 
