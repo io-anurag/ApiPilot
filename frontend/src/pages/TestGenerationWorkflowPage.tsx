@@ -802,6 +802,11 @@ function DependencyAnalysisSummary({
         {cycles.length > 0 &&
           ` ${cycles.length} dependency cycle${cycles.length === 1 ? "" : "s"} detected.`}
       </p>
+      {aiOutcome === "skipped" && (
+        <p data-testid="dependency-analysis-ai-skipped" className="text-sm text-muted">
+          AI-assisted discovery was skipped; only deterministic matching was used.
+        </p>
+      )}
       {showAiErrorMessage && (
         <p data-testid="dependency-analysis-ai-error" className="text-sm text-muted">
           {aiErrorMessage}

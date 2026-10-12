@@ -101,6 +101,7 @@ export function SummaryPanel({
   statLabel,
   segments,
   description,
+  beforeAction,
   action,
 }: Readonly<{
   testId: string;
@@ -109,6 +110,8 @@ export function SummaryPanel({
   statLabel: string;
   segments?: SummaryPanelSegment[];
   description?: string;
+  /** Controls that shape the action's outcome (e.g. an option checkbox), shown above the button. */
+  beforeAction?: React.ReactNode;
   action?: SummaryPanelAction;
 }>) {
   return (
@@ -125,6 +128,7 @@ export function SummaryPanel({
       </div>
       {segments && <SummaryBreakdown segments={segments} />}
       {description && <p className="text-xs leading-5 text-muted">{description}</p>}
+      {beforeAction}
       {action && (
         <button
           type="button"

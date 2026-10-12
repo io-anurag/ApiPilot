@@ -1,12 +1,16 @@
-import { useState } from "react";
-import type { CollectionRequestView, ImpliedAuthHeader } from "@apipilot/shared-domain";
+import { useMemo, useState } from "react";
+import type {
+  CollectionRequestView,
+  ImpliedAuthHeader,
+  VariableBinding,
+} from "@apipilot/shared-domain";
 import type { RequestEdit } from "../services/externalCollectionsClient";
 import { BUTTON_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 import { CodeBlock } from "./CodeBlock";
 import { VariableHighlightedText } from "./VariableHighlightedText";
 import { RequestAuthEditor, RequestVariablesSection } from "./RequestAuthSections";
-import { ReferenceField } from "./requestChain/ReferenceField";
+import { ReferenceField, type ReferenceSuggestion } from "./requestChain/ReferenceField";
 import { POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS } from "./postmanDynamicVariables";
 import { SuggestionCombobox } from "./SuggestionCombobox";
 import { HTTP_REQUEST_HEADERS } from "./httpRequestHeaders";
@@ -69,8 +73,11 @@ export function RequestEditorPanel({
   locked,
   onSave,
   onClose,
+  variables = [],
 }: Readonly<{
   request: CollectionRequestView;
+  /** The collection's variables, offered ahead of the dynamic ones when `{{` is typed. */
+  variables?: readonly VariableBinding[];
   locked: boolean;
   onSave: (requestId: string, edit: RequestEdit) => Promise<void>;
   /** Deselects this request (returns the main pane to its empty-selection placeholder) — this
@@ -79,6 +86,16 @@ export function RequestEditorPanel({
    * a different one). */
   onClose: () => void;
 }>) {
+  const referenceSuggestions = useMemo<readonly ReferenceSuggestion[]>(
+    () => [
+      ...variables.map((variable) => ({
+        name: variable.name,
+        detail: variable.source === "environment" ? "Environment variable" : "Collection variable",
+      })),
+      ...POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS,
+    ],
+    [variables],
+  );
   const [method, setMethod] = useState(request.raw.method);
   const [url, setUrl] = useState(request.raw.url);
   const [headerRows, setHeaderRows] = useState<HeaderRow[]>(() =>
@@ -173,14 +190,14 @@ export function RequestEditorPanel({
             label="URL"
             value={url}
             onChange={setUrl}
-            suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
+            suggestions={referenceSuggestions}
             disabled={locked}
             monospace
           />
         </div>
         <p className="text-xs text-muted">
-          Type {"{{$"} in the URL, a header value or the body to pick a random value; it is
-          generated when the request runs.
+          Type {"{{"} in the URL, a header value or the body to pick a variable, or {"{{$"} for a
+          random value that is generated when the request runs.
         </p>
         {error && <ErrorState message={error} />}
       </div>
@@ -243,7 +260,7 @@ export function RequestEditorPanel({
                   placeholder="value"
                   value={row.value}
                   onChange={(value) => updateHeaderRow(index, { value })}
-                  suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
+                  suggestions={referenceSuggestions}
                   disabled={locked}
                   monospace
                 />
@@ -325,7 +342,7 @@ export function RequestEditorPanel({
               label="Raw body"
               value={body}
               onChange={setBody}
-              suggestions={POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS}
+              suggestions={referenceSuggestions}
               disabled={locked}
               multiline
               monospace

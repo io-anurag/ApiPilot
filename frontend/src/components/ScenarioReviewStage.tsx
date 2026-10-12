@@ -57,6 +57,9 @@ export function ScenarioReviewStage({
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
+  // On by default, matching the behavior before this became a choice. Turning it off skips the
+  // minutes-long AI pass of dependency analysis; deterministic matching still runs.
+  const [aiDependencyAnalysis, setAiDependencyAnalysis] = useState(true);
   const bulkDecision = useBulkDecision();
 
   function applyResult(
@@ -164,7 +167,7 @@ export function ScenarioReviewStage({
   async function handleFinalize() {
     setFinalizing(true);
     setFinalizeError(null);
-    const result = await finalizeScenarioReview();
+    const result = await finalizeScenarioReview({ aiDependencyAnalysis });
     setFinalizing(false);
     if (!result.ok) {
       setFinalizeError(result.message);
@@ -347,8 +350,9 @@ export function ScenarioReviewStage({
               >
                 <Skeleton className="h-2 w-2 rounded-full bg-brand-500" />
                 <span>
-                  Running dependency analysis with the local AI model — this can take a couple
-                  of minutes.
+                  {aiDependencyAnalysis
+                    ? "Running dependency analysis with the local AI model — this can take a couple of minutes."
+                    : "Running dependency analysis (deterministic matching only)."}
                 </span>
               </p>
             )}
@@ -365,6 +369,25 @@ export function ScenarioReviewStage({
           acceptedCount === 0
             ? "Accept at least one scenario to finalize. Pending and rejected scenarios are excluded from the approved suite."
             : "Only accepted scenarios go on to dependency analysis and the Postman collection; pending and rejected ones are excluded."
+        }
+        beforeAction={
+          isActiveStage ? (
+            <label className="flex items-start gap-2 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={aiDependencyAnalysis}
+                disabled={finalizing}
+                onChange={(event) => setAiDependencyAnalysis(event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <span>
+                Use local AI to find extra dependencies
+                <span className="block text-xs text-muted">
+                  Can take a few minutes. Turn off to use deterministic matching only.
+                </span>
+              </span>
+            </label>
+          ) : undefined
         }
         action={
           isActiveStage

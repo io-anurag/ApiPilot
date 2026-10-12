@@ -263,8 +263,10 @@ When you're done, click **Finalize Review**:
   everything downstream, and told how many accepted scenarios will be finalized.
 - If zero scenarios are accepted, finalizing is blocked — you must accept at least one.
 - **Finalize Review** is unavailable while a decision you just made is still being saved.
-- Finalizing triggers dependency analysis automatically (this can take a couple of
-  minutes on larger specs). While it runs, the review is locked — the list, filters, bulk
+- Finalizing triggers dependency analysis automatically. Beside the button, **Use local AI to
+  find extra dependencies** is on by default; the AI pass can take a few minutes, so turn it off
+  to use deterministic matching only (the Dependency Analysis summary then says AI-assisted
+  discovery was skipped). While it runs, the review is locked — the list, filters, bulk
   actions, and decision controls are disabled and a "locked while it is being finalized"
   message is shown — so nothing can change the review after it has been committed.
 

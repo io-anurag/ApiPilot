@@ -621,3 +621,33 @@ describe("RequestEditorPanel — editing the request's own auth (FR-002c)", () =
     expect(screen.getByLabelText("Token")).toBeDisabled();
   });
 });
+
+describe("RequestEditorPanel collection variable suggestions", () => {
+  it("offers the collection's variables, ahead of dynamic ones, when {{ is typed", () => {
+    render(
+      <RequestEditorPanel
+        request={request()}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        variables={[
+          { name: "token", source: "collection-default", resolved: false, referenced: true },
+          { name: "baseUrl", value: "http://localhost:3000", source: "environment", resolved: true, referenced: true },
+        ]}
+      />,
+    );
+    const url = screen.getByLabelText("URL");
+    fireEvent.change(url, { target: { value: "{{baseUrl}}/products/{{to" } });
+    const list = within(screen.getByRole("listbox", { name: "References for URL" }));
+    expect(list.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "{{token}}Collection variable",
+    ]);
+
+    fireEvent.change(url, { target: { value: "{{" } });
+    const names = within(screen.getByRole("listbox", { name: "References for URL" }))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(names.slice(0, 2)).toEqual(["{{token}}Collection variable", "{{baseUrl}}Environment variable"]);
+    expect(names.some((name) => name?.startsWith("{{$guid}}"))).toBe(true);
+  });
+});

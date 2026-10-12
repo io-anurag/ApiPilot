@@ -175,7 +175,7 @@ export function RequestAuthEditor({
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <label htmlFor="request-auth-type" className="text-xs font-medium text-muted">
+        <label htmlFor="request-auth-type" className="block text-xs font-medium text-muted">
           Auth type
         </label>
         <select

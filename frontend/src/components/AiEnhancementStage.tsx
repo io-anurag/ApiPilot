@@ -179,11 +179,11 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
         )}
       </div>
       <ul
-        className="grid max-h-72 grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto rounded-md border border-border bg-surface p-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+        className="flex max-h-72 flex-wrap gap-x-3 gap-y-2 overflow-y-auto rounded-md border border-border bg-surface p-2.5"
         aria-label="Batch progress"
       >
         {progress.batches.map((batch) => (
-          <li key={batch.index}>
+          <li key={batch.index} className="whitespace-nowrap">
             <StatusBadge
               label={`Batch ${batch.index + 1}: ${BATCH_STATUS_LABEL[batch.status]}`}
               tone={BATCH_STATUS_TONE[batch.status]}

@@ -602,8 +602,19 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
 
   router.post("/test-generation-workflow/scenario-review/finalize", async (req, res, next) => {
     const startedAt = logRequestReceived(req);
+    const body = req.body as Record<string, unknown> | undefined;
+    const aiDependencyAnalysis = body?.aiDependencyAnalysis;
+    if (aiDependencyAnalysis !== undefined && typeof aiDependencyAnalysis !== "boolean") {
+      logRequestFailed(req, startedAt, 400, "invalid_request");
+      res
+        .status(400)
+        .json({ error: "invalid_request", message: "aiDependencyAnalysis must be a boolean" });
+      return;
+    }
     try {
-      res.status(200).json({ workflow: toWorkflowResponse(await finalizeScenarioReview(provider)) });
+      res.status(200).json({
+        workflow: toWorkflowResponse(await finalizeScenarioReview(provider, { aiDependencyAnalysis })),
+      });
       logRequestSucceeded(req, startedAt, 200);
     } catch (err) {
       if (err instanceof StageNotActiveError) {

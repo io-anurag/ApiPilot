@@ -244,3 +244,42 @@ describe("ScenarioReviewStage while finalizing", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("ScenarioReviewStage AI dependency analysis option", () => {
+  const label = "Use local AI to find extra dependencies";
+
+  function acceptedWorkflow(): TestGenerationWorkflow {
+    const workflow = workflowWithScenario();
+    const reviewWorkspace = workflow.reviewWorkspace as unknown as {
+      scenarios: { state: string }[];
+      summary: Record<string, number>;
+    };
+    reviewWorkspace.scenarios[0].state = "accepted";
+    reviewWorkspace.summary = { total: 1, pending: 0, accepted: 1, rejected: 0, requiresReview: 0 };
+    return workflow;
+  }
+
+  it("is on by default and finalizes with the AI pass enabled", () => {
+    const spy = vi
+      .spyOn(client, "finalizeScenarioReview")
+      .mockResolvedValue({ ok: false, error: "x", message: "stop" });
+    render(<ScenarioReviewStage workflow={acceptedWorkflow()} onAdvanced={vi.fn()} />);
+
+    expect(screen.getByRole("checkbox", { name: new RegExp(label) })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Review" }));
+    expect(spy).toHaveBeenCalledWith({ aiDependencyAnalysis: true });
+    vi.restoreAllMocks();
+  });
+
+  it("finalizes with the AI pass skipped when the user turns it off", () => {
+    const spy = vi
+      .spyOn(client, "finalizeScenarioReview")
+      .mockResolvedValue({ ok: false, error: "x", message: "stop" });
+    render(<ScenarioReviewStage workflow={acceptedWorkflow()} onAdvanced={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: new RegExp(label) }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Review" }));
+    expect(spy).toHaveBeenCalledWith({ aiDependencyAnalysis: false });
+    vi.restoreAllMocks();
+  });
+});

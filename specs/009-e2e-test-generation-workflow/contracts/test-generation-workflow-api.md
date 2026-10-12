@@ -188,6 +188,10 @@ Body: `{ "scenarioId": "...", "revision": 2 }`.
 Commits the current `reviewWorkspace`'s projected `approvedTestModel` as the stage's output
 (research.md D6). Requires `scenarioReview` to be `active`.
 
+Optional body: `{ "aiDependencyAnalysis": boolean }`. Omitted or `true` runs the AI-assisted pass of
+dependency analysis as before; `false` skips it, so only deterministic matching runs and
+`dependencyAnalysis.aiOutcome` is `"skipped"`. A non-boolean value is `400 invalid_request`.
+
 ### Success Response: `200 OK`
 
 Stage becomes `complete`; `activeStageId` advances to `dependencyAnalysis`, which runs automatically

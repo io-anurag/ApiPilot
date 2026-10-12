@@ -185,6 +185,15 @@ describe("test generation workflow orchestration", () => {
     });
   });
 
+  it("rejects a non-boolean aiDependencyAnalysis on finalize with 400 invalid_request", async () => {
+    const app = createApp(fixedProvider(emptyCandidates));
+    const response = await request(app)
+      .post("/api/test-generation-workflow/scenario-review/finalize")
+      .send({ aiDependencyAnalysis: "no" });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("invalid_request");
+  });
+
   it("walks the full sequence from upload to a downloadable Postman collection (US1)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
     const agent = request.agent(app);

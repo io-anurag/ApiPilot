@@ -287,8 +287,20 @@ export function regenerateScenario(scenarioId: string, revision: number): Promis
   });
 }
 
-export function finalizeScenarioReview(): Promise<WorkflowResult> {
-  return postJson("/api/test-generation-workflow/scenario-review/finalize", "finalizeScenarioReview");
+/**
+ * `aiDependencyAnalysis: false` skips the minutes-long AI pass of the dependency analysis that
+ * finalizing runs; omitted keeps it on.
+ */
+export function finalizeScenarioReview(
+  options: { aiDependencyAnalysis?: boolean } = {},
+): Promise<WorkflowResult> {
+  return postJson(
+    "/api/test-generation-workflow/scenario-review/finalize",
+    "finalizeScenarioReview",
+    options.aiDependencyAnalysis === undefined
+      ? undefined
+      : { aiDependencyAnalysis: options.aiDependencyAnalysis },
+  );
 }
 
 export function recordWorkflowDecisions(

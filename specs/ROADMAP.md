@@ -3629,3 +3629,15 @@ Implementation
       Performance, screen readers, and the usability target SC-009. Pre-existing and not changed: at phone width the top tab menu and
       the command palette are wider than the screen.
     - Version bumped to 19.42.0 (root, backend, frontend, shared-domain).
+78. **AP-009 amended: skippable AI dependency analysis at finalize; version 19.43.0 (2026-10-12).**
+    - Finalizing scenario review ran the local-AI dependency pass unconditionally: for 13 positive scenarios it
+      took minutes and assembled 0 integration workflows. The user now chooses: a checkbox beside **Finalize
+      Review** (on by default, so behavior is unchanged unless turned off) sends `aiDependencyAnalysis`, and `false`
+      leaves only deterministic matching (`aiOutcome: "skipped"`, noted in the Dependency Analysis summary).
+    - Contract: `specs/009` `contracts/test-generation-workflow-api.md`. Documentation: `docs/USER_MANUAL.md`
+      section 3.6, `docs/architecture.md`.
+    - Also: AI Enhancement's batch progress list wraps badges instead of squeezing them into fixed columns.
+    - Also: the request editor offers the collection's variables when `{{` is typed (URL, header values, body), and the Auth type label sits above its dropdown.
+    - Validation (2026-10-12): the related backend and frontend suites pass (18 files, 161 tests); `npm run lint` and
+      `npm run build` pass. The full `npm test` was not run, and the UI was not exercised in a browser.
+    - Version bumped to 19.43.0 (root, backend, frontend, shared-domain).

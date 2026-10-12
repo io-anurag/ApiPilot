@@ -589,6 +589,7 @@ export function ExternalCollectionsPage({
                   locked={locked}
                   onSave={handleSaveRequest}
                   onClose={handleClosePanel}
+                  variables={collectionView?.variables}
                 />
               ) : (
                 <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">

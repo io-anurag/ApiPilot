@@ -137,8 +137,16 @@ export async function regenerateScenario(
  * Commits the current workspace's projected approved TestModel as this stage's output
  * (research.md D6), advances to `dependencyAnalysis`, and immediately runs it — that stage has
  * no separate trigger (data-model.md). Refuses when nothing was approved (FR-011).
+ *
+ * `options.aiDependencyAnalysis: false` withholds the provider from the analysis, so only the
+ * deterministic matching runs (`aiOutcome: "skipped"`). The AI pass costs minutes of local
+ * inference per run and often finds nothing beyond the deterministic relationships, so the user
+ * chooses whether to pay for it. Omitted means on, preserving the original behavior.
  */
-export async function finalizeScenarioReview(provider?: AIProvider): Promise<TestGenerationWorkflow> {
+export async function finalizeScenarioReview(
+  provider?: AIProvider,
+  options: { aiDependencyAnalysis?: boolean } = {},
+): Promise<TestGenerationWorkflow> {
   const startedAt = Date.now();
   // Tracks whether *this* call completed the stage, so the rollback below only ever reopens a
   // review this call closed — never one a previous, successful finalize legitimately closed
@@ -154,7 +162,9 @@ export async function finalizeScenarioReview(provider?: AIProvider): Promise<Tes
     updateStage("scenarioReview", "complete");
     completedByThisCall = true;
     advanceActiveStage("dependencyAnalysis");
-    const result = await runDependencyAnalysis(provider);
+    const result = await runDependencyAnalysis(
+      options.aiDependencyAnalysis === false ? undefined : provider,
+    );
     logger.info("stage_complete", {
       stage: "scenarioReview",
       workflowId: result.id,

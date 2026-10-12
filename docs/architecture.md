@@ -288,6 +288,11 @@ arriving in that window would land after the approved suite was already projecte
 regeneration returns. The frontend disables the review controls for the same window and holds
 "Finalize Review" while any decision is still in flight.
 
+The AI pass of dependency analysis is optional per finalize. `POST .../scenario-review/finalize`
+accepts `{ "aiDependencyAnalysis": boolean }` (omitted means `true`); `false` withholds the provider
+from `runDependencyAnalysis`, so only deterministic matching runs and the result records
+`aiOutcome: "skipped"`. A non-boolean value is `400 invalid_request`.
+
 Every stage is guarded by its required output. Stage state is visible as not-yet-reached, active,
 complete, stale, or skipped; skipped AI enhancement may become active again before scenario review
 is finalized. Changing an upstream decision invalidates dependent completed stages, marks them

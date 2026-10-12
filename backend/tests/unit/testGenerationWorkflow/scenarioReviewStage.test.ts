@@ -167,4 +167,43 @@ describe("scenarioReviewStage", () => {
     expect(retried.stages.scenarioReview.status).toBe("complete");
     expect(retried.stages.dependencyAnalysis.status).toBe("complete");
   });
+
+  describe("aiDependencyAnalysis option", () => {
+    function countingProvider() {
+      const counts = { inputBudget: 0 };
+      const provider: AIProvider = {
+        ...unavailableProvider,
+        getInputBudget: async () => {
+          counts.inputBudget += 1;
+          return undefined;
+        },
+      };
+      return { provider, counts };
+    }
+
+    async function acceptFirst() {
+      await reachScenarioReview();
+      const first = getCurrentWorkflow()!.reviewWorkspace!.scenarios[0];
+      applyScenarioDecisions([
+        { scenarioId: first.scenarioId, revision: first.revision, action: "accept" },
+      ]);
+    }
+
+    it("skips the AI pass and records aiOutcome \"skipped\" when turned off", async () => {
+      await acceptFirst();
+      const { provider, counts } = countingProvider();
+      const result = await finalizeScenarioReview(provider, { aiDependencyAnalysis: false });
+      expect(counts.inputBudget).toBe(0);
+      expect(result.dependencyAnalysis?.aiOutcome).toBe("skipped");
+      expect(result.stages.dependencyAnalysis.status).toBe("complete");
+    });
+
+    it("still runs the AI pass by default", async () => {
+      await acceptFirst();
+      const { provider, counts } = countingProvider();
+      const result = await finalizeScenarioReview(provider);
+      expect(counts.inputBudget).toBeGreaterThan(0);
+      expect(result.dependencyAnalysis?.aiOutcome).not.toBe("skipped");
+    });
+  });
 });
