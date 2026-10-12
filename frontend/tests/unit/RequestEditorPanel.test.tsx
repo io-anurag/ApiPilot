@@ -85,7 +85,9 @@ describe("RequestEditorPanel", () => {
       const url = screen.getByLabelText("URL");
 
       fireEvent.change(url, { target: { value: "{{baseUrl}}/widgets/{{$randomEm" } });
-      const options = within(screen.getByRole("listbox", { name: "References for URL" })).getAllByRole("option");
+      const options = within(
+        screen.getByRole("listbox", { name: "References for URL" }),
+      ).getAllByRole("option");
       expect(options).toHaveLength(1);
       expect(options[0]).toHaveTextContent("{{$randomEmail}}");
       expect(options[0]).toHaveTextContent("Email address");
@@ -98,7 +100,8 @@ describe("RequestEditorPanel", () => {
       renderEditor();
       const url = screen.getByLabelText("URL");
 
-      const list = () => within(screen.getByRole("listbox", { name: "References for URL" }));
+      const list = () =>
+        within(screen.getByRole("listbox", { name: "References for URL" }));
 
       fireEvent.change(url, { target: { value: "{{$" } });
       expect(list().getAllByRole("option").length).toBeGreaterThan(40);
@@ -113,7 +116,9 @@ describe("RequestEditorPanel", () => {
       renderEditor();
       const url = screen.getByLabelText("URL");
       fireEvent.change(url, { target: { value: "{{baseUrl" } });
-      expect(screen.queryByRole("listbox", { name: "References for URL" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("listbox", { name: "References for URL" }),
+      ).not.toBeInTheDocument();
     });
 
     it("works in a header value and in the body", () => {
@@ -123,7 +128,11 @@ describe("RequestEditorPanel", () => {
       fireEvent.keyDown(header, { key: "Tab" });
       expect(header).toHaveValue("Bearer {{$guid}}");
 
-      fireEvent.click(within(screen.getByRole("tablist", { name: "Request editor sections" })).getByRole("tab", { name: /Body/ }));
+      fireEvent.click(
+        within(
+          screen.getByRole("tablist", { name: "Request editor sections" }),
+        ).getByRole("tab", { name: /Body/ }),
+      );
       const body = screen.getByLabelText("Raw body");
       fireEvent.change(body, { target: { value: '{"id": "{{$randomUU' } });
       fireEvent.keyDown(body, { key: "Enter" });
@@ -132,7 +141,14 @@ describe("RequestEditorPanel", () => {
 
     it("saves the token as typed", () => {
       const onSave = vi.fn().mockResolvedValue(undefined);
-      render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+      render(
+        <RequestEditorPanel
+          request={request()}
+          locked={false}
+          onSave={onSave}
+          onClose={vi.fn()}
+        />,
+      );
       const url = screen.getByLabelText("URL");
       fireEvent.change(url, { target: { value: "{{baseUrl}}/{{$randomInt" } });
       fireEvent.keyDown(url, { key: "Enter" });
@@ -152,16 +168,31 @@ describe("RequestEditorPanel", () => {
 
   it("offers standard header names in a combo box for the header name, and keeps custom names", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<RequestEditorPanel request={request()} locked={false} onSave={onSave} onClose={vi.fn()} />);
+    render(
+      <RequestEditorPanel
+        request={request()}
+        locked={false}
+        onSave={onSave}
+        onClose={vi.fn()}
+      />,
+    );
 
     const name = screen.getByRole("combobox", { name: "Header 1 name" });
     expect(name).toHaveValue("Authorization");
-    fireEvent.mouseDown(screen.getByRole("button", { name: "Show all options for Header 1 name" }));
-    fireEvent.mouseDown(within(screen.getByRole("listbox", { name: "Options for Header 1 name" })).getByText("Content-Type"));
+    fireEvent.mouseDown(
+      screen.getByRole("button", { name: "Show all options for Header 1 name" }),
+    );
+    fireEvent.mouseDown(
+      within(
+        screen.getByRole("listbox", { name: "Options for Header 1 name" }),
+      ).getByText("Content-Type"),
+    );
     expect(name).toHaveValue("Content-Type");
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add header" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Header 2 name" }), { target: { value: "X-Tenant" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Header 2 name" }), {
+      target: { value: "X-Tenant" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith(
       "item-1",
@@ -623,6 +654,41 @@ describe("RequestEditorPanel — editing the request's own auth (FR-002c)", () =
 });
 
 describe("RequestEditorPanel collection variable suggestions", () => {
+  it.each([
+    ["bearer", "Token"],
+    ["basic", "Password"],
+    ["apikey", "Value"],
+  ])("offers and inserts variables in %s auth", (type, label) => {
+    render(
+      <RequestEditorPanel
+        request={request()}
+        locked={false}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        variables={[
+          { name: "token", source: "environment", resolved: false, referenced: false },
+          {
+            name: "customer_id",
+            source: "collection-default",
+            resolved: false,
+            referenced: false,
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(editTabs().getByRole("tab", { name: "Auth" }));
+    fireEvent.change(screen.getByLabelText("Auth type"), { target: { value: type } });
+    const field = screen.getByLabelText(label);
+    fireEvent.change(field, { target: { value: "{{tok" } });
+    const list = screen.getByRole("listbox", { name: `References for ${label}` });
+    expect(within(list).getByRole("option")).toHaveTextContent("{{token}}");
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(field).toHaveValue("{{token}}");
+    expect(
+      screen.queryByRole("listbox", { name: `References for ${label}` }),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers the collection's variables, ahead of dynamic ones, when {{ is typed", () => {
     render(
       <RequestEditorPanel
@@ -631,8 +697,19 @@ describe("RequestEditorPanel collection variable suggestions", () => {
         onSave={vi.fn()}
         onClose={vi.fn()}
         variables={[
-          { name: "token", source: "collection-default", resolved: false, referenced: true },
-          { name: "baseUrl", value: "http://localhost:3000", source: "environment", resolved: true, referenced: true },
+          {
+            name: "token",
+            source: "collection-default",
+            resolved: false,
+            referenced: true,
+          },
+          {
+            name: "baseUrl",
+            value: "http://localhost:3000",
+            source: "environment",
+            resolved: true,
+            referenced: true,
+          },
         ]}
       />,
     );
@@ -647,7 +724,10 @@ describe("RequestEditorPanel collection variable suggestions", () => {
     const names = within(screen.getByRole("listbox", { name: "References for URL" }))
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(names.slice(0, 2)).toEqual(["{{token}}Collection variable", "{{baseUrl}}Environment variable"]);
+    expect(names.slice(0, 2)).toEqual([
+      "{{token}}Collection variable",
+      "{{baseUrl}}Environment variable",
+    ]);
     expect(names.some((name) => name?.startsWith("{{$guid}}"))).toBe(true);
   });
 });

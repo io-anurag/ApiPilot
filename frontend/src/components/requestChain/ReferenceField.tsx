@@ -8,6 +8,7 @@ export interface ReferenceSuggestion {
 }
 
 const OPEN = /\{\{(\$?[A-Za-z0-9_]*)$/;
+const EMPTY_REFERENCE = /\{\{\}\}$/;
 const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
 
@@ -31,6 +32,7 @@ export function ReferenceField({
   monospace = false,
   disabled = false,
   invalid,
+  describedBy,
   placeholder,
   rows = 6,
 }: Readonly<{
@@ -45,6 +47,7 @@ export function ReferenceField({
   disabled?: boolean;
   /** An error to show under the field, announced with it. */
   invalid?: string | null;
+  describedBy?: string;
   placeholder?: string;
   rows?: number;
 }>) {
@@ -55,9 +58,18 @@ export function ReferenceField({
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
 
-  const matches = query === null ? [] : suggestions.filter((suggestion) => suggestion.name.toLowerCase().startsWith(query.toLowerCase()));
+  const matches =
+    query === null
+      ? []
+      : suggestions.filter((suggestion) =>
+          suggestion.name.toLowerCase().startsWith(query.toLowerCase()),
+        );
   const open = matches.length > 0;
-  const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [anchor, setAnchor] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   // While the list is open it follows the field through page scrolls and resizes.
   useLayoutEffect(() => {
@@ -77,21 +89,25 @@ export function ReferenceField({
 
   // Arrow-key navigation keeps the highlighted suggestion visible inside the scrollable list.
   useLayoutEffect(() => {
-    if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
+    if (open)
+      document
+        .getElementById(`${listId}-${active}`)
+        ?.scrollIntoView?.({ block: "nearest" });
   }, [open, active, listId]);
 
   function track(text: string, caret: number | null) {
     const before = text.slice(0, caret ?? text.length);
     const match = OPEN.exec(before);
     setQuery(match ? match[1] : null);
+    if (!match && EMPTY_REFERENCE.test(before)) setQuery("");
     setActive(0);
   }
 
   function insert(name: string) {
     const field = fieldRef.current;
     const caret = field?.selectionStart ?? value.length;
-    const before = value.slice(0, caret).replace(OPEN, "");
-    const after = value.slice(caret).replace(/^\}\}/, "");
+    const before = value.slice(0, caret).replace(EMPTY_REFERENCE, "").replace(OPEN, "");
+    const after = value.slice(caret).replace(/^\$?[A-Za-z0-9_]*\}\}/, "");
     const next = `${before}{{${name}}}${after}`;
     onChange(next);
     setQuery(null);
@@ -128,12 +144,23 @@ export function ReferenceField({
     "aria-autocomplete": "list" as const,
     "aria-activedescendant": open ? `${listId}-${active}` : undefined,
     "aria-invalid": invalid ? true : undefined,
-    "aria-describedby": invalid ? errorId : undefined,
+    "aria-describedby":
+      [invalid ? errorId : undefined, describedBy].filter(Boolean).join(" ") || undefined,
     className: `${INPUT_CLASS} ${monospace ? "font-mono text-xs" : ""} ${invalid ? "border-danger-500" : ""}`,
     onKeyDown: handleKeyDown,
     onChange: (event: { target: { value: string; selectionStart: number | null } }) => {
       onChange(event.target.value);
       track(event.target.value, event.target.selectionStart);
+    },
+    onFocus: (event: {
+      currentTarget: { value: string; selectionStart: number | null };
+    }) => {
+      track(event.currentTarget.value, event.currentTarget.selectionStart);
+    },
+    onClick: (event: {
+      currentTarget: { value: string; selectionStart: number | null };
+    }) => {
+      track(event.currentTarget.value, event.currentTarget.selectionStart);
     },
     onBlur: () => {
       setQuery(null);
@@ -146,13 +173,19 @@ export function ReferenceField({
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      {multiline ? <textarea {...common} rows={rows} spellCheck={false} /> : <input {...common} type="text" spellCheck={false} autoComplete="off" />}
+      {multiline ? (
+        <textarea {...common} rows={rows} spellCheck={false} />
+      ) : (
+        <input {...common} type="text" spellCheck={false} autoComplete="off" />
+      )}
       <ul
         id={listId}
         role="listbox"
         aria-label={`References for ${label}`}
         hidden={!open}
-        style={anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined}
+        style={
+          anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined
+        }
         className="fixed z-50 max-h-96 min-w-80 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
       >
         {matches.map((suggestion, index) => (
@@ -173,7 +206,11 @@ export function ReferenceField({
         ))}
       </ul>
       {invalid && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-danger-700 dark:text-danger-200">
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-1 text-xs text-danger-700 dark:text-danger-200"
+        >
           {invalid}
         </p>
       )}

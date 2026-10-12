@@ -1,7 +1,12 @@
 import type { RequestAuthView, RequestVariableReference } from "@apipilot/shared-domain";
 import { StatusBadge } from "./StatusBadge";
 import { VariableHighlightedText } from "./VariableHighlightedText";
-import { keepsHiddenValue, type AuthDraft, type EditableAuthType } from "../utils/authDraft";
+import {
+  keepsHiddenValue,
+  type AuthDraft,
+  type EditableAuthType,
+} from "../utils/authDraft";
+import { ReferenceField, type ReferenceSuggestion } from "./requestChain/ReferenceField";
 
 /** Postman's own names for its auth types; an unknown type is shown as stored. */
 const AUTH_TYPE_LABELS: Record<string, string> = {
@@ -50,14 +55,22 @@ const TABLE_CELL = "px-2 py-1.5 align-top";
  * as stored with `{{variable}}` references marked. A secret literal never reaches the browser; its
  * field is shown as hidden instead.
  */
-export function RequestAuthSection({ auth }: Readonly<{ auth: RequestAuthView | undefined }>) {
+export function RequestAuthSection({
+  auth,
+}: Readonly<{ auth: RequestAuthView | undefined }>) {
   if (!auth) {
-    return <p className="text-sm text-muted">No auth applies: neither this request, its folders nor the collection set one.</p>;
+    return (
+      <p className="text-sm text-muted">
+        No auth applies: neither this request, its folders nor the collection set one.
+      </p>
+    );
   }
   return (
     <div className="space-y-3">
       <p className="text-sm">
-        <span className="font-semibold text-text-primary">{authTypeLabel(auth.type)}</span>{" "}
+        <span className="font-semibold text-text-primary">
+          {authTypeLabel(auth.type)}
+        </span>{" "}
         <span className="text-muted">{authSourceText(auth.source)}</span>
       </p>
       {auth.fields.length > 0 && (
@@ -79,7 +92,9 @@ export function RequestAuthSection({ auth }: Readonly<{ auth: RequestAuthView | 
                   <td className={`${TABLE_CELL} font-mono text-xs`}>{field.key}</td>
                   <td className={`${TABLE_CELL} font-mono text-xs wrap-anywhere`}>
                     {field.hiddenLiteral ? (
-                      <span className="font-sans italic text-muted">Hidden literal value</span>
+                      <span className="font-sans italic text-muted">
+                        Hidden literal value
+                      </span>
                     ) : field.value.length > 0 ? (
                       <VariableHighlightedText text={field.value} />
                     ) : (
@@ -92,7 +107,9 @@ export function RequestAuthSection({ auth }: Readonly<{ auth: RequestAuthView | 
           </table>
         </div>
       )}
-      <p className="text-xs text-muted">Read-only. A secret typed directly into the collection is never shown here.</p>
+      <p className="text-xs text-muted">
+        Read-only. A secret typed directly into the collection is never shown here.
+      </p>
     </div>
   );
 }
@@ -105,9 +122,6 @@ const AUTH_TYPE_OPTIONS: Array<{ value: EditableAuthType; label: string }> = [
   { value: "apikey", label: "API Key" },
 ];
 
-const FIELD_INPUT =
-  "w-full rounded-md border border-border bg-surface px-2 py-1 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50";
-
 function AuthField({
   id,
   label,
@@ -115,6 +129,7 @@ function AuthField({
   draft,
   locked,
   onChange,
+  suggestions,
 }: Readonly<{
   id: string;
   label: string;
@@ -122,25 +137,26 @@ function AuthField({
   draft: AuthDraft;
   locked: boolean;
   onChange: (draft: AuthDraft) => void;
+  suggestions: readonly ReferenceSuggestion[];
 }>) {
   const hidden = draft.type === draft.storedType && draft.hiddenKeys.includes(fieldKey);
   const helpId = `${id}-help`;
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="text-xs font-medium text-muted">
+      <span aria-hidden="true" className="text-xs font-medium text-muted">
         {label}
-      </label>
-      <input
-        id={id}
-        type="text"
-        autoComplete="off"
-        spellCheck={false}
+      </span>
+      <ReferenceField
+        label={label}
         value={draft.fields[fieldKey] ?? ""}
         disabled={locked}
         placeholder={hidden ? "Hidden value set" : "{{variable}} or value"}
-        aria-describedby={hidden ? helpId : undefined}
-        onChange={(event) => onChange({ ...draft, fields: { ...draft.fields, [fieldKey]: event.target.value } })}
-        className={FIELD_INPUT}
+        describedBy={hidden ? helpId : undefined}
+        onChange={(value) =>
+          onChange({ ...draft, fields: { ...draft.fields, [fieldKey]: value } })
+        }
+        suggestions={suggestions}
+        monospace
       />
       {hidden && (
         <p id={helpId} className="text-xs text-muted">
@@ -164,18 +180,23 @@ export function RequestAuthEditor({
   draft,
   locked,
   onChange,
+  suggestions = [],
 }: Readonly<{
   /** The request's effective auth as loaded. */
   auth: RequestAuthView | undefined;
   draft: AuthDraft;
   locked: boolean;
   onChange: (draft: AuthDraft) => void;
+  suggestions?: readonly ReferenceSuggestion[];
 }>) {
   const unsupportedLabel = draft.storedType ? authTypeLabel(draft.storedType) : "";
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <label htmlFor="request-auth-type" className="block text-xs font-medium text-muted">
+        <label
+          htmlFor="request-auth-type"
+          className="block text-xs font-medium text-muted"
+        >
           Auth type
         </label>
         <select
@@ -183,14 +204,19 @@ export function RequestAuthEditor({
           value={draft.type}
           disabled={locked}
           onChange={(event) => {
-            const type = event.target.value === "unsupported" ? "unsupported" : AUTH_TYPE_OPTIONS.find((option) => option.value === event.target.value)?.value;
+            const type =
+              event.target.value === "unsupported"
+                ? "unsupported"
+                : AUTH_TYPE_OPTIONS.find((option) => option.value === event.target.value)
+                    ?.value;
             if (type) onChange({ ...draft, type });
           }}
           className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-64"
         >
-          {draft.storedType && !AUTH_TYPE_OPTIONS.some((option) => option.value === draft.storedType) && (
-            <option value="unsupported">{unsupportedLabel} (read-only)</option>
-          )}
+          {draft.storedType &&
+            !AUTH_TYPE_OPTIONS.some((option) => option.value === draft.storedType) && (
+              <option value="unsupported">{unsupportedLabel} (read-only)</option>
+            )}
           {AUTH_TYPE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -201,39 +227,85 @@ export function RequestAuthEditor({
 
       {draft.type === "inherit" &&
         (auth?.source.kind === "request" ? (
-          <p className="text-sm text-muted">Uses its folder&apos;s or the collection&apos;s auth. After saving, this tab shows which one applies.</p>
+          <p className="text-sm text-muted">
+            Uses its folder&apos;s or the collection&apos;s auth. After saving, this tab
+            shows which one applies.
+          </p>
         ) : (
           <RequestAuthSection auth={auth} />
         ))}
 
       {draft.type === "noauth" && (
-        <p className="text-sm text-muted">This request sends no auth, even when its folder or the collection sets one.</p>
+        <p className="text-sm text-muted">
+          This request sends no auth, even when its folder or the collection sets one.
+        </p>
       )}
 
       {draft.type === "unsupported" && (
         <>
           <RequestAuthSection auth={auth} />
           <p className="text-xs text-muted">
-            ApiPilot can&apos;t edit {unsupportedLabel}. Saving the request leaves it as it is; choose another type to replace it.
+            ApiPilot can&apos;t edit {unsupportedLabel}. Saving the request leaves it as
+            it is; choose another type to replace it.
           </p>
         </>
       )}
 
       {draft.type === "bearer" && (
-        <AuthField id="request-auth-token" label="Token" fieldKey="token" draft={draft} locked={locked} onChange={onChange} />
+        <AuthField
+          id="request-auth-token"
+          label="Token"
+          fieldKey="token"
+          draft={draft}
+          locked={locked}
+          onChange={onChange}
+          suggestions={suggestions}
+        />
       )}
 
       {draft.type === "basic" && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <AuthField id="request-auth-username" label="Username" fieldKey="username" draft={draft} locked={locked} onChange={onChange} />
-          <AuthField id="request-auth-password" label="Password" fieldKey="password" draft={draft} locked={locked} onChange={onChange} />
+          <AuthField
+            id="request-auth-username"
+            label="Username"
+            fieldKey="username"
+            draft={draft}
+            locked={locked}
+            onChange={onChange}
+            suggestions={suggestions}
+          />
+          <AuthField
+            id="request-auth-password"
+            label="Password"
+            fieldKey="password"
+            draft={draft}
+            locked={locked}
+            onChange={onChange}
+            suggestions={suggestions}
+          />
         </div>
       )}
 
       {draft.type === "apikey" && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <AuthField id="request-auth-key" label="Key" fieldKey="key" draft={draft} locked={locked} onChange={onChange} />
-          <AuthField id="request-auth-value" label="Value" fieldKey="value" draft={draft} locked={locked} onChange={onChange} />
+          <AuthField
+            id="request-auth-key"
+            label="Key"
+            fieldKey="key"
+            draft={draft}
+            locked={locked}
+            onChange={onChange}
+            suggestions={suggestions}
+          />
+          <AuthField
+            id="request-auth-value"
+            label="Value"
+            fieldKey="value"
+            draft={draft}
+            locked={locked}
+            onChange={onChange}
+            suggestions={suggestions}
+          />
           <div className="space-y-1">
             <label htmlFor="request-auth-in" className="text-xs font-medium text-muted">
               Add to
@@ -242,7 +314,12 @@ export function RequestAuthEditor({
               id="request-auth-in"
               value={draft.apiKeyIn}
               disabled={locked}
-              onChange={(event) => onChange({ ...draft, apiKeyIn: event.target.value === "query" ? "query" : "header" })}
+              onChange={(event) =>
+                onChange({
+                  ...draft,
+                  apiKeyIn: event.target.value === "query" ? "query" : "header",
+                })
+              }
               className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="header">Header</option>
@@ -254,7 +331,8 @@ export function RequestAuthEditor({
 
       {(draft.type === "bearer" || draft.type === "basic" || draft.type === "apikey") && (
         <p className="text-xs text-muted">
-          Saved with the request, on this request only. Use a <code>{"{{variable}}"}</code> to keep a secret out of the collection.
+          Saved with the request, on this request only. Use a{" "}
+          <code>{"{{variable}}"}</code> to keep a secret out of the collection.
         </p>
       )}
     </div>
@@ -265,7 +343,9 @@ export function RequestAuthEditor({
  * Every variable the request uses, where, and whether it is set (FR-002b). Status is text, not
  * color alone; values themselves stay in the variable panel (FR-003).
  */
-export function RequestVariablesSection({ references }: Readonly<{ references: RequestVariableReference[] }>) {
+export function RequestVariablesSection({
+  references,
+}: Readonly<{ references: RequestVariableReference[] }>) {
   if (references.length === 0) {
     return <p className="text-sm text-muted">This request uses no variables.</p>;
   }
@@ -295,17 +375,28 @@ export function RequestVariablesSection({ references }: Readonly<{ references: R
                 <td className={`${TABLE_CELL} font-mono text-xs`}>
                   <VariableHighlightedText text={`{{${reference.name}}}`} />
                 </td>
-                <td className={`${TABLE_CELL} text-xs`}>{reference.usedIn.map((location) => USED_IN_LABELS[location]).join(", ")}</td>
-                <td className={TABLE_CELL}>
-                  <StatusBadge label={reference.resolved ? "Set" : "Missing"} tone={reference.resolved ? "success" : "warning"} />
+                <td className={`${TABLE_CELL} text-xs`}>
+                  {reference.usedIn
+                    .map((location) => USED_IN_LABELS[location])
+                    .join(", ")}
                 </td>
-                <td className={`${TABLE_CELL} text-xs text-muted`}>{reference.source ? SOURCE_LABELS[reference.source] : "—"}</td>
+                <td className={TABLE_CELL}>
+                  <StatusBadge
+                    label={reference.resolved ? "Set" : "Missing"}
+                    tone={reference.resolved ? "success" : "warning"}
+                  />
+                </td>
+                <td className={`${TABLE_CELL} text-xs text-muted`}>
+                  {reference.source ? SOURCE_LABELS[reference.source] : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted">Values are shown and edited in the Variables panel.</p>
+      <p className="text-xs text-muted">
+        Values are shown and edited in the Variables panel.
+      </p>
     </div>
   );
 }

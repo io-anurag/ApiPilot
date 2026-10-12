@@ -19,7 +19,10 @@ function collectionReferencingToken() {
 }
 
 function environmentWithBaseUrlOnly() {
-  return { name: "env", values: [{ key: "baseUrl", value: "https://api.example.com", enabled: true }] };
+  return {
+    name: "env",
+    values: [{ key: "baseUrl", value: "https://api.example.com", enabled: true }],
+  };
 }
 
 describe("PUT /api/external-collections/:id/variables (AP-028 US2, quickstart.md Scenario 2)", () => {
@@ -30,8 +33,16 @@ describe("PUT /api/external-collections/:id/variables (AP-028 US2, quickstart.md
       .post("/api/external-collections")
       .field("name", "My collection")
       .field("tier", "local")
-      .attach("collection", Buffer.from(JSON.stringify(collectionReferencingToken())), "collection.json")
-      .attach("environment", Buffer.from(JSON.stringify(environmentWithBaseUrlOnly())), "environment.json");
+      .attach(
+        "collection",
+        Buffer.from(JSON.stringify(collectionReferencingToken())),
+        "collection.json",
+      )
+      .attach(
+        "environment",
+        Buffer.from(JSON.stringify(environmentWithBaseUrlOnly())),
+        "environment.json",
+      );
     const id = uploadResponse.body.uploadedCollection.id;
 
     const before = await agent.get(`/api/external-collections/${id}/collection`);
@@ -41,14 +52,37 @@ describe("PUT /api/external-collections/:id/variables (AP-028 US2, quickstart.md
       .put(`/api/external-collections/${id}/variables`)
       .send({ variableValues: { baseUrl: "https://api.example.com", token: "abc123" } });
     expect(updated.status).toBe(200);
-    expect(updated.body.collectionView.items[0].resolved.headers[0].value).toBe("Bearer abc123");
+    expect(updated.body.collectionView.items[0].resolved.headers[0].value).toBe(
+      "Bearer abc123",
+    );
     expect(updated.body.collectionView.items[0].unresolvedVariables).toEqual([]);
+
+    const withBlank = await agent
+      .put(`/api/external-collections/${id}/variables`)
+      .send({
+        variableValues: {
+          baseUrl: "https://api.example.com",
+          token: "abc123",
+          future_id: "",
+        },
+      });
+    expect(withBlank.status).toBe(200);
+    const reloaded = await agent.get(`/api/external-collections/${id}/collection`);
+    expect(reloaded.body.collectionView.variables).toContainEqual({
+      name: "future_id",
+      source: "collection-default",
+      resolved: false,
+      referenced: false,
+    });
+    expect(reloaded.body.collectionView.items[0].unresolvedVariables).toEqual([]);
   });
 
   it("404s uploaded_collection_not_found for an unknown id", async () => {
     const app = createApp();
     const agent = request.agent(app);
-    const response = await agent.put("/api/external-collections/does-not-exist/variables").send({ variableValues: {} });
+    const response = await agent
+      .put("/api/external-collections/does-not-exist/variables")
+      .send({ variableValues: {} });
     expect(response.status).toBe(404);
     expect(response.body.error).toBe("uploaded_collection_not_found");
   });

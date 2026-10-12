@@ -27,66 +27,70 @@ of folders had no place to put a root-level request that lives directly in the c
 rather than inside any folder — `items`/`folders` mirrors `CollectionFolderView`'s own shape at
 the root instead, matching the `containerId: "root"` literal the reorder endpoint already uses.
 
-| Field | Type | Notes |
-|---|---|---|
-| `id` | `string` | The `UploadedCollectionSet.id` this view was computed from. |
-| `items` | `CollectionRequestView[]` | The collection's own root-level requests, in source order (FR-001). |
-| `folders` | `CollectionFolderView[]` | The collection's own root-level folders, in source order (FR-001). |
-| `variables` | `VariableBinding[]` | Every variable referenced anywhere in the collection, plus any user-defined-ahead-of-use one (FR-003, FR-018). |
+| Field       | Type                      | Notes                                                                                                                              |
+| ----------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`        | `string`                  | The `UploadedCollectionSet.id` this view was computed from.                                                                        |
+| `items`     | `CollectionRequestView[]` | The collection's own root-level requests, in source order (FR-001).                                                                |
+| `folders`   | `CollectionFolderView[]`  | The collection's own root-level folders, in source order (FR-001).                                                                 |
+| `variables` | `VariableBinding[]`       | Every referenced, declared, user-defined-ahead-of-use, or statically discovered script-created variable (FR-003, FR-003a, FR-018). |
 
 ```ts
 interface CollectionFolderView {
-  id: string;                  // stable folder id (research.md D9); the root itself has no id —
-                                // it's CollectionView's own items/folders, not a synthesized folder
+  id: string; // stable folder id (research.md D9); the root itself has no id —
+  // it's CollectionView's own items/folders, not a synthesized folder
   name: string;
   items: CollectionRequestView[];
   folders: CollectionFolderView[]; // nested folders, arbitrary depth
   scriptEvents: Array<"prerequest" | "test">; // amended 2026-09-25 — which script kinds this
-                                // folder itself defines (FR-015b move dialog)
-  copiedScriptFolderIds: string[];   // amended 2026-09-25 — folders whose scripts this folder
-                                // carries a copy of, read from the copy marker line (FR-015b)
+  // folder itself defines (FR-015b move dialog)
+  copiedScriptFolderIds: string[]; // amended 2026-09-25 — folders whose scripts this folder
+  // carries a copy of, read from the copy marker line (FR-015b)
 }
 
 interface CollectionRequestView {
-  id: string;                 // stable item id (research.md D2)
+  id: string; // stable item id (research.md D2)
   name: string;
-  wasEdited: boolean;          // reflects `_apipilotEdited`
-  raw: {                       // exactly as stored, placeholders intact (FR-002)
+  wasEdited: boolean; // reflects `_apipilotEdited`
+  raw: {
+    // exactly as stored, placeholders intact (FR-002)
     method: string;
     url: string;
     headers: Array<{ key: string; value: string }>;
     body?: string;
   };
-  resolved: {                  // raw with every resolvable `{{var}}` substituted (FR-002, D3)
+  resolved: {
+    // raw with every resolvable `{{var}}` substituted (FR-002, D3)
     method: string;
     url: string;
     headers: Array<{ key: string; value: string }>;
     body?: string;
   };
   unresolvedVariables: string[]; // names still unresolved within this specific request
-  testScript?: string;          // post-implementation addendum (2026-09-21) — see below
-  auth?: RequestAuthView;       // amended 2026-09-25 (FR-002a) — absent when no auth applies
+  testScript?: string; // post-implementation addendum (2026-09-21) — see below
+  auth?: RequestAuthView; // amended 2026-09-25 (FR-002a) — absent when no auth applies
   variableReferences: RequestVariableReference[]; // amended 2026-09-25 (FR-002b), by name
   copiedScriptFolderIds: string[]; // amended 2026-09-25 (FR-015b), as on CollectionFolderView
 }
 
-interface RequestAuthView {     // amended 2026-09-25 (FR-002a)
-  type: string;                 // Postman auth type as stored, e.g. "bearer", "basic", "oauth2", "noauth"
+interface RequestAuthView {
+  // amended 2026-09-25 (FR-002a)
+  type: string; // Postman auth type as stored, e.g. "bearer", "basic", "oauth2", "noauth"
   source:
     | { kind: "request" }
     | { kind: "folder"; folderId: string; folderName: string }
     | { kind: "collection" };
   fields: Array<{
     key: string;
-    value: string;              // as stored, `{{variable}}` intact; "" when `hiddenLiteral`
-    hiddenLiteral: boolean;     // a secret field holding a literal — the value is never sent
+    value: string; // as stored, `{{variable}}` intact; "" when `hiddenLiteral`
+    hiddenLiteral: boolean; // a secret field holding a literal — the value is never sent
   }>;
 }
 
-interface RequestVariableReference { // amended 2026-09-25 (FR-002b)
+interface RequestVariableReference {
+  // amended 2026-09-25 (FR-002b)
   name: string;
   usedIn: Array<"url" | "headers" | "body" | "auth">;
-  resolved: boolean;            // same rule as VariableBinding.resolved
+  resolved: boolean; // same rule as VariableBinding.resolved
   source?: "collection-default" | "environment"; // the binding providing the value, when set
 }
 ```
@@ -109,7 +113,7 @@ and `resolvedValue` are empty.
 type SecretAuthFieldEdit = { kind: "keep" } | { kind: "set"; value: string };
 
 type RequestAuthEdit =
-  | { type: "inherit" }                      // removes the request's own auth
+  | { type: "inherit" } // removes the request's own auth
   | { type: "noauth" }
   | { type: "bearer"; token: SecretAuthFieldEdit }
   | { type: "basic"; username: string; password: SecretAuthFieldEdit }
@@ -145,21 +149,28 @@ more field this spec's original field list happened to omit.
 
 ## New: `VariableBinding` (part of `CollectionView`, not independently stored)
 
-| Field | Type | Notes |
-|---|---|---|
-| `name` | `string` | |
-| `value` | `string?` | Absent when unresolved. |
-| `source` | `"collection-default" \| "environment"` | Two persisted tiers only (research.md D8). The frontend additionally labels a value as a client-side-only "override" when it differs from the value the view loaded with (Story 3) — not a third `source` value. |
-| `resolved` | `boolean` | `false` when no value is available from either tier. |
-| `referenced` | `boolean` | `false` for a user-defined variable (FR-018) no request currently uses — never counted by the missing-variable check (FR-006), never blocks a run. |
+| Field        | Type                                    | Notes                                                                                                                                                                                                            |
+| ------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | `string`                                |                                                                                                                                                                                                                  |
+| `value`      | `string?`                               | Absent when unresolved.                                                                                                                                                                                          |
+| `source`     | `"collection-default" \| "environment"` | Two persisted tiers only (research.md D8). The frontend additionally labels a value as a client-side-only "override" when it differs from the value the view loaded with (Story 3) — not a third `source` value. |
+| `resolved`   | `boolean`                               | `false` when no value is available from either tier.                                                                                                                                                             |
+| `referenced` | `boolean`                               | `false` for a user-defined variable (FR-018) no request currently uses — never counted by the missing-variable check (FR-006), never blocks a run.                                                               |
+
+Literal names created by `pm.environment.set`, `pm.collectionVariables.set`, `pm.globals.set`,
+`pm.variables.set`, or the legacy Postman environment/global setters are discovered with Acorn
+from saved scripts, without execution. Script-only names use the existing unresolved binding
+shape; supplied environment values and collection defaults retain their existing precedence.
+Discovery does not claim the setter will run, infer values, resolve computed names, or parse an
+invalid script. Script text resembling a setter inside comments or string literals adds no name.
 
 ## Extended: `UploadedRequestResult`
 
 One additive optional field (research.md D6), mirroring how `ExecutionRun.cancelReason` was
 added additively in specs/025:
 
-| Field | Type | Notes |
-|---|---|---|
+| Field       | Type       | Notes                                                                                                                                                                |
+| ----------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `wasEdited` | `boolean?` | `true` only when the executed item carried `_apipilotEdited`. Absent (not `false`) when the item was never edited — keeps existing runs' serialized shape unchanged. |
 
 ## Repository additions
@@ -194,69 +205,83 @@ within the session — no new error type.
 (inline in this section before implementation) shaped every mutator as `Collection -> Collection`;
 `postman-collection`'s own mutation methods (`Request.update()`, `PropertyList.add()`/`.remove()`)
 mutate the parsed `Collection` in place instead of returning a new one, so every function here
-returns void (or a small result payload) and the caller re-serializes the *same* mutated instance
+returns void (or a small result payload) and the caller re-serializes the _same_ mutated instance
 via `.toJSON()` to get the string to persist.
 
 ```ts
 // collectionView.ts
 function buildCollectionView(
   uploadedCollectionSetId: string,
-  collection: Collection,           // parsed postman-collection instance
-  rawCollectionJson: string,        // the exact JSON string `collection` was parsed from — recovers
-                                     // the `_apipilotEdited` marker the SDK itself strips (D6/D9's editedItems.ts)
+  collection: Collection, // parsed postman-collection instance
+  rawCollectionJson: string, // the exact JSON string `collection` was parsed from — recovers
+  // the `_apipilotEdited` marker the SDK itself strips (D6/D9's editedItems.ts)
   variableValues: Record<string, string>,
-): CollectionView
+): CollectionView;
 
 // requestOverride.ts
 function applyRequestOverride(
   collection: Collection,
   requestId: string,
   edit: {
-    method: string; url: string; headers: Array<{key:string;value:string}>; body?: string;
+    method: string;
+    url: string;
+    headers: Array<{ key: string; value: string }>;
+    body?: string;
     testScript?: string; // post-implementation addendum — see the CollectionRequestView note above
   },
-): string                           // final JSON string ready to persist; throws RequestNotFoundError if requestId doesn't resolve (FR-012)
+): string; // final JSON string ready to persist; throws RequestNotFoundError if requestId doesn't resolve (FR-012)
 
 // itemIdentity.ts
-function ensureStableIds(collection: Collection): string // research.md D2/D9 — re-serializes the already-parsed collection to make the SDK's own auto-generated ids durable; run once at upload time
+function ensureStableIds(collection: Collection): string; // research.md D2/D9 — re-serializes the already-parsed collection to make the SDK's own auto-generated ids durable; run once at upload time
 
 // collectionStructure.ts (research.md D10)
 function addRequest(
   collection: Collection,
-  parentFolderId: string | null,     // null = collection root
-  input: { name: string; method: string; url: string; headers: Array<{key:string;value:string}>; body?: string },
-): { newItemId: string }             // mutates `collection` in place; caller re-serializes it
+  parentFolderId: string | null, // null = collection root
+  input: {
+    name: string;
+    method: string;
+    url: string;
+    headers: Array<{ key: string; value: string }>;
+    body?: string;
+  },
+): { newItemId: string }; // mutates `collection` in place; caller re-serializes it
 
-function deleteItem(collection: Collection, id: string): void
-  // removes a request OR folder (and everything nested) by id; throws ItemNotFoundError
+function deleteItem(collection: Collection, id: string): void;
+// removes a request OR folder (and everything nested) by id; throws ItemNotFoundError
 
-function renameItem(collection: Collection, id: string, name: string): void
+function renameItem(collection: Collection, id: string, name: string): void;
 
 function reorderContainer(
   collection: Collection,
-  containerId: string,                // literal "root" for the collection root, otherwise a folder id
-  orderedIds: string[],                // every direct child id of that container, in the new order
-): void
-  // throws InvalidOrderError if orderedIds doesn't exactly match the container's current child id set
+  containerId: string, // literal "root" for the collection root, otherwise a folder id
+  orderedIds: string[], // every direct child id of that container, in the new order
+): void;
+// throws InvalidOrderError if orderedIds doesn't exactly match the container's current child id set
 
-function moveItem(                   // FR-015a, amended 2026-09-25
+function moveItem( // FR-015a, amended 2026-09-25
   collection: Collection,
-  itemId: string,                      // a request or folder id
-  targetContainerId: string,           // literal "root" for the collection root, otherwise a folder id
-): MoveCarried
-  // appends the item last among its own kind in the target container, keeping the same instance,
-  // after carrying over its auth and the scripts of the folders it leaves (FR-015b)
-  // throws ItemNotFoundError for an unknown item or target, InvalidMoveError for the current
-  // container, or for a folder moved into itself or one of its own subfolders
+  itemId: string, // a request or folder id
+  targetContainerId: string, // literal "root" for the collection root, otherwise a folder id
+): MoveCarried;
+// appends the item last among its own kind in the target container, keeping the same instance,
+// after carrying over its auth and the scripts of the folders it leaves (FR-015b)
+// throws ItemNotFoundError for an unknown item or target, InvalidMoveError for the current
+// container, or for a folder moved into itself or one of its own subfolders
 
-interface MoveCarried {        // also the route's `carried` response field
+interface MoveCarried {
+  // also the route's `carried` response field
   auth: { type: string; fromFolderName: string | null } | null;
-  scriptsFromFolders: Array<{ id: string; name: string; events: Array<"prerequest" | "test"> }>;
+  scriptsFromFolders: Array<{
+    id: string;
+    name: string;
+    events: Array<"prerequest" | "test">;
+  }>;
 }
 
 // runLock.ts (research.md D11)
-function assertCollectionNotRunning(uploadedCollectionSetId: string): void
-  // throws CollectionLockedError if an UploadedCollectionExecutionRun for this id has status "in-progress"
+function assertCollectionNotRunning(uploadedCollectionSetId: string): void;
+// throws CollectionLockedError if an UploadedCollectionExecutionRun for this id has status "in-progress"
 ```
 
 `resolveCollectionVariables` (research.md D3) is used internally by `buildCollectionView` — not
@@ -289,7 +314,7 @@ separately exported as a route-facing function.
 
 ## Validation rules
 
-- **FR-012 (stale override)**: `applyRequestOverride` resolves `requestId` against the *current*
+- **FR-012 (stale override)**: `applyRequestOverride` resolves `requestId` against the _current_
   stored collection at write time — since edits mutate the record in place (research.md D4) rather
   than layering on an immutable original, a `requestId` that no longer exists (e.g., after the
   session's collection was replaced by uploading/handing off a new one with a different `id`)

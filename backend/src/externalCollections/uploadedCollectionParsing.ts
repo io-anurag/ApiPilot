@@ -1,5 +1,6 @@
-import type { Collection, Item } from "postman-collection";
+import type { Collection, Item, ItemGroup } from "postman-collection";
 import postmanCollection from "postman-collection";
+import { parse } from "acorn";
 import { InvalidCollectionError, InvalidEnvironmentError } from "./errors";
 
 /**
@@ -239,4 +240,79 @@ export function extractReferencedVariables(collection: Collection): string[] {
     collectVariableTokens(item.getAuth()?.toJSON(), tokens);
   });
   return [...tokens].filter((name) => !isPostmanDynamicVariable(name));
+}
+
+const SCRIPT_VARIABLE_SETTERS = new Set([
+  "pm.environment.set",
+  "pm.collectionVariables.set",
+  "pm.globals.set",
+  "pm.variables.set",
+  "postman.setEnvironmentVariable",
+  "postman.setGlobalVariable",
+]);
+
+function isScriptNode(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function scriptMemberPath(node: unknown): string | undefined {
+  if (!isScriptNode(node)) return undefined;
+  if (node.type === "Identifier" && typeof node.name === "string") return node.name;
+  if (node.type !== "MemberExpression" || !isScriptNode(node.property)) return undefined;
+  const parent = scriptMemberPath(node.object);
+  const property = node.computed ? node.property.value : node.property.name;
+  return parent && typeof property === "string" ? `${parent}.${property}` : undefined;
+}
+
+function collectScriptVariableNames(source: string, names: Set<string>): void {
+  let program: unknown;
+  try {
+    program = parse(source, {
+      ecmaVersion: "latest",
+      allowAwaitOutsideFunction: true,
+      allowReturnOutsideFunction: true,
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) return;
+    throw error;
+  }
+  const pending: unknown[] = [program];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (Array.isArray(node)) {
+      pending.push(...node.slice().reverse());
+      continue;
+    }
+    if (!isScriptNode(node)) continue;
+    if (node.type === "CallExpression" && Array.isArray(node.arguments)) {
+      const name = node.arguments[0];
+      const setter = scriptMemberPath(node.callee);
+      if (
+        setter &&
+        SCRIPT_VARIABLE_SETTERS.has(setter) &&
+        isScriptNode(name) &&
+        name.type === "Literal" &&
+        typeof name.value === "string" &&
+        name.value.length > 0 &&
+        !isPostmanDynamicVariable(name.value)
+      ) {
+        names.add(name.value);
+      }
+    }
+    pending.push(...Object.values(node).reverse());
+  }
+}
+
+export function extractScriptVariableNames(collection: Collection): string[] {
+  const names = new Set<string>();
+  const visit = (member: Collection | Item | ItemGroup<Item>): void => {
+    member.events.each((event) => {
+      if (event.listen !== "test" && event.listen !== "prerequest") return;
+      const source = event.script?.toSource();
+      if (source) collectScriptVariableNames(source, names);
+    });
+    if ("items" in member) member.items.each(visit);
+  };
+  visit(collection);
+  return [...names];
 }

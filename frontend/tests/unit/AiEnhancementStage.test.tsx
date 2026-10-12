@@ -156,7 +156,9 @@ describe("AiEnhancementStage", () => {
       ok: true,
       status: 200,
       json: () =>
-        Promise.resolve({ workflow: { stages: { aiEnhancement: { status: "complete" } } } }),
+        Promise.resolve({
+          workflow: { stages: { aiEnhancement: { status: "complete" } } },
+        }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -375,6 +377,46 @@ describe("AiEnhancementStage resuming an in-progress run after reload", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("resumes a running retry when workflow refresh supplies progress after mount", async () => {
+    const activeProgress = {
+      totalBatches: 2,
+      batches: [
+        { index: 0, status: "succeeded" as const },
+        { index: 1, status: "in-progress" as const },
+      ],
+      startedAt: "2026-01-01T00:00:00.000Z",
+      phase: "generating" as const,
+      cancelRequested: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          progress: {
+            aiEnhancement: { status: "active", progress: activeProgress },
+            liveScenarios: [],
+          },
+        }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onAdvanced = vi.fn();
+    const view = render(<AiEnhancementStage onAdvanced={onAdvanced} />);
+
+    view.rerender(
+      <AiEnhancementStage activeProgress={activeProgress} onAdvanced={onAdvanced} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Enhancing…" })).toBeDisabled();
+    expect(screen.getByTestId("ai-enhancement-run-progress")).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("progressOnly"),
+      undefined,
+    );
+    expect(fetchMock.mock.calls.every(([, init]) => init?.method !== "POST")).toBe(true);
   });
 
   it("shows the live run view immediately at mount, without requiring a click on Enhance with AI", () => {

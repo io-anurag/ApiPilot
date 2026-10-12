@@ -18,6 +18,7 @@ import type {
 } from "@apipilot/shared-domain";
 import {
   extractReferencedVariables,
+  extractScriptVariableNames,
   findVariableTokens,
   isPostmanDynamicVariable,
   removeVariableTokens,
@@ -351,7 +352,7 @@ function toFolderView(group: Folder, context: ViewContext): CollectionFolderView
 
 /**
  * Every variable available to this collection (FR-003, FR-018) — the union of variables
- * referenced by a request, variables the collection's own `variable` array declares, and any key
+ * referenced by a request, names created by saved scripts, variables the `variable` array declares, and any key
  * already present in `variableValues` with no current reference (research.md D12). Exactly two
  * persisted `source` tiers (research.md D8): `variableValues` always wins over a collection
  * default of the same name.
@@ -373,6 +374,7 @@ export function buildVariableBindings(
 
   const names = new Set<string>([
     ...referenced,
+    ...extractScriptVariableNames(collection),
     ...[...collectionDefaults.keys()].filter((name) => !isPostmanDynamicVariable(name)),
     ...Object.keys(variableValues).filter((name) => !isPostmanDynamicVariable(name)),
   ]);

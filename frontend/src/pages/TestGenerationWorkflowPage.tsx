@@ -227,7 +227,11 @@ export function TestGenerationWorkflowPage({
     previousActiveStageId.current = activeStageId;
     // Scoped to dependencyAnalysis: other stages (notably postmanGeneration) deliberately keep
     // the user on their success screen until they choose to continue.
-    if (previous === "dependencyAnalysis" && activeStageId && previous !== activeStageId) {
+    if (
+      previous === "dependencyAnalysis" &&
+      activeStageId &&
+      previous !== activeStageId
+    ) {
       setViewedStageId((viewed) => (viewed === previous ? activeStageId : viewed));
     }
   }, [activeStageId]);
@@ -367,6 +371,9 @@ export function TestGenerationWorkflowPage({
     displayStageId === "aiEnhancement" &&
     (workflow?.stages.aiEnhancement.status === "skipped" ||
       workflow?.stages.aiEnhancement.status === "partial");
+  const aiEnhancementIsRunning =
+    displayStageId === "aiEnhancement" &&
+    workflow?.stages.aiEnhancement.status === "active";
   // PostmanGenerationStage stays interactive (regenerable) even once `activeStageId` has moved on
   // to `execution` — it was never gated on being the active stage to begin with (see its own
   // render call below) — so the same read-only notice would misreport it too.
@@ -374,7 +381,9 @@ export function TestGenerationWorkflowPage({
   const postmanGenerationAlwaysActionable =
     displayStageId === "postmanGeneration" || displayStageId === "performanceTesting";
 
-  const displaySection: SectionId = displayStageId ? STAGE_SECTIONS[displayStageId] : "spec";
+  const displaySection: SectionId = displayStageId
+    ? STAGE_SECTIONS[displayStageId]
+    : "spec";
   useEffect(() => {
     onSectionChange?.(displaySection);
   }, [displaySection, onSectionChange]);
@@ -584,6 +593,7 @@ export function TestGenerationWorkflowPage({
           </div>
           {displayStageId !== workflow.activeStageId &&
             !aiEnhancementHasRetryableOutcome &&
+            !aiEnhancementIsRunning &&
             !postmanGenerationAlwaysActionable &&
             (displayStageId !== null && REVISABLE_STAGES.has(displayStageId) ? (
               <output
@@ -666,12 +676,16 @@ export function TestGenerationWorkflowPage({
               data-testid="dependency-analysis-in-progress"
               className="block rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-muted"
             >
-              Dependency analysis is running. This page updates automatically when it finishes;
-              with the local AI model it can take a couple of minutes.
+              Dependency analysis is running. This page updates automatically when it
+              finishes; with the local AI model it can take a couple of minutes.
             </output>
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
-            <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} onOpenCoverage={onOpenCoverage} />
+            <ScenarioReviewStage
+              workflow={workflow}
+              onAdvanced={handleAdvanced}
+              onOpenCoverage={onOpenCoverage}
+            />
           )}
           {displayStageId === "workflowReview" && workflow.dependencyAnalysis && (
             <WorkflowReviewStage
@@ -697,7 +711,9 @@ export function TestGenerationWorkflowPage({
             />
           )}
           {displayStageId === "performanceTesting" && (
-            <PerformanceTestingStage onOpenChainPlan={onOpenChainPlan ?? (() => undefined)} />
+            <PerformanceTestingStage
+              onOpenChainPlan={onOpenChainPlan ?? (() => undefined)}
+            />
           )}
           {displayStageId === "execution" && (
             <ExecutionHandoffNotice
@@ -784,11 +800,7 @@ function UploadAnalysisSummary({
       <h2 className="text-base font-semibold text-text-primary">
         {isUpload ? "Specification Uploaded" : "Specification Analysis"}
       </h2>
-      {isUpload && (
-        <p className="text-sm text-text-secondary">
-          {specificationFilename}
-        </p>
-      )}
+      {isUpload && <p className="text-sm text-text-secondary">{specificationFilename}</p>}
       <AnalysisSummary summary={apiModel.summary} />
     </section>
   );
@@ -833,9 +845,7 @@ function DependencyAnalysisSummary({
       data-testid="dependency-analysis-summary"
       className="space-y-2 rounded-lg border border-border bg-surface p-5 shadow-sm"
     >
-      <h2 className="text-base font-semibold text-text-primary">
-        Dependency Analysis
-      </h2>
+      <h2 className="text-base font-semibold text-text-primary">Dependency Analysis</h2>
       <p className="text-sm text-text-secondary">
         {graph.relationships.length} relationship
         {graph.relationships.length === 1 ? "" : "s"} found; {workflows.length}{" "}

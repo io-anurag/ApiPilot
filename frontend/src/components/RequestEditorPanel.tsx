@@ -90,7 +90,10 @@ export function RequestEditorPanel({
     () => [
       ...variables.map((variable) => ({
         name: variable.name,
-        detail: variable.source === "environment" ? "Environment variable" : "Collection variable",
+        detail:
+          variable.source === "environment"
+            ? "Environment variable"
+            : "Collection variable",
       })),
       ...POSTMAN_DYNAMIC_VARIABLE_SUGGESTIONS,
     ],
@@ -196,8 +199,8 @@ export function RequestEditorPanel({
           />
         </div>
         <p className="text-xs text-muted">
-          Type {"{{"} in the URL, a header value or the body to pick a variable, or {"{{$"} for a
-          random value that is generated when the request runs.
+          Type {"{{"} in the URL, a header value or the body to pick a variable, or{" "}
+          {"{{$"} for a random value that is generated when the request runs.
         </p>
         {error && <ErrorState message={error} />}
       </div>
@@ -288,9 +291,7 @@ export function RequestEditorPanel({
             {request.impliedAuthHeader && (
               <div className="space-y-1 rounded-md border border-border bg-surface-subtle px-3 py-2">
                 <p className="text-sm wrap-anywhere">
-                  <span className="font-semibold text-text-primary">
-                    Auth adds:
-                  </span>{" "}
+                  <span className="font-semibold text-text-primary">Auth adds:</span>{" "}
                   <span className="font-mono">
                     {request.impliedAuthHeader.key}:{" "}
                     <ImpliedAuthValue
@@ -322,6 +323,7 @@ export function RequestEditorPanel({
             auth={request.auth}
             draft={authDraft}
             locked={locked}
+            suggestions={referenceSuggestions}
             onChange={(draft) => {
               setAuthDraft(draft);
               setAuthEdited(true);

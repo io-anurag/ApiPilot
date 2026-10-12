@@ -85,20 +85,31 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
 
   return (
     <div data-testid="ai-enhancement-run-progress" className="space-y-3">
-      <output aria-live="polite" className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+      <output
+        aria-live="polite"
+        className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5"
+      >
         {preparing ? (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-text-primary">
+            <span
+              data-testid="ai-enhancement-phase"
+              className="text-sm font-medium text-text-primary"
+            >
               Preparing the local model
             </span>
             <span className="text-xs text-muted">
-              {"— this can take a few minutes the first time, while the model downloads. "}
+              {
+                "— this can take a few minutes the first time, while the model downloads. "
+              }
               <span data-testid="ai-enhancement-elapsed">{elapsed} elapsed</span>
             </span>
           </>
         ) : (
           <>
-            <span data-testid="ai-enhancement-phase" className="text-sm font-medium text-text-primary">
+            <span
+              data-testid="ai-enhancement-phase"
+              className="text-sm font-medium text-text-primary"
+            >
               Generating scenarios
             </span>
             <span className="text-xs text-muted">
@@ -152,7 +163,10 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
             (specs/014-ai-batching-policy FR-012).
           */}
           {progress.runBudgetRemainingMs !== undefined && (
-            <span data-testid="ai-enhancement-run-budget-remaining" className="text-xs text-muted">
+            <span
+              data-testid="ai-enhancement-run-budget-remaining"
+              className="text-xs text-muted"
+            >
               {progress.runBudgetRemainingMs > 0
                 ? `${formatElapsed(progress.runBudgetRemainingMs)} of run time left`
                 : "run time limit reached; finishing the current batch"}
@@ -195,7 +209,9 @@ function BatchProgressList({ progress }: Readonly<{ progress: AiEnhancementProgr
   );
 }
 
-function LiveScenarioPreview({ scenarios }: Readonly<{ scenarios: LiveScenarioSummary[] }>) {
+function LiveScenarioPreview({
+  scenarios,
+}: Readonly<{ scenarios: LiveScenarioSummary[] }>) {
   if (scenarios.length === 0) return null;
 
   return (
@@ -211,14 +227,19 @@ function LiveScenarioPreview({ scenarios }: Readonly<{ scenarios: LiveScenarioSu
           Review actions unlock when generation finishes.
         </span>
       </div>
-      <ul className="space-y-1 text-sm text-success-900 dark:text-success-100" aria-label="Live AI scenarios">
+      <ul
+        className="space-y-1 text-sm text-success-900 dark:text-success-100"
+        aria-label="Live AI scenarios"
+      >
         {scenarios.map((item) => (
           <li key={item.scenarioId} className="flex flex-wrap gap-x-2 gap-y-1">
             <span className="font-mono font-medium">
               {item.operationMethod.toUpperCase()}
             </span>
             <span className="font-mono">{item.operationPath}</span>
-            <span className="text-success-700 dark:text-success-100">{item.category}</span>
+            <span className="text-success-700 dark:text-success-100">
+              {item.category}
+            </span>
           </li>
         ))}
       </ul>
@@ -289,12 +310,12 @@ export function AiEnhancementStage({
   /** Per-batch detail and, for eligible batches, a retry control (specs/015-ai-batch-retry). */
   batchOutcomes?: BatchOutcomeRecord[];
   /**
-   * The workflow's own `stages.aiEnhancement.progress` at mount time. A run started before a
+   * The workflow's own `stages.aiEnhancement.progress`. A run started before a
    * page reload keeps running server-side (FR-007), but this component's local `running`/
    * `progress` state would otherwise reset to idle on remount, showing the trigger button as if
    * nothing were happening — clicking it then only produces "already in progress" from the
-   * server's concurrency guard. Seeding state from this prop and resuming polling below instead
-   * restores the live view the reload interrupted.
+   * server's concurrency guard. Seeding state from this prop and resuming polling below restores
+   * the live view, including when workflow refresh first supplies progress after mount.
    */
   activeProgress?: AiEnhancementProgress;
   onAdvanced: (result: WorkflowResult) => void;
@@ -333,12 +354,14 @@ export function AiEnhancementStage({
   // polling requests.
   useEffect(() => stopPolling, []);
 
-  // Resumes observing a run that was already in progress when this component mounted (see
+  // Resumes observing a run reported by the workflow when this component mounted or refreshed (see
   // `activeProgress` above). Unlike `handleRun`, this never calls `runAiEnhancement()` itself —
   // it only polls the existing run to completion, since the run was started by an earlier page
   // load (or another tab) and calling it again would just hit the server's concurrency guard.
   useEffect(() => {
-    if (!activeProgress) return;
+    if (!activeProgress || pollHandleRef.current !== null) return;
+    setRunning(true);
+    setProgress(activeProgress);
     pollHandleRef.current = setInterval(() => {
       void fetchAiEnhancementProgress().then((result) => {
         if (!result.ok || !result.snapshot) return;
@@ -348,6 +371,7 @@ export function AiEnhancementStage({
           setProgress(currentProgress);
           return;
         }
+        if (result.snapshot.aiEnhancement.status === "active") return;
         stopPolling();
         setRunning(false);
         setProgress(undefined);
@@ -361,10 +385,7 @@ export function AiEnhancementStage({
         });
       });
     }, PROGRESS_POLL_INTERVAL_MS);
-    return stopPolling;
-    // Intentionally mount-only: `activeProgress` is a snapshot taken when this component was
-    // created, not a live value to resync against on every parent re-render.
-  }, []);
+  }, [activeProgress]);
 
   async function handleRun() {
     setRunning(true);
@@ -443,7 +464,7 @@ export function AiEnhancementStage({
           <button
             type="button"
             onClick={handleRun}
-            disabled={running}
+            disabled={running || retryingBatchIndex !== null}
             className={`inline-flex items-center gap-2 ${BUTTON_STYLES.warning}`}
           >
             <RetryIcon className={`h-4 w-4 ${running ? "animate-spin" : ""}`} />
@@ -459,7 +480,7 @@ export function AiEnhancementStage({
               <button
                 type="button"
                 onClick={() => handleRetryBatch(batch.index)}
-                disabled={retryingBatchIndex !== null}
+                disabled={running || retryingBatchIndex !== null}
                 className={BUTTON_STYLES.secondary}
               >
                 {retryingBatchIndex === batch.index
@@ -470,7 +491,9 @@ export function AiEnhancementStage({
           }}
         />
         {running && progress && <RunProgress progress={progress} />}
-        {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
+        {running && liveScenarios.length > 0 && (
+          <LiveScenarioPreview scenarios={liveScenarios} />
+        )}
         {running && (
           <CancelButton
             onCancel={handleCancel}
@@ -495,7 +518,7 @@ export function AiEnhancementStage({
         <button
           type="button"
           onClick={handleRun}
-          disabled={running}
+          disabled={running || retryingBatchIndex !== null}
           className={BUTTON_STYLES.primary}
         >
           {running ? "Enhancing…" : "Enhance with AI"}
@@ -508,7 +531,9 @@ export function AiEnhancementStage({
         )}
       </div>
       {running && progress && <RunProgress progress={progress} />}
-      {running && liveScenarios.length > 0 && <LiveScenarioPreview scenarios={liveScenarios} />}
+      {running && liveScenarios.length > 0 && (
+        <LiveScenarioPreview scenarios={liveScenarios} />
+      )}
       {error && <ErrorState testId="ai-enhancement-error" message={error} />}
     </section>
   );

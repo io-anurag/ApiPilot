@@ -246,7 +246,9 @@ describe("TestGenerationWorkflowPage", () => {
   function deleteCalls() {
     return vi
       .mocked(fetch)
-      .mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "DELETE");
+      .mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "DELETE",
+      );
   }
 
   it("requires confirmation before discarding an in-progress workflow, then discards it on the server immediately (FR-010)", async () => {
@@ -290,7 +292,9 @@ describe("TestGenerationWorkflowPage", () => {
     expect(screen.queryByTestId("api-review-stage")).not.toBeInTheDocument();
     expect(screen.queryByTestId("discard-existing-confirmation")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Cancel — return to my in-progress workflow" }),
+      screen.queryByRole("button", {
+        name: "Cancel — return to my in-progress workflow",
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -617,7 +621,11 @@ describe("TestGenerationWorkflowPage", () => {
       render(<TestGenerationWorkflowPage onHandoffToExecution={onHandoffToExecution} />);
 
       await waitFor(() =>
-        expect(onHandoffToExecution).toHaveBeenCalledWith(postmanArtifact, undefined, expect.stringMatching(/^wf-/)),
+        expect(onHandoffToExecution).toHaveBeenCalledWith(
+          postmanArtifact,
+          undefined,
+          expect.stringMatching(/^wf-/),
+        ),
       );
     });
 
@@ -650,7 +658,11 @@ describe("TestGenerationWorkflowPage", () => {
       fireEvent.click(
         screen.getByRole("button", { name: "Go to Import & Run Collection" }),
       );
-      expect(onHandoffToExecution).toHaveBeenCalledWith(postmanArtifact, undefined, expect.stringMatching(/^wf-/));
+      expect(onHandoffToExecution).toHaveBeenCalledWith(
+        postmanArtifact,
+        undefined,
+        expect.stringMatching(/^wf-/),
+      );
     });
 
     it("still shows the interactive Postman Generation form with download links when revisited after advancing to execution", async () => {
@@ -734,7 +746,11 @@ describe("TestGenerationWorkflowPage", () => {
         screen.getByRole("button", { name: "Continue to Import & Run Collection" }),
       );
 
-      expect(onHandoffToExecution).toHaveBeenCalledWith(postmanArtifact, undefined, expect.stringMatching(/^wf-/));
+      expect(onHandoffToExecution).toHaveBeenCalledWith(
+        postmanArtifact,
+        undefined,
+        expect.stringMatching(/^wf-/),
+      );
       expect(screen.getByTestId("execution-handoff-notice")).toBeInTheDocument();
     });
   });
@@ -749,7 +765,8 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
     updatedAt: string,
   ) {
     const stages = baseStages() as Record<string, { stageId: string; status: string }>;
-    for (const id of Object.keys(stages)) stages[id] = { stageId: id, status: "complete" };
+    for (const id of Object.keys(stages))
+      stages[id] = { stageId: id, status: "complete" };
     stages.execution = { stageId: "execution", status: statuses.execution ?? "active" };
     stages.performanceTesting = {
       stageId: "performanceTesting",
@@ -763,8 +780,13 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if ((init?.method ?? "GET") !== "GET") throw new Error("Unexpected non-GET fetch");
       if (server.current === "fail") throw new Error("offline");
-      if (server.current === null) return { ok: true, status: 204, json: () => Promise.resolve(null) };
-      return { ok: true, status: 200, json: () => Promise.resolve({ workflow: server.current }) };
+      if (server.current === null)
+        return { ok: true, status: 204, json: () => Promise.resolve(null) };
+      return {
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ workflow: server.current }),
+      };
     });
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
@@ -781,14 +803,21 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
   });
 
   it("refetches when it becomes visible and shows an Execution that is now Complete", async () => {
-    const server = { current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown,
+    };
     const fetchMock = stubServer(server);
     const view = render(<TestGenerationWorkflowPage isVisible={false} />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
     expect(executionStatusText()).toContain("Active");
     const callsWhileHidden = fetchMock.mock.calls.length;
 
-    server.current = executeWorkflow({ execution: "complete" }, "2026-01-01T00:05:00.000Z");
+    server.current = executeWorkflow(
+      { execution: "complete" },
+      "2026-01-01T00:05:00.000Z",
+    );
     view.rerender(<TestGenerationWorkflowPage isVisible />);
 
     await waitFor(() => expect(executionStatusText()).toContain("Complete"));
@@ -797,10 +826,14 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
 
   it("does not fetch while hidden, however long it waits", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const server = { current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown,
+    };
     const fetchMock = stubServer(server);
     render(<TestGenerationWorkflowPage isVisible={false} />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
     const callsAfterMount = fetchMock.mock.calls.length;
 
     await act(async () => {
@@ -811,13 +844,19 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
 
   it("does not fetch while the browser tab is hidden", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const server = { current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown,
+    };
     const fetchMock = stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
     const callsAfterMount = fetchMock.mock.calls.length;
 
-    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    const visibility = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
     try {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(REFRESH_MS * 3);
@@ -830,12 +869,19 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
 
   it("refetches every 5 seconds while visible and waiting, then stops once both stages have finished", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const server = { current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown,
+    };
     const fetchMock = stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
 
-    server.current = executeWorkflow({ execution: "complete" }, "2026-01-01T00:01:00.000Z");
+    server.current = executeWorkflow(
+      { execution: "complete" },
+      "2026-01-01T00:01:00.000Z",
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
     });
@@ -864,10 +910,14 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
 
   it("leaves the screen unchanged when the refetch returns nothing or fails", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const server = { current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow({}, "2026-01-01T00:00:00.000Z") as unknown,
+    };
     stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
 
     for (const answer of [null, "fail"]) {
       server.current = answer;
@@ -880,10 +930,17 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
   });
 
   it("shows one consistent Execution status in the tracker and the step position (FR-012)", async () => {
-    const server = { current: executeWorkflow({ execution: "complete" }, "2026-01-01T00:05:00.000Z") as unknown };
+    const server = {
+      current: executeWorkflow(
+        { execution: "complete" },
+        "2026-01-01T00:05:00.000Z",
+      ) as unknown,
+    };
     stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
     expect(executionStatusText()).toContain("Complete");
     expect(screen.getByTestId("workflow-position")).toHaveTextContent("Execution");
     expect(executionStatusText()).not.toContain("Active");
@@ -916,7 +973,11 @@ describe("TestGenerationWorkflowPage background stages", () => {
   function stubServer(server: { current: unknown }) {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if ((init?.method ?? "GET") !== "GET") throw new Error("Unexpected non-GET fetch");
-      return { ok: true, status: 200, json: () => Promise.resolve({ workflow: server.current }) };
+      return {
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ workflow: server.current }),
+      };
     });
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
@@ -930,7 +991,9 @@ describe("TestGenerationWorkflowPage background stages", () => {
   it("opens the live progress view for an AI Enhancement run still in flight, not a blank screen", async () => {
     stubServer({ current: aiRunningWorkflow() });
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
 
     openPhase("design");
     const chip = screen.getByTestId("stage-status-aiEnhancement");
@@ -939,7 +1002,94 @@ describe("TestGenerationWorkflowPage background stages", () => {
 
     expect(await screen.findByTestId("ai-enhancement-run-progress")).toBeInTheDocument();
     // Resumes observing the run; it must not offer to start a second one.
-    expect(screen.queryByRole("button", { name: "Enhance with AI" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Enhance with AI" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("read-only-stage-notice")).not.toBeInTheDocument();
+  });
+
+  it("keeps a pending batch retry live when workflow refresh changes the stage from partial to active", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const partial = workflowAt("scenarioReview");
+    partial.stages.aiEnhancement = {
+      stageId: "aiEnhancement",
+      status: "partial",
+      batchOutcomes: [
+        {
+          index: 0,
+          operationKeys: ["GET /items"],
+          status: "failed",
+          failureExplanation: {
+            category: "unusable-output",
+            summary: "The AI reply could not be used.",
+            nextStep: "Retry this batch.",
+            retryable: true,
+          },
+        },
+      ],
+    } as (typeof partial.stages)["aiEnhancement"];
+    const server = { current: partial };
+    let finishRetry = () => {};
+    const retryFinished = new Promise<void>((resolve) => {
+      finishRetry = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (init?.method === "POST") {
+        server.current = aiRunningWorkflow("2026-01-01T00:01:00.000Z");
+        await retryFinished;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve(
+            url.includes("progressOnly")
+              ? {
+                  progress: {
+                    aiEnhancement: { status: "active", progress: aiProgress },
+                    liveScenarios: [],
+                  },
+                }
+              : { workflow: server.current },
+          ),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<TestGenerationWorkflowPage isVisible />);
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
+    openPhase("design");
+    fireEvent.click(screen.getByTestId("stage-status-aiEnhancement"));
+    fireEvent.click(screen.getByRole("button", { name: "Retry batch 1" }));
+    expect(screen.getByRole("button", { name: "Retry AI enhancement" })).toBeDisabled();
+
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(screen.getByRole("button", { name: "Enhancing…" })).toBeDisabled();
+    expect(screen.getByTestId("ai-enhancement-run-progress")).toBeInTheDocument();
+    expect(screen.queryByTestId("read-only-stage-notice")).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(REFRESH_MS + 100));
+    fireEvent.click(screen.getByRole("button", { name: "Enhancing…" }));
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(1);
+
+    const settled = workflowAt("scenarioReview", {
+      updatedAt: "2026-01-01T00:02:00.000Z",
+    });
+    settled.stages.aiEnhancement = { stageId: "aiEnhancement", status: "complete" };
+    await act(async () => {
+      server.current = settled;
+      finishRetry();
+    });
+    expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent(
+      "Complete",
+    );
+    expect(screen.queryByTestId("ai-enhancement-error")).not.toBeInTheDocument();
   });
 
   it("keeps refreshing while AI enhancement runs in the background, and stops once it settles", async () => {
@@ -947,7 +1097,9 @@ describe("TestGenerationWorkflowPage background stages", () => {
     const server = { current: aiRunningWorkflow() as unknown };
     const fetchMock = stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
-    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument(),
+    );
 
     const before = fetchMock.mock.calls.length;
     await act(async () => {
@@ -955,7 +1107,9 @@ describe("TestGenerationWorkflowPage background stages", () => {
     });
     expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
 
-    const settled = workflowAt("scenarioReview", { updatedAt: "2026-01-01T00:05:00.000Z" });
+    const settled = workflowAt("scenarioReview", {
+      updatedAt: "2026-01-01T00:05:00.000Z",
+    });
     settled.stages.aiEnhancement = { stageId: "aiEnhancement", status: "complete" };
     server.current = settled;
     await act(async () => {
@@ -963,7 +1117,9 @@ describe("TestGenerationWorkflowPage background stages", () => {
     });
     openPhase("design");
     await waitFor(() =>
-      expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent("Complete"),
+      expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent(
+        "Complete",
+      ),
     );
 
     const calls = fetchMock.mock.calls.length;
@@ -976,12 +1132,16 @@ describe("TestGenerationWorkflowPage background stages", () => {
   it("explains a running Dependency Analysis, then follows the workflow to Workflow Review when it finishes", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const server = {
-      current: workflowAt("dependencyAnalysis", { updatedAt: "2026-01-01T00:00:00.000Z" }) as unknown,
+      current: workflowAt("dependencyAnalysis", {
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }) as unknown,
     };
     stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
 
-    expect(await screen.findByTestId("dependency-analysis-in-progress")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("dependency-analysis-in-progress"),
+    ).toBeInTheDocument();
 
     const done = workflowAt("workflowReview", {
       updatedAt: "2026-01-01T00:05:00.000Z",
@@ -992,40 +1152,59 @@ describe("TestGenerationWorkflowPage background stages", () => {
         cycles: [],
       },
     });
-    done.stages.dependencyAnalysis = { stageId: "dependencyAnalysis", status: "complete" };
+    done.stages.dependencyAnalysis = {
+      stageId: "dependencyAnalysis",
+      status: "complete",
+    };
     server.current = done;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
     });
 
     await waitFor(() =>
-      expect(screen.getByTestId("workflow-position")).toHaveTextContent("Workflow Review"),
+      expect(screen.getByTestId("workflow-position")).toHaveTextContent(
+        "Workflow Review",
+      ),
     );
-    expect(screen.queryByTestId("dependency-analysis-in-progress")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("dependency-analysis-in-progress"),
+    ).not.toBeInTheDocument();
   });
 
   it("does not pull the user off another stage's screen when the active stage advances on refresh", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     // Postman is complete but the user has not continued yet, so the page keeps polling.
-    const onPostman = workflowAt("postmanGeneration", { updatedAt: "2026-01-01T00:00:00.000Z" });
-    onPostman.stages.postmanGeneration = { stageId: "postmanGeneration", status: "complete" };
+    const onPostman = workflowAt("postmanGeneration", {
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    onPostman.stages.postmanGeneration = {
+      stageId: "postmanGeneration",
+      status: "complete",
+    };
     const server = { current: onPostman as unknown };
     const fetchMock = stubServer(server);
     render(<TestGenerationWorkflowPage isVisible />);
     await waitFor(() =>
-      expect(screen.getByTestId("workflow-position")).toHaveTextContent("Postman Generation"),
+      expect(screen.getByTestId("workflow-position")).toHaveTextContent(
+        "Postman Generation",
+      ),
     );
 
     // Server moves on (e.g. Postman Generation finished elsewhere); the page must stay put until
     // the user chooses to continue.
     const advanced = workflowAt("execution", { updatedAt: "2026-01-01T00:05:00.000Z" });
-    advanced.stages.postmanGeneration = { stageId: "postmanGeneration", status: "complete" };
+    advanced.stages.postmanGeneration = {
+      stageId: "postmanGeneration",
+      status: "complete",
+    };
     server.current = advanced;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
     });
 
     expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
-    expect(screen.getByTestId("workflow-position")).toHaveTextContent("Postman Generation");
+    expect(screen.getByTestId("workflow-position")).toHaveTextContent(
+      "Postman Generation",
+    );
   });
 });

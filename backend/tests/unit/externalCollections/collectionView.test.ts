@@ -35,6 +35,88 @@ function nestedCollectionJson(): string {
 }
 
 describe("buildCollectionView", () => {
+  it("lists script-created variable names without executing scripts or inventing values", () => {
+    const raw = JSON.stringify({
+      info: { name: "Script variables" },
+      event: [
+        {
+          listen: "prerequest",
+          script: { exec: ['pm.collectionVariables.set("collectionKey", "secret");'] },
+        },
+      ],
+      item: [
+        {
+          name: "Customers",
+          event: [
+            {
+              listen: "prerequest",
+              script: { exec: ['pm.globals.set("globalKey", "secret");'] },
+            },
+          ],
+          item: [
+            {
+              name: "Create customer",
+              request: { method: "POST", url: "https://example.test/customers" },
+              event: [
+                {
+                  listen: "test",
+                  script: {
+                    exec: [
+                      'pm.test("captures customer", function () { pm.environment.set("customer_id", pm.response.json().id); });',
+                      'if (pm.response.code === 200) pm.environment.set("token", pm.response.json().token);',
+                      'pm.variables.set("localKey", "secret");',
+                      'postman.setEnvironmentVariable("legacyKey", "secret");',
+                      'pm.environment.set("customer_id", 42);',
+                      '// pm.environment.set("commentOnly", "secret");',
+                      'const text = \'pm.environment.set("stringOnly", "secret")\';',
+                      'pm.environment.set(variableName, "secret");',
+                      'throw new Error("must never execute");',
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+    expect(view.variables.map((variable) => variable.name)).toEqual([
+      "collectionKey",
+      "globalKey",
+      "customer_id",
+      "token",
+      "localKey",
+      "legacyKey",
+    ]);
+    expect(
+      view.variables.every(
+        (variable) =>
+          !variable.resolved && !variable.referenced && variable.value === undefined,
+      ),
+    ).toBe(true);
+    expect(view.items).toEqual([]);
+    expect(view.folders[0].items[0].unresolvedVariables).toEqual([]);
+  });
+
+  it("keeps the collection readable when a script has syntax errors", () => {
+    const raw = JSON.stringify({
+      info: { name: "Invalid script" },
+      variable: [{ key: "baseUrl", value: "https://example.test" }],
+      item: [
+        {
+          name: "Request",
+          request: { method: "GET", url: "{{baseUrl}}" },
+          event: [
+            { listen: "test", script: { exec: ['pm.environment.set("unfinished",'] } },
+          ],
+        },
+      ],
+    });
+    const view = buildCollectionView("uc-1", parseUploadedCollection(raw), raw, {});
+    expect(view.variables.map((variable) => variable.name)).toEqual(["baseUrl"]);
+  });
+
   it("reproduces the collection's own folder/request order and nesting", () => {
     const view = buildCollectionView(
       "uc-1",

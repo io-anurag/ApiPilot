@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { ReferenceField, type ReferenceSuggestion } from "../../src/components/requestChain/ReferenceField";
+import {
+  ReferenceField,
+  type ReferenceSuggestion,
+} from "../../src/components/requestChain/ReferenceField";
 
 /** AP-037 (specs/037-request-chain-performance tasks T029; FR-005). */
 
@@ -13,23 +16,62 @@ const SUGGESTIONS: ReferenceSuggestion[] = [
   { name: "$guid", detail: "Generated per request" },
 ];
 
-function Harness({ initial = "", onCommit = () => undefined }: { initial?: string; onCommit?: () => void }) {
+function Harness({
+  initial = "",
+  onCommit = () => undefined,
+}: {
+  initial?: string;
+  onCommit?: () => void;
+}) {
   const [value, setValue] = useState(initial);
   return (
     <>
-      <ReferenceField label="Header value" value={value} onChange={setValue} onCommit={onCommit} suggestions={SUGGESTIONS} />
+      <ReferenceField
+        label="Header value"
+        value={value}
+        onChange={setValue}
+        onCommit={onCommit}
+        suggestions={SUGGESTIONS}
+      />
       <output data-testid="value">{value}</output>
     </>
   );
 }
 
 function type(text: string) {
-  const field = screen.getByRole("combobox", { name: "Header value" }) as HTMLInputElement;
+  const field = screen.getByRole("combobox", {
+    name: "Header value",
+  }) as HTMLInputElement;
   fireEvent.change(field, { target: { value: text, selectionStart: text.length } });
   return field;
 }
 
 describe("ReferenceField", () => {
+  it("offers variables for a completed empty placeholder and replaces it without extra braces", () => {
+    render(<Harness />);
+    const field = type("Bearer {{}}");
+    expect(screen.getAllByRole("option")).toHaveLength(SUGGESTIONS.length);
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(screen.getByTestId("value")).toHaveTextContent("Bearer {{token}}");
+    expect(field).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("reopens suggestions at the cursor inside an existing reference without retaining its suffix", () => {
+    render(<Harness initial="Bearer {{token}} tail" />);
+    const field = screen.getByRole("combobox", {
+      name: "Header value",
+    }) as HTMLInputElement;
+    const position = "Bearer {{to".length;
+    field.setSelectionRange(position, position);
+    fireEvent.focus(field);
+    expect(screen.getByRole("option", { name: /token/ })).toBeInTheDocument();
+    fireEvent.keyDown(field, { key: "Escape" });
+    fireEvent.click(field);
+    fireEvent.mouseDown(screen.getByRole("option", { name: /token/ }));
+    expect(screen.getByTestId("value")).toHaveTextContent("Bearer {{token}} tail");
+    expect(field).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("offers every suggestion when {{ is typed, with where each comes from", () => {
     render(<Harness />);
     const field = type("Bearer {{");
@@ -83,7 +125,17 @@ describe("ReferenceField", () => {
       </div>,
     );
     const field = screen.getByRole("combobox", { name: "Header value" });
-    vi.spyOn(field, "getBoundingClientRect").mockReturnValue({ top: 100, bottom: 130, left: 40, right: 340, width: 300, height: 30, x: 40, y: 100, toJSON: () => ({}) });
+    vi.spyOn(field, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      bottom: 130,
+      left: 40,
+      right: 340,
+      width: 300,
+      height: 30,
+      x: 40,
+      y: 100,
+      toJSON: () => ({}),
+    });
     type("Bearer {{");
     const list = screen.getByRole("listbox");
     expect(list).toHaveClass("fixed");

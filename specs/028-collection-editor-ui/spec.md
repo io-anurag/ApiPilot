@@ -24,7 +24,7 @@ preview, the way Postman's collection/environment editor works.
   collections only, or both? → A: Both. This extends past specs/018-test-execution-results'
   original boundary ("AP-017 executes only the approved, generated Postman artifact and
   explicitly does not change how that artifact is generated"). The conflict is resolved by
-  scoping edits as an *override layer* applied after generation, not a change to generation
+  scoping edits as an _override layer_ applied after generation, not a change to generation
   itself: the original `TestScenario`/`GeneratedRequest` and its deterministic provenance are
   never mutated in place (FR-009a), and any edited request that is actually run is visibly
   distinguished in that run's own record from what was originally generated (FR-011). specs/018's
@@ -35,8 +35,8 @@ preview, the way Postman's collection/environment editor works.
   runs — variable overrides are saved into the selected environment's stored values
   (`Environment.variableValues`), and request edits are saved as a persistent override layered on
   the request's original definition (FR-009a), not a one-time or session-only application.
-  *(Storage location refined 2026-09-23: both are saved on the `UploadedCollectionSet` in place;
-  see that session below.)*
+  _(Storage location refined 2026-09-23: both are saved on the `UploadedCollectionSet` in place;
+  see that session below.)_
 
 ### Session 2026-09-21 (clarify pass)
 
@@ -90,9 +90,9 @@ preview, the way Postman's collection/environment editor works.
   placed last among its own kind there (FR-015a). A folder cannot be moved into itself or into
   one of its own subfolders. Moving is offered from the collection tree only. The run panel's
   run-order list offers the same move up/move down reordering as the tree (FR-015), so the order
-  a run uses can be set where the run is started. *(Refined the same day: moving was first also
+  a run uses can be set where the run is started. _(Refined the same day: moving was first also
   offered from the run-order list, and was removed from it. Superseded later the same day by the
-  per-run order question below.)*
+  per-run order question below.)_
 - Q: Postman's Runner lets a user place any request anywhere in the run order, across folders,
   without changing the collection. Should the run-order list do the same instead of reordering
   the collection within a folder? → A: Yes. The run-order list sets an order for runs only, by
@@ -119,7 +119,7 @@ preview, the way Postman's collection/environment editor works.
   auth, where that auth comes from, and its fields with `{{variable}}` references visible, plus
   every variable the request uses, where it is used, and whether it is set (FR-002a, FR-002b).
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Browse the Collection Before Running (Priority: P1)
 
@@ -182,7 +182,7 @@ with the specific missing variable(s) named.
 3. **Given** one or more variables a request depends on remain unresolved, **When** the user
    attempts to start a run, **Then** the run starts; the unresolved variables stay marked missing
    (the Variables toggle's red dot, each request's "Unresolved" list) and an affected request
-   records its own outcome. *(Superseded: originally blocked the run — see FR-006.)*
+   records its own outcome. _(Superseded: originally blocked the run — see FR-006.)_
 
 ---
 
@@ -260,8 +260,8 @@ items; verify the collection view reflects all three changes immediately.
     the collection's stored order are unchanged, and requests the user had excluded from the run
     stay excluded (FR-015c). The order is kept for later runs until the page is reloaded, and
     **Reset** restores the collection's order. Each row shows the request's folder path, method,
-    name and endpoint path. *(Amended 2026-09-25: this scenario first changed the collection's
-    stored order, within the request's own folder only.)*
+    name and endpoint path. _(Amended 2026-09-25: this scenario first changed the collection's
+    stored order, within the request's own folder only.)_
 11. **Given** a request that inherits Bearer `{{token}}` auth and a pre-request script from folder
     "Orders", **When** the user moves it to the collection root, **Then** the request itself now
     has Bearer `{{token}}` auth and a copy of Orders' pre-request script marked as copied from
@@ -272,7 +272,7 @@ items; verify the collection view reflects all three changes immediately.
 13. **Given** a request that inherits Bearer `{{token}}` from folder "Auth", **When** the user
     opens its Auth tab, chooses Bearer Token, enters `{{adminToken}}` and saves, **Then** the Auth
     tab says "Set on this request.", the Headers tab note shows `Authorization: Bearer
-    {{adminToken}}`, the request is marked edited, and the next run sends that token (FR-002c).
+{{adminToken}}`, the request is marked edited, and the next run sends that token (FR-002c).
 14. **Given** a request whose own Bearer token is a literal, **When** the user changes only its
     URL, or changes the auth type's other fields and leaves the hidden token untouched, and saves,
     **Then** the stored token is unchanged and is never shown (FR-002c).
@@ -355,7 +355,7 @@ items; verify the collection view reflects all three changes immediately.
   only evaluates variables an actual request references); if the user later adds a request that
   references it, it resolves normally using the value already defined.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -369,9 +369,9 @@ items; verify the collection view reflects all three changes immediately.
   stored, with every `{{variable}}` reference visibly distinguished. A literal value in a secret
   field (for example a password, token, client secret or API key value) MUST NOT be sent to the
   browser; the field MUST be shown as a hidden literal instead. When no auth applies, the view
-  MUST say so. This view is read-only. *(Amended 2026-09-25: the request's own auth is now
+  MUST say so. This view is read-only. _(Amended 2026-09-25: the request's own auth is now
   editable from the same tab (FR-002c); inherited auth and unsupported types are still shown
-  read-only.)*
+  read-only.)_
 - **FR-002c**: The system MUST let the user set a selected request's own auth from its Auth tab:
   inherit from its folder or the collection, No Auth, Bearer Token (token), Basic Auth (username,
   password) or API Key (key, value, and whether it goes in a header or the query string). Any
@@ -389,16 +389,22 @@ items; verify the collection view reflects all three changes immediately.
 - **FR-003**: The system MUST list every variable referenced anywhere in the loaded collection,
   showing its current value, its source (collection default, environment value, or user
   override), and whether it is currently resolved or missing.
+- **FR-003a**: The variable catalog MUST also discover literal names created by standard Postman
+  variable setters in saved collection, folder, and request pre-request/test scripts. Discovery
+  MUST NOT execute scripts or infer their values; a name with no supplied value remains unresolved
+  and is not a request reference unless the request uses it. Computed names and syntactically
+  invalid scripts are not statically discovered. The editor MUST offer catalog names when typing
+  `{{`, `{{}}`, or a partial reference in URL, header, body, and editable auth fields.
 - **FR-004**: The system MUST let the user set or override the value of any collection- or
   environment-scoped variable from this view.
 - **FR-005**: When the user sets or changes a variable's value, the system MUST immediately
   update every visible request preview that references that variable to show the substituted
   value, without requiring a page reload or a run.
 - **FR-006**: The system MUST keep every unresolved variable visibly marked missing, and MUST NOT
-  block starting a run because of one. *(Superseded: originally "MUST block starting a run while
+  block starting a run because of one. _(Superseded: originally "MUST block starting a run while
   any variable a target request depends on remains unresolved". Changed so a value captured by an
   earlier request's test script (`pm.environment.set`) can feed a later request in the same run;
-  specs/026 FR-004 changed with it.)*
+  specs/026 FR-004 changed with it.)_
 - **FR-007**: The system MUST allow the user to directly edit a selected request's method, URL,
   headers, and body content, in addition to setting variable values.
 - **FR-008**: This capability MUST be available for both uploaded external collections
@@ -406,22 +412,22 @@ items; verify the collection view reflects all three changes immediately.
   execution (specs/018-test-execution-results, specs/016-workflow-aware-postman). A generated
   collection meets this requirement through the guided workflow's hand-off: once handed off and
   uploaded it is an `UploadedCollectionSet`, and this view applies to it unchanged (Clarifications
-  2026-09-23, research.md D1). *(Previously recorded, 2026-09-21, as a known gap because the view
+  2026-09-23, research.md D1). _(Previously recorded, 2026-09-21, as a known gap because the view
   is mounted only in `ExternalCollectionsPage.tsx`; closed by that clarification rather than by a
-  second editor over specs/018's endpoints.)*
+  second editor over specs/018's endpoints.)_
 - **FR-009**: A variable value set in this view MUST be persisted into the collection's own stored
   variable values (`UploadedCollectionSet.variableValues`, encrypted at rest), so it is available
-  and reused across subsequent runs rather than discarded when the view closes. *(Reworded
+  and reused across subsequent runs rather than discarded when the view closes. _(Reworded
   2026-09-23, Clarifications: originally named `Environment.variableValues`/`EnvironmentForm`,
-  which this view never uses.)*
+  which this view never uses.)_
 - **FR-009a**: A direct request edit (FR-007) MUST be persisted into the collection's own stored
   definition (`UploadedCollectionSet.collection`) and MUST mark the edited request so that runs can
   report it (FR-011). It MUST NOT alter any generated `TestScenario`/`GeneratedRequest` or its
   provenance (constitution: deterministic generation, explainable provenance), which holds because
   the edited collection is a separate downstream copy (research.md D1, D4). The edit persists for
-  reuse across subsequent runs, mirroring FR-009. *(Reworded 2026-09-23, Clarifications:
+  reuse across subsequent runs, mirroring FR-009. _(Reworded 2026-09-23, Clarifications:
   originally "an override layered on top of the request's original definition, not an in-place
-  mutation of it".)*
+  mutation of it".)_
 - **FR-010**: The system MUST NOT dispatch any request as a result of navigating, previewing, or
   editing in this view — starting a run remains a separate, explicit user action.
 - **FR-011**: Any request or variable value that was overridden in this view and is subsequently
@@ -439,8 +445,8 @@ items; verify the collection view reflects all three changes immediately.
 - **FR-015**: The system MUST allow the user to reorder requests and folders within their
   containing folder (or the collection root); the collection's own stored order MUST reflect the
   new order for every subsequent view and run. This MUST be available from the collection tree.
-  *(Amended 2026-09-25, second time the same day: this was also offered from the run panel's
-  run-order list, which now sets a per-run order instead (FR-015c).)*
+  _(Amended 2026-09-25, second time the same day: this was also offered from the run panel's
+  run-order list, which now sets a per-run order instead (FR-015c).)_
 - **FR-015c**: The run panel's run-order list MUST let the user place any request at any position
   in the run, across folders, by dragging a row or with its move up/move down buttons, which MUST
   be keyboard operable. That order MUST apply to runs only (specs/026 FR-019): it MUST NOT change
@@ -477,7 +483,7 @@ items; verify the collection view reflects all three changes immediately.
   currently referenced by any request in the collection, and MUST persist it alongside variables
   discovered by reference (FR-003) for future use.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **CollectionView**: The read model presented to the user for a loaded collection — its
   folder/request tree in source order, and, per request, the raw (unresolved) and
@@ -494,7 +500,7 @@ items; verify the collection view reflects all three changes immediately.
   applies to so it can be discarded if that request no longer exists (FR-012), and is surfaced in
   any run record produced from the overridden request (FR-011).
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -514,7 +520,7 @@ items; verify the collection view reflects all three changes immediately.
   model, and the existing variable-completeness check, rather than introducing a parallel
   variable or collection model.
 - This is a pre-run visibility and configuration surface. It does not change how a collection or
-  its underlying test scenarios are *generated* (specs/003, 007, 016) — the deterministic
+  its underlying test scenarios are _generated_ (specs/003, 007, 016) — the deterministic
   generation pipeline's output is never mutated in place. What this feature edits is a downstream
   copy (the `UploadedCollectionSet`, FR-009a) that sits between "generated" and "executed," with
   every edited request visibly reflected in the resulting run record (FR-011) so generated-test
