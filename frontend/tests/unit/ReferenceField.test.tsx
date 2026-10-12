@@ -47,6 +47,35 @@ function type(text: string) {
 }
 
 describe("ReferenceField", () => {
+  it("keeps the suggestions inside a narrow viewport", () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    try {
+      render(<Harness />);
+      const field = screen.getByRole("combobox", { name: "Header value" });
+      vi.spyOn(field, "getBoundingClientRect").mockReturnValue({
+        top: 100,
+        bottom: 130,
+        left: 40,
+        right: 440,
+        width: 400,
+        height: 30,
+        x: 40,
+        y: 100,
+        toJSON: () => ({}),
+      });
+      type("{{");
+      const list = screen.getByRole("listbox");
+      expect(list.style.width).toBe("304px");
+      expect(list.style.left).toBe("8px");
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalWidth,
+      });
+    }
+  });
+
   it("offers variables for a completed empty placeholder and replaces it without extra braces", () => {
     render(<Harness />);
     const field = type("Bearer {{}}");

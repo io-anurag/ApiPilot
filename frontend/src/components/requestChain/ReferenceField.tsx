@@ -7,7 +7,7 @@ export interface ReferenceSuggestion {
   detail: string;
 }
 
-const OPEN = /\{\{(\$?[A-Za-z0-9_]*)$/;
+const OPEN = /\{\{(\$?\w*)$/;
 const EMPTY_REFERENCE = /\{\{\}\}$/;
 const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
@@ -76,7 +76,11 @@ export function ReferenceField({
     if (!open) return;
     const place = () => {
       const box = fieldRef.current?.getBoundingClientRect();
-      if (box) setAnchor({ top: box.bottom + 4, left: box.left, width: box.width });
+      if (box) {
+        const width = Math.min(box.width, window.innerWidth - 16);
+        const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
+        setAnchor({ top: box.bottom + 4, left, width });
+      }
     };
     place();
     window.addEventListener("scroll", place, true);
@@ -99,7 +103,7 @@ export function ReferenceField({
     const before = text.slice(0, caret ?? text.length);
     const match = OPEN.exec(before);
     setQuery(match ? match[1] : null);
-    if (!match && EMPTY_REFERENCE.test(before)) setQuery("");
+    if (!match && before.endsWith("{{}}")) setQuery("");
     setActive(0);
   }
 
@@ -107,7 +111,7 @@ export function ReferenceField({
     const field = fieldRef.current;
     const caret = field?.selectionStart ?? value.length;
     const before = value.slice(0, caret).replace(EMPTY_REFERENCE, "").replace(OPEN, "");
-    const after = value.slice(caret).replace(/^\$?[A-Za-z0-9_]*\}\}/, "");
+    const after = value.slice(caret).replace(/^\$?\w*\}\}/, "");
     const next = `${before}{{${name}}}${after}`;
     onChange(next);
     setQuery(null);
@@ -186,7 +190,7 @@ export function ReferenceField({
         style={
           anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined
         }
-        className="fixed z-50 max-h-96 min-w-80 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
+        className="fixed z-50 max-h-96 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
       >
         {matches.map((suggestion, index) => (
           <li
@@ -200,8 +204,10 @@ export function ReferenceField({
             }}
             className={`flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-sm ${index === active ? "bg-brand-50 dark:bg-brand-500/20" : ""}`}
           >
-            <span className="font-mono text-xs text-text-primary">{`{{${suggestion.name}}}`}</span>
-            <span className="text-xs text-muted">{suggestion.detail}</span>
+            <span className="min-w-0 wrap-anywhere font-mono text-xs text-text-primary">{`{{${suggestion.name}}}`}</span>
+            <span className="min-w-0 wrap-anywhere text-xs text-muted">
+              {suggestion.detail}
+            </span>
           </li>
         ))}
       </ul>

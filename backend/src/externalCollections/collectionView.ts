@@ -379,7 +379,9 @@ export function buildVariableBindings(
     ...Object.keys(variableValues).filter((name) => !isPostmanDynamicVariable(name)),
   ]);
   return [...names].map((name): VariableBinding => {
-    const environmentValue = variableValues[name];
+    const environmentValue = Object.hasOwn(variableValues, name)
+      ? variableValues[name]
+      : undefined;
     if (environmentValue) {
       return {
         name,

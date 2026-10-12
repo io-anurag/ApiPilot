@@ -66,6 +66,7 @@ describe("buildCollectionView", () => {
                       'if (pm.response.code === 200) pm.environment.set("token", pm.response.json().token);',
                       'pm.variables.set("localKey", "secret");',
                       'postman.setEnvironmentVariable("legacyKey", "secret");',
+                      'pm.environment.set("constructor", "secret");',
                       'pm.environment.set("customer_id", 42);',
                       '// pm.environment.set("commentOnly", "secret");',
                       'const text = \'pm.environment.set("stringOnly", "secret")\';',
@@ -88,6 +89,7 @@ describe("buildCollectionView", () => {
       "token",
       "localKey",
       "legacyKey",
+      "constructor",
     ]);
     expect(
       view.variables.every(
