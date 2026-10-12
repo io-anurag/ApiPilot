@@ -2,6 +2,7 @@ import type { LivePoint, RecentRequest } from "@apipilot/shared-domain";
 import type { StatusTone } from "../StatusBadge";
 import { formatDuration } from "../performance/performanceViewModel";
 import type { LiveRunStatus } from "./useLiveRun";
+import { formatTimeUtc } from "../../dateTime";
 
 /**
  * Labels, tones and number formatting of the live run dashboard (AP-045), kept out of JSX
@@ -56,11 +57,9 @@ export function formatElapsed(ms: number): string {
   return formatDuration(ms);
 }
 
-/** Local time of day as HH:MM:SS. */
+/** The UTC time of day, `HH:MM:SS UTC`. */
 export function formatClock(epochMs: number): string {
-  const date = new Date(epochMs);
-  const two = (value: number) => String(value).padStart(2, "0");
-  return `${two(date.getHours())}:${two(date.getMinutes())}:${two(date.getSeconds())}`;
+  return formatTimeUtc(epochMs);
 }
 
 /** The plotted figure: a point's count over its bucket width, in requests (or failures) per second. */
@@ -98,6 +97,33 @@ export function requestStatusText(request: Pick<RecentRequest, "status" | "faile
 
 export function requestStatusTone(request: Pick<RecentRequest, "status" | "failed">): StatusTone {
   return request.failed || request.status === null ? "danger" : "success";
+}
+
+/** The UTC clock time (HH:MM:SS) of a second of a run that started at `startedAt` (ISO 8601). */
+export function formatClockUtc(startedAt: string, second: number): string {
+  const startMs = Date.parse(startedAt);
+  if (Number.isNaN(startMs)) return "—";
+  return new Date(startMs + Math.max(0, second) * 1000).toISOString().slice(11, 19);
+}
+
+/**
+ * A failed response for reading: a JSON body is indented, anything else (and a JSON body that was cut
+ * short, which cannot be parsed) is shown as received.
+ */
+export function formatResponseText(text: string, contentType: string | null, truncated: boolean): string {
+  if (truncated || !/json/i.test(contentType ?? "")) return text;
+  try {
+    return JSON.stringify(JSON.parse(text) as unknown, null, 2);
+  } catch {
+    return text;
+  }
+}
+
+/** A chain's own passed and failed shares, in percent; a failing chain always shows some red. */
+export function chainOutcomeShares(requests: number, failures: number): { passed: number; failed: number } {
+  if (requests <= 0) return { passed: 0, failed: 0 };
+  const failed = failures > 0 ? Math.min(100, Math.max(2, (failures / requests) * 100)) : 0;
+  return { passed: 100 - failed, failed };
 }
 
 export function hasVirtualUsers(points: readonly LivePoint[]): boolean {

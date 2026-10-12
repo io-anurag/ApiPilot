@@ -11,6 +11,7 @@ import { StatusBadge } from "../StatusBadge";
 import { RecentRuns } from "./RecentRuns";
 import { SourcePicker } from "./path/SourcePicker";
 import type { SourceKind } from "./path/pathState";
+import { formatDateTimeUtc } from "../../dateTime";
 
 const SEED_LABELS: Record<NonNullable<ChainPlanSummary["seedSource"]>, string> = {
   specification: "Seeded from a specification",
@@ -19,11 +20,6 @@ const SEED_LABELS: Record<NonNullable<ChainPlanSummary["seedSource"]>, string> =
 };
 
 type ListState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; plans: ChainPlanSummary[] };
-
-const formatUpdated = (iso: string): string => {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-};
 
 /**
  * The Performance tab's entry screen (specs/047-unified-performance-tab FR-002 to FR-005): a source
@@ -37,7 +33,7 @@ export function PerformanceHome({
   onExit,
   banner,
   busy = false,
-}: Readonly<{ onPick: (source: SourceKind) => void; onOpen: (planId: string) => void; onExit?: () => void; banner?: ReactNode; busy?: boolean }>) {
+}: Readonly<{ onPick: (source: SourceKind) => void; onOpen: (planId: string, runId?: string) => void; onExit?: () => void; banner?: ReactNode; busy?: boolean }>) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [duplicating, setDuplicating] = useState<ChainPlanSummary | null>(null);
   const [deleting, setDeleting] = useState<ChainPlanSummary | null>(null);
@@ -159,7 +155,7 @@ export function PerformanceHome({
                       <td className="px-3 py-2 tabular-nums">{plan.chainCount}</td>
                       <td className="px-3 py-2 tabular-nums">{plan.stepCount}</td>
                       <td className="px-3 py-2 tabular-nums">{plan.dataSetCount}</td>
-                      <td className="px-3 py-2 text-muted">{formatUpdated(plan.updatedAt)}</td>
+                      <td className="px-3 py-2 text-muted">{formatDateTimeUtc(plan.updatedAt)}</td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap justify-end gap-2">
                           <button type="button" className={BUTTON_STYLES.secondary} aria-label={`Open ${plan.name}`} disabled={busy} onClick={() => onOpen(plan.id)}>
@@ -183,7 +179,7 @@ export function PerformanceHome({
             <h3 id="performance-runs-title" className="text-base font-semibold">
               Recent runs
             </h3>
-            <RecentRuns plans={plans} />
+            <RecentRuns plans={plans} onOpenRun={onOpen} busy={busy} />
           </section>
         </>
       )}

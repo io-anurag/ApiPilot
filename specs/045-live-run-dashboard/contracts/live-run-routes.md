@@ -31,6 +31,6 @@ Headers: `Cache-Control: no-store`.
 ## Guarantees
 
 - `totals` equals the run's own progress totals at the same moment, and the final snapshot equals the report.
-- Contains only fields listed in `data-model.md`; never headers, cookies, bodies, resolved URLs or `rawCapture`.
+- Contains only fields listed in `data-model.md`; never headers, cookies, resolved URLs or `rawCapture`, and bodies only as the masked, size-limited `recentFailures[].response` of a request-chain run (AP-049), which is never stored.
 - Cheap: no database write and no full-result recomputation per request.
 - Existing run routes, progress and report contracts are unchanged. The only additions to existing responses are the optional fields listed in `data-model.md`.

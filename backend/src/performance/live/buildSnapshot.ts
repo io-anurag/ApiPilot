@@ -1,5 +1,5 @@
-import type { LiveChainRow, LivePoint, LiveRunKind, LiveRunLatency, LiveRunSnapshot, LiveRunState, RecentRequest } from "@apipilot/shared-domain";
-import { LIVE_RECENT_REQUEST_LIMIT } from "@apipilot/shared-domain";
+import type { LiveChainRow, LivePoint, LiveRunKind, LiveRunLatency, LiveRunSnapshot, LiveRunState, RecentFailure, RecentRequest } from "@apipilot/shared-domain";
+import { LIVE_RECENT_FAILURE_LIMIT, LIVE_RECENT_REQUEST_LIMIT } from "@apipilot/shared-domain";
 import type { LiveSeriesView } from "./liveSeries";
 
 /**
@@ -12,6 +12,7 @@ export interface LiveRunSource {
   kind: LiveRunKind;
   state: LiveRunState;
   elapsedMs: number;
+  startedAt?: string;
   plannedDurationMs: number | null;
   plannedRequests: number | null;
   totals: { requests: number; failures: number };
@@ -20,11 +21,13 @@ export interface LiveRunSource {
   chains: LiveChainRow[];
   series: LiveSeriesView;
   recent: RecentRequest[];
+  /** Request-chain runs only (AP-049). */
+  recentFailures?: RecentFailure[];
   inFlight: string | null;
 }
 
 /** What an aggregate reports about the run now; the registry adds the run's identity and state. */
-export type LiveParts = Pick<LiveRunSource, "elapsedMs" | "totals" | "currentVirtualUsers" | "latency" | "chains" | "series" | "recent">;
+export type LiveParts = Pick<LiveRunSource, "elapsedMs" | "totals" | "currentVirtualUsers" | "latency" | "chains" | "series" | "recent" | "recentFailures">;
 
 export interface LiveCursor {
   /** Points whose bucket ends at or after this second are returned. */
@@ -56,6 +59,7 @@ export function buildSnapshot(source: LiveRunSource, requested: LiveCursor): Liv
     kind: source.kind,
     state: source.state,
     elapsedMs: Math.max(0, source.elapsedMs),
+    ...(source.startedAt ? { startedAt: source.startedAt } : {}),
     plannedDurationMs: source.plannedDurationMs,
     plannedRequests: source.plannedRequests,
     totals: { requests: source.totals.requests, failures: source.totals.failures },
@@ -64,6 +68,7 @@ export function buildSnapshot(source: LiveRunSource, requested: LiveCursor): Liv
     chains: source.chains,
     series: { fromSecond: points[0]?.second ?? Math.max(0, cursor.since), bucketSeconds: source.series.bucketSeconds, points, ...(source.series.groups ? { groups: source.series.groups } : {}) },
     recent: source.recent.slice(0, LIVE_RECENT_REQUEST_LIMIT),
+    ...(source.recentFailures ? { recentFailures: source.recentFailures.slice(0, LIVE_RECENT_FAILURE_LIMIT) } : {}),
     inFlight: source.inFlight,
     // The newest buckets may still fill (see LATE_POINT_MARGIN_SECONDS), so the next poll asks for them again.
     nextSince: last ? Math.max(0, last.second - Math.ceil(LATE_POINT_MARGIN_SECONDS / source.series.bucketSeconds) * source.series.bucketSeconds) : 0,

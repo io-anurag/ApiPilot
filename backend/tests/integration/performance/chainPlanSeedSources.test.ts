@@ -10,6 +10,12 @@ import {
 import { performanceAgent, unavailableProbe } from "../../fixtures/performance/agent";
 import { uploadCollection } from "../../fixtures/performance/collectionPlans";
 import { establishSession } from "../../fixtures/performance/session";
+import { runWithSession } from "../../../src/session/sessionContext";
+import {
+  appendResult,
+  createRun,
+  settleRun,
+} from "../../../src/externalCollections/uploadedCollectionExecutionStore";
 
 /** AP-037 (specs/037-request-chain-performance tasks T068; US4, FR-020, FR-023, FR-024, FR-026). */
 
@@ -32,6 +38,159 @@ describe("POST /api/chain-plans/seed from the guided workflow", () => {
     const plan = seeded.body.plan as ChainPlan;
     expect(plan.chains.some((chain) => chain.name.startsWith("Workflow "))).toBe(true);
     expect(plan.seedingReport?.source.kind).toBe("workflow");
+  });
+
+  it("uses saved request bodies and settings from the collection handed off by this workflow", async () => {
+    const { agent, sessionId } = await performanceAgent({});
+    const current = await agent.get("/api/test-generation-workflow");
+    expect(current.status).toBe(200);
+    const uploaded = await agent
+      .post("/api/external-collections")
+      .field("name", "Guided configured collection")
+      .field("workflowId", current.body.workflow.id)
+      .field("tier", "local")
+      .field("requestDelayMs", "75")
+      .attach(
+        "collection",
+        Buffer.from(JSON.stringify(twoFolderCollection())),
+        "collection.json",
+      )
+      .attach(
+        "environment",
+        Buffer.from(
+          JSON.stringify({
+            values: [
+              { key: "baseUrl", value: "http://127.0.0.1:4700/api", enabled: true },
+              { key: "tenant", value: "configured-tenant", enabled: true },
+            ],
+          }),
+        ),
+        "environment.json",
+      );
+    expect(uploaded.status).toBe(201);
+    const collectionId = uploaded.body.uploadedCollection.id as string;
+    const saved = await agent
+      .put(`/api/external-collections/${collectionId}/requests/req-create`)
+      .send({
+        method: "POST",
+        url: "{{baseUrl}}/customers",
+        headers: [{ key: "Content-Type", value: "application/json" }],
+        body: '{"name":"Configured customer","tenant":"{{tenant}}"}',
+      });
+    expect(saved.status).toBe(200);
+    runWithSession(sessionId, () => {
+      const run = createRun({
+        uploadedCollectionSetId: collectionId,
+        uploadedCollectionSnapshot: {
+          name: "Guided configured collection",
+          tier: "local",
+        },
+      });
+      for (const itemId of ["req-create", "req-token"]) {
+        appendResult(run.id, {
+          itemId,
+          requestName: itemId,
+          requestMethod: "POST",
+          outcome: "passed",
+          startedAt: "2026-10-12T12:00:00.000Z",
+          durationMs: 1,
+          testOutcomes: [],
+        });
+      }
+      settleRun(run.id, "completed");
+    });
+    await uploadCollection(agent, twoFolderCollection(), undefined, {
+      name: "Unrelated upload",
+    });
+    const seeded = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({ name: "Guided configured plan", source: { kind: "workflow" } });
+    expect(seeded.status).toBe(201);
+    const plan = seeded.body.plan as ChainPlan;
+    expect(plan.seedingReport?.source).toMatchObject({
+      kind: "workflow",
+      specificationTitle: current.body.workflow.apiModel.info.title,
+    });
+    expect(plan.chains.flatMap((chain) => chain.steps)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: expect.objectContaining({
+            kind: "collection",
+            collectionId,
+            itemId: "req-create",
+          }),
+          body: {
+            kind: "raw",
+            text: '{"name":"Configured customer","tenant":"{{tenant}}"}',
+            contentType: "application/json",
+          },
+        }),
+      ]),
+    );
+    expect(plan.thinkTimeMs).toBe(75);
+    expect(plan.chains.map((chain) => chain.name)).toEqual(["Customers", "Auth"]);
+    const steps = plan.chains.flatMap((chain) => chain.steps);
+    expect(
+      steps.map((step) =>
+        step.source.kind === "collection" ? step.source.itemId : null,
+      ),
+    ).toEqual(["req-create", "req-token"]);
+    expect(steps[1].body).toEqual({
+      kind: "form",
+      fields: [{ name: "client_id", value: "{{client_id}}" }],
+    });
+    const environments = await agent.get("/api/test-generation-workflow/environments");
+    expect(
+      environments.body.environments.find(
+        (environment: { id: string }) => environment.id === plan.targetEnvironmentId,
+      ),
+    ).toMatchObject({
+      baseUrl: "http://127.0.0.1:4700/api",
+      tier: "local",
+      requestDelayMs: 75,
+      variableValues: { tenant: "configured-tenant" },
+    });
+    const withoutEnvironment = await agent.post(`${CHAIN_BASE}/seed`).send({
+      name: "No environment",
+      source: { kind: "workflow" },
+      environmentId: null,
+    });
+    expect(withoutEnvironment.status).toBe(201);
+    expect(withoutEnvironment.body.plan.targetEnvironmentId).toBeNull();
+    expect(withoutEnvironment.body.plan.chains).toEqual(plan.chains);
+    const edited = await agent.put(`${CHAIN_BASE}/${plan.id}`).send({
+      revision: plan.revision,
+      plan: {
+        ...plan,
+        chains: plan.chains.map((chain, chainIndex) =>
+          chainIndex === 0
+            ? {
+                ...chain,
+                steps: chain.steps.map((step, stepIndex) =>
+                  stepIndex === 0
+                    ? {
+                        ...step,
+                        body: {
+                          kind: "raw",
+                          text: '{"name":"Performance customer"}',
+                          contentType: "application/json",
+                        },
+                      }
+                    : step,
+                ),
+              }
+            : chain,
+        ),
+      },
+    });
+    expect(edited.status).toBe(200);
+    expect(edited.body.plan.chains[0].steps[0].body.text).toBe(
+      '{"name":"Performance customer"}',
+    );
+    expect(
+      (await agent.get(`/api/external-collections/${collectionId}/collection`)).body
+        .collectionView,
+    ).toEqual(saved.body.collectionView);
   });
 });
 

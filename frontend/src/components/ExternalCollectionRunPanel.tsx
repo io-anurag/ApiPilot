@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   CollectionRequestView,
   EnvironmentTier,
-  ExecutionConfirmationRequirement,
   FailureAnalysis,
   FailureAnalysisInProgress,
   RawHeader,
@@ -28,10 +27,11 @@ import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { CollectionRunSetupCard } from "./CollectionRunSetupCard";
 import { summarizeCollectionRun } from "../utils/collectionRunSetup";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, ENTRY_CONTROL } from "./controlStyles";
 import { SeededPlans } from "./requestChain/SeededPlans";
 import { SeedPlanDialog } from "./requestChain/SeedPlanDialog";
 import { applyRunOrder, moveRunOrderItem, type RunOrder } from "../utils/runOrder";
+import { formatDateTimeUtc, formatTimeUtc } from "../dateTime";
 
 const POLL_INTERVAL_MS = 750;
 
@@ -261,45 +261,6 @@ function UnverifiedContentDialog({
           Confirm and run
         </button>
         <button type="button" onClick={onDecline} className={BUTTON_STYLES.secondary}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Risk-tier / destructive-request gate (FR-013) — the same concern as specs/018's generated-run
- * confirmation, evaluated every run start rather than once per artifact. */
-function RiskTierConfirmationBanner({
-  requirement,
-  onConfirm,
-  onCancel,
-}: Readonly<{ requirement: ExecutionConfirmationRequirement; onConfirm: () => void; onCancel: () => void }>) {
-  return (
-    <div
-      role="alertdialog"
-      data-testid="risk-tier-confirmation-banner"
-      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
-    >
-      <p className="text-left text-sm text-warning-700 hyphens-none dark:text-warning-100">
-        This run targets a <strong>{requirement.environmentTier}</strong> environment
-        {requirement.destructiveOperations.length > 0 && " and includes destructive requests"}.
-      </p>
-      {requirement.destructiveOperations.length > 0 && (
-        <ul className="space-y-1 text-sm text-warning-700 dark:text-warning-100">
-          {requirement.destructiveOperations.map((operation) => (
-            <li key={`${operation.operationMethod} ${operation.operationPath}`} className="flex items-center gap-2">
-              <HttpMethodBadge method={operation.operationMethod} />
-              <span className="font-mono text-xs">{operation.operationPath}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex gap-2">
-        <button type="button" onClick={onConfirm} className={BUTTON_STYLES.danger}>
-          Confirm and run
-        </button>
-        <button type="button" onClick={onCancel} className={BUTTON_STYLES.secondary}>
           Cancel
         </button>
       </div>
@@ -598,6 +559,8 @@ export function ExternalCollectionRunPanel({
   onRunAgain,
   onViewResults,
   onOpenCoverage,
+  coverageSlot,
+  onOpenVariables,
   openRunId,
   onOpenRunHandled,
 }: Readonly<{
@@ -624,6 +587,10 @@ export function ExternalCollectionRunPanel({
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: opens the Coverage view, so a run's results can be read as coverage of the specification. */
   onOpenCoverage?: () => void;
+  /** How this run feeds API Test Coverage, shown inside the Run step's launch card. */
+  coverageSlot?: ReactNode;
+  /** Opens the Review requests step, where variable values are set. */
+  onOpenVariables?: () => void;
   /** Which part to show (AP-042): `run` is the order and launch card, `results` the run and its
    * history, `hidden` nothing (the component stays mounted so state and polling carry on), and the
    * default `all` the original single panel. */
@@ -650,8 +617,6 @@ export function ExternalCollectionRunPanel({
   const [downloadingReport, setDownloadingReport] = useState<"pdf" | "html" | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [showUnverifiedDialog, setShowUnverifiedDialog] = useState(false);
-  const [pendingRiskTierConfirmation, setPendingRiskTierConfirmation] =
-    useState<ExecutionConfirmationRequirement | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(requests.map((item) => item.id)));
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // AP-031: stored analyses for the open run, and the session's one analysis in progress.
@@ -734,7 +699,6 @@ export function ExternalCollectionRunPanel({
     setRun(null);
     setStartError(null);
     setShowUnverifiedDialog(false);
-    setPendingRiskTierConfirmation(null);
     refreshHistory();
   }, [uploadedCollection.id]);
 
@@ -802,14 +766,9 @@ export function ExternalCollectionRunPanel({
         setShowUnverifiedDialog(true);
         return;
       }
-      if (result.error === "confirmation_required" && result.confirmation) {
-        setPendingRiskTierConfirmation(result.confirmation);
-        return;
-      }
       setStartError(result.message);
       return;
     }
-    setPendingRiskTierConfirmation(null);
     setRun(result.run);
     refreshHistory();
     onRunStarted?.();
@@ -820,7 +779,9 @@ export function ExternalCollectionRunPanel({
       setShowUnverifiedDialog(true);
       return;
     }
-    performStart(false);
+    // The click is the explicit trigger, and the writes are listed on the card above it, so no second
+    // question is asked (the unverified-content dialog above is a separate, first-run-only gate).
+    performStart(true);
   }
 
   function toggleSelected(id: string) {
@@ -885,7 +846,7 @@ export function ExternalCollectionRunPanel({
       type="button"
       onClick={() => setSeedingChainPlan(true)}
       disabled={selectedIds.size === 0 || requests.length === 0}
-      className={BUTTON_STYLES.secondary}
+      className={`${ENTRY_CONTROL} px-3 py-1.5`}
     >
       Create request-chain plan
     </button>
@@ -898,10 +859,10 @@ export function ExternalCollectionRunPanel({
       emptyText="None yet."
     />
   );
-  const setup = summarizeCollectionRun({ orderedRequests, selectedIds });
+  const setup = summarizeCollectionRun({ orderedRequests, selectedIds, placements, requestDelayMs: uploadedCollection.requestDelayMs });
   const newestRun = [...runHistory, ...(run ? [run] : [])].sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
   const lastRunText = newestRun
-    ? `${new Date(newestRun.startedAt).toLocaleString()} · ${RUN_STATUS_LABEL[newestRun.status]}`
+    ? `${formatDateTimeUtc(newestRun.startedAt)} · ${RUN_STATUS_LABEL[newestRun.status]}`
     : null;
   const orderBlock = requests.length > 0 && (
     <RunOrderChecklist
@@ -923,13 +884,6 @@ export function ExternalCollectionRunPanel({
           onDecline={() => setShowUnverifiedDialog(false)}
         />
       )}
-      {pendingRiskTierConfirmation && (
-        <RiskTierConfirmationBanner
-          requirement={pendingRiskTierConfirmation}
-          onConfirm={() => performStart(true)}
-          onCancel={() => setPendingRiskTierConfirmation(null)}
-        />
-      )}
       {startError && <ErrorState message={startError} />}
     </>
   );
@@ -944,7 +898,7 @@ export function ExternalCollectionRunPanel({
         kind="collection"
         runId={run.id}
         collectionId={uploadedCollection.id}
-        meta={`${uploadedCollection.name} · started ${new Date(run.startedAt).toLocaleTimeString()}`}
+        meta={`${uploadedCollection.name} · started ${formatTimeUtc(run.startedAt)}`}
         actions={
           run.status === "in-progress" ? (
             <button type="button" onClick={handleCancel} disabled={cancelling || run.cancelRequested} className={BUTTON_STYLES.danger}>
@@ -979,20 +933,29 @@ export function ExternalCollectionRunPanel({
     />
   );
 
+  const loadTestBlock =
+    onOpenChainPlan ? (
+      <section aria-labelledby="launch-plan-title" className="space-y-2">
+        <h4 id="launch-plan-title" className="text-sm font-semibold text-text-primary">
+          Load test instead
+        </h4>
+        <p className="text-left text-xs text-muted hyphens-none">
+          Turn the selected requests into a request-chain plan, then open it in Performance to
+          load-test them. This does not run anything.
+        </p>
+        <div className="flex justify-end">{chainPlanButton}</div>
+        <div className="space-y-1 pt-1">
+          <h5 className="text-xs font-semibold uppercase text-muted">Plans from collections</h5>
+          {seededPlans}
+        </div>
+      </section>
+    ) : undefined;
+
   if (view === "run") {
     return (
-      <section
-        data-testid="external-collection-run-panel"
-        className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start"
-      >
-        <div className="min-w-0">
-          {orderBlock || (
-            <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted">
-              Every request in the collection runs, in the collection&apos;s own order.
-            </p>
-          )}
-        </div>
+      <section data-testid="external-collection-run-panel" className="space-y-4">
         <CollectionRunSetupCard
+          part="launch"
           collection={uploadedCollection}
           setup={setup}
           totalRequests={requests.length}
@@ -1003,26 +966,32 @@ export function ExternalCollectionRunPanel({
           onStart={handleRunClick}
           lastRunText={lastRunText}
           onViewResults={hasRuns ? onViewResults : undefined}
-          loadTest={
-            onOpenChainPlan ? (
-              <section aria-labelledby="launch-plan-title" className="space-y-2">
-                <h4 id="launch-plan-title" className="text-sm font-semibold text-text-primary">
-                  Load test instead
-                </h4>
-                <p className="text-left text-xs text-muted hyphens-none">
-                  Turn the selected requests into a request-chain plan, then open it in Performance to
-                  load-test them. This does not run anything.
-                </p>
-                {chainPlanButton}
-                <div className="space-y-1 pt-1">
-                  <h5 className="text-xs font-semibold uppercase text-muted">Plans from collections</h5>
-                  {seededPlans}
-                </div>
-              </section>
-            ) : undefined
-          }
+          loadTest={loadTestBlock}
+          coverage={coverageSlot}
           gates={gates}
         />
+        {/* What the run will do (hosts, variables, writes) is read first, then the run order. */}
+        <CollectionRunSetupCard
+          part="details"
+          onOpenVariables={onOpenVariables}
+          collection={uploadedCollection}
+          setup={setup}
+          totalRequests={requests.length}
+          customOrder={runOrder !== undefined}
+          inProgress={run?.status === "in-progress"}
+          starting={starting}
+          startDisabled={runDisabled}
+          onStart={handleRunClick}
+          lastRunText={lastRunText}
+          gates={null}
+        />
+        <div className="min-w-0">
+          {orderBlock || (
+            <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted">
+              Every request in the collection runs, in the collection&apos;s own order.
+            </p>
+          )}
+        </div>
         {chainPlanDialog}
       </section>
     );

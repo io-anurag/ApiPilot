@@ -1,4 +1,5 @@
 import type { RequestGroupResult, UserScriptResult, UserScriptRun, UserScriptThreshold } from "@apipilot/shared-domain";
+import { formatReportTime } from "../../formatReportTime";
 import { bytes, clock, escapeHtml, formatCount, ms, PHASE_TEXT, pct, REPORT_CSP, STYLE, timelineSvg, timelineTable } from "./renderHtmlReport";
 import { LIVE_SERIES_STYLE, liveSeriesChart } from "./chainReportCharts";
 import { OTHER_REQUESTS } from "./userScriptAggregate";
@@ -244,7 +245,7 @@ export function renderUserScriptReport(run: UserScriptRun): string {
     `<div><dt>Environment</dt><dd>${escapeHtml(run.environment.name)} <span class="badge neutral">Tier: ${escapeHtml(run.environment.tier)}</span></dd><dd><code>${escapeHtml(run.environment.baseUrl)}</code></dd></div>`,
     `<div><dt>Load used</dt><dd>${escapeHtml(loadText(run))}</dd></div>`,
     `<div><dt>k6 · outcome</dt><dd><code>v${escapeHtml(run.k6Version)}</code></dd><dd class="small">${escapeHtml(run.exitMeaning ? EXIT_TEXT[run.exitMeaning] : "k6 was stopped")}</dd></div>`,
-    `<div><dt>Started · ended</dt><dd><code>${escapeHtml(run.startedAt)}</code></dd><dd><code>${escapeHtml(run.endedAt ?? "—")}</code></dd></div>`,
+    `<div><dt>Started · ended</dt><dd><code>${escapeHtml(formatReportTime(run.startedAt))}</code></dd><dd><code>${escapeHtml(run.endedAt ? formatReportTime(run.endedAt) : "—")}</code></dd></div>`,
     `<div><dt>Mapped environment values</dt><dd class="small">${mappingText(run)}</dd><dd class="small muted">Names and sources only; values are never recorded.</dd></div>`,
     "</dl>",
   ];

@@ -8,13 +8,15 @@ import type { RunnerStartInput } from "../../../src/performance/k6/runnerTypes";
 /** research D7, D10, D19 (tasks T056, T059). */
 
 describe("k6 invocation", () => {
-  it("pins the argument list, with the usage report off and JSON output only (FR-033, D10)", () => {
+  it("pins the argument list, with the usage report off and JSON metrics and log output only (FR-033, D10)", () => {
     const runDir = path.join("tmp", "apipilot-k6", "run-1");
     expect(buildK6Args(runDir)).toEqual([
       "run",
       "--no-usage-report",
       "--quiet",
       "--no-color",
+      "--log-format",
+      "json",
       "--out",
       `json=${path.join(runDir, "metrics.ndjson")}`,
       path.join(runDir, "script.js"),

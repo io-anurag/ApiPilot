@@ -1,7 +1,7 @@
 import { useMemo, useState, type PointerEvent } from "react";
 import type { LivePoint, LiveSeries } from "@apipilot/shared-domain";
 import { axisTicks, formatAxisTime, formatTick, timeSpan, timeTicks } from "./chartScale";
-import { formatRate, formatRequestDuration, hasVirtualUsers, perSecond } from "./liveRunViewModel";
+import { formatClockUtc, formatRate, formatRequestDuration, hasVirtualUsers, perSecond } from "./liveRunViewModel";
 
 const WIDTH = 760;
 const PAD_TOP = 14;
@@ -77,7 +77,9 @@ function LinePlot({
   onHover,
   testId,
   label,
-}: Readonly<{ spec: PlotSpec; points: readonly LivePoint[]; span: number; hover: number | null; onHover: (index: number | null) => void; testId: string; label: string }>) {
+  timeLabel,
+  timeTitle,
+}: Readonly<{ spec: PlotSpec; points: readonly LivePoint[]; span: number; hover: number | null; onHover: (index: number | null) => void; testId: string; label: string; timeLabel: (second: number) => string; timeTitle: string }>) {
   // Both plots reserve the right axis, so a point is at the same x in each and the hover rule lines up.
   const padRight = PAD_RIGHT;
   const plotWidth = WIDTH - PAD_LEFT - padRight;
@@ -130,12 +132,12 @@ function LinePlot({
         <g key={`x${second}`}>
           <line x1={x(second)} x2={x(second)} y1={PAD_TOP + plotHeight} y2={PAD_TOP + plotHeight + 4} className="stroke-border-strong" strokeWidth={1} />
           <text x={x(second)} y={spec.height - 18} textAnchor="middle" fontSize={11} className="fill-muted font-mono" data-axis="time">
-            {formatAxisTime(second)}
+            {timeLabel(second)}
           </text>
         </g>
       ))}
       <text x={PAD_LEFT + plotWidth / 2} y={spec.height - 1} textAnchor="middle" fontSize={10} className="fill-muted">
-        Elapsed time (m:ss)
+        {timeTitle}
       </text>
       {spec.lines.map((line) => (
         <path
@@ -184,8 +186,11 @@ type View = "total" | "groups";
  * `LoadProfileChart`, tokens only. Series differ by line style and are named in a legend, so colour is
  * never the only cue; hovering reads off any second; the same figures are in a table. Nothing animates.
  */
-export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonly<{ series: LiveSeries; thinned: boolean; plannedSeconds?: number | null }>) {
+export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt }: Readonly<{ series: LiveSeries; thinned: boolean; plannedSeconds?: number | null; startedAt?: string }>) {
   const { points, bucketSeconds } = series;
+  // The actual UTC time of a second of the run; the run-relative m:ss only when the start is not known.
+  const timeLabel = (second: number) => (startedAt ? formatClockUtc(startedAt, second) : formatAxisTime(second));
+  const timeTitle = startedAt ? "Time (UTC)" : "Elapsed time (m:ss)";
   const groups = series.groups && points.some((point) => point.byGroup) ? series.groups : undefined;
   const [view, setView] = useState<View>("total");
   const [hover, setHover] = useState<number | null>(null);
@@ -249,7 +254,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonl
   const shown = hover !== null && points[hover] ? hover : points.length - 1;
   const point = points[shown]!;
   const readout = [
-    `At ${formatAxisTime(point.second)}`,
+    `At ${timeLabel(point.second)}${startedAt ? " UTC" : ""}`,
     `${formatRate(model.requests[shown]!)} requests/s`,
     `${formatRate(model.failures[shown]!)} failures/s`,
     ...(model.showUsers ? [`${point.virtualUsers ?? "no"} virtual users`] : []),
@@ -258,7 +263,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonl
   ].join(" · ");
   const latest = points.length - 1;
   const summary =
-    `Requests per second, failures per second${model.showUsers ? " and virtual users" : ""} over ${formatAxisTime(points[latest]!.second)}. ` +
+    `Requests per second, failures per second${model.showUsers ? " and virtual users" : ""} over ${timeLabel(points[latest]!.second)}${startedAt ? " UTC" : ""}. ` +
     `Latest: ${formatRate(model.requests[latest]!)} requests per second, ${formatRate(model.failures[latest]!)} failures per second` +
     `${model.showUsers ? `, ${points[latest]!.virtualUsers ?? "no"} virtual users` : ""}. The values are also in the table below the graph.`;
 
@@ -318,13 +323,13 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonl
       </p>
 
       <div className="max-w-full overflow-x-auto" data-testid="live-run-plots">
-        <LinePlot spec={ratePlot} points={points} span={model.span} hover={hover} onHover={setHover} testId="live-run-chart-svg" label={summary} />
+        <LinePlot spec={ratePlot} points={points} span={model.span} hover={hover} onHover={setHover} testId="live-run-chart-svg" label={summary} timeLabel={timeLabel} timeTitle={timeTitle} />
         {model.showLatency && (
           <div className="mt-3 space-y-1">
             <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
               <Swatch stroke={STROKE.latency} dash={undefined} /> Average response time
             </p>
-            <LinePlot spec={latencyPlot} points={points} span={model.span} hover={hover} onHover={setHover} testId="live-run-latency-svg" label="Average response time per second, in milliseconds. The values are also in the table below the graph." />
+            <LinePlot spec={latencyPlot} points={points} span={model.span} hover={hover} onHover={setHover} testId="live-run-latency-svg" label="Average response time per second, in milliseconds. The values are also in the table below the graph." timeLabel={timeLabel} timeTitle={timeTitle} />
           </div>
         )}
       </div>
@@ -347,7 +352,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonl
               <caption className="sr-only">Requests, failures, virtual users and response time for each {bucketSeconds === 1 ? "second" : `${bucketSeconds}-second step`} of the run</caption>
               <thead className="sticky top-0 bg-chrome text-muted">
                 <tr>
-                  <th scope="col" className="px-3 py-1.5 font-semibold">Time</th>
+                  <th scope="col" className="px-3 py-1.5 font-semibold">{startedAt ? "Time (UTC)" : "Time"}</th>
                   <th scope="col" className="px-3 py-1.5 font-semibold">Requests</th>
                   <th scope="col" className="px-3 py-1.5 font-semibold">Failures</th>
                   <th scope="col" className="px-3 py-1.5 font-semibold">Requests/s</th>
@@ -364,7 +369,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null }: Readonl
               <tbody className="divide-y divide-border font-mono">
                 {points.map((row, index) => (
                   <tr key={row.second}>
-                    <th scope="row" className="px-3 py-1 font-normal">{formatAxisTime(row.second)}</th>
+                    <th scope="row" className="px-3 py-1 font-normal">{timeLabel(row.second)}</th>
                     <td className="px-3 py-1">{row.requests}</td>
                     <td className="px-3 py-1">{row.failures}</td>
                     <td className="px-3 py-1">{formatRate(model.requests[index]!)}</td>

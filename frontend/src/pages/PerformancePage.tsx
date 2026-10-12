@@ -35,7 +35,7 @@ export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly
   useEffect(() => onDraftChange?.(hasDraft), [hasDraft, onDraftChange]);
 
   const open = useCallback(
-    async (planId: string) => {
+    async (planId: string, runId?: string) => {
       setOpening(true);
       setOpenError(null);
       const result = await fetchPlan(planId);
@@ -45,7 +45,7 @@ export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly
         return;
       }
       const origin = sourceOfPlan(result.plan);
-      openPlan(planId, origin.source, origin.selection);
+      openPlan(planId, origin.source, origin.selection, runId);
     },
     [openPlan],
   );
@@ -83,18 +83,18 @@ export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly
   }
 
   /** Opening a saved plan replaces the draft too, so it asks as well (FR-020). */
-  function handleOpen(planId: string) {
+  function handleOpen(planId: string, runId?: string) {
     if (path.draft) {
       setPending({
         message: "A draft test is in progress. Opening a plan discards it.",
         confirm: () => {
           path.discard();
-          void open(planId);
+          void open(planId, runId);
         },
       });
       return;
     }
-    void open(planId);
+    void open(planId, runId);
   }
 
   function start(source: SourceKind) {

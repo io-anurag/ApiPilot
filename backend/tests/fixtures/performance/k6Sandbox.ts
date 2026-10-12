@@ -66,6 +66,8 @@ export interface K6Sandbox {
   aborts: string[];
   /** AP-037: paths the script passed to `open()`. */
   opened: string[];
+  /** AP-049: lines the script wrote with `console.log`, in order. */
+  logs: string[];
   setup(): unknown;
   iterate(data: unknown, iteration?: number): void;
   setVu(vu: number): void;
@@ -90,6 +92,7 @@ export function loadScript(
   const clock = { now: Date.parse("2026-09-27T12:00:00.000Z") };
   const aborts: string[] = [];
   const opened: string[] = [];
+  const logs: string[] = [];
   const iterations = options.iterations ?? { next: 0 };
   let iterationInTest = 0;
 
@@ -134,6 +137,11 @@ export function loadScript(
       clock.now += seconds * 1000;
     },
     Counter,
+    console: {
+      log(message: unknown) {
+        logs.push(String(message));
+      },
+    },
     encoding: { b64encode: (text: string) => Buffer.from(text, "utf-8").toString("base64") },
     exec: {
       vu: {
@@ -189,6 +197,7 @@ export function loadScript(
     clock,
     aborts,
     opened,
+    logs,
     setup: () => (sandbox.setup as () => unknown)(),
     iterate(data, iteration = 0) {
       sandbox.__ITER = iteration;

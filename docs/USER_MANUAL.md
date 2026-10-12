@@ -520,10 +520,10 @@ with them. They are saved as text: a number such as `42` becomes `"42"`, and an 
 becomes its JSON. Within a single run, later requests see the value exactly as the script
 set it.
 
-Click **Start run**. A Staging/Production tier or a destructive request
-(`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own requests)
-triggers a second, separate confirmation naming the tier and the specific requests
-involved. Requests then run one at a time, in the run-order list's order (the collection's
+Click **Start run**. The run starts at once: **Start run** is your confirmation. The card above the run order
+lists the write requests (`POST`/`PUT`/`PATCH`/`DELETE`, detected directly from the collection's own
+requests) and the target tier, so read it before you click. The only question asked is the first-run one for a
+collection ApiPilot did not generate. Requests then run one at a time, in the run-order list's order (the collection's
 own order unless you changed it) — including everything inside nested folders.
 
 While running, you see a live summary and a **Cancel run** button. Each request's row
@@ -769,9 +769,13 @@ restored." **View report** opens each report exactly as it was rendered.
 **Starting from something you already have.** Each existing entry point can seed a first draft:
 - **Performance, OpenAPI specification**: upload a specification and choose the operations. You get one
   single-step chain per chosen operation, from its positive scenario.
-- **Guided workflow**: on the Performance Testing stage, choose **Create request-chain plan**. You
-  get one chain per approved workflow, with its variables already extracted and referenced, then one
-  single-step chain per other operation.
+- **Guided workflow**: on the Performance Testing stage, choose **Create request-chain plan**. If
+  you already took the workflow's collection to Import & Run Collection, the plan is built from that
+  collection as you left it: your saved request-body, header, auth and variable edits, the requests
+  and order of its latest finished run, and its default environment (copied, so you can still change
+  it in the dialog). Everything stays editable and the source collection is not changed. Otherwise
+  you get one chain per approved workflow, with its variables already extracted and referenced, then
+  one single-step chain per other operation.
 - **Import & Run Collection**: select requests in the run panel and choose **Create request-chain
   plan**. You get one chain per top-level folder, in run order. Recognised `pm.environment.set(...)`
   statements become extractors, recognised status assertions become expected statuses, and
@@ -1029,6 +1033,12 @@ you can start: a **performance plan run** (on the Run step), a **Run k6 Script**
 - **Latest requests.** The 15 most recent completed requests, newest first, with the time into the run, step, method, path,
   HTTP status and duration. It is a sample, not a log. Paths are shown as written in the plan or collection (for example
   `/orders/{{id}}`), never with a query string, header, cookie, token or body.
+- **Recent failures** (request-chain runs). A sample of the latest 15 failed requests, newest first, each with its UTC time, step,
+  method, path and status, and the response the server sent, so you can see why it failed. The newest is open and the others
+  expand on click. It is a sample: each virtual user contributes at most one failure a second, and the counts elsewhere are
+  exact. A response is cut to 2,048 characters, and secret environment values and credential-looking fields such as tokens
+  are shown as `[masked]`. If the plan uses a secret data set column, no response text is kept. A response is held in memory
+  while the run is open: it is never saved, put in a report or written to a log, so it is gone after a backend restart.
 - **After the run.** The graph and final totals stay on the dashboard of a finished run, and the k6 HTML reports and the
   collection HTML and PDF reports include the graph. Runs from before this feature show no graph in their k6 report, and
   the latest-requests list is empty once the backend has restarted.
@@ -1237,7 +1247,7 @@ Variable and credential values are encrypted before being stored.
 | "Finalize Review" is blocked | No scenarios have been accepted yet, or a decision is still being saved | Accept at least one scenario; wait a moment for pending decisions to finish |
 | Scenario Review controls are greyed out | The review is being finalized and dependency analysis is running | Wait for finalizing to finish; the workflow moves on to Workflow Review automatically |
 | Postman generation fails | Approved scenarios/workflows contain unresolved data ApiPilot cannot faithfully render | Read the listed validation problems and address them in Scenario/Workflow Review, then regenerate |
-| Confirmation appears after **Start run** | Target environment is Staging/Production, or the collection includes destructive requests | Review the named requests, then confirm explicitly if intended |
+| Confirmation appears after **Start run** in Import & Run | The collection is unverified (not generated by ApiPilot) and this is its first run | Read the notice, then confirm if intended; it is not asked again for that collection |
 | "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
 | Guided workflow progress lost after a backend restart | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your uploaded collections and past run history are unaffected and still there |
 | "Import & Run Collection" tab refuses my collection/environment file | File isn't valid JSON, or the collection has no requests at all | Fix the file locally; ApiPilot never attempts to repair a malformed upload |

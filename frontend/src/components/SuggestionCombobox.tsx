@@ -27,6 +27,8 @@ export function SuggestionCombobox({
   placeholder,
   disabled = false,
   monospace = false,
+  onCommit,
+  invalid = false,
 }: Readonly<{
   label: string;
   value: string;
@@ -35,6 +37,9 @@ export function SuggestionCombobox({
   placeholder?: string;
   disabled?: boolean;
   monospace?: boolean;
+  /** Called when the field loses focus, so the caller can save. */
+  onCommit?: () => void;
+  invalid?: boolean;
 }>) {
   const id = useId();
   const listId = `${id}-options`;
@@ -166,8 +171,12 @@ export function SuggestionCombobox({
           setOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        onBlur={close}
-        className={`w-full rounded-md border border-border bg-surface py-1 pl-2 pr-8 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${monospace ? "font-mono" : ""}`}
+        aria-invalid={invalid ? true : undefined}
+        onBlur={() => {
+          close();
+          onCommit?.();
+        }}
+        className={`w-full rounded-md border ${invalid ? "border-danger-500" : "border-border"} bg-surface py-1 pl-2 pr-8 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${monospace ? "font-mono" : ""}`}
       />
       <button
         type="button"

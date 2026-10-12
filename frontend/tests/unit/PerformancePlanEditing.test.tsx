@@ -132,6 +132,19 @@ describe("the plan's chains on the Plan step", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("k6 sets Host for every request, so a step cannot set it.");
   });
 
+  it("offers the standard header names as a dropdown and keeps a typed custom name", async () => {
+    setup();
+    await openPlan();
+    fireEvent.click(await screen.findByText("Get the customer"));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add header" }));
+    const name = screen.getByRole("combobox", { name: "Headers 2 name" });
+    fireEvent.mouseDown(screen.getByRole("button", { name: "Show all options for Headers 2 name" }));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /^Content-Type/ }));
+    expect(name).toHaveValue("Content-Type");
+    fireEvent.change(name, { target: { value: "X-Custom-Trace" } });
+    expect(name).toHaveValue("X-Custom-Trace");
+  });
+
   it("does not send a header row that was added and left empty", async () => {
     const calls = setup();
     await openPlan();

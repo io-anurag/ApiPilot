@@ -124,6 +124,13 @@ shape of the run once it ends.
   HTTP status and duration, bounded to 15 entries, and MUST state that it is a sample of the latest requests.
 - **FR-005**: The recent-requests list MUST NOT contain request or response headers, cookies, tokens, API keys or bodies,
   and MUST NOT contain the values of secret variables or credentials.
+- **FR-005a** *(amended 2026-10-12, AP-049, at the engineer's request)*: For a request-chain run, the dashboard MUST also
+  list the most recent failed requests (at most 15, newest first) as a separate Recent failures section, each with time,
+  step, method, path, status and the response the server sent, and MUST state that it is a sample. The response is held in
+  memory for the live view only: it MUST NOT be written to the database, a report, a snapshot of a settled run or any log,
+  and it MUST be cut to 2,048 characters, with secret environment values and credential-looking JSON fields masked. A plan
+  that uses a secret data set column MUST show no response text. Request content and response headers are never kept. This
+  amends AP-037 SC-005 for this one in-memory view and changes nothing else in it.
 - **FR-006**: The dashboard MUST distinguish loading, live, stale (connection lost), completed, cancelled and failed states,
   and MUST NOT present an unavailable-data state as zero requests. Figures become stale after 10 seconds without a
   fresh reply; until then the last figures stay shown as live.
@@ -160,6 +167,8 @@ shape of the run once it ends.
   current virtual users.
 - **Recent request**: a completed request shown in the list: step, method, path, HTTP status, duration. Carries no
   credentials or bodies.
+- **Recent failure** *(AP-049)*: a sampled failed request of a request-chain run: time, step, method, path, status and a
+  masked, size-limited response, held in memory only.
 - **Run state**: loading, live, stale, completed, cancelled or failed, as shown to the engineer.
 
 ## Success Criteria *(mandatory)*

@@ -12,6 +12,7 @@ import type {
   ScenarioVerdict,
 } from "@apipilot/shared-domain";
 import type { StatusTone } from "../StatusBadge";
+import { formatDateTimeUtc } from "../../dateTime";
 
 /** Opens a workflow from Coverage; `runId` asks Import & Run to open that run's results. */
 export type OpenWorkflow = (view: "guided-workflow" | "import-collection", options?: { runId?: string }) => void;
@@ -121,12 +122,9 @@ export function formatFraction(numerator: number, denominator: number): string {
   return `${numerator} / ${denominator}`;
 }
 
-/** `2026-10-10T11:00:00.000Z` -> `2026-10-10 11:00 UTC`; the raw value if it is not a date. */
+/** `2026-10-10T11:00:00.000Z` -> `2026-10-10 11:00:00 UTC`; the raw value if it is not a date. */
 export function formatTimestamp(value: string | undefined): string {
-  if (!value) return "None";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  return value ? formatDateTimeUtc(value) : "None";
 }
 
 export interface BreakdownSegment {

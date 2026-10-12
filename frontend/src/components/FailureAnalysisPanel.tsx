@@ -20,6 +20,7 @@ import { HttpMethodBadge } from "./HttpMethodBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { BUTTON_STYLES } from "./controlStyles";
+import { formatDateTimeUtc } from "../dateTime";
 
 /** Matches the enhancement progress view's cadence (specs/030-ai-failure-analysis research D10). */
 export const IN_PROGRESS_POLL_MS = 1_000;
@@ -238,7 +239,7 @@ function AnalysisView({
         {explanation.status === "available"
           ? `; explanation by ${explanation.provenance.aiModel} (${explanation.provenance.aiProvider})`
           : ""}
-        , {new Date(analysis.analyzedAt).toLocaleString()}
+        , {formatDateTimeUtc(analysis.analyzedAt)}
       </p>
     </div>
   );

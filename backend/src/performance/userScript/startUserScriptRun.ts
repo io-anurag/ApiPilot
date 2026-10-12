@@ -136,7 +136,7 @@ async function runUserScript(input: RunUserScriptInput): Promise<void> {
   const aggregate = createUserScriptAggregate({ plannedDurationMs: run.plannedDurationMs, startedAtMs });
   const stderr = createStderrFilter();
   // AP-045: the live dashboard reads this run's figures from memory.
-  registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "user-script", plannedDurationMs: run.plannedDurationMs, parts: aggregate.liveParts });
+  registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "user-script", plannedDurationMs: run.plannedDurationMs, startedAt: run.startedAt, parts: aggregate.liveParts });
 
   const settle = (settlement: UserScriptRunSettlement, result?: UserScriptResult) => {
     const settled = repository.settle(sessionId, run.id, settlement, deps.now().toISOString(), result);

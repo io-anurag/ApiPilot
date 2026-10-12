@@ -7,7 +7,10 @@ export interface ReferenceSuggestion {
   detail: string;
 }
 
-const OPEN = /\{\{(\$?\w*)$/;
+const MIN_LIST_WIDTH = 448;
+const MIN_LIST_HEIGHT = 200;
+const MAX_LIST_HEIGHT = 320;
+const OPEN =/\{\{(\$?\w*)$/;
 const EMPTY_REFERENCE = /\{\{\}\}$/;
 const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
@@ -66,9 +69,11 @@ export function ReferenceField({
         );
   const open = matches.length > 0;
   const [anchor, setAnchor] = useState<{
-    top: number;
+    top?: number;
+    bottom?: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
 
   // While the list is open it follows the field through page scrolls and resizes.
@@ -77,9 +82,17 @@ export function ReferenceField({
     const place = () => {
       const box = fieldRef.current?.getBoundingClientRect();
       if (box) {
-        const width = Math.min(box.width, window.innerWidth - 16);
+        // A readable width of its own, not a narrow field's: a name must never wrap.
+        const width = Math.min(Math.max(box.width, MIN_LIST_WIDTH), window.innerWidth - 16);
         const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
-        setAnchor({ top: box.bottom + 4, left, width });
+        const below = window.innerHeight - box.bottom - 12;
+        const above = box.top - 12;
+        // Open upwards when the space below is too small for a useful list and there is more above.
+        if (below < MIN_LIST_HEIGHT && above > below) {
+          setAnchor({ bottom: window.innerHeight - box.top + 4, left, width, maxHeight: Math.min(MAX_LIST_HEIGHT, above) });
+        } else {
+          setAnchor({ top: box.bottom + 4, left, width, maxHeight: Math.min(MAX_LIST_HEIGHT, below) });
+        }
       }
     };
     place();
@@ -188,9 +201,11 @@ export function ReferenceField({
         aria-label={`References for ${label}`}
         hidden={!open}
         style={
-          anchor ? { top: anchor.top, left: anchor.left, width: anchor.width } : undefined
+          anchor
+            ? { top: anchor.top, bottom: anchor.bottom, left: anchor.left, width: anchor.width, maxHeight: anchor.maxHeight }
+            : undefined
         }
-        className="fixed z-50 max-h-96 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
+        className="fixed z-50 overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg"
       >
         {matches.map((suggestion, index) => (
           <li
@@ -202,12 +217,10 @@ export function ReferenceField({
               event.preventDefault();
               insert(suggestion.name);
             }}
-            className={`flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1 text-sm ${index === active ? "bg-brand-50 dark:bg-brand-500/20" : ""}`}
+            className={`grid cursor-pointer grid-cols-[minmax(11rem,auto)_minmax(0,1fr)] items-baseline gap-x-3 px-3 py-1.5 text-sm ${index === active ? "bg-brand-50 dark:bg-brand-500/20" : ""}`}
           >
-            <span className="min-w-0 wrap-anywhere font-mono text-xs text-text-primary">{`{{${suggestion.name}}}`}</span>
-            <span className="min-w-0 wrap-anywhere text-xs text-muted">
-              {suggestion.detail}
-            </span>
+            <span className="whitespace-nowrap font-mono text-xs text-text-primary">{`{{${suggestion.name}}}`}</span>
+            <span className="min-w-0 text-xs text-muted">{suggestion.detail}</span>
           </li>
         ))}
       </ul>

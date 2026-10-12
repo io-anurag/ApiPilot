@@ -12,6 +12,8 @@ What one poll returns for one run.
 | `kind` | `"chain" \| "user-script" \| "collection"` | Which figures exist (see below) |
 | `state` | `"live" \| "completed" \| "cancelled" \| "failed"` | From the run status; `stale` and `loading` are client states, never sent |
 | `elapsedMs` | number | Since the run started |
+| `recentFailures` | `RecentFailure[]`, optional | AP-049, request-chain runs only: at most 15, newest first, each `{ second, chain, method, path, status \| null, response }`. `response` is `text` (masked, at most 2,048 characters, with `truncated`), `empty`, `none-received` or `withheld` (plan has secret data set columns). In memory only: absent once the run is no longer held, never stored or reported. |
+| `startedAt` | string (ISO 8601, UTC), optional | When the run started; the latest-requests time column shows `startedAt` plus each request's `second` as a UTC clock time, and falls back to the second of the run when absent. Additive. |
 | `plannedDurationMs` | number \| null | k6 kinds only |
 | `plannedRequests` | number \| null | Collection only |
 | `totals` | `{ requests, failures }` | Same numbers as the run progress and, at the end, the report |

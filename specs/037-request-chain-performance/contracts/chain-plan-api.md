@@ -42,8 +42,9 @@ Body:
 ```
 
 - **Optional environment.** `environmentId` is optional. It names where literal credentials found
-  while seeding are moved (research R8). For specification and workflow sources, without it they
-  are dropped and listed. For a collection source, omitting it copies the collection's current
+  while seeding are moved (research R8). For specification and workflow sources without a linked
+  collection, without it they are dropped and listed. For a collection source, including a workflow
+  source resolved to its handed-off collection, omitting it copies the collection's current
   saved variable values, tier and request delay into a new session-owned environment and selects
   it as the plan's target. The base URL uses the same leading-variable selection as the request
   seeder, preserving a configured path prefix; for literal request URLs it uses the configured
@@ -62,7 +63,14 @@ Body:
     upload response list the analyzed operations in `specification.operations`
     (`{ method, path, operationId? }`) for the picker.
   - `workflow` uses the guided workflow: `409 workflow_not_ready` until Postman generation is
-    complete, the same gate as today's guided plan.
+    complete, the same gate as today's guided plan. When the session holds a collection whose
+    `sourceWorkflowId` matches that workflow, the newest such collection supplies the current
+    saved requests (including bodies, headers and auth). The latest settled run's recorded item IDs
+    supply selection and order, excluding removed requests; if none remain or no IDs were recorded,
+    all current requests are used in collection order. Collection seeding and environment defaults
+    apply. The report keeps `source.kind: "workflow"` and its specification title so the plan stays
+    discoverable from that stage; individual steps record their collection source. Without a linked
+    collection, the original approved-workflow seeding behavior is unchanged.
   - `collection`: `404 uploaded_collection_not_found`, or `400 no_requests_selected`, the codes
     the collection run and AP-036 already use.
   - Any other `source` is `422 invalid_plan { field: "source" }`.
@@ -225,7 +233,7 @@ It shows the reason otherwise (R21).
 ## Logging
 
 | Event | Fields |
-|---|---|
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `chain_plan_saved` | `planId`, `revision`, `chainCount`, `stepCount`, `movedCredentialCount`, `durationMs` |
 | `chain_plan_seeded` | `planId`, `sourceKind`, `stepCount`, `reportItemCount` |
 | `chain_data_set_stored` | `planId`, `dataSetId`, `rowCount`, `columnCount`, `sizeBytes` |

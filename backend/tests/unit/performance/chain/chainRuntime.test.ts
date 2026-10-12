@@ -154,7 +154,8 @@ describe("chain runtime: extractors and cut short (FR-009, FR-011, FR-012)", () 
     expect(sandbox.requests[1].url).toBe(`${BASE}/42/false`);
     expect(sandbox.requests[1].headers["X-Loc"]).toBe("/x/1, /x/2");
     expect(sandbox.requests[0].responseType).toBe("text");
-    expect(sandbox.requests[1].responseType).toBe("none");
+    // Every response is read as text, so a failed one can be sampled for the live view (AP-049).
+    expect(sandbox.requests[1].responseType).toBe("text");
   });
 });
 
@@ -311,9 +312,9 @@ describe("chain runtime: checks (US3; FR-016, FR-017)", () => {
     expect(counted(sandbox, "apipilot_check").map((tags) => tags.outcome)).toEqual(["failed", "passed", "passed"]);
   });
 
-  it("reads the body only when a step extracts or checks it", () => {
+  it("reads every response as text, so a failed one can be sampled", () => {
     const timeOnly = checked([{ id: "k1", kind: "time-at-most", maxMs: 1000 }], { status: 200, durationMs: 1 });
-    expect(timeOnly.requests[0].responseType).toBe("none");
+    expect(timeOnly.requests[0].responseType).toBe("text");
     const contains = checked([{ id: "k1", kind: "body-contains", text: "x" }], { status: 200, body: "x" });
     expect(contains.requests[0].responseType).toBe("text");
   });
@@ -375,5 +376,44 @@ describe("chain runtime: data sets (US6; FR-013, FR-043)", () => {
     sandbox.iterate(NO_SETUP, 0);
     expect(sandbox.requests[0].url).toBe(`${BASE}/t/x`);
     expect(counted(sandbox, "apipilot_missing_data")).toEqual([]);
+  });
+});
+
+describe("chain runtime: failed-response samples (AP-049)", () => {
+  const sampleOf = (line: string) => JSON.parse(line.slice("APIPILOT_FAILURE ".length)) as { step: string; journey: string; status: number; type: string | null; size: number; body: string };
+
+  it("writes one sample for a response whose status was not expected, with its type and body", () => {
+    const plan = planOf([step({ id: "s1", expectedStatuses: ["201"] })]);
+    const sandbox = loadChainPlan(plan, { values: VALUES, respond: () => ({ status: 400, body: "name already exists", headers: { "Content-Type": "text/plain" } }) });
+    sandbox.iterate(NO_SETUP, 0);
+    expect(sandbox.logs).toHaveLength(1);
+    expect(sandbox.logs[0].startsWith("APIPILOT_FAILURE ")).toBe(true);
+    expect(sampleOf(sandbox.logs[0])).toMatchObject({ step: "s1", journey: "c1", status: 400, type: "text/plain", size: 19, body: "name already exists" });
+  });
+
+  it("writes nothing for an expected status", () => {
+    const plan = planOf([step({ id: "s1", expectedStatuses: ["2XX"] })]);
+    const sandbox = loadChainPlan(plan, { values: VALUES, respond: () => ({ status: 204, body: "" }) });
+    sandbox.iterate(NO_SETUP, 0);
+    expect(sandbox.logs).toEqual([]);
+  });
+
+  it("cuts a long body to 2048 characters and reports its full size", () => {
+    const plan = planOf([step({ id: "s1", expectedStatuses: ["200"] })]);
+    const sandbox = loadChainPlan(plan, { values: VALUES, respond: () => ({ status: 500, body: "x".repeat(5000) }) });
+    sandbox.iterate(NO_SETUP, 0);
+    const sample = sampleOf(sandbox.logs[0]);
+    expect(sample.body).toHaveLength(2048);
+    expect(sample.size).toBe(5000);
+  });
+
+  it("writes at most one sample a second for a virtual user", () => {
+    const plan = planOf([step({ id: "s1", expectedStatuses: ["200"] }), step({ id: "s2", expectedStatuses: ["200"], url: "{{baseUrl}}/b" })]);
+    const sandbox = loadChainPlan(plan, { values: VALUES, respond: () => ({ status: 500, body: "boom" }) });
+    sandbox.iterate(NO_SETUP, 0);
+    expect(sandbox.logs).toHaveLength(1);
+    sandbox.clock.now += 1000;
+    sandbox.iterate(NO_SETUP, 1);
+    expect(sandbox.logs).toHaveLength(2);
   });
 });

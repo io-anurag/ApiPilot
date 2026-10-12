@@ -125,6 +125,8 @@ export interface PathState {
   replacingSpecification: boolean;
   collectionId: string | null;
   planId: string | null;
+  /** A run to show when the plan opens: the Run step opens with its report. */
+  runId: string | null;
   step: PathStep;
   /** Highest step index reached; steps up to it can be selected. */
   reached: number;
@@ -138,6 +140,7 @@ export const INITIAL_PATH_STATE: PathState = {
   replacingSpecification: false,
   collectionId: null,
   planId: null,
+  runId: null,
   step: "source",
   reached: 0,
   parked: false,
@@ -151,7 +154,7 @@ export const hasDraft = (state: PathState): boolean => state.source !== null && 
 
 export type PathAction =
   | { type: "pick"; source: SourceKind; specificationLoaded: boolean; selection: readonly string[] }
-  | { type: "open-plan"; planId: string; source: SourceKind; selection: readonly string[] }
+  | { type: "open-plan"; planId: string; source: SourceKind; selection: readonly string[]; runId?: string }
   | { type: "plan-created"; planId: string }
   | { type: "go"; step: PathStep }
   | { type: "next" }
@@ -175,7 +178,7 @@ export function pathReducer(state: PathState, action: PathAction): PathState {
       return { ...INITIAL_PATH_STATE, source: action.source, selection: action.selection, step, reached: indexOf(step) };
     }
     case "open-plan":
-      return { ...INITIAL_PATH_STATE, source: action.source, selection: action.selection, planId: action.planId, step: "plan", reached: indexOf("run") };
+      return { ...INITIAL_PATH_STATE, source: action.source, selection: action.selection, planId: action.planId, runId: action.runId ?? null, step: action.runId ? "run" : "plan", reached: indexOf("run") };
     case "plan-created":
       return moveTo({ ...state, planId: action.planId }, "plan");
     case "go":

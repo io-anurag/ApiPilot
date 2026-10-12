@@ -6,8 +6,10 @@ import { ErrorState } from "../ErrorState";
 import { EnvironmentForCredentials } from "../performance/EnvironmentForCredentials";
 
 const SOURCE_TEXT: Record<SeedSourceInput["kind"], string> = {
-  specification: "the uploaded specification: one step per operation, from its positive scenario",
-  workflow: "the guided workflow: one chain per approved workflow, and one step per other operation",
+  specification:
+    "the uploaded specification: one step per operation, from its positive scenario",
+  workflow:
+    "the guided workflow: one chain per approved workflow, and one step per other operation",
   collection: "the selected requests: one chain per top-level folder, in run order",
 };
 
@@ -22,11 +24,17 @@ export function SeedPlanDialog({
   defaultName,
   onSeeded,
   onCancel,
-}: Readonly<{ source: SeedSourceInput; defaultName: string; onSeeded: (planId: string) => void; onCancel: () => void }>) {
+}: Readonly<{
+  source: SeedSourceInput;
+  defaultName: string;
+  onSeeded: (planId: string) => void;
+  onCancel: () => void;
+}>) {
   const id = useId();
   const [name, setName] = useState(defaultName);
+  const offerCollectionSettings = source.kind !== "specification";
   const [environmentId, setEnvironmentId] = useState(
-    source.kind === "collection" ? "collection" : "",
+    offerCollectionSettings ? "collection" : "",
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +43,9 @@ export function SeedPlanDialog({
     setBusy(true);
     setError(null);
     let environment: { environmentId?: string | null } = {};
-    if (source.kind === "collection" && environmentId !== "collection") {
+    if (offerCollectionSettings && environmentId !== "collection") {
       environment = { environmentId: environmentId || null };
-    } else if (source.kind !== "collection" && environmentId) {
+    } else if (!offerCollectionSettings && environmentId) {
       environment = { environmentId };
     }
     const result = await seedPlan({ name: name.trim(), source, ...environment });
@@ -63,19 +71,34 @@ export function SeedPlanDialog({
           <label htmlFor={`${id}-name`} className="text-sm font-medium">
             Plan name
           </label>
-          <input id={`${id}-name`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={name} onChange={(event) => setName(event.target.value)} />
+          <input
+            id={`${id}-name`}
+            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
         </div>
         <EnvironmentForCredentials
           environmentId={environmentId}
           onChange={setEnvironmentId}
-          offerCollectionSettings={source.kind === "collection"}
+          offerCollectionSettings={offerCollectionSettings}
+          collectionSettingsLabel={
+            source.kind === "workflow"
+              ? "Collection settings (when available)"
+              : undefined
+          }
         />
         {error && <ErrorState message={error} testId="seed-plan-error" />}
         <div className="flex justify-end gap-2">
           <button type="button" className={BUTTON_STYLES.secondary} onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className={BUTTON_STYLES.primary} disabled={busy || name.trim() === ""} onClick={() => void handleCreate()}>
+          <button
+            type="button"
+            className={BUTTON_STYLES.primary}
+            disabled={busy || name.trim() === ""}
+            onClick={() => void handleCreate()}
+          >
             {busy ? "Creating…" : "Create plan"}
           </button>
         </div>

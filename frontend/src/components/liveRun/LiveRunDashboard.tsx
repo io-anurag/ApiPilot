@@ -7,10 +7,12 @@ import { StatTile } from "../StatTile";
 import { StatusBadge } from "../StatusBadge";
 import { formatAxisTime } from "./chartScale";
 import { LatestRequestsTable } from "./LatestRequestsTable";
+import { RecentFailuresList } from "./RecentFailuresList";
 import { LiveRunChart } from "./LiveRunChart";
 import {
   failureShare,
   formatClock,
+  chainOutcomeShares,
   formatCount,
   formatElapsed,
   formatRate,
@@ -304,32 +306,29 @@ function Detail({ snapshot }: Readonly<{ snapshot: LiveRunSnapshot }>) {
   const hasChains = snapshot.chains.length > 0;
   return (
     <div className="@container space-y-4">
-      <div
-        className={`grid items-start gap-4 ${hasChains ? "@4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" : ""}`}
+      {hasChains && <ChainRows chains={snapshot.chains} />}
+      <section
+        aria-label="Requests over time"
+        className="min-w-0 rounded-2xl border border-border bg-surface p-5"
       >
-        <section
-          aria-label="Requests over time"
-          className="min-w-0 rounded-2xl border border-border bg-surface p-5"
-        >
-          <LiveRunChart
-            series={snapshot.series}
-            thinned={snapshot.thinned}
-            plannedSeconds={
-              snapshot.plannedDurationMs === null
-                ? null
-                : snapshot.plannedDurationMs / 1000
-            }
-          />
-        </section>
-        {hasChains && <ChainRows chains={snapshot.chains} />}
-      </div>
-      <LatestRequestsTable requests={snapshot.recent} />
+        <LiveRunChart
+          series={snapshot.series}
+          thinned={snapshot.thinned}
+          startedAt={snapshot.startedAt}
+          plannedSeconds={
+            snapshot.plannedDurationMs === null
+              ? null
+              : snapshot.plannedDurationMs / 1000
+          }
+        />
+      </section>
+      {snapshot.recentFailures && <RecentFailuresList failures={snapshot.recentFailures} startedAt={snapshot.startedAt} />}
+      <LatestRequestsTable requests={snapshot.recent} startedAt={snapshot.startedAt} />
     </div>
   );
 }
 
 function ChainRows({ chains }: Readonly<{ chains: readonly LiveChainRow[] }>) {
-  const busiest = Math.max(1, ...chains.map((chain) => chain.requests));
   return (
     <section
       aria-labelledby="live-run-chains-title"
@@ -339,7 +338,7 @@ function ChainRows({ chains }: Readonly<{ chains: readonly LiveChainRow[] }>) {
       <h4 id="live-run-chains-title" className="text-sm font-semibold">
         Chains
       </h4>
-      <p className="pb-2 text-xs text-muted">Requests and failures so far, per chain.</p>
+      <p className="pb-2 text-xs text-muted">Requests and failures so far, per chain. Each bar shows that chain's passed (green) and failed (red) share.</p>
       <ul className="divide-y divide-border">
         {chains.map((chain) => (
           <li key={chain.id} className="flex items-start justify-between gap-3 py-2">
@@ -353,12 +352,14 @@ function ChainRows({ chains }: Readonly<{ chains: readonly LiveChainRow[] }>) {
                   </span>
                 )}
               </p>
-              <progress
-                className="block h-1.5 w-full accent-brand-600"
-                aria-label={`${chain.label}: share of the busiest chain`}
-                max={busiest}
-                value={chain.requests}
-              />
+              <div
+                role="img"
+                aria-label={`${chain.label}: ${formatCount(chain.requests - chain.failures)} passed, ${formatCount(chain.failures)} failed`}
+                className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-strong"
+              >
+                <span className="bg-success-500" style={{ width: `${chainOutcomeShares(chain.requests, chain.failures).passed}%` }} />
+                <span className="bg-danger-500" style={{ width: `${chainOutcomeShares(chain.requests, chain.failures).failed}%` }} />
+              </div>
             </div>
             <p className="shrink-0 text-right font-mono text-xs text-muted">
               <span className="block">{formatCount(chain.requests)} req</span>

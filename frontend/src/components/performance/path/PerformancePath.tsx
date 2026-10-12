@@ -185,7 +185,7 @@ const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.l
 
 /** A path with a plan: the same steps, over the plan the engineer owns, every edit saved as it is made (FR-011, FR-013, FR-014). */
 function PathWithPlan({ planId, path, quickTest, onExit }: Readonly<{ planId: string; path: PathApi; quickTest: QuickTestSession; onExit?: () => void }>) {
-  const loaded = useChainPlanSession(planId);
+  const loaded = useChainPlanSession(planId, undefined, path.state.runId ?? undefined);
 
   if (loaded.status !== "ready") {
     return (

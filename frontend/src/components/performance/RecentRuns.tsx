@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import type { ChainPlanSummary, ChainRunSummary } from "@apipilot/shared-domain";
 import { chainRunsClient } from "../../services/requestChainClient";
+import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge, type StatusTone } from "../StatusBadge";
+import { formatDateTimeUtc } from "../../dateTime";
 
 /** Plans whose runs are read for the list: there is no cross-plan runs read, so the most recently updated ones stand in (specs/047 tasks T027). */
 export const RECENT_RUNS_PLAN_LIMIT = 10;
@@ -18,22 +20,19 @@ const STATUS: Record<ChainRunSummary["status"], { label: string; tone: StatusTon
 
 interface Row {
   run: ChainRunSummary;
+  planId: string;
   planName: string;
 }
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; rows: Row[] };
 
-const formatStarted = (iso: string): string => {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-};
-
 /**
  * The entry screen's recent runs across plans (specs/047-unified-performance-tab FR-002). The backend
  * lists runs per plan, so this reads the runs of the most recently updated plans and merges them by start
  * time; a plan whose runs cannot be read is skipped, and the list says so only when none could be.
+ * Each run opens on its plan's Run step with that run's report.
  */
-export function RecentRuns({ plans }: Readonly<{ plans: readonly ChainPlanSummary[] }>) {
+export function RecentRuns({ plans, onOpenRun, busy = false }: Readonly<{ plans: readonly ChainPlanSummary[]; onOpenRun: (planId: string, runId: string) => void; busy?: boolean }>) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
   useEffect(() => {
@@ -48,7 +47,7 @@ export function RecentRuns({ plans }: Readonly<{ plans: readonly ChainPlanSummar
         return;
       }
       const rows = readable
-        .flatMap(({ plan, result }) => (result.ok ? result.runs.map((run) => ({ run, planName: plan.name })) : []))
+        .flatMap(({ plan, result }) => (result.ok ? result.runs.map((run) => ({ run, planId: plan.id, planName: plan.name })) : []))
         .sort((a, b) => (a.run.startedAt < b.run.startedAt ? 1 : a.run.startedAt > b.run.startedAt ? -1 : 0))
         .slice(0, RECENT_RUNS_SHOWN);
       setState({ kind: "ready", rows });
@@ -77,16 +76,22 @@ export function RecentRuns({ plans }: Readonly<{ plans: readonly ChainPlanSummar
             <th scope="col" className="px-3 py-2 font-medium">Started</th>
             <th scope="col" className="px-3 py-2 font-medium">Environment</th>
             <th scope="col" className="px-3 py-2 font-medium">Status</th>
+            <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {state.rows.map(({ run, planName }) => (
+          {state.rows.map(({ run, planId, planName }) => (
             <tr key={run.id}>
               <td className="px-3 py-2 font-medium text-text-primary">{planName}</td>
-              <td className="px-3 py-2 text-muted">{formatStarted(run.startedAt)}</td>
+              <td className="px-3 py-2 text-muted">{formatDateTimeUtc(run.startedAt)}</td>
               <td className="px-3 py-2">{run.environment.name}</td>
               <td className="px-3 py-2">
                 <StatusBadge label={STATUS[run.status].label} tone={STATUS[run.status].tone} />
+              </td>
+              <td className="px-3 py-2 text-right">
+                <button type="button" className={BUTTON_STYLES.secondary} aria-label={`Open the run of ${planName} started ${formatDateTimeUtc(run.startedAt)}`} disabled={busy} onClick={() => onOpenRun(planId, run.id)}>
+                  Open run
+                </button>
               </td>
             </tr>
           ))}

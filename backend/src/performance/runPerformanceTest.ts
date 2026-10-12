@@ -11,6 +11,7 @@ import { parseMetricsLine } from "./k6/metricsStream";
 import { buildChildEnv } from "./k6/runner";
 import type { PerformanceRunner, RunnerHandle } from "./k6/runnerTypes";
 import { finishLiveSnapshotSource, registerLiveSnapshotSource } from "./live/liveRunRegistry";
+import { parseFailureLine, type FailureResponseSettings } from "./live/failureSamples";
 import { liveStepInfoFromChain } from "./live/liveStepInfo";
 import { createAggregate } from "./report/aggregate";
 import { deriveFindings } from "./report/findings";
@@ -43,6 +44,8 @@ export interface StartPerformanceRunInput {
    * the run settles.
    */
   writeRunFiles?: (runDir: string) => void;
+  /** AP-049: what to mask in, or withhold from, a failed request's response shown live. Chain runs only. */
+  failureResponses?: FailureResponseSettings;
 }
 
 /** AP-037 research R12: k6's exit code when the script called `exec.test.abort`. */
@@ -113,10 +116,10 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
   const { sessionId, run } = input;
   const repository = getPerformanceRunRepository();
   const startedAtMs = Date.parse(run.startedAt);
-  const aggregate = createAggregate(sourceOf(run), run.plannedDurationMs, startedAtMs, run.planSource === "chain" ? { steps: liveStepInfoFromChain(run.snapshot) } : {});
+  const aggregate = createAggregate(sourceOf(run), run.plannedDurationMs, startedAtMs, run.planSource === "chain" ? { steps: liveStepInfoFromChain(run.snapshot), ...(input.failureResponses ? { failureResponses: input.failureResponses } : {}) } : {});
   // AP-045: only request-chain runs can be started today, and only they have a live view.
   if (run.planSource === "chain") {
-    registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "chain", plannedDurationMs: run.plannedDurationMs, parts: aggregate.liveParts });
+    registerLiveSnapshotSource({ sessionId, runId: run.id, kind: "chain", plannedDurationMs: run.plannedDurationMs, startedAt: run.startedAt, parts: aggregate.liveParts });
   }
   const settle = (settlement: PerformanceRunSettlement, result?: PerformanceResult) => {
     const settled = repository.settle(sessionId, run.id, settlement, input.now().toISOString(), result);
@@ -176,8 +179,11 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
         }
       },
       // k6's stderr can carry resolved URLs or response text, so it is counted, never logged (D23).
-      onStderrLine: () => {
+      // A sampled failure line (AP-049) is masked and kept in memory for the live view, nowhere else.
+      onStderrLine: (line) => {
         stderrLines += 1;
+        const sample = run.planSource === "chain" ? parseFailureLine(line) : null;
+        if (sample) aggregate.recordFailureSample(sample, input.now().getTime());
       },
     });
     liveHandles.set(run.id, handle);

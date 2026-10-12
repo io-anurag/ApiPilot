@@ -48,6 +48,8 @@ export interface PerformanceRuns<TRun extends RunRecord = PerformanceRun, TSumma
 
 export function usePerformanceRuns<TRun extends RunRecord = PerformanceRun, TSummary extends RunSummaryRecord = PerformanceRunSummary, TStartInput = string>(
   client: PerformanceRunsClient<TRun, TSummary, TStartInput>,
+  /** A run whose report is open from the start, such as one chosen from the recent runs. */
+  initialReportRunId: string | null = null,
 ): PerformanceRuns<TRun, TSummary, TStartInput> {
   const { cancelRun, fetchReadiness, fetchRun, fetchRuns, startRun } = client;
   const [readiness, setReadiness] = useState<K6Readiness | null>(null);
@@ -55,7 +57,7 @@ export function usePerformanceRuns<TRun extends RunRecord = PerformanceRun, TSum
   const [run, setRun] = useState<TRun | null>(null);
   const [latestFinished, setLatestFinished] = useState<TRun | null>(null);
   const [runs, setRuns] = useState<TSummary[]>([]);
-  const [reportRunId, setReportRunId] = useState<string | null>(null);
+  const [reportRunId, setReportRunId] = useState<string | null>(initialReportRunId);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);

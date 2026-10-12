@@ -42,7 +42,7 @@ describe("coverageViewModel", () => {
   });
 
   it("formats timestamps in UTC and passes through anything that is not a date", () => {
-    expect(formatTimestamp("2026-10-10T11:00:00.000Z")).toBe("2026-10-10 11:00 UTC");
+    expect(formatTimestamp("2026-10-10T11:00:00.000Z")).toBe("2026-10-10 11:00:00 UTC");
     expect(formatTimestamp(undefined)).toBe("None");
     expect(formatTimestamp("not a date")).toBe("not a date");
   });

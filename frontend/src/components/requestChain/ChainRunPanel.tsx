@@ -6,6 +6,7 @@ import { LiveRunDashboard } from "../liveRun/LiveRunDashboard";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
+import { formatDateTimeUtc, formatTimeUtc } from "../../dateTime";
 
 type Runs = PerformanceRuns<ChainRun, ChainRunSummary, string>;
 
@@ -66,8 +67,8 @@ const SECTION_LABEL = "text-xs font-semibold uppercase tracking-wide text-muted"
 const FULL_BUTTON = "w-full justify-center text-center";
 
 /**
- * The Runs & reports tab (AP-040): the plan's runs and the open report on the left, and on the right
- * the run in progress with Cancel, the last run with Run again, and Restore. Starting a run is on Run
+ * The Runs & reports tab (AP-040): the run in progress with Cancel, then the last run with Run again
+ * and Restore, side by side above the plan's runs, then the open report. Starting a run is on Run
  * setup; the last run's card links there.
  */
 export function ChainRunPanel({ plan, script, environments, runs, runsClient, onRestore, onGoToSetup }: ChainRunProps & Readonly<{ onGoToSetup: () => void }>) {
@@ -76,89 +77,24 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
   const latestEnvironment = latest ? environments.find((candidate) => candidate.id === latest.environment.id) : undefined;
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-w-0 space-y-5">
-        {runs.run && runs.inProgress && (
-          <LiveRunDashboard
-            key={runs.run.id}
-            kind="chain"
-            runId={runs.run.id}
-            meta={`${runs.run.environment.name} · ${runs.run.snapshot.planName} · started ${new Date(runs.run.startedAt).toLocaleTimeString()}`}
-            actions={
-              <button type="button" className={BUTTON_STYLES.danger} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
-                {runs.cancelling ? "Cancelling…" : "Cancel run"}
-              </button>
-            }
-          />
-        )}
+    <div className="min-w-0 space-y-5">
+      {runs.run && runs.inProgress && (
+        <LiveRunDashboard
+          key={runs.run.id}
+          kind="chain"
+          runId={runs.run.id}
+          meta={`${runs.run.environment.name} · ${runs.run.snapshot.planName} · started ${formatTimeUtc(runs.run.startedAt)}`}
+          actions={
+            <button type="button" className={BUTTON_STYLES.danger} disabled={runs.cancelling} onClick={() => void runs.cancel()}>
+              {runs.cancelling ? "Cancelling…" : "Cancel run"}
+            </button>
+          }
+        />
+      )}
 
-        <section aria-labelledby="chain-runs-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
-          <div className="px-5 py-4">
-            <h3 id="chain-runs-title" className="text-base font-semibold">
-              Runs of this plan
-            </h3>
-            <p className="text-xs text-muted">Open a run to read its report. Reports are rendered by the server and never run scripts.</p>
-          </div>
-          {runs.runs.length === 0 ? (
-            <p className="border-t border-border px-5 py-4 text-sm text-muted">No runs yet. Start one from Run setup.</p>
-          ) : (
-            <div className="overflow-x-auto border-t border-border">
-              <table className="w-full min-w-[32rem] text-left text-sm">
-                <caption className="sr-only">Runs of this plan</caption>
-                <thead className="text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th scope="col" className="px-5 py-2.5 font-semibold">Started</th>
-                    <th scope="col" className="px-5 py-2.5 font-semibold">Environment</th>
-                    <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
-                    <th scope="col" className="px-5 py-2.5 font-semibold"><span className="sr-only">Report</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border border-t border-border">
-                  {runs.runs.map((summary) => {
-                    const open = summary.id === runs.reportRunId;
-                    return (
-                      <tr key={summary.id} className={open ? "bg-brand-50 dark:bg-brand-500/10" : ""}>
-                        <td className="px-5 py-3 font-mono text-xs">{new Date(summary.startedAt).toLocaleString()}</td>
-                        <td className="px-5 py-3">{summary.environment.name}</td>
-                        <td className="px-5 py-3">
-                          <StatusBadge label={summary.failure?.category === "setup-step-failed" ? "Failed: a Once before load step failed" : STATUS_TEXT[summary.status]} tone={STATUS_TONE[summary.status]} />
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {open ? (
-                            <span aria-current="true" className="text-sm font-semibold text-brand-700 dark:text-brand-300">
-                              Viewing report
-                            </span>
-                          ) : (
-                            summary.status !== "in-progress" && (
-                              <button type="button" className={BUTTON_STYLES.ghost} onClick={() => runs.showReport(summary.id)}>
-                                View report
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {runs.reportRunId && !(runs.inProgress && runs.run?.id === runs.reportRunId) && (
-          <LiveRunDashboard key={runs.reportRunId} kind="chain" runId={runs.reportRunId} meta={`Run ${runs.reportRunId.slice(0, 8)}`} />
-        )}
-
-        {runs.reportRunId && (
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            <PerformanceReportFrame client={runsClient} runId={runs.reportRunId} />
-          </div>
-        )}
-      </div>
-
-      <aside aria-label="Run actions" className="space-y-4 lg:sticky lg:top-4">
+      <aside aria-label="Run actions" className="grid gap-4 md:grid-cols-2">
         {runs.error && (
-          <section aria-labelledby="chain-active-run-title" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+          <section aria-labelledby="chain-active-run-title" className="space-y-3 md:col-span-2 rounded-2xl border border-border bg-surface p-5">
             <h3 id="chain-active-run-title" className={SECTION_LABEL}>
               Run
             </h3>
@@ -166,18 +102,18 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
           </section>
         )}
 
-        <section aria-labelledby="chain-last-run-title" data-section="results" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+        <section aria-labelledby="chain-last-run-title" data-section="results" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
           <h3 id="chain-last-run-title" className={SECTION_LABEL}>
             Last run
           </h3>
           {latest ? (
             <>
-              <p className="text-base font-semibold">{new Date(latest.startedAt).toLocaleString()}</p>
+              <p className="text-base font-semibold">{formatDateTimeUtc(latest.startedAt)}</p>
               <p className="flex flex-wrap gap-1.5">
                 <StatusBadge label={STATUS_TEXT[latest.status]} tone={STATUS_TONE[latest.status]} />
                 <StatusBadge label={latestEnvironment?.name ?? latest.environment.name} />
               </p>
-              <div className="space-y-2 pt-1">
+              <div className="mt-auto space-y-2 pt-1">
                 <button type="button" className={`${BUTTON_STYLES.primary} ${FULL_BUTTON} py-2.5`} disabled={againBlocked !== null || runs.starting} onClick={() => void runs.start(latest.environment.id)}>
                   Run again on {latestEnvironment?.name ?? latest.environment.name}
                 </button>
@@ -189,6 +125,7 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
                 <button type="button" className={`${BUTTON_STYLES.secondary} ${FULL_BUTTON} py-2.5`} onClick={onGoToSetup}>
                   Go to Run setup
                 </button>
+                <p className="text-left text-xs text-muted hyphens-none">Run again is offered only while the script, environment and data sets are unchanged since this run. When it is blocked, the reason appears here in words.</p>
               </div>
             </>
           ) : (
@@ -202,26 +139,95 @@ export function ChainRunPanel({ plan, script, environments, runs, runsClient, on
         </section>
 
         {latest && (
-          <section aria-labelledby="chain-restore-title" className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+          <section aria-labelledby="chain-restore-title" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
             <h3 id="chain-restore-title" className={SECTION_LABEL}>
               Restore this run&apos;s plan
             </h3>
             <p className="text-left text-xs text-muted hyphens-none">Restoring generates the script; it never starts a run.</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={BUTTON_STYLES.secondary} disabled={runs.inProgress} onClick={() => onRestore(latest.id, "plan")}>
-                Into this plan
-              </button>
-              <button type="button" className={BUTTON_STYLES.secondary} onClick={() => onRestore(latest.id, "new-plan")}>
-                As a new plan
-              </button>
+            <div className="mt-auto space-y-3 pt-1">
+              <div className="space-y-1">
+                <button type="button" aria-describedby="chain-restore-plan-hint" className={`${BUTTON_STYLES.secondary} ${FULL_BUTTON} py-2.5`} disabled={runs.inProgress} onClick={() => onRestore(latest.id, "plan")}>
+                  Into this plan
+                </button>
+                <p id="chain-restore-plan-hint" className="text-left text-xs text-muted hyphens-none">
+                  Replaces this plan&apos;s chains, load settings and thresholds with the ones this run used. Edits made since are lost.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <button type="button" aria-describedby="chain-restore-new-hint" className={`${BUTTON_STYLES.secondary} ${FULL_BUTTON} py-2.5`} onClick={() => onRestore(latest.id, "new-plan")}>
+                  As a new plan
+                </button>
+                <p id="chain-restore-new-hint" className="text-left text-xs text-muted hyphens-none">
+                  Keeps this plan as it is and opens a copy of the run&apos;s plan, named &quot;(restored)&quot;.
+                </p>
+              </div>
             </div>
           </section>
         )}
-
-        <p className="rounded-2xl border border-border bg-surface p-4 text-left text-xs text-muted hyphens-none">
-          Run again is offered only while the script, environment and data sets are unchanged since this run. When it is blocked, the reason appears here in words.
-        </p>
       </aside>
+
+      <section aria-labelledby="chain-runs-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="px-5 py-4">
+          <h3 id="chain-runs-title" className="text-base font-semibold">
+            Runs of this plan
+          </h3>
+          <p className="text-xs text-muted">Open a run to read its report. Reports are rendered by the server and never run scripts.</p>
+        </div>
+        {runs.runs.length === 0 ? (
+          <p className="border-t border-border px-5 py-4 text-sm text-muted">No runs yet. Start one from Run setup.</p>
+        ) : (
+          <div className="overflow-x-auto border-t border-border">
+            <table className="w-full min-w-[32rem] text-left text-sm">
+              <caption className="sr-only">Runs of this plan</caption>
+              <thead className="text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Started</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Environment</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold"><span className="sr-only">Report</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border border-t border-border">
+                {runs.runs.map((summary) => {
+                  const open = summary.id === runs.reportRunId;
+                  return (
+                    <tr key={summary.id} className={open ? "bg-brand-50 dark:bg-brand-500/10" : ""}>
+                      <td className="px-5 py-3 font-mono text-xs">{formatDateTimeUtc(summary.startedAt)}</td>
+                      <td className="px-5 py-3">{summary.environment.name}</td>
+                      <td className="px-5 py-3">
+                        <StatusBadge label={summary.failure?.category === "setup-step-failed" ? "Failed: a Once before load step failed" : STATUS_TEXT[summary.status]} tone={STATUS_TONE[summary.status]} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        {open ? (
+                          <span aria-current="true" className="text-sm font-semibold text-brand-700 dark:text-brand-300">
+                            Viewing report
+                          </span>
+                        ) : (
+                          summary.status !== "in-progress" && (
+                            <button type="button" className={BUTTON_STYLES.ghost} onClick={() => runs.showReport(summary.id)}>
+                              View report
+                            </button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {runs.reportRunId && !(runs.inProgress && runs.run?.id === runs.reportRunId) && (
+        <LiveRunDashboard key={runs.reportRunId} kind="chain" runId={runs.reportRunId} meta={`Run ${runs.reportRunId.slice(0, 8)}`} />
+      )}
+
+      {runs.reportRunId && (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <PerformanceReportFrame client={runsClient} runId={runs.reportRunId} />
+        </div>
+      )}
     </div>
   );
 }

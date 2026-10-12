@@ -122,7 +122,7 @@ describe("CoveragePage: states", () => {
     fetchMock.mockResolvedValueOnce({ ok: false, error: "network_error", message: "Offline." });
     fireEvent.click(screen.getByRole("button", { name: "Recalculate" }));
     expect(await screen.findByText(/Out-of-date snapshot: the latest recalculation failed/)).toBeInTheDocument();
-    expect(screen.getByTestId("coverage-error")).toHaveTextContent("snapshot calculated at 2026-10-10 12:00 UTC");
+    expect(screen.getByTestId("coverage-error")).toHaveTextContent("snapshot calculated at 2026-10-10 12:00:00 UTC");
     expect(screen.getByTestId("spec-metrics")).toBeInTheDocument();
   });
 });
@@ -138,7 +138,7 @@ describe("CoveragePage: content", () => {
     expect(context).toHaveTextContent("Orders API v1.0.0");
     expect(context).toHaveTextContent("9f3a1c0123");
     expect(context).toHaveTextContent("Orders collection (local)");
-    expect(context).toHaveTextContent("2026-10-10 11:00 UTC");
+    expect(context).toHaveTextContent("2026-10-10 11:00:00 UTC");
     expect(context).toHaveTextContent("26 accepted, 3 pending");
     expect(context).toHaveTextContent("1 rejected, not counted");
   });

@@ -3656,3 +3656,41 @@ Implementation
     - Spec, plan, tasks and contract: `specs/048-workflow-run-stage-status/`. Documentation: `specs/009` data model and API contract,
       `specs/026` upload contract, `docs/USER_MANUAL.md` sections 3.10 and 3.11, `docs/architecture.md` "Workflow orchestration".
     - Version bumped to 19.44.0 (root, backend, frontend, shared-domain).
+80. **AP-037 amended: guided plans reuse the configured collection; version 19.45.0 (2026-10-12).**
+    - Creating a request-chain plan from the guided Performance Testing stage now seeds from the newest collection linked to the
+      workflow (`sourceWorkflowId`) when one exists: saved raw/form bodies, headers, auth and variables, the selection and order of
+      its latest settled run, and its default environment (copied; an explicit environment choice is still honored). Without a
+      linked collection, the original workflow seeding is unchanged. The plan stays under guided plans with collection provenance.
+    - Spec: `specs/037-request-chain-performance/` (US4 scenario 6, FR-023, chain-plan-api contract, quickstart). Documentation:
+      `docs/USER_MANUAL.md` request-chain seeding.
+    - Validation (2026-10-12): `chainPlanSeedSources` (9) and `SeedPlanDialog` (9) tests pass; `npm run lint` and `npm run build`
+      pass. The full `npm test` was not run, and the UI was not exercised in a browser.
+    - Version bumped to 19.45.0 (root, backend, frontend, shared-domain).
+81. **AP-045 amended: Recent failures with the response; version 19.46.0 (2026-10-12).**
+    - Request-chain runs get a separate **Recent failures** section on the live dashboard: the latest 15 failed requests, each with
+      UTC time, step, method, path, status and the response the server sent. The generated script writes one console line per
+      sampled failure (at most one a second per virtual user, body cut to 2,048 characters); the backend reads it from k6's stderr
+      in memory, masks secret environment values and credential-looking fields (the Debug run's masker), keeps the newest 15 and
+      serves them as optional `recentFailures` on the live snapshot. A plan with a secret data set column shows no response text.
+    - Amends AP-037 SC-005 for this one in-memory view: the response is never stored, reported or logged. Spec: `specs/045`
+      FR-005a, data model, route contract; `specs/037` SC-005. Documentation: `docs/USER_MANUAL.md` live run dashboard.
+    - Behaviour changes to know: k6 now runs with `--log-format json`, every response is read as text (it was only for steps that
+      extracted or checked a body), and the `readsBody` script field is gone. The Debug-parity runtime hash was updated after
+      review: the Debug run already reads every body. Generated scripts and their hash change, so a script from before must be
+      regenerated.
+    - Validation (2026-10-12): full backend suite (2,396) and frontend suite (948) pass; `npm run lint` and `npm run build` pass;
+      the opt-in real-k6 suite (`K6_TEST_REAL=1`, k6 2.3.0, 7 tests) passes. The UI was not exercised in a browser.
+    - Also in this version: every date and time on screen is one fixed UTC format, `2026-10-12 13:32:53 UTC` (`frontend/src/dateTime.ts`;
+      the chain, user-script and collection reports use the same format, while the retired plan kinds' reports stay byte-identical);
+      the live graphs' time axis and values table show the actual UTC time (`startedAt` plus the second); Recent runs on the
+      Performance home has **Open run**, which opens that run's report on its plan's Run step; Runs & reports shows Last run and
+      Restore side by side above the runs table with hints; the Chains block sits above the graphs; the Import & Run step shows
+      the launch card (with Load test instead) full width above the run order, then the run order and the run's details in two
+      equal columns; header names in the chain step editor are a dropdown of standard headers.
+    - Import & Run Collection: **Start run** no longer asks a second confirmation for destructive requests or a staging/production
+      tier (at the engineer's explicit request; specs/026 FR-013 amended). It sends the confirmation itself, the card lists the
+      tier and every write before the click, and the first-run unverified-content question is unchanged. The backend gate is
+      unchanged for other clients. The run details list every variable the selected requests use (where, how many requests,
+      whether it has a value, never the value), and each links to Review requests, where values are set.
+    - Version bumped to 19.46.0 (root, backend, frontend, shared-domain).
+

@@ -32,7 +32,7 @@ describe("Live run dashboard accessibility", () => {
     expect(screen.getByRole("progressbar", { name: "Planned time elapsed" })).toBeInTheDocument();
     expect(within(screen.getByTestId("live-run-latest")).getByRole("table")).toHaveAccessibleName();
     expect(within(screen.getByTestId("live-run-chains")).getByRole("list")).toBeInTheDocument();
-    expect(within(screen.getByTestId("live-run-chains")).getByRole("progressbar")).toHaveAccessibleName();
+    expect(within(screen.getByTestId("live-run-chains")).getAllByRole("img")[0]).toHaveAccessibleName(/passed, .* failed/);
     expect(screen.getByRole("heading", { name: "Latest requests" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Chains" })).toBeInTheDocument();
   });

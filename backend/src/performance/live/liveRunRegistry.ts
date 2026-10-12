@@ -18,6 +18,8 @@ export interface LiveRunRegistration {
   runId: string;
   kind: Extract<LiveRunKind, "chain" | "user-script">;
   plannedDurationMs: number | null;
+  /** When the run started (ISO 8601). */
+  startedAt: string;
   /** The aggregate's current figures at `nowMs`. */
   parts(nowMs: number): LiveParts;
 }
@@ -59,6 +61,7 @@ export function readLiveSnapshot(sessionId: string, runId: string, nowMs: number
       runId,
       kind: registration.kind,
       state: entry.state,
+      startedAt: registration.startedAt,
       plannedDurationMs: registration.plannedDurationMs,
       plannedRequests: null,
       inFlight: null,

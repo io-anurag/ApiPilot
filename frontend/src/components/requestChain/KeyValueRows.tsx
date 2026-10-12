@@ -1,5 +1,6 @@
 import type { NameValue } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
+import { SuggestionCombobox, type ComboboxOption } from "../SuggestionCombobox";
 import { ReferenceField, type ReferenceSuggestion } from "./ReferenceField";
 
 const NAME_CLASS =
@@ -18,6 +19,7 @@ export function KeyValueRows({
   onCommit,
   suggestions,
   refuseName,
+  nameOptions,
   addLabel,
 }: Readonly<{
   label: string;
@@ -26,6 +28,8 @@ export function KeyValueRows({
   onCommit: () => void;
   suggestions: readonly ReferenceSuggestion[];
   refuseName?: (name: string) => string | null;
+  /** When given, the name is a dropdown of these suggestions that still accepts any typed name. */
+  nameOptions?: readonly ComboboxOption[];
   addLabel: string;
 }>) {
   const update = (index: number, row: NameValue) => onChange(rows.map((current, at) => (at === index ? row : current)));
@@ -56,16 +60,28 @@ export function KeyValueRows({
                 return (
                   <tr key={index} className="align-top">
                     <td className="py-1 pr-2">
-                      <label className="sr-only" htmlFor={`${label}-name-${index}`}>{`${label} ${index + 1} name`}</label>
-                      <input
-                        id={`${label}-name-${index}`}
-                        className={NAME_CLASS}
-                        value={row.name}
-                        spellCheck={false}
-                        aria-invalid={refusal ? true : undefined}
-                        onChange={(event) => update(index, { ...row, name: event.target.value })}
-                        onBlur={onCommit}
-                      />
+                      {!nameOptions && <label className="sr-only" htmlFor={`${label}-name-${index}`}>{`${label} ${index + 1} name`}</label>}
+                      {nameOptions ? (
+                        <SuggestionCombobox
+                          label={`${label} ${index + 1} name`}
+                          value={row.name}
+                          options={nameOptions}
+                          monospace
+                          invalid={refusal !== null}
+                          onChange={(name) => update(index, { ...row, name })}
+                          onCommit={onCommit}
+                        />
+                      ) : (
+                        <input
+                          id={`${label}-name-${index}`}
+                          className={NAME_CLASS}
+                          value={row.name}
+                          spellCheck={false}
+                          aria-invalid={refusal ? true : undefined}
+                          onChange={(event) => update(index, { ...row, name: event.target.value })}
+                          onBlur={onCommit}
+                        />
+                      )}
                       {refusal && <p role="alert" className="mt-1 text-xs text-danger-700 dark:text-danger-200">{refusal}</p>}
                     </td>
                     <td className="py-1 pr-2">

@@ -1,4 +1,5 @@
 import type { ChainRun, ChainRunSnapshotStep, PerformanceResult, StepResult } from "@apipilot/shared-domain";
+import { formatReportTime } from "../../formatReportTime";
 import { latencyChart, liveSeriesChart, stepLatencyChart, throughputChart, virtualUsersChart } from "./chainReportCharts";
 import { CHAIN_STYLE } from "./chainReportStyle";
 import { bytes, clock, escapeHtml, formatCount, ms, PHASE_TEXT, pct, REPORT_CSP, timelineTable } from "./renderHtmlReport";
@@ -132,7 +133,7 @@ function facts(run: ChainRun): string {
     fact("Environment", `${escapeHtml(run.environment.name)} <span class="badge neutral">Tier: ${escapeHtml(run.environment.tier)}</span>`, `<code>${escapeHtml(run.environment.baseUrl)}</code>`),
     fact("Load profile", `${escapeHtml(snapshot.loadProfile.kind)} · ${escapeHtml(profile)}`, `<span class="small muted">Default think time ${snapshot.thinkTimeMs / 1000} s</span>`),
     fact("Duration", escapeHtml(duration(run.startedAt, run.endedAt)), `<span class="small muted">Planned ${escapeHtml(duration("1970-01-01T00:00:00Z", new Date(run.plannedDurationMs).toISOString()))}</span>`),
-    fact("Started · ended", `<code>${escapeHtml(run.startedAt)}</code>`, `<code>${escapeHtml(run.endedAt ?? "—")}</code>`),
+    fact("Started · ended", `<code>${escapeHtml(formatReportTime(run.startedAt))}</code>`, `<code>${escapeHtml(run.endedAt ? formatReportTime(run.endedAt) : "—")}</code>`),
     fact("k6 · script", `<code>v${escapeHtml(run.k6Version)} · sha256 ${escapeHtml(run.scriptSha256.slice(0, 12))}</code>`),
     fact("Hosts", snapshot.hosts.map((host) => `<code>${escapeHtml(host)}</code>`).join(", ") || "—"),
     fact("Seeded from", escapeHtml(seed)),
@@ -278,6 +279,41 @@ function phaseBlock(measured: StepResult | undefined): string {
   return `<dt>Request phases</dt><dd>${bar}<table class="phases"><thead><tr><th>Phase</th><th class="num">Mean</th><th class="num">p95</th></tr></thead><tbody>${rows}</tbody></table></dd>`;
 }
 
+/**
+ * Why a step's requests failed, from what the run measured: the statuses that were not expected, the
+ * extractions that followed them (k6 extracts only from an expected status, so those failures are a
+ * consequence, not a second problem) and the checks that failed. Response content is never in a
+ * report (AP-037 SC-005), so the cause behind a status is for the Debug run to show.
+ */
+function failureReasons(step: ChainRunSnapshotStep, measured: StepResult | undefined): string {
+  if (!measured) return "";
+  const expectedText = step.expectedStatuses.length > 0 ? step.expectedStatuses.join(", ") : "none listed";
+  const unexpected = (measured.statusesReceived ?? []).filter((entry) => !entry.expected);
+  const unexpectedCount = unexpected.reduce((sum, entry) => sum + entry.count, 0);
+  const reasons: string[] = unexpected.map((entry) =>
+    entry.status === "0"
+      ? `No response × ${formatCount(entry.count)}: the connection failed or the request timed out, so the server never answered.`
+      : `Status ${escapeHtml(entry.status)} × ${formatCount(entry.count)}: the step expects ${escapeHtml(expectedText)}, so each of these counted as a failed request.`,
+  );
+  for (const capture of measured.captures ?? []) {
+    if (capture.failed === 0) continue;
+    const afterStatus = Math.min(capture.failed, unexpectedCount);
+    const rest = capture.failed - afterStatus;
+    const parts = [
+      afterStatus > 0 ? `${formatCount(afterStatus)} followed an unexpected status (a value is only extracted from an expected one)` : "",
+      rest > 0 ? `${formatCount(rest)} got an expected status but the value was not found in the response` : "",
+    ].filter(Boolean);
+    reasons.push(`<code>${escapeHtml(capture.name)}</code> not extracted × ${formatCount(capture.failed)}: ${parts.join("; ")}.`);
+  }
+  for (const check of step.checks) {
+    const counts = measured.checks?.find((entry) => entry.checkId === check.id);
+    if (counts && counts.failed > 0) reasons.push(`Check "${escapeHtml(checkLabel(check))}" failed × ${formatCount(counts.failed)}.`);
+  }
+  if (reasons.length === 0) return "";
+  const hint = '<p class="small muted">A report never holds response content. To see what the server said, run Debug for this chain.</p>';
+  return `<dt>Why it failed</dt><dd><ul>${reasons.map((reason) => `<li>${reason}</li>`).join("")}</ul>${hint}</dd>`;
+}
+
 function stepBlock(step: ChainRunSnapshotStep, measured: StepResult | undefined, cutShortHere: number): string {
   const received = measured?.statusesReceived?.map((entry) => `${statusText(entry.status)} × ${formatCount(entry.count)}`).join(", ") ?? "";
   const glance = measured && measured.requests > 0 ? `${received ? `${received} · ` : ""}p95 ${ms(measured.latencyMs?.p95)} · ${pct(measured.errorRatePercent)} failed` : "not sent";
@@ -304,6 +340,7 @@ function stepBlock(step: ChainRunSnapshotStep, measured: StepResult | undefined,
     `<dt>Expected</dt><dd>${escapeHtml(step.expectedStatuses.join(", ") || "—")}</dd>`,
     `<dt>Extractors</dt><dd>${extractors ? `<ul>${extractors}</ul>` : "None"}</dd>`,
     `<dt>Checks</dt><dd>${checks ? `<ul>${checks}</ul>` : "None"}</dd>`,
+    failureReasons(step, measured),
     cutShortHere > 0 ? `<dt>Cut short here</dt><dd>${formatCount(cutShortHere)} times</dd>` : "",
     notSent > 0 ? `<dt>Not sent</dt><dd>${formatCount(measured!.notAttempted.missingData)} missing data · ${formatCount(measured!.notAttempted.dependencyNotAttempted)} not attempted</dd>` : "",
     measured?.missingVariables.length ? `<dt>Missing values</dt><dd>${escapeHtml(measured.missingVariables.join(", "))}</dd>` : "",

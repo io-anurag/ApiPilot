@@ -34,15 +34,16 @@ function Figure({
 
 /**
  * The "Results" entry to API Test Coverage on the start screen (`strip`) and beside the run flow in
- * Import & Run Collection (`panel`). One primary action at most; with no specification the button is
+ * Import & Run Collection (`panel`), or inside the Run step's launch card (`inline`, the panel's
+ * content without its own frame). One primary action at most; with no specification the button is
  * disabled and the reason is text, not a dead control (AP-046 placement mock).
  */
 export function CoverageEntryCard({
   entry,
   onOpen,
   variant,
-}: Readonly<{ entry: CoverageEntryState; onOpen: () => void; variant: "strip" | "panel" }>) {
-  const panel = variant === "panel";
+}: Readonly<{ entry: CoverageEntryState; onOpen: () => void; variant: "strip" | "panel" | "inline" }>) {
+  const panel = variant !== "strip";
   const ready = entry.status === "ready" ? entry : null;
   const reasonId = `coverage-entry-${variant}-reason`;
   const disabled = entry.status === "no-spec" || entry.status === "loading";
@@ -59,7 +60,11 @@ export function CoverageEntryCard({
     <section
       aria-labelledby={`coverage-entry-${variant}-title`}
       data-testid={`coverage-entry-${variant}`}
-      className={`rounded-xl border border-l-4 border-border-strong border-l-section-results bg-surface-elevated shadow-sm ${panel ? "px-4 py-3" : "p-5"}`}
+      className={
+        variant === "inline"
+          ? "border-l-4 border-l-section-results pl-3"
+          : `rounded-xl border border-l-4 border-border-strong border-l-section-results bg-surface-elevated shadow-sm ${panel ? "px-4 py-3" : "p-5"}`
+      }
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0 max-w-3xl space-y-1">

@@ -232,6 +232,11 @@ that neither can be mistaken for the other.
   requires (specs/018 FR-007) — naming every request in the uploaded collection whose HTTP method
   is POST, PUT, PATCH, or DELETE, detected directly from the collection's own requests rather than
   from `ApiModel`-derived operation metadata.
+  *(Amended 2026-10-12, AP-049, at the engineer's explicit request: the Import & Run Collection screen no
+  longer asks the separate staging/production or destructive-request confirmation after Start run. Start run
+  is the explicit trigger and sends the confirmation itself; the run card above the run order lists the
+  target tier and every write request before the click. The first-run confirmation for unverified content
+  (FR-007) is unchanged. The backend's `409 confirmation_required` is unchanged for any other client.)*
 - **FR-014**: The system MUST allow the user to cancel a run of an uploaded collection already in
   progress, with the same "already-attempted results kept, remaining requests marked
   not-attempted" behavior an ApiPilot-generated run's cancellation already has (specs/018 FR-015).

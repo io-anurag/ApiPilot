@@ -8,7 +8,7 @@ export interface PerformancePath {
   /** An unfinished test with no plan yet exists (parked or not). */
   draft: boolean;
   pick: (source: SourceKind, specificationLoaded: boolean, selection: readonly string[]) => void;
-  openPlan: (planId: string, source: SourceKind, selection: readonly string[]) => void;
+  openPlan: (planId: string, source: SourceKind, selection: readonly string[], runId?: string) => void;
   planCreated: (planId: string) => void;
   go: (step: PathStep) => void;
   next: () => void;
@@ -32,7 +32,7 @@ export function usePerformancePath(initial: PathState = INITIAL_PATH_STATE): Per
   const actions = useMemo(
     () => ({
       pick: (source: SourceKind, specificationLoaded: boolean, selection: readonly string[]) => dispatch({ type: "pick", source, specificationLoaded, selection }),
-      openPlan: (planId: string, source: SourceKind, selection: readonly string[]) => dispatch({ type: "open-plan", planId, source, selection }),
+      openPlan: (planId: string, source: SourceKind, selection: readonly string[], runId?: string) => dispatch({ type: "open-plan", planId, source, selection, ...(runId ? { runId } : {}) }),
       planCreated: (planId: string) => dispatch({ type: "plan-created", planId }),
       go: (step: PathStep) => dispatch({ type: "go", step }),
       next: () => dispatch({ type: "next" }),

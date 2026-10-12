@@ -76,6 +76,44 @@ describe("renderChainReport", () => {
     expect(html).toContain("customer_id × 2");
   });
 
+  it("explains a failing step from its unexpected statuses, extractions and checks, and points to Debug for the response", () => {
+    const base = runOf(customerLifecyclePlan(), {});
+    const step = base.result!.steps[0];
+    const html = renderChainReport({
+      ...base,
+      result: {
+        ...base.result!,
+        steps: [
+          {
+            ...step,
+            requests: 100,
+            errorRatePercent: 5,
+            statusesReceived: [
+              { status: "200", count: 93, expected: true },
+              { status: "400", count: 5, expected: false },
+              { status: "0", count: 2, expected: false },
+            ],
+            captures: [{ name: "customer_id", succeeded: 93, failed: 9 }],
+          },
+        ],
+      },
+    });
+    expect(html).toContain("<dt>Why it failed</dt>");
+    expect(html).toContain("Status 400 × 5: the step expects 200");
+    expect(html).toContain("No response × 2");
+    expect(html).toContain("not extracted × 9: 7 followed an unexpected status");
+    expect(html).toContain("2 got an expected status but the value was not found");
+    expect(html).toContain('Check "Field id equals {{customer_id}}" failed × 1');
+    expect(html).toContain("run Debug for this chain");
+  });
+
+  it("has no failure explanation for a step that did not fail", () => {
+    const base = runOf(customerLifecyclePlan(), {});
+    const step = base.result!.steps[0];
+    const html = renderChainReport({ ...base, result: { ...base.result!, steps: [{ ...step, checks: [{ checkId: "k3", kind: "field-equals", passed: 10, failed: 0 }] }] } });
+    expect(html).not.toContain("Why it failed");
+  });
+
   it("shows Once before load steps with outcome and latency apart from the load", () => {
     const html = renderChainReport(runOf(customerLifecyclePlan(), {}));
     expect(html).toContain("<h2>Once before load</h2>");

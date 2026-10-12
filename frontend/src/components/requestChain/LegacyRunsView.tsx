@@ -4,6 +4,7 @@ import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
+import { formatDateTimeUtc } from "../../dateTime";
 
 const STATUS_TEXT: Record<LegacyRunSummary["status"], string> = { "in-progress": "In progress", completed: "Completed", cancelled: "Cancelled", failed: "Failed" };
 const STATUS_TONE = { "in-progress": "info", completed: "success", cancelled: "neutral", failed: "danger" } as const;
@@ -57,7 +58,7 @@ export function LegacyRunsView() {
             <tbody className="divide-y divide-border">
               {state.runs.map((run) => (
                 <tr key={run.id}>
-                  <td className="py-2 pr-4">{new Date(run.startedAt).toLocaleString()}</td>
+                  <td className="py-2 pr-4">{formatDateTimeUtc(run.startedAt)}</td>
                   <td className="py-2 pr-4">{LEGACY_SOURCES.find((entry) => entry.source === run.source)?.label}</td>
                   <td className="py-2 pr-4">{run.environment.name}</td>
                   <td className="py-2 pr-4">
@@ -65,7 +66,7 @@ export function LegacyRunsView() {
                   </td>
                   <td className="py-2 text-right">
                     {run.status !== "in-progress" && (
-                      <button type="button" className={BUTTON_STYLES.ghost} aria-label={`View report of the run started ${new Date(run.startedAt).toLocaleString()}`} onClick={() => setOpen(run)}>
+                      <button type="button" className={BUTTON_STYLES.ghost} aria-label={`View report of the run started ${formatDateTimeUtc(run.startedAt)}`} onClick={() => setOpen(run)}>
                         View report
                       </button>
                     )}

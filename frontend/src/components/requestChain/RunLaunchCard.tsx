@@ -8,6 +8,7 @@ import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
 import { DebugRunNotes, DebugRunResultView, useChainDebugRun } from "./ChainDebugPanel";
 import { runBlockedReason, STATUS_TEXT, summarizeChains, type ChainRunProps } from "./ChainRunPanel";
+import { formatDateTimeUtc } from "../../dateTime";
 
 const HERO_BUTTON = "inline-flex min-h-11 items-center rounded-lg px-5 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 const HERO_PRIMARY = `${HERO_BUTTON} bg-brand-600 text-white hover:bg-brand-700`;
@@ -73,7 +74,7 @@ export function RunLaunchCard({ plan, analysis, script, environment, runs, dirty
             )}
             {latest && (
               <p className="text-sm text-muted" data-testid="run-launch-last-run">
-                Last run: {new Date(latest.startedAt).toLocaleString()} · {STATUS_TEXT[latest.status]} ·{" "}
+                Last run: {formatDateTimeUtc(latest.startedAt)} · {STATUS_TEXT[latest.status]} ·{" "}
                 <button type="button" className={BUTTON_STYLES.ghost} onClick={onViewRuns}>
                   View runs &amp; reports
                 </button>

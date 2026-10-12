@@ -391,14 +391,11 @@ describe("ExternalCollectionsPage", () => {
     await waitFor(() => expect(startCallCount).toBe(2));
   });
 
-  it("still syncs the confirmation when the first run also needs the separate risk-tier gate (e.g. a destructive request)", async () => {
-    // Regression: the backend records `confirmedAt` permanently the instant gate 1 sees
-    // `confirmed: true` — *before* it even evaluates gate 2 (risk tier / destructive request). A
-    // collection whose first-ever run also happens to need gate 2 (this fixture's destructive
-    // POST) got that confirmation gate-1 response, but the page's `onConfirmed` sync was
-    // previously wired only to the eventual *successful* run start, so it never fired here even
-    // though the backend had already recorded the confirmation on the very first confirmed call.
-    let startCallCount = 0;
+  it("starts a run with destructive requests from Start run alone, with no second confirmation, and remembers the first-run confirmation", async () => {
+    // The first run asks once, for the collection's unverified content. After that, Start run is the
+    // explicit trigger: a collection with destructive requests is not asked again, and the first
+    // confirmation is synced so a later click skips the unverified-content dialog too.
+    const starts: unknown[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -413,31 +410,14 @@ describe("ExternalCollectionsPage", () => {
           return { ok: true, status: 200, json: () => Promise.resolve({ runs: [] }) };
         }
         if (url.endsWith("/execution/start") && init?.method === "POST") {
-          startCallCount += 1;
-          // Call 1 ("Confirm and run" on the unverified-content dialog): the backend has just
-          // marked confirmedAt, but still blocks this same call on gate 2 since a destructive
-          // request is present.
-          if (startCallCount === 1) {
-            return {
-              ok: false,
-              status: 409,
-              json: () =>
-                Promise.resolve({
-                  error: "confirmation_required",
-                  message: "This execution requires explicit confirmation before it can start.",
-                  environmentTier: "local",
-                  destructiveOperations: [{ operationMethod: "POST", operationPath: "/auth" }],
-                }),
-            };
-          }
-          // Call 2 ("Confirm and run" on the risk-tier banner) and any later call both succeed.
+          starts.push(JSON.parse(init.body as string));
           return {
             ok: true,
             status: 200,
             json: () =>
               Promise.resolve({
                 run: {
-                  id: `run-${startCallCount}`,
+                  id: `run-${starts.length}`,
                   source: "uploaded",
                   uploadedCollectionSetId: "uc-1",
                   uploadedCollectionSnapshot: { name: "My collection", tier: "local" },
@@ -461,20 +441,17 @@ describe("ExternalCollectionsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(await screen.findByTestId("unverified-content-dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm and run" }));
-
-    // Gate 1's confirmation cleared the unverified dialog; gate 2's own banner now appears instead.
-    expect(await screen.findByTestId("risk-tier-confirmation-banner")).toBeInTheDocument();
-    expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm and run" }));
     await screen.findByTestId("external-collection-run-summary");
-    expect(startCallCount).toBe(2);
+    expect(screen.queryByTestId("risk-tier-confirmation-banner")).not.toBeInTheDocument();
+    expect(starts).toHaveLength(1);
     backToRun();
 
-    // The real regression check: a third run click must skip the unverified-content dialog
-    // entirely — it was already recorded on call 1, not call 2.
+    // A second click starts at once: neither the unverified-content dialog nor a risk-tier question.
     fireEvent.click(screen.getByRole("button", { name: "Start run" }));
     expect(screen.queryByTestId("unverified-content-dialog")).not.toBeInTheDocument();
-    await waitFor(() => expect(startCallCount).toBe(3));
+    expect(screen.queryByTestId("risk-tier-confirmation-banner")).not.toBeInTheDocument();
+    await waitFor(() => expect(starts).toHaveLength(2));
+    expect(starts[1]).toMatchObject({ confirmed: true });
   });
 });
 

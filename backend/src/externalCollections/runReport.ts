@@ -4,6 +4,7 @@ import type {
   UploadedCollectionExecutionRun,
   UploadedRequestResult,
 } from "@apipilot/shared-domain";
+import { formatReportTime } from "../formatReportTime";
 import type { LiveSeriesView } from "../performance/live/liveSeries";
 import { runSeries } from "./runSeries";
 
@@ -153,12 +154,7 @@ export function buildRunReportModel(run: UploadedCollectionExecutionRun): RunRep
   };
 }
 
-/** `2026-10-10 14:25:19 UTC`; fixed format and zone so a report does not depend on the server's locale. */
-export function formatReportTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return `${date.toISOString().slice(0, 19).replace("T", " ")} UTC`;
-}
+export { formatReportTime };
 
 /** An ASCII-only file name for the download, so no header or path needs special handling. */
 export function reportFileName(model: Pick<RunReportModel, "collectionName" | "runId">, extension = "pdf"): string {

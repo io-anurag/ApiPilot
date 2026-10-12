@@ -11,10 +11,12 @@ export function EnvironmentForCredentials({
   environmentId,
   onChange,
   offerCollectionSettings = false,
+  collectionSettingsLabel = "Collection settings (copy)",
 }: Readonly<{
   environmentId: string;
-  onChange: (environmentId: string) => void
+  onChange: (environmentId: string) => void;
   offerCollectionSettings?: boolean;
+  collectionSettingsLabel?: string;
 }>) {
   const id = useId();
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -32,9 +34,14 @@ export function EnvironmentForCredentials({
           ? "Target environment"
           : "Environment for credentials (optional)"}
       </label>
-      <select id={`${id}-environment`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={environmentId} onChange={(event) => onChange(event.target.value)}>
+      <select
+        id={`${id}-environment`}
+        className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+        value={environmentId}
+        onChange={(event) => onChange(event.target.value)}
+      >
         {offerCollectionSettings && (
-          <option value="collection">Collection settings (copy)</option>
+          <option value="collection">{collectionSettingsLabel}</option>
         )}
         <option value="">None: literal credentials are not kept</option>
         {environments.map((environment) => (

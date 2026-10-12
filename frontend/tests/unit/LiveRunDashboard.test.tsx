@@ -94,8 +94,8 @@ describe("LiveRunDashboard", () => {
     render(<LiveRunDashboard kind="chain" runId="run-1" />);
     await settle();
     await tick(11_000);
-    expect(screen.getByTestId("live-run-stale")).toHaveTextContent(/^Figures stale since \d\d:\d\d:\d\d\./);
-    expect(screen.getByText(/^Stale: no figures since \d\d:\d\d:\d\d$/)).toBeInTheDocument();
+    expect(screen.getByTestId("live-run-stale")).toHaveTextContent(/^Figures stale since \d\d:\d\d:\d\d UTC\./);
+    expect(screen.getByText(/^Stale: no figures since \d\d:\d\d:\d\d UTC$/)).toBeInTheDocument();
     expect(within(tile("Requests done")).getByText("120")).toBeInTheDocument();
     fetchMock.mockResolvedValue(ok(liveSnapshot({ totals: { requests: 150, failures: 2 } })));
     await tick(1_000);

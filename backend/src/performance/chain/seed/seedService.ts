@@ -15,7 +15,11 @@ import {
 import { NoRequestsSelectedError } from "../../../externalCollections/errors";
 import { resolveRunOrder } from "../../../externalCollections/runOrder";
 import { parseStoredCollection } from "../../../externalCollections/uploadedCollectionParsing";
-import { getUploadedCollection } from "../../../externalCollections/uploadedCollectionStore";
+import { listRuns } from "../../../externalCollections/uploadedCollectionExecutionStore";
+import {
+  getUploadedCollection,
+  listUploadedCollections,
+} from "../../../externalCollections/uploadedCollectionStore";
 import { UnknownOperationKeyError } from "../../../testGenerationWorkflow/errors";
 import { normalizeOperationSelection } from "../../../testGenerationWorkflow/operationSelection";
 import { getCurrentWorkflow } from "../../../testGenerationWorkflow/workflowStore";
@@ -36,7 +40,10 @@ import { seedFromWorkflow } from "./seedFromWorkflow";
  * Literal credentials found while seeding move into the named environment, or are dropped and listed
  * (Clarification 2026-10-03). Seeding sends nothing and runs nothing.
  */
-export type SeedSourceInput = { kind: "specification"; selectedOperationKeys?: string[] } | { kind: "workflow" } | { kind: "collection"; collectionId: string; orderedRequestIds: string[] };
+export type SeedSourceInput =
+  | { kind: "specification"; selectedOperationKeys?: string[] }
+  | { kind: "workflow" }
+  | { kind: "collection"; collectionId: string; orderedRequestIds: string[] };
 
 export function parseSeedSource(raw: unknown): SeedSourceInput {
   const source = (raw ?? {}) as Record<string, unknown>;
@@ -44,62 +51,138 @@ export function parseSeedSource(raw: unknown): SeedSourceInput {
   if (source.kind === "specification") {
     const keys = source.selectedOperationKeys;
     if (keys === undefined) return { kind: "specification" };
-    if (!Array.isArray(keys) || keys.length === 0 || !keys.every((key) => typeof key === "string")) {
-      throw new InvalidChainPlanError("source", "selectedOperationKeys, when present, lists at least one operation as \"METHOD /path\".");
+    if (
+      !Array.isArray(keys) ||
+      keys.length === 0 ||
+      !keys.every((key) => typeof key === "string")
+    ) {
+      throw new InvalidChainPlanError(
+        "source",
+        'selectedOperationKeys, when present, lists at least one operation as "METHOD /path".',
+      );
     }
     return { kind: "specification", selectedOperationKeys: keys as string[] };
   }
   if (source.kind === "collection") {
-    if (typeof source.collectionId !== "string" || !Array.isArray(source.orderedRequestIds) || !source.orderedRequestIds.every((id) => typeof id === "string")) {
-      throw new InvalidChainPlanError("source", "A collection source names the collection and the requests in run order.");
+    if (
+      typeof source.collectionId !== "string" ||
+      !Array.isArray(source.orderedRequestIds) ||
+      !source.orderedRequestIds.every((id) => typeof id === "string")
+    ) {
+      throw new InvalidChainPlanError(
+        "source",
+        "A collection source names the collection and the requests in run order.",
+      );
     }
-    return { kind: "collection", collectionId: source.collectionId, orderedRequestIds: source.orderedRequestIds as string[] };
+    return {
+      kind: "collection",
+      collectionId: source.collectionId,
+      orderedRequestIds: source.orderedRequestIds as string[],
+    };
   }
-  throw new InvalidChainPlanError("source", "Seed from a specification, the guided workflow or a collection.");
+  throw new InvalidChainPlanError(
+    "source",
+    "Seed from a specification, the guided workflow or a collection.",
+  );
 }
 
 /** The chosen operations in specification order; an unknown key is a 422 `invalid_plan` on `source`, never a quietly smaller plan. */
-function selectedKeysOf(apiModel: ApiModel, keys: readonly string[] | undefined): string[] | undefined {
+function selectedKeysOf(
+  apiModel: ApiModel,
+  keys: readonly string[] | undefined,
+): string[] | undefined {
   try {
     return normalizeOperationSelection(apiModel, keys);
   } catch (error) {
-    if (error instanceof UnknownOperationKeyError) throw new InvalidChainPlanError("source", error.message);
+    if (error instanceof UnknownOperationKeyError)
+      throw new InvalidChainPlanError("source", error.message);
     throw error;
   }
 }
 
-function readSource(source: SeedSourceInput, name: string, now: string): Omit<SeedInput, "environment"> {
+function readSource(
+  source: SeedSourceInput,
+  name: string,
+  now: string,
+): Omit<SeedInput, "environment"> {
   if (source.kind === "specification") {
     const test = getQuickTest();
-    if (!test) throw new PlanSourceUnavailableError(404, "quick_test_not_found", "Upload a specification in Performance first.");
-    const selectedOperationKeys = selectedKeysOf(test.apiModel, source.selectedOperationKeys);
-    return seedFromSpecification({ ...contextFromQuickTest(test), selectedOperationKeys }, test.specification.filename, name, now);
+    if (!test)
+      throw new PlanSourceUnavailableError(
+        404,
+        "quick_test_not_found",
+        "Upload a specification in Performance first.",
+      );
+    const selectedOperationKeys = selectedKeysOf(
+      test.apiModel,
+      source.selectedOperationKeys,
+    );
+    return seedFromSpecification(
+      { ...contextFromQuickTest(test), selectedOperationKeys },
+      test.specification.filename,
+      name,
+      now,
+    );
   }
   if (source.kind === "workflow") {
     // The same gate as the guided performance plan: Postman generation is complete (AP-029).
     const workflow = getCurrentWorkflow();
-    if (!workflow || workflow.stages.postmanGeneration.status !== "complete") {
-      throw new PlanSourceUnavailableError(409, "workflow_not_ready", "Finish the guided workflow up to Postman generation first.");
+    if (workflow?.stages.postmanGeneration.status !== "complete") {
+      throw new PlanSourceUnavailableError(
+        409,
+        "workflow_not_ready",
+        "Finish the guided workflow up to Postman generation first.",
+      );
     }
-    return seedFromWorkflow(contextFromWorkflow(workflow), workflow.apiModel?.info?.title ?? "the guided workflow", name, now);
+    return seedFromWorkflow(
+      contextFromWorkflow(workflow),
+      workflow.apiModel?.info?.title ?? "the guided workflow",
+      name,
+      now,
+    );
   }
   const stored = getUploadedCollection(source.collectionId);
   const collection = parseStoredCollection(stored.collection);
   if (source.orderedRequestIds.length === 0) throw new NoRequestsSelectedError();
   const ordered = resolveRunOrder(collection, source.orderedRequestIds) ?? [];
-  return seedFromCollection({ id: stored.id, name: stored.name }, collection, ordered, name, now);
+  return seedFromCollection(
+    { id: stored.id, name: stored.name },
+    collection,
+    ordered,
+    name,
+    now,
+  );
 }
 
-function storeMoved(environment: Environment, moves: { stepId: string; location: MovedCredential["location"]; valueName: string; value: string }[]): MovedCredential[] {
+function storeMoved(
+  environment: Environment,
+  moves: {
+    stepId: string;
+    location: MovedCredential["location"];
+    valueName: string;
+    value: string;
+  }[],
+): MovedCredential[] {
   if (moves.length === 0) return [];
   const variableValues = { ...environment.variableValues };
   for (const move of moves) variableValues[move.valueName] = move.value;
-  updateEnvironment(environment.id, { name: environment.name, tier: environment.tier, baseUrl: environment.baseUrl, variableValues, requestDelayMs: environment.requestDelayMs });
-  return moves.map((move) => ({ stepId: move.stepId, location: move.location, valueName: move.valueName, environmentName: environment.name }));
+  updateEnvironment(environment.id, {
+    name: environment.name,
+    tier: environment.tier,
+    baseUrl: environment.baseUrl,
+    variableValues,
+    requestDelayMs: environment.requestDelayMs,
+  });
+  return moves.map((move) => ({
+    stepId: move.stepId,
+    location: move.location,
+    valueName: move.valueName,
+    environmentName: environment.name,
+  }));
 }
 
 function collectionEnvironment(
-  source: Extract<SeedSourceInput, { kind: "collection"; }>,
+  source: Extract<SeedSourceInput, { kind: "collection" }>,
   planName: string,
 ): Environment {
   if (listPlans().length >= CHAIN_PLAN_LIMITS.plansPerSession) {
@@ -142,19 +225,67 @@ function collectionEnvironment(
   });
 }
 
+function configuredWorkflowSource():
+  Extract<SeedSourceInput, { kind: "collection" }> | undefined {
+  const workflow = getCurrentWorkflow();
+  if (workflow?.stages.postmanGeneration.status === "complete") {
+    const stored = listUploadedCollections()
+      .filter((collection) => collection.sourceWorkflowId === workflow.id)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    if (stored) {
+      const collection = parseStoredCollection(stored.collection);
+      const requestIds: string[] = [];
+      collection.forEachItem((item) => requestIds.push(item.id));
+      const currentIds = new Set(requestIds);
+      const lastRun = listRuns().find(
+        (run) =>
+          run.uploadedCollectionSetId === stored.id && run.status !== "in-progress",
+      );
+      const runIds =
+        lastRun?.results.flatMap((result) =>
+          result.itemId && currentIds.has(result.itemId) ? [result.itemId] : [],
+        ) ?? [];
+      return {
+        kind: "collection",
+        collectionId: stored.id,
+        orderedRequestIds: runIds.length > 0 ? [...new Set(runIds)] : requestIds,
+      };
+    }
+  }
+  return undefined;
+}
+
 export function seedPlan(
   input: { name: string; source: SeedSourceInput; environmentId?: string | null },
   now: string,
 ): { view: ChainPlanView; movedCredentials: MovedCredential[]; reportItems: number } {
-  const chosenEnvironment = input.environmentId ? getEnvironment(input.environmentId) : null;
-  const read = readSource(input.source, input.name, now);
+  const chosenEnvironment = input.environmentId
+    ? getEnvironment(input.environmentId)
+    : null;
+  const source =
+    input.source.kind === "workflow"
+      ? (configuredWorkflowSource() ?? input.source)
+      : input.source;
+  const read = readSource(source, input.name, now);
+  if (input.source.kind === "workflow" && source.kind === "collection") {
+    read.report.source = {
+      kind: "workflow",
+      specificationTitle:
+        getCurrentWorkflow()?.apiModel?.info?.title ?? "the guided workflow",
+    };
+  }
   const inheritCollection =
-    input.source.kind === "collection" && input.environmentId === undefined;
+    source.kind === "collection" && input.environmentId === undefined;
   const environment =
-    inheritCollection && input.source.kind === "collection"
-      ? collectionEnvironment(input.source, input.name)
+    inheritCollection && source.kind === "collection"
+      ? collectionEnvironment(source, input.name)
       : chosenEnvironment;
-  const seeded = assembleSeededPlan({ ...read, environment: environment ? { name: environment.name, valueNames: Object.keys(environment.variableValues) } : null });
+  const seeded = assembleSeededPlan({
+    ...read,
+    environment: environment
+      ? { name: environment.name, valueNames: Object.keys(environment.variableValues) }
+      : null,
+  });
   const plan = withFingerprint({
     ...seeded.plan,
     targetEnvironmentId: environment?.id ?? null,

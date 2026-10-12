@@ -9,6 +9,7 @@ import { discardDebugRun, executeDebugRun, revealDebugValue } from "../performan
 import { createFetchSender, type Sender } from "../performance/chain/debug/sender";
 import { createPlan, deletePlan, duplicatePlan, emptyPlan, getPlan, listPlans, savePlan, scriptStatusOf, viewOf } from "../performance/chain/chainPlanStore";
 import { addDataSet, previewDataSet, removeDataSet, replaceDataSetFile, runCopyWriter, updateDataSet } from "../performance/chain/dataSets";
+import { failureResponseSettings } from "../performance/chain/failureResponseSettings";
 import { generateChainScript } from "../performance/chain/generateScript";
 import { restoreRun } from "../performance/chain/restore";
 import { parseSeedSource, seedPlan } from "../performance/chain/seed/seedService";
@@ -399,6 +400,7 @@ export function createChainPlansRouter(deps: PerformanceTestingDependencies): Ro
         now: deps.now,
         runDirectoryRoot: deps.runDirectoryRoot,
         writeRunFiles: runCopyWriter(sessionId, plan),
+        failureResponses: failureResponseSettings(plan, environment),
       }).catch((error: Error) => logger.error("performance_run_unhandled_error", { runId: run.id, errorCategory: error.name }));
       res.status(200).json({ run });
       logSucceeded(req, startedAt, 200);

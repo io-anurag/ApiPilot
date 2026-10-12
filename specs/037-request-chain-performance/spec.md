@@ -82,6 +82,7 @@ seeded from, so its steps are user content, as AP-036's collection requests are 
 exception MUST be amended before `/speckit-plan` continues, to consolidate the k6 exceptions into
 one rule for request-chain plans. *(Done 2026-10-02: constitution v2.8.0, commit `d0873c3`, merged
 to `main`; noted by plan 2026-10-03.)* What this specification relies on:
+
 - ApiPilot still writes every byte of the script, deterministically, and the engineer's content
   reaches it only as data, never as code (FR-016, FR-030);
 - no secret value reaches the plan or the script: secrets are environment references, and a
@@ -317,6 +318,15 @@ editing the collection afterwards does not change the plan.
    The engineer can choose another environment or none, and every part of the resulting plan
    and copied environment remains independently editable. Unsupported scripts remain listed in
    the seeding report rather than executed or silently translated.
+6. **Given** a guided workflow whose handed-off collection has saved request-body edits and run
+   settings, **When** the engineer creates a plan from the guided Performance Testing stage,
+   **Then** the newest collection linked to that workflow is used instead of rebuilding requests
+   from the original specification. Its latest settled run supplies selection and order for
+   requests still present; without recorded request IDs, all current requests are used. Saved raw
+   and form bodies, headers, auth and variables carry over using collection seeding. The default
+   target environment is copied as in scenario 5, and explicit environment choices remain honored.
+   The plan stays listed under guided plans, with collection provenance on each step, and further
+   performance edits do not change the source collection.
 
 ---
 
@@ -518,7 +528,10 @@ and that the same plan generates a byte-identical script whatever the file's con
   credential step only when it is selected; a token source with no operation behind it, such as OAuth2
   client credentials, is seeded only when a seeded step sends its token. Endpoints that need no token
   never cause a credential step. Guided-workflow and collection seeding are unchanged.)*
-- **FR-023**: Seeding from the guided workflow MUST give one chain per approved workflow, with each
+- **FR-023**: When a collection linked to the current guided workflow exists, guided seeding MUST
+  use its current saved requests and settings as described in US4 scenario 6, including request
+  bodies, rather than re-deriving requests from the original workflow. Without a linked collection,
+  seeding from the guided workflow MUST give one chain per approved workflow, with each
   workflow variable as an extractor on its producer and a `{{name}}` reference on its consumers, and
   one single-step chain per other operation in scope. Seeding from the quick path MUST give one
   single-step chain per operation, with login operations left out as AP-032 FR-003a.
@@ -675,6 +688,9 @@ and that the same plan generates a byte-identical script whatever the file's con
 - **SC-005**: No secret value, extracted value, data set value, request body or response body
   appears in any plan, script, environment template, snapshot, report or log, checked by a scan of
   all of them after a run that uses a secret token and a data set with a secret column.
+  *(Amended 2026-10-12, AP-049: the one exception is a failed request's response in the live dashboard's
+  Recent failures section, held in memory only, masked and size-limited; it never appears in a plan, script,
+  snapshot, stored result, report or log. See `specs/045-live-run-dashboard` FR-005a.)*
 - **SC-008**: A plan built by hand survives a backend restart with 100% of its chains, steps and
   data sets intact.
 - **SC-009**: In a run using a data set in **Next row per iteration** mode, 100% of iterations use

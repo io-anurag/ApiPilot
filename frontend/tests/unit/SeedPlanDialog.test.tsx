@@ -14,70 +14,120 @@ const ENVIRONMENT = { id: "e1", name: "Local stub", tier: "local", baseUrl: "htt
 describe("SeedPlanDialog", () => {
   it("explains the seed, offers an environment for credentials, and seeds with the name and environment chosen", async () => {
     const calls = stubFetch({
-      ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [ENVIRONMENT] }],
-      ["POST /api/chain-plans/seed"]: () => [201, { ...viewOf(chainPlanFixture()), movedCredentials: [] }],
+      ["GET /api/test-generation-workflow/environments"]: () => [
+        200,
+        { environments: [ENVIRONMENT] },
+      ],
+      ["POST /api/chain-plans/seed"]: () => [
+        201,
+        { ...viewOf(chainPlanFixture()), movedCredentials: [] },
+      ],
     });
     const onSeeded = vi.fn();
-    render(<SeedPlanDialog source={{ kind: "specification" }} defaultName="Weak API" onSeeded={onSeeded} onCancel={() => undefined} />);
+    render(
+      <SeedPlanDialog
+        source={{ kind: "specification" }}
+        defaultName="Weak API"
+        onSeeded={onSeeded}
+        onCancel={() => undefined}
+      />,
+    );
     expect(screen.getByText(/never re-derived from its source/)).toBeInTheDocument();
     expect(screen.getByLabelText("Plan name")).toHaveValue("Weak API");
     await screen.findByRole("option", { name: "Local stub (local)" });
-    expect(screen.getByRole("option", { name: "None: literal credentials are not kept" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Environment for credentials (optional)"), { target: { value: "e1" } });
+    expect(
+      screen.getByRole("option", { name: "None: literal credentials are not kept" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Environment for credentials (optional)"), {
+      target: { value: "e1" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     await waitFor(() => expect(onSeeded).toHaveBeenCalledWith(PLAN_ID));
-    expect(calls.find((call) => call.method === "POST")?.body).toEqual({ name: "Weak API", source: { kind: "specification" }, environmentId: "e1" });
+    expect(calls.find((call) => call.method === "POST")?.body).toEqual({
+      name: "Weak API",
+      source: { kind: "specification" },
+      environmentId: "e1",
+    });
   });
 
   it("shows why seeding failed", async () => {
     stubFetch({
-      ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [] }],
-      ["POST /api/chain-plans/seed"]: () => [404, { error: "quick_test_not_found", message: "Upload a specification in Performance first." }],
+      ["GET /api/test-generation-workflow/environments"]: () => [
+        200,
+        { environments: [] },
+      ],
+      ["POST /api/chain-plans/seed"]: () => [
+        404,
+        {
+          error: "quick_test_not_found",
+          message: "Upload a specification in Performance first.",
+        },
+      ],
     });
-    render(<SeedPlanDialog source={{ kind: "specification" }} defaultName="x" onSeeded={() => undefined} onCancel={() => undefined} />);
+    render(
+      <SeedPlanDialog
+        source={{ kind: "specification" }}
+        defaultName="x"
+        onSeeded={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
-    expect(await screen.findByTestId("seed-plan-error")).toHaveTextContent("Upload a specification in Performance first.");
+    expect(await screen.findByTestId("seed-plan-error")).toHaveTextContent(
+      "Upload a specification in Performance first.",
+    );
   });
 
-  it.each([
-    { selection: "collection", environment: {} },
-    { selection: "e1", environment: { environmentId: "e1" } },
-    { selection: "", environment: { environmentId: null } },
-  ])(
-    "defaults to copied collection settings and allows the $selection override",
-    async ({ selection, environment }) => {
-      const calls = stubFetch({
-      ["GET /api/test-generation-workflow/environments"]: () => [200, { environments: [ENVIRONMENT] }],
-      ["POST /api/chain-plans/seed"]: () => [201, { ...viewOf(chainPlanFixture()), movedCredentials: [] }],
-    });
-      const source = {
-        kind: "collection" as const,
-        collectionId: "c1",
-        orderedRequestIds: ["request-2", "request-1"],
-      };
-      const onSeeded = vi.fn();
-      render(
-        <SeedPlanDialog
-          source={source}
-          defaultName="Configured collection"
-          onSeeded={onSeeded}
-          onCancel={() => undefined}
-        />,
-      );
-      expect(screen.getByLabelText("Target environment")).toHaveValue("collection");
-      await screen.findByRole("option", { name: "Local stub (local)" });
-      fireEvent.change(screen.getByLabelText("Target environment"), {
-        target: { value: selection },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
-      await waitFor(() => expect(onSeeded).toHaveBeenCalledWith(PLAN_ID));
-      expect(calls.find((call) => call.method === "POST")?.body).toEqual({
-        name: "Configured collection",
-        source,
-        ...environment,
-      });
-    },
-  );
+  describe.each(["collection", "workflow"] as const)("%s setup", (kind) => {
+    it.each([
+      { selection: "collection", environment: {} },
+      { selection: "e1", environment: { environmentId: "e1" } },
+      { selection: "", environment: { environmentId: null } },
+    ])(
+      "defaults to copied collection settings and allows the $selection override",
+      async ({ selection, environment }) => {
+        const calls = stubFetch({
+          ["GET /api/test-generation-workflow/environments"]: () => [
+            200,
+            { environments: [ENVIRONMENT] },
+          ],
+          ["POST /api/chain-plans/seed"]: () => [
+            201,
+            { ...viewOf(chainPlanFixture()), movedCredentials: [] },
+          ],
+        });
+        const source =
+          kind === "workflow"
+            ? { kind }
+            : {
+                kind: "collection" as const,
+                collectionId: "c1",
+                orderedRequestIds: ["request-2", "request-1"],
+              };
+        const onSeeded = vi.fn();
+        render(
+          <SeedPlanDialog
+            source={source}
+            defaultName="Configured collection"
+            onSeeded={onSeeded}
+            onCancel={() => undefined}
+          />,
+        );
+        expect(screen.getByLabelText("Target environment")).toHaveValue("collection");
+        await screen.findByRole("option", { name: "Local stub (local)" });
+        fireEvent.change(screen.getByLabelText("Target environment"), {
+          target: { value: selection },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
+        await waitFor(() => expect(onSeeded).toHaveBeenCalledWith(PLAN_ID));
+        expect(calls.find((call) => call.method === "POST")?.body).toEqual({
+          name: "Configured collection",
+          source,
+          ...environment,
+        });
+      },
+    );
+  });
 });
 
 describe("SeedingReportView", () => {

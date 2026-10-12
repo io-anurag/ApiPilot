@@ -81,8 +81,7 @@ const SETUP_STEPS = [
     ],
     "uses": [],
     "columns": [],
-    "refreshFrom": [],
-    "readsBody": true
+    "refreshFrom": []
   }
 ];
 const CHAINS = [
@@ -130,8 +129,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": true
+        ]
       },
       {
         "id": "s3",
@@ -173,8 +171,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": false
+        ]
       },
       {
         "id": "s4",
@@ -211,8 +208,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": false
+        ]
       },
       {
         "id": "s5",
@@ -258,8 +254,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": true
+        ]
       },
       {
         "id": "s6",
@@ -296,8 +291,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": false
+        ]
       },
       {
         "id": "s7",
@@ -331,8 +325,7 @@ const CHAINS = [
         "columns": [],
         "refreshFrom": [
           "s1"
-        ],
-        "readsBody": false
+        ]
       }
     ]
   }
@@ -347,6 +340,9 @@ const captureOutcome = new Counter("apipilot_capture");
 const checkOutcome = new Counter("apipilot_check");
 const setupOutcome = new Counter("apipilot_setup");
 const dataOutcome = new Counter("apipilot_data");
+const FAILURE_BODY_LIMIT = 2048;
+const FAILURE_LOG_INTERVAL_MS = 1000;
+let lastFailureLoggedMs = 0;
 const REFERENCE = /\{\{([A-Za-z0-9_]+)\}\}/g;
 const RUN_TAG_SETTING = __ENV.APIPILOT_RUN_TAG;
 const RUN_TAG = typeof RUN_TAG_SETTING === "string" && /^[0-9a-f]{6}$/.test(RUN_TAG_SETTING) ? RUN_TAG_SETTING : "";
@@ -626,8 +622,18 @@ function send(step, scope, tags) {
   return http.request(request.method, request.url, request.body, {
     headers: request.headers,
     tags: tags,
-    responseType: step.readsBody ? "text" : "none",
+    // Always text: a failed request's response is sampled for the live view (AP-049).
+    responseType: "text",
   });
+}
+
+function reportFailure(step, journey, response) {
+  const now = Date.now();
+  if (now - lastFailureLoggedMs < FAILURE_LOG_INTERVAL_MS) return;
+  lastFailureLoggedMs = now;
+  const body = typeof response.body === "string" ? response.body : "";
+  const type = headerValue(response, "content-type");
+  console.log("APIPILOT_FAILURE " + JSON.stringify({ step: step.id, journey: journey, status: response.status, type: typeof type === "string" ? type : null, size: body.length, body: body.slice(0, FAILURE_BODY_LIMIT) }));
 }
 
 function sendSetup(step, scope, kind) {
@@ -738,6 +744,7 @@ function runChain(chain, scope) {
     for (const id of step.refreshFrom) maybeRefresh(id, scope);
     const response = send(step, scope, tags);
     const expected = statusOk(response.status, step.expected);
+    if (!expected) reportFailure(step, chain.id, response);
     check(response, { status: function () { return expected; } }, tags);
     runChecks(step, response, scope, tags);
     let failed = null;

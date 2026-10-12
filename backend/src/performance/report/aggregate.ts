@@ -18,6 +18,7 @@ import type { MetricsPoint } from "../k6/metricsStream";
 import { latencyOf, type LiveParts } from "../live/buildSnapshot";
 import { createLiveSeries } from "../live/liveSeries";
 import type { LiveStepInfo } from "../live/liveStepInfo";
+import { createFailureResponseBuilder, createFailureRing, type FailureResponseSettings, type FailureSample } from "../live/failureSamples";
 import { createRecentRing } from "../live/recentRing";
 import { LatencyHistogram } from "./histogram";
 import { isRunLayout, layoutFromPlan, type RunLayout } from "./runLayout";
@@ -123,11 +124,15 @@ export interface PerformanceAggregate {
   liveParts(nowMs: number): LiveParts;
   /** AP-045 US4: the whole run's series for the finished result (at most 1,800 points). */
   storedLiveSeries(endMs: number): StoredLiveSeries;
+  /** AP-049: one sampled failed request, masked and kept in memory for the live view only. */
+  recordFailureSample(sample: FailureSample, nowMs: number): void;
 }
 
 export interface AggregateLiveOptions {
   /** Step id to its chain, name, method and path template (AP-045 research R5). Absent: the layout's own method, no path. */
   steps?: ReadonlyMap<string, LiveStepInfo>;
+  /** AP-049: what to mask in, or withhold from, a failed request's response. Absent: no secrets, nothing withheld. */
+  failureResponses?: FailureResponseSettings;
 }
 
 /**
@@ -208,6 +213,8 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
     })),
   });
   const liveRing = createRecentRing();
+  const failureRing = createFailureRing();
+  const failureResponses = createFailureResponseBuilder(liveOptions.failureResponses ?? { secrets: [], withhold: false });
   const secondOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - runStartMs) / 1000));
 
   const bucketIndex = (timeMs: number) => Math.max(0, Math.floor((timeMs - runStartMs) / bucketMs));
@@ -564,7 +571,20 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
       chains: chainRows,
       series: liveSeries.view(Math.floor(elapsedMs / 1000)),
       recent: liveRing.list(),
+      recentFailures: failureRing.list(),
     };
+  }
+
+  function recordFailureSample(sample: FailureSample, nowMs: number): void {
+    const info = liveOptions.steps?.get(sample.step);
+    failureRing.push({
+      second: secondOf(nowMs),
+      chain: info?.stepName ?? sample.step,
+      method: info?.method ?? "",
+      path: info?.path ?? "",
+      status: sample.status === 0 ? null : sample.status,
+      response: failureResponses.responseOf(sample),
+    });
   }
 
   function storedLiveSeries(endMs: number): StoredLiveSeries {
@@ -572,5 +592,5 @@ export function createAggregate(source: PerformancePlan | RunLayout, plannedDura
     return { bucketSeconds: view.bucketSeconds, points: view.points, ...(view.groups ? { groups: view.groups } : {}) };
   }
 
-  return { ingest, progress, toResult, setupFailure, liveParts, storedLiveSeries };
+  return { ingest, progress, toResult, setupFailure, liveParts, storedLiveSeries, recordFailureSample };
 }

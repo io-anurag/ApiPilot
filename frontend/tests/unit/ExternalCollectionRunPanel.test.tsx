@@ -185,7 +185,7 @@ describe("ExternalCollectionRunPanel", () => {
     await waitFor(() => expect(calls.some((call) => call.url.includes("/execution/start"))).toBe(true));
     const startCall = calls.find((call) => call.url.includes("/execution/start"));
     expect(JSON.parse(startCall!.init!.body as string)).toEqual({
-      confirmed: false,
+      confirmed: true,
       selectedRequestIds: ["item-1", "item-2"],
     });
   });
@@ -202,7 +202,7 @@ describe("ExternalCollectionRunPanel", () => {
     await waitFor(() => expect(calls.some((call) => call.url.includes("/execution/start"))).toBe(true));
     const startCall = calls.find((call) => call.url.includes("/execution/start"));
     expect(JSON.parse(startCall!.init!.body as string)).toEqual({
-      confirmed: false,
+      confirmed: true,
       selectedRequestIds: ["item-1"],
     });
   });

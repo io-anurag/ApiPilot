@@ -7,6 +7,7 @@ import { BodyEditor } from "./BodyEditor";
 import { splitPastedUrl } from "./chainEditing";
 import { CheckRows } from "./CheckRows";
 import { ExtractorRows } from "./ExtractorRows";
+import { HTTP_REQUEST_HEADERS } from "../httpRequestHeaders";
 import { KeyValueRows } from "./KeyValueRows";
 import { ReferenceField, type ReferenceSuggestion } from "./ReferenceField";
 
@@ -146,7 +147,7 @@ export function StepEditor({
           </div>
           <div>
             <h4 className="mb-1 text-sm font-semibold">Headers</h4>
-            <KeyValueRows label="Headers" rows={step.headers} suggestions={suggestions} addLabel="+ Add header" refuseName={headerRefusal} onChange={(headers) => edit({ headers })} onCommit={onCommit} />
+            <KeyValueRows label="Headers" rows={step.headers} suggestions={suggestions} addLabel="+ Add header" refuseName={headerRefusal} nameOptions={HTTP_REQUEST_HEADERS} onChange={(headers) => edit({ headers })} onCommit={onCommit} />
           </div>
           <div>
             <h4 className="mb-1 text-sm font-semibold">Body</h4>

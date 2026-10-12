@@ -170,6 +170,7 @@ describe("ReferenceField", () => {
     expect(list).toHaveClass("fixed");
     expect(list.style.top).toBe("134px");
     expect(list.style.left).toBe("40px");
-    expect(list.style.width).toBe("300px");
+    // A narrow field still gets a list wide enough that names do not wrap.
+    expect(list.style.width).toBe("448px");
   });
 });

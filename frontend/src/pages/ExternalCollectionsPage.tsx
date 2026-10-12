@@ -414,6 +414,11 @@ export function ExternalCollectionsPage({
     onOpenCoverage && coverage ? (
       <CoverageEntryCard entry={coverage} onOpen={onOpenCoverage} variant="panel" />
     ) : null;
+  // On the Run step the same card sits inside the launch card, with Load test instead.
+  const coverageInline =
+    onOpenCoverage && coverage ? (
+      <CoverageEntryCard entry={coverage} onOpen={onOpenCoverage} variant="inline" />
+    ) : undefined;
 
   return (
     <div className="space-y-5">
@@ -495,7 +500,7 @@ export function ExternalCollectionsPage({
         />
       )}
 
-      {step !== "collection" && step !== "results" && coverageEntry}
+      {step !== "collection" && step !== "results" && step !== "run" && coverageEntry}
 
       {step === "review" && selected && !collectionView && (
         viewError ? (
@@ -630,6 +635,8 @@ export function ExternalCollectionsPage({
           // Without a specification Coverage can only explain that it has nothing to show, so the
           // results do not offer it (the entry card beside the run flow says why instead).
           onOpenCoverage={coverage?.status === "no-spec" ? undefined : onOpenCoverage}
+          coverageSlot={coverageInline}
+          onOpenVariables={() => setRequestedStep("review")}
           openRunId={openRunId}
           onOpenRunHandled={() => setOpenRunId(undefined)}
           onConfirmed={() =>

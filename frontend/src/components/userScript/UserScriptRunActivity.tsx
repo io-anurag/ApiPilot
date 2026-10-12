@@ -9,6 +9,7 @@ import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import { runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import { LOAD_ORIGIN } from "./UserScriptRunTrigger";
+import { formatTimeUtc } from "../../dateTime";
 
 /**
  * A script's live run, its failure message, its report and its run history (AP-034 FR-019,
@@ -47,7 +48,7 @@ export function UserScriptRunActivity({
             key={run.id}
             kind="user-script"
             runId={run.id}
-            meta={`Run ${run.id.slice(0, 8)} · ${run.snapshot.scriptName} · started ${new Date(run.startedAt).toLocaleTimeString()}`}
+            meta={`Run ${run.id.slice(0, 8)} · ${run.snapshot.scriptName} · started ${formatTimeUtc(run.startedAt)}`}
             actions={
               <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void cancel()}>
                 {cancelling || run.cancelRequested ? "Cancelling…" : "Cancel run"}

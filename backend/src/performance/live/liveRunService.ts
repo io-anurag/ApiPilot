@@ -56,6 +56,7 @@ function storedSnapshot(run: StoredK6Run, cursor: LiveCursor): LiveRunSnapshot {
       kind: run.kind,
       state: stateOf(run.status),
       elapsedMs,
+      startedAt: run.startedAt,
       plannedDurationMs: run.plannedDurationMs,
       plannedRequests: null,
       totals: { requests, failures },

@@ -19,6 +19,9 @@ export function buildK6Args(runDir: string): string[] {
     "--no-usage-report",
     "--quiet",
     "--no-color",
+    // JSON log lines, so a console line the script writes (a sampled failure, AP-049) parses reliably.
+    "--log-format",
+    "json",
     "--out",
     `json=${path.join(runDir, "metrics.ndjson")}`,
     path.join(runDir, "script.js"),

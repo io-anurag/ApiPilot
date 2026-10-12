@@ -76,7 +76,7 @@ describe("renderChainScript", () => {
     plan.chains[0].steps[4] = { ...plan.chains[0].steps[4], checks: [{ id: "k3", kind: "field-equals", path: "items[0].id", expected: { type: "text", value: "{{customer_id}}" } }] };
     const script = render(plan).script;
     const tables = new Function(`${script.slice(script.indexOf("const SETUP_STEPS"), script.indexOf("const DATA ="))} return { SETUP_STEPS, CHAINS };`)() as {
-      SETUP_STEPS: { id: string; needs: string[]; readsBody: boolean }[];
+      SETUP_STEPS: { id: string; needs: string[] }[];
       CHAINS: { steps: { id: string; uses: string[]; refreshFrom: string[]; needs: string[]; extractors: unknown[]; checks: { path: unknown[] }[] }[] }[];
     };
     expect(tables.SETUP_STEPS.map((s) => [s.id, s.needs])).toEqual([["s1", ["baseUrl", "client_id", "client_secret"]]]);

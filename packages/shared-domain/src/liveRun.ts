@@ -58,6 +58,34 @@ export interface RecentRequest {
   durationMs: number;
 }
 
+/** How many failed requests the live view keeps, newest first. */
+export const LIVE_RECENT_FAILURE_LIMIT = 15;
+/** The most response text kept for one failed request, in characters, before masking. */
+export const LIVE_FAILURE_BODY_LIMIT = 2048;
+
+/**
+ * What a failed request's response shows. Held in memory for the live view only: it is never stored,
+ * reported or logged. Text has had secret values and credential-looking fields masked.
+ */
+export type FailureResponse =
+  | { kind: "text"; contentType: string | null; text: string; truncated: boolean }
+  | { kind: "empty"; contentType: string | null }
+  /** No response arrived: the connection failed or the request timed out. */
+  | { kind: "none-received" }
+  /** Not kept, because the plan uses secret data set columns and the response could echo one. */
+  | { kind: "withheld"; reason: "secret-data-columns" };
+
+/** A failed request sampled for the live view (at most one per second per virtual user). */
+export interface RecentFailure {
+  second: number;
+  chain: string;
+  method: string;
+  path: string;
+  /** Null when no response was received. */
+  status: number | null;
+  response: FailureResponse;
+}
+
 export interface LiveChainRow {
   id: string;
   label: string;
@@ -77,6 +105,8 @@ export interface LiveRunSnapshot {
   kind: LiveRunKind;
   state: LiveRunState;
   elapsedMs: number;
+  /** When the run started (ISO 8601, UTC); each request's `second` is measured from it. */
+  startedAt?: string;
   /** k6 kinds only. */
   plannedDurationMs: number | null;
   /** Collection only. */
@@ -90,6 +120,8 @@ export interface LiveRunSnapshot {
   series: LiveSeries;
   /** Newest first, at most `LIVE_RECENT_REQUEST_LIMIT`. */
   recent: RecentRequest[];
+  /** Request-chain runs only, newest first, at most `LIVE_RECENT_FAILURE_LIMIT`; a sample, not every failure. Absent once the run is no longer held in memory. */
+  recentFailures?: RecentFailure[];
   /** Name of the request being sent (collection only). */
   inFlight: string | null;
   /** Cursor for the next poll. */

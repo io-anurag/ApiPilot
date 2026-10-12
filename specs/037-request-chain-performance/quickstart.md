@@ -116,6 +116,13 @@ separately from unexpected statuses. Chains were not cut short by a failed check
 4. Finish the guided workflow to Postman generation with one approved workflow, and seed from the
    Performance Testing stage. **Expected:** one chain for the workflow, with its variables as
    extractors and `{{name}}` references, and one single-step chain for each other operation.
+5. Hand the guided collection off to Import & Run Collection. Save a custom JSON request body and
+   environment values, choose a request order and run the collection. Return to the guided
+   Performance Testing stage and create a plan. **Expected:** the saved body and latest run's
+   request selection/order are retained, and the collection's values, base URL, tier and delay
+   are copied into the plan's target environment. Performance requests and environment remain
+   editable without changing the collection. Choosing another environment or None overrides the
+   copy; unsupported scripts remain in the seeding report.
 
 ## Scenario 7: CSV data sets (P2, US6, SC-009) **real k6**
 

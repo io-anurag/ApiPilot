@@ -92,7 +92,7 @@ export interface ChainPlanSession {
 
 export type ChainPlanSessionState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; session: ChainPlanSession };
 
-export function useChainPlanSession(planId: string, onOpenPlan?: (planId: string) => void): ChainPlanSessionState {
+export function useChainPlanSession(planId: string, onOpenPlan?: (planId: string) => void, initialReportRunId?: string): ChainPlanSessionState {
   const [view, setView] = useState<ChainPlanView | null>(null);
   const [draft, setDraftState] = useState<ChainPlan | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -108,7 +108,7 @@ export function useChainPlanSession(planId: string, onOpenPlan?: (planId: string
   const saving = useRef(false);
   const queued = useRef(false);
   const runsClient = useMemo(() => chainRunsClient(planId), [planId]);
-  const runs = usePerformanceRuns(runsClient);
+  const runs = usePerformanceRuns(runsClient, initialReportRunId);
 
   const setDraft = useCallback((plan: ChainPlan) => {
     draftRef.current = plan;

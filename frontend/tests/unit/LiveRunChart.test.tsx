@@ -189,3 +189,21 @@ describe("chartScale", () => {
     expect(timeSpan(10, 1, null)).toBe(11);
   });
 });
+
+describe("LiveRunChart: actual time", () => {
+  const series = { fromSecond: 0, bucketSeconds: 1, points: [livePoint(0), livePoint(15), livePoint(30)] };
+
+  it("labels the time axis, the readout and the table with the UTC time of each second when the run's start is known", () => {
+    render(<LiveRunChart series={series} thinned={false} startedAt="2026-10-12T13:34:10.000Z" />);
+    const ticks = screen.getAllByText(/^\d\d:\d\d:\d\d$/);
+    expect(ticks.map((tick) => tick.textContent)).toEqual(expect.arrayContaining(["13:34:10", "13:34:25", "13:34:40"]));
+    expect(screen.getAllByText("Time (UTC)").length).toBeGreaterThan(0);
+    expect(screen.getByText(/^At 13:34:40 UTC/)).toBeInTheDocument();
+    expect(screen.queryByText("Elapsed time (m:ss)")).not.toBeInTheDocument();
+  });
+
+  it("keeps the elapsed time when the start is not known", () => {
+    render(<LiveRunChart series={series} thinned={false} />);
+    expect(screen.getAllByText("Elapsed time (m:ss)").length).toBeGreaterThan(0);
+  });
+});
