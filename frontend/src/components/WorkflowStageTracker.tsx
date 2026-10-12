@@ -160,6 +160,9 @@ export const REVISABLE_STAGES = new Set<WorkflowStageId>([
 ]);
 
 const READ_ONLY_VIEWABLE_STATUSES = new Set<StageStatus>([
+  // A non-active-stage that is still `active` is a run continuing in the background (AI
+  // enhancement after early reveal); its live progress view is worth opening.
+  "active",
   "complete",
   "stale",
   "skipped",

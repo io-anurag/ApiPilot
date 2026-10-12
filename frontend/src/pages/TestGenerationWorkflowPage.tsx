@@ -217,6 +217,21 @@ export function TestGenerationWorkflowPage({
   const lastHandoffKey = useRef<string | null>(null);
   useWorkflowStageRefresh(workflow, setWorkflow, isVisible);
 
+  // A refresh (not a user action) can move the active stage on while the user is still looking at
+  // the stage that was active — dependency analysis finishing. Follow it, but never pull the
+  // user away from a stage they deliberately navigated to.
+  const previousActiveStageId = useRef<WorkflowStageId | null>(null);
+  const activeStageId = workflow?.activeStageId ?? null;
+  useEffect(() => {
+    const previous = previousActiveStageId.current;
+    previousActiveStageId.current = activeStageId;
+    // Scoped to dependencyAnalysis: other stages (notably postmanGeneration) deliberately keep
+    // the user on their success screen until they choose to continue.
+    if (previous === "dependencyAnalysis" && activeStageId && previous !== activeStageId) {
+      setViewedStageId((viewed) => (viewed === previous ? activeStageId : viewed));
+    }
+  }, [activeStageId]);
+
   function maybeHandoff(wf: TestGenerationWorkflow) {
     if (wf.activeStageId !== "execution" || !wf.postmanArtifact || !onHandoffToExecution)
       return;
@@ -631,11 +646,29 @@ export function TestGenerationWorkflowPage({
                 batchOutcomes={workflow.stages.aiEnhancement.batchOutcomes}
                 onAdvanced={handleAdvanced}
               />
+            ) : workflow.stages.aiEnhancement.status === "active" &&
+              workflow.stages.aiEnhancement.progress ? (
+              // Run still going server-side after the workflow already advanced to scenarioReview
+              // (early reveal). There is no outcome to summarize yet, so resume the live progress
+              // view instead of rendering nothing.
+              <AiEnhancementStage
+                activeProgress={workflow.stages.aiEnhancement.progress}
+                onAdvanced={handleAdvanced}
+              />
             ) : (
               <AiEnhancementOutcomeSummary workflow={workflow} />
             ))}
           {displayStageId === "dependencyAnalysis" && workflow.dependencyAnalysis && (
             <DependencyAnalysisSummary dependencyAnalysis={workflow.dependencyAnalysis} />
+          )}
+          {displayStageId === "dependencyAnalysis" && !workflow.dependencyAnalysis && (
+            <output
+              data-testid="dependency-analysis-in-progress"
+              className="block rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-muted"
+            >
+              Dependency analysis is running. This page updates automatically when it finishes;
+              with the local AI model it can take a couple of minutes.
+            </output>
           )}
           {displayStageId === "scenarioReview" && workflow.reviewWorkspace && (
             <ScenarioReviewStage workflow={workflow} onAdvanced={handleAdvanced} onOpenCoverage={onOpenCoverage} />

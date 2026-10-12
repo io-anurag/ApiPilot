@@ -889,3 +889,143 @@ describe("TestGenerationWorkflowPage freshness (specs/048)", () => {
     expect(executionStatusText()).not.toContain("Active");
   });
 });
+
+/** Revisiting and following stages while server-side work is still running in the background. */
+describe("TestGenerationWorkflowPage background stages", () => {
+  const REFRESH_MS = 5000;
+
+  const aiProgress = {
+    totalBatches: 0,
+    batches: [],
+    startedAt: "2026-01-01T00:00:00.000Z",
+    phase: "preparing",
+    cancelRequested: false,
+  };
+
+  /** AI enhancement still running after the workflow already advanced to scenarioReview. */
+  function aiRunningWorkflow(updatedAt = "2026-01-01T00:00:00.000Z") {
+    const wf = workflowAt("scenarioReview", { updatedAt });
+    wf.stages.aiEnhancement = {
+      stageId: "aiEnhancement",
+      status: "active",
+      progress: aiProgress,
+    } as (typeof wf.stages)["aiEnhancement"];
+    return wf;
+  }
+
+  function stubServer(server: { current: unknown }) {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? "GET") !== "GET") throw new Error("Unexpected non-GET fetch");
+      return { ok: true, status: 200, json: () => Promise.resolve({ workflow: server.current }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the live progress view for an AI Enhancement run still in flight, not a blank screen", async () => {
+    stubServer({ current: aiRunningWorkflow() });
+    render(<TestGenerationWorkflowPage isVisible />);
+    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+
+    openPhase("design");
+    const chip = screen.getByTestId("stage-status-aiEnhancement");
+    expect(chip).toHaveTextContent("Active — view");
+    fireEvent.click(chip);
+
+    expect(await screen.findByTestId("ai-enhancement-run-progress")).toBeInTheDocument();
+    // Resumes observing the run; it must not offer to start a second one.
+    expect(screen.queryByRole("button", { name: "Enhance with AI" })).not.toBeInTheDocument();
+  });
+
+  it("keeps refreshing while AI enhancement runs in the background, and stops once it settles", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const server = { current: aiRunningWorkflow() as unknown };
+    const fetchMock = stubServer(server);
+    render(<TestGenerationWorkflowPage isVisible />);
+    await waitFor(() => expect(screen.getByTestId("workflow-stage-tracker")).toBeInTheDocument());
+
+    const before = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
+
+    const settled = workflowAt("scenarioReview", { updatedAt: "2026-01-01T00:05:00.000Z" });
+    settled.stages.aiEnhancement = { stageId: "aiEnhancement", status: "complete" };
+    server.current = settled;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
+    });
+    openPhase("design");
+    await waitFor(() =>
+      expect(screen.getByTestId("stage-status-aiEnhancement")).toHaveTextContent("Complete"),
+    );
+
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS * 3);
+    });
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("explains a running Dependency Analysis, then follows the workflow to Workflow Review when it finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const server = {
+      current: workflowAt("dependencyAnalysis", { updatedAt: "2026-01-01T00:00:00.000Z" }) as unknown,
+    };
+    stubServer(server);
+    render(<TestGenerationWorkflowPage isVisible />);
+
+    expect(await screen.findByTestId("dependency-analysis-in-progress")).toBeInTheDocument();
+
+    const done = workflowAt("workflowReview", {
+      updatedAt: "2026-01-01T00:05:00.000Z",
+      dependencyAnalysis: {
+        workflows: [],
+        manualConfirmationCandidates: [],
+        graph: { relationships: [] },
+        cycles: [],
+      },
+    });
+    done.stages.dependencyAnalysis = { stageId: "dependencyAnalysis", status: "complete" };
+    server.current = done;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-position")).toHaveTextContent("Workflow Review"),
+    );
+    expect(screen.queryByTestId("dependency-analysis-in-progress")).not.toBeInTheDocument();
+  });
+
+  it("does not pull the user off another stage's screen when the active stage advances on refresh", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Postman is complete but the user has not continued yet, so the page keeps polling.
+    const onPostman = workflowAt("postmanGeneration", { updatedAt: "2026-01-01T00:00:00.000Z" });
+    onPostman.stages.postmanGeneration = { stageId: "postmanGeneration", status: "complete" };
+    const server = { current: onPostman as unknown };
+    const fetchMock = stubServer(server);
+    render(<TestGenerationWorkflowPage isVisible />);
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-position")).toHaveTextContent("Postman Generation"),
+    );
+
+    // Server moves on (e.g. Postman Generation finished elsewhere); the page must stay put until
+    // the user chooses to continue.
+    const advanced = workflowAt("execution", { updatedAt: "2026-01-01T00:05:00.000Z" });
+    advanced.stages.postmanGeneration = { stageId: "postmanGeneration", status: "complete" };
+    server.current = advanced;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
+    });
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+    expect(screen.getByTestId("workflow-position")).toHaveTextContent("Postman Generation");
+  });
+});

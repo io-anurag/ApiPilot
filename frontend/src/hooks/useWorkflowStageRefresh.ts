@@ -6,11 +6,18 @@ import { fetchCurrentWorkflow } from "../services/testGenerationWorkflowClient";
 export const WORKFLOW_REFRESH_INTERVAL_MS = 5000;
 
 /**
- * Whether a run elsewhere could still change what the tracker shows: Postman Generation is done
+ * Whether the server could still change what the tracker shows: Dependency Analysis is running,
+ * or Postman Generation is done
  * (so the Execute stages are reachable) and Execution or Performance Testing has not finished
  * (Execution counts as finished once complete or skipped).
  */
 export function isWaitingOnRun(workflow: TestGenerationWorkflow): boolean {
+  // Dependency analysis runs server-side after finalize and can outlive the finalize request
+  // (e.g. the page was remounted); its result only arrives by asking the server again.
+  if (workflow.stages.dependencyAnalysis.status === "active") return true;
+  // AI enhancement keeps running after the workflow advances to scenario review (early reveal), so
+  // the review workspace keeps gaining scenarios while no AI Enhancement screen is mounted.
+  if (workflow.stages.aiEnhancement.status === "active") return true;
   if (workflow.stages.postmanGeneration.status !== "complete") return false;
   const execution = workflow.stages.execution.status;
   const executionDone = execution === "complete" || execution === "skipped";
