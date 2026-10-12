@@ -140,6 +140,13 @@ const AI_ENHANCEMENT_ONLY_TRANSITIONS: ReadonlySet<string> = new Set([
  */
 const EXECUTION_ONLY_TRANSITIONS: ReadonlySet<string> = new Set(["active->skipped", "skipped->active"]);
 
+/**
+ * `performanceTesting` has no screen that makes it `active`, so a finished run completes it
+ * directly from `not-yet-reached` rather than through an Active state nobody sees
+ * (specs/048-workflow-run-stage-status research D4).
+ */
+const PERFORMANCE_ONLY_TRANSITIONS: ReadonlySet<string> = new Set(["not-yet-reached->complete"]);
+
 function isValidTransition(
   stageId: WorkflowStageId,
   from: StageStatus,
@@ -149,6 +156,7 @@ function isValidTransition(
   const transition = `${from}->${to}`;
   if (GENERAL_TRANSITIONS.has(transition)) return true;
   if (stageId === "aiEnhancement" && AI_ENHANCEMENT_ONLY_TRANSITIONS.has(transition)) return true;
+  if (stageId === "performanceTesting" && PERFORMANCE_ONLY_TRANSITIONS.has(transition)) return true;
   return stageId === "execution" && EXECUTION_ONLY_TRANSITIONS.has(transition);
 }
 

@@ -293,6 +293,20 @@ accepts `{ "aiDependencyAnalysis": boolean }` (omitted means `true`); `false` wi
 from `runDependencyAnalysis`, so only deterministic matching runs and the result records
 `aiOutcome: "skipped"`. A non-boolean value is `400 invalid_request`.
 
+Two Execute stages are completed by the backend at the point a run settles (AP-048,
+`backend/src/testGenerationWorkflow/runCompletion.ts`), so the status is right whether or not a screen is
+open. `runUploadedCollectionExecution` calls `completeExecutionForUpload` after settling a run `completed`, with
+the upload's `sourceWorkflowId` (set from the optional `workflowId` field of `POST /api/external-collections`, stored
+in `uploaded_collections.source_workflow_id`, sent by the form only while both files are the hand-off's own `File`
+objects). `startPerformanceRun`'s settle calls `completePerformanceForRun` for any final state, with the run
+snapshot's seed source, inside `runWithSession` because k6 callbacks have no request context. The rules
+(`shouldCompleteExecution`, `shouldCompletePerformance`) are pure; the appliers check the current status first so
+repeats are idempotent, and a failed update is logged (`stage_update_failed`), never thrown, so a settled run is
+never changed. `performanceTesting` gained one transition, `not-yet-reached → complete`. The guided workflow page,
+which stays mounted while hidden, receives `isVisible` from `App.tsx` and `useWorkflowStageRefresh` refetches the
+workflow when it becomes visible and every 5 s while visible, the browser tab is not hidden and a run could still
+change it; a response not newer than the held workflow, a `null` or a failure is ignored.
+
 Every stage is guarded by its required output. Stage state is visible as not-yet-reached, active,
 complete, stale, or skipped; skipped AI enhancement may become active again before scenario review
 is finalized. Changing an upstream decision invalidates dependent completed stages, marks them

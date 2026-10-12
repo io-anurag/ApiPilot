@@ -297,6 +297,10 @@ export class SqliteConnection {
     this.ensureColumn("performance_runs", "chain_plan_id", "TEXT");
     this.ensureColumn("performance_runs", "plan_document_encrypted", "BLOB");
     this.ensureColumn("performance_runs", "plan_document_iv", "BLOB");
+
+    // specs/048-workflow-run-stage-status D1: the guided workflow an upload was handed over from.
+    // Nullable: an upload from before this column, or one made directly, has no source workflow.
+    this.ensureColumn("uploaded_collections", "source_workflow_id", "TEXT");
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

@@ -3641,3 +3641,18 @@ Implementation
     - Validation (2026-10-12): the related backend and frontend suites pass (18 files, 161 tests); `npm run lint` and
       `npm run build` pass. The full `npm test` was not run, and the UI was not exercised in a browser.
     - Version bumped to 19.43.0 (root, backend, frontend, shared-domain).
+79. **AP-048 Guided workflow run stage status; version 19.44.0 (2026-10-12).**
+    - The guided workflow's Execution and Performance Testing stages now show **Complete** when a qualifying run finishes. The
+      backend decides where the run settles (`runCompletion.ts`): a `completed` Import & Run run of the upload made from the
+      workflow's hand-off completes Execution (a cancelled run, an unlinked upload, a hand-picked copy and a skipped Execution do
+      not); a request-chain run seeded from the workflow's specification (title or file name) in any final state completes
+      Performance Testing once Postman Generation is complete. Updates are idempotent and a failed update is logged, never
+      allowed to change the run. No run content is copied into the workflow.
+    - Additive contract changes: optional `workflowId` on `POST /api/external-collections` (`400 invalid_request` when malformed,
+      stored as `uploaded_collections.source_workflow_id`, never returned) and one new stage transition,
+      `performanceTesting` `not-yet-reached → complete`.
+    - The hidden guided workflow page refetches when it becomes visible and every 5 seconds while visible and still waiting
+      (`useWorkflowStageRefresh`), so the tracker updates without a reload.
+    - Spec, plan, tasks and contract: `specs/048-workflow-run-stage-status/`. Documentation: `specs/009` data model and API contract,
+      `specs/026` upload contract, `docs/USER_MANUAL.md` sections 3.10 and 3.11, `docs/architecture.md` "Workflow orchestration".
+    - Version bumped to 19.44.0 (root, backend, frontend, shared-domain).

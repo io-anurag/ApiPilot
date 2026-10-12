@@ -9,16 +9,21 @@ export interface ImportPreload {
   name: string;
   collectionFile: File;
   environmentFile: File;
+  /** The guided workflow this hand-off came from. Sent with the upload only while both files are
+   * still the ones built here (specs/048-workflow-run-stage-status). */
+  workflowId?: string;
 }
 
 export function toImportPreload(
   postmanArtifact: ExportResult,
   specTitle: string | undefined,
   token: number,
+  workflowId?: string,
 ): ImportPreload {
   const filenames = artifactFilenames(specTitle);
   return {
     token,
+    workflowId,
     name: specTitle?.trim() || "Generated collection",
     collectionFile: new File(
       [`${JSON.stringify(postmanArtifact.collection, null, 2)}\n`],

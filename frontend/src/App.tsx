@@ -252,10 +252,11 @@ export function App() {
   function handleHandoffToExecution(
     postmanArtifact: ExportResult,
     specTitle: string | undefined,
+    workflowId: string,
   ) {
     importPreloadTokenRef.current += 1;
     setImportPreload(
-      toImportPreload(postmanArtifact, specTitle, importPreloadTokenRef.current),
+      toImportPreload(postmanArtifact, specTitle, importPreloadTokenRef.current, workflowId),
     );
     setActiveTab("import-collection");
     setTabsVisible(true);
@@ -310,6 +311,7 @@ export function App() {
                     onOpenChainPlan={handleOpenChainPlan}
                     onOpenCoverage={handleOpenCoverage}
                     stageRequest={guidedStageRequest}
+                    isVisible={started && activeTab === "guided-workflow"}
                   />
                 </LazyView>
               </div>

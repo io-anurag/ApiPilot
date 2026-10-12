@@ -9,6 +9,7 @@ import { findEditedItemIds } from "./editedItems";
 import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
 import { toStoredVariableValues } from "./variableValueText";
 import { pathOfTemplate } from "../performance/live/recentRing";
+import { completeExecutionForUpload } from "../testGenerationWorkflow/runCompletion";
 import { beginCollectionLive, setCollectionInFlight } from "./liveRunState";
 
 const logger = createLogger("externalCollections.runUploadedCollectionExecution");
@@ -162,6 +163,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
     }
 
     settleRun(runId, "completed");
+    completeExecutionForUpload(uploadedCollection.sourceWorkflowId, "completed");
   } catch (error) {
     logger.error("uploaded_collection_execution_run_error", {
       runId,
@@ -169,5 +171,6 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
     });
     appendNotAttempted(runId, orderedItems.slice(attempted), "run-ended-before-reached");
     settleRun(runId, "completed");
+    completeExecutionForUpload(uploadedCollection.sourceWorkflowId, "completed");
   }
 }

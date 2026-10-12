@@ -347,6 +347,14 @@ The **Execution** chip in the stage tracker shows a short notice with a **Go to 
 Run Collection** button, in case you reload the page or navigate away before the
 hand-off.
 
+**When Execution shows Complete.** Once you submit the upload from the hand-off and a run of it
+finishes (every request attempted, or stopped by an error; a cancelled run does not count), the
+Execution stage in the stage tracker changes to **Complete** by itself. A collection you pick by
+hand from the file picker, even a copy of the same files, is not linked to the workflow, and neither
+is one you replaced either file of before submitting. A skipped Execution stays skipped. The guided
+workflow shows the change when you switch back to it, and within about five seconds if it is on
+screen.
+
 ### 3.11 Performance Testing (optional)
 
 Performance Testing opens once the Postman collection is generated: choose **Set up a performance
@@ -357,6 +365,12 @@ that use it, then one single-step chain for each other operation in the API revi
 Credential requests become **Once before load** steps. The plan opens in **Performance**,
 where you edit, run and report it ([section 5b](#5b-performance-plans-request-chains)); it is never
 re-derived from the workflow.
+
+**When Performance Testing shows Complete.** Once Postman Generation is complete, a performance run
+of a request-chain plan seeded from this workflow's specification (from the guided workflow, or
+from the same specification file) that reaches any final state (completed, failed or cancelled)
+marks the stage **Complete**. Plans from another specification, from a collection, or built from
+nothing do not.
 
 The stage also lists the plans already created from the guided workflow, each with **Open**. Runs
 recorded from the guided plan this stage held before version 19.19.0 are listed read only under
