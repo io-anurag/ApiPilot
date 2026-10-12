@@ -40,8 +40,19 @@ Body:
           | { "kind": "collection", "collectionId": "…", "orderedRequestIds": ["…"] },
   "environmentId": "…" }
 ```
+
 - **Optional environment.** `environmentId` is optional. It names where literal credentials found
-  while seeding are moved (research R8). Without it they are dropped and listed.
+  while seeding are moved (research R8). For specification and workflow sources, without it they
+  are dropped and listed. For a collection source, omitting it copies the collection's current
+  saved variable values, tier and request delay into a new session-owned environment and selects
+  it as the plan's target. The base URL uses the same leading-variable selection as the request
+  seeder, preserving a configured path prefix; for literal request URLs it uses the configured
+  `baseUrl` or the first selected HTTP(S) origin. A missing base URL remains empty for the user to
+  configure, never fabricated. The request delay becomes the plan's initial think time. An explicit
+  environment ID uses that environment instead; `environmentId: null` explicitly opts out of the
+  copy and retains the credential-dropping behavior. Values remain in encrypted environment
+  storage, never in the plan response or script. Further edits to the plan or its copied environment
+  do not mutate the source collection, and later source edits do not change the copy.
 - **Source kinds.**
   - `specification` uses the session's quick test: `404 quick_test_not_found` if none.
     `selectedOperationKeys` (amendment 2026-10-04, version 19.21.0) limits the seed to those

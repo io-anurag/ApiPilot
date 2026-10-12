@@ -309,6 +309,14 @@ editing the collection afterwards does not change the plan.
 4. **Given** a seeded plan, **When** its source changes (the collection is edited, the guided
    workflow's approvals change, or a new specification is uploaded), **Then** the plan does not
    change; the engineer may seed a new plan explicitly.
+5. **Given** a collection configured in Import & Run Collection, including one handed off from
+   the guided workflow, **When** the engineer creates a request-chain plan, **Then** its saved
+   request edits, selected requests and run order are used, and its saved values, base URL, tier
+   and request delay are copied into a separate target environment by default. The delay sets
+   the plan's initial think time; performance load and thresholds keep their own defaults.
+   The engineer can choose another environment or none, and every part of the resulting plan
+   and copied environment remains independently editable. Unsupported scripts remain listed in
+   the seeding report rather than executed or silently translated.
 
 ---
 

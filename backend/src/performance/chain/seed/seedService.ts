@@ -1,6 +1,17 @@
-import type { ApiModel, ChainPlanView, Environment, MovedCredential } from "@apipilot/shared-domain";
+import {
+  CHAIN_PLAN_LIMITS,
+  ApiModel,
+  ChainPlanView,
+  Environment,
+  MovedCredential,
+} from "@apipilot/shared-domain";
 import { PlanSourceUnavailableError } from "../../../api/performanceHttp";
-import { getEnvironment, updateEnvironment } from "../../../execution/environmentStore";
+import {
+  createEnvironment,
+  getEnvironment,
+  listEnvironments,
+  updateEnvironment,
+} from "../../../execution/environmentStore";
 import { NoRequestsSelectedError } from "../../../externalCollections/errors";
 import { resolveRunOrder } from "../../../externalCollections/runOrder";
 import { parseStoredCollection } from "../../../externalCollections/uploadedCollectionParsing";
@@ -8,10 +19,12 @@ import { getUploadedCollection } from "../../../externalCollections/uploadedColl
 import { UnknownOperationKeyError } from "../../../testGenerationWorkflow/errors";
 import { normalizeOperationSelection } from "../../../testGenerationWorkflow/operationSelection";
 import { getCurrentWorkflow } from "../../../testGenerationWorkflow/workflowStore";
-import { InvalidChainPlanError } from "../../errors";
+import { InvalidChainPlanError, PlanLimitExceededError } from "../../errors";
+import { baseUrlVariableOf } from "../../collection/collectionValues";
 import { contextFromWorkflow } from "../../plan/buildPlan";
 import { contextFromQuickTest, getQuickTest } from "../../quick/quickTestStore";
-import { createPlan } from "../chainPlanStore";
+import { createPlan, listPlans } from "../chainPlanStore";
+import { withFingerprint } from "../savePlan";
 import { assembleSeededPlan, type SeedInput } from "./assembleSeededPlan";
 import { seedFromCollection } from "./seedFromCollection";
 import { seedFromSpecification } from "./seedFromSpecification";
@@ -85,11 +98,70 @@ function storeMoved(environment: Environment, moves: { stepId: string; location:
   return moves.map((move) => ({ stepId: move.stepId, location: move.location, valueName: move.valueName, environmentName: environment.name }));
 }
 
-export function seedPlan(input: { name: string; source: SeedSourceInput; environmentId?: string }, now: string): { view: ChainPlanView; movedCredentials: MovedCredential[]; reportItems: number } {
-  const environment = input.environmentId ? getEnvironment(input.environmentId) : null;
+function collectionEnvironment(
+  source: Extract<SeedSourceInput, { kind: "collection"; }>,
+  planName: string,
+): Environment {
+  if (listPlans().length >= CHAIN_PLAN_LIMITS.plansPerSession) {
+    throw new PlanLimitExceededError(
+      "plansPerSession",
+      "Delete a plan before creating another.",
+      409,
+    );
+  }
+  const stored = getUploadedCollection(source.collectionId);
+  const collection = parseStoredCollection(stored.collection);
+  const selected = new Set(source.orderedRequestIds);
+  const urls: string[] = [];
+  collection.forEachItem((item) => {
+    if (selected.has(item.id)) urls.push(item.request.url.toString());
+  });
+  const baseVariable = baseUrlVariableOf(urls);
+  const literalUrl = urls.find(
+    (url) => URL.canParse(url) && ["http:", "https:"].includes(new URL(url).protocol),
+  );
+  const literalBaseUrl = literalUrl ? new URL(literalUrl).origin : "";
+  const baseUrl =
+    baseVariable === null
+      ? (stored.variableValues.baseUrl ?? literalBaseUrl)
+      : (stored.variableValues[baseVariable] ?? "");
+  const names = new Set(listEnvironments().map((environment) => environment.name));
+  const prefix = `${planName} environment`.slice(0, 110);
+  let name = prefix;
+  let number = 2;
+  while (names.has(name)) {
+    name = `${prefix} (${number})`;
+    number += 1;
+  }
+  return createEnvironment({
+    name,
+    tier: stored.tier,
+    baseUrl,
+    variableValues: { ...stored.variableValues },
+    requestDelayMs: stored.requestDelayMs,
+  });
+}
+
+export function seedPlan(
+  input: { name: string; source: SeedSourceInput; environmentId?: string | null },
+  now: string,
+): { view: ChainPlanView; movedCredentials: MovedCredential[]; reportItems: number } {
+  const chosenEnvironment = input.environmentId ? getEnvironment(input.environmentId) : null;
   const read = readSource(input.source, input.name, now);
+  const inheritCollection =
+    input.source.kind === "collection" && input.environmentId === undefined;
+  const environment =
+    inheritCollection && input.source.kind === "collection"
+      ? collectionEnvironment(input.source, input.name)
+      : chosenEnvironment;
   const seeded = assembleSeededPlan({ ...read, environment: environment ? { name: environment.name, valueNames: Object.keys(environment.variableValues) } : null });
-  const plan = { ...seeded.plan, targetEnvironmentId: environment?.id ?? null };
+  const plan = withFingerprint({
+    ...seeded.plan,
+    targetEnvironmentId: environment?.id ?? null,
+    ...(inheritCollection && environment
+      ? { thinkTimeMs: environment.requestDelayMs }
+      : {}),
+  });
   const movedCredentials = environment ? storeMoved(environment, seeded.moves) : [];
   const view = createPlan(plan);
   return { view, movedCredentials, reportItems: plan.seedingReport?.items.length ?? 0 };

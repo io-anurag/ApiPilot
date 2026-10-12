@@ -25,14 +25,22 @@ export function SeedPlanDialog({
 }: Readonly<{ source: SeedSourceInput; defaultName: string; onSeeded: (planId: string) => void; onCancel: () => void }>) {
   const id = useId();
   const [name, setName] = useState(defaultName);
-  const [environmentId, setEnvironmentId] = useState("");
+  const [environmentId, setEnvironmentId] = useState(
+    source.kind === "collection" ? "collection" : "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
     setBusy(true);
     setError(null);
-    const result = await seedPlan({ name: name.trim(), source, ...(environmentId ? { environmentId } : {}) });
+    let environment: { environmentId?: string | null } = {};
+    if (source.kind === "collection" && environmentId !== "collection") {
+      environment = { environmentId: environmentId || null };
+    } else if (source.kind !== "collection" && environmentId) {
+      environment = { environmentId };
+    }
+    const result = await seedPlan({ name: name.trim(), source, ...environment });
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
@@ -48,8 +56,8 @@ export function SeedPlanDialog({
           Create request-chain plan
         </h2>
         <p className="text-sm text-muted">
-          Seeds a first draft from {SOURCE_TEXT[source.kind]}. Every part of every step stays editable, and the plan is never
-          re-derived from its source afterwards.
+          Seeds a first draft from {SOURCE_TEXT[source.kind]}. Every part of every step
+          stays editable, and the plan is never re-derived from its source afterwards.
         </p>
         <div className="space-y-1">
           <label htmlFor={`${id}-name`} className="text-sm font-medium">
@@ -57,7 +65,11 @@ export function SeedPlanDialog({
           </label>
           <input id={`${id}-name`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={name} onChange={(event) => setName(event.target.value)} />
         </div>
-        <EnvironmentForCredentials environmentId={environmentId} onChange={setEnvironmentId} />
+        <EnvironmentForCredentials
+          environmentId={environmentId}
+          onChange={setEnvironmentId}
+          offerCollectionSettings={source.kind === "collection"}
+        />
         {error && <ErrorState message={error} testId="seed-plan-error" />}
         <div className="flex justify-end gap-2">
           <button type="button" className={BUTTON_STYLES.secondary} onClick={onCancel}>

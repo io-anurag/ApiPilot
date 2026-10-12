@@ -733,6 +733,13 @@ directly in **Performance** (**Postman collection** source). The plan opens in
 **Performance** ([section 5b](#5b-performance-plans-request-chains)) and is never compared
 with the collection again: editing or removing the collection leaves it unchanged.
 
+**Collection settings (copy)** is selected by default when creating a plan. It carries the saved
+request edits and copies the current variable values, base URL, environment tier and request
+delay into a separate target environment. The request delay also becomes the plan's initial think
+time. This includes collections handed off from the Guided Workflow. You can choose another
+environment or none instead, then edit the plan and its environment without changing the collection.
+Load profile and thresholds are performance-specific and remain separately configurable.
+
 The run panel also lists the plans already created from collections, each with **Open**. The
 **Collection Performance Test** tab of earlier versions is gone; its runs are listed read only
 under **Earlier runs** in Performance.

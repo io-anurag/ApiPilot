@@ -167,7 +167,7 @@ export function createChainPlansRouter(deps: PerformanceTestingDependencies): Ro
     `${BASE}/seed`,
     chainRoute((req, res, startedAt) => {
       const body = (req.body ?? {}) as { name?: unknown; source?: unknown; environmentId?: unknown };
-      const environmentId = typeof body.environmentId === "string" && body.environmentId !== "" ? body.environmentId : undefined;
+      const environmentId = body.environmentId === null ? null : typeof body.environmentId === "string" && body.environmentId !== "" ? body.environmentId : undefined;
       const source = parseSeedSource(body.source);
       const { view, movedCredentials, reportItems } = seedPlan({ name: nameOf(body), source, environmentId }, deps.now().toISOString());
       logger.info("chain_plan_seeded", { planId: view.plan.id, sourceKind: source.kind, stepCount: stepCountOf(view.plan), reportItemCount: reportItems, movedCredentialCount: movedCredentials.length });

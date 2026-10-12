@@ -109,8 +109,11 @@ export const listPlans = () => chainRequest("listPlans", CHAIN_PLANS_BASE, undef
 
 export const createPlan = (name: string) => chainRequest("createPlan", CHAIN_PLANS_BASE, json("POST", { name }), toView);
 
-export const seedPlan = (input: { name: string; source: SeedSourceInput; environmentId?: string }) =>
-  chainRequest("seedPlan", `${CHAIN_PLANS_BASE}/seed`, json("POST", input), toSaved);
+export const seedPlan = (input: {
+  name: string;
+  source: SeedSourceInput;
+  environmentId?: string | null;
+}) => chainRequest("seedPlan", `${CHAIN_PLANS_BASE}/seed`, json("POST", input), toSaved);
 
 /**
  * AP-047 (specs/047-unified-performance-tab contracts/reselect-api.md): applies a changed operation
