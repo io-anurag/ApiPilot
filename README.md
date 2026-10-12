@@ -65,10 +65,10 @@ The following capabilities are implemented in the current repository:
 - Postman collection, environment, and artifact README generation from approved test intent.
 - OpenAPI parameter serialization for supported `style` and `explode` combinations, credential variables per distinct security scheme, resource-qualified path-parameter variables (`/users/{id}` → `{{user_id}}`), automatic producer-to-consumer chaining, and OAuth2 client-credentials token setup.
 - Explicit Newman execution, one request at a time, with cancellation, safety confirmation, request delays, and categorized pass/fail/not-attempted outcomes. In the UI, a generated collection runs through "Import & Run Collection" after the guided workflow hands it off; the guided workflow's own execution endpoints remain available over HTTP, where a request whose data prerequisite failed is held back as "dependency not met" and every result records its processing stage.
-- On-demand AI failure analysis of one failed request in an Import & Run Collection run (*implementation complete, AI evaluation pending*; see [Limitations](#limitations-and-roadmap)). Deterministic rules decide the likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", with a fixed High or Moderate strength and the rule that decided it. The local AI adds only a plain-language summary and suggested next steps, labelled as an inference. The redacted evidence behind the cause is shown, and if the AI is unavailable the cause and evidence are still shown and stored. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
+- On-demand AI failure analysis of one failed request in an Import & Run Collection run (_implementation complete, AI evaluation pending_; see [Limitations](#limitations-and-roadmap)). Deterministic rules decide the likely cause (specification mismatch, environment issue, or downstream-service issue) or "insufficient evidence", with a fixed High or Moderate strength and the rule that decided it. The local AI adds only a plain-language summary and suggested next steps, labelled as an inference. The redacted evidence behind the cause is shown, and if the AI is unavailable the cause and evidence are still shown and stored. When the failed request came from the session's current guided workflow, its operation, scenario, documented responses, and upstream workflow steps are attached as specification context. Analyses are stored with the run and never send a request to the target API.
 - k6 performance testing from the guided workflow (AP-029), a quick test from a specification (AP-032), a collection (AP-036), step edits (AP-033) and user-defined journeys (AP-035) were derived plans; AP-037 phase two (19.19.0) retired them. Those entry points now create request-chain plans (below), and runs recorded from the derived plans stay readable, with their reports unchanged, but cannot be run again or restored.
-- Run k6 Script (`specs/034-run-user-k6-script`, *implementation complete, manual browser walkthrough pending*): upload or write a k6 script, which ApiPilot checks before storing (allowlisted k6 built-ins only, no file access, no code built from text, no `handleSummary`). Confirm its exact content (bound to its SHA-256), map the names it reads to environment values, optionally replace its load with a profile, and run it with your own k6 on an explicit trigger, with a self-contained report grouped by k6 request name. Scripts, runs and results are stored encrypted. A script downloaded from any performance plan can be run here as your own.
-- Performance plans: request chains (`specs/037-request-chain-performance`, *implementation complete; phase one walkthrough done, phase two browser walkthrough pending*): a performance plan you own and edit freely, as in Postman or JMeter. It holds chains of concrete steps, each with its own method, URL, query, headers, body, expected statuses, extractors, checks, run frequency (every iteration, once per virtual user, once before load) and think time. A plan can start empty or be seeded once from the quick test's specification, the guided workflow's Performance Testing stage or selected collection requests, and is never re-derived from its source; each entry point lists the plans created from it. A shared plan check blocks the script while a value is used before it is extracted. Credentials typed as text move into a secret environment value. CSV data sets supply per-iteration or per-virtual-user rows. Plans and data sets are stored encrypted, and a run's report shows each chain, step, check and data set.
+- Run k6 Script (`specs/034-run-user-k6-script`, _implementation complete, manual browser walkthrough pending_): upload or write a k6 script, which ApiPilot checks before storing (allowlisted k6 built-ins only, no file access, no code built from text, no `handleSummary`). Confirm its exact content (bound to its SHA-256), map the names it reads to environment values, optionally replace its load with a profile, and run it with your own k6 on an explicit trigger, with a self-contained report grouped by k6 request name. Scripts, runs and results are stored encrypted. A script downloaded from any performance plan can be run here as your own.
+- Performance plans: request chains (`specs/037-request-chain-performance`, _implementation complete; phase one walkthrough done, phase two browser walkthrough pending_): a performance plan you own and edit freely, as in Postman or JMeter. It holds chains of concrete steps, each with its own method, URL, query, headers, body, expected statuses, extractors, checks, run frequency (every iteration, once per virtual user, once before load) and think time. A plan can start empty or be seeded once from the quick test's specification, the guided workflow's Performance Testing stage or selected collection requests, and is never re-derived from its source; each entry point lists the plans created from it. A shared plan check blocks the script while a value is used before it is extracted. Credentials typed as text move into a secret environment value. CSV data sets supply per-iteration or per-virtual-user rows. Plans and data sets are stored encrypted, and a run's report shows each chain, step, check and data set.
 - Per-browser session isolation using an unguessable HTTP-only cookie and a 60-minute idle eviction policy.
 - Local SQLite persistence for environments, encrypted credential-like values, execution history, and AI readiness/benchmark diagnostics.
 - Standalone import and execution of an externally-authored Postman collection and environment pair — no OpenAPI specification or guided workflow required — with the same per-request pass/fail reporting, a mandatory unverified-content confirmation before its first run, and full pre-request/test-script fidelity via Newman's own sandbox.
@@ -127,22 +127,22 @@ flowchart LR
 
 ### Component boundaries
 
-| Component                             | Responsibility                                                                                                         |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `frontend/`                           | React/Vite workflow UI, presentation, interaction, and service clients.                                                |
-| `backend/src/api/`                    | Thin HTTP adapters, request validation, response mapping, and error status mapping.                                    |
-| `backend/src/openapi/`                | YAML parsing, OpenAPI validation, internal reference resolution, normalization, analysis, and `ApiModel` construction. |
-| `backend/src/testDesign/`             | Deterministic rules, generated values, assertions, deduplication, AI candidate validation, and review transformations. |
-| `backend/src/dependencies/`           | Relationship evidence, deterministic matching, AI-assisted corroboration, graph construction, and workflow assembly.   |
-| `backend/src/ai/`                     | `AIProvider`, local/mock providers, readiness, queueing, batching, viability, model configuration, and benchmarks.     |
-| `backend/src/postman/`                | Collection, environment, workflow, authentication, parameter, assertion, and artifact-document rendering.              |
-| `backend/src/testGenerationWorkflow/` | In-memory stage state machine, gating, invalidation, operation selection, progress, and review orchestration.          |
-| `backend/src/execution/`              | Environment handling, run lifecycle, sequencing, cancellation, and Newman integration.                                 |
+| Component                             | Responsibility                                                                                                                                                                                                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/`                           | React/Vite workflow UI, presentation, interaction, and service clients.                                                                                                                                                                                     |
+| `backend/src/api/`                    | Thin HTTP adapters, request validation, response mapping, and error status mapping.                                                                                                                                                                         |
+| `backend/src/openapi/`                | YAML parsing, OpenAPI validation, internal reference resolution, normalization, analysis, and `ApiModel` construction.                                                                                                                                      |
+| `backend/src/testDesign/`             | Deterministic rules, generated values, assertions, deduplication, AI candidate validation, and review transformations.                                                                                                                                      |
+| `backend/src/dependencies/`           | Relationship evidence, deterministic matching, AI-assisted corroboration, graph construction, and workflow assembly.                                                                                                                                        |
+| `backend/src/ai/`                     | `AIProvider`, local/mock providers, readiness, queueing, batching, viability, model configuration, and benchmarks.                                                                                                                                          |
+| `backend/src/postman/`                | Collection, environment, workflow, authentication, parameter, assertion, and artifact-document rendering.                                                                                                                                                   |
+| `backend/src/testGenerationWorkflow/` | In-memory stage state machine, gating, invalidation, operation selection, progress, and review orchestration.                                                                                                                                               |
+| `backend/src/execution/`              | Environment handling, run lifecycle, sequencing, cancellation, and Newman integration.                                                                                                                                                                      |
 | `backend/src/externalCollections/`    | Upload/store/edit/execute path for an uploaded Postman collection (externally authored or handed off from the guided workflow), sibling to `execution/`; reuses Newman for dispatch and its own result mapper for the collection's own named test outcomes. |
-| `backend/src/failureAnalysis/`        | On-demand AI failure analysis of an uploaded-collection result: deterministic evidence, redaction, specification-context matching, prompt, response validation, and the per-session in-progress guard. |
-| `backend/src/performance/`            | k6 performance testing: plan building (`plan/`), k6 script rendering, readiness and process runner (`k6/`), and aggregation, findings and the HTML report (`report/`). |
-| `backend/src/persistence/`            | SQLite connection, repositories, schema initialization, interrupted-run recovery, and credential encryption.           |
-| `packages/shared-domain/`             | Framework-independent contracts for API models, tests, AI, review, dependencies, workflows, artifacts, execution, and failure analysis. |
+| `backend/src/failureAnalysis/`        | On-demand AI failure analysis of an uploaded-collection result: deterministic evidence, redaction, specification-context matching, prompt, response validation, and the per-session in-progress guard.                                                      |
+| `backend/src/performance/`            | k6 performance testing: plan building (`plan/`), k6 script rendering, readiness and process runner (`k6/`), and aggregation, findings and the HTML report (`report/`).                                                                                      |
+| `backend/src/persistence/`            | SQLite connection, repositories, schema initialization, interrupted-run recovery, and credential encryption.                                                                                                                                                |
+| `packages/shared-domain/`             | Framework-independent contracts for API models, tests, AI, review, dependencies, workflows, artifacts, execution, and failure analysis.                                                                                                                     |
 
 The shared-domain package contains no Express, React, browser, or Node-specific implementation. Postman is an output target, not the internal test model.
 
@@ -231,6 +231,7 @@ An unresolved variable does not refuse an uploaded-collection run: an earlier re
 For any failed request in an uploaded-collection run, including one still in progress, the operator can choose **Analyze failure** (`specs/030-ai-failure-analysis`). `buildEvidence.ts` extracts an ordered, redacted evidence list (`E1..En`) from the recorded result: failure category, status, timing, test outcomes and, for a `local`-tier run, redacted request/response excerpts. It adds the matched specification context when there is one.
 
 `classifyFailure.ts` then decides the cause from that full evidence with seven ordered rules (research D15 in the spec folder). The first rule that matches decides, and a failure that matches no rule is reported as "insufficient evidence":
+
 - no response: environment issue, High;
 - a 502 or 504 gateway error: environment, Moderate;
 - 401, 403, 407, 408 or 429: environment, Moderate;
@@ -286,28 +287,28 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 
 `.env.example` leaves the tuning variables (timeouts, batch sizes, run budgets, throughput estimates) empty or commented out, so the defaults in `backend/src/ai/modelConfig.ts` apply; set one only to override it. Relative paths in `AI_MODEL_CACHE_DIR` and `APIPILOT_DB_PATH` resolve from the backend's working directory, which is `backend/` under the npm scripts; the example's `models` and `db/apipilot.db` therefore land in the git-ignored `backend/models/` and `backend/db/`.
 
-| Variable                             | Purpose                                                             | Default                                 |
-| ------------------------------------ | ------------------------------------------------------------------- | --------------------------------------- |
-| `BACKEND_PORT`                       | Express listener port                                               | `4000`                                  |
-| `FRONTEND_DEV_PORT`                  | Vite development server port                                        | `5173`                                  |
-| `GIT_COMMIT`                         | Commit value returned by `/api/version`                             | Detected from Git, otherwise `unknown`  |
-| `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics | `false`                                 |
-| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock`                                     | `mock` in tests, `local` otherwise      |
-| `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                       | `onnx-community/Qwen2.5-0.5B-Instruct`  |
-| `AI_MODEL_CACHE_DIR`                 | Local model cache directory                                         | `~/.apipilot/models`                    |
-| `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                | Unset; fp32 is the measured CPU default |
-| `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                    |
-| `AI_MODEL_CONTEXT_FLOOR_TOKENS`      | Conservative context estimate when a model reports none             | `2048`                                  |
-| `AI_USE_ACCELERATOR`                 | Attempt hardware acceleration                                       | `false`                                 |
-| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Operations per scenario-enhancement batch                           | `1`                                     |
-| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                            | `300000` (5 minutes)                    |
-| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Operations per AI dependency batch                                  | `3`                                     |
-| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Whole AI dependency pass ceiling                                    | `120000`                                |
-| `AI_PREFILL_MS_PER_TOKEN`            | Optional viability estimate override                                | Code default                            |
-| `AI_DECODE_MS_PER_TOKEN`             | Optional viability estimate override                                | Code default                            |
-| `AI_VIABILITY_SAFETY_FACTOR`         | Optional viability margin override                                  | Code default                            |
-| `APIPILOT_DB_PATH`                   | SQLite database path                                                | `~/.apipilot/apipilot.db`               |
-| `K6_BINARY_PATH`                     | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded      | Unset: the first `k6` on `PATH`         |
+| Variable                             | Purpose                                                                         | Default                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------- |
+| `BACKEND_PORT`                       | Express listener port                                                           | `4000`                                  |
+| `FRONTEND_DEV_PORT`                  | Vite development server port                                                    | `5173`                                  |
+| `GIT_COMMIT`                         | Commit value returned by `/api/version`                                         | Detected from Git, otherwise `unknown`  |
+| `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics             | `false`                                 |
+| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock`                                                 | `mock` in tests, `local` otherwise      |
+| `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                                   | `onnx-community/Qwen2.5-0.5B-Instruct`  |
+| `AI_MODEL_CACHE_DIR`                 | Local model cache directory                                                     | `~/.apipilot/models`                    |
+| `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                            | Unset; fp32 is the measured CPU default |
+| `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                                |
+| `AI_MODEL_CONTEXT_FLOOR_TOKENS`      | Conservative context estimate when a model reports none                         | `2048`                                  |
+| `AI_USE_ACCELERATOR`                 | Attempt hardware acceleration                                                   | `false`                                 |
+| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Operations per scenario-enhancement batch                                       | `1`                                     |
+| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                                        | `300000` (5 minutes)                    |
+| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Operations per AI dependency batch                                              | `3`                                     |
+| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Whole AI dependency pass ceiling                                                | `120000`                                |
+| `AI_PREFILL_MS_PER_TOKEN`            | Optional viability estimate override                                            | Code default                            |
+| `AI_DECODE_MS_PER_TOKEN`             | Optional viability estimate override                                            | Code default                            |
+| `AI_VIABILITY_SAFETY_FACTOR`         | Optional viability margin override                                              | Code default                            |
+| `APIPILOT_DB_PATH`                   | SQLite database path                                                            | `~/.apipilot/apipilot.db`               |
+| `K6_BINARY_PATH`                     | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded                 | Unset: the first `k6` on `PATH`         |
 
 On Windows, an enabled accelerator requests DirectML; Linux uses CUDA where available and macOS uses CoreML where available. Check `/api/ai/status` because requesting an accelerator does not guarantee that it initialized. The default local model is roughly 1.7 GB on disk and measured at about 2.75 GB peak process RSS on the reference CPU profile; actual requirements depend on the selected model and dtype.
 
@@ -339,28 +340,28 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 
 ### Guided workflow endpoints
 
-| Method         | Endpoint                                                    | Purpose                                                                                                 |
-| -------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `GET` / `POST` | `/api/test-generation-workflow`                             | Read the current session workflow, poll progress with `?progressOnly=true`, or upload/start a workflow. |
-| `DELETE`       | `/api/test-generation-workflow`                             | Discard the current session workflow; `409 ai_enhancement_running` while AI enhancement runs.           |
+| Method         | Endpoint                                                    | Purpose                                                                                                  |
+| -------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET` / `POST` | `/api/test-generation-workflow`                             | Read the current session workflow, poll progress with `?progressOnly=true`, or upload/start a workflow.  |
+| `DELETE`       | `/api/test-generation-workflow`                             | Discard the current session workflow; `409 ai_enhancement_running` while AI enhancement runs.            |
 | `POST`         | `/api/test-generation-workflow/api-review/continue`         | Complete API review, optionally with `{ selectedOperationKeys }`; absent or empty keeps every operation. |
-| `POST`         | `/api/test-generation-workflow/deterministic-generation`    | Run deterministic scenario generation.                                                                  |
-| `POST`         | `/api/test-generation-workflow/ai-enhancement`              | Start optional AI enhancement.                                                                          |
-| `POST`         | `/api/test-generation-workflow/ai-enhancement/cancel`       | Request cancellation at a batch boundary.                                                               |
-| `POST`         | `/api/test-generation-workflow/ai-enhancement/retry-batch`  | Retry one failed batch using `{ batchIndex }`.                                                          |
-| `POST`         | `/api/test-generation-workflow/scenario-review/decisions`   | Apply scenario decisions using an `updates` array.                                                      |
-| `POST`         | `/api/test-generation-workflow/scenario-review/edit`        | Edit a scenario using `scenarioId`, `revision`, and `edit`.                                             |
-| `POST`         | `/api/test-generation-workflow/scenario-review/regenerate`  | Regenerate one scenario.                                                                                |
-| `POST`         | `/api/test-generation-workflow/scenario-review/finalize`    | Finalize scenario review.                                                                               |
-| `POST`         | `/api/test-generation-workflow/workflow-review/decisions`   | Apply workflow approval/rejection decisions.                                                            |
-| `POST`         | `/api/test-generation-workflow/workflow-review/continue`    | Complete workflow review.                                                                               |
-| `POST`         | `/api/test-generation-workflow/postman-generation`          | Generate approved Postman artifacts; accepts export options.                                            |
-| `GET` / `POST` | `/api/test-generation-workflow/environments`                | List or create session environments.                                                                    |
-| `PUT`          | `/api/test-generation-workflow/environments/:environmentId` | Update an environment.                                                                                  |
-| `POST`         | `/api/test-generation-workflow/execution/start`             | Start an asynchronous run using `{ environmentId, confirmed? }`.                                        |
-| `POST`         | `/api/test-generation-workflow/execution/cancel`            | Request cancellation of the active run.                                                                 |
-| `GET`          | `/api/test-generation-workflow/execution/runs`              | List session run summaries.                                                                             |
-| `GET`          | `/api/test-generation-workflow/execution/runs/:runId`       | Retrieve one run and its request results.                                                               |
+| `POST`         | `/api/test-generation-workflow/deterministic-generation`    | Run deterministic scenario generation.                                                                   |
+| `POST`         | `/api/test-generation-workflow/ai-enhancement`              | Start optional AI enhancement.                                                                           |
+| `POST`         | `/api/test-generation-workflow/ai-enhancement/cancel`       | Request cancellation at a batch boundary.                                                                |
+| `POST`         | `/api/test-generation-workflow/ai-enhancement/retry-batch`  | Retry one failed batch using `{ batchIndex }`.                                                           |
+| `POST`         | `/api/test-generation-workflow/scenario-review/decisions`   | Apply scenario decisions using an `updates` array.                                                       |
+| `POST`         | `/api/test-generation-workflow/scenario-review/edit`        | Edit a scenario using `scenarioId`, `revision`, and `edit`.                                              |
+| `POST`         | `/api/test-generation-workflow/scenario-review/regenerate`  | Regenerate one scenario.                                                                                 |
+| `POST`         | `/api/test-generation-workflow/scenario-review/finalize`    | Finalize scenario review.                                                                                |
+| `POST`         | `/api/test-generation-workflow/workflow-review/decisions`   | Apply workflow approval/rejection decisions.                                                             |
+| `POST`         | `/api/test-generation-workflow/workflow-review/continue`    | Complete workflow review.                                                                                |
+| `POST`         | `/api/test-generation-workflow/postman-generation`          | Generate approved Postman artifacts; accepts export options.                                             |
+| `GET` / `POST` | `/api/test-generation-workflow/environments`                | List or create session environments.                                                                     |
+| `PUT`          | `/api/test-generation-workflow/environments/:environmentId` | Update an environment.                                                                                   |
+| `POST`         | `/api/test-generation-workflow/execution/start`             | Start an asynchronous run using `{ environmentId, confirmed? }`.                                         |
+| `POST`         | `/api/test-generation-workflow/execution/cancel`            | Request cancellation of the active run.                                                                  |
+| `GET`          | `/api/test-generation-workflow/execution/runs`              | List session run summaries.                                                                              |
+| `GET`          | `/api/test-generation-workflow/execution/runs/:runId`       | Retrieve one run and its request results.                                                                |
 
 The environment and execution endpoints above are retained as an API-only path (`specs/018` Clarifications 2026-09-23); the current UI runs generated collections through the external collection endpoints below after the hand-off.
 
@@ -368,86 +369,86 @@ The environment and execution endpoints above are retained as an API-only path (
 
 AP-037 phase two (19.19.0) retired the guided, quick and collection performance plans, with their plan, script and run-start routes. Runs recorded from them stay readable, read only, under their old bases `/api/test-generation-workflow/performance`, `/api/quick-performance` and `/api/collection-performance` (`specs/037-request-chain-performance/contracts/changes-to-existing-apis.md`):
 
-| Method | Endpoint | Purpose |
-| ------ | -------- | ------- |
-| `GET` | `/runs`, `/runs/:runId` | List that source's runs, or read any run of the session with its result. |
-| `POST` | `/runs/:runId/cancel` | Stop a run still settling (`202`). |
-| `GET` | `/runs/:runId/report` | The report exactly as rendered before; `?download=true` adds `Content-Disposition`. |
+| Method | Endpoint                | Purpose                                                                             |
+| ------ | ----------------------- | ----------------------------------------------------------------------------------- |
+| `GET`  | `/runs`, `/runs/:runId` | List that source's runs, or read any run of the session with its result.            |
+| `POST` | `/runs/:runId/cancel`   | Stop a run still settling (`202`).                                                  |
+| `GET`  | `/runs/:runId/report`   | The report exactly as rendered before; `?download=true` adds `Content-Disposition`. |
 
 The quick test keeps its upload, now a seeding source for request-chain plans, under `/api/quick-performance`:
 
-| Method | Endpoint | Purpose |
-| ------ | -------- | ------- |
-| `POST` | `/` | Upload a specification (multipart `file`); `409 quick_test_exists` unless `?replaceExisting=true`. |
-| `GET` | `/` | The session's quick test: its specification summary. |
+| Method | Endpoint | Purpose                                                                                            |
+| ------ | -------- | -------------------------------------------------------------------------------------------------- |
+| `POST` | `/`      | Upload a specification (multipart `file`); `409 quick_test_exists` unless `?replaceExisting=true`. |
+| `GET`  | `/`      | The session's quick test: its specification summary.                                               |
 
 ### Run k6 Script endpoints
 
 Under `/api/user-scripts` (`specs/034-run-user-k6-script/contracts/user-scripts-api.md`). No specification or guided workflow is required. A run starts only on `POST /:id/runs`, after the script's exact content was confirmed.
 
-| Method | Endpoint | Purpose |
-| ------ | -------- | ------- |
-| `GET` | `/` | The session's scripts. |
-| `POST` | `/upload?name=` | Upload a script as `application/octet-stream` (at most 1 MiB); `422 script_refused` with each reason by line. |
-| `POST` | `/` | Create a script from the editor (`{ name, content }`). |
-| `GET` | `/example` | ApiPilot's fixed starter script. |
-| `GET` | `/:id`, `/:id/content`, `/:id/download` | The script with its check result, settings and confirmation; its text; its exact bytes. |
-| `PUT` | `/:id/content` | A new version (JSON from the editor, or octet-stream with `?baseSha256=`); clears the confirmation. |
-| `PATCH`, `DELETE` | `/:id` | Rename (keeps the confirmation); delete (runs are kept). |
-| `POST` | `/:id/confirmation` | Confirm `{ sha256 }`, the content shown. |
-| `PUT` | `/:id/settings` | Mapping, load choice and thresholds (names only). |
-| `GET` | `/:id/values?environmentId=` | Which mapped values the environment has, never the values. |
-| `GET` | `/readiness` | k6 readiness. |
-| `POST` | `/:id/runs` | Start a run on `{ environmentId, scriptSha256 }`. |
-| `GET` | `/runs[?scriptId=]`, `/runs/:runId` | Runs, or one run with progress, result and, for a failed start, k6's message. |
-| `POST` | `/runs/:runId/cancel` | Stop a run in progress (`202`). |
-| `GET` | `/runs/:runId/report` | The self-contained HTML report; `?download=true` adds `Content-Disposition`. |
+| Method            | Endpoint                                | Purpose                                                                                                       |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET`             | `/`                                     | The session's scripts.                                                                                        |
+| `POST`            | `/upload?name=`                         | Upload a script as `application/octet-stream` (at most 1 MiB); `422 script_refused` with each reason by line. |
+| `POST`            | `/`                                     | Create a script from the editor (`{ name, content }`).                                                        |
+| `GET`             | `/example`                              | ApiPilot's fixed starter script.                                                                              |
+| `GET`             | `/:id`, `/:id/content`, `/:id/download` | The script with its check result, settings and confirmation; its text; its exact bytes.                       |
+| `PUT`             | `/:id/content`                          | A new version (JSON from the editor, or octet-stream with `?baseSha256=`); clears the confirmation.           |
+| `PATCH`, `DELETE` | `/:id`                                  | Rename (keeps the confirmation); delete (runs are kept).                                                      |
+| `POST`            | `/:id/confirmation`                     | Confirm `{ sha256 }`, the content shown.                                                                      |
+| `PUT`             | `/:id/settings`                         | Mapping, load choice and thresholds (names only).                                                             |
+| `GET`             | `/:id/values?environmentId=`            | Which mapped values the environment has, never the values.                                                    |
+| `GET`             | `/readiness`                            | k6 readiness.                                                                                                 |
+| `POST`            | `/:id/runs`                             | Start a run on `{ environmentId, scriptSha256 }`.                                                             |
+| `GET`             | `/runs[?scriptId=]`, `/runs/:runId`     | Runs, or one run with progress, result and, for a failed start, k6's message.                                 |
+| `POST`            | `/runs/:runId/cancel`                   | Stop a run in progress (`202`).                                                                               |
+| `GET`             | `/runs/:runId/report`                   | The self-contained HTML report; `?download=true` adds `Content-Disposition`.                                  |
 
 ### Request-chain plan endpoints
 
 Under `/api/chain-plans` (`specs/037-request-chain-performance/contracts/chain-plan-api.md`). Plans are saved whole with an optimistic revision; a run starts only on `POST /:planId/runs` and shares the session's one execution slot.
 
-| Method | Endpoint | Purpose |
-| ------ | -------- | ------- |
-| `GET`, `POST` | `/` | The session's plans; create an empty plan (`{ name }`). |
-| `POST` | `/seed` | Seed a plan once from `specification`, `workflow` or `collection` (with the requests in run order). |
-| `GET`, `PUT`, `DELETE` | `/:planId` | The plan with its analysis and script status; save `{ revision, plan }` (`409 plan_revision_conflict` when stale); delete (runs are kept). |
-| `POST` | `/:planId/duplicate` | Copy the plan and its data sets. |
-| `POST` | `/:planId/data-sets` | Add a CSV data set (multipart, at most 5 MiB); `422 data_set_invalid` with the reason and line. |
-| `PUT`, `DELETE` | `/:planId/data-sets/:id`, `/:id/file` | Rename, change the mode or mark columns secret; replace the file; remove. |
-| `GET` | `/:planId/data-sets/:id/preview` | The first rows, secret cells hidden. |
-| `POST` | `/:planId/script` | Generate the script (`422 plan_has_blockers`). |
-| `GET` | `/:planId/script/download?file=script\|environment-template` | Download either file. |
-| `GET` | `/readiness` | k6 readiness. |
-| `POST`, `GET` | `/:planId/runs` | Start a run on `{ environmentId }`; list this plan's runs. |
-| `GET` | `/runs/:runId` | One chain run with progress and result. |
-| `POST` | `/runs/:runId/cancel`, `/runs/:runId/restore` | Stop a run in progress (`202`); restore its chains and steps into the plan or a new plan. |
-| `GET` | `/runs/:runId/report` | The self-contained HTML report; `?download=true` adds `Content-Disposition`. |
+| Method                 | Endpoint                                                     | Purpose                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`, `POST`          | `/`                                                          | The session's plans; create an empty plan (`{ name }`).                                                                                    |
+| `POST`                 | `/seed`                                                      | Seed a plan once from `specification`, `workflow` or `collection` (with the requests in run order).                                        |
+| `GET`, `PUT`, `DELETE` | `/:planId`                                                   | The plan with its analysis and script status; save `{ revision, plan }` (`409 plan_revision_conflict` when stale); delete (runs are kept). |
+| `POST`                 | `/:planId/duplicate`                                         | Copy the plan and its data sets.                                                                                                           |
+| `POST`                 | `/:planId/data-sets`                                         | Add a CSV data set (multipart, at most 5 MiB); `422 data_set_invalid` with the reason and line.                                            |
+| `PUT`, `DELETE`        | `/:planId/data-sets/:id`, `/:id/file`                        | Rename, change the mode or mark columns secret; replace the file; remove.                                                                  |
+| `GET`                  | `/:planId/data-sets/:id/preview`                             | The first rows, secret cells hidden.                                                                                                       |
+| `POST`                 | `/:planId/script`                                            | Generate the script (`422 plan_has_blockers`).                                                                                             |
+| `GET`                  | `/:planId/script/download?file=script\|environment-template` | Download either file.                                                                                                                      |
+| `GET`                  | `/readiness`                                                 | k6 readiness.                                                                                                                              |
+| `POST`, `GET`          | `/:planId/runs`                                              | Start a run on `{ environmentId }`; list this plan's runs.                                                                                 |
+| `GET`                  | `/runs/:runId`                                               | One chain run with progress and result.                                                                                                    |
+| `POST`                 | `/runs/:runId/cancel`, `/runs/:runId/restore`                | Stop a run in progress (`202`); restore its chains and steps into the plan or a new plan.                                                  |
+| `GET`                  | `/runs/:runId/report`                                        | The self-contained HTML report; `?download=true` adds `Content-Disposition`.                                                               |
 
 ### External collection endpoints
 
 Mounted independently of the guided-workflow routes above — no active workflow is required for any endpoint below.
 
-| Method | Endpoint                                                | Purpose                                                                                       |
-| ------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `POST` | `/api/external-collections`                               | Multipart `name`, `tier`, `collection` file, `environment` file; returns the created summary. |
-| `GET`  | `/api/external-collections`                               | Lists the session's uploaded collections (never `variableValues` or the raw collection body). |
-| `DELETE` | `/api/external-collections/:id`                         | Removes an uploaded collection; past runs against it are unaffected.                          |
-| `GET`  | `/api/external-collections/:id/collection`                 | Returns the collection/variable editor's read model: folder/request tree, per-request raw and resolved form, and variable bindings. |
-| `PUT`  | `/api/external-collections/:id/variables`                  | Saves variable value overrides into the environment's stored values.                                                                |
-| `PUT`  | `/api/external-collections/:id/requests/:requestId`        | Saves a persisted override of one request's method/URL/headers/body/test script.                                                    |
-| `POST` | `/api/external-collections/:id/items`                      | Adds a new request or folder.                                                                                                         |
-| `DELETE` | `/api/external-collections/:id/items/:itemId`            | Deletes a request or folder (and everything nested within a deleted folder).                                                          |
-| `PUT`  | `/api/external-collections/:id/items/:itemId/rename`       | Renames a request or folder.                                                                                                           |
-| `PUT`  | `/api/external-collections/:id/containers/:containerId/order` | Reorders requests/folders within their containing folder or the collection root.                                                  |
-| `POST` | `/api/external-collections/:id/items/:itemId/move`         | Moves a request or folder into another folder or the collection root, carrying its inherited auth and the scripts of the folders it leaves. |
-| `POST` | `/api/external-collections/:id/execution/start`            | Starts a run using `{ confirmed?, selectedRequestIds? }`; two independent confirmation gates may apply in sequence, and an optional request-ID subset runs only those requests. Unresolved variables do not refuse the run. |
-| `POST` | `/api/external-collections/:id/execution/cancel`           | Requests cancellation of the active run.                                                       |
-| `GET`  | `/api/external-collections/:id/execution/runs`              | Lists this collection's run summaries.                                                          |
-| `GET`  | `/api/external-collections/:id/execution/runs/:runId`        | Retrieves one run and its per-request results, independent of the collection's own lifecycle.  |
-| `POST` | `/api/external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` | Classifies one failed result by rule and asks the configured AI provider to explain it. Returns `200` with `analyzed` (stored; its explanation may be unavailable) or `kept-previous` (the new explanation failed, so the stored one was kept); a result that did not fail, or an analysis already in progress in the session, returns `409`. |
-| `GET`  | `/api/external-collections/:id/execution/runs/:runId/failure-analyses` | Lists the run's stored analyses, ordered by result index.                                     |
-| `GET`  | `/api/failure-analysis/in-progress`                          | Returns the session's analysis in progress and its phase, or `204` when there is none.          |
+| Method   | Endpoint                                                                                    | Purpose                                                                                                                                                                                                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/external-collections`                                                                 | Multipart `name`, `tier`, `collection` file, `environment` file; returns the created summary.                                                                                                                                                                                                                                                 |
+| `GET`    | `/api/external-collections`                                                                 | Lists the session's uploaded collections (never `variableValues` or the raw collection body).                                                                                                                                                                                                                                                 |
+| `DELETE` | `/api/external-collections/:id`                                                             | Removes an uploaded collection; past runs against it are unaffected.                                                                                                                                                                                                                                                                          |
+| `GET`    | `/api/external-collections/:id/collection`                                                  | Returns the collection/variable editor's read model: folder/request tree, per-request raw and resolved form, and variable bindings.                                                                                                                                                                                                           |
+| `PUT`    | `/api/external-collections/:id/variables`                                                   | Saves variable value overrides into the environment's stored values.                                                                                                                                                                                                                                                                          |
+| `PUT`    | `/api/external-collections/:id/requests/:requestId`                                         | Saves a persisted override of one request's method/URL/headers/body/test script.                                                                                                                                                                                                                                                              |
+| `POST`   | `/api/external-collections/:id/items`                                                       | Adds a new request or folder.                                                                                                                                                                                                                                                                                                                 |
+| `DELETE` | `/api/external-collections/:id/items/:itemId`                                               | Deletes a request or folder (and everything nested within a deleted folder).                                                                                                                                                                                                                                                                  |
+| `PUT`    | `/api/external-collections/:id/items/:itemId/rename`                                        | Renames a request or folder.                                                                                                                                                                                                                                                                                                                  |
+| `PUT`    | `/api/external-collections/:id/containers/:containerId/order`                               | Reorders requests/folders within their containing folder or the collection root.                                                                                                                                                                                                                                                              |
+| `POST`   | `/api/external-collections/:id/items/:itemId/move`                                          | Moves a request or folder into another folder or the collection root, carrying its inherited auth and the scripts of the folders it leaves.                                                                                                                                                                                                   |
+| `POST`   | `/api/external-collections/:id/execution/start`                                             | Starts a run using `{ confirmed?, selectedRequestIds? }`; two independent confirmation gates may apply in sequence, and an optional request-ID subset runs only those requests. Unresolved variables do not refuse the run.                                                                                                                   |
+| `POST`   | `/api/external-collections/:id/execution/cancel`                                            | Requests cancellation of the active run.                                                                                                                                                                                                                                                                                                      |
+| `GET`    | `/api/external-collections/:id/execution/runs`                                              | Lists this collection's run summaries.                                                                                                                                                                                                                                                                                                        |
+| `GET`    | `/api/external-collections/:id/execution/runs/:runId`                                       | Retrieves one run and its per-request results, independent of the collection's own lifecycle.                                                                                                                                                                                                                                                 |
+| `POST`   | `/api/external-collections/:id/execution/runs/:runId/results/:resultIndex/failure-analysis` | Classifies one failed result by rule and asks the configured AI provider to explain it. Returns `200` with `analyzed` (stored; its explanation may be unavailable) or `kept-previous` (the new explanation failed, so the stored one was kept); a result that did not fail, or an analysis already in progress in the session, returns `409`. |
+| `GET`    | `/api/external-collections/:id/execution/runs/:runId/failure-analyses`                      | Lists the run's stored analyses, ordered by result index.                                                                                                                                                                                                                                                                                     |
+| `GET`    | `/api/failure-analysis/in-progress`                                                         | Returns the session's analysis in progress and its phase, or `204` when there is none.                                                                                                                                                                                                                                                        |
 
 Common contract failures use JSON such as `{ error, message }`. Invalid uploads return `400`; oversized uploads return `413`; stage conflicts, confirmation requirements, duplicate resources, and active-run conflicts return `409`; missing resources return `404`; unexpected failures return a safe `500` without stack traces or raw internal details.
 
@@ -545,9 +546,19 @@ npm run test -w frontend
 
 `npm test` runs Vitest across the workspace, including backend unit/integration tests, frontend jsdom/React tests, and shared-domain tests. Ordinary tests use mock or scripted providers and do not download a model. `test:ai-real`, `test:ai-real:failure-analysis` (the AP-031 evaluation corpus, recorded in `specs/030-ai-failure-analysis/evaluation.md`), and `ai:benchmark` are opt-in and may load or download local models. `test:k6-real` (`K6_TEST_REAL=1`) is opt-in and needs a k6 1.0.0 or later that you installed; `perf:stub` starts a local stub target for AP-029's manual quickstart. Neither is part of `npm test`.
 
-The backend's `dev` and `start` scripts, and its Vitest workers, run Node with `--disable-warning=DEP0176`. On Node 24, `newman@6.2.2` (the latest release) reads the deprecated `fs.F_OK` constant as it loads, which prints a DeprecationWarning that has no functional effect. Only that warning code is silenced. If you run `backend/dist/server.js` directly with `node`, pass the same flag to keep the log clean.
+The backend's `dev` and `start` scripts, and its Vitest workers, run Node with `--disable-warning=DEP0176`. On Node 24, `newman@6.2.3` reads the deprecated `fs.F_OK` constant as it loads, which prints a DeprecationWarning that has no functional effect. Only that warning code is silenced. If you run `backend/dist/server.js` directly with `node`, pass the same flag to keep the log clean.
 
 npm 11, bundled with Node 24, skips dependency install scripts that the root `allowScripts` field does not list. `better-sqlite3` (native build) and `onnxruntime-node` (runtime binaries) need theirs, so their entries are pinned to the installed versions. After upgrading either package, run `npm install-scripts ls` and approve the new version with `npm install-scripts approve <pkg>` once you have reviewed it.
+
+Dependency updates retain the existing major versions; breaking upgrades need separate compatibility review. Node types stay on version 24 to match the runtime. Root `overrides` pin security patches for transitive dependencies. After changing an override, use `npm update <package>` if `npm install` leaves its old locked version in place, and verify the result with `npm ls <package>` and `npm audit`.
+
+As of 2026-10-12, `npm audit` reports 7 remaining findings (6 high, 1 moderate), including dependent packages, from three unresolved advisories:
+
+- [Faker code execution](https://github.com/advisories/GHSA-qxc2-j82w-r537): Postman Collection still requires Faker 5's legacy API; the patched Faker 10.5+ API is not a drop-in replacement.
+- [CSV prototype replacement](https://github.com/advisories/GHSA-8cw4-87c7-c6xx): Newman 6 expects the callable `csv-parse` 4 export; patched version 7.0.2+ exposes a named `parse` function instead.
+- [Forge RSA signature verification](https://github.com/advisories/GHSA-86w9-cpqp-85rv): the latest release, `node-forge@1.4.0`, is still affected and no patched release is published.
+
+These findings are not suppressed. Do not run `npm audit fix --force` as a routine fix: its suggested Newman/Postman downgrades change execution contracts. Full remediation needs compatible upstream fixes or an explicitly reviewed migration.
 
 The repository has no checked-in Dockerfile, docker-compose file, or deployment manifest. The backend and frontend do have independent production build scripts: the backend compiles to `backend/dist`, and the frontend builds a Vite distribution under `frontend/dist`.
 
@@ -560,12 +571,12 @@ Current intentional limitations include:
 - Local AI performance depends heavily on the selected model and machine. Large specifications may settle as partial or not completed at the configured run budget while retaining successful units.
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.
 - There is no user authentication, multi-user account model, external database, external queue, scheduled execution, or cloud AI provider.
-- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), explains one failed request in an Import & Run Collection run: fixed rules decide the likely cause from the recorded evidence, and the local AI adds a labelled summary and next steps, plus specification context when the collection came from the current guided workflow. Its status is *implementation complete, AI evaluation pending*. On the 12-case synthetic evaluation corpus the rules match every label, and the default `Qwen2.5-0.5B-Instruct` wrote a usable explanation for all 12 with no contradictions (`specs/030-ai-failure-analysis/evaluation.md`, run 5). It is not recorded as Implemented until the corpus also contains at least 4 real, redacted recorded failures. The cause is a likely cause, not a confirmed root cause; a failure no rule covers is reported as "insufficient evidence". It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
+- AP-031 (formerly AP-018), AI failure analysis (`specs/030-ai-failure-analysis`), explains one failed request in an Import & Run Collection run: fixed rules decide the likely cause from the recorded evidence, and the local AI adds a labelled summary and next steps, plus specification context when the collection came from the current guided workflow. Its status is _implementation complete, AI evaluation pending_. On the 12-case synthetic evaluation corpus the rules match every label, and the default `Qwen2.5-0.5B-Instruct` wrote a usable explanation for all 12 with no contradictions (`specs/030-ai-failure-analysis/evaluation.md`, run 5). It is not recorded as Implemented until the corpus also contains at least 4 real, redacted recorded failures. The cause is a likely cause, not a confirmed root cause; a failure no rule covers is reported as "insufficient evidence". It does not analyze runs made through the guided workflow's API-only execution endpoints. Some AI enhancement and manual Postman acceptance work remains follow-up validation rather than a missing runtime pipeline.
 - The Postman-style collection/variable editor (AP-028) operates on uploaded collections. A generated collection reaches it by being handed off and uploaded, at which point it is stored and confirmed like any externally-authored collection (`specs/028` Clarifications 2026-09-23). The guided workflow's own execution endpoints are an API-only path with no editing surface.
 - Dependency-aware holding of requests (`specs/029-execution-gap-closure`) applies to the guided workflow's API-only execution path. Uploaded-collection runs execute every selected request in collection order, and a request that depends on a failed one records its own outcome.
 - AP-029 (k6 performance testing), AP-032 (the quick performance test), AP-033 (step edits), AP-035 (user-defined journeys) and AP-036 (a performance test from a collection) were derived plans; AP-037 phase two (19.19.0) retired them. Their runs can be opened, with the report as it was rendered, but not run again or restored. Runs apply no limit on virtual users or duration, include write steps as the plan has them, and never clean up what they create.
-- AP-037, request-chain performance plans (`specs/037-request-chain-performance`), is *implementation complete*: `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows, and a scripted browser walkthrough of quickstart scenarios 1 to 9 passed (2026-10-03). Phase two (19.19.0) retired the derived plans; its scripted browser walkthrough (quickstart scenario 10) passed on 2026-10-04 (19.19.1) and awaits acceptance. Creating a plan from a collection converts only a fixed set of script statements and runs no script; the rest is listed in the seeding report. A downloaded script that reads a data set cannot be run in Run k6 Script, which never lets a script open files. Extractors read JSON body fields and response headers only.
-- AP-034, Run k6 Script (`specs/034-run-user-k6-script`), is *implementation complete, manual browser walkthrough pending*; `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows (2026-10-01). ApiPilot checks a supplied script statically and runs only the bytes you confirmed, but it cannot restrict which hosts the script contacts, and what the script does is your responsibility. The check accepts a strict JavaScript subset: reading a property by a key built at run time is refused (use a `Map`), test data files cannot be read, and WebSocket, gRPC and browser tests are not supported.
+- AP-037, request-chain performance plans (`specs/037-request-chain-performance`), is _implementation complete_: `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows, and a scripted browser walkthrough of quickstart scenarios 1 to 9 passed (2026-10-03). Phase two (19.19.0) retired the derived plans; its scripted browser walkthrough (quickstart scenario 10) passed on 2026-10-04 (19.19.1) and awaits acceptance. Creating a plan from a collection converts only a fixed set of script statements and runs no script; the rest is listed in the seeding report. A downloaded script that reads a data set cannot be run in Run k6 Script, which never lets a script open files. Extractors read JSON body fields and response headers only.
+- AP-034, Run k6 Script (`specs/034-run-user-k6-script`), is _implementation complete, manual browser walkthrough pending_; `npm run test:k6-real -w backend` passed against k6 v2.3.0 on Windows (2026-10-01). ApiPilot checks a supplied script statically and runs only the bytes you confirmed, but it cannot restrict which hosts the script contacts, and what the script does is your responsibility. The check accepts a strict JavaScript subset: reading a property by a key built at run time is refused (use a `Map`), test data files cannot be read, and WebSocket, gRPC and browser tests are not supported.
 
 The implementation status for AP-001 through AP-033 is maintained in [specs/ROADMAP.md](specs/ROADMAP.md); that roadmap identifies implemented features and remaining validation tasks. Feature `spec.md` files provide the normative behavior and contracts.
 
