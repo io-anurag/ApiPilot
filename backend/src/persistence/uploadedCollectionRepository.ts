@@ -15,6 +15,8 @@ export interface UploadedCollectionInput {
   collection: string;
   variableValues: Record<string, string>;
   requestDelayMs: number;
+  /** specs/048-workflow-run-stage-status D1. */
+  sourceWorkflowId?: string;
 }
 
 export interface UploadedCollectionRepository {
@@ -40,6 +42,7 @@ interface UploadedCollectionRow {
   variable_values_iv: Buffer;
   request_delay_ms: number;
   confirmed_at: string | null;
+  source_workflow_id: string | null;
   created_at: string;
 }
 
@@ -57,6 +60,7 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
       variableValues: toStoredVariableValues(JSON.parse(json) as Record<string, unknown>),
       requestDelayMs: row.request_delay_ms,
       confirmedAt: row.confirmed_at ?? undefined,
+      sourceWorkflowId: row.source_workflow_id ?? undefined,
       createdAt: row.created_at,
     };
   }
@@ -95,10 +99,21 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
     this.connection.db
       .prepare(
         `INSERT INTO uploaded_collections
-           (id, session_id, name, tier, collection, variable_values_encrypted, variable_values_iv, request_delay_ms, confirmed_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+           (id, session_id, name, tier, collection, variable_values_encrypted, variable_values_iv, request_delay_ms, confirmed_at, source_workflow_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
       )
-      .run(id, sessionId, input.name, input.tier, input.collection, ciphertext, iv, input.requestDelayMs, createdAt);
+      .run(
+        id,
+        sessionId,
+        input.name,
+        input.tier,
+        input.collection,
+        ciphertext,
+        iv,
+        input.requestDelayMs,
+        input.sourceWorkflowId ?? null,
+        createdAt,
+      );
     return {
       id,
       name: input.name,
@@ -106,6 +121,7 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
       collection: input.collection,
       variableValues: input.variableValues,
       requestDelayMs: input.requestDelayMs,
+      ...(input.sourceWorkflowId ? { sourceWorkflowId: input.sourceWorkflowId } : {}),
       createdAt,
     };
   }

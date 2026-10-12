@@ -35,6 +35,11 @@ export interface UploadedCollectionSet {
   requestDelayMs: number;
   /** Set once the FR-007 "unverified content" confirmation has been accepted for this artifact. */
   confirmedAt?: string;
+  /**
+   * The guided workflow whose Continue to Import & Run hand-off this upload was made from
+   * (specs/048-workflow-run-stage-status). Absent for any other upload. Not part of `UploadedCollectionSummary`.
+   */
+  sourceWorkflowId?: string;
   createdAt: string;
 }
 

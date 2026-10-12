@@ -121,11 +121,20 @@ export function ExternalCollectionUpload({
     if (!collectionFile || !environmentFile) return;
     setUploading(true);
     setError(null);
+    // Only the workflow's own files link the upload to it: replacing either one, or never having
+    // been handed over, sends nothing (specs/048 D1).
+    const workflowId =
+      preload?.workflowId !== undefined &&
+      collectionFile === preload.collectionFile &&
+      environmentFile === preload.environmentFile
+        ? preload.workflowId
+        : undefined;
     const result = await createUploadedCollection({
       name: name.trim(),
       tier,
       collectionFile,
       environmentFile,
+      workflowId,
     });
     setUploading(false);
     if (!result.ok) {

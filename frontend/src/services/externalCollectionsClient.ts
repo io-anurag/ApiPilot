@@ -91,6 +91,8 @@ export type UploadedCollectionInput = {
   collectionFile: File;
   environmentFile: File;
   requestDelayMs?: number;
+  /** The guided workflow this upload was handed over from (specs/048-workflow-run-stage-status). */
+  workflowId?: string;
 };
 
 export type UploadedCollectionResult = { ok: true; uploadedCollection: UploadedCollectionSummary } | ErrorResult;
@@ -103,6 +105,7 @@ export async function createUploadedCollection(input: UploadedCollectionInput): 
   formData.set("collection", input.collectionFile);
   formData.set("environment", input.environmentFile);
   if (input.requestDelayMs) formData.set("requestDelayMs", String(input.requestDelayMs));
+  if (input.workflowId) formData.set("workflowId", input.workflowId);
 
   let response: Response;
   try {

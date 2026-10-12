@@ -63,6 +63,9 @@ const logger = createLogger("api.externalCollections");
 
 const VALID_TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 
+/** The id shape `startWorkflow` mints (specs/048-workflow-run-stage-status D1). */
+const WORKFLOW_ID_PATTERN = /^wf-\d+-\d+$/;
+
 function isValidTier(value: unknown): value is EnvironmentTier {
   return typeof value === "string" && (VALID_TIERS as string[]).includes(value);
 }
@@ -122,6 +125,14 @@ export function createExternalCollectionsRouter(): Router {
       const requestDelayMs =
         typeof body.requestDelayMs === "string" ? Number.parseInt(body.requestDelayMs, 10) : 0;
 
+      // Optional link to the guided workflow this upload was handed over from (specs/048 D1).
+      const workflowId = body.workflowId;
+      if (workflowId !== undefined && (typeof workflowId !== "string" || !WORKFLOW_ID_PATTERN.test(workflowId))) {
+        logRequestFailed(req.method, req.path, startedAt, 400, "invalid_request");
+        res.status(400).json({ error: "invalid_request", message: "workflowId must be a workflow id" });
+        return;
+      }
+
       // Backfills a stable id on every request/folder (AP-028 research.md D2, D9) so every later
       // collection-editor operation (variable/field/structural edits) has a stable identity to
       // address from the moment a collection is stored — whether uploaded directly here or handed
@@ -160,6 +171,7 @@ export function createExternalCollectionsRouter(): Router {
           collection: collectionWithStableIds,
           variableValues,
           requestDelayMs: Number.isFinite(requestDelayMs) && requestDelayMs > 0 ? requestDelayMs : 0,
+          ...(workflowId ? { sourceWorkflowId: workflowId } : {}),
         });
         res.status(201).json({ uploadedCollection: toSummary(uploadedCollection) });
         logRequestSucceeded(req.method, req.path, startedAt, 201);

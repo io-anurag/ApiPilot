@@ -37,6 +37,7 @@ import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { STAGE_SECTIONS, type SectionId } from "../components/sectionCatalog";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
+import { useWorkflowStageRefresh } from "../hooks/useWorkflowStageRefresh";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
  * in-progress, per-stage breakdown is WorkflowStageTracker's job once a workflow exists. */
@@ -167,6 +168,7 @@ export function TestGenerationWorkflowPage({
   onOpenChainPlan,
   onOpenCoverage,
   stageRequest,
+  isVisible = false,
 }: Readonly<{
   /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
   onExit?: () => void;
@@ -178,6 +180,7 @@ export function TestGenerationWorkflowPage({
   onHandoffToExecution?: (
     postmanArtifact: ExportResult,
     specTitle: string | undefined,
+    workflowId: string,
   ) => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the approved workflows. */
   onOpenChainPlan?: (planId: string) => void;
@@ -187,6 +190,9 @@ export function TestGenerationWorkflowPage({
    * shows that stage; when present on mount it also replaces the automatic hand-off to Import &
    * Run that otherwise follows resuming a workflow already at `execution`. */
   stageRequest?: Readonly<{ stageId: WorkflowStageId; token: number }>;
+  /** Whether the page is on screen. It stays mounted while hidden, so a run that finishes in
+   * another view is picked up when this turns true and while it stays true (specs/048). */
+  isVisible?: boolean;
 }>) {
   const [workflow, setWorkflow] = useState<TestGenerationWorkflow | null>(null);
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
@@ -209,6 +215,7 @@ export function TestGenerationWorkflowPage({
   // double-invoke, or simply re-rendering) — keyed on the workflow id + updatedAt pair, which
   // changes exactly when a fresh Postman artifact was produced.
   const lastHandoffKey = useRef<string | null>(null);
+  useWorkflowStageRefresh(workflow, setWorkflow, isVisible);
 
   function maybeHandoff(wf: TestGenerationWorkflow) {
     if (wf.activeStageId !== "execution" || !wf.postmanArtifact || !onHandoffToExecution)
@@ -216,7 +223,7 @@ export function TestGenerationWorkflowPage({
     const key = `${wf.id}:${wf.updatedAt}`;
     if (lastHandoffKey.current === key) return;
     lastHandoffKey.current = key;
-    onHandoffToExecution(wf.postmanArtifact, wf.apiModel?.info?.title);
+    onHandoffToExecution(wf.postmanArtifact, wf.apiModel?.info?.title, wf.id);
   }
 
   useEffect(() => {
@@ -671,6 +678,7 @@ export function TestGenerationWorkflowPage({
                   onHandoffToExecution?.(
                     workflow.postmanArtifact,
                     workflow.apiModel?.info?.title,
+                    workflow.id,
                   );
                 }
               }}

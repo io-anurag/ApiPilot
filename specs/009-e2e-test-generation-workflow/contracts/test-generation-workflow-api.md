@@ -288,6 +288,15 @@ Returns the updated `{ "workflow": {...} }`. Starting a later run through specs/
 Both endpoints are API-only: the current UI hands the generated collection off to "Import & Run
 Collection" and calls neither (spec.md Clarifications 2026-09-23).
 
+### Run-completion (specs/048-workflow-run-stage-status)
+
+No request or response shape changes. After a qualifying run settles, `stages.execution.status`
+(a run of an upload made from this workflow's hand-off, settled `completed`) or
+`stages.performanceTesting.status` (a request-chain run seeded from this workflow's specification,
+any final state, once `postmanGeneration` is complete) is `"complete"` with `completedAt` set, and
+`updatedAt` advances. A failure while updating a stage is logged (`stage_update_failed`) and never
+changes the run. See `specs/048-workflow-run-stage-status/contracts/changes-to-existing-apis.md`.
+
 ## Guarantees asserted by contract tests
 
 - No stage-transition endpoint succeeds while its stage's `WorkflowStageState.status` is anything

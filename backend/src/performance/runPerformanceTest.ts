@@ -4,6 +4,7 @@ import type { ChainRun, Environment, PerformanceResult, PerformanceRun } from "@
 import { createLogger } from "../logger";
 import { getPerformanceRunRepository, type PerformanceRunSettlement } from "../persistence/performanceRunRepository";
 import { touch } from "../session/sessionRegistry";
+import { completePerformanceForRun } from "../testGenerationWorkflow/runCompletion";
 import { sha256Hex } from "./plan/identifiers";
 import { createRunDirectory, removeRunDirectory } from "./k6/runDirectory";
 import { parseMetricsLine } from "./k6/metricsStream";
@@ -130,6 +131,10 @@ export async function startPerformanceRun(input: StartPerformanceRunInput): Prom
       durationMs: input.now().getTime() - startedAtMs,
     });
     if (settlement.status === "failed") logger.error("performance_run_failed", { runId: run.id, errorCategory: settlement.failure.category });
+    // specs/048 D3: tell the guided workflow, after the run has settled. Legacy runs pass null and never match.
+    if (settled.status !== "in-progress") {
+      completePerformanceForRun(sessionId, settled.status, run.planSource === "chain" ? run.snapshot.seedSource : null);
+    }
   };
 
   let runDir: string | undefined;

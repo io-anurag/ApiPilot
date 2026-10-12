@@ -15,6 +15,11 @@ OpenAPI-upload route's use of `multer`).
 - `collection` (file, required) — Postman Collection v2.1 JSON, ≤ `MAX_UPLOAD_BYTES` (10 MB).
 - `environment` (file, required) — Postman Environment JSON, ≤ `MAX_UPLOAD_BYTES`.
 - `requestDelayMs` (number, optional, default `0`).
+- `workflowId` (string, optional) — the guided workflow this upload was handed over from
+  (specs/048-workflow-run-stage-status). Must match `^wf-\d+-\d+$`, otherwise
+  `400 invalid_request`. Stored with the upload and never returned in the response; when a run of
+  this upload completes while that workflow is the session's current one, its `execution` stage
+  completes.
 
 **201 Created** — `{ "uploadedCollection": { "id": "...", "name": "...", "tier": "local", "requestDelayMs": 0, "createdAt": "..." } }` (never includes `variableValues` or the raw collection body in the response — mirrors `Environment`'s own create response never echoing `variableValues` back either).
 

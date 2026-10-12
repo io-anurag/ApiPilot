@@ -54,7 +54,24 @@ skipped → active                (aiEnhancement retry, only while scenarioRevie
 complete → stale                (an upstream dependency was revised)
 complete → active               (the stage itself is being redone, e.g. scenarioReview re-edited)
 stale → active                  (user begins redoing the stale stage)
+not-yet-reached → complete      (performanceTesting only — added by specs/048, see below)
 ```
+
+**Run-completion rules (specs/048-workflow-run-stage-status).** Two stages are completed by the
+backend where a run settles, not by a screen. Neither copies run content into the workflow; only the
+stage's `status`, `completedAt` and the workflow's `updatedAt` change. Both are idempotent: a stage
+that is already `complete` is left unchanged.
+
+- `execution` goes `active → complete` when a run of an upload made from this workflow's own
+  hand-off settles as `completed` (a run that stopped on an error counts; a cancelled run does not).
+  A `skipped`, `stale` or `not-yet-reached` Execution is left alone.
+- `performanceTesting` goes `not-yet-reached → complete` (or `active → complete`) when a
+  request-chain performance run seeded from this workflow's specification reaches any final state
+  (`completed`, `failed`, `cancelled`) and `postmanGeneration` is `complete`. The seed is matched by
+  specification title (workflow seed) or file name (specification seed); collection seeds and plans
+  built from nothing never match.
+
+Full rules: `specs/048-workflow-run-stage-status/data-model.md`.
 
 ## WorkflowStageState
 
