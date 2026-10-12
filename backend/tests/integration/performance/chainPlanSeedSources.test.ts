@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { ChainPlan } from "@apipilot/shared-domain";
 import { createApp } from "../../../src/app";
 import { chainAgent, CHAIN_BASE } from "../../fixtures/chain/chainAgent";
-import { TWO_FOLDER_REQUEST_IDS, twoFolderCollection } from "../../fixtures/chain/collections";
+import {
+  TWO_FOLDER_REQUEST_IDS,
+  twoFolderCollection,
+} from "../../fixtures/chain/collections";
 import { performanceAgent, unavailableProbe } from "../../fixtures/performance/agent";
 import { uploadCollection } from "../../fixtures/performance/collectionPlans";
 import { establishSession } from "../../fixtures/performance/session";
@@ -13,14 +16,18 @@ import { establishSession } from "../../fixtures/performance/session";
 describe("POST /api/chain-plans/seed from the guided workflow", () => {
   it("is refused until Postman generation is complete", async () => {
     const { agent } = await chainAgent();
-    const refused = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "workflow" } });
+    const refused = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({ name: "x", source: { kind: "workflow" } });
     expect(refused.status).toBe(409);
     expect(refused.body.error).toBe("workflow_not_ready");
   });
 
   it("seeds one chain per approved workflow once the workflow is ready", async () => {
     const { agent } = await performanceAgent({});
-    const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "Guided", source: { kind: "workflow" } });
+    const seeded = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({ name: "Guided", source: { kind: "workflow" } });
     expect(seeded.status).toBe(201);
     const plan = seeded.body.plan as ChainPlan;
     expect(plan.chains.some((chain) => chain.name.startsWith("Workflow "))).toBe(true);
@@ -30,30 +37,61 @@ describe("POST /api/chain-plans/seed from the guided workflow", () => {
 
 describe("POST /api/chain-plans/seed from a stored collection", () => {
   async function withCollection() {
-    const agent = request.agent(createApp(undefined, { performance: { probe: unavailableProbe() } }));
+    const agent = request.agent(
+      createApp(undefined, { performance: { probe: unavailableProbe() } }),
+    );
     await establishSession(agent);
-    const collectionId = await uploadCollection(agent, twoFolderCollection(), undefined, { name: "Two folders" });
+    const collectionId = await uploadCollection(agent, twoFolderCollection(), undefined, {
+      name: "Two folders",
+    });
     return { agent, collectionId };
   }
 
   it("refuses an unknown collection and an empty selection", async () => {
     const { agent, collectionId } = await withCollection();
-    const unknown = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "collection", collectionId: "00000000-0000-4000-8000-0000000000ff", orderedRequestIds: ["a"] } });
+    const unknown = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({
+        name: "x",
+        source: {
+          kind: "collection",
+          collectionId: "00000000-0000-4000-8000-0000000000ff",
+          orderedRequestIds: ["a"],
+        },
+      });
     expect(unknown.status).toBe(404);
     expect(unknown.body.error).toBe("uploaded_collection_not_found");
-    const empty = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "x", source: { kind: "collection", collectionId, orderedRequestIds: [] } });
+    const empty = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({
+        name: "x",
+        source: { kind: "collection", collectionId, orderedRequestIds: [] },
+      });
     expect(empty.body.error).toBe("no_requests_selected");
   });
 
   it("seeds chains per folder, and an edit to the collection afterwards leaves the plan unchanged", async () => {
     const { agent, collectionId } = await withCollection();
-    const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({ name: "From collection", source: { kind: "collection", collectionId, orderedRequestIds: TWO_FOLDER_REQUEST_IDS } });
+    const seeded = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({
+        name: "From collection",
+        source: {
+          kind: "collection",
+          collectionId,
+          orderedRequestIds: TWO_FOLDER_REQUEST_IDS,
+        },
+      });
     expect(seeded.status).toBe(201);
     const plan = seeded.body.plan as ChainPlan;
     expect(plan.chains.map((chain) => chain.name)).toEqual(["Auth", "Customers"]);
-    expect(plan.seedingReport?.items.some((item) => item.kind === "pre-request-script")).toBe(true);
+    expect(
+      plan.seedingReport?.items.some((item) => item.kind === "pre-request-script"),
+    ).toBe(true);
 
-    const renamed = await agent.put(`/api/external-collections/${collectionId}/items/req-get/rename`).send({ name: "Renamed in the collection" });
+    const renamed = await agent
+      .put(`/api/external-collections/${collectionId}/items/req-get/rename`)
+      .send({ name: "Renamed in the collection" });
     expect(renamed.status).toBe(200);
     expect((await agent.get(`${CHAIN_BASE}/${plan.id}`)).body.plan).toEqual(plan);
   });
@@ -73,7 +111,11 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     );
     const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({
       name: "Configured plan",
-      source: { kind: "collection", collectionId, orderedRequestIds: TWO_FOLDER_REQUEST_IDS },
+      source: {
+        kind: "collection",
+        collectionId,
+        orderedRequestIds: TWO_FOLDER_REQUEST_IDS,
+      },
     });
     expect(seeded.status).toBe(201);
     expect(seeded.body.plan.targetEnvironmentId).not.toBeNull();
@@ -87,7 +129,8 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
 
   it("copies current values, request edits, inherited auth, base URL aliases and delay without coupling the source", async () => {
     const { agent } = await withCollection();
-    const uploaded = await agent.post("/api/external-collections")
+    const uploaded = await agent
+      .post("/api/external-collections")
       .field("name", "Saved setup")
       .field("tier", "local")
       .field("requestDelayMs", "75")
@@ -112,7 +155,7 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     const collectionId = uploaded.body.uploadedCollection.id as string;
     expect(
       (
-        await agent.put(`/api/external-collections/${collectionId}/items/req-get/rename`).send({
+        await agent.put(`/api/external-collections/${collectionId}/variables`).send({
           variableValues: {
             serviceUrl: "http://127.0.0.1:4700/api",
             tenant: "saved-tenant",
@@ -123,7 +166,9 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     ).toBe(200);
     expect(
       (
-        await agent.put(`/api/external-collections/${collectionId}/items/req-get/rename`).send({
+        await agent
+          .put(`/api/external-collections/${collectionId}/requests/req-create`)
+          .send({
             method: "POST",
             url: "{{serviceUrl}}/customers?tenant={{tenant}}",
             headers: [{ key: "Content-Type", value: "application/json" }],
@@ -162,7 +207,7 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
 
     expect(
       (
-        await agent.put(`/api/external-collections/${collectionId}/items/req-get/rename`).send({
+        await agent.put(`/api/external-collections/${collectionId}/variables`).send({
           variableValues: {
             serviceUrl: "http://127.0.0.1:4800",
             tenant: "new-tenant",
@@ -184,11 +229,14 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     expect(repeated.status).toBe(201);
     expect(repeated.body.plan.targetEnvironmentId).not.toBe(environment.id);
 
-    const edited = await agent.put(`${CHAIN_BASE}/${plan.id}`)
+    const edited = await agent
+      .put(`${CHAIN_BASE}/${plan.id}`)
       .send({ revision: plan.revision, plan: { ...plan, thinkTimeMs: 150 } });
     expect(edited.status).toBe(200);
     expect(edited.body.plan.thinkTimeMs).toBe(150);
-    const other = request.agent(createApp(undefined, { performance: { probe: unavailableProbe() } }));
+    const other = request.agent(
+      createApp(undefined, { performance: { probe: unavailableProbe() } }),
+    );
     await establishSession(other);
     expect((await other.get(`${CHAIN_BASE}/${plan.id}`)).status).toBe(404);
     expect(
@@ -201,7 +249,9 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     const { agent, collectionId } = await withCollection();
     expect(
       (
-        await agent.put(`/api/external-collections/${collectionId}/items/req-get/rename`).send({
+        await agent
+          .put(`/api/external-collections/${collectionId}/requests/req-get`)
+          .send({
             method: "GET",
             url: "{{baseUrl}}/customers",
             headers: [{ key: "Cookie", value: "session=configured-secret" }],
@@ -209,9 +259,9 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
       ).status,
     ).toBe(200);
     const seeded = await agent.post(`${CHAIN_BASE}/seed`).send({
-        name: "Credentials",
-        source: { kind: "collection", collectionId, orderedRequestIds: ["req-get"] },
-      });
+      name: "Credentials",
+      source: { kind: "collection", collectionId, orderedRequestIds: ["req-get"] },
+    });
     expect(seeded.status).toBe(201);
     expect(seeded.body.movedCredentials).toEqual(
       expect.arrayContaining([
@@ -230,15 +280,23 @@ describe("POST /api/chain-plans/seed from a stored collection", () => {
     const { agent, collectionId } = await withCollection();
     const input = {
       name: "Original",
-      source: { kind: "collection", collectionId, orderedRequestIds: TWO_FOLDER_REQUEST_IDS },
+      source: {
+        kind: "collection",
+        collectionId,
+        orderedRequestIds: TWO_FOLDER_REQUEST_IDS,
+      },
     };
     const first = await agent.post(`${CHAIN_BASE}/seed`).send(input);
     expect(first.status).toBe(201);
     const environmentId = first.body.plan.targetEnvironmentId as string;
-    const chosen = await agent.post(`${CHAIN_BASE}/seed`).send({ ...input, name: "Override", environmentId });
+    const chosen = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({ ...input, name: "Override", environmentId });
     expect(chosen.status).toBe(201);
     expect(chosen.body.plan.targetEnvironmentId).toBe(environmentId);
-    const none = await agent.post(`${CHAIN_BASE}/seed`).send({ ...input, name: "Without environment", environmentId: null });
+    const none = await agent
+      .post(`${CHAIN_BASE}/seed`)
+      .send({ ...input, name: "Without environment", environmentId: null });
     expect(none.status).toBe(201);
     expect(none.body.plan.targetEnvironmentId).toBeNull();
     expect(
