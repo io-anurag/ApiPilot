@@ -35,6 +35,7 @@ import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 import { createLogger } from "./logger";
 import { sessionMiddleware } from "./session/sessionMiddleware";
+import { localHostGuard } from "./security/localHostGuard";
 
 const logger = createLogger("api.errorHandler");
 const requestLogger = createLogger("api.request");
@@ -42,6 +43,11 @@ const requestLogger = createLogger("api.request");
 export interface CreateAppOptions {
   /** See `DEBUG_LOG_REAL_CLIENT_IP` in `.env.example`. Default false. */
   debugLogRealClientIp?: boolean;
+  /**
+   * Reject any request whose `Host` or `Origin` is not a loopback name (DNS-rebinding defence).
+   * Default true; `server.ts` turns it off only when `BACKEND_HOST` explicitly exposes the server.
+   */
+  restrictToLocalHosts?: boolean;
   /**
    * AP-029: replaces the k6 runner, readiness probe, clock or tick interval. Tests inject a fake
    * runner here so `npm test` never needs k6.
@@ -67,6 +73,12 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // logged IP by sending its own `X-Forwarded-For` header.
   if (options?.debugLogRealClientIp) {
     app.set("trust proxy", "loopback");
+  }
+
+  // First, so a rejected request never reaches the session layer (no cookie issued, no session
+  // registered). ApiPilot is single-user and local-only; see README "Security model".
+  if (options?.restrictToLocalHosts ?? true) {
+    app.use(localHostGuard);
   }
 
   // Assigns every request an unguessable per-browser session identity and runs the rest of the

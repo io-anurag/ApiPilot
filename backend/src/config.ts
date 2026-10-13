@@ -5,6 +5,8 @@
  */
 export interface AppConfig {
   backendPort: number;
+  /** Interface the HTTP listener binds to. Loopback unless `BACKEND_HOST` is set explicitly. */
+  backendHost: string;
   debugLogRealClientIp: boolean;
 }
 
@@ -16,20 +18,23 @@ export class InvalidAIConfigurationError extends Error {
 }
 
 const DEFAULT_BACKEND_PORT = 4000;
+const DEFAULT_BACKEND_HOST = "127.0.0.1";
 
 /**
  * Reads `BACKEND_PORT` from `env` (defaulting to `process.env`), falling back to 4000 when
- * unset, non-numeric, or non-positive. Also reads `DEBUG_LOG_REAL_CLIENT_IP` (default false) —
- * see `AppConfig.debugLogRealClientIp`.
+ * unset, non-numeric, or non-positive. Reads `BACKEND_HOST` (default 127.0.0.1, so the server is
+ * reachable only from this machine) and `DEBUG_LOG_REAL_CLIENT_IP` (default false) — see
+ * `AppConfig.debugLogRealClientIp`.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const rawPort = env.BACKEND_PORT;
   const parsedPort = rawPort ? Number.parseInt(rawPort, 10) : DEFAULT_BACKEND_PORT;
   const backendPort =
     Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_BACKEND_PORT;
+  const backendHost = env.BACKEND_HOST?.trim() || DEFAULT_BACKEND_HOST;
   const debugLogRealClientIp = env.DEBUG_LOG_REAL_CLIENT_IP === "true";
 
-  return { backendPort, debugLogRealClientIp };
+  return { backendPort, backendHost, debugLogRealClientIp };
 }
 
 /** Validates AI settings that must fail fast when the backend is started. */

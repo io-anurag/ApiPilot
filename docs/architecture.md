@@ -1266,6 +1266,12 @@ and every stored value are unchanged; the journey is merged, not the model. The 
   `trust proxy` is scoped to `loopback` only when this flag is enabled, so it must never be turned
   on behind a real reverse proxy without also restricting `trust proxy` to that proxy's actual
   address, or a client could spoof its own logged IP.
+- ApiPilot is single-user and local-only: it has no authentication, and browser sessions isolate
+  workflows rather than identify users. The backend binds to `127.0.0.1` unless `BACKEND_HOST` is set
+  explicitly (a startup warning is logged when it is not loopback), and while bound to loopback
+  `backend/src/security/localHostGuard.ts` rejects any request whose `Host` or `Origin` is not
+  `localhost`, `127.0.0.1` or `[::1]` with `403 forbidden_host` (DNS-rebinding defence), before the
+  session layer runs. The Vite dev server also binds to loopback.
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
   review, dependency detection, export, or AI failure analysis. Generating a collection is not
   authorization to execute it.

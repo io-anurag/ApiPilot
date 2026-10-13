@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { InvalidAIConfigurationError, loadConfig, validateAIConfiguration } from "../../src/config";
 
 describe("loadConfig", () => {
+  it("binds to loopback by default and honours an explicit BACKEND_HOST", () => {
+    expect(loadConfig({}).backendHost).toBe("127.0.0.1");
+    expect(loadConfig({ BACKEND_HOST: "  " }).backendHost).toBe("127.0.0.1");
+    expect(loadConfig({ BACKEND_HOST: "0.0.0.0" }).backendHost).toBe("0.0.0.0");
+  });
+
   it("defaults debugLogRealClientIp to false when unset", () => {
     expect(loadConfig({}).debugLogRealClientIp).toBe(false);
   });

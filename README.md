@@ -267,6 +267,15 @@ The Vite frontend is available at `http://localhost:5173` and proxies `/api` req
 
 The `.env` file is optional when defaults are acceptable. The default development mode is local AI outside tests; set `AI_PROVIDER_MODE=mock` for a fast, model-free run.
 
+### Security model: single-user, local-only
+
+ApiPilot is a single-user tool meant to run on your own machine. It has no authentication or multi-user model: browser sessions are random per-browser cookies that keep workflows separate, not a login. The backend executes scripts and holds stored credentials, so it must not be reachable by others.
+
+- The backend binds to `127.0.0.1` by default. Set `BACKEND_HOST` only if you deliberately accept exposing it; a startup warning is logged when you do.
+- While bound to loopback, requests whose `Host` or `Origin` header is not `localhost`, `127.0.0.1` or `[::1]` are rejected with `403 forbidden_host`, which blocks DNS-rebinding attacks from web pages you visit.
+- The Vite dev server also binds to `127.0.0.1`.
+- Do not put ApiPilot behind a public reverse proxy or deploy it as a shared service without adding authentication first.
+
 ### Use the workflow
 
 1. Choose **Guided Workflow** and upload an OpenAPI 3.x YAML document.
@@ -290,6 +299,7 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | Variable                             | Purpose                                                                         | Default                                 |
 | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------- |
 | `BACKEND_PORT`                       | Express listener port                                                           | `4000`                                  |
+| `BACKEND_HOST`                       | Interface the backend binds to; non-loopback values expose an unauthenticated server | `127.0.0.1`                        |
 | `FRONTEND_DEV_PORT`                  | Vite development server port                                                    | `5173`                                  |
 | `GIT_COMMIT`                         | Commit value returned by `/api/version`                                         | Detected from Git, otherwise `unknown`  |
 | `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics             | `false`                                 |

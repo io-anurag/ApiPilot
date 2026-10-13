@@ -2,6 +2,7 @@ import "./loadEnv";
 import { createApp } from "./app";
 import { loadConfig, validateAIConfiguration } from "./config";
 import { createLogger } from "./logger";
+import { isLoopbackBindAddress } from "./security/localHostGuard";
 import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
@@ -74,13 +75,28 @@ recoverPerformanceRunsAtStartup();
 // Same guard for an AP-034 user-script run (specs/034-run-user-k6-script FR-023).
 recoverUserScriptRunsAtStartup();
 
-const app = createApp(undefined, { debugLogRealClientIp: config.debugLogRealClientIp });
+const loopbackOnly = isLoopbackBindAddress(config.backendHost);
 
-const server = app.listen(config.backendPort, () => {
+const app = createApp(undefined, {
+  debugLogRealClientIp: config.debugLogRealClientIp,
+  restrictToLocalHosts: loopbackOnly,
+});
+
+// ApiPilot has no authentication and executes user-supplied scripts, so it binds to loopback unless
+// the operator explicitly sets BACKEND_HOST. Exposing it is logged loudly rather than silently.
+const server = app.listen(config.backendPort, config.backendHost, () => {
   logger.info("server_listening", {
+    host: config.backendHost,
     port: config.backendPort,
-    url: `http://localhost:${config.backendPort}`,
+    url: `http://${config.backendHost}:${config.backendPort}`,
   });
+  if (!loopbackOnly) {
+    logger.warn("server_exposed_beyond_loopback", {
+      host: config.backendHost,
+      reason:
+        "BACKEND_HOST is not a loopback address. The server has no authentication; anyone who can reach it can run scripts and use stored credentials.",
+    });
+  }
 });
 
 server.on("error", (err: NodeJS.ErrnoException) => {

@@ -3705,3 +3705,14 @@ Implementation
       denial on the child's own flags instead.
     - Version bumped to 19.47.0 (root, backend, frontend, shared-domain).
 
+83. **Local-only hardening: loopback bind and Host/Origin guard; version 19.48.0 (2026-10-13).**
+    - The backend bound every interface (`app.listen(port)`) while having no authentication, executing scripts and holding
+      credentials. It now binds `127.0.0.1` by default; `BACKEND_HOST` (documented in `.env.example`) must be set to expose it,
+      and a non-loopback value logs a startup warning.
+    - While bound to loopback, `localHostGuard` rejects a non-loopback `Host` or `Origin` with `403 forbidden_host` before the
+      session layer (DNS-rebinding defence). It is not installed when the operator sets a non-loopback `BACKEND_HOST`.
+    - The Vite dev server now binds `127.0.0.1` (it was `host: true`, which let LAN clients reach the backend through its
+      proxy) and proxies to `127.0.0.1`.
+    - README gains a "Security model: single-user, local-only" section. The session cookie `secure` flag is unchanged.
+    - Version bumped to 19.48.0 (root, backend, frontend, shared-domain).
+

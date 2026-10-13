@@ -24,11 +24,15 @@ export default defineConfig(({ mode }) => {
     customLogger: createFileLogger(),
     plugins: [react(), tailwindcss()],
     server: {
-      host: true,
+      // Loopback only. `host: true` would expose the dev server on every interface, and because its
+      // proxy reaches the backend over loopback it would hand LAN clients a way around the
+      // backend's loopback bind.
+      host: "127.0.0.1",
       port: frontendDevPort,
       proxy: {
         "/api": {
-          target: `http://localhost:${backendPort}`,
+          // The backend binds 127.0.0.1 by default; `localhost` can resolve to ::1 first.
+          target: `http://127.0.0.1:${backendPort}`,
           changeOrigin: true,
           // Forward the original browser address via X-Forwarded-For. The backend ignores this
           // header unless DEBUG_LOG_REAL_CLIENT_IP=true explicitly opts in (see .env.example and
