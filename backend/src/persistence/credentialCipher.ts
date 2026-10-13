@@ -32,8 +32,14 @@ export interface CredentialCipher {
   decrypt(ciphertext: Buffer, iv: Buffer): string;
 }
 
-export function createCredentialCipher(keyPath: string): CredentialCipher {
-  return cipherFromKey(loadOrCreateKey(keyPath));
+/**
+ * `envKey` (from `APIPILOT_KEY`) takes precedence over the key file; when given, no key file is
+ * read or created. Threat model: the file key (mode 0o600, which Windows ignores) only protects
+ * a copied DB file, not an attacker with read access to the data directory. An env-supplied key
+ * keeps the key off that disk.
+ */
+export function createCredentialCipher(keyPath: string, envKey?: Buffer): CredentialCipher {
+  return cipherFromKey(envKey ?? loadOrCreateKey(keyPath));
 }
 
 /**

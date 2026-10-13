@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { resolveDbPath, resolveKeyPath } from "./config";
+import { resolveDbPath, resolveEnvKey, resolveKeyPath } from "./config";
 import { createCredentialCipher, createEphemeralCredentialCipher, type CredentialCipher } from "./credentialCipher";
 import { PersistenceInitializationError } from "./errors";
 import { createLogger } from "../logger";
@@ -41,7 +41,9 @@ export class SqliteConnection {
       // its credential key either — an ephemeral in-process key is generated instead of a file
       // named literally ":memory:.key" in the working directory.
       this.cipher =
-        dbPath === ":memory:" ? createEphemeralCredentialCipher() : createCredentialCipher(resolveKeyPath(dbPath));
+        dbPath === ":memory:"
+          ? createEphemeralCredentialCipher()
+          : createCredentialCipher(resolveKeyPath(dbPath), resolveEnvKey());
       this.initializeSchema();
     } catch (cause) {
       // Release the file handle before surfacing the failure — otherwise a corrupted file stays

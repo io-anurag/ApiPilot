@@ -468,7 +468,7 @@ There is no login or account system. Each browser receives an unguessable UUID i
 - Session-owned uploaded collections, their runs, and AI failure analyses (one encrypted analysis per failed result, replaced atomically when the result is analyzed again). Analyses stored by the earlier AI-decided version are removed at startup, with the count logged, because their cause was chosen by the AI.
 - AI readiness history and benchmark diagnostics, which are process-wide rather than session-owned.
 
-Environment variable and credential-like values are encrypted with AES-256-GCM. The key is stored in a sibling `${APIPILOT_DB_PATH}.key` file, so the database and key must be backed up together. A corrupted or unreadable database fails startup explicitly. Runs left in progress during a backend restart are recorded as cancelled with a backend-restart reason.
+Environment variable and credential-like values are encrypted with AES-256-GCM. The key is stored in a sibling `${APIPILOT_DB_PATH}.key` file, so the database and key must be backed up together. Threat model: the file key protects against a copied database file only; the file's `0o600` mode has no effect on Windows, so anyone who can read the data directory can read both. Set `APIPILOT_KEY` (64 hex characters or base64 of 32 bytes) to supply the key from the environment instead; it takes precedence, no key file is created, and a malformed value fails startup. Changing the key makes previously stored values undecryptable. A corrupted or unreadable database fails startup explicitly. Runs left in progress during a backend restart are recorded as cancelled with a backend-restart reason.
 
 ### Security and privacy boundaries
 
