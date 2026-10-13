@@ -408,8 +408,14 @@ The first time you run a newly uploaded collection, a warning appears: its reque
 any pre-request/test scripts it carries, were **not generated or verified by ApiPilot**
 and will execute exactly as authored — including any additional network calls a script
 itself makes. You must explicitly confirm before the first request is ever dispatched;
-declining runs nothing. This confirmation is required only once per uploaded collection,
-not on every run of an already-confirmed one.
+declining runs nothing. The confirmation is tied to the collection's scripts: it is not
+repeated on every run, but if you edit, add, remove or move a script afterwards, the
+collection shows **Unverified** again and asks before its next run. Changing a URL, a header,
+a variable value or a name does not.
+
+The scripts run in a separate, restricted process that cannot write files, start programs or
+read ApiPilot's database or keys. It can still make network requests, so confirm only
+collections you trust.
 
 ### 4.3 Browsing and editing the collection
 

@@ -53,10 +53,16 @@ Starts a run (FR-005). Two independent confirmation gates apply, checked in this
 requiring its own `confirmed: true` resubmission — mirrors `execution/start`'s existing
 `confirmation_required` pattern but adds the FR-007 gate ahead of it:
 
-1. **Unverified-content gate (FR-007)** — applies only while `UploadedCollectionSet.confirmedAt`
-   is unset (i.e., this collection has never been run before). Accepting it sets `confirmedAt`
-   permanently for this artifact (spec.md Assumptions: required once per upload, not once per
-   run).
+1. **Unverified-content gate (FR-007)** — applies while `UploadedCollectionSet.confirmedAt` is
+   unset. Accepting it sets `confirmedAt` for this artifact and records `scriptsSha256` (a SHA-256
+   over every collection-, folder- and request-level script, 19.47.0). `confirmedAt` is reported
+   only while the stored scripts still hash to that value; after a script edit it is unset and
+   `confirmationVoided: true` is set, and the gate applies again. Edits that do not touch scripts
+   leave it. The request may carry `scriptsSha256`; when present it must equal the collection's
+   current hash, and for a voided collection it is required. Otherwise the response is
+   `409 unverified_content_confirmation_required` with the current `scriptsSha256` to confirm.
+   Uploaded scripts run in a permission-restricted child process (`NewmanSandbox`); network access
+   is not restricted.
 2. **Risk-tier gate (FR-013)** — the same staging/production/destructive-operation gate
    `execution/start` already has, evaluated against this request's own POST/PUT/PATCH/DELETE
    items (research.md D3) instead of `ApiModel` operations. Evaluated every run start, exactly

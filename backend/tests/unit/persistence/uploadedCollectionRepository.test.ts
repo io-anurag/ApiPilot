@@ -130,4 +130,55 @@ describe("uploadedCollectionRepository", () => {
       UploadedCollectionNotFoundError,
     );
   });
+
+  describe("confirmation is bound to the collection's scripts", () => {
+    const withScript = (code: string, url = "http://x/a") =>
+      JSON.stringify({
+        info: { name: "c" },
+        item: [{ id: "i1", name: "one", event: [{ listen: "test", script: { exec: [code] } }], request: { method: "GET", url } }],
+      });
+
+    function setup(collection: string) {
+      const repository = getUploadedCollectionRepository();
+      const sessionId = randomUUID();
+      enterTestSession(sessionId);
+      const created = repository.create(sessionId, randomUUID(), new Date(0).toISOString(), { ...input, collection });
+      return { repository, sessionId, created };
+    }
+
+    it("stays confirmed while the scripts are unchanged, including after a non-script edit", () => {
+      const { repository, sessionId, created } = setup(withScript("a();"));
+      repository.markConfirmed(sessionId, created.id, "2026-01-01T00:00:00.000Z");
+      repository.updateCollectionBody(sessionId, created.id, withScript("a();", "http://other/b"));
+
+      const fetched = repository.get(sessionId, created.id);
+      expect(fetched?.confirmedAt).toBe("2026-01-01T00:00:00.000Z");
+      expect(fetched?.confirmationVoided).toBeUndefined();
+    });
+
+    it("is voided when a script is edited after confirmation, and can be confirmed again", () => {
+      const { repository, sessionId, created } = setup(withScript("a();"));
+      repository.markConfirmed(sessionId, created.id, "2026-01-01T00:00:00.000Z");
+      repository.updateCollectionBody(sessionId, created.id, withScript("fetchSomething();"));
+
+      const voided = repository.get(sessionId, created.id);
+      expect(voided?.confirmedAt).toBeUndefined();
+      expect(voided?.confirmationVoided).toBe(true);
+      expect(voided?.scriptsSha256).not.toBe(created.scriptsSha256);
+
+      repository.markConfirmed(sessionId, created.id, "2026-02-01T00:00:00.000Z");
+      const again = repository.get(sessionId, created.id);
+      expect(again?.confirmedAt).toBe("2026-02-01T00:00:00.000Z");
+      expect(again?.confirmationVoided).toBeUndefined();
+    });
+
+    it("does not honour a confirmation recorded before hashes existed", () => {
+      const { repository, sessionId, created } = setup(withScript("a();"));
+      getSharedConnection()
+        .db.prepare("UPDATE uploaded_collections SET confirmed_at = ?, confirmed_scripts_sha256 = NULL WHERE id = ?")
+        .run("2026-01-01T00:00:00.000Z", created.id);
+
+      expect(repository.get(sessionId, created.id)?.confirmedAt).toBeUndefined();
+    });
+  });
 });

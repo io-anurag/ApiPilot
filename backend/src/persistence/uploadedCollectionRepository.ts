@@ -1,5 +1,6 @@
 import type { UploadedCollectionSet } from "@apipilot/shared-domain";
 import { DuplicateNameError, UploadedCollectionNotFoundError } from "../externalCollections/errors";
+import { computeScriptsSha256 } from "../externalCollections/scriptFingerprint";
 import { toStoredVariableValues } from "../externalCollections/variableValueText";
 import { getSharedConnection, type SqliteConnection } from "./connection";
 
@@ -42,6 +43,7 @@ interface UploadedCollectionRow {
   variable_values_iv: Buffer;
   request_delay_ms: number;
   confirmed_at: string | null;
+  confirmed_scripts_sha256: string | null;
   source_workflow_id: string | null;
   created_at: string;
 }
@@ -51,6 +53,9 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
 
   private toUploadedCollectionSet(row: UploadedCollectionRow): UploadedCollectionSet {
     const json = this.connection.cipher.decrypt(row.variable_values_encrypted, row.variable_values_iv);
+    // A confirmation counts only for the scripts it was given for; once they change it is void.
+    const scriptsSha256 = computeScriptsSha256(row.collection);
+    const confirmationVoided = row.confirmed_at !== null && row.confirmed_scripts_sha256 !== scriptsSha256;
     return {
       id: row.id,
       name: row.name,
@@ -59,7 +64,9 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
       // Values saved before run-captured values were stored as text can be numbers or objects.
       variableValues: toStoredVariableValues(JSON.parse(json) as Record<string, unknown>),
       requestDelayMs: row.request_delay_ms,
-      confirmedAt: row.confirmed_at ?? undefined,
+      scriptsSha256,
+      confirmedAt: row.confirmed_at !== null && !confirmationVoided ? row.confirmed_at : undefined,
+      ...(confirmationVoided ? { confirmationVoided: true } : {}),
       sourceWorkflowId: row.source_workflow_id ?? undefined,
       createdAt: row.created_at,
     };
@@ -121,18 +128,24 @@ export class SqliteUploadedCollectionRepository implements UploadedCollectionRep
       collection: input.collection,
       variableValues: input.variableValues,
       requestDelayMs: input.requestDelayMs,
+      scriptsSha256: computeScriptsSha256(input.collection),
       ...(input.sourceWorkflowId ? { sourceWorkflowId: input.sourceWorkflowId } : {}),
       createdAt,
     };
   }
 
   markConfirmed(sessionId: string, id: string, confirmedAt: string): void {
-    const result = this.connection.db
-      .prepare("UPDATE uploaded_collections SET confirmed_at = ? WHERE session_id = ? AND id = ?")
-      .run(confirmedAt, sessionId, id);
-    if (result.changes === 0) {
+    const row = this.connection.db
+      .prepare("SELECT collection FROM uploaded_collections WHERE session_id = ? AND id = ?")
+      .get(sessionId, id) as { collection: string } | undefined;
+    if (!row) {
       throw new UploadedCollectionNotFoundError(id);
     }
+    // Hashed from the stored body in the same synchronous step, so the confirmation is for exactly
+    // the scripts that are stored now.
+    this.connection.db
+      .prepare("UPDATE uploaded_collections SET confirmed_at = ?, confirmed_scripts_sha256 = ? WHERE session_id = ? AND id = ?")
+      .run(confirmedAt, computeScriptsSha256(row.collection), sessionId, id);
   }
 
   updateVariableValues(sessionId: string, id: string, variableValues: Record<string, string>): UploadedCollectionSet {

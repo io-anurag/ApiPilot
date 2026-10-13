@@ -3694,3 +3694,14 @@ Implementation
       whether it has a value, never the value), and each links to Review requests, where values are set.
     - Version bumped to 19.46.0 (root, backend, frontend, shared-domain).
 
+82. **AP-026 amended: uploaded scripts run in a restricted process, confirmation bound to their hash; version 19.47.0 (2026-10-13).**
+    - Uploaded-collection items run in one child Node process per run (`--permission`, read access to `node_modules` only; no
+      write, spawn, worker or addon grant; the backend's environment is not inherited). The database and its key file are out of
+      reach even if a script escapes postman-sandbox. Network access is not restricted; this stays a trust-the-collection model.
+    - The "unverified content" confirmation is bound to a SHA-256 over the collection's scripts. A script edit voids it
+      (`confirmationVoided`); URL, header, variable and name edits do not. Re-confirming a voided collection needs the hash the
+      client was shown. Confirmations recorded before the hash existed ask again once.
+    - Finding: inside postman-sandbox `require('fs')` returns an empty stub rather than throwing, so the process-level tests assert
+      denial on the child's own flags instead.
+    - Version bumped to 19.47.0 (root, backend, frontend, shared-domain).
+

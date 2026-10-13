@@ -72,8 +72,8 @@ function isValidTier(value: unknown): value is EnvironmentTier {
 
 /** Never includes `variableValues` or the raw `collection` body (contract, mirrors `Environment`'s own create/list response). */
 function toSummary(uploadedCollection: UploadedCollectionSet) {
-  const { id, name, tier, requestDelayMs, confirmedAt, createdAt } = uploadedCollection;
-  return { id, name, tier, requestDelayMs, confirmedAt, createdAt };
+  const { id, name, tier, requestDelayMs, scriptsSha256, confirmedAt, confirmationVoided, createdAt } = uploadedCollection;
+  return { id, name, tier, requestDelayMs, scriptsSha256, confirmedAt, confirmationVoided, createdAt };
 }
 
 function logRequestReceived(method: string, path: string): number {
@@ -519,19 +519,30 @@ export function createExternalCollectionsRouter(): Router {
       // unresolved `{{token}}` simply records its own failed/errored outcome. Unresolved variables
       // stay visible before running (CollectionView.unresolvedVariables, the Variables panel).
 
-      // Gate 1 (FR-007) — evaluated only while never-before confirmed; permanently satisfied once
-      // accepted. Deliberately does NOT let this same `confirmed:true` also satisfy gate 2 below
-      // (research.md D10) — a brand-new upload against a risky tier requires two separate
-      // confirmed resubmissions, one per gate.
+      // Gate 1 (FR-007) — evaluated until the collection's scripts have been confirmed; the
+      // confirmation is bound to a hash of those scripts, so it is void again as soon as any of
+      // them changes (`confirmedAt` is unset then). Deliberately does NOT let this same
+      // `confirmed:true` also satisfy gate 2 below (research.md D10) — a brand-new upload against
+      // a risky tier requires two separate confirmed resubmissions, one per gate.
       if (!uploadedCollection.confirmedAt) {
-        if (!confirmed) {
+        // A client that holds a copy from before the scripts changed must not re-confirm unseen
+        // code with a bare `confirmed:true`: it has to echo the hash it was shown. For a collection
+        // never confirmed before the hash is optional (nothing earlier could have gone stale).
+        const claimedSha256 = typeof requestBody?.scriptsSha256 === "string" ? requestBody.scriptsSha256 : undefined;
+        const seenCurrentScripts =
+          claimedSha256 === undefined ? !uploadedCollection.confirmationVoided : claimedSha256 === uploadedCollection.scriptsSha256;
+        if (!confirmed || !seenCurrentScripts) {
           logRequestFailed(req.method, req.path, startedAt, 409, "unverified_content_confirmation_required");
           res.status(409).json({
             error: "unverified_content_confirmation_required",
-            message:
-              "This collection's requests and any embedded pre-request/test scripts have never " +
-              "been confirmed. They were not generated or verified by ApiPilot and will execute " +
-              "exactly as authored.",
+            message: uploadedCollection.confirmationVoided
+              ? "This collection's scripts changed since they were last confirmed. They were not " +
+                "generated or verified by ApiPilot and will execute exactly as authored; " +
+                "confirm them again to run."
+              : "This collection's requests and any embedded pre-request/test scripts have never " +
+                "been confirmed. They were not generated or verified by ApiPilot and will execute " +
+                "exactly as authored.",
+            scriptsSha256: uploadedCollection.scriptsSha256,
           });
           return;
         }

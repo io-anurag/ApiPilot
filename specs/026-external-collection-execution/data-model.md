@@ -18,7 +18,9 @@ The stored, session-scoped representation of one uploaded collection + environme
 | `collection` | `string` (raw JSON, as uploaded) | The uploaded Postman Collection v2.1 document, stored verbatim. Parsed into a `postman-collection` `Collection` instance and walked via `forEachItem()` into `PostmanRawItem[]` (`externalCollections.ts`, research.md D6) at read/run time by `uploadedCollectionParsing.ts`/`runUploadedCollectionExecution.ts` rather than pre-normalized and persisted — the artifact of record is what the user actually uploaded. |
 | `variableValues` | `Record<string, string>` | From the uploaded environment file's `values` array. Encrypted at rest (FR-009), same mechanism as `Environment.variableValues` (research.md D4). |
 | `requestDelayMs` | `number` | Mirrors `Environment.requestDelayMs`; `0` (no pause) by default. |
-| `confirmedAt` | `string?` (ISO 8601) | Set once the FR-007 "unverified content" confirmation has been accepted for this artifact. Absent means the next run-start request must re-surface that confirmation (spec.md Assumptions: required once per upload, not once per run). |
+| `confirmedAt` | `string?` (ISO 8601) | Set once the FR-007 "unverified content" confirmation has been accepted for the scripts the collection has now. Absent means the next run-start request must re-surface that confirmation; it is also absent after a script edit (19.47.0), because the confirmation is bound to `scriptsSha256` (stored as `confirmed_scripts_sha256`). |
+| `scriptsSha256` | `string` | SHA-256 over every script the collection would execute. Computed on read, not stored with the collection. |
+| `confirmationVoided` | `true?` | Set when the collection was confirmed before but its scripts changed since. |
 | `createdAt` | `string` (ISO 8601) | |
 
 Session-scoped exactly like `Environment` (specs/017/025): removed when the owning session is

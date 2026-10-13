@@ -33,8 +33,20 @@ export interface UploadedCollectionSet {
   variableValues: Record<string, string>;
   /** Mirrors `Environment.requestDelayMs`; `0` (no pause) by default. */
   requestDelayMs: number;
-  /** Set once the FR-007 "unverified content" confirmation has been accepted for this artifact. */
+  /**
+   * SHA-256 over every script the collection would execute. The FR-007 "unverified content"
+   * confirmation is bound to this value: a client confirming a collection whose scripts changed
+   * since it last asked must send the hash it was shown.
+   */
+  scriptsSha256: string;
+  /**
+   * Set once the FR-007 "unverified content" confirmation has been accepted for the scripts the
+   * collection has now. Absent when it was never confirmed, or when its scripts changed since
+   * (then `confirmationVoided` is set).
+   */
   confirmedAt?: string;
+  /** True when the collection was confirmed before but its scripts have changed since, so it must be confirmed again. */
+  confirmationVoided?: true;
   /**
    * The guided workflow whose Continue to Import & Run hand-off this upload was made from
    * (specs/048-workflow-run-stage-status). Absent for any other upload. Not part of `UploadedCollectionSummary`.

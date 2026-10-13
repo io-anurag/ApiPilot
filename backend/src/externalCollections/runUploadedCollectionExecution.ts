@@ -4,6 +4,7 @@ import { createLogger } from "../logger";
 import { parseUploadedCollection } from "./uploadedCollectionParsing";
 import { mapUploadedResult } from "./mapUploadedResult";
 import { runSingleItem } from "../execution/newmanRunner";
+import { NewmanSandbox } from "../execution/newmanSandbox";
 import { appendResult, isCancelRequested, settleRun } from "./uploadedCollectionExecutionStore";
 import { findEditedItemIds } from "./editedItems";
 import { updateUploadedCollectionVariables } from "./uploadedCollectionStore";
@@ -86,6 +87,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
   const { runId, uploadedCollection, orderedItemIds } = input;
   let orderedItems: Item[] = [];
   let attempted = 0;
+  const sandbox = new NewmanSandbox();
 
   try {
     const collection = parseUploadedCollection(uploadedCollection.collection);
@@ -135,6 +137,9 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
         folderChain: folderChainOf(item, collection),
         declaredVariables,
         environment: environmentRecord,
+        // The collection's scripts were not written by ApiPilot (specs/026 FR-007): they run
+        // outside the backend process, under Node's permission model.
+        sandbox,
       });
       environmentRecord = itemOutcome.environment;
       // A workflow-chaining test script (e.g. `pm.environment.set(...)` capturing a prior step's
@@ -172,5 +177,7 @@ export async function runUploadedCollectionExecution(input: RunUploadedCollectio
     appendNotAttempted(runId, orderedItems.slice(attempted), "run-ended-before-reached");
     settleRun(runId, "completed");
     completeExecutionForUpload(uploadedCollection.sourceWorkflowId, "completed");
+  } finally {
+    sandbox.close();
   }
 }

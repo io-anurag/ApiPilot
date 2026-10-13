@@ -643,7 +643,16 @@ export function ExternalCollectionsPage({
             setUploadedCollections((current) =>
               current.map((c) =>
                 c.id === selected.id
-                  ? { ...c, confirmedAt: new Date().toISOString() }
+                  ? { ...c, confirmedAt: new Date().toISOString(), confirmationVoided: undefined }
+                  : c,
+              ),
+            )
+          }
+          onScriptsChanged={(scriptsSha256) =>
+            setUploadedCollections((current) =>
+              current.map((c) =>
+                c.id === selected.id
+                  ? { ...c, scriptsSha256, confirmedAt: undefined, confirmationVoided: true }
                   : c,
               ),
             )

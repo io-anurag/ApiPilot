@@ -552,6 +552,7 @@ export function ExternalCollectionRunPanel({
   runOrder,
   onRunOrderChange,
   onConfirmed,
+  onScriptsChanged,
   onOpenChainPlan,
   view = "all",
   onRunStarted,
@@ -583,6 +584,8 @@ export function ExternalCollectionRunPanel({
    * subsequent run re-showed the "not generated or verified by ApiPilot" dialog even though the
    * backend had already recorded the confirmation permanently. */
   onConfirmed?: () => void;
+  /** The backend refused because the collection's scripts changed since they were confirmed; `scriptsSha256` is what to confirm now. */
+  onScriptsChanged?: (scriptsSha256: string) => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the selected requests, in run order. */
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: opens the Coverage view, so a run's results can be read as coverage of the specification. */
@@ -736,7 +739,12 @@ export function ExternalCollectionRunPanel({
     // run's order (specs/026 FR-019).
     const selectedRequestIds =
       requests.length > 0 ? orderedRequests.filter((item) => selectedIds.has(item.id)).map((item) => item.id) : undefined;
-    const result = await startUploadedCollectionExecution(uploadedCollection.id, confirmed, selectedRequestIds);
+    const result = await startUploadedCollectionExecution(
+      uploadedCollection.id,
+      confirmed,
+      selectedRequestIds,
+      uploadedCollection.scriptsSha256,
+    );
     setStarting(false);
 
     // The backend records this collection's unverified-content confirmation (FR-007) — gate 1 —
@@ -763,6 +771,9 @@ export function ExternalCollectionRunPanel({
 
     if (!result.ok) {
       if (result.error === "unverified_content_confirmation_required") {
+        // This page's copy of the collection predates a script change: take the hash the backend
+        // wants confirmed, so the dialog below confirms what will actually run.
+        if (result.scriptsSha256) onScriptsChanged?.(result.scriptsSha256);
         setShowUnverifiedDialog(true);
         return;
       }

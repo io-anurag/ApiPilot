@@ -301,6 +301,11 @@ export class SqliteConnection {
     // specs/048-workflow-run-stage-status D1: the guided workflow an upload was handed over from.
     // Nullable: an upload from before this column, or one made directly, has no source workflow.
     this.ensureColumn("uploaded_collections", "source_workflow_id", "TEXT");
+
+    // The "unverified content" confirmation is bound to the hash of the collection's scripts at
+    // the time it was given. Nullable: a confirmation recorded before this column has no hash, so
+    // it no longer counts and the collection asks again once (the safe direction).
+    this.ensureColumn("uploaded_collections", "confirmed_scripts_sha256", "TEXT");
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

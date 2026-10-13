@@ -491,12 +491,32 @@ records its own outcome. The generated-collection `execution/start` keeps its re
 the collection's stored `variableValues` (`updateUploadedCollectionVariables`), so the resolved
 preview and later runs reflect captured values rather than silently diverging from what was sent.
 
-Executing the collection's own pre-request/test scripts inside Newman's existing sandboxed script
-engine — the same engine `newmanRunner.ts` already invokes for every generated request — required
-a narrow, explicit amendment to constitution XVII ("avoid executing uploaded specifications or
-generated scripts on the server"), gated behind the FR-007 confirmation above and scoped only to
-this feature; it does not apply to ApiPilot-generated artifacts, AI output, or uploaded OpenAPI
-specifications, and no new sandboxing layer was introduced.
+Executing the collection's own pre-request/test scripts required a narrow, explicit amendment to
+constitution XVII ("avoid executing uploaded specifications or generated scripts on the server"),
+gated behind the FR-007 confirmation above and scoped only to this feature; it does not apply to
+ApiPilot-generated artifacts, AI output, or uploaded OpenAPI specifications.
+
+Since 19.47.0 these scripts do not run in the backend process. `runUploadedCollectionExecution.ts`
+starts one `NewmanSandbox` (`execution/newmanSandbox.ts`) per run: a child Node process started
+with `--permission` and read access only to the installed `node_modules` Newman needs. It has no
+file-system write, no process-spawn, no worker and no addon grant, and it does not inherit the
+backend's environment (only proxy settings and, on Windows, `SystemRoot`/`windir`). The collection
+goes in over IPC and a plain summary (status, headers, body text, assertions, environment) comes
+back. The backend's database and its credential key file are therefore unreachable from the child
+even if a script escaped postman-sandbox's vm context, which is not itself a security boundary.
+A child that hangs is killed after two minutes and the run records the failure. Generated
+collections (`execution/runExecution.ts`) still run in-process: their scripts are ApiPilot's own.
+
+What this does not do: Node 24's permission model has no network control, so a script, or
+`pm.sendRequest`, can still reach any host the machine can. The model is trust-the-collection, and
+the FR-007 confirmation is what carries that trust. The confirmation is bound to a SHA-256 over
+every script in the collection (`externalCollections/scriptFingerprint.ts`, stored as
+`confirmed_scripts_sha256`): editing, adding, removing or moving a script voids it
+(`confirmedAt` is unset and `confirmationVoided` is set), while edits that cannot change the code
+that runs (URL, headers, variable values, a rename) do not. A client re-confirming a voided
+collection must send the `scriptsSha256` it was shown, so a stale screen cannot confirm scripts
+nobody saw. Confirmations recorded before the hash existed no longer count, so those collections
+ask once more.
 
 A finished uploaded-collection run can be downloaded as a PDF (AP-043) or as one self-contained HTML file (AP-044):
 `GET /api/external-collections/:id/execution/runs/:runId/report.pdf` and `.../report.html` (one handler, both formats).
@@ -1232,9 +1252,11 @@ and every stored value are unchanged; the journey is merged, not the model. The 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
   executes them nor follows arbitrary filesystem/network references.
 - The one narrow exception to "never execute uploaded content" is a user-initiated, explicitly
-  confirmed run of an uploaded Postman collection's own scripts, inside Newman's existing sandbox
-  (specs/026-external-collection-execution, constitution XVII amendment). It does not extend to
-  OpenAPI specifications, ApiPilot-generated artifacts, or AI output.
+  confirmed run of an uploaded Postman collection's own scripts, in a permission-restricted child
+  process with no file-system write, process-spawn or backend-environment access, confirmed
+  against a hash of those scripts (specs/026-external-collection-execution, constitution XVII
+  amendment). Network access is not restricted: the collection is trusted once confirmed. It does
+  not extend to OpenAPI specifications, ApiPilot-generated artifacts, or AI output.
 - Specifications, credentials, raw prompts, raw model responses, and complete request payloads are
   excluded from ordinary diagnostics. Logs favor stage, category, duration, model identity, and
   correlation context. A request-completion log records only method/path/status/duration/client

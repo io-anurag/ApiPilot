@@ -91,3 +91,35 @@ describe("external collections: confirmation gates (US2, FR-007, FR-013, researc
     expect(again.body.error).toBe("execution_in_progress");
   });
 });
+
+describe("external collections: confirmation is bound to the scripts (hash)", () => {
+  function scripted(code: string) {
+    return {
+      info: { name: "c" },
+      item: [
+        {
+          name: "Get widget",
+          event: [{ listen: "test", script: { exec: [code] } }],
+          request: { method: "GET", url: "{{baseUrl}}/widgets" },
+        },
+      ],
+    };
+  }
+
+  it("reports scriptsSha256, refuses a mismatching hash, and accepts the matching one", async () => {
+    const agent = request.agent(createApp());
+    const uploaded = await upload(agent, "local", "hashed", scripted("pm.test('a', () => {});"));
+    const { id, scriptsSha256 } = uploaded.body.uploadedCollection;
+    expect(scriptsSha256).toMatch(/^[0-9a-f]{64}$/);
+
+    const wrong = await agent
+      .post(`/api/external-collections/${id}/execution/start`)
+      .send({ confirmed: true, scriptsSha256: "0".repeat(64) });
+    expect(wrong.status).toBe(409);
+    expect(wrong.body.error).toBe("unverified_content_confirmation_required");
+    expect(wrong.body.scriptsSha256).toBe(scriptsSha256);
+
+    const right = await agent.post(`/api/external-collections/${id}/execution/start`).send({ confirmed: true, scriptsSha256 });
+    expect(right.status).toBe(200);
+  });
+});

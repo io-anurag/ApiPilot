@@ -27,6 +27,8 @@ export interface ErrorResult {
   confirmation?: ExecutionConfirmationRequirement;
   /** Present only for `409 execution_in_progress`. */
   runId?: string;
+  /** Present only for `409 unverified_content_confirmation_required`: the hash of the scripts to confirm now. */
+  scriptsSha256?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ function parseError(parsedBody: unknown, status: number, operation: string): Err
         }
       : {}),
     ...(typeof parsed?.runId === "string" ? { runId: parsed.runId as string } : {}),
+    ...(typeof parsed?.scriptsSha256 === "string" ? { scriptsSha256: parsed.scriptsSha256 } : {}),
   };
   logger.error("request_failed", { operation, errorCategory: result.error, statusCode: status });
   return result;
@@ -148,11 +151,13 @@ export async function startUploadedCollectionExecution(
   id: string,
   confirmed = false,
   selectedRequestIds?: string[],
+  /** The `scriptsSha256` of the collection the user was shown; the backend refuses to re-confirm changed scripts without it. */
+  scriptsSha256?: string,
 ): Promise<UploadedRunResult> {
   const response = await postJson(
     `/api/external-collections/${id}/execution/start`,
     "startUploadedCollectionExecution",
-    { confirmed, ...(selectedRequestIds ? { selectedRequestIds } : {}) },
+    { confirmed, ...(selectedRequestIds ? { selectedRequestIds } : {}), ...(scriptsSha256 ? { scriptsSha256 } : {}) },
   );
   if ("networkError" in response) {
     return { ok: false, error: "network_error", message: response.networkError };

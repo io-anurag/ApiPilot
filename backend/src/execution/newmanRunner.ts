@@ -5,6 +5,7 @@ import type {
 } from "@apipilot/shared-domain";
 import type { EventDefinition, ItemDefinition, ItemGroupDefinition } from "postman-collection";
 import type { NewmanExecutionResult } from "./mapNewmanResult";
+import type { NewmanSandbox } from "./newmanSandbox";
 
 /**
  * Thin wrapper around Newman's Node API: runs exactly one Postman request item (with its already-
@@ -59,6 +60,12 @@ export interface NewmanItemRunInput {
   folderChain?: ReadonlyArray<Record<string, unknown>>;
   /** The collection's own `event` array (collection-level pre-request/test scripts), passed as is. */
   collectionEvents?: EventDefinition[];
+  /**
+   * Run in this permission-restricted child process (`newmanSandbox.ts`) instead of in this one.
+   * Passed for an uploaded collection, whose scripts ApiPilot did not write; ApiPilot's own
+   * generated scripts run in-process. The caller owns the sandbox and closes it after the run.
+   */
+  sandbox?: NewmanSandbox;
 }
 
 export interface NewmanItemRunOutput {
@@ -95,38 +102,38 @@ function nestInFolders(
 export async function runSingleItem(
   input: NewmanItemRunInput,
 ): Promise<NewmanItemRunOutput> {
+  const options = {
+    collection: {
+      info: { name: "apipilot-execution-item" },
+      ...(input.collectionAuth ? { auth: input.collectionAuth } : {}),
+      ...(input.collectionEvents ? { event: input.collectionEvents } : {}),
+      variable: input.declaredVariables,
+      item: [nestInFolders(input.item, input.folderChain ?? [])],
+    },
+    environment: {
+      values: Object.entries(input.environment).map(([key, value]) => ({
+        key,
+        value,
+        enabled: true,
+      })),
+    },
+    timeoutRequest: REQUEST_TIMEOUT_MS,
+    reporters: [],
+  };
+  if (input.sandbox) return input.sandbox.run(options);
+
   const { default: newman } = await newmanModule;
   return new Promise((resolve, reject) => {
-    newman.run(
-      {
-        collection: {
-          info: { name: "apipilot-execution-item" },
-          ...(input.collectionAuth ? { auth: input.collectionAuth } : {}),
-          ...(input.collectionEvents ? { event: input.collectionEvents } : {}),
-          variable: input.declaredVariables,
-          item: [nestInFolders(input.item, input.folderChain ?? [])],
-        },
-        environment: {
-          values: Object.entries(input.environment).map(([key, value]) => ({
-            key,
-            value,
-            enabled: true,
-          })),
-        },
-        timeoutRequest: REQUEST_TIMEOUT_MS,
-        reporters: [],
-      },
-      (err, summary) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        const execution = (summary.run.executions[0] ?? {}) as unknown as NewmanExecutionResult;
-        resolve({
-          execution,
-          environment: summary.environment.toObject(false, true),
-        });
-      },
-    );
+    newman.run(options, (err, summary) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      const execution = (summary.run.executions[0] ?? {}) as unknown as NewmanExecutionResult;
+      resolve({
+        execution,
+        environment: summary.environment.toObject(false, true),
+      });
+    });
   });
 }
