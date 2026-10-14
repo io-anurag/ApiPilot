@@ -32,7 +32,7 @@ The structured candidate returned by the AI response contract before domain conv
 | `category`        | `ScenarioCategory` | Must be an allowed semantic category; deterministic-only categories are not fabricated |
 | `targetLocation`  | location union     | Must match the referenced operation input location                                     |
 | `targetField`     | `string`           | Required when targeting a field; must resolve in operation schemas/parameters          |
-| `request`         | `GeneratedRequest` | Must use only supported operation inputs                                               |
+| `request`         | `GeneratedRequest` | Must use only supported operation inputs; an omitted or null `pathParameters`, `queryParameters` or `headers` map is read as `{}` (2026-10-14 amendment) |
 | `assertions`      | `Assertion[]`      | Status codes and schemas must be documented in `ApiModel`                              |
 | `rationale`       | `string`           | Required, non-empty                                                                    |
 | `confidence`      | `number`           | Required and bounded from 0 through 1                                                  |

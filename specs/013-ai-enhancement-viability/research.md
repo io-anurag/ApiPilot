@@ -454,3 +454,70 @@ model with stronger JSON adherence.
 
 Tracked as **T072**. Success criterion SC-001 is therefore **not yet met**; SC-002 through SC-005
 and SC-009 through SC-011 are met or are covered by passing tests.
+
+---
+
+## Decision 11: Default to Qwen3-1.7B at fp32, with prompt version 4 (2026-10-14, closes T072)
+
+**Context.** T072 asked whether the enhancement stage's unreliable structured output should be resolved by
+constraining the reply, requesting one candidate per call, or adopting a model with stronger JSON
+adherence. The harness was first corrected (a warm-up so model load is not charged to the first workload,
+six operations instead of three, reply length recorded, and no model "selected" when none produces a
+usable reply). It was then run on the cached models with the production validation as the judge.
+
+**Evidence** (six synthetic operations; success means at least one candidate the pipeline would retain):
+
+| Model, dtype and prompt | Usable | Latency per operation | Peak memory |
+| --- | --- | --- | --- |
+| Qwen2.5-0.5B fp32, prompt v3 | 0 of 6 | 5 s | 3.3 GB |
+| Qwen2.5-0.5B q8, prompt v3 | 0 of 6 | 15 s | 2.1 GB |
+| Qwen3-1.7B fp32, prompt v3 | 0 of 6 | 4 s (replies empty) | 9.0 GB |
+| Qwen2.5-0.5B fp32, prompt v4 | 0 of 6 | 12 s | 3.3 GB |
+| Qwen3-1.7B fp32, prompt v4 | **5 of 6** | 30 s | 9.0 GB |
+| Qwen3-1.7B q8, prompt v4 | 0 of 6 | 44 s | 4.5 GB |
+
+The failure was not JSON adherence. The 0.5B model answers `[]` and, when forced, echoes the operation
+description back, so no prompt change helped it. Qwen3-1.7B also answered `[]` unprompted, but when asked
+for a candidate it wrote a sensible one for every operation, failing validation only because it omitted
+empty request maps and copied the example's `400` onto operations that do not document it. Both were
+fixed (see below). Position mattered: the instruction that `expectedStatusCode` must be one of an explicit
+`allowedStatusCodes` list scored 2 to 3 of 6 mid-task and 5 of 6 as the last sentence with the list as the
+last key.
+
+**Decision.**
+1. The default model becomes `onnx-community/Qwen3-1.7B-ONNX` at fp32 (the cached files are fp32; an unset
+   `AI_MODEL_DTYPE` loads fp32 on CPU).
+2. The enhancement prompt moves to version 4: exactly one candidate per operation and no empty reply, an
+   `allowedTargets` list, an example status code taken from the operation, and `allowedStatusCodes` last.
+3. The parser reads an omitted or null `pathParameters`, `queryParameters` or `headers` map as empty.
+   Nothing else is repaired.
+4. The planning seeds are re-measured for the new model: 50 ms per prompt token (measured 30 to 72) and
+   250 ms per output token (a steady 241 to 246), up from 42 and 180. `AI_DEPENDENCY_TIMEOUT_MS` rises from
+   50 s to 90 s, because at the new rates a 458-token dependency unit projects at 54.9 s and the pre-flight
+   check refused the AI pass outright. The enhancement run budget stays at 5 minutes, which now covers
+   roughly 10 operations.
+
+**Trade-offs, recorded per constitution XXX.**
+- Download about 6.6 GB against 1.9 GB, resident memory about 9 GB against 3.2 GB, and about 30 s per
+  operation against 5 to 10 s. A machine without roughly 10 GB of free memory should set `AI_MODEL_ID`
+  to a smaller model and accept that enhancement will mostly come back empty.
+- A forced candidate can be low value for an operation the deterministic rules already cover. Review
+  (specs/006) is the control; AI scenarios are never approved automatically (specs/005 FR-018).
+- The first run on an uncached machine downloads 6.6 GB before generating anything.
+
+**Alternatives considered.**
+- *Keep Qwen2.5-0.5B and tune the prompt*: rejected; 0 of 6 under every variant tried, and the forced
+  variants made it worse.
+- *Phi-3-mini (4k and 128k) and LaMini-Flan-T5*: not re-run; Phi-3 scored 0 to 33% at 270 to 320 s per
+  request in the AP-004 benchmark, which disqualifies it on latency, and both need multi-gigabyte
+  downloads.
+- *Qwen3-1.7B at q8*: measured afterwards (T066): 0 of 6 usable against 5 of 6 at fp32, 44 s per
+  operation against 29 s, and 4.5 GB peak memory against 8.9 GB. Half the memory does not help a model
+  that produces nothing usable and is slower, so the default stays fp32.
+- *Constrained decoding or a schema-only prompt*: Transformers.js offers no grammar-constrained output,
+  and the failure was never malformed JSON.
+
+**Limits of the evidence.** Six synthetic operations, so one workload is 17 points. The judge is the
+production validation, not a person reading the candidates. Other AI features (dependency analysis,
+failure explanation) were checked on the new default, see ROADMAP #91, but only against their existing
+fixtures and corpora.

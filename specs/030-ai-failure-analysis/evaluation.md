@@ -342,3 +342,23 @@ bounded:
 - the output is only displayed, labelled as an AI inference, and never executed.
 
 This is recorded as a known limitation rather than mitigated further.
+
+## Run 6: the new default model, Qwen3-1.7B (2026-10-14)
+
+The default local model changed to `onnx-community/Qwen3-1.7B-ONNX` at fp32 for scenario enhancement
+(specs/013 research.md Decision 11). Research D20 required this feature to be re-evaluated on that model,
+with the planning rates recalibrated in the same change, which is done (50 ms per prompt token, 250 ms per
+output token). `npm run test:ai-real:failure-analysis -w backend`, defaults, CPU, same 12 synthetic cases:
+
+| Measure | Qwen2.5-0.5B (run 5) | Qwen3-1.7B (this run) | SC-006 bar |
+|---|---|---|---|
+| Rules match the labels | 12 of 12 | 12 of 12 | 100% |
+| Usable explanations | 12 of 12 (100%) | 11 of 12 (92%) | at least 80% |
+| Contradictions | 0 | 0 | at most 10% |
+| Median latency | 11.2 s | 34.2 s | within the per-inference timeout (SC-005) |
+| Slowest | n/a | 58.0 s | 120 s timeout |
+
+The one unusable explanation was `env-connection-refused`, which came back `INVALID_RESPONSE`. The
+feature meets the numeric bars on the new default and takes about three times as long per explanation. It
+is still *implementation complete, AI evaluation pending*, only because SC-006 also needs at least 4 real,
+redacted failures in the corpus (T055), and every case so far is synthetic.

@@ -20,7 +20,7 @@ consumed directly by future backend features (AP-005+), not exposed over HTTP.
 ```json
 {
   "state": "ready",
-  "modelId": "onnx-community/Qwen2.5-0.5B-Instruct",
+  "modelId": "onnx-community/Qwen3-1.7B-ONNX",
   "provider": "local",
   "acceleratorRequested": false,
   "acceleratorActive": false,
@@ -29,12 +29,12 @@ consumed directly by future backend features (AP-005+), not exposed over HTTP.
   "lastKnownReadiness": {
     "state": "unavailable",
     "reason": "Model download failed: ENOTFOUND",
-    "modelId": "onnx-community/Qwen2.5-0.5B-Instruct",
+    "modelId": "onnx-community/Qwen3-1.7B-ONNX",
     "updatedAt": "2026-09-15T08:00:00.000Z"
   },
   "latestBenchmarkRun": {
     "runAt": "2026-08-20T00:00:00.000Z",
-    "selectedModelId": "onnx-community/Qwen2.5-0.5B-Instruct",
+    "selectedModelId": "onnx-community/Qwen3-1.7B-ONNX",
     "selectionRationale": "Highest structured-output success rate (100%) among evaluated candidates..."
   }
 }

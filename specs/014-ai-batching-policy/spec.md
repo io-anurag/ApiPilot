@@ -23,6 +23,11 @@ between, and nothing retained when it fails.
 
 ### Measured behaviour (shipped default configuration, `Qwen2.5-0.5B-Instruct`, CPU)
 
+> **Amended 2026-10-14:** the figures in this section describe Qwen2.5-0.5B, the default when they were
+> taken. The default is now Qwen3-1.7B, whose planning rates (50 ms per prompt token, 250 ms per output
+> token), `AI_DEPENDENCY_TIMEOUT_MS` (90 s) and per-operation cost (about 30 s) are recorded in
+> `specs/013-ai-enhancement-viability/research.md` Decision 11. The batching policy itself is unchanged.
+
 | Input | Batches | Prompt size | Max AI scenarios obtainable | Deterministic scenarios | Observed / projected outcome |
 | --- | --- | --- | --- | --- | --- |
 | 6 operations | 1 | ~3,500 chars | 3 | 32 | `INVALID_RESPONSE` after ~57s of generation |

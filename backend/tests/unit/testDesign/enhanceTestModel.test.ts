@@ -954,7 +954,7 @@ describe("enhanceTestModel work-bounded units (specs/014-ai-batching-policy)", (
  */
 describe("enhanceTestModel validates against the full ApiModel, not the unit (specs/014-ai-batching-policy)", () => {
   function candidateProvider(candidate: Record<string, unknown>): AIProvider {
-    return provider(JSON.stringify({ responseVersion: 3, candidates: [candidate] }));
+    return provider(JSON.stringify({ responseVersion: 5, candidates: [candidate] }));
   }
 
   it("rejects a candidate naming an operation that exists in no part of the specification", async () => {

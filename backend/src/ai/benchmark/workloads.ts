@@ -24,9 +24,12 @@ export interface BenchmarkWorkload {
  * Replaces `ap004-representative-v1`, whose three single-sentence prompts bore no resemblance to the
  * enhancement task: a recorded 33% success rate on them could not support a decision about that task
  * (specs/013-ai-enhancement-viability T025, constitution XXII). Reports written under the earlier id
- * are history and are not comparable with this set.
+ * are history and are not comparable with this set. `v2` widened the set from three operations to six:
+ * on three, one model answer decided a third of the score. `v3` adds two operations with no parameters
+ * and no request body, which the first six lacked: they exposed that a prompt listing no allowed
+ * target left the model with nothing it was permitted to aim at, and it answered with no candidate.
  */
-export const WORKLOAD_SET_ID = "ap013-enhancement-v1";
+export const WORKLOAD_SET_ID = "ap013-enhancement-v3";
 
 const string = (extra: Partial<SchemaConstraint> = {}): SchemaConstraint => ({
   type: "string",
@@ -53,8 +56,10 @@ function modelOf(operation: ApiOperation): ApiModel {
 }
 
 /**
- * Three small, fixed operations spanning what enhancement reasons about: a format-constrained body
- * field, path/query parameters with an enumeration, and a nested array body. Fixed literals rather
+ * Six small, fixed operations spanning what enhancement reasons about: a format-constrained body
+ * field, path/query parameters with an enumeration, a nested array body, a path-only delete, a
+ * paginated list, a partial update combining a path parameter with a body, and two operations that take
+ * no input at all. Fixed literals rather
  * than a parsed specification so the prompts are byte-stable (constitution VII, XXIII).
  */
 const FIXTURES: { id: string; model: ApiModel }[] = [
@@ -161,6 +166,115 @@ const FIXTURES: { id: string; model: ApiModel }[] = [
       ],
       security: [],
       tags: ["orders"],
+    }),
+  },
+  {
+    id: "delete-order",
+    model: modelOf({
+      path: "/orders/{orderId}",
+      method: "DELETE",
+      operationId: "deleteOrder",
+      parameters: [
+        { name: "orderId", location: "path", required: true, schema: string({ format: "uuid" }) },
+      ],
+      requestBody: undefined,
+      responses: [response("204", "Deleted"), response("404", "No such order")],
+      security: [],
+      tags: ["orders"],
+    }),
+  },
+  {
+    id: "list-orders",
+    model: modelOf({
+      path: "/orders",
+      method: "GET",
+      operationId: "listOrders",
+      parameters: [
+        {
+          name: "limit",
+          location: "query",
+          required: false,
+          schema: { type: "integer", required: [], properties: {}, minimum: 1, maximum: 100 },
+        },
+        {
+          name: "status",
+          location: "query",
+          required: false,
+          schema: string({ enum: ["open", "shipped", "cancelled"] }),
+        },
+      ],
+      requestBody: undefined,
+      responses: [
+        response("200", "A page of orders", {
+          type: "array",
+          required: [],
+          properties: {},
+          items: string(),
+        }),
+        response("400", "Invalid query"),
+      ],
+      security: [],
+      tags: ["orders"],
+    }),
+  },
+  {
+    id: "update-account",
+    model: modelOf({
+      path: "/accounts/{accountId}",
+      method: "PATCH",
+      operationId: "updateAccount",
+      parameters: [
+        { name: "accountId", location: "path", required: true, schema: string({ format: "uuid" }) },
+      ],
+      requestBody: {
+        required: true,
+        contentTypes: {
+          "application/json": {
+            type: "object",
+            required: [],
+            properties: {
+              displayName: string({ minLength: 1, maxLength: 40 }),
+              email: string({ format: "email" }),
+            },
+          },
+        },
+      },
+      responses: [response("200", "Updated"), response("404", "No such account")],
+      security: [],
+      tags: ["accounts"],
+    }),
+  },
+  {
+    id: "list-regions",
+    model: modelOf({
+      path: "/regions",
+      method: "GET",
+      operationId: "listRegions",
+      parameters: [],
+      requestBody: undefined,
+      responses: [
+        response("200", "The regions", {
+          type: "array",
+          required: [],
+          properties: {},
+          items: string(),
+        }),
+      ],
+      security: [],
+      tags: ["regions"],
+    }),
+  },
+  {
+    id: "start-reindex",
+    model: modelOf({
+      path: "/reindex",
+      method: "POST",
+      operationId: "startReindex",
+      parameters: [],
+      requestBody: undefined,
+      responses: [response("202", "Accepted"), response("409", "A reindex is already running")],
+      security: [],
+      tags: ["admin"],
     }),
   },
 ];

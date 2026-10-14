@@ -26,7 +26,9 @@ describe("buildAIDependencyRequest", () => {
   it("sets a feature-specific timeout override large enough for a real request to actually complete", () => {
     const request = buildAIDependencyRequest("dep-1", crudChainApiModel);
     expect(request.timeoutMs).toBe(AI_DEPENDENCY_TIMEOUT_MS);
-    expect(AI_DEPENDENCY_TIMEOUT_MS).toBe(50_000);
+    // 90s since the move to Qwen3-1.7B: its projected cost for a 458-token unit (54.9s) exceeded the
+    // previous 50s, which made the pre-flight check refuse the AI pass every time.
+    expect(AI_DEPENDENCY_TIMEOUT_MS).toBe(90_000);
   });
 
   it("sets an explicit, capped output allowance rather than the generic default", () => {

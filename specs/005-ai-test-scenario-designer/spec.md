@@ -240,3 +240,25 @@ reported explicitly.
   generation, and test execution are outside this feature and belong to later roadmap items.
 - Prompt wording, model choice, output schema version, and evaluation corpus are versioned
   engineering assets defined during planning and must remain traceable.
+
+## Amendments
+
+### 2026-10-14: one requested candidate per operation, and omitted empty request maps (specs/013 T072)
+
+Measured on six operations (`ap013-enhancement-v2`), the prompt that let the model answer
+`{"candidates":[]}` produced no usable candidate from either model tried: Qwen2.5-0.5B answered empty or
+echoed the prompt, and Qwen3-1.7B answered empty for every operation. Prompt contract version 4 therefore
+asks for exactly one candidate per operation and states that an empty list is not an answer, lists the
+targets and status codes the operation allows, and shows a worked example whose status code the operation
+documents. Qwen3-1.7B then produced a usable candidate for 5 of 6 operations.
+
+- **US1 acceptance scenario 3 is amended, not removed.** The system still accepts an empty or fully
+  rejected reply without error and adds no AI scenario for it, and every candidate is still validated
+  (FR-006, FR-007, FR-009), deduplicated against the deterministic baseline (FR-010) and left `pending`
+  for review (FR-018). What changes is the request: the model is no longer invited to decline, so it may
+  now propose a low-value scenario for an operation that is already well covered. Review is the control
+  for that, and it is a deliberate trade for a feature that otherwise produced nothing.
+- **Candidate contract.** `request.pathParameters`, `request.queryParameters` and `request.headers` may be
+  omitted or `null`; an omitted map is read as `{}`. A map that is present but not an object is still
+  `invalid-shape`, and a candidate with no `request` object is still rejected. No other field is repaired.
+- FR-007, FR-009 and FR-014 are unchanged.

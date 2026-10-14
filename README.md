@@ -20,7 +20,7 @@ ApiPilot is a local-first API test engineering workspace. It turns an OpenAPI 3.
 Requirements:
 
 - Node.js 24 LTS or newer (see `.nvmrc`) and npm.
-- For local AI: disk space for the selected model, free memory for inference, and network access only for the initial model download. No GPU is required.
+- For local AI: disk space for the selected model, free memory for inference, and network access only for the initial model download. The default model (Qwen3-1.7B) needs about 7 GB of disk and about 10 GB of free memory; no GPU is required. A smaller model can be chosen with `AI_MODEL_ID`, at the cost of scenario enhancement mostly coming back empty (see [Configuration](docs/configuration.md)).
 - For deterministic-only use and routine tests: set `AI_PROVIDER_MODE=mock`; no model download is needed.
 
 ```powershell

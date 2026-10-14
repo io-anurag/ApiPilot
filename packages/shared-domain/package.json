@@ -1,6 +1,6 @@
 {
   "name": "@apipilot/shared-domain",
-  "version": "19.49.3",
+  "version": "19.50.1",
   "private": true,
   "type": "module",
   "main": "src/index.ts",

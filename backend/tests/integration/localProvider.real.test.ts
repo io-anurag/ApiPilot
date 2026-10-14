@@ -8,7 +8,7 @@ const REAL_MODEL_ENABLED = process.env.AI_TEST_REAL_MODEL === "1";
 describe.runIf(REAL_MODEL_ENABLED)("LocalProvider (real model, opt-in)", () => {
   it("completes an inference call fully offline once the model is cached", async () => {
     const provider = new LocalProvider({
-      modelId: process.env.AI_MODEL_ID ?? "onnx-community/Qwen2.5-0.5B-Instruct",
+      modelId: process.env.AI_MODEL_ID ?? "onnx-community/Qwen3-1.7B-ONNX",
       cacheDir: process.env.AI_MODEL_CACHE_DIR ?? `${process.env.HOME ?? process.env.USERPROFILE}/.apipilot/models`,
       useAccelerator: false,
       inferenceTimeoutMs: 120_000,
@@ -27,15 +27,15 @@ describe.runIf(REAL_MODEL_ENABLED)("LocalProvider (real model, opt-in)", () => {
 
   it("rejects an input that exceeds the model's context window as INVALID_REQUEST instead of crashing onnxruntime", async () => {
     const provider = new LocalProvider({
-      modelId: process.env.AI_MODEL_ID ?? "onnx-community/Qwen2.5-0.5B-Instruct",
+      modelId: process.env.AI_MODEL_ID ?? "onnx-community/Qwen3-1.7B-ONNX",
       cacheDir: process.env.AI_MODEL_CACHE_DIR ?? `${process.env.HOME ?? process.env.USERPROFILE}/.apipilot/models`,
       useAccelerator: false,
       inferenceTimeoutMs: 120_000,
     });
 
-    // Qwen2.5-0.5B-Instruct has a 32768-token context window; repeating a short word
-    // comfortably exceeds it without needing a multi-megabyte fixture.
-    const oversizedInput = "token ".repeat(40_000);
+    // The default model (Qwen3-1.7B) has a 40960-token context window and Qwen2.5-0.5B a 32768-token
+    // one; repeating a short word 60,000 times exceeds either without a multi-megabyte fixture.
+    const oversizedInput = "token ".repeat(60_000);
 
     const response = await provider.infer({
       contractVersion: 1,

@@ -155,14 +155,15 @@ All three must be clean, with no test disabled or weakened to accommodate the ch
 
 Behaviours from earlier features that this work must not break:
 
-- [ ] `011` success / partial / skipped outcome semantics unchanged; no new `StageStatus` member.
-- [ ] `012` `409 ai_enhancement_already_running` concurrency guard still enforced.
-- [ ] `012` incremental `reviewWorkspace` population still reveals scenarios as batches succeed.
-- [ ] Review decisions on early-revealed scenarios survive later batches settling.
-- [ ] Deterministic scenarios never removed, altered, or reordered — across success, partial,
-      refusal, cancellation, and failure (SC-010).
-- [ ] Identical input yields identical retained scenarios in identical order (SC-009).
-- [ ] `analyzeDependencies` and `regenerateReviewScenario` still work — they share the corrected
+- [x] `011` success / partial / skipped outcome semantics unchanged; no new `StageStatus` member. *(`StageStatus` has the same six members as at the 011 commit `355fc6c`; `aiEnhancementStage.test.ts` covers complete, partial and skipped.)*
+- [x] `012` `409 ai_enhancement_already_running` concurrency guard still enforced. *(`testGenerationWorkflow.test.ts`, the concurrent-POST test.)*
+- [x] `012` incremental `reviewWorkspace` population still reveals scenarios as batches succeed. *(`aiEnhancementStage.test.ts`, progress and incremental reveal.)*
+- [x] Review decisions on early-revealed scenarios survive later batches settling. *(`aiEnhancementStage.test.ts`, FR-012 test, and the cancellation variant.)*
+- [x] Deterministic scenarios never removed, altered, or reordered — across success, partial,
+      refusal, cancellation, and failure (SC-010). *(`enhanceTestModel.regression.test.ts`, all five paths.)*
+- [x] Identical input yields identical retained scenarios in identical order (SC-009). *(`enhanceTestModel.regression.test.ts`, two fresh runs and a delayed provider.)*
+- [x] `analyzeDependencies` and `regenerateReviewScenario` still work — they share the corrected
       inference path and should **improve**, having been on the same defective prompting path.
-- [ ] No specification content, prompt, or model response is written to logs (constitution XX).
-- [ ] Ordinary `npm test` still downloads no model and runs no real inference.
+      *(Real default model, 2026-10-14: dependency analysis on the `knownRelationships` fixture succeeds, where Qwen2.5-0.5B finished `partial` with an invalid response. `regenerateReviewScenario` regenerated 1 of 4 sampled scenarios on Qwen3-1.7B against 0 of 4 on Qwen2.5-0.5B: an improvement, but weak; see T071.)*
+- [x] No specification content, prompt, or model response is written to logs (constitution XX). *(`enhanceTestModel.regression.test.ts` captures every console channel over success, malformed output and failure; verified to fail when a response is deliberately logged.)*
+- [x] Ordinary `npm test` still downloads no model and runs no real inference. *(Full suite run with `AI_MODEL_CACHE_DIR` set to an empty directory and `HF_HUB_OFFLINE=1`: the directory was still empty afterwards and no model-load event was logged. The three real-model test files are skipped.)*
