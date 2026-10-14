@@ -3716,3 +3716,16 @@ Implementation
     - README gains a "Security model: single-user, local-only" section. The session cookie `secure` flag is unchanged.
     - Version bumped to 19.48.0 (root, backend, frontend, shared-domain).
 
+
+84. **Restart-lost guided workflow is now explicit; version 19.49.0 (2026-10-14).**
+    - A backend restart discards every in-memory guided workflow (`specs/017` FR-008), but the returning browser used to see
+      the same empty state as a brand-new visitor while its runs, environments and collections were still there.
+    - Decision: surface the loss rather than persist workflow state. Persisting it would contradict FR-008 and need its own
+      specification; it remains an option if a future requirement asks for it.
+    - A well-formed `sessionId` cookie the new process never issued is tombstoned with `expiryReason: "backend-restart"`
+      (`markLostToRestart`, no expiry listener fires so persisted data is kept). `GET /api/test-generation-workflow` returns
+      `sessionExpiredReason: "inactivity" | "backend-restart"` (additive; `SessionExpiryReason` in shared-domain), and the page
+      says the backend was restarted and that saved data is unaffected.
+    - Behaviour change: a guessed but well-formed cookie now gets the restart notice (`200`, `workflow: null`) instead of `204`;
+      it never receives any session's workflow. Specified as `specs/017` FR-007b, with the contract and data model amended.
+    - Version bumped to 19.49.0 (root, backend, frontend, shared-domain).

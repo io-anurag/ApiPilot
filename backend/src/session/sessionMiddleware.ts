@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { runWithSession } from "./sessionContext";
-import { touch } from "./sessionRegistry";
+import { getStatus, markLostToRestart, touch } from "./sessionRegistry";
 
 const COOKIE_NAME = "sessionId";
 // crypto.randomUUID()'s shape — anything else (missing cookie, foreign/malformed value) is
@@ -46,7 +46,14 @@ export function sessionMiddleware(req: Request, res: Response, next: NextFunctio
   }
 
   (req as RequestWithSessionId).sessionId = sessionId;
-  touch(sessionId);
+  if (sessionId === presented && getStatus(sessionId) === "absent") {
+    // A well-formed cookie this process never issued: the backend restarted since this browser
+    // last connected, and its in-memory workflow (if any) is gone — record that so the
+    // workflow endpoint can say so instead of showing an indistinguishable empty state.
+    markLostToRestart(sessionId);
+  } else {
+    touch(sessionId);
+  }
   runWithSession(sessionId, () => next());
 }
 

@@ -109,7 +109,11 @@ describe("session isolation", () => {
       .get("/api/test-generation-workflow")
       .set("Cookie", `sessionId=${guessed}`);
 
-    expect(response.status).toBe(204);
+    // A well-formed id this process never issued is indistinguishable from a pre-restart cookie
+    // (FR-007b), so it gets the restart notice — but never any session's workflow.
+    expect(response.status).toBe(200);
+    expect(response.body.workflow).toBeNull();
+    expect(response.body.sessionExpiredReason).toBe("backend-restart");
   });
 
   it("US1: the shared AI provider serves both sessions' AI enhancement independently (FR-005, FR-009)", async () => {
@@ -187,10 +191,42 @@ describe("session isolation", () => {
 
     const afterExpiryA = await agentA.get("/api/test-generation-workflow");
     expect(afterExpiryA.status).toBe(200);
-    expect(afterExpiryA.body).toEqual({ workflow: null, sessionExpired: true });
+    expect(afterExpiryA.body).toEqual({
+      workflow: null,
+      sessionExpired: true,
+      sessionExpiredReason: "inactivity",
+    });
 
     const stillB = await agentB.get("/api/test-generation-workflow");
     expect(stillB.status).toBe(200);
     expect(stillB.body.workflow.id).toBe(startedB.body.workflow.id);
+  });
+
+  it("US3: a browser whose workflow was lost to a backend restart sees an explicit restart notice, and starting a new run clears it (FR-007b, FR-008)", async () => {
+    const app = createApp(fixedProvider(emptyCandidates));
+    const agent = request.agent(app);
+    await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+
+    // A backend restart empties both in-memory maps while the browser keeps its cookie.
+    resetStore();
+    resetRegistryForTest();
+
+    const afterRestart = await agent.get("/api/test-generation-workflow");
+    expect(afterRestart.status).toBe(200);
+    expect(afterRestart.body).toEqual({
+      workflow: null,
+      sessionExpired: true,
+      sessionExpiredReason: "backend-restart",
+    });
+
+    const restarted = await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    expect(restarted.status).toBe(200);
+    const afterNewRun = await agent.get("/api/test-generation-workflow");
+    expect(afterNewRun.body.workflow.id).toBe(restarted.body.workflow.id);
+    expect(afterNewRun.body.sessionExpired).toBeUndefined();
   });
 });

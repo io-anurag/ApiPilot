@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextFunction, Request, Response } from "express";
 import { sessionMiddleware } from "../../../src/session/sessionMiddleware";
-import { resetRegistryForTest } from "../../../src/session/sessionRegistry";
+import {
+  getExpiryReason,
+  getStatus,
+  resetRegistryForTest,
+  touch,
+} from "../../../src/session/sessionRegistry";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -49,6 +54,34 @@ describe("sessionMiddleware", () => {
 
     expect(cookieCalls).toHaveLength(0);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("tombstones a well-formed session id this process never issued as lost to a backend restart", () => {
+    const unknown = "11111111-2222-3333-4444-555555555555";
+    const { res } = fakeResponse();
+
+    sessionMiddleware(fakeRequest(`sessionId=${unknown}`), res, vi.fn() as unknown as NextFunction);
+
+    expect(getStatus(unknown)).toBe("expired");
+    expect(getExpiryReason(unknown)).toBe("backend-restart");
+  });
+
+  it("leaves a freshly issued session live, not tombstoned", () => {
+    const { res, cookieCalls } = fakeResponse();
+
+    sessionMiddleware(fakeRequest(undefined), res, vi.fn() as unknown as NextFunction);
+
+    expect(getStatus(cookieCalls[0][1])).toBe("live");
+  });
+
+  it("does not re-tombstone a known live session on later requests", () => {
+    const known = "11111111-2222-3333-4444-555555555555";
+    touch(known);
+    const { res } = fakeResponse();
+
+    sessionMiddleware(fakeRequest(`sessionId=${known}`), res, vi.fn() as unknown as NextFunction);
+
+    expect(getStatus(known)).toBe("live");
   });
 
   it("replaces a malformed cookie value with a fresh id rather than trusting it", () => {

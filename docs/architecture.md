@@ -221,6 +221,11 @@ assigns each browser an unguessable, cryptographically random session identifier
 pipeline module needed to change to become session-aware. Concurrent sessions never see or
 affect each other's workflow, and a session idle for over 60 minutes is evicted — its next visit
 is told explicitly that its session expired, rather than shown an indistinguishable empty state.
+A backend restart is surfaced the same way: a well-formed `sessionId` cookie the new process never
+issued is tombstoned with `expiryReason: "backend-restart"` (no expiry listener fires, so persisted
+data is kept), and `GET /api/test-generation-workflow` returns `sessionExpiredReason` so the UI can
+say the backend restarted instead of blaming inactivity. Persisting workflow state itself was
+considered and rejected (specs/017 FR-008).
 A user-confirmed discard (FR-010) happens either as part of a replacement upload
 (`POST ?discardExisting=true`) or on its own through `DELETE /api/test-generation-workflow`
 (v19.5.1), which the UI's "Discard and start new" calls immediately. The standalone discard is
@@ -412,7 +417,7 @@ the backend stops is recorded on restart as cancelled with a `cancelReason` of
 Guided-workflow generation state (`backend/src/testGenerationWorkflow/workflowStore.ts`) and the
 session registry itself (`backend/src/session/sessionRegistry.ts`) are deliberately **not** part of
 this feature and remain in-memory-only `Map`s — an in-progress workflow still does not survive a
-backend restart.
+backend restart (the UI now says so explicitly; see the session-isolation section above).
 
 `Environment.variableValues` — the field carrying credential-like values — is encrypted at rest
 with AES-256-GCM (`backend/src/persistence/credentialCipher.ts`, Node's built-in `node:crypto`,

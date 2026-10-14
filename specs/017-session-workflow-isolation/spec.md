@@ -129,7 +129,10 @@ the new session shows the existing "no workflow started" state, never the other 
 
 - What happens when two sessions' workflows are active at once and the backend process
   restarts? Every session's in-progress workflow is lost, exactly as today's single-instance
-  behavior already allows (no persistence is introduced by this feature).
+  behavior already allows (no persistence is introduced by this feature). As of the 2026-10-14
+  amendment (FR-007b) each returning browser is told the backend restarted instead of seeing an
+  indistinguishable empty state. Persisting workflow state across restarts was considered and
+  deliberately not chosen: it contradicts FR-008 and would need its own specification.
 - What happens when the same person uses two different browsers (or one regular and one private
   window)? Each is treated as a fully independent session with its own workflow; this feature
   does not introduce login, so there is no way to recognize both as "the same person" or merge
@@ -183,6 +186,17 @@ the new session shows the existing "no workflow started" state, never the other 
   next request, the system MUST distinguish that case from a genuinely new session by showing an
   explicit notice that its previous session expired due to inactivity, rather than an
   indistinguishable "no workflow started yet" empty state.
+- **FR-007b** *(amendment, 2026-10-14)*: When a browser presents a well-formed session cookie
+  that the running backend process has never issued (the backend restarted since that browser
+  last connected), the system MUST treat it as a session whose in-memory workflow was lost to
+  the restart and say so explicitly — the notice MUST name the restart rather than inactivity,
+  and MUST state that saved runs, environments, and collections are unaffected. The response
+  MUST NOT carry any session's workflow, and MUST NOT trigger per-session data eviction (the
+  persisted data of `specs/025-local-persistence-layer` survives a restart). A browser with no
+  cookie, or a malformed one, is unaffected and still sees the plain empty state (FR-006). The
+  notice may also appear for a browser that had connected but never started a workflow, since
+  that is indistinguishable without persisting session state; its wording is therefore
+  accurate in both cases.
 - **FR-008**: The system MUST NOT persist any session's workflow state to durable storage as
   part of this feature — an isolated session's workflow remains in-memory only, and a backend
   restart still clears every session's workflow, unchanged from today's behavior

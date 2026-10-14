@@ -8,9 +8,12 @@
  * `workflowStore.ts` back (research.md D3, D4).
  */
 
+import type { SessionExpiryReason } from "@apipilot/shared-domain";
+
 interface SessionEntry {
   lastActivityAt: number;
   expired: boolean;
+  expiryReason?: SessionExpiryReason;
 }
 
 export type SessionStatus = "live" | "absent" | "expired";
@@ -45,6 +48,23 @@ export function getStatus(sessionId: string): SessionStatus {
   return entry.expired ? "expired" : "live";
 }
 
+/** Why `sessionId` is tombstoned, or `undefined` if it is live or was never seen. */
+export function getExpiryReason(sessionId: string): SessionExpiryReason | undefined {
+  const entry = sessions.get(sessionId);
+  return entry?.expired ? entry.expiryReason : undefined;
+}
+
+/**
+ * Tombstones a session id the browser presented but this process has never seen. Registry
+ * entries are only ever tombstoned, never deleted, while the process runs — so an unknown id
+ * with a well-formed cookie means the backend restarted since that browser last connected and
+ * any in-memory workflow it had is gone. There is no workflow state to discard, so no expiry
+ * listener is notified.
+ */
+export function markLostToRestart(sessionId: string): void {
+  sessions.set(sessionId, { lastActivityAt: Date.now(), expired: true, expiryReason: "backend-restart" });
+}
+
 /** Registers a callback invoked (synchronously) with a session id the moment it is idle-evicted, so other modules (`workflowStore.ts`) can discard their own per-session state without this module depending on them. */
 export function onExpire(listener: (sessionId: string) => void): void {
   expiryListeners.push(listener);
@@ -55,6 +75,7 @@ function sweep(): void {
   for (const [sessionId, entry] of sessions) {
     if (!entry.expired && now - entry.lastActivityAt > IDLE_TIMEOUT_MS) {
       entry.expired = true;
+      entry.expiryReason = "inactivity";
       for (const listener of expiryListeners) listener(sessionId);
     }
   }
@@ -72,6 +93,7 @@ if (process.env.NODE_ENV !== "test") {
 export function forceExpireForTest(sessionId: string): void {
   const entry = sessions.get(sessionId) ?? { lastActivityAt: Date.now(), expired: false };
   entry.expired = true;
+  entry.expiryReason = "inactivity";
   sessions.set(sessionId, entry);
   for (const listener of expiryListeners) listener(sessionId);
 }

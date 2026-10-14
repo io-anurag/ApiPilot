@@ -266,6 +266,13 @@ export interface AiEnhancementProgressSnapshot {
   liveScenarios: LiveScenarioSummary[];
 }
 
+/**
+ * Why a session's guided workflow is gone (specs/017-session-workflow-isolation FR-007a/FR-007b):
+ * idle-evicted after the inactivity window, or lost because the backend restarted (workflow state
+ * is in-memory only, FR-008). Returned as `sessionExpiredReason` by `GET /api/test-generation-workflow`.
+ */
+export type SessionExpiryReason = "inactivity" | "backend-restart";
+
 /** data-model.md: WorkflowReviewDecision — mirrors ReviewState/ReviewDecision (research.md D5). */
 export type WorkflowReviewState = "pending" | "approved" | "rejected";
 

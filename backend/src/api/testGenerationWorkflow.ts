@@ -80,7 +80,7 @@ import {
 import { getCurrentWorkflow } from "../testGenerationWorkflow/workflowStore";
 import { reaffirmSession } from "../session/sessionMiddleware";
 import { getSessionId } from "../session/sessionContext";
-import { getStatus } from "../session/sessionRegistry";
+import { getExpiryReason, getStatus } from "../session/sessionRegistry";
 import {
   continueWorkflowReview,
   recordWorkflowDecisions,
@@ -311,9 +311,15 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
       const workflow = getCurrentWorkflow();
       if (!workflow) {
         // Distinguishes "your session's workflow was idle-evicted" from "you never started one"
-        // (contracts/session-isolation.md, FR-007a) without a new endpoint.
-        if (getStatus(getSessionId()) === "expired") {
-          res.status(200).json({ workflow: null, sessionExpired: true });
+        // (contracts/session-isolation.md, FR-007a) without a new endpoint. `sessionExpiredReason`
+        // additionally tells an idle eviction from a backend restart (FR-007b).
+        const sessionId = getSessionId();
+        if (getStatus(sessionId) === "expired") {
+          res.status(200).json({
+            workflow: null,
+            sessionExpired: true,
+            sessionExpiredReason: getExpiryReason(sessionId),
+          });
           logRequestSucceeded(req, startedAt, 200);
           return;
         }

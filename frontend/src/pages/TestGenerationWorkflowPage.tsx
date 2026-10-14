@@ -9,6 +9,7 @@ import {
 import type {
   DependencyAnalysisResult,
   ExportResult,
+  SessionExpiryReason,
   TestGenerationWorkflow,
   TestModel,
   WorkflowStageId,
@@ -209,6 +210,9 @@ export function TestGenerationWorkflowPage({
   // (specs/017-session-workflow-isolation FR-007a) — distinct from a session that never
   // started one, which never sets this.
   const [sessionExpired, setSessionExpired] = useState(false);
+  // Why it was lost (FR-007b): idle eviction vs a backend restart, which also clears every
+  // in-progress workflow because workflow state is in-memory only (FR-008).
+  const [sessionExpiredReason, setSessionExpiredReason] = useState<SessionExpiryReason | undefined>();
   // Purely presentational: highlights the upload dropzone while a file is dragged over it.
   const [dragActive, setDragActive] = useState(false);
   // Guards against handing off more than once for the same generated artifact (StrictMode's
@@ -255,6 +259,7 @@ export function TestGenerationWorkflowPage({
         if (!stageRequest) maybeHandoff(result.workflow);
       } else if (result.ok && result.sessionExpired) {
         setSessionExpired(true);
+        setSessionExpiredReason(result.sessionExpiredReason);
       }
       setLoading(false);
     });
@@ -454,7 +459,9 @@ export function TestGenerationWorkflowPage({
           data-testid="session-expired-notice"
           className="block border-l-4 border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
         >
-          Your previous session expired due to inactivity. Start a new run below.
+          {sessionExpiredReason === "backend-restart"
+            ? "The backend was restarted, so any in-progress guided run was cleared. Saved runs, environments, and collections are unaffected. Start a new run below."
+            : "Your previous session expired due to inactivity. Start a new run below."}
         </output>
       )}
       {showHome && (

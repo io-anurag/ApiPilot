@@ -44,13 +44,25 @@ been idle-evicted and no other session's workflow is visible to it).
 ### Success Response: `200 OK` — session expired (new, FR-007a)
 
 ```json
-{ "workflow": null, "sessionExpired": true }
+{ "workflow": null, "sessionExpired": true, "sessionExpiredReason": "inactivity" }
 ```
 
 The calling session previously had an in-progress workflow, but it was discarded after 60
 minutes of inactivity from that session (FR-007). Distinguishes "you had progress that expired"
 from a genuinely new session's `204`. This case can only be produced starting with this
 feature; no existing behavior changes for a session that has truly never started a workflow.
+
+`sessionExpiredReason` (additive, FR-007b, `SessionExpiryReason` in `packages/shared-domain`) is
+`"inactivity"` as above, or `"backend-restart"`:
+
+```json
+{ "workflow": null, "sessionExpired": true, "sessionExpiredReason": "backend-restart" }
+```
+
+`"backend-restart"` is returned when the request carried a well-formed `sessionId` cookie that
+this backend process never issued — workflow state is in-memory only (FR-008), so the restart
+discarded it. It does not evict any persisted per-session data. A missing or malformed cookie
+still yields `204`. Consumers that ignore `sessionExpiredReason` keep working unchanged.
 
 ## Unaffected endpoints
 

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   forceExpireForTest,
+  getExpiryReason,
   getStatus,
+  markActive,
+  markLostToRestart,
   onExpire,
   resetRegistryForTest,
   sweepForTest,
@@ -68,6 +71,39 @@ describe("sessionRegistry", () => {
     forceExpireForTest("s4");
 
     expect(notified).toEqual(["s4"]);
+  });
+
+  it("records the expiry reason: inactivity for an idle eviction, backend-restart for a lost-to-restart id", () => {
+    touch("idle");
+    forceExpireForTest("idle");
+    markLostToRestart("restarted");
+
+    expect(getExpiryReason("idle")).toBe("inactivity");
+    expect(getExpiryReason("restarted")).toBe("backend-restart");
+    expect(getStatus("restarted")).toBe("expired");
+  });
+
+  it("has no expiry reason for a live or never-seen session", () => {
+    touch("live");
+    expect(getExpiryReason("live")).toBeUndefined();
+    expect(getExpiryReason("never-seen")).toBeUndefined();
+  });
+
+  it("markLostToRestart does not notify onExpire listeners, so persisted per-session data is kept", () => {
+    const notified: string[] = [];
+    onExpire((sessionId) => notified.push(sessionId));
+
+    markLostToRestart("s6");
+
+    expect(notified).not.toContain("s6");
+  });
+
+  it("markActive clears a restart tombstone", () => {
+    markLostToRestart("s7");
+    markActive("s7");
+
+    expect(getStatus("s7")).toBe("live");
+    expect(getExpiryReason("s7")).toBeUndefined();
   });
 
   it("resetRegistryForTest clears every entry", () => {

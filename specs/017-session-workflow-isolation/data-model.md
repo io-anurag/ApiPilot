@@ -11,6 +11,7 @@ serialized to the frontend beyond the one derived `sessionExpired` boolean (see
 | `sessionId` | `string` | The `Map` key itself (not a struct field) — a `crypto.randomUUID()` value, unguessable per FR-004a. |
 | `lastActivityAt` | `number` (epoch ms) | Updated on every request the session middleware handles for this session (FR-007). |
 | `expired` | `boolean` | `false` for a live session. Set `true` by the idle-eviction sweep (research.md D4); the entry is retained as a tombstone rather than deleted, so a later request from the same session id can be told "expired" (FR-007a) instead of looking like a brand-new session. |
+| `expiryReason` | `SessionExpiryReason \| undefined` | Set only on a tombstone: `"inactivity"` from the sweep, or `"backend-restart"` when a well-formed cookie arrives for an id this process never issued (FR-007b, 2026-10-14 amendment). `SessionExpiryReason` lives in `packages/shared-domain` because it is returned to the frontend. A restart tombstone notifies no `onExpire` listener — there is no in-memory state to discard, and persisted data (`specs/025`) must survive. |
 
 **Lifecycle**:
 
@@ -30,6 +31,12 @@ serialized to the frontend beyond the one derived `sessionExpired` boolean (see
                                                     - session starts a new workflow → entry becomes
                                                       { lastActivityAt: now, expired: false } again
 ```
+
+Amendment (FR-007b): the "(no entry)" start state has a second branch. If the request carries a
+well-formed `sessionId` cookie the process never issued, the entry is created directly as
+`{ expired: true, expiryReason: "backend-restart" }` instead of a live one, and is surfaced as
+`sessionExpired: true, sessionExpiredReason: "backend-restart"`. Starting a new workflow clears
+it exactly like an inactivity tombstone.
 
 A tombstoned entry (`expired: true`) is never evicted from the registry `Map` itself in this
 feature's scope (research.md D4) — only the corresponding `workflowStore` entry (the actual

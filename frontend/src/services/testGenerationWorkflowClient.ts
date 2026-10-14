@@ -4,6 +4,7 @@ import type {
   ReviewEditContent,
   ReviewUpdateOutcome,
   ReviewUpdateRequest,
+  SessionExpiryReason,
   TestGenerationWorkflow,
 } from "@apipilot/shared-domain";
 import { createLogger } from "../logger";
@@ -17,7 +18,12 @@ export type WorkflowResult =
   | { ok: false; error: string; message: string; problems?: string[] };
 
 export type WorkflowOrNoneResult =
-  | { ok: true; workflow: TestGenerationWorkflow | null; sessionExpired?: boolean }
+  | {
+      ok: true;
+      workflow: TestGenerationWorkflow | null;
+      sessionExpired?: boolean;
+      sessionExpiredReason?: SessionExpiryReason;
+    }
   | { ok: false; error: string; message: string };
 
 async function toWorkflowResult(response: Response, operation: string): Promise<WorkflowResult> {
@@ -84,7 +90,12 @@ export async function fetchCurrentWorkflow(): Promise<WorkflowOrNoneResult> {
     return {
       ok: true,
       workflow: parsed.workflow as TestGenerationWorkflow | null,
-      ...(parsed?.sessionExpired ? { sessionExpired: true as const } : {}),
+      ...(parsed?.sessionExpired
+        ? {
+            sessionExpired: true as const,
+            ...(parsed.sessionExpiredReason ? { sessionExpiredReason: parsed.sessionExpiredReason as SessionExpiryReason } : {}),
+          }
+        : {}),
     };
   } catch (err) {
     logger.error("network_error", { operation: "fetchCurrentWorkflow", errorCategory: "network_error" });
