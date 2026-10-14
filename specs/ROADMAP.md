@@ -3729,3 +3729,15 @@ Implementation
     - Behaviour change: a guessed but well-formed cookie now gets the restart notice (`200`, `workflow: null`) instead of `204`;
       it never receives any session's workflow. Specified as `specs/017` FR-007b, with the contract and data model amended.
     - Version bumped to 19.49.0 (root, backend, frontend, shared-domain).
+
+85. **Feature freeze, README cap and retirement date (2026-10-14).**
+    - Documentation only; no behaviour, contract or version change (stays 19.49.0).
+    - Feature freeze until the two outstanding walkthroughs are accepted: AP-034 (manual browser walkthrough) and AP-037
+      phase two (the user's acceptance of the scripted scenario 10 run). Defect, security and walkthrough-driven fixes are not
+      frozen. AP-031's AI evaluation and AP-039's browser check stay open here and do not gate the freeze.
+    - The read-only legacy performance run routes and the "Earlier runs" view (AP-037 FR-037) are to be removed on
+      2026-12-31. Open: what happens to the stored legacy run rows must be decided and FR-037 amended before then.
+    - README cut from 613 lines to install, quick start and a link list. Moved unchanged: status, capabilities, limitations
+      and dependency advisories to `docs/status.md`; the configuration table, persistence and security to
+      `docs/configuration.md`; the route tables to `docs/http-api.md`; commands and tooling notes to `docs/development.md`.
+      The README's architecture, pipeline and repository-structure sections duplicated `docs/architecture.md` and were dropped.

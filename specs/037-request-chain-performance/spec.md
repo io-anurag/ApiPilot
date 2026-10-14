@@ -598,6 +598,9 @@ and that the same plan generates a byte-identical script whatever the file's con
   split, and the AP-036 conversion review gate MUST be removed, with their screens.
 - **FR-037**: A run recorded before this feature MUST keep its report exactly as rendered before.
   **Run again** and restore MUST NOT be offered for it, and the runs view MUST say why.
+  Amended 2026-10-14: this read-only retention ends on 2026-12-31, when the legacy run routes and the
+  runs view are removed. What happens to the stored legacy run rows is undecided and MUST be settled
+  here before that date.
 - **FR-038**: No AI MUST take part in seeding, editing, generating, running or reporting (AP-029
   FR-041).
 

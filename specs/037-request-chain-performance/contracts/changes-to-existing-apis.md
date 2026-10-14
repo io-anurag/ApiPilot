@@ -85,6 +85,8 @@
   `POST …/environment`. The collection seeding route replaces them.
 
 ### Routes kept, read-only
+- **Removal date: 2026-12-31** (FR-037, amended 2026-10-14) for the legacy-runs routes below and the
+  legacy runs view. The quick upload stays.
 - **Legacy runs.** `GET …/runs`, `GET …/runs/:runId`, `POST …/runs/:runId/cancel` and
   `GET …/runs/:runId/report`, under the old bases. They let legacy runs be listed and their reports
   opened (FR-037).

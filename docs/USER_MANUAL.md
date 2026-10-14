@@ -43,7 +43,7 @@ you confirm before it runs (section 6).
 
 ## 2. Starting ApiPilot
 
-Follow the [Quick start](../README.md#quick-start) section of the README to install
+Follow the [Install and Quick start](../README.md#install) sections of the README to install
 dependencies and run `npm run dev`. Once running:
 
 - Frontend: `http://localhost:5173`
@@ -1154,8 +1154,8 @@ Variable and credential values are encrypted before being stored.
 - AI runs entirely on your own machine (Transformers.js); nothing about your
   specification, scenarios, or results is ever sent to an external service.
 - Whether AI is available at all (`local` vs `mock` mode, and the model used) is a
-  deployment-time configuration your operator sets — see the README's
-  [Configuration](../README.md#configuration) section. There's no in-app toggle.
+  deployment-time configuration your operator sets — see the
+  [Configuration](configuration.md#configuration) section. There's no in-app toggle.
 - If the AI model isn't ready or fails, the deterministic baseline is unaffected and you
   can continue the workflow normally.
 - Larger specifications may only get AI enhancement for part of their operations within
@@ -1249,7 +1249,7 @@ Variable and credential values are encrypted before being stored.
 | Upload rejected immediately | File isn't `.yaml`/`.yml`, or exceeds 10 MB | Check the extension and file size |
 | "Invalid YAML" / "Unsupported version" error | File isn't valid YAML, or isn't OpenAPI 3.x | Validate the file locally; Swagger 2.0 must be converted to OpenAPI 3.x first |
 | Analysis issues listed after upload | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs | Review the listed locations; generation still proceeds but treat affected operations' tests with caution |
-| "Enhance with AI" stays on "Preparing the local model" a long time | First run needs to download/load the model | Wait for first-run provisioning to finish (see README AI setup); subsequent runs are faster |
+| "Enhance with AI" stays on "Preparing the local model" a long time | First run needs to download/load the model | Wait for first-run provisioning to finish (see the README's Install section and [Configuration](configuration.md#configuration)); subsequent runs are faster |
 | AI Enhancement ends "Partially completed" | Spec has more operations than fit the run's time budget | Use the per-batch **Retry batch N** buttons, or **Retry AI enhancement** if retryable |
 | **Continue** on API Review is disabled | No operation is checked | Check at least one operation, or use **Select all** |
 | "Finalize Review" is blocked | No scenarios have been accepted yet, or a decision is still being saved | Accept at least one scenario; wait a moment for pending decisions to finish |
@@ -1263,7 +1263,7 @@ Variable and credential values are encrypted before being stored.
 | Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
 | **Analyze failure** is disabled on every request | Another failure analysis is already running in your session | Wait for it to finish; the buttons re-enable automatically |
 | Failure analysis stays on "Waiting for the local AI" | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins |
-| Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` (README Configuration). An earlier explanation is kept |
+| Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` ([Configuration](configuration.md#configuration)). An earlier explanation is kept |
 | Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
 | "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
 | **Generate script** stays disabled | **Plan check** on the Plan step lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the header says **Not saved** | Choose **Go to step** in Plan check to go to the problem, or fix the error shown under the plan's name |
@@ -1283,8 +1283,10 @@ Variable and credential values are encrypted before being stored.
 
 ## 11. Where to look next
 
-- [README](../README.md) — installation, configuration, AI model selection, and full
-  scope/limitations.
+- [README](../README.md) — installation and quick start.
+- [Configuration](configuration.md) — environment variables, AI model selection, persistence, and security.
+- [Status and limitations](status.md) — implementation status, feature freeze, and known limitations.
+- [HTTP API](http-api.md) — route reference.
 - [Architecture reference](architecture.md) — internal system design.
 - [specs/ROADMAP.md](../specs/ROADMAP.md) — feature status and what's planned next.
 - Individual `specs/<feature>/spec.md` files — the normative requirements behind any
