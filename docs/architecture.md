@@ -394,8 +394,8 @@ about 3 GB but scored 0% on the enhancement benchmark.
 `AI_PROVIDER_MODE=mock` (the automated-test default) needs no model process and adds no
 meaningful memory beyond the Node/Express and Vite dev servers themselves.
 
-The benchmark harness measures contract-shaped enhancement prompts (workload set `ap013-enhancement-v2`,
-six operations built from the real prompt builder and judged by the real candidate validation), not
+The benchmark harness measures contract-shaped enhancement prompts (workload set `ap013-enhancement-v3`,
+eight operations built from the real prompt builder and judged by the real candidate validation), not
 generic prompts. Each result records its `dtype`, the model load time separately from per-workload
 latency, and the mean reply length. When no candidate produces a usable reply, nothing is selected: the
 configured model is retained and the report says it is not an endorsement. The latest run is recorded
@@ -403,11 +403,14 @@ in `specs/004-ai-provider-local-inference/benchmark-results.json`; what each pro
 scored, and why the default is Qwen3-1.7B, is in `specs/013-ai-enhancement-viability/research.md`
 Decision 11.
 
-The scenario-enhancement prompt (response contract version 4) asks for exactly one candidate per
+The scenario-enhancement prompt (response contract version 5) asks for exactly one candidate per
 operation, lists the targets and status codes the operation allows, and shows a worked example whose
 status code the operation documents. A candidate may omit an empty `pathParameters`,
 `queryParameters` or `headers` map; the parser reads an omitted map as empty. Everything is still
-validated against the full `ApiModel`, and AI scenarios still enter review as pending.
+validated against the full `ApiModel`, and AI scenarios still enter review as pending. An operation with no
+parameters and no request body is told to leave out its target, regenerating a scenario asks for a
+*replacement* rather than "one more", and a candidate that sends a body for an operation that takes none is
+rejected.
 
 Cancelling an AI enhancement run releases its request immediately: the batch in flight is abandoned
 and stays retryable, its late result is discarded, and the next request waits behind it in the serial

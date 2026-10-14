@@ -8,10 +8,11 @@ import type {
 } from "@apipilot/shared-domain";
 
 /**
- * Version 5 (specs/013 T071 follow-up): an operation with no parameters and no request body no longer
- * gets an empty `allowedTargets` list and an instruction to pick from it; it is told to leave out the
- * target. The prompt is unchanged for every operation that has one. Measured on two such operations, the
- * model answered with no candidate under version 4 (see the "no parameters" prompt tests).
+ * Version 5 (specs/013 T071 follow-up), two changes. An operation with no parameters and no request body
+ * no longer gets an empty `allowedTargets` list and an instruction to pick from it: it is told to leave
+ * out the target and shown an example without one, built from its own path and method. And a request to
+ * regenerate a scenario now says "replacement" rather than "one more" (`AIScenarioPurpose`). The prompt
+ * is unchanged for every enhancement request of an operation that has targets.
  *
  * Version 4 (specs/013-ai-enhancement-viability T072): the instructions and the worked example
  * changed, not the reply structure. Measured on six operations against the default 0.5B model and
@@ -355,7 +356,21 @@ function baselineForOperations(
   };
 }
 
-export function buildAIScenarioPrompt(apiModel: ApiModel, testModel: TestModel): string {
+/**
+ * What the request is for. `enhance` asks for something extra beyond the deterministic coverage;
+ * `replace` asks for a different scenario to stand in for the one a reviewer wants regenerated. They
+ * differ only in the task's wording (specs/013 T071 follow-up): given the enhancement wording ("one
+ * more scenario, prefer something not already covered"), the default model returned no candidate for
+ * an operation with little left to add, which for a replacement is a failed regeneration. Measured on
+ * seven operations: 1 usable replacement with the enhancement wording, 3 with this one.
+ */
+export type AIScenarioPurpose = "enhance" | "replace";
+
+export function buildAIScenarioPrompt(
+  apiModel: ApiModel,
+  testModel: TestModel,
+  purpose: AIScenarioPurpose = "enhance",
+): string {
   const operations = apiModel.operations;
   const candidateCeiling = Math.max(
     1,
@@ -372,7 +387,9 @@ export function buildAIScenarioPrompt(apiModel: ApiModel, testModel: TestModel):
   return JSON.stringify({
     responseVersion: AI_SCENARIO_RESPONSE_VERSION,
     task:
-      `Suggest exactly ${candidateCeiling} more test ${candidateCeiling === 1 ? "scenario" : "scenarios"} for ${subject} below. ` +
+      (purpose === "replace"
+        ? `Write exactly ${candidateCeiling} replacement test ${candidateCeiling === 1 ? "scenario" : "scenarios"} for ${subject} below. `
+        : `Suggest exactly ${candidateCeiling} more test ${candidateCeiling === 1 ? "scenario" : "scenarios"} for ${subject} below. `) +
       "You must return that many candidates; never return an empty list. " +
       "Use only fields, parameters and status codes shown. " +
       // An operation with no parameters and no request body has no target to aim at. Telling the model
@@ -384,7 +401,9 @@ export function buildAIScenarioPrompt(apiModel: ApiModel, testModel: TestModel):
           "must come from allowedTargets. "
         : "This operation takes no parameters or request body: leave out targetLocation and targetField " +
           "and send empty request objects. ") +
-      "Prefer something existingCoverage does not already cover. " +
+      (purpose === "replace"
+        ? "It must be a different scenario from the one in existingCoverage. "
+        : "Prefer something existingCoverage does not already cover. ") +
       'Reply with only a JSON object: {"candidates":[...]} shaped exactly like the example.' +
       // Last sentence of the task, and `allowedStatusCodes` the last key below: measured against
       // Qwen3-1.7B, the identical instruction placed mid-task scored 2 to 3 of 6 workloads usable and
@@ -416,11 +435,12 @@ export function buildAIScenarioRequest(
   requestId: string,
   apiModel: ApiModel,
   testModel: TestModel,
+  purpose: AIScenarioPurpose = "enhance",
 ): InferenceRequest {
   return {
     contractVersion: 1,
     requestId,
-    input: buildAIScenarioPrompt(apiModel, testModel),
+    input: buildAIScenarioPrompt(apiModel, testModel, purpose),
     expectedOutputFormat: "json",
     maxOutputTokens: AI_SCENARIO_MAX_OUTPUT_TOKENS,
   };

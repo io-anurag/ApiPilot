@@ -62,7 +62,7 @@ async function attemptRegeneration(
   const contextTestModel = { scenarios: [reviewScenario.scenario] };
   try {
     const response = await provider.infer(
-      buildAIScenarioRequest(requestId, apiModel, contextTestModel),
+      buildAIScenarioRequest(requestId, apiModel, contextTestModel, "replace"),
     );
     const parsed = parseAIScenarioResponse(response);
     const rawCandidate = parsed.candidates[0];

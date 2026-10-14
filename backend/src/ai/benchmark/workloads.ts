@@ -28,6 +28,10 @@ export interface BenchmarkWorkload {
  * on three, one model answer decided a third of the score. `v3` adds two operations with no parameters
  * and no request body, which the first six lacked: they exposed that a prompt listing no allowed
  * target left the model with nothing it was permitted to aim at, and it answered with no candidate.
+ * Both document an alternative outcome (`409`) a candidate can exercise. An operation with no input and
+ * a single documented response was tried first and dropped: there is nothing left to propose for it, so
+ * an empty reply is the correct one, and this benchmark's rule that an empty reply is unusable would
+ * have scored a right answer as a failure.
  */
 export const WORKLOAD_SET_ID = "ap013-enhancement-v3";
 
@@ -245,23 +249,16 @@ const FIXTURES: { id: string; model: ApiModel }[] = [
     }),
   },
   {
-    id: "list-regions",
+    id: "clear-cache",
     model: modelOf({
-      path: "/regions",
-      method: "GET",
-      operationId: "listRegions",
+      path: "/cache",
+      method: "DELETE",
+      operationId: "clearCache",
       parameters: [],
       requestBody: undefined,
-      responses: [
-        response("200", "The regions", {
-          type: "array",
-          required: [],
-          properties: {},
-          items: string(),
-        }),
-      ],
+      responses: [response("204", "Cleared"), response("409", "A rebuild is in progress")],
       security: [],
-      tags: ["regions"],
+      tags: ["admin"],
     }),
   },
   {

@@ -3852,3 +3852,21 @@ Implementation
       change (new contract version, and a benchmark workload with a target-less operation).
     - `specs/013` has no open tasks left.
     - Version bumped to 19.50.1 (root, backend, frontend, shared-domain).
+
+93. **AP-013 regeneration follow-up: prompt version 5; version 19.50.2 (2026-10-15).**
+    - Prompt contract 4 -> 5 (unshipped, so folded into one version): an operation with no parameters and no request body is told
+      to leave out its target and gets an example built from its own path and method and no target (it previously got an empty
+      `allowedTargets` and returned no candidate); and a regeneration request now asks for a *replacement* (`AIScenarioPurpose`)
+      instead of "one more". Enhancement wording for operations with targets is unchanged.
+    - Validator: a candidate that sends content in `request.body` for an operation declaring no request body is rejected
+      (`field-not-found`, FR-009). It used to pass. Absent, null and `{}` bodies are accepted. `specs/005` Amendments updated.
+    - Benchmark set `ap013-enhancement-v3`: eight operations, two with no inputs. Qwen3-1.7B fp32: 5 of 8 before, 6 of 8 after.
+      Regeneration on the real default, seven operations: 1 of 7 before, 3 of 7 after. Details, including two prompt additions
+      that did not help and one workload replaced because an empty reply is correct for it, are in `specs/013` research.md
+      Decision 11 follow-up.
+    - `benchmark-results.json` is regenerated on the final set (`ap013-enhancement-v3`): Qwen3-1.7B fp32 6 of 8 (28 s, 8.7 GB),
+      q8 1 of 8 (33 s, 4.3 GB), Qwen2.5-0.5B fp32 0 of 8. The earlier 0 of 6 for q8 was measured on the six-operation set.
+    - Not fixed, and not a prompt gap: the default model asserts `400` for operations documenting only `201` or `200`/`404`; the
+      validator rejects that correctly. Relaxing FR-009 (keep the candidate, drop the undocumented assertion) or a stronger model
+      are the only ways forward, and neither is decided.
+    - Version bumped to 19.50.2 (root, backend, frontend, shared-domain).

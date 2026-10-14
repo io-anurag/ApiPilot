@@ -450,6 +450,54 @@ describe("AI scenario prompt version 4 (specs/013 T072)", () => {
     });
   });
 
+  describe("purpose: enhance or replace (specs/013 T071 follow-up)", () => {
+    const taskFor = (purpose?: "enhance" | "replace") =>
+      (
+        JSON.parse(
+          buildAIScenarioPrompt(
+            { ...aiScenarioApiModel, operations: [operation({})] },
+            { scenarios: [] },
+            purpose,
+          ),
+        ) as { task: string }
+      ).task;
+
+    it("defaults to enhancement, unchanged", () => {
+      expect(taskFor()).toBe(taskFor("enhance"));
+      expect(taskFor()).toMatch(/^Suggest exactly 1 more test scenario/);
+      expect(taskFor()).toMatch(/Prefer something existingCoverage does not already cover/);
+    });
+
+    it("asks for a replacement that differs from the scenario shown, when replacing", () => {
+      expect(taskFor("replace")).toMatch(/^Write exactly 1 replacement test scenario/);
+      expect(taskFor("replace")).toMatch(/different scenario from the one in existingCoverage/);
+      expect(taskFor("replace")).not.toMatch(/more test scenario/);
+    });
+
+    it("keeps the rest of the contract the same for both purposes", () => {
+      for (const purpose of ["enhance", "replace"] as const) {
+        const task = taskFor(purpose);
+        expect(task).toMatch(/never return an empty list/i);
+        expect(task).toMatch(/must be one pair from allowedTargets/);
+        expect(task.endsWith("expectedStatusCode must be one of allowedStatusCodes.")).toBe(true);
+      }
+    });
+
+    it("changes only the task: operations, targets and example are identical", () => {
+      const build = (purpose: "enhance" | "replace") =>
+        JSON.parse(
+          buildAIScenarioPrompt(
+            { ...aiScenarioApiModel, operations: [operation({})] },
+            { scenarios: [] },
+            purpose,
+          ),
+        ) as Record<string, unknown>;
+      const { task: _a, ...enhance } = build("enhance");
+      const { task: _b, ...replace } = build("replace");
+      expect(replace).toEqual(enhance);
+    });
+  });
+
   it("tells the model to choose its target from that list", () => {
     expect(promptOf([operation({})]).task).toMatch(/allowedTargets/);
   });

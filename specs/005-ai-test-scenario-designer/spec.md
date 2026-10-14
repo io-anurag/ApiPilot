@@ -262,3 +262,18 @@ documents. Qwen3-1.7B then produced a usable candidate for 5 of 6 operations.
   omitted or `null`; an omitted map is read as `{}`. A map that is present but not an object is still
   `invalid-shape`, and a candidate with no `request` object is still rejected. No other field is repaired.
 - FR-007, FR-009 and FR-014 are unchanged.
+
+### 2026-10-15: operations with no inputs, regeneration wording, and an invented request body (specs/013 T071 follow-up)
+
+- **Operations with no parameters and no request body.** Prompt version 5 no longer gives such an
+  operation an empty `allowedTargets` list and an instruction to pick from it (the model had nothing it was
+  permitted to aim at and returned no candidate). It is told to leave out `targetLocation` and
+  `targetField`, and its worked example carries the operation's own path and method and no target. A
+  candidate with no target was always valid and still is.
+- **Regeneration asks for a replacement.** A request to regenerate a scenario (specs/006) now says
+  "replacement ... different from the one in existingCoverage" instead of "one more ... prefer something not
+  already covered". Enhancement wording is unchanged.
+- **FR-009 is enforced for request bodies.** A candidate that sends content in `request.body` for an
+  operation that declares no request body is rejected as `field-not-found` (`request.body`). An absent,
+  null or empty-object body is accepted, because that is what a candidate with nothing to send looks like.
+  Previously an invented body for such an operation passed validation.

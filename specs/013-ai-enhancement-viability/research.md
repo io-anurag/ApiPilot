@@ -521,3 +521,38 @@ last key.
 production validation, not a person reading the candidates. Other AI features (dependency analysis,
 failure explanation) were checked on the new default, see ROADMAP #91, but only against their existing
 fixtures and corpora.
+
+### Decision 11 follow-up (2026-10-15): operations with no inputs, and regeneration
+
+The T071 check found `regenerateReviewScenario` succeeding on 1 of 4 sampled operations on the default
+model. Investigation, in order:
+
+1. **Workloads.** The benchmark set gains two operations with no parameters and no body (`ap013-enhancement-v3`,
+   eight operations). On the version 4 prompt both got `{"candidates":[]}`: the prompt told the model to choose
+   a target from an empty `allowedTargets` list. Baseline 5 of 8 usable.
+2. **Prompt version 5.** No empty list and a "leave out the target" instruction for such operations. This fixed
+   `start-reindex` (a real candidate asserting the documented `202`) and exposed a validator hole: the model had
+   invented a request body for an operation that takes none, and it passed. That is now rejected.
+3. **Example.** For `GET /regions` the model copied the example's own path (`/items/{itemId}`). A target-less
+   example built from the operation's own path and method removed that, and the model then returned `[]` for it.
+   For an operation with no input and a single documented response that is the correct answer (nothing is left to
+   propose), and this benchmark scores an empty reply as unusable, so that workload was replaced by one with a
+   documented alternative outcome (`DELETE /cache`, `204` or `409`). This is a correction of the judge's
+   assumption, not a tuned result, and the earlier fixture is described in `workloads.ts`.
+4. **Regeneration wording.** The sampled failures were not mostly target-less operations. Regeneration reused
+   the enhancement wording ("one more", "prefer something not already covered"), which for an operation with
+   little left to add returns no candidate, i.e. a failed regeneration. A request to replace a scenario now says
+   so (`AIScenarioPurpose`). On seven operations of the real default model: 1 usable replacement before, 3 after.
+
+Two prompt additions were tried and dropped because they did not help or made things worse: an instruction to
+"use this operation's own operationPath and operationMethod, not the example's" (both target-less operations
+went back to empty replies, 5 of 8), and "or leave assertions empty" appended to the status-code instruction (no
+change: the model still asserted `400`).
+
+**Result.** Enhancement benchmark on the eight operations, Qwen3-1.7B fp32: 5 of 8 before, 6 of 8 after.
+Regeneration on seven operations: 1 of 7 before, 3 of 7 after. **What is still wrong, and is a model limit rather
+than a prompt gap:** 3 of the 4 remaining regeneration failures, and the remaining enhancement failures, are the
+model asserting `400` for an operation that documents only `201` or `200`/`404`, which the validator correctly
+rejects (FR-009); the fourth names a wrong operation path. Closing that would mean deliberately relaxing FR-009
+(for example keeping the candidate with its undocumented assertion removed, which CLAUDE.md section 13 allows
+as an empty assertion set) or using a stronger model; neither was done.
