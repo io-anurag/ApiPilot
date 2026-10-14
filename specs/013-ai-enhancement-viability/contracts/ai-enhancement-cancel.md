@@ -69,8 +69,10 @@ Matches the existing refusal shared by every stage-transition route.
 
 ### Idempotency
 
-Cancelling an already-cancelled run returns `202` again with `cancelRequested` still `true`. The
-flag transitions `false` → `true` only and cannot be withdrawn.
+Cancelling a run that has been cancelled but has not yet settled returns `202` again with
+`cancelRequested` still `true`; the flag transitions `false` → `true` only and cannot be withdrawn.
+Because the run now settles almost at once, a repeat cancel normally finds no run and answers
+`409 no_run_in_progress`.
 
 ---
 
@@ -109,8 +111,10 @@ Scenarios already merged into `reviewWorkspace` by `012`'s incremental populatio
 
 - **Between batches** cancellation is precise: remaining batches become `not-attempted`, reusing
   the check point where `runBatchedInference` already evaluates `isTimedOut`.
-- **Within a batch** it is not: the in-flight computation runs to completion and its result is
-  discarded. The user is released immediately regardless.
+- **Within a batch** the computation cannot be interrupted, but it is no longer waited for: the
+  run's request resolves immediately, the batch is recorded `not-attempted` (so it stays
+  retryable), and the computation's late result is discarded without touching the workflow. This
+  applies equally while the model is still being prepared, when nothing has been planned yet.
 - **No orphan contention** (FR-017): the request queue will not start a new task while a previous
   abandoned computation is still settling, so a retry can no longer compete with work already
   given up on — the CPU-contention defect behind the original report.

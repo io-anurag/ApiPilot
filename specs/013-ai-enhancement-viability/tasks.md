@@ -97,8 +97,10 @@ the configured budget, with the deterministic baseline unaltered and unreordered
 - [x] T022 [US1] Reduce `AI_SCENARIO_MAX_OUTPUT_TOKENS` in `backend/src/testDesign/aiScenarioPrompt.ts` from 1024 to a value achievable within the default timeout at the measured decode rate, documenting the arithmetic in the existing constant comment (FR-011) (depends on T019)
 - [x] T023 [US1] Verify `backend/src/testDesign/enhanceTestModel.ts` still passes the **full** `apiModel` to `validateAICandidateSemantics` while sending only the projection to the provider; add an explanatory comment, as this is the invariant that keeps prompt slimming safe (depends on T020, T013)
 - [x] T024 [US1] Update `.env.example` at repo root: leave `AI_MODEL_DTYPE` unset by default with a comment recording that `q8` measured 4x slower than fp32 on CPU, and correct `AI_INFERENCE_TIMEOUT_MS` guidance to a value coherent with the new output allowance (FR-012, research.md Decision 5)
-- [ ] T025 [US1] Extend `backend/src/ai/benchmark/workloads.ts` with workloads representative of the enhancement task (contract-shaped prompts requesting structured candidates), replacing reliance on the single-sentence workloads whose recorded 33% success rate cannot support a decision about this workload (constitution XXII)
-- [ ] T026 [US1] Extend `backend/src/ai/benchmark/runBenchmark.ts` to record `dtype` as a first-class dimension of each candidate result so the fp32-vs-q8 comparison is reproducible rather than anecdotal (depends on T025)
+- [x] T025 [US1] Extend `backend/src/ai/benchmark/workloads.ts` with workloads representative of the enhancement task (contract-shaped prompts requesting structured candidates), replacing reliance on the single-sentence workloads whose recorded 33% success rate cannot support a decision about this workload (constitution XXII)
+      **Done 2026-10-14:** `workloads.ts` now holds three contract-shaped enhancement workloads (`ap013-enhancement-v1`) built from the real prompt builder; a reply counts only if at least one candidate would be retained by the real validation. The generic `ap004-representative-v1` prompts were removed from the harness.
+- [x] T026 [US1] Extend `backend/src/ai/benchmark/runBenchmark.ts` to record `dtype` as a first-class dimension of each candidate result so the fp32-vs-q8 comparison is reproducible rather than anecdotal (depends on T025)
+      **Done 2026-10-14:** `BenchmarkCandidateResult.dtype`; every candidate states its dtype and Qwen2.5-0.5B runs at both fp32 and q8; the selection rationale names the dtype. Logic split into `evaluateCandidate.ts`, covered without a model. `benchmark-results.json` is regenerated only by T066, an opted-in real-model run.
 
 **Checkpoint**: The stage can succeed. Run [quickstart.md](./quickstart.md) step 5b — this is the
 first time SC-001 has ever been achievable.
@@ -153,8 +155,8 @@ advances, and cancelling returns control promptly leaving the workflow consisten
 - [x] T042 [P] [US3] Extend `backend/tests/unit/ai/requestBatching.test.ts`: an `isCancelled` predicate is checked before each batch alongside the existing `isTimedOut`; once true, remaining batches become `not-attempted` without calling `runBatch`, and omitting the predicate behaves exactly as today (backward compatible with `analyzeDependencies.ts`'s call site)
 - [x] T043 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx` (fake timers, not real ones — constitution XXIV): a **single-batch** run renders the phase and a live elapsed timer, superseding `012` FR-005 which hid all progress for `totalBatches <= 1` and therefore for 100% of real runs
 - [x] T044 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: the preparing phase renders distinctly from generating, so a first-run model download is attributable rather than mysterious (FR-018)
-- [ ] T045 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: a cancel control is present while running, invokes the cancel endpoint, and the component returns to an interactive state without waiting for the run to settle (FR-020, SC-008)
-      **Partly covered 2026-10-14, left open:** tests show the control while running, that it calls the cancel endpoint without awaiting the run, the "Stopping…" state, and a refused cancel re-enabling it. The component does **not** return to an interactive state before the run settles: `running` stays true, so "Enhancing…" and "Stopping…" remain disabled until the pending run request resolves at the next batch boundary, which can be minutes with a generation in flight. That does not yet meet SC-008. Needs a product decision before changing the component.
+- [x] T045 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: a cancel control is present while running, invokes the cancel endpoint, and the component returns to an interactive state without waiting for the run to settle (FR-020, SC-008)
+      **Done 2026-10-14.** The earlier gap (the UI stayed on "Stopping…" until the run settled) was fixed on the server: cancelling now aborts a per-run signal, so the run stops waiting for the batch in flight (recorded `not-attempted`, retryable), discards its late result, and also stops waiting during model preparation. The run request resolves at once and the component hands off through `onAdvanced`. See `requestBatching.ts` (`cancelSignal`, `raceCancellation`) and `aiEnhancementStage.ts`.
 
 ### Implementation for User Story 3
 
@@ -237,11 +239,9 @@ VII/XXII require this class of decision to rest on corpus evidence, and each ad-
 ### Outstanding tasks
 
 The dedicated US1 tests T007-T015, US2 tests T027-T032, US3 tests T038-T044 and US4 tests
-T054-T057 are written and validated (T032, T039-T041 and T043-T044 on 2026-10-14). T045 is partly
-covered and open, see its note.
+T054-T057 are written and validated (T032, T039-T041 and T043-T044 on 2026-10-14). T045 was completed afterwards (see its note).
 
-T025/T026/T066 (benchmark harness extension and re-run) and T068/T071 (`012` supersession note,
-regression checklist) are also outstanding.
+T066 (the real-model benchmark re-run, opt-in) and T071 (regression checklist) are also outstanding.
 
 - [ ] T072 Resolve AI structured-output reliability, the failure the timeout was masking. Extend the benchmark harness to cover the enhancement workload (T025/T026), then let the recorded evidence choose between: constraining the response schema so a candidate costs fewer tokens, requesting a single candidate per call, and adopting a model with stronger JSON adherence. Also fixes the load-sensitive `analyzeDependencies` test recorded in T001, which fails for the same reason this feature exists — a time budget consumed before the work it was meant to cover.
 

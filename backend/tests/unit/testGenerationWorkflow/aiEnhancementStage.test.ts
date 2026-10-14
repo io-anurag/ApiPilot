@@ -13,6 +13,7 @@ import {
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
 import {
   AiEnhancementAlreadyRunningError,
+  NoAiEnhancementRunInProgressError,
   StageNotActiveError,
 } from "../../../src/testGenerationWorkflow/errors";
 import {
@@ -645,7 +646,7 @@ describe("aiEnhancementStage cancellation (specs/013-ai-enhancement-viability FR
     expect(wf.activeStageId).toBe("scenarioReview");
   });
 
-  it("resolves to 'partial' with cancelled true, retaining the succeeded batches' scenarios and the review decisions on them, and starts no further batch", async () => {
+  it("resolves to 'partial' with cancelled true, retaining completed batches' scenarios and the review decisions on them, and abandoning the batch in flight", async () => {
     // A retry is where a user can already be deciding on early-revealed scenarios while later
     // batches run (see the FR-012 test above), so the first run is skipped to reach scenarioReview.
     await reachAiEnhancement();
@@ -673,7 +674,8 @@ describe("aiEnhancementStage cancellation (specs/013-ai-enhancement-viability FR
 
     const wf = await runAiEnhancement(provider);
 
-    // Batches 0 and 1 ran; batch 2 was never attempted.
+    // Batch 0 completed; batch 1 was in flight when the cancel arrived and is abandoned; batch 2 was
+    // never started.
     expect(inferCalls).toBe(2);
     expect(wf.stages.aiEnhancement.status).toBe("partial");
     expect(wf.stages.aiEnhancement.cancelled).toBe(true);
@@ -683,12 +685,12 @@ describe("aiEnhancementStage cancellation (specs/013-ai-enhancement-viability FR
     const aiScenarios = wf.reviewWorkspace!.scenarios.filter(
       (s) => s.scenario.provenance.source === "AI",
     );
-    expect(aiScenarios).toHaveLength(2);
-    expect(aiScenarios.find((s) => s.scenarioId === decidedScenarioId)?.state).toBe("accepted");
-    expect(aiScenarios.filter((s) => s.state === "pending")).toHaveLength(1);
+    expect(aiScenarios).toHaveLength(1);
+    expect(aiScenarios[0].scenarioId).toBe(decidedScenarioId);
+    expect(aiScenarios[0].state).toBe("accepted");
   });
 
-  it("does not mark a run cancelled when the cancel arrives only after the last batch has started", async () => {
+  it("abandons the batch in flight when the cancel arrives during the last batch, discarding its result", async () => {
     await reachAiEnhancement();
     const provider = perOperationCandidateProvider();
     const originalInfer = provider.infer;
@@ -702,7 +704,123 @@ describe("aiEnhancementStage cancellation (specs/013-ai-enhancement-viability FR
     const wf = await runAiEnhancement(provider);
 
     expect(inferCalls).toBe(3);
-    expect(wf.stages.aiEnhancement.status).toBe("complete");
-    expect(wf.stages.aiEnhancement.cancelled).toBeUndefined();
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.stages.aiEnhancement.cancelled).toBe(true);
+    expect(
+      wf.reviewWorkspace!.scenarios.filter((s) => s.scenario.provenance.source === "AI"),
+    ).toHaveLength(2);
+    expect(wf.stages.aiEnhancement.batchOutcomes?.map((o) => o.status)).toEqual([
+      "succeeded",
+      "succeeded",
+      "not-attempted",
+    ]);
+  });
+
+  it("settles at once while the generation in flight never returns, and the late result changes nothing", async () => {
+    await reachAiEnhancement();
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inferCalls = 0;
+    let lateResponse: ReturnType<AIProvider["infer"]> | undefined;
+    provider.infer = (request) => {
+      inferCalls += 1;
+      if (inferCalls === 2) {
+        // Batch 1: an uninterruptible generation the user gives up on.
+        // Its eventual reply holds a candidate for an unknown operation, which would be recorded as
+        // non-executable (mutating the run's outcomes) if a late result were not discarded.
+        lateResponse = released.then(async () => ({
+          ...(await originalInfer(request)),
+          content: JSON.stringify({
+            responseVersion: 1,
+            candidates: [
+              {
+                candidateId: "late-ghost",
+                operationPath: "/ghost",
+                operationMethod: "GET",
+                category: "positive",
+                request: { pathParameters: {}, queryParameters: {}, headers: {}, body: {} },
+                assertions: [],
+                rationale: "Unknown operation.",
+                confidence: 0.5,
+                assumptions: [],
+              },
+            ],
+          }),
+        }));
+        return lateResponse;
+      }
+      return originalInfer(request);
+    };
+
+    const run = runAiEnhancement(provider);
+    await vi.waitFor(() => expect(inferCalls).toBe(2));
+    cancelAiEnhancement();
+    const wf = await run;
+
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.stages.aiEnhancement.cancelled).toBe(true);
+    const before = JSON.stringify(getCurrentWorkflow());
+
+    release();
+    await lateResponse;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // The abandoned batch finished after the run had settled: nothing may change.
+    expect(JSON.stringify(getCurrentWorkflow())).toBe(before);
+    expect(inferCalls).toBe(2);
+  });
+
+  it("is idempotent while the run is still settling, and a later cancel finds no run", async () => {
+    await reachAiEnhancement();
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    provider.infer = async (request) => {
+      const first = cancelAiEnhancement();
+      const second = cancelAiEnhancement();
+      expect(second.stages.aiEnhancement.progress?.cancelRequested).toBe(true);
+      expect(second.id).toBe(first.id);
+      return originalInfer(request);
+    };
+
+    await runAiEnhancement(provider);
+
+    expect(() => cancelAiEnhancement()).toThrow(NoAiEnhancementRunInProgressError);
+  });
+
+  it("cancelled while the model is still being prepared, returns at once with the baseline untouched", async () => {
+    await reachAiEnhancement();
+    const deterministicCount = getCurrentWorkflow()!.deterministicTestModel!.scenarios.length;
+    let inferCalls = 0;
+    let finishPreparing!: (budget: number) => void;
+    const provider: AIProvider = {
+      ...perOperationCandidateProvider(),
+      getInputBudget: () =>
+        new Promise<number>((resolve) => {
+          finishPreparing = resolve;
+        }),
+      infer: async (request) => {
+        inferCalls += 1;
+        return perOperationCandidateProvider().infer(request);
+      },
+    };
+
+    const run = runAiEnhancement(provider);
+    await vi.waitFor(() => expect(finishPreparing).toBeDefined());
+    expect(getCurrentWorkflow()!.stages.aiEnhancement.progress?.phase).toBe("preparing");
+    cancelAiEnhancement();
+    const wf = await run;
+
+    expect(wf.stages.aiEnhancement.status).toBe("skipped");
+    expect(wf.stages.aiEnhancement.cancelled).toBe(true);
+    expect(wf.stages.aiEnhancement.failureExplanation?.category).toBe("cancelled");
+    expect(wf.reviewWorkspace?.scenarios).toHaveLength(deterministicCount);
+    // The download finishing afterwards starts no inference.
+    finishPreparing(10);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(inferCalls).toBe(0);
   });
 });

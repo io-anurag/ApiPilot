@@ -728,4 +728,61 @@ describe("AiEnhancementStage phase, elapsed time and cancel (specs/013-ai-enhanc
     );
     expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
   });
+
+  it("hands control back as soon as the server settles the cancelled run, without waiting for any generation (SC-008)", async () => {
+    let settleRun!: (value: unknown) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string, init?: { method?: string } | null) => {
+        if (init?.method === "POST" && url.endsWith("/ai-enhancement/cancel")) {
+          // Accepting the cancel is what lets the server release the pending run request.
+          queueMicrotask(() =>
+            settleRun({
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  workflow: {
+                    activeStageId: "scenarioReview",
+                    stages: { aiEnhancement: { status: "partial", cancelled: true } },
+                  },
+                }),
+            }),
+          );
+          return Promise.resolve({ ok: true, status: 202, json: () => Promise.resolve({}) });
+        }
+        if (init?.method === "POST") {
+          return new Promise((resolve) => {
+            settleRun = resolve;
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              progress: { aiEnhancement: { progress: singleBatchGenerating }, liveScenarios: [] },
+            }),
+        });
+      }),
+    );
+    const onAdvanced = vi.fn();
+    render(<AiEnhancementStage onAdvanced={onAdvanced} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
+    await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(onAdvanced).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: true,
+        workflow: expect.objectContaining({ activeStageId: "scenarioReview" }),
+      }),
+    );
+    // No run is being waited on any more: the progress view and cancel control are gone.
+    expect(screen.queryByTestId("ai-enhancement-run-progress")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-enhancement-cancel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enhance with AI" })).toBeEnabled();
+  });
 });

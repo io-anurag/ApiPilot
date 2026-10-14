@@ -421,11 +421,11 @@ export function AiEnhancementStage({
   }
 
   /**
-   * Requests cancellation and returns immediately (FR-020). The server accepts the request and
-   * settles the run at the next batch boundary, so `handleRun`'s still-pending promise resolves
-   * shortly afterwards with the terminal outcome — we mark the intent here rather than tearing
-   * down local state, so scenarios already generated are not visually discarded before the
-   * server confirms they were kept.
+   * Requests cancellation and returns immediately (FR-020). The server stops waiting for the batch
+   * in flight as soon as it accepts the request, so `handleRun`'s still-pending promise resolves
+   * almost at once with the terminal outcome and hands control back through `onAdvanced`. This
+   * only marks the intent ("Stopping…") for that short gap; local state is not torn down here, so
+   * scenarios already generated are not visually discarded before the server confirms them.
    */
   async function handleCancel() {
     setCancelling(true);

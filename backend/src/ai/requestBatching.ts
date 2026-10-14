@@ -210,6 +210,43 @@ export function splitOperationsIntoBatches<TOperation>(
   return batches;
 }
 
+/** What `raceCancellation` reports: the work's value, or that the caller gave up waiting for it. */
+export type Abandonable<T> = { abandoned: false; value: T } | { abandoned: true };
+
+/**
+ * Waits for `work`, or for `signal` to abort, whichever happens first. When the signal wins the work
+ * is *not* stopped (an in-flight local inference cannot be interrupted); it is only no longer waited
+ * for, and its eventual outcome — including a rejection — is swallowed so it can neither surface late
+ * nor raise an unhandled rejection. A signal that is already aborted, or aborts in the same turn as
+ * the work settles, wins: the caller asked to stop waiting. Without a signal this just awaits `work`.
+ * (specs/013-ai-enhancement-viability FR-020, SC-008)
+ */
+export async function raceCancellation<T>(
+  work: Promise<T>,
+  signal?: AbortSignal,
+): Promise<Abandonable<T>> {
+  if (!signal) return { abandoned: false, value: await work };
+  if (signal.aborted) {
+    work.catch(() => undefined);
+    return { abandoned: true };
+  }
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<Abandonable<T>>((resolve) => {
+    onAbort = () => resolve({ abandoned: true });
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    const result = await Promise.race([
+      work.then((value): Abandonable<T> => ({ abandoned: false, value })),
+      aborted,
+    ]);
+    if (result.abandoned) work.catch(() => undefined);
+    return result;
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
 /** One batch's outcome plus (on success) the caller-defined data `runBatch` produced for it. */
 export interface BatchRun<TOperation, TBatchData> {
   batch: Batch<TOperation>;
@@ -254,6 +291,14 @@ export async function runBatchedInference<TOperation, TBatchData>(
      * existing callers are unaffected.
      */
     isCancelled?: () => boolean;
+    /**
+     * Aborts the run promptly (specs/013 FR-020, SC-008). Unlike `isCancelled`, which only takes
+     * effect between batches, this also stops *waiting* for the batch in flight: it is recorded
+     * `not-attempted` (so it stays retryable), is not retried, and its late result is discarded by
+     * the caller. The underlying work is not interrupted. An already-aborted signal behaves like
+     * `isCancelled` returning true.
+     */
+    cancelSignal?: AbortSignal;
     /** Number of immediate retries for a failed batch. Defaults to zero. */
     retryFailedBatches?: number;
     onBatchStart?: (index: number, total: number) => void;
@@ -266,7 +311,7 @@ export async function runBatchedInference<TOperation, TBatchData>(
   const total = batches.length;
 
   for (const [index, batch] of batches.entries()) {
-    if (options.isTimedOut?.() || options.isCancelled?.()) {
+    if (options.isTimedOut?.() || options.isCancelled?.() || options.cancelSignal?.aborted) {
       const outcome: BatchOutcome = { status: "not-attempted" };
       runs.push({ batch, outcome });
       options.onBatchSettled?.(index, total, outcome);
@@ -276,7 +321,14 @@ export async function runBatchedInference<TOperation, TBatchData>(
     let attempt = 0;
     for (;;) {
       try {
-        const data = await runBatch(batch, attempt);
+        const raced = await raceCancellation(runBatch(batch, attempt), options.cancelSignal);
+        if (raced.abandoned) {
+          const outcome: BatchOutcome = { status: "not-attempted" };
+          runs.push({ batch, outcome });
+          options.onBatchSettled?.(index, total, outcome);
+          break;
+        }
+        const data = raced.value;
         const outcome: BatchOutcome = { status: "success" };
         runs.push({ batch, outcome, data });
         options.onBatchSettled?.(index, total, outcome);
@@ -288,7 +340,7 @@ export async function runBatchedInference<TOperation, TBatchData>(
           options.retryFailedBatches > 0
             ? Math.floor(options.retryFailedBatches)
             : 0;
-        if (attempt < retryLimit && !options.isCancelled?.()) {
+        if (attempt < retryLimit && !options.isCancelled?.() && !options.cancelSignal?.aborted) {
           attempt += 1;
           options.onBatchRetry?.(index, total, attempt);
           continue;

@@ -39,14 +39,21 @@ import {
 const logger = createLogger("testGenerationWorkflow.aiEnhancementStage");
 
 /**
+ * One abort controller per run in flight, keyed by workflow id (unique across sessions), so a cancel
+ * request arriving on its own HTTP request can release the run's still-pending request.
+ */
+const runCancellation = new Map<string, AbortController>();
+
+/**
  * Requests cancellation of the run currently in flight
  * (specs/013-ai-enhancement-viability/contracts/ai-enhancement-cancel.md, FR-020).
  *
  * Returns as soon as the request is recorded rather than waiting for the run to settle: that is
- * what returns interactive control to the user promptly (SC-008). Cancellation takes effect at
- * the next batch boundary — an in-flight generation cannot be interrupted, since the underlying
- * runtime exposes no abort signal (research.md Decision 7) — so the run finishes shortly
- * afterwards and the client observes the terminal state through its existing poll.
+ * what returns interactive control to the user promptly (SC-008). The run stops waiting for the
+ * batch in flight at once and settles with what earlier batches produced. The in-flight generation
+ * itself cannot be interrupted, since the underlying runtime exposes no abort signal (research.md
+ * Decision 7): its result is discarded, its batch stays retryable, and the provider's queue holds
+ * the next request until it has finished (FR-017), so it never competes with a following run.
  *
  * Idempotent: cancelling an already-cancelled run succeeds without changing anything.
  */
@@ -56,6 +63,7 @@ export function cancelAiEnhancement(): TestGenerationWorkflow {
     throw new NoAiEnhancementRunInProgressError();
   }
   const updated = requestAiEnhancementCancel();
+  runCancellation.get(updated.id)?.abort();
   logger.info("cancel_requested", {
     stage: "aiEnhancement",
     workflowId: updated.id,
@@ -197,6 +205,7 @@ export async function runAiEnhancement(
   // progress it created itself — never another still-legitimately-running call's progress
   // (relevant when this call fails precisely because one is already in progress, FR-008).
   let progressSetByThisCall = false;
+  let cancellationWorkflowId: string | undefined;
   try {
     const workflow = getCurrentWorkflow();
     if (!workflow) {
@@ -239,6 +248,9 @@ export async function runAiEnhancement(
       cancelRequested: false,
     });
     progressSetByThisCall = true;
+    const cancellation = new AbortController();
+    runCancellation.set(workflow.id, cancellation);
+    cancellationWorkflowId = workflow.id;
     if (!isRetry) {
       // Seed the review workspace with the deterministic baseline immediately, before any AI
       // batch has even started, so it is reviewable from the very start of the run — AI-derived
@@ -276,6 +288,7 @@ export async function runAiEnhancement(
           });
         },
         isCancelled: () => isAiEnhancementCancelRequested(),
+        cancelSignal: cancellation.signal,
         onPrepared: () => {
           // The engine is loaded; everything from here is generation, and elapsed time shown to
           // the user is measured from this moment rather than from the request, so a large
@@ -477,6 +490,8 @@ export async function runAiEnhancement(
       durationMs: Date.now() - startedAt,
     });
     throw error;
+  } finally {
+    if (cancellationWorkflowId) runCancellation.delete(cancellationWorkflowId);
   }
 }
 

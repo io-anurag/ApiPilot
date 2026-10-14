@@ -1,5 +1,5 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { createApp } from "../../src/app";
 import { resetStore } from "../../src/testGenerationWorkflow/workflowStore";
@@ -985,21 +985,16 @@ describe("AI enhancement progress v2 and cancel (specs/013-ai-enhancement-viabil
     });
   });
 
-  it("POST cancel answers 202 with cancelRequested true at once, is idempotent, and the run settles cancelled without starting further batches", async () => {
+  it("POST cancel answers 202 with cancelRequested true, the run settles cancelled, and a later cancel finds no run", async () => {
     let inferCalls = 0;
-    const cancelResponses: { status: number; progress?: Progress }[] = [];
+    let cancelResponse: { status: number; progress?: Progress } | undefined;
     const app = createApp(
       readyProvider({
         infer: async (req) => {
           inferCalls += 1;
           if (inferCalls === 1) {
-            for (let attempt = 0; attempt < 2; attempt += 1) {
-              const response = await agent.post(`${BASE}/ai-enhancement/cancel`);
-              cancelResponses.push({
-                status: response.status,
-                progress: progressOf(response.body),
-              });
-            }
+            const response = await agent.post(`${BASE}/ai-enhancement/cancel`);
+            cancelResponse = { status: response.status, progress: progressOf(response.body) };
           }
           return {
             contractVersion: 1,
@@ -1018,17 +1013,70 @@ describe("AI enhancement progress v2 and cancel (specs/013-ai-enhancement-viabil
 
     const settled = await agent.post(`${BASE}/ai-enhancement`);
 
-    expect(cancelResponses.map((r) => r.status)).toEqual([202, 202]);
-    for (const { progress } of cancelResponses) {
-      expect(progress?.cancelRequested).toBe(true);
-      expect(progress?.phase).toBe("generating");
-    }
+    expect(cancelResponse?.status).toBe(202);
+    expect(cancelResponse?.progress?.cancelRequested).toBe(true);
+    expect(cancelResponse?.progress?.phase).toBe("generating");
     expect(settled.status).toBe(200);
     const stage = settled.body.workflow.stages.aiEnhancement;
-    expect(stage.status).toBe("partial");
+    expect(stage.status).toBe("skipped");
     expect(stage.cancelled).toBe(true);
     expect(stage.progress).toBeUndefined();
-    // Batch 0 ran; the two remaining batches were never attempted (cooperative cancel).
+    // Batch 0 was in flight when the cancel arrived and is abandoned; the others never start.
     expect(inferCalls).toBe(1);
+    expect(stage.batchOutcomes.map((batch: { status: string }) => batch.status)).toEqual([
+      "not-attempted",
+      "not-attempted",
+      "not-attempted",
+    ]);
+
+    const again = await agent.post(`${BASE}/ai-enhancement/cancel`);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe("no_run_in_progress");
   });
+
+  it("releases the run request promptly when the generation in flight never returns (SC-008)", async () => {
+    let releaseGeneration!: () => void;
+    const generationDone = new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+    let started = false;
+    const app = createApp(
+      readyProvider({
+        infer: async (req) => {
+          started = true;
+          await generationDone;
+          return {
+            contractVersion: 1,
+            requestId: req.requestId,
+            status: "success",
+            content: emptyCandidates,
+            modelId: "mock-model",
+            provider: "mock",
+            durationMs: 1,
+          };
+        },
+      }),
+    );
+    const agent = request.agent(app);
+    await reachAiEnhancement(agent);
+
+    const run = agent.post(`${BASE}/ai-enhancement`).then((response) => response);
+    await vi.waitFor(() => expect(started).toBe(true));
+    const cancelled = await agent.post(`${BASE}/ai-enhancement/cancel`);
+    expect(cancelled.status).toBe(202);
+
+    // The run request resolves while the generation is still pending.
+    const settled = await run;
+    expect(settled.status).toBe(200);
+    expect(settled.body.workflow.stages.aiEnhancement.cancelled).toBe(true);
+    expect(settled.body.workflow.activeStageId).toBe("scenarioReview");
+
+    // The review stage is usable straight away, and a late finish of the orphaned generation
+    // leaves the workflow exactly as it was.
+    const before = (await agent.get(BASE)).body;
+    releaseGeneration();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await agent.get(BASE)).body).toEqual(before);
+  });
+
 });

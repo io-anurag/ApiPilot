@@ -110,6 +110,12 @@ export interface MockProviderConfig {
 /** Recorded outcome of evaluating one candidate model against sample workloads (FR-014). */
 export interface BenchmarkCandidateResult {
   modelId: string;
+  /**
+   * Weight quantization this result was measured at. The same `modelId` can appear more than once
+   * at different dtypes (fp32 against q8), so a result is identified by the pair. Absent only on
+   * reports recorded before the dimension existed (specs/013-ai-enhancement-viability T026).
+   */
+  dtype?: ModelDType;
   /** Fraction (0-1) of sample workloads producing parseable output in the expected format. */
   structuredOutputSuccessRate: number;
   averageLatencyMs: number;

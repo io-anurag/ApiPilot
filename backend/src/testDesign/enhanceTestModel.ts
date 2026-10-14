@@ -23,6 +23,7 @@ import {
 import { candidateToScenario } from "./aiScenarioCandidate";
 import { deduplicate, scenariosAreEquivalent } from "./deduplicate";
 import {
+  raceCancellation,
   runBatchedInference,
   splitOperationsIntoBatches,
   type Batch,
@@ -115,6 +116,12 @@ interface BatchRunContext {
   outcomes: AICandidateOutcomes;
   candidateIds: Set<string>;
   retryAttempt: number;
+  /**
+   * When aborted, the run has stopped waiting for this batch. `runOneBatch` then discards a late
+   * response before touching `outcomes` or `candidateIds`, so abandoned work can never alter a
+   * result the run has already returned (specs/013-ai-enhancement-viability FR-020, FR-021).
+   */
+  cancelSignal?: AbortSignal;
 }
 
 function createBatchRequestId(
@@ -198,6 +205,7 @@ async function runOneBatch(
       "with a candidates array. Do not include markdown, explanations, or trailing text.";
   }
   const response = await provider.infer(request);
+  if (context.cancelSignal?.aborted) return [];
   let parsed: ReturnType<typeof parseAIScenarioResponse>;
   try {
     parsed = parseAIScenarioResponse(response);
@@ -368,6 +376,14 @@ export interface EnhanceTestModelOptions {
    * retained from completed batches are kept (research.md Decision 7).
    */
   isCancelled?: () => boolean;
+  /**
+   * Aborts the run promptly (FR-020, SC-008): the batch in flight, or the model preparation, is no
+   * longer waited for. An in-flight generation still cannot be interrupted, so its late result is
+   * discarded and the batch is recorded `not-attempted` (retryable); batches that already
+   * completed keep their scenarios. Providers serialize requests, so a following run queues behind
+   * the abandoned computation rather than competing with it (FR-017).
+   */
+  cancelSignal?: AbortSignal;
   /** Fires immediately before a batch's inference call starts. */
   onBatchStart?: (index: number, total: number) => void;
   /** Fires before a failed batch is retried. */
@@ -418,7 +434,23 @@ export async function enhanceTestModel(
   // `getInputBudget()` loads the engine if it is not already loaded, so this await is where a
   // first run's model download and load actually happen. Signalling afterwards lets the caller
   // report "preparing" separately from "generating" (specs/013-ai-enhancement-viability FR-018).
-  const budgetChars = await provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS);
+  const preparation = await raceCancellation(
+    provider.getInputBudget(AI_SCENARIO_MAX_OUTPUT_TOKENS),
+    options.cancelSignal,
+  );
+  if (preparation.abandoned) {
+    // Cancelled while the model was still loading: nothing was planned or sent, so the baseline
+    // passes through untouched. The load itself carries on and is reused by the next run.
+    return {
+      requestId,
+      enhancedTestModel: testModel,
+      aiCandidates: emptyOutcomes(),
+      aiProviderOutcome: "unavailable",
+      aiErrorMessage:
+        "AI enhancement was cancelled before it started; deterministic scenarios were preserved",
+    };
+  }
+  const budgetChars = preparation.value;
   options.onPrepared?.();
 
   // The run ceiling is measured from here — the moment preparation ends — and not from this
@@ -520,7 +552,7 @@ export async function enhanceTestModel(
         scopeBaselineToOperations(testModel, batch.operations),
         batchRequestId,
         provider,
-        { outcomes, candidateIds, retryAttempt },
+        { outcomes, candidateIds, retryAttempt, cancelSignal: options.cancelSignal },
         index,
       ).then((result) => {
         batchScenariosByIndex[index] = result;
@@ -530,6 +562,7 @@ export async function enhanceTestModel(
     {
       isTimedOut: isRunBudgetExhausted,
       isCancelled: options.isCancelled,
+      cancelSignal: options.cancelSignal,
       retryFailedBatches: 1,
       onBatchStart: options.onBatchStart,
       onBatchRetry: options.onBatchRetry,

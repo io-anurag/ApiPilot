@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AIProviderError } from "../../../src/ai/errors";
 import {
   deriveAggregateOutcome,
+  raceCancellation,
   runBatchedInference,
   splitOperationsIntoBatches,
   type Batch,
@@ -447,5 +448,151 @@ describe("runBatchedInference", () => {
 
     expect(summary.outcome).toBe("success");
     expect(summary.runs.map((run) => run.data)).toEqual([1, 2]);
+  });
+});
+
+describe("runBatchedInference cancelSignal (specs/013 FR-020, SC-008)", () => {
+  const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }, { operations: [3] }];
+
+  it("abandons the in-flight batch at once, records it and the rest not-attempted, and never starts another", async () => {
+    const controller = new AbortController();
+    const started: number[] = [];
+    const settled: [number, string][] = [];
+    const summary = await runBatchedInference(
+      batches,
+      (batch) => {
+        started.push(batch.operations[0]);
+        controller.abort();
+        return new Promise<string>(() => {}); // never settles: an uninterruptible generation
+      },
+      {
+        cancelSignal: controller.signal,
+        onBatchSettled: (index, _total, outcome) => settled.push([index, outcome.status]),
+      },
+    );
+
+    expect(started).toEqual([1]);
+    expect(summary.runs.map((run) => run.outcome.status)).toEqual([
+      "not-attempted",
+      "not-attempted",
+      "not-attempted",
+    ]);
+    expect(settled).toEqual([
+      [0, "not-attempted"],
+      [1, "not-attempted"],
+      [2, "not-attempted"],
+    ]);
+    expect(summary.runs[0].data).toBeUndefined();
+  });
+
+  it("does not retry the abandoned batch", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    await runBatchedInference(
+      [{ operations: [1] }],
+      () => {
+        attempts += 1;
+        controller.abort();
+        return new Promise<string>(() => {});
+      },
+      { cancelSignal: controller.signal, retryFailedBatches: 2 },
+    );
+    expect(attempts).toBe(1);
+  });
+
+  it("swallows the abandoned batch's late rejection instead of raising an unhandled rejection", async () => {
+    const controller = new AbortController();
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    let rejectLate!: (error: Error) => void;
+    await runBatchedInference(
+      [{ operations: [1] }],
+      () => {
+        queueMicrotask(() => controller.abort());
+        return new Promise<string>((_resolve, reject) => {
+          rejectLate = reject;
+        });
+      },
+      { cancelSignal: controller.signal },
+    );
+
+    rejectLate(new Error("late failure"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it("keeps the batches that completed before the cancel", async () => {
+    const controller = new AbortController();
+    const summary = await runBatchedInference(
+      batches,
+      async (batch) => {
+        if (batch.operations[0] === 2) {
+          controller.abort();
+          return new Promise<string>(() => {});
+        }
+        return `data-${batch.operations[0]}`;
+      },
+      { cancelSignal: controller.signal },
+    );
+
+    expect(summary.runs.map((run) => run.outcome.status)).toEqual([
+      "success",
+      "not-attempted",
+      "not-attempted",
+    ]);
+    expect(summary.runs[0].data).toBe("data-1");
+    expect(summary.outcome).toBe("partial");
+  });
+
+  it("treats an already-aborted signal as cancelled before any batch starts", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const runBatch = vi.fn(async () => "x");
+
+    const summary = await runBatchedInference(batches, runBatch, {
+      cancelSignal: controller.signal,
+    });
+
+    expect(runBatch).not.toHaveBeenCalled();
+    expect(summary.notAttemptedCount).toBe(3);
+  });
+
+  it("behaves exactly as before when no signal is supplied", async () => {
+    const summary = await runBatchedInference(batches, async (batch) => batch.operations[0]);
+    expect(summary.outcome).toBe("success");
+    expect(summary.runs.map((run) => run.data)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("raceCancellation", () => {
+  it("returns the value when the work settles before the signal aborts", async () => {
+    const controller = new AbortController();
+    await expect(raceCancellation(Promise.resolve(7), controller.signal)).resolves.toEqual({
+      abandoned: false,
+      value: 7,
+    });
+  });
+
+  it("reports abandoned when the signal aborts first, and detaches its listener", async () => {
+    const controller = new AbortController();
+    const work = new Promise<number>(() => {});
+    const raced = raceCancellation(work, controller.signal);
+    controller.abort();
+    await expect(raced).resolves.toEqual({ abandoned: true });
+  });
+
+  it("propagates the work's own rejection when it is not abandoned", async () => {
+    const controller = new AbortController();
+    await expect(
+      raceCancellation(Promise.reject(new Error("boom")), controller.signal),
+    ).rejects.toThrow("boom");
+  });
+
+  it("without a signal simply awaits the work", async () => {
+    await expect(raceCancellation(Promise.resolve("v"))).resolves.toEqual({
+      abandoned: false,
+      value: "v",
+    });
   });
 });

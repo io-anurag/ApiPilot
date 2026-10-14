@@ -392,6 +392,17 @@ CPU profile also used to calibrate `AI_INFERENCE_TIMEOUT_MS` and `AI_ENHANCEMENT
 `AI_PROVIDER_MODE=mock` (the automated-test default) needs no model process and adds no
 meaningful memory beyond the Node/Express and Vite dev servers themselves.
 
+The committed results were measured on three generic one-sentence prompts, which say little about the
+enhancement task. The harness now benchmarks contract-shaped enhancement prompts (workload set
+`ap013-enhancement-v1`, built from the real prompt builder and judged by the real candidate
+validation) and records each result's `dtype`, so fp32 and q8 of the same model are compared
+reproducibly. The figures above predate that and are replaced the next time the benchmark is run
+against a real model, which is an explicit, opt-in session.
+
+Cancelling an AI enhancement run releases its request immediately: the batch in flight is abandoned
+and stays retryable, its late result is discarded, and the next request waits behind it in the serial
+queue.
+
 First use of local AI downloads and caches the model — about 1.7 GB for the default model at
 fp32, under `AI_MODEL_CACHE_DIR` (`~/.apipilot/models` by default). `.env.example` documents why
 `AI_MODEL_DTYPE` should stay unset on CPU: measured q8 quantization was roughly 4x slower than
