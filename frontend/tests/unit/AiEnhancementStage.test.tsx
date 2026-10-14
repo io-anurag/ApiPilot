@@ -518,3 +518,214 @@ describe("AiEnhancementStage resuming an in-progress run after reload", () => {
     );
   });
 });
+
+/**
+ * Phase, elapsed time and cancel for a run in progress (specs/013-ai-enhancement-viability FR-018,
+ * FR-019, FR-020). Fake timers throughout, so elapsed time is asserted against a controlled clock
+ * rather than real waiting (constitution XXIV).
+ */
+describe("AiEnhancementStage phase, elapsed time and cancel (specs/013-ai-enhancement-viability)", () => {
+  const PROGRESS_POLL_INTERVAL_MS = 2000;
+  const NOW = new Date("2026-10-14T10:00:00.000Z");
+  const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * The run POST never settles (the component stays in its running state); the `progressOnly` poll
+   * returns `progress`; the cancel POST resolves with `cancelResponse`.
+   */
+  function stubRun(
+    progress: unknown,
+    cancelResponse: { ok: boolean; status: number; body: unknown } = {
+      ok: true,
+      status: 202,
+      body: { workflow: {} },
+    },
+  ) {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string, init?: { method?: string } | null) => {
+        if (init?.method === "POST" && url.endsWith("/ai-enhancement/cancel")) {
+          return Promise.resolve({
+            ok: cancelResponse.ok,
+            status: cancelResponse.status,
+            json: () => Promise.resolve(cancelResponse.body),
+          });
+        }
+        if (init?.method === "POST") return new Promise(() => {});
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              progress: { aiEnhancement: { progress }, liveScenarios: [] },
+            }),
+        });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function startRun() {
+    render(<AiEnhancementStage onAdvanced={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
+    await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS));
+  }
+
+  const singleBatchGenerating = {
+    totalBatches: 1,
+    batches: [{ index: 0, status: "in-progress" }],
+    startedAt: ago(20_000),
+    generatingSince: ago(5_000),
+    phase: "generating",
+    cancelRequested: false,
+  };
+
+  const preparing = {
+    totalBatches: 0,
+    batches: [],
+    startedAt: ago(42_000),
+    phase: "preparing",
+    cancelRequested: false,
+  };
+
+  it("shows the phase and a live elapsed timer for a single-batch run (FR-019, supersedes 012 FR-005)", async () => {
+    stubRun(singleBatchGenerating);
+
+    await startRun();
+
+    expect(screen.getByTestId("ai-enhancement-phase")).toHaveTextContent("Generating scenarios");
+    // generatingSince was 5 s before the clock was set, and the poll tick advanced it by 2 s.
+    expect(screen.getByTestId("ai-enhancement-elapsed")).toHaveTextContent("7s elapsed");
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+    expect(screen.getByTestId("ai-enhancement-elapsed")).toHaveTextContent("10s elapsed");
+
+    await act(() => vi.advanceTimersByTimeAsync(55_000));
+    expect(screen.getByTestId("ai-enhancement-elapsed")).toHaveTextContent("1m 05s elapsed");
+  });
+
+  it("measures elapsed time from generatingSince, not from when the run started", async () => {
+    stubRun({ ...singleBatchGenerating, startedAt: ago(600_000), generatingSince: ago(1_000) });
+
+    await startRun();
+
+    expect(screen.getByTestId("ai-enhancement-elapsed")).toHaveTextContent("3s elapsed");
+  });
+
+  it("renders the preparing phase distinctly from generating and attributes the wait to the model download (FR-018)", async () => {
+    stubRun(preparing);
+
+    await startRun();
+
+    const phase = screen.getByTestId("ai-enhancement-phase");
+    expect(phase).toHaveTextContent("Preparing the local model");
+    expect(phase).not.toHaveTextContent("Generating scenarios");
+    expect(screen.getByTestId("ai-enhancement-run-progress")).toHaveTextContent(/model downloads/i);
+    // Preparation is timed from startedAt (there is no generatingSince yet).
+    expect(screen.getByTestId("ai-enhancement-elapsed")).toHaveTextContent("44s elapsed");
+  });
+
+  it("shows no batch progress, and no NaN, while the model is still being prepared", async () => {
+    stubRun(preparing);
+
+    await startRun();
+
+    expect(screen.queryByTestId("ai-enhancement-progress")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-enhancement-run-progress")).not.toHaveTextContent("NaN");
+  });
+
+  it("switches from the preparing view to the generating view when the phase advances", async () => {
+    let current: unknown = preparing;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init?: { method?: string } | null) => {
+        if (init?.method === "POST") return new Promise(() => {});
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              progress: { aiEnhancement: { progress: current }, liveScenarios: [] },
+            }),
+        });
+      }),
+    );
+    await startRun();
+    expect(screen.getByTestId("ai-enhancement-phase")).toHaveTextContent(
+      "Preparing the local model",
+    );
+
+    current = { ...singleBatchGenerating, generatingSince: ago(0) };
+    await act(() => vi.advanceTimersByTimeAsync(PROGRESS_POLL_INTERVAL_MS));
+
+    expect(screen.getByTestId("ai-enhancement-phase")).toHaveTextContent("Generating scenarios");
+  });
+
+  it("offers a cancel control only while a run is in progress", () => {
+    stubRun(singleBatchGenerating);
+    render(<AiEnhancementStage onAdvanced={() => {}} />);
+    expect(screen.queryByTestId("ai-enhancement-cancel")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Enhance with AI" }));
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
+
+  it("invokes the cancel endpoint without waiting for the run to settle, and says it is stopping (FR-020)", async () => {
+    const fetchMock = stubRun({ ...singleBatchGenerating });
+    await startRun();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // The run POST is still pending (it never resolves in this stub); only the cancel call is awaited.
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    const cancelCalls = fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/ai-enhancement/cancel") && init?.method === "POST",
+    );
+    expect(cancelCalls).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+  });
+
+  it("reports a refused cancel and re-enables the control so the user can try again", async () => {
+    stubRun(singleBatchGenerating, {
+      ok: false,
+      status: 409,
+      body: {
+        error: "no_run_in_progress",
+        message: "No AI enhancement run is currently in progress.",
+      },
+    });
+    await startRun();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(screen.getByTestId("ai-enhancement-error")).toHaveTextContent(
+      "No AI enhancement run",
+    );
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
+
+  it("says the current batch will finish and the run then stop once the server reports the cancel", async () => {
+    stubRun({ ...singleBatchGenerating, cancelRequested: true });
+
+    await startRun();
+
+    expect(screen.getByTestId("ai-enhancement-run-progress")).toHaveTextContent(
+      "finishing the current batch, then stopping",
+    );
+    expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+  });
+});

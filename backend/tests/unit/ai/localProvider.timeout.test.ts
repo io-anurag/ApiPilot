@@ -120,4 +120,85 @@ describe("LocalProvider timeout handling", () => {
     expect(response.status).toBe("success");
     expect(response.content).toContain("echo:");
   });
+
+  describe("an abandoned inference (specs/013 FR-017, SC-011)", () => {
+    function providerWithStuckFirstGeneration(timeoutMs: number) {
+      const state = {
+        calls: 0,
+        releaseFirst: undefined as (() => void) | undefined,
+      };
+      const provider = new LocalProvider(
+        { modelId: "fake-model", cacheDir: "/tmp/fake-cache", useAccelerator: false, inferenceTimeoutMs: timeoutMs },
+        async () => ({
+          generate: async () => {
+            state.calls += 1;
+            if (state.calls === 1) {
+              await new Promise<void>((resolve) => {
+                state.releaseFirst = resolve;
+              });
+              return "abandoned result";
+            }
+            return "second result";
+          },
+        }),
+      );
+      return { provider, state };
+    }
+
+    it("releases its own caller with TIMEOUT while the orphaned computation is still running", async () => {
+      const { provider, state } = providerWithStuckFirstGeneration(20);
+
+      const response = await provider.infer(TEXT_INFERENCE_REQUEST);
+
+      expect(response.errorCategory).toBe("TIMEOUT");
+      expect(state.releaseFirst).toBeDefined();
+      state.releaseFirst?.();
+    });
+
+    it("does not start the next inference until the abandoned computation settles, and discards its result", async () => {
+      const { provider, state } = providerWithStuckFirstGeneration(20);
+
+      const first = await provider.infer(TEXT_INFERENCE_REQUEST);
+      expect(first.errorCategory).toBe("TIMEOUT");
+
+      const second = provider.infer(TEXT_INFERENCE_REQUEST);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(state.calls).toBe(1);
+
+      state.releaseFirst?.();
+      const secondResponse = await second;
+
+      expect(state.calls).toBe(2);
+      expect(secondResponse.status).toBe("success");
+      expect(secondResponse.content).toBe("second result");
+      expect(first.content).toBeUndefined();
+    });
+
+    it("also holds the queue when the abandoned computation eventually fails", async () => {
+      let calls = 0;
+      let failFirst: ((error: Error) => void) | undefined;
+      const provider = new LocalProvider(
+        { modelId: "fake-model", cacheDir: "/tmp/fake-cache", useAccelerator: false, inferenceTimeoutMs: 20 },
+        async () => ({
+          generate: async () => {
+            calls += 1;
+            if (calls === 1) {
+              await new Promise<void>((_resolve, reject) => {
+                failFirst = reject;
+              });
+            }
+            return "second result";
+          },
+        }),
+      );
+
+      await provider.infer(TEXT_INFERENCE_REQUEST);
+      const second = provider.infer(TEXT_INFERENCE_REQUEST);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(calls).toBe(1);
+
+      failFirst?.(new Error("orphan crashed"));
+      await expect(second).resolves.toMatchObject({ status: "success" });
+    });
+  });
 });

@@ -233,4 +233,4 @@ With multiple developers, after Setup + Foundational are done:
 
 ## Phase 7: Convergence
 
-- [ ] T037 Add a pre-flight dependency guard (e.g. a `pretest`/`predev` script check) that fails with a clear, actionable "run `npm install` first" message when `node_modules`/`vitest` is missing, instead of the raw shell "command not recognized" error, per spec.md Edge Cases (partial)
+- [x] T037 Add a pre-flight dependency guard (e.g. a `pretest`/`predev` script check) that fails with a clear, actionable "run `npm install` first" message when `node_modules`/`vitest` is missing, instead of the raw shell "command not recognized" error, per spec.md Edge Cases — done: `scripts/check-dependencies.mjs`, wired as root `pretest`/`prelint`/`prebuild`/`predev`

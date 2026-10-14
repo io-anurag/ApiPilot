@@ -120,7 +120,8 @@ arrives in seconds naming the constraint, with no inference started.
 - [x] T029 [P] [US2] Extend `backend/tests/unit/ai/viability.test.ts`: the estimate is pure and total — identical inputs always yield an identical estimate, with no I/O
 - [x] T030 [P] [US2] Extend `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts`: a refusal resolves the stage to `skipped` with `failureExplanation.category === "not-viable"`, leaves the deterministic baseline fully intact, and adds **no** new `StageStatus` member (FR-015, FR-016, research.md Decision 10)
 - [x] T031 [P] [US2] Extend `backend/tests/unit/testDesign/enhanceTestModel.test.ts`: when some batches pass pre-flight and later ones are refused, the run resolves to `partial` retaining what succeeded, not to a total failure (spec.md Edge Cases)
-- [ ] T032 [P] [US2] Extend `backend/tests/unit/ai/requestQueue.test.ts` and `backend/tests/unit/ai/localProvider.timeout.test.ts`: after a timeout abandons an inference, the queue does not start the next task until the abandoned computation settles, so a retry cannot run concurrently with work already given up on (FR-017, SC-011)
+- [x] T032 [P] [US2] Extend `backend/tests/unit/ai/requestQueue.test.ts` and `backend/tests/unit/ai/localProvider.timeout.test.ts`: after a timeout abandons an inference, the queue does not start the next task until the abandoned computation settles, so a retry cannot run concurrently with work already given up on (FR-017, SC-011)
+      **Done 2026-10-14** in `requestQueue.test.ts` and `localProvider.timeout.test.ts`. Writing the tests showed that T037 was ticked but not implemented (`RequestQueue` was unchanged and the next inference ran concurrently with the abandoned `generate()`); `RequestQueue.holdUntilSettled` and its use in `LocalProvider.runInference` now deliver it.
 
 ### Implementation for User Story 2
 
@@ -129,6 +130,7 @@ arrives in seconds naming the constraint, with no inference started.
 - [x] T035 [US2] Add a pre-flight check to `backend/src/testDesign/enhanceTestModel.ts`: before each batch's `infer()`, estimate viability and record a refusal outcome instead of calling the provider when not viable (depends on T033, T034, T031)
 - [x] T036 [US2] Add a pre-flight refusal error/outcome type to `backend/src/testGenerationWorkflow/errors.ts` following the existing error-class pattern, carrying `projectedMs` and `budgetMs` for the explanation mapping (depends on T035)
 - [x] T037 [US2] In `backend/src/ai/requestQueue.ts`: do not start a queued task while a prior abandoned computation is still settling, and discard the abandoned result on arrival (depends on T032)
+      **Corrected 2026-10-14:** this was ticked without the behaviour being present; implemented with T032.
 
 **Checkpoint**: SC-002 and SC-005 hold — an unviable run reports in under 10 s instead of 300 s.
 
@@ -145,13 +147,14 @@ advances, and cancelling returns control promptly leaving the workflow consisten
 ### Tests for User Story 3
 
 - [x] T038 [P] [US3] Extend `backend/tests/unit/testGenerationWorkflow/workflowStore.test.ts`: `phase` transitions `"preparing"` → `"generating"` one way only and never returns; `generatingSince` is present iff `phase` is `"generating"` and never earlier than `startedAt`; `totalBatches` is `0` while preparing; `cancelRequested` transitions `false` → `true` only (data-model.md validation rules)
-- [ ] T039 [P] [US3] Extend `backend/tests/integration/testGenerationWorkflow.test.ts`: `GET /api/test-generation-workflow` returns the extended progress shape in [contracts/ai-enhancement-progress-v2.md](./contracts/ai-enhancement-progress-v2.md) for both the preparing and generating states
-- [ ] T040 [P] [US3] Extend `backend/tests/integration/testGenerationWorkflow.test.ts`: `POST /api/test-generation-workflow/ai-enhancement/cancel` returns `202` with `cancelRequested: true` per [contracts/ai-enhancement-cancel.md](./contracts/ai-enhancement-cancel.md); `409 no_run_in_progress` when no run is active; a repeat cancel is idempotent and returns `202`
-- [ ] T041 [P] [US3] Extend `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts`: cancelling with no succeeded batch yields `skipped` + `cancelled: true`; cancelling after a succeeded batch yields `partial` + `cancelled: true` retaining that batch's scenarios and any review decisions on them (FR-021)
+- [x] T039 [P] [US3] Extend `backend/tests/integration/testGenerationWorkflow.test.ts`: `GET /api/test-generation-workflow` returns the extended progress shape in [contracts/ai-enhancement-progress-v2.md](./contracts/ai-enhancement-progress-v2.md) for both the preparing and generating states
+- [x] T040 [P] [US3] Extend `backend/tests/integration/testGenerationWorkflow.test.ts`: `POST /api/test-generation-workflow/ai-enhancement/cancel` returns `202` with `cancelRequested: true` per [contracts/ai-enhancement-cancel.md](./contracts/ai-enhancement-cancel.md); `409 no_run_in_progress` when no run is active; a repeat cancel is idempotent and returns `202`
+- [x] T041 [P] [US3] Extend `backend/tests/unit/testGenerationWorkflow/aiEnhancementStage.test.ts`: cancelling with no succeeded batch yields `skipped` + `cancelled: true`; cancelling after a succeeded batch yields `partial` + `cancelled: true` retaining that batch's scenarios and any review decisions on them (FR-021)
 - [x] T042 [P] [US3] Extend `backend/tests/unit/ai/requestBatching.test.ts`: an `isCancelled` predicate is checked before each batch alongside the existing `isTimedOut`; once true, remaining batches become `not-attempted` without calling `runBatch`, and omitting the predicate behaves exactly as today (backward compatible with `analyzeDependencies.ts`'s call site)
-- [ ] T043 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx` (fake timers, not real ones — constitution XXIV): a **single-batch** run renders the phase and a live elapsed timer, superseding `012` FR-005 which hid all progress for `totalBatches <= 1` and therefore for 100% of real runs
-- [ ] T044 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: the preparing phase renders distinctly from generating, so a first-run model download is attributable rather than mysterious (FR-018)
+- [x] T043 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx` (fake timers, not real ones — constitution XXIV): a **single-batch** run renders the phase and a live elapsed timer, superseding `012` FR-005 which hid all progress for `totalBatches <= 1` and therefore for 100% of real runs
+- [x] T044 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: the preparing phase renders distinctly from generating, so a first-run model download is attributable rather than mysterious (FR-018)
 - [ ] T045 [P] [US3] Extend `frontend/tests/unit/AiEnhancementStage.test.tsx`: a cancel control is present while running, invokes the cancel endpoint, and the component returns to an interactive state without waiting for the run to settle (FR-020, SC-008)
+      **Partly covered 2026-10-14, left open:** tests show the control while running, that it calls the cancel endpoint without awaiting the run, the "Stopping…" state, and a refused cancel re-enabling it. The component does **not** return to an interactive state before the run settles: `running` stays true, so "Enhancing…" and "Stopping…" remain disabled until the pending run request resolves at the next batch boundary, which can be minutes with a generation in flight. That does not yet meet SC-008. Needs a product decision before changing the component.
 
 ### Implementation for User Story 3
 
@@ -233,14 +236,12 @@ VII/XXII require this class of decision to rest on corpus evidence, and each ad-
 
 ### Outstanding tasks
 
-The dedicated US1 tests T007-T015, US2 tests T027-T031, US3 tests T038 and T042, and US4 tests
-T054-T057 are written and validated. Existing coverage also exercises the implemented stage,
-partial-run, frontend, and accessibility behavior described by the remaining story tests. T032,
-T039-T041, and T043-T045 still need dedicated queue/integration/fake-timer coverage before they
-can be marked complete.
+The dedicated US1 tests T007-T015, US2 tests T027-T032, US3 tests T038-T044 and US4 tests
+T054-T057 are written and validated (T032, T039-T041 and T043-T044 on 2026-10-14). T045 is partly
+covered and open, see its note.
 
-T025/T026/T066 (benchmark harness extension and re-run) and T067/T068/T071 (roadmap, `012`
-supersession note, regression checklist) are also outstanding.
+T025/T026/T066 (benchmark harness extension and re-run) and T068/T071 (`012` supersession note,
+regression checklist) are also outstanding.
 
 - [ ] T072 Resolve AI structured-output reliability, the failure the timeout was masking. Extend the benchmark harness to cover the enhancement workload (T025/T026), then let the recorded evidence choose between: constraining the response schema so a candidate costs fewer tokens, requesting a single candidate per call, and adopting a model with stronger JSON adherence. Also fixes the load-sensitive `analyzeDependencies` test recorded in T001, which fails for the same reason this feature exists — a time budget consumed before the work it was meant to cover.
 

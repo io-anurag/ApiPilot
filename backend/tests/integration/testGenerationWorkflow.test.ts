@@ -852,3 +852,183 @@ describe("POST /api/test-generation-workflow/ai-enhancement/retry-batch", () => 
     expect(notInteger.status).toBe(400);
   });
 });
+
+/**
+ * Extended progress and cancellation of the AI enhancement stage (specs/013-ai-enhancement-viability,
+ * contracts/ai-enhancement-progress-v2.md and contracts/ai-enhancement-cancel.md). `valid.yaml`'s 3
+ * operations are batched one-per-batch (`getInputBudget` returns 10). Mid-run requests go through
+ * the test's own session agent, as in the tests above.
+ */
+describe("AI enhancement progress v2 and cancel (specs/013-ai-enhancement-viability)", () => {
+  beforeEach(() => resetStore());
+
+  const BASE = "/api/test-generation-workflow";
+
+  function readyProvider(overrides: Partial<AIProvider>): AIProvider {
+    return {
+      mode: "mock",
+      getReadiness: () => ({
+        state: "ready",
+        acceleratorRequested: false,
+        acceleratorActive: false,
+        updatedAt: new Date(0).toISOString(),
+      }),
+      getInputBudget: async () => 10,
+      infer: async (req) => ({
+        contractVersion: 1,
+        requestId: req.requestId,
+        status: "success",
+        content: emptyCandidates,
+        modelId: "mock-model",
+        provider: "mock",
+        durationMs: 1,
+      }),
+      ...overrides,
+    };
+  }
+
+  async function reachAiEnhancement(agent: ReturnType<typeof request.agent>) {
+    await agent
+      .post(BASE)
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await agent.post(`${BASE}/api-review/continue`);
+    await agent.post(`${BASE}/deterministic-generation`);
+  }
+
+  interface Progress {
+    totalBatches: number;
+    batches: { index: number; status: string }[];
+    startedAt: string;
+    phase: string;
+    generatingSince?: string;
+    cancelRequested: boolean;
+  }
+  const progressOf = (body: { workflow: { stages: { aiEnhancement: { progress?: Progress } } } }) =>
+    body.workflow.stages.aiEnhancement.progress;
+
+  it("GET reports phase 'preparing' with no batches and no generatingSince while the model is being prepared (FR-018)", async () => {
+    let duringPreparation: Progress | undefined;
+    const app = createApp(
+      readyProvider({
+        getInputBudget: async () => {
+          duringPreparation = progressOf((await agent.get(BASE)).body);
+          return 10;
+        },
+      }),
+    );
+    const agent = request.agent(app);
+    await reachAiEnhancement(agent);
+
+    const done = await agent.post(`${BASE}/ai-enhancement`);
+
+    expect(done.status).toBe(200);
+    expect(duringPreparation).toEqual({
+      totalBatches: 0,
+      batches: [],
+      startedAt: expect.any(String),
+      phase: "preparing",
+      cancelRequested: false,
+    });
+  });
+
+  it("GET reports phase 'generating' with generatingSince, the batch list and cancelRequested false while generating", async () => {
+    const seen: Progress[] = [];
+    const app = createApp(
+      readyProvider({
+        infer: async (req) => {
+          const progress = progressOf((await agent.get(BASE)).body);
+          if (progress) seen.push(progress);
+          return {
+            contractVersion: 1,
+            requestId: req.requestId,
+            status: "success",
+            content: emptyCandidates,
+            modelId: "mock-model",
+            provider: "mock",
+            durationMs: 1,
+          };
+        },
+      }),
+    );
+    const agent = request.agent(app);
+    await reachAiEnhancement(agent);
+
+    await agent.post(`${BASE}/ai-enhancement`);
+
+    expect(seen).toHaveLength(3);
+    for (const progress of seen) {
+      expect(progress.phase).toBe("generating");
+      expect(progress.totalBatches).toBe(3);
+      expect(progress.cancelRequested).toBe(false);
+      expect(progress.generatingSince).toEqual(expect.any(String));
+      expect(Date.parse(progress.generatingSince as string)).toBeGreaterThanOrEqual(
+        Date.parse(progress.startedAt),
+      );
+    }
+    // The server never transmits a ticking elapsed value: clients derive it from generatingSince.
+    expect(Object.keys(seen[0]).filter((key) => /elapsed/i.test(key))).toEqual([]);
+  });
+
+  it("POST cancel answers 409 no_run_in_progress when no run is active, with or without a workflow", async () => {
+    const agent = request.agent(createApp(readyProvider({})));
+
+    const noWorkflow = await agent.post(`${BASE}/ai-enhancement/cancel`);
+    expect(noWorkflow.status).toBe(409);
+    expect(noWorkflow.body.error).toBe("no_run_in_progress");
+
+    await reachAiEnhancement(agent);
+    const idle = await agent.post(`${BASE}/ai-enhancement/cancel`);
+    expect(idle.status).toBe(409);
+    expect(idle.body).toEqual({
+      error: "no_run_in_progress",
+      message: expect.any(String),
+    });
+  });
+
+  it("POST cancel answers 202 with cancelRequested true at once, is idempotent, and the run settles cancelled without starting further batches", async () => {
+    let inferCalls = 0;
+    const cancelResponses: { status: number; progress?: Progress }[] = [];
+    const app = createApp(
+      readyProvider({
+        infer: async (req) => {
+          inferCalls += 1;
+          if (inferCalls === 1) {
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+              const response = await agent.post(`${BASE}/ai-enhancement/cancel`);
+              cancelResponses.push({
+                status: response.status,
+                progress: progressOf(response.body),
+              });
+            }
+          }
+          return {
+            contractVersion: 1,
+            requestId: req.requestId,
+            status: "success",
+            content: emptyCandidates,
+            modelId: "mock-model",
+            provider: "mock",
+            durationMs: 1,
+          };
+        },
+      }),
+    );
+    const agent = request.agent(app);
+    await reachAiEnhancement(agent);
+
+    const settled = await agent.post(`${BASE}/ai-enhancement`);
+
+    expect(cancelResponses.map((r) => r.status)).toEqual([202, 202]);
+    for (const { progress } of cancelResponses) {
+      expect(progress?.cancelRequested).toBe(true);
+      expect(progress?.phase).toBe("generating");
+    }
+    expect(settled.status).toBe(200);
+    const stage = settled.body.workflow.stages.aiEnhancement;
+    expect(stage.status).toBe("partial");
+    expect(stage.cancelled).toBe(true);
+    expect(stage.progress).toBeUndefined();
+    // Batch 0 ran; the two remaining batches were never attempted (cooperative cancel).
+    expect(inferCalls).toBe(1);
+  });
+});

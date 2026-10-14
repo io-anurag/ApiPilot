@@ -35,11 +35,11 @@ is `specs/030-ai-failure-analysis`.
 
 | Feature | Status |
 |---|---|
-| AP-001 — Application Foundation | Implemented (1 minor follow-up task outstanding: a pre-flight `node_modules` dependency guard) |
+| AP-001 — Application Foundation | Implemented (the pre-flight `node_modules` dependency guard, T037, was completed 2026-10-14) |
 | AP-002 — OpenAPI Specification Engine | Implemented |
 | AP-003 — Deterministic Test Designer | Implemented |
 | AP-004 — AI Provider & Local Inference Foundation | Implemented (1 follow-up task outstanding: full manual quickstart validation pass) |
-| AP-005 — AI Test Scenario Designer | Implemented (3 follow-up tasks outstanding: broader semantic validation coverage, candidate-ID/low-confidence policy enforcement, all-or-nothing degradation coverage for partial/mixed-invalid provider responses — all marked partial in tasks.md) |
+| AP-005 — AI Test Scenario Designer | Implemented (the three convergence follow-ups T042 to T044 were completed 2026-10-14) |
 | AP-006 — Test Scenario Review | Implemented |
 | AP-007 — Postman Collection Generator | Implemented (1 follow-up task outstanding: the manual Postman-import acceptance step, which needs a real, operator-authorized target this feature deliberately does not provide). Amended 2026-09-23: a path parameter with no approved value is exported as a resource-qualified variable (`/users/{id}` → `{{user_id}}`) so same-named parameters on different resources no longer share one value |
 | AP-008 — API Dependency & Integration Workflow Engine | Implemented |
@@ -47,7 +47,7 @@ is `specs/030-ai-failure-analysis`.
 | AP-010 — Presentation System & Review Scalability | Implemented |
 | AP-011 — Bounded AI Prompt Batching | Implemented |
 | AP-012 — AI Enhancement Progress Visibility | Implemented (1 follow-up task outstanding: manual real-model UI validation from quickstart.md, optional) |
-| AP-013 — AI Enhancement Viability | Implemented with follow-up validation outstanding: benchmark workload/dtype evidence, endpoint integration coverage, fake-timer UI coverage, and regression checklist |
+| AP-013 — AI Enhancement Viability | Implemented with follow-up validation outstanding: benchmark workload/dtype evidence (T025, T026, T066, T072), the cancel-returns-control behaviour (T045) and the regression checklist (T071). Queue, endpoint and fake-timer coverage completed 2026-10-14 |
 | AP-014 — AI Batching Policy & Run Pacing | Implemented (2 tasks blocked on an uncached real local model — validating a conditional-example batching rule and re-measuring decode throughput — plus two startup-validation items for the run-budget env var deliberately deferred, per tasks.md) |
 | AP-015 — AI Batch Retry | Implemented |
 | AP-016 — Workflow-Aware Postman Generation | Implemented |
@@ -3741,3 +3741,34 @@ Implementation
       and dependency advisories to `docs/status.md`; the configuration table, persistence and security to
       `docs/configuration.md`; the route tables to `docs/http-api.md`; commands and tooling notes to `docs/development.md`.
       The README's architecture, pipeline and repository-structure sections duplicated `docs/architecture.md` and were dropped.
+
+86. **AP-001 and AP-005 convergence follow-ups closed; version 19.49.1 (2026-10-14).**
+    - Defect fix, not a feature (the freeze in #85 does not cover it). AP-001 T037: `scripts/check-dependencies.mjs`, run as
+      root `pretest`, `prelint`, `prebuild` and `predev`, fails with "run `npm install`" naming the missing dev dependencies
+      instead of the shell's "command not recognized".
+    - AP-005 T042: a candidate with a missing or non-object request parameter map, a null or unsupported assertion, or a
+      status-code/schema assertion without its content used to be able to throw inside semantic validation; each is now an
+      `invalid-shape` finding. Unknown request-body keys are now caught inside array items, and header names match
+      case-insensitively. Request values are deliberately not checked against constraints (negative scenarios violate them).
+    - AP-005 T043: new finding codes `invalid-candidate-id` and `invalid-confidence` (shared-domain `AIValidationFindingCode`,
+      additive); out-of-range confidence stays `low-confidence`. No minimum confidence threshold is invented because the
+      specification defines none; the policy is recorded in `specs/005` data-model.md.
+    - AP-005 T044 decision: per-candidate handling is kept; an all-or-nothing response policy would contradict FR-007, FR-011,
+      FR-012, US4/AC2 and the partial retention of AP-011, AP-012 and AP-015. Degradation coverage added instead.
+    - Version bumped to 19.49.1 (root, backend, frontend, shared-domain).
+
+87. **AP-013 test coverage completed; abandoned inference now holds the queue; version 19.49.2 (2026-10-14).**
+    - Defect fix. Writing `specs/013` T032 showed that T037 was ticked without its behaviour: after a timeout the next
+      inference started while the abandoned `generate()` was still running (FR-017, SC-011). `RequestQueue.holdUntilSettled`
+      now makes the next request wait for that computation, and `LocalProvider` registers it on a timeout. The late result is
+      discarded and the caller still gets `TIMEOUT` at once. Known limit: a native call that never returns would block later
+      inferences; the spec accepts the orphan window and no bound was invented.
+    - Defect fix: while the model was being prepared (`totalBatches` 0) the stage rendered a progress bar with
+      `aria-valuenow="NaN"`; the batch list is now shown only once batches are planned.
+    - Tests added: queue hold and timeout abandonment (T032), progress v2 and cancel routes (T039, T040), cancellation outcomes
+      of the stage (T041), single-batch phase and elapsed time, preparing phase and cancel control (T043, T044, part of T045).
+    - Test reliability: `liveUserScriptRoute` and `liveChainRoute` waited on the request count alone, but a request's count and
+      its failure arrive as separate lines; they now wait for both. Earlier full-suite failures under load came from a stray
+      `find` process, not the suite.
+    - Open: T045 (the UI stays on "Stopping..." until the run settles, so SC-008 is not met), T025/T026/T066/T072, T071.
+    - Version bumped to 19.49.2 (root, backend, frontend, shared-domain).

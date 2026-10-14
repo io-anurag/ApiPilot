@@ -1,6 +1,6 @@
 {
   "name": "apipilot",
-  "version": "19.49.0",
+  "version": "19.49.2",
   "private": true,
   "description": "ApiPilot monorepo: backend, frontend, and shared domain packages.",
   "engines": {
@@ -12,12 +12,15 @@
     "packages/shared-domain"
   ],
   "scripts": {
-    "predev": "node scripts/dev-stop.mjs",
+    "predev": "node scripts/check-dependencies.mjs && node scripts/dev-stop.mjs",
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "stop": "node scripts/dev-stop.mjs",
     "version:bump": "node scripts/bump-version.mjs",
+    "prebuild": "node scripts/check-dependencies.mjs",
     "build": "npm run build --workspaces --if-present",
+    "pretest": "node scripts/check-dependencies.mjs",
     "test": "vitest run",
+    "prelint": "node scripts/check-dependencies.mjs",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "devDependencies": {

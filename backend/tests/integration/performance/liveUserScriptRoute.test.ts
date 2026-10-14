@@ -41,7 +41,12 @@ describe("GET /api/user-scripts/runs/:runId/live", () => {
     const { agent, runId } = await startedRun({ hold: true });
     const response = await waitFor(
       () => liveOf(agent, runId),
-      (r) => (r.body as LiveRunSnapshot).totals?.requests === 2,
+      // A request's `http_reqs` and `http_req_failed` are separate NDJSON lines, so the request count
+      // can reach 2 a moment before the second request's failure is counted: wait for both.
+      (r) => {
+        const live = r.body as LiveRunSnapshot;
+        return live.totals?.requests === 2 && live.totals?.failures === 1 && live.recent?.length === 2;
+      },
     );
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");

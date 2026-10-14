@@ -24,6 +24,8 @@ export interface AIScenarioCandidate {
 
 export type AIValidationFindingCode =
   | "invalid-shape"
+  | "invalid-candidate-id"
+  | "invalid-confidence"
   | "operation-not-found"
   | "method-not-found"
   | "field-not-found"

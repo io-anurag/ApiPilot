@@ -43,7 +43,11 @@ describe("GET /api/chain-plans/runs/:runId/live", () => {
     const { agent, run } = await startedRun({ hold: true });
     const response = await waitFor(
       () => liveOf(agent, run.id),
-      (r) => (r.body as LiveRunSnapshot).totals?.requests === 2,
+      // A request's count and its failure are separate NDJSON lines: wait for both, not just the count.
+      (r) => {
+        const live = r.body as LiveRunSnapshot;
+        return live.totals?.requests === 2 && live.totals?.failures === 1 && live.recent?.length === 2;
+      },
     );
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");

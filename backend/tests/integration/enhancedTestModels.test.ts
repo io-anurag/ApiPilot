@@ -143,6 +143,34 @@ describe("POST /api/test-models/enhance", () => {
     }
   });
 
+  it("preserves the deterministic baseline for malformed provider output", async () => {
+    const response = await request(createApp(fixedProvider("not json")))
+      .post("/api/test-models/enhance")
+      .send({ apiModel: aiScenarioApiModel, testModel: aiScenarioBaseline });
+
+    expect(response.status).toBe(200);
+    expect(response.body.aiProviderOutcome).toBe("invalid-response");
+    expect(response.body.enhancedTestModel).toEqual(aiScenarioBaseline);
+    expect(response.body.aiErrorMessage).not.toContain("not json");
+  });
+
+  it("keeps valid candidates and reports a structurally invalid sibling as rejected", async () => {
+    const [valid] = JSON.parse(candidateResponse).candidates;
+    const content = JSON.stringify({
+      responseVersion: 1,
+      candidates: [valid, { ...valid, candidateId: "bad-confidence", confidence: 9 }],
+    });
+    const response = await request(createApp(fixedProvider(content)))
+      .post("/api/test-models/enhance")
+      .send({ apiModel: aiScenarioApiModel, testModel: aiScenarioBaseline });
+
+    expect(response.status).toBe(200);
+    expect(response.body.aiProviderOutcome).toBe("success");
+    expect(response.body.enhancedTestModel.scenarios).toHaveLength(1);
+    expect(response.body.aiCandidates.rejected).toHaveLength(1);
+    expect(response.body.aiCandidates.rejected[0].findings[0].code).toBe("low-confidence");
+  });
+
   it("deduplicates equivalent AI candidates and preserves their identities", async () => {
     const parsedCandidate = JSON.parse(candidateResponse).candidates[0];
     const response = await request(

@@ -485,15 +485,14 @@ export class LocalProvider implements AIProvider {
     hooks?.onStarted?.();
     const timeoutMs = request.timeoutMs ?? this.config.inferenceTimeoutMs;
     const generationStartedAt = Date.now();
+    let generation: Promise<string> | undefined;
     try {
-      const content = await withTimeout(
-        engine.generate(request.input, {
-          maxNewTokens: request.maxOutputTokens,
-          expectedOutputFormat: request.expectedOutputFormat,
-          ...(request.systemPrompt !== undefined ? { systemPrompt: request.systemPrompt } : {}),
-        }),
-        timeoutMs,
-      );
+      generation = engine.generate(request.input, {
+        maxNewTokens: request.maxOutputTokens,
+        expectedOutputFormat: request.expectedOutputFormat,
+        ...(request.systemPrompt !== undefined ? { systemPrompt: request.systemPrompt } : {}),
+      });
+      const content = await withTimeout(generation, timeoutMs);
       const durationMs = Date.now() - startedAt;
       this.recordObservedRates(
         request.input.length,
@@ -515,6 +514,11 @@ export class LocalProvider implements AIProvider {
         durationMs,
       };
     } catch (error) {
+      // The engine exposes no abort signal, so the abandoned `generate()` keeps running. Its caller is
+      // released with TIMEOUT now (the late result is discarded: nothing reads `generation` again),
+      // but the next request waits for it to settle rather than competing with work already given up
+      // on (specs/013-ai-enhancement-viability FR-017, SC-011).
+      if (error instanceof TimeoutError && generation) this.queue.holdUntilSettled(generation);
       const errorCategory =
         error instanceof TimeoutError
           ? "TIMEOUT"

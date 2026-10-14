@@ -6,7 +6,10 @@ import { buildApiModel } from "../../../src/openapi/buildApiModel";
 import { parseYaml } from "../../../src/openapi/parseYaml";
 import { validateSpec } from "../../../src/openapi/validateSpec";
 import { continueApiReview } from "../../../src/testGenerationWorkflow/apiReviewStage";
-import { runAiEnhancement } from "../../../src/testGenerationWorkflow/aiEnhancementStage";
+import {
+  cancelAiEnhancement,
+  runAiEnhancement,
+} from "../../../src/testGenerationWorkflow/aiEnhancementStage";
 import { runDeterministicGeneration } from "../../../src/testGenerationWorkflow/deterministicGenerationStage";
 import {
   AiEnhancementAlreadyRunningError,
@@ -607,5 +610,99 @@ describe("aiEnhancementStage batchOutcomes persistence (specs/015-ai-batch-retry
     expect(wf.aiEnhancement?.notViable).toBeDefined();
     expect(wf.stages.aiEnhancement.status).toBe("skipped");
     expect(wf.stages.aiEnhancement.batchOutcomes).toBeUndefined();
+  });
+});
+
+describe("aiEnhancementStage cancellation (specs/013-ai-enhancement-viability FR-016, FR-021)", () => {
+  beforeEach(() => resetStore());
+
+  it("resolves to 'skipped' with cancelled true when no batch had succeeded, leaving the deterministic baseline intact", async () => {
+    await reachAiEnhancement();
+    const deterministicCount = getCurrentWorkflow()!.deterministicTestModel!.scenarios.length;
+    let inferCalls = 0;
+    const provider: AIProvider = {
+      ...perOperationCandidateProvider(),
+      infer: async () => {
+        inferCalls += 1;
+        // The user cancels while the first batch is in flight; that batch then fails.
+        cancelAiEnhancement();
+        throw Object.assign(new Error("timed out"), { category: "TIMEOUT" });
+      },
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    expect(inferCalls).toBe(1);
+    expect(wf.stages.aiEnhancement.status).toBe("skipped");
+    expect(wf.stages.aiEnhancement.cancelled).toBe(true);
+    expect(wf.stages.aiEnhancement.aiErrorCategory).toBeUndefined();
+    expect(wf.stages.aiEnhancement.failureExplanation?.category).toBe("cancelled");
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+    expect(wf.reviewWorkspace?.scenarios).toHaveLength(deterministicCount);
+    expect(
+      wf.reviewWorkspace?.scenarios.every((s) => s.scenario.provenance.source !== "AI"),
+    ).toBe(true);
+    expect(wf.activeStageId).toBe("scenarioReview");
+  });
+
+  it("resolves to 'partial' with cancelled true, retaining the succeeded batches' scenarios and the review decisions on them, and starts no further batch", async () => {
+    // A retry is where a user can already be deciding on early-revealed scenarios while later
+    // batches run (see the FR-012 test above), so the first run is skipped to reach scenarioReview.
+    await reachAiEnhancement();
+    await runAiEnhancement(unavailableProvider);
+
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    let inferCalls = 0;
+    let decidedScenarioId: string | undefined;
+    provider.infer = async (request) => {
+      inferCalls += 1;
+      if (inferCalls === 2) {
+        // Batch 0's scenario is already revealed: decide on it, then cancel during batch 1.
+        const revealed = getCurrentWorkflow()!.reviewWorkspace!.scenarios.find(
+          (s) => s.scenario.provenance.source === "AI",
+        )!;
+        applyScenarioDecisions([
+          { scenarioId: revealed.scenarioId, revision: revealed.revision, action: "accept" },
+        ]);
+        decidedScenarioId = revealed.scenarioId;
+        cancelAiEnhancement();
+      }
+      return originalInfer(request);
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    // Batches 0 and 1 ran; batch 2 was never attempted.
+    expect(inferCalls).toBe(2);
+    expect(wf.stages.aiEnhancement.status).toBe("partial");
+    expect(wf.stages.aiEnhancement.cancelled).toBe(true);
+    expect(wf.stages.aiEnhancement.failureExplanation?.category).toBe("cancelled");
+    expect(wf.stages.aiEnhancement.progress).toBeUndefined();
+
+    const aiScenarios = wf.reviewWorkspace!.scenarios.filter(
+      (s) => s.scenario.provenance.source === "AI",
+    );
+    expect(aiScenarios).toHaveLength(2);
+    expect(aiScenarios.find((s) => s.scenarioId === decidedScenarioId)?.state).toBe("accepted");
+    expect(aiScenarios.filter((s) => s.state === "pending")).toHaveLength(1);
+  });
+
+  it("does not mark a run cancelled when the cancel arrives only after the last batch has started", async () => {
+    await reachAiEnhancement();
+    const provider = perOperationCandidateProvider();
+    const originalInfer = provider.infer;
+    let inferCalls = 0;
+    provider.infer = async (request) => {
+      inferCalls += 1;
+      if (inferCalls === 3) cancelAiEnhancement();
+      return originalInfer(request);
+    };
+
+    const wf = await runAiEnhancement(provider);
+
+    expect(inferCalls).toBe(3);
+    expect(wf.stages.aiEnhancement.status).toBe("complete");
+    expect(wf.stages.aiEnhancement.cancelled).toBeUndefined();
   });
 });

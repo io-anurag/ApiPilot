@@ -11,6 +11,8 @@ npm run dev
 npm run stop
 ```
 
+`npm test`, `npm run lint`, `npm run build` and `npm run dev` first run `scripts/check-dependencies.mjs`, which fails with a "run `npm install`" message naming the missing root dev dependencies when `node_modules` has not been installed, instead of the shell's "command not recognized" error. It only checks; it never installs.
+
 Workspace-specific commands:
 
 ```powershell

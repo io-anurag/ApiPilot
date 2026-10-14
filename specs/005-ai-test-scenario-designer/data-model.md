@@ -42,11 +42,13 @@ The structured candidate returned by the AI response contract before domain conv
 
 | Field         | Type                  | Meaning                                                                                                                        |
 | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `code`        | closed string         | Examples: `invalid-shape`, `operation-not-found`, `field-not-found`, `undocumented-status-code`, `low-confidence`, `duplicate` |
+| `code`        | closed string         | Examples: `invalid-shape`, `invalid-candidate-id`, `invalid-confidence`, `operation-not-found`, `field-not-found`, `undocumented-status-code`, `low-confidence`, `duplicate` |
 | `message`     | `string`              | Safe actionable explanation                                                                                                    |
 | `candidateId` | `string`              | Candidate being evaluated                                                                                                      |
 | `path`        | `string \| undefined` | Candidate field path when relevant                                                                                             |
 | `executable`  | `boolean`             | Whether candidate may enter `TestModel`                                                                                        |
+
+Metadata policy (FR-014): `candidateId` must be a non-empty string (`invalid-candidate-id`) and unique across a run (`duplicate`, later occurrences rejected). `confidence` must be a number (`invalid-confidence` when missing or not a number) inside the inclusive range [0, 1] (`low-confidence` when outside it). No minimum confidence threshold is defined, so none is applied; an in-range confidence is kept in the candidate's AI provenance as the model's own claim. Request parameter maps, assertions (supported type plus the content that type requires) and assumptions are shape-checked (`invalid-shape`) before any semantic check, and request-body keys are checked at every depth, including inside array items. Header names are matched case-insensitively. Candidate request values are deliberately not checked against schema constraints, because negative scenarios violate them on purpose. A candidate cannot introduce an authentication credential: any header or query name the operation does not declare is `field-not-found`.
 
 ## Candidate Outcomes
 

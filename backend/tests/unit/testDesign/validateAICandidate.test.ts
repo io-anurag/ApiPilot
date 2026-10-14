@@ -67,7 +67,7 @@ describe("AI candidate validation", () => {
 
   it("rejects an empty candidate ID", () => {
     expect(validateAICandidateShape({ ...candidate, candidateId: "" })).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "invalid-shape" })]),
+      expect.arrayContaining([expect.objectContaining({ code: "invalid-candidate-id" })]),
     );
   });
 
@@ -120,5 +120,195 @@ describe("AI candidate validation", () => {
       fullModel,
     );
     expect(findings).toEqual([]);
+  });
+});
+
+describe("AI candidate semantic validation (specs/005 FR-007, FR-009)", () => {
+  const arrayModel = {
+    ...aiScenarioApiModel,
+    operations: [
+      {
+        ...aiScenarioApiModel.operations[0],
+        parameters: [
+          {
+            name: "X-Trace-Id",
+            location: "header" as const,
+            required: false,
+            schema: { type: "string", required: [], properties: {} },
+          },
+        ],
+        requestBody: {
+          required: true,
+          contentTypes: {
+            "application/json": {
+              type: "object",
+              required: [],
+              properties: {
+                items: {
+                  type: "array",
+                  required: [],
+                  properties: {},
+                  items: {
+                    type: "object",
+                    required: [],
+                    properties: {
+                      sku: { type: "string", required: [], properties: {} },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+  const arrayCandidate = {
+    ...candidate,
+    targetField: "items",
+    request: { ...candidate.request, body: { items: [{ sku: "a" }] } },
+  };
+
+  it("accepts body keys that exist inside array items", () => {
+    expect(validateAICandidateSemantics(arrayCandidate, arrayModel)).toEqual([]);
+  });
+
+  it("rejects an unknown body key inside an array item", () => {
+    const findings = validateAICandidateSemantics(
+      {
+        ...arrayCandidate,
+        request: { ...candidate.request, body: { items: [{ sku: "a" }, { bogus: 1 }] } },
+      },
+      arrayModel,
+    );
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "field-not-found",
+        path: "request.body.items[1].bogus",
+      }),
+    ]);
+  });
+
+  it("matches header parameter names case-insensitively", () => {
+    const findings = validateAICandidateSemantics(
+      {
+        ...arrayCandidate,
+        request: { ...arrayCandidate.request, headers: { "x-trace-id": "abc" } },
+      },
+      arrayModel,
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it("does not let a candidate invent an authentication credential the specification does not declare", () => {
+    const findings = validateAICandidateSemantics(
+      {
+        ...arrayCandidate,
+        request: {
+          ...arrayCandidate.request,
+          headers: { Authorization: "Bearer made-up", "X-Api-Key": "made-up" },
+        },
+      },
+      arrayModel,
+    );
+    expect(findings.map((finding) => finding.path)).toEqual([
+      "request.headerParameters.Authorization",
+      "request.headerParameters.X-Api-Key",
+    ]);
+  });
+});
+
+describe("AI candidate shape validation of request and assertions (specs/005 FR-007)", () => {
+  it.each([
+    ["a missing queryParameters object", { ...candidate.request, queryParameters: undefined }],
+    ["a non-object headers value", { ...candidate.request, headers: "x" }],
+    ["an array pathParameters value", { ...candidate.request, pathParameters: [] }],
+  ])("reports %s as an invalid shape instead of throwing", (_name, request) => {
+    const findings = validateAICandidateShape({ ...candidate, request });
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "invalid-shape",
+        candidateId: "candidate-1",
+        executable: false,
+      }),
+    ]);
+  });
+
+  it.each([
+    ["a null assertion", [null]],
+    ["an unsupported assertion type", [{ type: "response-time", expectedStatusCode: "200" }]],
+    ["a status-code assertion without a status code", [{ type: "status-code" }]],
+    ["a schema-conformance assertion without a schema", [{ type: "schema-conformance" }]],
+  ])("reports %s as an invalid shape", (_name, assertions) => {
+    const findings = validateAICandidateShape({ ...candidate, assertions });
+    expect(findings).toEqual([
+      expect.objectContaining({ code: "invalid-shape", path: "assertions[0]" }),
+    ]);
+  });
+
+  it("reports non-string assumptions as an invalid shape", () => {
+    expect(validateAICandidateShape({ ...candidate, assumptions: [1] })).toEqual([
+      expect.objectContaining({ code: "invalid-shape", path: "assumptions" }),
+    ]);
+  });
+});
+
+describe("AI candidate identity and confidence metadata (specs/005 FR-014)", () => {
+  it.each([
+    ["missing", undefined],
+    ["empty", ""],
+    ["blank", "   "],
+    ["a number", 7],
+  ])("reports a %s candidate ID as invalid-candidate-id only", (_name, candidateId) => {
+    expect(validateAICandidateShape({ ...candidate, candidateId })).toEqual([
+      expect.objectContaining({
+        code: "invalid-candidate-id",
+        path: "candidateId",
+        executable: false,
+      }),
+    ]);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["a string", "0.8"],
+    ["null", null],
+  ])("reports %s confidence as invalid-confidence only", (_name, confidence) => {
+    expect(validateAICandidateShape({ ...candidate, confidence })).toEqual([
+      expect.objectContaining({
+        code: "invalid-confidence",
+        candidateId: "candidate-1",
+        path: "confidence",
+        executable: false,
+      }),
+    ]);
+  });
+
+  it.each([-0.1, 1.5, Number.POSITIVE_INFINITY])(
+    "reports confidence %s outside the documented [0, 1] bound as low-confidence",
+    (confidence) => {
+      expect(validateAICandidateShape({ ...candidate, confidence })).toEqual([
+        expect.objectContaining({ code: "low-confidence", path: "confidence" }),
+      ]);
+    },
+  );
+
+  it.each([0, 1])("accepts the inclusive confidence bound %s", (confidence) => {
+    expect(validateAICandidateShape({ ...candidate, confidence })).toEqual([]);
+  });
+
+  it("reports an identity defect and a confidence defect together", () => {
+    const codes = validateAICandidateShape({
+      ...candidate,
+      candidateId: "",
+      confidence: undefined,
+    }).map((finding) => finding.code);
+    expect(codes).toEqual(["invalid-candidate-id", "invalid-confidence"]);
+  });
+
+  it("still reports other structural defects as invalid-shape", () => {
+    expect(validateAICandidateShape({ ...candidate, rationale: 3 })).toEqual([
+      expect.objectContaining({ code: "invalid-shape" }),
+    ]);
   });
 });

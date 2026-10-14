@@ -123,7 +123,12 @@ function RunProgress({ progress }: Readonly<{ progress: AiEnhancementProgress }>
           </span>
         )}
       </output>
-      <BatchProgressList progress={progress} />
+      {/*
+        While the model is being prepared nothing has been planned yet (`totalBatches` is 0 and the
+        list is empty, contracts/ai-enhancement-progress-v2.md), so there is no batch progress to
+        show and the settled fraction would be 0/0.
+      */}
+      {progress.totalBatches > 0 && <BatchProgressList progress={progress} />}
     </div>
   );
 }

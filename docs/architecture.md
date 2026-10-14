@@ -154,6 +154,10 @@ Candidates cannot add executable endpoints, methods, parameters, fields, securit
 status codes absent from the model. Valid AI provenance includes rationale, bounded confidence,
 assumptions, provider/model identity, and candidate identity when available. Invalid or
 non-executable candidates stay outside the executable scenario set with an explainable result.
+Handling is per candidate, not per response: one invalid candidate (a malformed ID or confidence, an
+unknown field, an undocumented status code) never discards its valid siblings, and the deterministic
+baseline is always returned unchanged. A provider that is unavailable, times out, or returns
+unparseable output yields the baseline plus a structured outcome.
 
 ### Dependency workflows
 
@@ -326,7 +330,9 @@ reloads and additional tabs while the backend remains alive, but not backend res
 All AI consumers use the shared `AIProvider` contract. Local Transformers.js inference is isolated
 in the local provider; tests normally use a deterministic mock or scripted fake provider. Provider
 states are explicit: `not-loaded`, `loading`, `ready`, and `unavailable`. Requests queue FIFO and
-run serially. Load failures are surfaced, require explicit retry, and never trigger a cloud
+run serially, and a request whose inference timed out holds the queue until that abandoned computation
+actually settles (the engine cannot be interrupted), so the next request never competes with work already
+given up on. Load failures are surfaced, require explicit retry, and never trigger a cloud
 fallback. CPU is the guaranteed mode; an explicitly enabled unavailable accelerator falls back to
 CPU with a notice.
 
