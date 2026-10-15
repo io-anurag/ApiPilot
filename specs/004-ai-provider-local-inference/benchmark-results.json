@@ -1,34 +1,35 @@
 {
-  "runAt": "2026-09-04T12:04:11.030Z",
-  "workloadSetId": "ap004-representative-v1",
+  "runAt": "2026-10-15T06:01:17.399Z",
+  "workloadSetId": "ap013-enhancement-v3",
   "candidates": [
     {
+      "modelId": "onnx-community/Qwen3-1.7B-ONNX",
+      "dtype": "fp32",
+      "structuredOutputSuccessRate": 0.875,
+      "averageLatencyMs": 28675.761212499998,
+      "loadMs": 40931.3195,
+      "averageOutputChars": 404.375,
+      "peakMemoryMb": 8898.734375
+    },
+    {
+      "modelId": "onnx-community/Qwen3-1.7B-ONNX",
+      "dtype": "q8",
+      "structuredOutputSuccessRate": 0.125,
+      "averageLatencyMs": 35491.73422499999,
+      "loadMs": 6758.240899999975,
+      "averageOutputChars": 455.625,
+      "peakMemoryMb": 4479.96484375
+    },
+    {
       "modelId": "onnx-community/Qwen2.5-0.5B-Instruct",
-      "structuredOutputSuccessRate": 0.3333333333333333,
-      "averageLatencyMs": 12654.346633333334,
-      "peakMemoryMb": 2749.265625
-    },
-    {
-      "modelId": "Xenova/LaMini-Flan-T5-248M",
+      "dtype": "fp32",
       "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 4.53203333333416,
-      "peakMemoryMb": 2749.875
-    },
-    {
-      "modelId": "onnx-community/Phi-3-mini-4k-instruct-ONNX",
-      "structuredOutputSuccessRate": 0.3333333333333333,
-      "averageLatencyMs": 322867.8621333334,
-      "peakMemoryMb": 4279.8125,
-      "notes": "dtype=q4"
-    },
-    {
-      "modelId": "onnx-community/Phi-3-mini-128k-instruct-ONNX",
-      "structuredOutputSuccessRate": 0,
-      "averageLatencyMs": 270339.21760000003,
-      "peakMemoryMb": 3552.875,
-      "notes": "dtype=q4"
+      "averageLatencyMs": 10212.16916250001,
+      "loadMs": 6573.5777000000235,
+      "averageOutputChars": 416.375,
+      "peakMemoryMb": 3574.8125
     }
   ],
-  "selectedModelId": "onnx-community/Qwen2.5-0.5B-Instruct",
-  "selectionRationale": "Highest structured-output success rate (33%) among evaluated candidates; average latency 12654ms is acceptable for interactive CPU use (research.md #2, constitution VII, Model Selection Is an Engineering Decision)."
+  "selectedModelId": "onnx-community/Qwen3-1.7B-ONNX",
+  "selectionRationale": "onnx-community/Qwen3-1.7B-ONNX (dtype=fp32) had the highest structured-output success rate (88%) on the enhancement workloads, with average latency 28676ms (research.md #2, constitution VII and XXII)."
 }

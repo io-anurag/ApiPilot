@@ -32,7 +32,7 @@ describe("AI scenario prompt and response contract", () => {
     // minutes against a 5-minute timeout, so the stage could never complete
     // (specs/013-ai-enhancement-viability FR-011).
     expect(request.maxOutputTokens).toBe(AI_SCENARIO_MAX_OUTPUT_TOKENS);
-    expect(prompt.responseVersion).toBe(3);
+    expect(prompt.responseVersion).toBe(5);
   });
 
   it("sends an operation-contract projection, not the serialized models (FR-009)", () => {
@@ -202,8 +202,8 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
     ) as Record<string, unknown>;
   }
 
-  it("declares response version 3, since request scope changed even though structure did not (XXIII)", () => {
-    expect(promptFor(aiScenarioApiModel.operations).responseVersion).toBe(3);
+  it("declares response version 5, since the instructions changed for operations with no inputs (XXIII)", () => {
+    expect(promptFor(aiScenarioApiModel.operations).responseVersion).toBe(5);
   });
 
   it("carries exactly the operations it was given, so a single-operation unit asks about one operation", () => {
@@ -237,7 +237,7 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
     const single = promptFor([withoutBody], baselineForBodyless).task as string;
     const many = promptFor(threeOperations, baselineForBodyless).task as string;
 
-    const ceilingOf = (task: string) => Number(/at most (\d+)/.exec(task)?.[1]);
+    const ceilingOf = (task: string) => Number(/exactly (\d+)/.exec(task)?.[1]);
     expect(ceilingOf(single)).toBeGreaterThan(0);
     expect(ceilingOf(single)).toBe(1);
     // Three operations must request more than one does — the previous per-request ceiling meant a
@@ -303,5 +303,240 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
     // One candidate per operation keeps 192 tokens sufficient while avoiding long local-model
     // generations that can consume the entire per-request timeout.
     expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(192);
+  });
+});
+
+/**
+ * Version 4 (specs/013-ai-enhancement-viability T072). Measured against the default and a stronger
+ * local model, the version 3 prompt let both answer `[]`, and a model forced to answer copied the
+ * worked example's `400` even where the operation does not document it, and invented targets. The
+ * changes below address those observed failures; none changes what is validated.
+ */
+describe("AI scenario prompt version 4 (specs/013 T072)", () => {
+  const operation = (
+    overrides: Partial<(typeof aiScenarioApiModel.operations)[number]>,
+  ): (typeof aiScenarioApiModel.operations)[number] => ({
+    path: "/orders/{orderId}",
+    method: "GET",
+    operationId: "getOrder",
+    parameters: [
+      { name: "orderId", location: "path", required: true, schema: { type: "string", required: [], properties: {} } },
+      { name: "expand", location: "query", required: false, schema: { type: "string", required: [], properties: {} } },
+      { name: "X-Trace", location: "header", required: false, schema: { type: "string", required: [], properties: {} } },
+    ],
+    requestBody: undefined,
+    responses: [
+      { statusCode: "200", description: "ok", contentTypes: {}, examples: {} },
+      { statusCode: "404", description: "none", contentTypes: {}, examples: {} },
+    ],
+    security: [],
+    tags: [],
+    ...overrides,
+  });
+  const promptOf = (operations: (typeof aiScenarioApiModel.operations)[number][]) =>
+    JSON.parse(
+      buildAIScenarioPrompt({ ...aiScenarioApiModel, operations }, { scenarios: [] }),
+    ) as {
+      task: string;
+      allowedTargets: { targetLocation: string; targetField: string }[];
+      allowedStatusCodes?: string[];
+      example: { candidates: { assertions: { expectedStatusCode?: string }[] }[] };
+    };
+
+  it("asks for exactly one candidate per operation and says an empty list is not an answer", () => {
+    const prompt = promptOf([operation({}), operation({ path: "/orders", operationId: "list" })]);
+    expect(prompt.task).toContain("exactly 2");
+    expect(prompt.task).toMatch(/never return an empty list/i);
+  });
+
+  it("lists the allowed targets: every parameter by location and every body field, in declaration order", () => {
+    const withBody = aiScenarioApiModel.operations[0];
+    expect(promptOf([operation({})]).allowedTargets).toEqual([
+      { targetLocation: "path", targetField: "orderId" },
+      { targetLocation: "query", targetField: "expand" },
+      { targetLocation: "header", targetField: "X-Trace" },
+    ]);
+    expect(promptOf([withBody]).allowedTargets).toEqual([
+      { targetLocation: "body", targetField: "email" },
+      { targetLocation: "body", targetField: "displayName" },
+    ]);
+  });
+
+  it("lists the documented status codes of the operations in the request, once each in first-seen order", () => {
+    const other = operation({
+      path: "/orders",
+      operationId: "list",
+      responses: [
+        { statusCode: "200", description: "ok", contentTypes: {}, examples: {} },
+        { statusCode: "400", description: "bad", contentTypes: {}, examples: {} },
+      ],
+    });
+    const prompt = promptOf([operation({}), other]);
+    expect(prompt.allowedStatusCodes).toEqual(["200", "404", "400"]);
+    expect(prompt.task).toMatch(/expectedStatusCode must be one of allowedStatusCodes/);
+  });
+
+  it("places the status-code instruction last in the task and the list last in the prompt, where measured to work", () => {
+    const prompt = promptOf([operation({})]);
+    expect(prompt.task.endsWith("expectedStatusCode must be one of allowedStatusCodes.")).toBe(true);
+    expect(Object.keys(prompt).at(-1)).toBe("allowedStatusCodes");
+  });
+
+  it("omits the status-code list, and the instruction about it, for an operation documenting no response", () => {
+    const prompt = promptOf([operation({ responses: [] })]);
+    expect(prompt.allowedStatusCodes).toBeUndefined();
+    expect(prompt.task).not.toMatch(/allowedStatusCodes/);
+  });
+
+  describe("an operation with no parameters and no request body (specs/013 T071 follow-up)", () => {
+    // Measured: with an empty `allowedTargets` and an instruction to pick a pair from it, the model had
+    // nothing it was permitted to aim at and answered `{"candidates":[]}` for every such operation.
+    const bare = () => operation({ parameters: [], requestBody: undefined });
+    const promptOfBare = () =>
+      JSON.parse(
+        buildAIScenarioPrompt({ ...aiScenarioApiModel, operations: [bare()] }, { scenarios: [] }),
+      ) as Record<string, unknown> & { task: string };
+
+    it("sends no allowedTargets list rather than an empty one", () => {
+      expect(promptOfBare().allowedTargets).toBeUndefined();
+      expect("allowedTargets" in promptOfBare()).toBe(false);
+    });
+
+    it("shows an example that has no target either, so there is no path parameter to copy", () => {
+      const example = (promptOfBare() as unknown as {
+        example: { candidates: Record<string, unknown>[] };
+      }).example.candidates[0];
+      expect(example).not.toHaveProperty("targetLocation");
+      expect(example).not.toHaveProperty("targetField");
+      expect(example.request).toEqual({ pathParameters: {}, queryParameters: {}, headers: {} });
+      // The operation's own path and method, so copying the example cannot name another operation.
+      expect(example.operationPath).toBe(bare().path);
+      expect(example.operationMethod).toBe(bare().method.toUpperCase());
+      // Still a supported category, and never a status code the operation does not document.
+      expect(SCENARIO_CATEGORIES).toContain(example.category as string);
+      expect((example.assertions as { expectedStatusCode: string }[]).map((a) => a.expectedStatusCode)).toEqual(["404"]);
+    });
+
+    it("keeps the targeted example for an operation that has targets", () => {
+      const example = promptOf([operation({})]).example.candidates[0] as unknown as Record<string, unknown>;
+      expect(example.targetLocation).toBe("path");
+      expect(example.targetField).toBe("itemId");
+    });
+
+    it("tells the model to leave out the target instead of choosing one from nothing", () => {
+      const { task } = promptOfBare();
+      expect(task).toMatch(/no parameters or request body/i);
+      expect(task).toMatch(/leave out targetLocation and targetField/i);
+      expect(task).not.toMatch(/must be one pair from allowedTargets/);
+    });
+
+    it("still asks for exactly one candidate and still ends with the status-code instruction", () => {
+      const { task } = promptOfBare();
+      expect(task).toContain("exactly 1");
+      expect(task.endsWith("expectedStatusCode must be one of allowedStatusCodes.")).toBe(true);
+    });
+
+    it("leaves the prompt of an operation that has targets as it was", () => {
+      const withTargets = promptOf([operation({})]);
+      expect(withTargets.allowedTargets.length).toBeGreaterThan(0);
+      expect(withTargets.task).toMatch(/must be one pair from allowedTargets/);
+      expect(withTargets.task).not.toMatch(/leave out targetLocation/i);
+    });
+
+    it("treats a request as target-less only when none of its operations has a target", () => {
+      const mixed = promptOf([bare(), operation({})]);
+      expect(mixed.allowedTargets.length).toBeGreaterThan(0);
+      expect(mixed.task).toMatch(/must be one pair from allowedTargets/);
+    });
+  });
+
+  describe("purpose: enhance or replace (specs/013 T071 follow-up)", () => {
+    const taskFor = (purpose?: "enhance" | "replace") =>
+      (
+        JSON.parse(
+          buildAIScenarioPrompt(
+            { ...aiScenarioApiModel, operations: [operation({})] },
+            { scenarios: [] },
+            purpose,
+          ),
+        ) as { task: string }
+      ).task;
+
+    it("defaults to enhancement, unchanged", () => {
+      expect(taskFor()).toBe(taskFor("enhance"));
+      expect(taskFor()).toMatch(/^Suggest exactly 1 more test scenario/);
+      expect(taskFor()).toMatch(/Prefer something existingCoverage does not already cover/);
+    });
+
+    it("asks for a replacement that differs from the scenario shown, when replacing", () => {
+      expect(taskFor("replace")).toMatch(/^Write exactly 1 replacement test scenario/);
+      expect(taskFor("replace")).toMatch(/different scenario from the one in existingCoverage/);
+      expect(taskFor("replace")).not.toMatch(/more test scenario/);
+    });
+
+    it("keeps the rest of the contract the same for both purposes", () => {
+      for (const purpose of ["enhance", "replace"] as const) {
+        const task = taskFor(purpose);
+        expect(task).toMatch(/never return an empty list/i);
+        expect(task).toMatch(/must be one pair from allowedTargets/);
+        expect(task.endsWith("expectedStatusCode must be one of allowedStatusCodes.")).toBe(true);
+      }
+    });
+
+    it("changes only the task: operations, targets and example are identical", () => {
+      const build = (purpose: "enhance" | "replace") =>
+        JSON.parse(
+          buildAIScenarioPrompt(
+            { ...aiScenarioApiModel, operations: [operation({})] },
+            { scenarios: [] },
+            purpose,
+          ),
+        ) as Record<string, unknown>;
+      const { task: _a, ...enhance } = build("enhance");
+      const { task: _b, ...replace } = build("replace");
+      expect(replace).toEqual(enhance);
+    });
+  });
+
+  it("tells the model to choose its target from that list", () => {
+    expect(promptOf([operation({})]).task).toMatch(/allowedTargets/);
+  });
+
+  it("makes the example's status code one the operation documents, preferring a client error", () => {
+    expect(promptOf([operation({})]).example.candidates[0].assertions).toEqual([
+      { type: "status-code", expectedStatusCode: "404" },
+    ]);
+    expect(
+      promptOf([
+        operation({
+          responses: [
+            { statusCode: "201", description: "c", contentTypes: {}, examples: {} },
+            { statusCode: "409", description: "x", contentTypes: {}, examples: {} },
+          ],
+        }),
+      ]).example.candidates[0].assertions,
+    ).toEqual([{ type: "status-code", expectedStatusCode: "409" }]);
+  });
+
+  it("falls back to the first documented code when none is a client error, and to no assertion when none is documented", () => {
+    const only200 = operation({
+      responses: [{ statusCode: "200", description: "ok", contentTypes: {}, examples: {} }],
+    });
+    expect(promptOf([only200]).example.candidates[0].assertions).toEqual([
+      { type: "status-code", expectedStatusCode: "200" },
+    ]);
+    expect(promptOf([operation({ responses: [] })]).example.candidates[0].assertions).toEqual([]);
+  });
+
+  it("never teaches a status code the operation does not document", () => {
+    const prompt = promptOf([operation({})]);
+    const documented = ["200", "404"];
+    for (const assertion of prompt.example.candidates[0].assertions) {
+      expect(documented).toContain(assertion.expectedStatusCode);
+    }
+  });
+
+  it("stays deterministic across repeated builds", () => {
+    expect(promptOf([operation({})])).toEqual(promptOf([operation({})]));
   });
 });

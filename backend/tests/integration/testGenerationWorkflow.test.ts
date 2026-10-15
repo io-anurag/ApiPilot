@@ -114,6 +114,65 @@ describe("test generation workflow orchestration", () => {
     expect(response.status).toBe(204);
   });
 
+  it("keeps an AI scenario whose undocumented status code was removed, and carries the removal through review to the approved model (specs/005 amendment 2026-10-15)", async () => {
+    const inventedStatus = { type: "status-code", expectedStatusCode: "418" };
+    const candidate = {
+      candidateId: "invented-status",
+      operationPath: "/pets",
+      operationMethod: "POST",
+      category: "invalid-format",
+      targetLocation: "body",
+      targetField: "name",
+      request: { pathParameters: {}, queryParameters: {}, headers: {}, body: { name: "" } },
+      assertions: [inventedStatus],
+      rationale: "Exercise an empty pet name.",
+      confidence: 0.8,
+      assumptions: [],
+    };
+    const agent = request.agent(
+      createApp(fixedProvider(JSON.stringify({ responseVersion: 1, candidates: [candidate] }))),
+    );
+
+    await agent
+      .post("/api/test-generation-workflow")
+      .attach("file", validSpecificationBuffer(), VALID_SPECIFICATION_FILENAME);
+    await agent.post("/api/test-generation-workflow/api-review/continue");
+    await agent.post("/api/test-generation-workflow/deterministic-generation");
+    const enhanced = await agent.post("/api/test-generation-workflow/ai-enhancement");
+
+    expect(enhanced.status).toBe(200);
+    expect(enhanced.body.workflow.aiEnhancement.aiCandidates.nonExecutable).toEqual([]);
+    const [added] = enhanced.body.workflow.aiEnhancement.aiCandidates.added;
+    expect(added.strippedAssertions).toEqual([
+      { assertion: inventedStatus, reason: "undocumented-status-code" },
+    ]);
+    const reviewScenario = enhanced.body.workflow.reviewWorkspace.scenarios.find(
+      (item: { scenarioId: string }) => item.scenarioId === added.scenarioId,
+    );
+    // The wire format delivers what the review screen reads, with the redacted displayRequest added.
+    expect(reviewScenario.state).toBe("pending");
+    expect(reviewScenario.scenario.assertions).toEqual([]);
+    expect(reviewScenario.scenario.displayRequest).toBeDefined();
+    expect(reviewScenario.scenario.provenance).toMatchObject({
+      source: "AI",
+      aiStrippedAssertions: [{ assertion: inventedStatus, reason: "undocumented-status-code" }],
+    });
+
+    await agent.post("/api/test-generation-workflow/scenario-review/decisions").send({
+      updates: [
+        { scenarioId: reviewScenario.scenarioId, revision: reviewScenario.revision, action: "accept" },
+      ],
+    });
+    const finalized = await agent.post("/api/test-generation-workflow/scenario-review/finalize");
+
+    expect(finalized.status).toBe(200);
+    const approved = finalized.body.workflow.approvedTestModel.scenarios.find(
+      (scenario: { id: string }) => scenario.id === reviewScenario.scenarioId,
+    );
+    expect(approved.assertions).toEqual([]);
+    expect(approved.provenance.aiStrippedAssertions).toHaveLength(1);
+  });
+
   it("GET ?progressOnly=true omits apiModel/approvedTestModel and trims reviewWorkspace to AI-sourced scenarios (contracts/ai-enhancement-progress-v2.md addendum)", async () => {
     const app = createApp(fixedProvider(emptyCandidates));
     const agent = request.agent(app);

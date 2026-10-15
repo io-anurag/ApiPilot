@@ -83,7 +83,27 @@ export function parseAIScenarioResponse(response: InferenceResponse): ParsedResp
       "AI response contained a malformed candidate",
     );
   }
-  return { responseVersion, candidates };
+  return { responseVersion, candidates: candidates.map(withEmptyRequestMaps) };
+}
+
+const REQUEST_MAPS = ["pathParameters", "queryParameters", "headers"] as const;
+
+/**
+ * Reads an omitted `pathParameters`, `queryParameters` or `headers` map as empty (specs/013 T072).
+ *
+ * Measured against a stronger local model, every candidate was well-formed except that it left out the
+ * maps that did not apply, although the worked example shows all three. An absent map and an empty one
+ * mean the same thing, so this loses nothing. Anything else is left exactly as received: a map that is
+ * present but not an object, or a candidate with no `request` at all, still fails shape validation
+ * downstream rather than being invented. Returns a copy; the provider's response is never mutated.
+ */
+function withEmptyRequestMaps(candidate: unknown): unknown {
+  if (!isRecord(candidate) || !isRecord(candidate.request)) return candidate;
+  const request = { ...candidate.request };
+  for (const key of REQUEST_MAPS) {
+    if (request[key] === undefined || request[key] === null) request[key] = {};
+  }
+  return { ...candidate, request };
 }
 
 /** Type guard confirming `value` has every field an `AIScenarioCandidate` requires, without checking whether they reference real operation/schema content. */

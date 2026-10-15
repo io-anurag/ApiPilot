@@ -36,8 +36,14 @@ export const AI_DEPENDENCY_RESPONSE_VERSION = 2;
  * run). 50s restores real headroom over that measured case. Serves double duty as the pre-flight
  * viability budget (`analyzeDependencies.ts`), so planning and enforcement cannot disagree about
  * what "fits."
+ *
+ * Raised from 50 to 90 seconds with the move to Qwen3-1.7B as the default model (specs/013
+ * research.md Decision 11). At its measured 50 ms/prompt-token and 250 ms/output-token, a 458-token
+ * unit projects at 54.9s, which the pre-flight check refused outright against 50s, so the
+ * AI-assisted pass would never have run. 90s covers that unit and the ~554-token typical one (~59s)
+ * with room, and the 128-token allowance still bounds the worst case.
  */
-export const AI_DEPENDENCY_TIMEOUT_MS = 50_000;
+export const AI_DEPENDENCY_TIMEOUT_MS = 90_000;
 
 /**
  * Generation bound for a dependency-analysis response (specs/014-ai-batching-policy, mirroring

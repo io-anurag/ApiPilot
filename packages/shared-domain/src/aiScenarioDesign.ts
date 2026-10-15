@@ -1,4 +1,5 @@
 import type {
+  AIStrippedAssertion,
   Assertion,
   GeneratedRequest,
   ScenarioCategory,
@@ -55,8 +56,11 @@ export interface AINonExecutableCandidate {
 }
 
 export interface AIAddedCandidate {
+  /** The candidate as added, i.e. with any undocumented assertions already removed. */
   candidate: AIScenarioCandidate;
   scenarioId: string;
+  /** Present only when assertions were removed from this candidate (specs/005 amendment 2026-10-15). */
+  strippedAssertions?: AIStrippedAssertion[];
 }
 
 export interface AIDeduplicatedCandidate {

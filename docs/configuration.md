@@ -16,7 +16,7 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | `GIT_COMMIT`                         | Commit value returned by `/api/version`                                         | Detected from Git, otherwise `unknown`  |
 | `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics             | `false`                                 |
 | `AI_PROVIDER_MODE`                   | `local` or deterministic `mock`                                                 | `mock` in tests, `local` otherwise      |
-| `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                                   | `onnx-community/Qwen2.5-0.5B-Instruct`  |
+| `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                                   | `onnx-community/Qwen3-1.7B-ONNX`        |
 | `AI_MODEL_CACHE_DIR`                 | Local model cache directory                                                     | `~/.apipilot/models`                    |
 | `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                            | Unset; fp32 is the measured CPU default |
 | `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                                |

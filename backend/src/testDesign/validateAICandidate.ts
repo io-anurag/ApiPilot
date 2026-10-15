@@ -1,7 +1,9 @@
 import type {
   AIValidationFinding,
   AIScenarioCandidate,
+  AIStrippedAssertion,
   ApiModel,
+  Assertion,
   SchemaConstraint,
   ScenarioCategory,
 } from "@apipilot/shared-domain";
@@ -34,7 +36,8 @@ export function validateAICandidateShape(value: unknown): AIValidationFinding[] 
   const hasValidId =
     typeof record?.candidateId === "string" && record.candidateId.trim().length > 0;
   const hasNumericConfidence = typeof record?.confidence === "number";
-  const candidateId = typeof record?.candidateId === "string" ? record.candidateId : "unknown";
+  const candidateId =
+    typeof record?.candidateId === "string" ? record.candidateId : "unknown";
   const findings: AIValidationFinding[] = [];
   if (record && !hasValidId) {
     findings.push({
@@ -121,7 +124,13 @@ function validateCandidateStructure(
 ): AIValidationFinding[] {
   const findings: AIValidationFinding[] = [];
   const invalid = (path: string, message: string): void => {
-    findings.push({ code: "invalid-shape", message, candidateId, path, executable: false });
+    findings.push({
+      code: "invalid-shape",
+      message,
+      candidateId,
+      path,
+      executable: false,
+    });
   };
   for (const key of ["pathParameters", "queryParameters", "headers"] as const) {
     if (!isRecord(candidate.request[key])) {
@@ -138,7 +147,10 @@ function validateCandidateStructure(
         assertion.expectedStatusCode.length === 0)
     ) {
       invalid(path, "Candidate status-code assertion requires expectedStatusCode");
-    } else if (assertion.type === "schema-conformance" && !isRecord(assertion.expectedSchema)) {
+    } else if (
+      assertion.type === "schema-conformance" &&
+      !isRecord(assertion.expectedSchema)
+    ) {
       invalid(path, "Candidate schema-conformance assertion requires expectedSchema");
     }
   });
@@ -215,7 +227,9 @@ export function validateAICandidateSemantics(
   const parameterKey = (location: string, name: string): string =>
     `${location}:${location === "header" ? name.toLowerCase() : name}`;
   const allowedParameters = new Set(
-    operation.parameters.map((parameter) => parameterKey(parameter.location, parameter.name)),
+    operation.parameters.map((parameter) =>
+      parameterKey(parameter.location, parameter.name),
+    ),
   );
   const requestParameters: ["path" | "query" | "header", Record<string, unknown>][] = [
     ["path", candidate.request.pathParameters],
@@ -236,6 +250,17 @@ export function validateAICandidateSemantics(
     }
   }
   const bodySchema = primaryRequestBodySchema(operation);
+  if (!operation.requestBody && hasContent(candidate.request.body)) {
+    // The operation declares no request body, so any content sent is an invented field (FR-009).
+    // Absent, null and `{}` are what a candidate with nothing to send looks like and are accepted.
+    findings.push({
+      code: "field-not-found",
+      message: "Candidate request sends a body the operation does not take",
+      candidateId: candidate.candidateId,
+      path: "request.body",
+      executable: false,
+    });
+  }
   if (bodySchema) {
     addUnknownBodyFields(
       candidate.request.body,
@@ -283,6 +308,48 @@ export function validateAICandidateSemantics(
   return findings;
 }
 
+/**
+ * Removes the assertions whose status code the operation does not document, keeping the candidate
+ * (specs/005 amendment 2026-10-15). A `schema-conformance` assertion on such a code goes with it,
+ * since no documented response exists to ground it. Assertions on a documented code are never
+ * touched, so a schema mismatch there still surfaces as `schema-not-found` from
+ * `validateAICandidateSemantics`. Pure: the input candidate is not mutated, and the retained
+ * assertions keep their order. An unknown operation leaves the candidate unchanged for the
+ * validator to report.
+ */
+export function stripUndocumentedStatusAssertions(
+  candidate: AIScenarioCandidate,
+  apiModel: ApiModel,
+): { candidate: AIScenarioCandidate; strippedAssertions: AIStrippedAssertion[] } {
+  const operation = apiModel.operations.find(
+    (item) =>
+      item.path === candidate.operationPath &&
+      item.method.toUpperCase() === candidate.operationMethod.toUpperCase(),
+  );
+  if (!operation) return { candidate, strippedAssertions: [] };
+  const retained: Assertion[] = [];
+  const strippedAssertions: AIStrippedAssertion[] = [];
+  for (const assertion of candidate.assertions) {
+    const undocumented =
+      Boolean(assertion.expectedStatusCode) &&
+      !operation.responses.some(
+        (response) => response.statusCode === assertion.expectedStatusCode,
+      );
+    if (undocumented) {
+      strippedAssertions.push({ assertion, reason: "undocumented-status-code" });
+    } else {
+      retained.push(assertion);
+    }
+  }
+  if (strippedAssertions.length === 0) return { candidate, strippedAssertions };
+  return { candidate: { ...candidate, assertions: retained }, strippedAssertions };
+}
+
+function hasContent(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  return !(isRecord(value) && Object.keys(value).length === 0);
+}
+
 function addUnknownBodyFields(
   value: unknown,
   schema: SchemaConstraint,
@@ -294,7 +361,13 @@ function addUnknownBodyFields(
     if (schema.items) {
       const itemSchema = schema.items;
       value.forEach((item, index) =>
-        addUnknownBodyFields(item, itemSchema, `${path}[${index}]`, candidateId, findings),
+        addUnknownBodyFields(
+          item,
+          itemSchema,
+          `${path}[${index}]`,
+          candidateId,
+          findings,
+        ),
       );
     }
     return;
@@ -312,7 +385,13 @@ function addUnknownBodyFields(
       });
       continue;
     }
-    addUnknownBodyFields(nestedValue, childSchema, `${path}.${key}`, candidateId, findings);
+    addUnknownBodyFields(
+      nestedValue,
+      childSchema,
+      `${path}.${key}`,
+      candidateId,
+      findings,
+    );
   }
 }
 

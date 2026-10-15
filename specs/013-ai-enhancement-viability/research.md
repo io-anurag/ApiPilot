@@ -454,3 +454,149 @@ model with stronger JSON adherence.
 
 Tracked as **T072**. Success criterion SC-001 is therefore **not yet met**; SC-002 through SC-005
 and SC-009 through SC-011 are met or are covered by passing tests.
+
+---
+
+## Decision 11: Default to Qwen3-1.7B at fp32, with prompt version 4 (2026-10-14, closes T072)
+
+**Context.** T072 asked whether the enhancement stage's unreliable structured output should be resolved by
+constraining the reply, requesting one candidate per call, or adopting a model with stronger JSON
+adherence. The harness was first corrected (a warm-up so model load is not charged to the first workload,
+six operations instead of three, reply length recorded, and no model "selected" when none produces a
+usable reply). It was then run on the cached models with the production validation as the judge.
+
+**Evidence** (six synthetic operations; success means at least one candidate the pipeline would retain):
+
+| Model, dtype and prompt | Usable | Latency per operation | Peak memory |
+| --- | --- | --- | --- |
+| Qwen2.5-0.5B fp32, prompt v3 | 0 of 6 | 5 s | 3.3 GB |
+| Qwen2.5-0.5B q8, prompt v3 | 0 of 6 | 15 s | 2.1 GB |
+| Qwen3-1.7B fp32, prompt v3 | 0 of 6 | 4 s (replies empty) | 9.0 GB |
+| Qwen2.5-0.5B fp32, prompt v4 | 0 of 6 | 12 s | 3.3 GB |
+| Qwen3-1.7B fp32, prompt v4 | **5 of 6** | 30 s | 9.0 GB |
+| Qwen3-1.7B q8, prompt v4 | 0 of 6 | 44 s | 4.5 GB |
+
+The failure was not JSON adherence. The 0.5B model answers `[]` and, when forced, echoes the operation
+description back, so no prompt change helped it. Qwen3-1.7B also answered `[]` unprompted, but when asked
+for a candidate it wrote a sensible one for every operation, failing validation only because it omitted
+empty request maps and copied the example's `400` onto operations that do not document it. Both were
+fixed (see below). Position mattered: the instruction that `expectedStatusCode` must be one of an explicit
+`allowedStatusCodes` list scored 2 to 3 of 6 mid-task and 5 of 6 as the last sentence with the list as the
+last key.
+
+**Decision.**
+1. The default model becomes `onnx-community/Qwen3-1.7B-ONNX` at fp32 (the cached files are fp32; an unset
+   `AI_MODEL_DTYPE` loads fp32 on CPU).
+2. The enhancement prompt moves to version 4: exactly one candidate per operation and no empty reply, an
+   `allowedTargets` list, an example status code taken from the operation, and `allowedStatusCodes` last.
+3. The parser reads an omitted or null `pathParameters`, `queryParameters` or `headers` map as empty.
+   Nothing else is repaired.
+4. The planning seeds are re-measured for the new model: 50 ms per prompt token (measured 30 to 72) and
+   250 ms per output token (a steady 241 to 246), up from 42 and 180. `AI_DEPENDENCY_TIMEOUT_MS` rises from
+   50 s to 90 s, because at the new rates a 458-token dependency unit projects at 54.9 s and the pre-flight
+   check refused the AI pass outright. The enhancement run budget stays at 5 minutes, which now covers
+   roughly 10 operations.
+
+**Trade-offs, recorded per constitution XXX.**
+- Download about 6.6 GB against 1.9 GB, resident memory about 9 GB against 3.2 GB, and about 30 s per
+  operation against 5 to 10 s. A machine without roughly 10 GB of free memory should set `AI_MODEL_ID`
+  to a smaller model and accept that enhancement will mostly come back empty.
+- A forced candidate can be low value for an operation the deterministic rules already cover. Review
+  (specs/006) is the control; AI scenarios are never approved automatically (specs/005 FR-018).
+- The first run on an uncached machine downloads 6.6 GB before generating anything.
+
+**Alternatives considered.**
+- *Keep Qwen2.5-0.5B and tune the prompt*: rejected; 0 of 6 under every variant tried, and the forced
+  variants made it worse.
+- *Phi-3-mini (4k and 128k) and LaMini-Flan-T5*: not re-run; Phi-3 scored 0 to 33% at 270 to 320 s per
+  request in the AP-004 benchmark, which disqualifies it on latency, and both need multi-gigabyte
+  downloads.
+- *Qwen3-1.7B at q8*: measured afterwards (T066): 0 of 6 usable against 5 of 6 at fp32, 44 s per
+  operation against 29 s, and 4.5 GB peak memory against 8.9 GB. Half the memory does not help a model
+  that produces nothing usable and is slower, so the default stays fp32.
+- *Constrained decoding or a schema-only prompt*: Transformers.js offers no grammar-constrained output,
+  and the failure was never malformed JSON.
+
+**Limits of the evidence.** Six synthetic operations, so one workload is 17 points. The judge is the
+production validation, not a person reading the candidates. Other AI features (dependency analysis,
+failure explanation) were checked on the new default, see ROADMAP #91, but only against their existing
+fixtures and corpora.
+
+### Decision 11 follow-up (2026-10-15): operations with no inputs, and regeneration
+
+The T071 check found `regenerateReviewScenario` succeeding on 1 of 4 sampled operations on the default
+model. Investigation, in order:
+
+1. **Workloads.** The benchmark set gains two operations with no parameters and no body (`ap013-enhancement-v3`,
+   eight operations). On the version 4 prompt both got `{"candidates":[]}`: the prompt told the model to choose
+   a target from an empty `allowedTargets` list. Baseline 5 of 8 usable.
+2. **Prompt version 5.** No empty list and a "leave out the target" instruction for such operations. This fixed
+   `start-reindex` (a real candidate asserting the documented `202`) and exposed a validator hole: the model had
+   invented a request body for an operation that takes none, and it passed. That is now rejected.
+3. **Example.** For `GET /regions` the model copied the example's own path (`/items/{itemId}`). A target-less
+   example built from the operation's own path and method removed that, and the model then returned `[]` for it.
+   For an operation with no input and a single documented response that is the correct answer (nothing is left to
+   propose), and this benchmark scores an empty reply as unusable, so that workload was replaced by one with a
+   documented alternative outcome (`DELETE /cache`, `204` or `409`). This is a correction of the judge's
+   assumption, not a tuned result, and the earlier fixture is described in `workloads.ts`.
+4. **Regeneration wording.** The sampled failures were not mostly target-less operations. Regeneration reused
+   the enhancement wording ("one more", "prefer something not already covered"), which for an operation with
+   little left to add returns no candidate, i.e. a failed regeneration. A request to replace a scenario now says
+   so (`AIScenarioPurpose`). On seven operations of the real default model: 1 usable replacement before, 3 after.
+
+Two prompt additions were tried and dropped because they did not help or made things worse: an instruction to
+"use this operation's own operationPath and operationMethod, not the example's" (both target-less operations
+went back to empty replies, 5 of 8), and "or leave assertions empty" appended to the status-code instruction (no
+change: the model still asserted `400`).
+
+**Result.** Enhancement benchmark on the eight operations, Qwen3-1.7B fp32: 5 of 8 before, 6 of 8 after.
+Regeneration on seven operations: 1 of 7 before, 3 of 7 after. **What is still wrong, and is a model limit rather
+than a prompt gap:** 3 of the 4 remaining regeneration failures, and the remaining enhancement failures, are the
+model asserting `400` for an operation that documents only `201` or `200`/`404`, which the validator correctly
+rejects (FR-009); the fourth names a wrong operation path. Closing that would mean deliberately relaxing FR-009
+(for example keeping the candidate with its undocumented assertion removed, which CLAUDE.md section 13 allows
+as an empty assertion set) or using a stronger model; neither was done.
+
+**Follow-up, 2026-10-15: assertion removal adopted (specs/005 Amendments, version 19.51.0).** An undocumented
+status code now removes the assertion and keeps the candidate, and the benchmark's usable-reply check applies the
+same rule. Re-run on the same eight operations (`ap013-enhancement-v3`), from the cached models, with replies of
+identical mean length to the previous run (404.4, 455.6 and 416.4 characters), so the gain comes from validation and
+not from different model output:
+
+| Candidate | Before | After | Latency | Peak RSS |
+|---|---|---|---|---|
+| Qwen3-1.7B fp32 | 6 of 8 (75%) | **7 of 8 (88%)** | 28.7 s | 8.9 GB |
+| Qwen3-1.7B q8 | 1 of 8 | 1 of 8 | 35.5 s | 4.5 GB |
+| Qwen2.5-0.5B fp32 | 0 of 8 | 0 of 8 | 10.2 s | 3.6 GB |
+
+One reply is recovered; q8 and the 0.5B model are unchanged, so their failures are not status-code assertions.
+Latency and memory differences from the earlier run are run-to-run noise.
+
+**Replies captured and re-scored, same day.** To diagnose the remaining failure and to measure regeneration, the
+Qwen3-1.7B fp32 replies for all eight workload operations were captured once (enhancement, and
+`regenerateReviewScenario` on each operation's first deterministic scenario) and scored under the previous strict
+rule and under the new one. The model decodes deterministically, so the enhancement replies are the benchmark's own.
+
+| Operation | Enhancement, strict | Enhancement, strip | Regeneration, strict | Regeneration, strip |
+|---|---|---|---|---|
+| `POST /accounts` | usable | usable | usable | usable |
+| `GET /orders/{orderId}` | usable | usable | usable | usable |
+| `POST /orders` | usable | usable | **invalid JSON** | **invalid JSON** |
+| `DELETE /orders/{orderId}` | usable | usable | usable | usable |
+| `GET /orders` | usable | usable | usable | usable |
+| `PATCH /accounts/{accountId}` | rejected (`400` undocumented) | **usable** | rejected (undocumented status) | **usable** |
+| `DELETE /cache` | **rejected** (invented query parameter) | rejected | usable | usable |
+| `POST /reindex` | usable | usable | usable | usable |
+| **Total** | **6 of 8** | **7 of 8** | **6 of 8** | **7 of 8** |
+
+Both rules were applied to the same replies, so the before/after is like for like. The only reply that changes is
+`PATCH /accounts/{accountId}`, in both flows: the model asserted `400`, which the operation does not document.
+The earlier "3 of 7" regeneration figure was measured on a different sample of operations and is not comparable with
+this table; it is not restated here.
+
+**The two replies that still fail are correct rejections, not validator gaps.** For `DELETE /cache` the model
+invented a `cache` query parameter on an operation that takes no parameters, which FR-009 forbids; stripping an
+assertion does not touch it, and nothing should. For the `POST /orders` regeneration the reply is not valid JSON (a
+stray quote closes the request object, and `contentType` is added to `request`); repairing it would be silent input
+repair (CLAUDE.md section 8.4), so it surfaces as invalid output and the current scenario is preserved. Both are
+limits of the model, not of the prompt or the validator, and neither is addressed here.

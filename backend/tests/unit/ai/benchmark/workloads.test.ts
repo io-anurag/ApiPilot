@@ -17,12 +17,12 @@ import {
  */
 describe("enhancement benchmark workloads", () => {
   it("identifies the enhancement workload set, distinct from the generic AP-004 set", () => {
-    expect(WORKLOAD_SET_ID).toBe("ap013-enhancement-v1");
+    expect(WORKLOAD_SET_ID).toBe("ap013-enhancement-v3");
     expect(WORKLOAD_SET_ID).not.toBe("ap004-representative-v1");
   });
 
   it("provides several uniquely named workloads", () => {
-    expect(ENHANCEMENT_WORKLOADS.length).toBeGreaterThanOrEqual(3);
+    expect(ENHANCEMENT_WORKLOADS.length).toBeGreaterThanOrEqual(8);
     const ids = ENHANCEMENT_WORKLOADS.map((workload) => workload.id);
     expect(new Set(ids).size).toBe(ids.length);
   });

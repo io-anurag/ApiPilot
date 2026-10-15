@@ -60,6 +60,16 @@ export interface RuleProvenance {
   duplicateOfAICandidates?: string[];
 }
 
+/**
+ * An assertion an AI candidate proposed that was removed because the specification does not
+ * document its status code (specs/005 amendment 2026-10-15). Kept so a reviewer can see what the
+ * model proposed; it is never an executable contract fact.
+ */
+export interface AIStrippedAssertion {
+  assertion: Assertion;
+  reason: "undocumented-status-code";
+}
+
 /** Explains the model and reasoning behind a validated AI-derived scenario. */
 export interface AIProvenance {
   source: "AI";
@@ -78,6 +88,8 @@ export interface AIProvenance {
    * feature onward; absent on scenarios produced before it shipped.
    */
   aiBatchIndex?: number;
+  /** Present only when at least one proposed assertion was removed as undocumented. */
+  aiStrippedAssertions?: AIStrippedAssertion[];
 }
 
 export type Provenance = RuleProvenance | AIProvenance;

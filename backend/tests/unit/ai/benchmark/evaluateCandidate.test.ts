@@ -4,7 +4,11 @@ import type {
   BenchmarkCandidateResult,
   InferenceRequest,
 } from "@apipilot/shared-domain";
-import { evaluateCandidate, selectBest } from "../../../../src/ai/benchmark/evaluateCandidate";
+import {
+  WARMUP_INPUT,
+  evaluateCandidate,
+  selectBest,
+} from "../../../../src/ai/benchmark/evaluateCandidate";
 import type { BenchmarkWorkload } from "../../../../src/ai/benchmark/workloads";
 
 function workload(id: string, usable: (content: string | undefined) => boolean): BenchmarkWorkload {
@@ -32,7 +36,7 @@ function scriptedProvider(
     getInputBudget: async () => undefined,
     infer: async (request) => {
       seen.push(request);
-      const content = replies[request.input];
+      const content = request.input === WARMUP_INPUT ? "pong" : replies[request.input];
       return {
         contractVersion: 1,
         requestId: request.requestId,
@@ -84,7 +88,8 @@ describe("evaluateCandidate", () => {
       workloads,
       () => 100,
     );
-    expect(seen.map((r) => [r.input, r.expectedOutputFormat, r.maxOutputTokens])).toEqual([
+    // The first request is the untimed warm-up, covered separately below.
+    expect(seen.slice(1).map((r) => [r.input, r.expectedOutputFormat, r.maxOutputTokens])).toEqual([
       ["input-a", "json", 123],
       ["input-b", "json", 123],
     ]);
@@ -117,6 +122,73 @@ describe("evaluateCandidate", () => {
     );
     expect([fp32.dtype, q8.dtype]).toEqual(["fp32", "q8"]);
     expect(fp32.structuredOutputSuccessRate).toBeGreaterThan(q8.structuredOutputSuccessRate);
+  });
+});
+
+describe("evaluateCandidate warm-up (specs/013 T026)", () => {
+  const workloads = [workload("a", (c) => c === "ok"), workload("b", (c) => c === "ok")];
+
+  it("loads the model with an untimed warm-up request before any workload, so load time is not charged to a workload", async () => {
+    const seen: InferenceRequest[] = [];
+    const result = await evaluateCandidate(
+      { modelId: "m", dtype: "fp32" },
+      scriptedProvider({ "input-a": "ok", "input-b": "ok" }, seen),
+      workloads,
+      () => 1,
+    );
+
+    expect(seen.map((r) => r.input)).toEqual([WARMUP_INPUT, "input-a", "input-b"]);
+    expect(seen[0].maxOutputTokens).toBe(1);
+    expect(result.structuredOutputSuccessRate).toBe(1);
+    expect(result.loadMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("averages latency over the workloads only", async () => {
+    let clock = 0;
+    const provider = scriptedProvider({ "input-a": "ok", "input-b": "ok" });
+    const original = provider.infer.bind(provider);
+    provider.infer = async (request) => {
+      clock += request.input === WARMUP_INPUT ? 100_000 : 10;
+      return original(request);
+    };
+    const result = await evaluateCandidate(
+      { modelId: "m", dtype: "fp32" },
+      provider,
+      workloads,
+      () => 1,
+      () => clock,
+    );
+
+    expect(result.loadMs).toBe(100_000);
+    expect(result.averageLatencyMs).toBe(10);
+  });
+
+  it("reports the average reply length, which separates a slow model from a long reply", async () => {
+    const result = await evaluateCandidate(
+      { modelId: "m", dtype: "fp32" },
+      scriptedProvider({ "input-a": "12345678", "input-b": "1234" }),
+      workloads,
+      () => 1,
+    );
+    expect(result.averageOutputChars).toBe(6);
+  });
+
+  it("throws when the warm-up fails, because a model that cannot load has no results to compare", async () => {
+    const provider = scriptedProvider({ "input-a": "ok", "input-b": "ok" });
+    provider.infer = async (request) => ({
+      contractVersion: 1,
+      requestId: request.requestId,
+      status: "error",
+      errorCategory: "LOAD_FAILED",
+      errorMessage: "no weights",
+      modelId: "m",
+      provider: "mock",
+      durationMs: 0,
+    });
+
+    await expect(
+      evaluateCandidate({ modelId: "m", dtype: "fp32" }, provider, workloads, () => 1),
+    ).rejects.toThrow(/warm-up/i);
   });
 });
 
@@ -157,5 +229,31 @@ describe("selectBest", () => {
 
   it("refuses to choose when no candidate was evaluated", () => {
     expect(() => selectBest([])).toThrow(/no candidate/i);
+  });
+
+  describe("when no candidate produced a usable reply", () => {
+    const none = [result("a", "fp32", 0, 10), result("b", "q8", 0, 5), result("c", "fp32", 0, 1)];
+
+    it("selects nothing on merit: it retains the configured model and says it is not an endorsement", () => {
+      const best = selectBest(none, "b");
+      expect(best.qualified).toBe(false);
+      expect(best.modelId).toBe("b");
+      expect(best.rationale).toMatch(/no candidate/i);
+      expect(best.rationale).toMatch(/retained/i);
+      expect(best.rationale).toMatch(/not an endorsement/i);
+      expect(best.rationale).not.toMatch(/highest/i);
+    });
+
+    it("falls back to the best-ranked candidate when the configured model was not evaluated, still unqualified", () => {
+      const best = selectBest(none, "not-evaluated");
+      expect(best.qualified).toBe(false);
+      expect(none.map((r) => r.modelId)).toContain(best.modelId);
+    });
+
+    it("reports a candidate with any usable reply as qualified", () => {
+      const best = selectBest([result("a", "fp32", 0, 1), result("b", "fp32", 0.34, 99)], "a");
+      expect(best.qualified).toBe(true);
+      expect(best.modelId).toBe("b");
+    });
   });
 });

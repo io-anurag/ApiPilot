@@ -13,23 +13,21 @@ import { ENHANCEMENT_WORKLOADS, WORKLOAD_SET_ID } from "./workloads";
 const logger = createLogger("ai.benchmark");
 
 /**
- * Shortlisted candidates evaluated by this harness (research.md #2, constitution VII). Every entry
- * states its dtype. fp32 is what an unset `AI_MODEL_DTYPE` loads on CPU, pinned here so the result
- * records it; the Qwen entry is also run at q8 because that quantization measured about 4x slower on
- * CPU and the comparison belongs in the recorded evidence, not in anecdote (specs/013 research.md
- * Decision 5). The Phi-3 entries stay at q4: their fp32 weights are about 16 GB against about 2.5 GB.
+ * Candidates evaluated by this harness (research.md #2, constitution VII). Every entry states its
+ * dtype. fp32 is what an unset `AI_MODEL_DTYPE` loads on CPU, pinned here so the result records it.
+ *
+ * Qwen3-1.7B is the default model (specs/013 research.md Decision 11) and is run at both fp32 and q8,
+ * so the dtype the default runs at is a recorded comparison rather than an assumption. Qwen2.5-0.5B
+ * at fp32 stays as the reference the default replaced.
+ *
+ * LaMini-Flan-T5, the two Phi-3 models and Qwen2.5-0.5B at q8 are not run: Phi-3 scored 0 to 33% at
+ * 270 to 320 s per request in the AP-004 benchmark and each needs a multi-gigabyte download, and
+ * Qwen2.5-0.5B at q8 scored 0% under every prompt tried. Re-add them only with a reason.
  */
 const CANDIDATES: BenchmarkCandidate[] = [
+  { modelId: "onnx-community/Qwen3-1.7B-ONNX", dtype: "fp32" },
+  { modelId: "onnx-community/Qwen3-1.7B-ONNX", dtype: "q8" },
   { modelId: "onnx-community/Qwen2.5-0.5B-Instruct", dtype: "fp32" },
-  { modelId: "onnx-community/Qwen2.5-0.5B-Instruct", dtype: "q8" },
-  { modelId: "Xenova/LaMini-Flan-T5-248M", dtype: "fp32" },
-  // Corrected repo ids (previously missing the "-ONNX" suffix, which does not exist on
-  // Hugging Face and made these candidates fail to load in every prior benchmark run).
-  { modelId: "onnx-community/Phi-3-mini-4k-instruct-ONNX", dtype: "q4" },
-  // Added to evaluate whether a larger context window (128k vs. Qwen2.5's 32768) avoids
-  // the context-limit failures observed enhancing large ApiModel/TestModel prompts in
-  // production; MIT-licensed, meeting the permissive-license shortlist criterion (research.md #2).
-  { modelId: "onnx-community/Phi-3-mini-128k-instruct-ONNX", dtype: "q4" },
 ];
 
 async function main(): Promise<void> {
@@ -64,7 +62,12 @@ async function main(): Promise<void> {
     throw new Error("No candidate model could be evaluated; see logged errors above");
   }
 
-  const { modelId: selectedModelId, dtype: selectedDtype, rationale } = selectBest(candidates);
+  const {
+    modelId: selectedModelId,
+    dtype: selectedDtype,
+    qualified,
+    rationale,
+  } = selectBest(candidates, model.modelId);
   const report = buildBenchmarkReport({
     workloadSetId: WORKLOAD_SET_ID,
     candidates,
@@ -85,7 +88,10 @@ async function main(): Promise<void> {
   getAiDiagnosticsRepository().recordBenchmarkRun(report);
 
   logger.info("benchmark_report_written", { outputPath });
-  logger.info("benchmark_model_selected", { modelId: selectedModelId, dtype: selectedDtype });
+  logger.info(qualified ? "benchmark_model_selected" : "benchmark_no_candidate_qualified", {
+    modelId: selectedModelId,
+    dtype: selectedDtype,
+  });
 }
 
 main().catch((error: unknown) => {

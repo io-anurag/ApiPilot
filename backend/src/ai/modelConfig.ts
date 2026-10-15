@@ -2,7 +2,15 @@ import os from "node:os";
 import path from "node:path";
 import type { AIProviderMode, ModelConfig, ModelDType } from "@apipilot/shared-domain";
 
-const DEFAULT_MODEL_ID = "onnx-community/Qwen2.5-0.5B-Instruct";
+/**
+ * The default local model. Qwen3-1.7B at fp32 (a ~6.6 GB download, ~9 GB resident, about 4 tokens per
+ * second on the reference CPU), replacing Qwen2.5-0.5B, which scored 0% on the enhancement
+ * benchmark (`ap013-enhancement-v2`) under every prompt tried while Qwen3-1.7B reached 83% under
+ * prompt version 4 (specs/013-ai-enhancement-viability research.md Decision 11, T072). A machine
+ * without roughly 10 GB of free memory should set `AI_MODEL_ID` to a smaller model, accepting that
+ * scenario enhancement will then mostly come back empty.
+ */
+const DEFAULT_MODEL_ID = "onnx-community/Qwen3-1.7B-ONNX";
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".apipilot", "models");
 /**
  * Per-request inference timeout (specs/014-ai-batching-policy).
@@ -60,9 +68,16 @@ const DEFAULT_CONTEXT_FLOOR_TOKENS = 2048;
  * default even with the output allowance cut to 96 tokens. Prompt size is the dominant lever, and
  * an estimator seeded at 2.0 would have declared every such run viable
  * (specs/014-ai-batching-policy).
+ *
+ * Re-measured for the Qwen3-1.7B default, fp32, same reference CPU, exact token counts from the
+ * model's own tokenizer: decode a steady 241 to 246 ms/token at 96 and 192 output tokens (a cold
+ * 48-token sample read 1,500 and was discarded), prefill 30 to 72 ms/token across four real
+ * enhancement prompts of 350 to 405 tokens. 250 and 50 sit at the slow end of those ranges. The
+ * figures above describe Qwen2.5-0.5B (42 and 180) and are kept as the record of how the model
+ * is sized, not as current defaults.
  */
-const DEFAULT_PREFILL_MS_PER_TOKEN = 42;
-const DEFAULT_DECODE_MS_PER_TOKEN = 180;
+const DEFAULT_PREFILL_MS_PER_TOKEN = 50;
+const DEFAULT_DECODE_MS_PER_TOKEN = 250;
 
 /**
  * How far a projected duration may exceed the configured timeout before the run is refused.
@@ -93,7 +108,7 @@ const DEFAULT_VIABILITY_SAFETY_FACTOR = 1.0;
  * larger output allowance, and a whole-specification request made the model echo the request back
  * instead of answering it.
  *
- * Configurable rather than fixed because that result describes this CPU and this 0.5B model, not
+ * Configurable rather than fixed because that result describes this CPU and the default model, not
  * the domain: a faster machine or a stronger model may well manage more, and should be able to try
  * without a code change.
  *
@@ -120,7 +135,7 @@ const DEFAULT_ENHANCEMENT_OPERATIONS_PER_UNIT = 1;
  * specifications with unusually large per-operation schemas.
  *
  * Configurable rather than fixed for the same reason as enhancement's: this describes what this
- * CPU and this 0.5B model can prefill/decode inside `AI_DEPENDENCY_TIMEOUT_MS`, not the domain,
+ * CPU and the default model can prefill/decode inside `AI_DEPENDENCY_TIMEOUT_MS`, not the domain,
  * and a faster machine or stronger model should be able to raise it without a code change.
  */
 const DEFAULT_DEPENDENCY_OPERATIONS_PER_UNIT = 3;

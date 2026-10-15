@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aiScenarioApiModel } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "../../../src/testDesign/validateAICandidate";
@@ -63,6 +64,34 @@ describe("AI candidate validation", () => {
         expect.objectContaining({ code: "undocumented-status-code" }),
       ]),
     );
+  });
+
+  it("strips only assertions on undocumented status codes, in order, without mutating the input", () => {
+    const documented = { type: "status-code" as const, expectedStatusCode: "409" };
+    const invented = { type: "status-code" as const, expectedStatusCode: "418" };
+    const input = { ...candidate, assertions: [invented, documented] };
+
+    const result = stripUndocumentedStatusAssertions(input, aiScenarioApiModel);
+
+    expect(result.candidate.assertions).toEqual([documented]);
+    expect(result.strippedAssertions).toEqual([
+      { assertion: invented, reason: "undocumented-status-code" },
+    ]);
+    expect(input.assertions).toEqual([invented, documented]);
+    expect(validateAICandidateSemantics(result.candidate, aiScenarioApiModel)).toEqual([]);
+  });
+
+  it("returns the same candidate when nothing is undocumented or the operation is unknown", () => {
+    expect(stripUndocumentedStatusAssertions(candidate, aiScenarioApiModel)).toEqual({
+      candidate,
+      strippedAssertions: [],
+    });
+    const unknown = {
+      ...candidate,
+      operationPath: "/missing",
+      assertions: [{ type: "status-code" as const, expectedStatusCode: "418" }],
+    };
+    expect(stripUndocumentedStatusAssertions(unknown, aiScenarioApiModel).candidate).toBe(unknown);
   });
 
   it("rejects an empty candidate ID", () => {
@@ -215,6 +244,72 @@ describe("AI candidate semantic validation (specs/005 FR-007, FR-009)", () => {
       "request.headerParameters.Authorization",
       "request.headerParameters.X-Api-Key",
     ]);
+  });
+});
+
+describe("a candidate for an operation with no inputs (specs/013 T071 follow-up)", () => {
+  const bareModel = {
+    ...aiScenarioApiModel,
+    operations: [
+      {
+        ...aiScenarioApiModel.operations[0],
+        path: "/reindex",
+        operationId: "startReindex",
+        parameters: [],
+        requestBody: undefined,
+        responses: [
+          { statusCode: "202", description: "Accepted", contentTypes: {}, examples: {} },
+          { statusCode: "409", description: "Already running", contentTypes: {}, examples: {} },
+        ],
+      },
+    ],
+  };
+  const bareCandidate = {
+    candidateId: "c-bare",
+    operationPath: "/reindex",
+    operationMethod: "POST",
+    category: "positive" as const,
+    request: { pathParameters: {}, queryParameters: {}, headers: {} },
+    assertions: [{ type: "status-code" as const, expectedStatusCode: "409" }],
+    rationale: "A second request while one is running should be refused.",
+    confidence: 0.7,
+    assumptions: [],
+  };
+
+  it("is valid with no targetLocation and no targetField", () => {
+    expect(validateAICandidateShape(bareCandidate)).toEqual([]);
+    expect(validateAICandidateSemantics(bareCandidate, bareModel)).toEqual([]);
+  });
+
+  it("is rejected when it invents a request body the operation does not take", () => {
+    const findings = validateAICandidateSemantics(
+      { ...bareCandidate, request: { ...bareCandidate.request, body: { action: "restart" } } },
+      bareModel,
+    );
+    expect(findings).toEqual([
+      expect.objectContaining({ code: "field-not-found", path: "request.body" }),
+    ]);
+  });
+
+  it.each([
+    ["an absent body", undefined],
+    ["a null body", null],
+    ["an empty object", {}],
+  ])("accepts %s for an operation that takes no body", (_name, body) => {
+    expect(
+      validateAICandidateSemantics(
+        { ...bareCandidate, request: { ...bareCandidate.request, body } },
+        bareModel,
+      ),
+    ).toEqual([]);
+  });
+
+  it("is still rejected when it invents a target the operation does not have", () => {
+    const findings = validateAICandidateSemantics(
+      { ...bareCandidate, targetLocation: "query" as const, targetField: "force" },
+      bareModel,
+    );
+    expect(findings).toEqual([expect.objectContaining({ code: "field-not-found" })]);
   });
 });
 

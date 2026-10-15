@@ -155,8 +155,12 @@ status codes absent from the model. Valid AI provenance includes rationale, boun
 assumptions, provider/model identity, and candidate identity when available. Invalid or
 non-executable candidates stay outside the executable scenario set with an explainable result.
 Handling is per candidate, not per response: one invalid candidate (a malformed ID or confidence, an
-unknown field, an undocumented status code) never discards its valid siblings, and the deterministic
-baseline is always returned unchanged. A provider that is unavailable, times out, or returns
+unknown field) never discards its valid siblings, and the deterministic baseline is always returned
+unchanged. A status-code assertion the specification does not document is the one case handled per
+assertion: it is removed (`stripUndocumentedStatusAssertions`) and the candidate kept, with the removal
+recorded on the added candidate and in `AIProvenance.aiStrippedAssertions`. Stripping runs before
+deduplication, so equivalence is judged on the retained assertions. A schema that does not match a
+documented response is not repaired and still makes the candidate non-executable. A provider that is unavailable, times out, or returns
 unparseable output yields the baseline plus a structured outcome.
 
 ### Dependency workflows
@@ -385,25 +389,38 @@ Transformers.js's generic GPU device resolution (CUDA on Linux x64, CoreML on ma
 
 The project's own benchmark harness (`npm run ai:benchmark -w backend`, recorded in
 [specs/004-ai-provider-local-inference/benchmark-results.json](../specs/004-ai-provider-local-inference/benchmark-results.json))
-measured the selected default model (`onnx-community/Qwen2.5-0.5B-Instruct`, fp32) at roughly
-2.75 GB peak process RSS and ~12.7s average latency per representative workload on the reference
-CPU profile also used to calibrate `AI_INFERENCE_TIMEOUT_MS` and `AI_ENHANCEMENT_RUN_BUDGET_MS` in
-`backend/src/ai/modelConfig.ts`. 4 GB of free RAM is a reasonable minimum for running local AI.
+measured the selected default model (`onnx-community/Qwen3-1.7B-ONNX`, fp32) at roughly 9 GB peak
+process RSS and ~30 s average latency per enhancement workload on the reference CPU profile also
+used to calibrate `AI_INFERENCE_TIMEOUT_MS`, `AI_ENHANCEMENT_RUN_BUDGET_MS` and the planning rates
+(50 ms per prompt token, 250 ms per output token) in `backend/src/ai/modelConfig.ts`. About 10 GB of
+free RAM is a reasonable minimum for the default model; the former default, Qwen2.5-0.5B, needs
+about 3 GB but scored 0% on the enhancement benchmark.
 `AI_PROVIDER_MODE=mock` (the automated-test default) needs no model process and adds no
 meaningful memory beyond the Node/Express and Vite dev servers themselves.
 
-The committed results were measured on three generic one-sentence prompts, which say little about the
-enhancement task. The harness now benchmarks contract-shaped enhancement prompts (workload set
-`ap013-enhancement-v1`, built from the real prompt builder and judged by the real candidate
-validation) and records each result's `dtype`, so fp32 and q8 of the same model are compared
-reproducibly. The figures above predate that and are replaced the next time the benchmark is run
-against a real model, which is an explicit, opt-in session.
+The benchmark harness measures contract-shaped enhancement prompts (workload set `ap013-enhancement-v3`,
+eight operations built from the real prompt builder and judged by the real candidate validation), not
+generic prompts. Each result records its `dtype`, the model load time separately from per-workload
+latency, and the mean reply length. When no candidate produces a usable reply, nothing is selected: the
+configured model is retained and the report says it is not an endorsement. The latest run is recorded
+in `specs/004-ai-provider-local-inference/benchmark-results.json`; what each prompt version and model
+scored, and why the default is Qwen3-1.7B, is in `specs/013-ai-enhancement-viability/research.md`
+Decision 11.
+
+The scenario-enhancement prompt (response contract version 5) asks for exactly one candidate per
+operation, lists the targets and status codes the operation allows, and shows a worked example whose
+status code the operation documents. A candidate may omit an empty `pathParameters`,
+`queryParameters` or `headers` map; the parser reads an omitted map as empty. Everything is still
+validated against the full `ApiModel`, and AI scenarios still enter review as pending. An operation with no
+parameters and no request body is told to leave out its target, regenerating a scenario asks for a
+*replacement* rather than "one more", and a candidate that sends a body for an operation that takes none is
+rejected.
 
 Cancelling an AI enhancement run releases its request immediately: the batch in flight is abandoned
 and stays retryable, its late result is discarded, and the next request waits behind it in the serial
 queue.
 
-First use of local AI downloads and caches the model — about 1.7 GB for the default model at
+First use of local AI downloads and caches the model — about 6.6 GB for the default model at
 fp32, under `AI_MODEL_CACHE_DIR` (`~/.apipilot/models` by default). `.env.example` documents why
 `AI_MODEL_DTYPE` should stay unset on CPU: measured q8 quantization was roughly 4x slower than
 fp32 on the reference profile and produced malformed structured output. Local AI operates fully
@@ -662,8 +679,8 @@ Status: implementation complete, AI evaluation pending. `npm run test:ai-real:fa
 backend` runs a 12-case synthetic corpus against the real local provider and reports the share of
 usable explanations and of answers rejected for contradicting the rule (research D20). In run 5
 (`specs/030-ai-failure-analysis/evaluation.md`) the default `Qwen2.5-0.5B-Instruct` produced 12 of
-12 usable explanations with no contradictions, at an 11.2 s median on CPU, so the default model is
-unchanged. The rules match all 12 labels, which `npm test` also checks without a model. SC-006
+12 usable explanations with no contradictions, at an 11.2 s median on CPU. After the default became
+Qwen3-1.7B (run 6) it produced 11 of 12 usable explanations with no contradictions, at a 34 s median. The rules match all 12 labels, which `npm test` also checks without a model. SC-006
 additionally requires at least 4 real, redacted recorded failures in the corpus, which do not exist
 yet, so the feature is not recorded as Implemented (constitution XXII). The pipeline around the
 model is model-agnostic and does not change with it.

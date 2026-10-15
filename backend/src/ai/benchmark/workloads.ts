@@ -3,6 +3,7 @@ import { parseAIScenarioResponse } from "../../testDesign/parseAIScenarioRespons
 import { buildAIScenarioRequest } from "../../testDesign/aiScenarioPrompt";
 import { generateTestModel } from "../../testDesign/generateTestModel";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "../../testDesign/validateAICandidate";
@@ -24,9 +25,16 @@ export interface BenchmarkWorkload {
  * Replaces `ap004-representative-v1`, whose three single-sentence prompts bore no resemblance to the
  * enhancement task: a recorded 33% success rate on them could not support a decision about that task
  * (specs/013-ai-enhancement-viability T025, constitution XXII). Reports written under the earlier id
- * are history and are not comparable with this set.
+ * are history and are not comparable with this set. `v2` widened the set from three operations to six:
+ * on three, one model answer decided a third of the score. `v3` adds two operations with no parameters
+ * and no request body, which the first six lacked: they exposed that a prompt listing no allowed
+ * target left the model with nothing it was permitted to aim at, and it answered with no candidate.
+ * Both document an alternative outcome (`409`) a candidate can exercise. An operation with no input and
+ * a single documented response was tried first and dropped: there is nothing left to propose for it, so
+ * an empty reply is the correct one, and this benchmark's rule that an empty reply is unusable would
+ * have scored a right answer as a failure.
  */
-export const WORKLOAD_SET_ID = "ap013-enhancement-v1";
+export const WORKLOAD_SET_ID = "ap013-enhancement-v3";
 
 const string = (extra: Partial<SchemaConstraint> = {}): SchemaConstraint => ({
   type: "string",
@@ -53,11 +61,14 @@ function modelOf(operation: ApiOperation): ApiModel {
 }
 
 /**
- * Three small, fixed operations spanning what enhancement reasons about: a format-constrained body
- * field, path/query parameters with an enumeration, and a nested array body. Fixed literals rather
+ * Six small, fixed operations spanning what enhancement reasons about: a format-constrained body
+ * field, path/query parameters with an enumeration, a nested array body, a path-only delete, a
+ * paginated list, a partial update combining a path parameter with a body, and two operations that take
+ * no input at all. Fixed literals rather
  * than a parsed specification so the prompts are byte-stable (constitution VII, XXIII).
  */
-const FIXTURES: { id: string; model: ApiModel }[] = [
+/** The operations the enhancement workloads are built from; exported so a run's replies can be re-scored or diagnosed per operation. */
+export const FIXTURES: { id: string; model: ApiModel }[] = [
   {
     id: "create-account",
     model: modelOf({
@@ -163,6 +174,108 @@ const FIXTURES: { id: string; model: ApiModel }[] = [
       tags: ["orders"],
     }),
   },
+  {
+    id: "delete-order",
+    model: modelOf({
+      path: "/orders/{orderId}",
+      method: "DELETE",
+      operationId: "deleteOrder",
+      parameters: [
+        { name: "orderId", location: "path", required: true, schema: string({ format: "uuid" }) },
+      ],
+      requestBody: undefined,
+      responses: [response("204", "Deleted"), response("404", "No such order")],
+      security: [],
+      tags: ["orders"],
+    }),
+  },
+  {
+    id: "list-orders",
+    model: modelOf({
+      path: "/orders",
+      method: "GET",
+      operationId: "listOrders",
+      parameters: [
+        {
+          name: "limit",
+          location: "query",
+          required: false,
+          schema: { type: "integer", required: [], properties: {}, minimum: 1, maximum: 100 },
+        },
+        {
+          name: "status",
+          location: "query",
+          required: false,
+          schema: string({ enum: ["open", "shipped", "cancelled"] }),
+        },
+      ],
+      requestBody: undefined,
+      responses: [
+        response("200", "A page of orders", {
+          type: "array",
+          required: [],
+          properties: {},
+          items: string(),
+        }),
+        response("400", "Invalid query"),
+      ],
+      security: [],
+      tags: ["orders"],
+    }),
+  },
+  {
+    id: "update-account",
+    model: modelOf({
+      path: "/accounts/{accountId}",
+      method: "PATCH",
+      operationId: "updateAccount",
+      parameters: [
+        { name: "accountId", location: "path", required: true, schema: string({ format: "uuid" }) },
+      ],
+      requestBody: {
+        required: true,
+        contentTypes: {
+          "application/json": {
+            type: "object",
+            required: [],
+            properties: {
+              displayName: string({ minLength: 1, maxLength: 40 }),
+              email: string({ format: "email" }),
+            },
+          },
+        },
+      },
+      responses: [response("200", "Updated"), response("404", "No such account")],
+      security: [],
+      tags: ["accounts"],
+    }),
+  },
+  {
+    id: "clear-cache",
+    model: modelOf({
+      path: "/cache",
+      method: "DELETE",
+      operationId: "clearCache",
+      parameters: [],
+      requestBody: undefined,
+      responses: [response("204", "Cleared"), response("409", "A rebuild is in progress")],
+      security: [],
+      tags: ["admin"],
+    }),
+  },
+  {
+    id: "start-reindex",
+    model: modelOf({
+      path: "/reindex",
+      method: "POST",
+      operationId: "startReindex",
+      parameters: [],
+      requestBody: undefined,
+      responses: [response("202", "Accepted"), response("409", "A reindex is already running")],
+      security: [],
+      tags: ["admin"],
+    }),
+  },
 ];
 
 /**
@@ -195,12 +308,12 @@ export function isEnhancementReplyUsable(
   }
   return candidates.some((candidate) => {
     if (validateAICandidateShape(candidate).length > 0) return false;
-    return (
-      validateAICandidateSemantics(
-        candidate as Parameters<typeof validateAICandidateSemantics>[0],
-        apiModel,
-      ).length === 0
+    // Mirrors the pipeline: an undocumented status code costs the assertion, not the candidate.
+    const { candidate: retained } = stripUndocumentedStatusAssertions(
+      candidate as Parameters<typeof validateAICandidateSemantics>[0],
+      apiModel,
     );
+    return validateAICandidateSemantics(retained, apiModel).length === 0;
   });
 }
 

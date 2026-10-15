@@ -57,6 +57,11 @@ All unknowns from the Technical Context are resolved below before Phase 1 design
     `benchmark-results.json`); resolving oversized-prompt failures instead requires
     bounding what `enhanceTestModel`/`analyzeDependencies` send in the request body, which
     is a separate, spec-level change.
+
+    **Amended 2026-10-14:** the default is now `onnx-community/Qwen3-1.7B-ONNX` (fp32). The statement
+    above was true for the AP-004 benchmark's generic prompts; against the enhancement workload
+    (`ap013-enhancement-v2`, specs/013 research.md Decision 11) Qwen2.5-0.5B scored 0% and
+    Qwen3-1.7B 83% under prompt version 4. `benchmark-results.json` is regenerated accordingly.
   - Metrics captured per candidate (FR-014, constitution VII, XXII): structured-output
     success rate (does the output parse as the requested shape), average/95th-percentile
     latency, peak memory, model size on disk, and startup/load time.

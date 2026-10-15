@@ -118,7 +118,15 @@ export interface BenchmarkCandidateResult {
   dtype?: ModelDType;
   /** Fraction (0-1) of sample workloads producing parseable output in the expected format. */
   structuredOutputSuccessRate: number;
+  /** Mean time per workload once the model is loaded; excludes `loadMs`. */
   averageLatencyMs: number;
+  /**
+   * Time to load the model and answer a one-token warm-up request, measured separately so a cold
+   * start is not charged to the first workload. Absent on reports recorded before it existed.
+   */
+  loadMs?: number;
+  /** Mean reply length in characters, so a slow model can be told from a long reply. */
+  averageOutputChars?: number;
   peakMemoryMb?: number;
   notes?: string;
 }
