@@ -49,6 +49,14 @@ dependencies and run `npm run dev`. Once running:
 - Frontend: `http://localhost:5173`
 - Backend health check: `http://localhost:4000/api/health`
 
+By default only the machine running ApiPilot can open it. To use it from another device on a
+network you trust, set `FRONTEND_DEV_HOST` (for example `0.0.0.0`) in `.env` and restart
+`npm run dev`. The terminal then prints an address that includes a one-time-per-launch access token:
+open that address on the other device. It stops working when ApiPilot restarts, and anyone who has it can
+use ApiPilot until then, so treat it like a password. The connection is not encrypted; see
+[Opening ApiPilot from another device](configuration.md#opening-apipilot-from-another-device)
+for the limits, for calling the API from scripts, and for safer alternatives such as an SSH tunnel.
+
 The header shows a live connection indicator — **Connecting…**, **Connected**, or
 **Disconnected** — so you always know whether the browser can reach the backend, plus a
 light/dark theme toggle. Your choice is remembered on that browser; until you choose

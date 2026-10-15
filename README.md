@@ -42,7 +42,7 @@ The `.env` file is optional when defaults are acceptable. The default developmen
 
 To run an existing Postman collection instead, choose **Import & Run Collection** on the start screen. Use `npm run stop` to stop the development servers.
 
-ApiPilot is single-user and local-only. It has no authentication, executes scripts you confirm, and holds stored credentials, so the backend binds to `127.0.0.1` by default. Do not expose it to a network without adding authentication first; see [Configuration, persistence, and security](docs/configuration.md#security-model-single-user-local-only).
+ApiPilot is single-user and local-only. It has no authentication, executes scripts you confirm, and holds stored credentials, so the backend binds to `127.0.0.1` by default, and so does the dev server. To open ApiPilot from another device on a network you trust, set `FRONTEND_DEV_HOST`: a non-loopback address makes a per-launch access token mandatory (printed once in the terminal; plain HTTP, so see the limits). Do not otherwise expose it to a network without adding authentication first; see [Configuration, persistence, and security](docs/configuration.md#security-model-single-user-local-only).
 
 ## Documentation
 

@@ -1310,7 +1310,17 @@ and every stored value are unchanged; the journey is merged, not the model. The 
   explicitly (a startup warning is logged when it is not loopback), and while bound to loopback
   `backend/src/security/localHostGuard.ts` rejects any request whose `Host` or `Origin` is not
   `localhost`, `127.0.0.1` or `[::1]` with `403 forbidden_host` (DNS-rebinding defence), before the
-  session layer runs. The Vite dev server also binds to loopback.
+  session layer runs. The Vite dev server also binds to loopback by default. `FRONTEND_DEV_HOST`
+  opts in to a network address, and any non-loopback value makes `frontend/devAccess/` (a Vite
+  plugin, with the address policy derived from the setting so there is no way to turn protection
+  off) require a per-launch 256-bit token on every request and WebSocket upgrade the dev server
+  receives: a browser exchanges it once for an `HttpOnly`, `SameSite=Strict` session cookie, a script
+  sends it in `X-ApiPilot-Token`, and anything else gets a uniform `401`. The token is in memory only
+  and is printed once to the terminal (not through Vite's logger, which feeds `logs/frontend.log`).
+  The backend is untouched: an accepted `/api` request has its network `Origin` rewritten to the
+  backend's loopback origin and the token removed before the proxy forwards it, so the backend's
+  `localHostGuard` stays exactly as strict for direct callers. The connection is plain HTTP, so
+  the token can be read by anyone who can read traffic on that network (specs/049).
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
   review, dependency detection, export, or AI failure analysis. Generating a collection is not
   authorization to execute it.

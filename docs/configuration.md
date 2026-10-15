@@ -13,6 +13,7 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | `BACKEND_PORT`                       | Express listener port                                                           | `4000`                                  |
 | `BACKEND_HOST`                       | Interface the backend binds to; non-loopback values expose an unauthenticated server | `127.0.0.1`                        |
 | `FRONTEND_DEV_PORT`                  | Vite development server port                                                    | `5173`                                  |
+| `FRONTEND_DEV_HOST`                  | Address the Vite dev server listens on; any non-loopback value turns on the access token (see below) | `127.0.0.1`                |
 | `GIT_COMMIT`                         | Commit value returned by `/api/version`                                         | Detected from Git, otherwise `unknown`  |
 | `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics             | `false`                                 |
 | `AI_PROVIDER_MODE`                   | `local` or deterministic `mock`                                                 | `mock` in tests, `local` otherwise      |
@@ -56,8 +57,34 @@ ApiPilot is a single-user tool meant to run on your own machine. It has no authe
 
 - The backend binds to `127.0.0.1` by default. Set `BACKEND_HOST` only if you deliberately accept exposing it; a startup warning is logged when you do.
 - While bound to loopback, requests whose `Host` or `Origin` header is not `localhost`, `127.0.0.1` or `[::1]` are rejected with `403 forbidden_host`, which blocks DNS-rebinding attacks from web pages you visit.
-- The Vite dev server also binds to `127.0.0.1`.
+- The Vite dev server also binds to `127.0.0.1` unless you set `FRONTEND_DEV_HOST`; see [Opening ApiPilot from another device](#opening-apipilot-from-another-device) below.
 - Do not put ApiPilot behind a public reverse proxy or deploy it as a shared service without adding authentication first.
+
+### Opening ApiPilot from another device
+
+The dev server forwards `/api` to the backend from your own machine, so letting it listen on a network address would give every device on that network the whole backend. That is why it listens on loopback only. `FRONTEND_DEV_HOST` lets you opt in to a network address, and when you do, an access token is mandatory. There is no setting that turns the token off, and none that turns it on for loopback.
+
+| `FRONTEND_DEV_HOST` | Result |
+| --- | --- |
+| Unset, `127.0.0.1`, `localhost` or `::1` | Unchanged: loopback only, no token. |
+| `0.0.0.0` or `::` | Listens on every interface; the token is required. |
+| A specific address or a host name | Listens on that address; the token is required. |
+| Anything that is not an address or a host name | The dev server refuses to start and names the setting. It does not fall back to another address. |
+
+When the token is required:
+
+- A new 256-bit random token is generated every time the dev server starts, including an automatic restart after `vite.config.ts` changes. It is held in memory only: it is never written to a file or to any log, and it cannot be set in `.env`.
+- The terminal prints it once, as a ready-to-open address per network address of the machine, for example `http://192.168.1.20:5173/?token=…`. The notice is written to the terminal only, not to `logs/frontend.log`.
+- Open that address once on the device you want to use. The dev server stores a session cookie (`HttpOnly`, `SameSite=Strict`) that page scripts cannot read, and redirects to the same address without the token, so it does not stay in the address bar. Reloads and new tabs on that device keep working.
+- Every request is checked: pages, assets, `/api` and the live-reload connection. A request without a valid credential gets `401` and nothing else, with the same body whatever the reason.
+- **Scripts and CI** cannot do the browser exchange. Send the token on each request in an `X-ApiPilot-Token` header, for example `curl -H "X-ApiPilot-Token: <token>" http://192.168.1.20:5173/api/health`. The header is checked like the cookie and is never forwarded to the backend. A `?token=` query parameter only opens a page; it has no effect on `/api` paths.
+- A restart invalidates every earlier token and cookie. Open the newly printed address.
+- The backend is not changed. It still listens on loopback and still applies its `Host` and `Origin` check to direct callers. A request that has passed the token check is presented to it as a same-machine request (the dev server rewrites the browser's network `Origin` to the backend's own loopback origin and removes the token).
+- To browse by a machine name instead of an IP address, add that name to `server.allowedHosts` in `frontend/vite.config.ts`; Vite blocks unknown host names.
+
+**Limits you must understand.** The connection is plain HTTP, so anyone who can read traffic on that network can read the token, and anyone who has the printed address can use ApiPilot until the next restart. There is no sign-out and no per-device identity. Use this only on a network you trust. For anything else, put TLS in front of the dev server, or skip this feature and use an SSH or VPN tunnel to the loopback address instead, for example `ssh -N -L 5173:127.0.0.1:5173 user@host`.
+
+Only the development server is covered. `vite preview` and the backend's own start command keep their loopback behaviour.
 
 ### Security and privacy boundaries
 

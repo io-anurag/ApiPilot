@@ -5,6 +5,9 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { createFileLogger } from "./viteLogger.ts";
+import { apiProxyOptions } from "./devAccess/apiProxy.ts";
+import { devAccessPlugin } from "./devAccess/devAccessPlugin.ts";
+import { resolveListenAddress } from "./devAccess/listenAddress.ts";
 
 // The ports live in the repository-root `.env`, which the backend loads (backend/src/loadEnv.ts)
 // but Vite does not: Vite never copies `.env` into `process.env`, and its own env directory is
@@ -19,26 +22,29 @@ export default defineConfig(({ mode }) => {
     process.env.FRONTEND_DEV_PORT ?? rootEnv.FRONTEND_DEV_PORT ?? "5173",
     10,
   );
+  // Loopback unless FRONTEND_DEV_HOST says otherwise (specs/049-lan-dev-access-token). Any other
+  // address turns on the access-token guard below; there is no setting to turn it off, and an
+  // invalid value throws here so the dev server refuses to start.
+  const listenAddress = resolveListenAddress(
+    process.env.FRONTEND_DEV_HOST ?? rootEnv.FRONTEND_DEV_HOST,
+  );
 
   return {
     customLogger: createFileLogger(),
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(listenAddress.protected ? [devAccessPlugin({ backendPort, address: listenAddress })] : []),
+    ],
     server: {
-      // Loopback only. `host: true` would expose the dev server on every interface, and because its
-      // proxy reaches the backend over loopback it would hand LAN clients a way around the
-      // backend's loopback bind.
-      host: "127.0.0.1",
+      // Loopback by default. `host: true` would expose the dev server on every interface, and
+      // because its proxy reaches the backend over loopback it would hand LAN clients a way around
+      // the backend's loopback bind. A non-loopback FRONTEND_DEV_HOST is allowed only together
+      // with the per-launch access token (devAccessPlugin), which gates the proxy as well.
+      host: listenAddress.host,
       port: frontendDevPort,
       proxy: {
-        "/api": {
-          // The backend binds 127.0.0.1 by default; `localhost` can resolve to ::1 first.
-          target: `http://127.0.0.1:${backendPort}`,
-          changeOrigin: true,
-          // Forward the original browser address via X-Forwarded-For. The backend ignores this
-          // header unless DEBUG_LOG_REAL_CLIENT_IP=true explicitly opts in (see .env.example and
-          // backend/src/app.ts), so this is inert by default.
-          xfwd: true,
-        },
+        "/api": apiProxyOptions(backendPort),
       },
     },
     test: {

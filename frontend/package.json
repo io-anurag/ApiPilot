@@ -1,11 +1,11 @@
 {
   "name": "@apipilot/frontend",
-  "version": "19.51.0",
+  "version": "19.52.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tooling.json && vite build",
     "preview": "vite preview",
     "test": "vitest run --root ."
   },
@@ -20,6 +20,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",
+    "@types/node": "^24.19.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^6.1.2",

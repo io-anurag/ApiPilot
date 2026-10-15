@@ -3892,3 +3892,24 @@ Implementation
     - The review flow was checked end to end (HTTP wire, accept, finalize, approved model) and a test added; stage summaries
       and Postman export need no change. `workloads.ts` now exports `FIXTURES` so a run's replies can be re-scored.
     - Version bumped to 19.51.0 (root, backend, frontend, shared-domain).
+
+95. **AP-049: dev server on a network address behind a per-launch access token; version 19.52.0 (2026-10-15).**
+    - New opt-in `FRONTEND_DEV_HOST` (default `127.0.0.1`, behaviour unchanged). Any non-loopback value makes access-token
+      protection mandatory, with no setting to turn it off (it is derived from the address). An invalid value stops startup and
+      names the setting. This reopens, safely, what item 83 closed: the dev proxy no longer hands a network client the backend.
+    - `frontend/devAccess/` (a Vite plugin plus pure modules): a 256-bit token per launch, in memory only, printed once to the
+      terminal (not through Vite's logger); a browser exchanges it once for an `HttpOnly`, `SameSite=Strict` cookie and is redirected
+      without it; a script sends `X-ApiPilot-Token` on each request; every HTTP request and WebSocket upgrade is checked first; a
+      refusal is a uniform `401`. A `?token=` parameter only opens a page and means nothing on an `/api` path.
+    - The backend is unchanged. A separate proxy-to-backend secret was rejected: it would not stop a network client and only
+      protects against other local processes. An accepted `/api` request has its network `Origin` rewritten to the backend's
+      loopback origin and the token removed before forwarding, because the backend's guard otherwise answers `403` to a state-changing
+      request from another device (a control test shows it). The backend's guard stays as strict for direct callers.
+    - The connection is plain HTTP: anyone who can read the network can read the token. Documented in `docs/configuration.md`
+      ("Opening ApiPilot from another device"), the README, the user manual, `.env.example` and the terminal notice, with an SSH
+      tunnel recommended for anything else.
+    - Tests: unit tests for the address policy, token, cookie, decision and notice; an integration test of a real Vite server behind a
+      stub backend applying the real `localHostGuard`; and the real `vite.config.ts` resolved under several values. The new tooling is
+      type-checked by `tsc -p frontend/tsconfig.tooling.json` in the frontend build (`@types/node` added to the frontend).
+    - Not covered: `vite preview` and the backend's own start command (unchanged), TLS, accounts, a sign-out.
+    - Version bumped to 19.52.0 (root, backend, frontend, shared-domain).
