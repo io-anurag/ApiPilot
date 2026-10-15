@@ -3883,7 +3883,12 @@ Implementation
     - `specs/005` Amendments, `data-model.md`, `contracts/enhanced-test-models-api.md`, `docs/architecture.md` and
       `docs/USER_MANUAL.md` updated.
     - `benchmark-results.json` regenerated on `ap013-enhancement-v3` from the cached models, with reply lengths identical to the
-      previous run: Qwen3-1.7B fp32 7 of 8 (was 6 of 8; 29 s, 8.9 GB), q8 1 of 8, Qwen2.5-0.5B fp32 0 of 8, both unchanged. The
-      one remaining fp32 failure was not diagnosed, and regeneration (3 of 7) was not re-measured. Details in `specs/013`
+      previous run: Qwen3-1.7B fp32 7 of 8 (was 6 of 8; 29 s, 8.9 GB), q8 1 of 8, Qwen2.5-0.5B fp32 0 of 8, both unchanged.
+    - Replies captured and scored under both rules on the same eight operations: enhancement 6 -> 7 of 8 and regeneration
+      6 -> 7 of 8, the only change being `PATCH /accounts/{accountId}` (an undocumented `400`). The two replies that still
+      fail are correct rejections: an invented query parameter on `DELETE /cache` (FR-009) and malformed JSON on the
+      `POST /orders` regeneration. The earlier "3 of 7" regeneration sample is not comparable. Details in `specs/013`
       research.md Decision 11 follow-up.
+    - The review flow was checked end to end (HTTP wire, accept, finalize, approved model) and a test added; stage summaries
+      and Postman export need no change. `workloads.ts` now exports `FIXTURES` so a run's replies can be re-scored.
     - Version bumped to 19.51.0 (root, backend, frontend, shared-domain).

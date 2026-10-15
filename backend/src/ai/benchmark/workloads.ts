@@ -67,7 +67,8 @@ function modelOf(operation: ApiOperation): ApiModel {
  * no input at all. Fixed literals rather
  * than a parsed specification so the prompts are byte-stable (constitution VII, XXIII).
  */
-const FIXTURES: { id: string; model: ApiModel }[] = [
+/** The operations the enhancement workloads are built from; exported so a run's replies can be re-scored or diagnosed per operation. */
+export const FIXTURES: { id: string; model: ApiModel }[] = [
   {
     id: "create-account",
     model: modelOf({

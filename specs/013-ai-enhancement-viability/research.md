@@ -569,6 +569,34 @@ not from different model output:
 | Qwen3-1.7B q8 | 1 of 8 | 1 of 8 | 35.5 s | 4.5 GB |
 | Qwen2.5-0.5B fp32 | 0 of 8 | 0 of 8 | 10.2 s | 3.6 GB |
 
-One reply is recovered; q8 and the 0.5B model are unchanged, so their failures are not status-code assertions. The one
-remaining Qwen3-1.7B fp32 failure was not diagnosed. Regeneration (seven operations) was not re-measured and still
-stands at 3 of 7 from the run above. Latency and memory differences from the earlier run are run-to-run noise.
+One reply is recovered; q8 and the 0.5B model are unchanged, so their failures are not status-code assertions.
+Latency and memory differences from the earlier run are run-to-run noise.
+
+**Replies captured and re-scored, same day.** To diagnose the remaining failure and to measure regeneration, the
+Qwen3-1.7B fp32 replies for all eight workload operations were captured once (enhancement, and
+`regenerateReviewScenario` on each operation's first deterministic scenario) and scored under the previous strict
+rule and under the new one. The model decodes deterministically, so the enhancement replies are the benchmark's own.
+
+| Operation | Enhancement, strict | Enhancement, strip | Regeneration, strict | Regeneration, strip |
+|---|---|---|---|---|
+| `POST /accounts` | usable | usable | usable | usable |
+| `GET /orders/{orderId}` | usable | usable | usable | usable |
+| `POST /orders` | usable | usable | **invalid JSON** | **invalid JSON** |
+| `DELETE /orders/{orderId}` | usable | usable | usable | usable |
+| `GET /orders` | usable | usable | usable | usable |
+| `PATCH /accounts/{accountId}` | rejected (`400` undocumented) | **usable** | rejected (undocumented status) | **usable** |
+| `DELETE /cache` | **rejected** (invented query parameter) | rejected | usable | usable |
+| `POST /reindex` | usable | usable | usable | usable |
+| **Total** | **6 of 8** | **7 of 8** | **6 of 8** | **7 of 8** |
+
+Both rules were applied to the same replies, so the before/after is like for like. The only reply that changes is
+`PATCH /accounts/{accountId}`, in both flows: the model asserted `400`, which the operation does not document.
+The earlier "3 of 7" regeneration figure was measured on a different sample of operations and is not comparable with
+this table; it is not restated here.
+
+**The two replies that still fail are correct rejections, not validator gaps.** For `DELETE /cache` the model
+invented a `cache` query parameter on an operation that takes no parameters, which FR-009 forbids; stripping an
+assertion does not touch it, and nothing should. For the `POST /orders` regeneration the reply is not valid JSON (a
+stray quote closes the request object, and `contentType` is added to `request`); repairing it would be silent input
+repair (CLAUDE.md section 8.4), so it surfaces as invalid output and the current scenario is preserved. Both are
+limits of the model, not of the prompt or the validator, and neither is addressed here.
