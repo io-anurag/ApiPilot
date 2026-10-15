@@ -4,6 +4,7 @@ import type {
   AIErrorCategory,
   AIProvider,
   AIScenarioCandidate,
+  AIStrippedAssertion,
   ApiOperation,
   EnhancementResult,
   TestModel,
@@ -17,6 +18,7 @@ import {
 import { estimateViability } from "../ai/viability";
 import { parseAIScenarioResponse, isCandidateShape } from "./parseAIScenarioResponse";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "./validateAICandidate";
@@ -108,8 +110,10 @@ function logResponseParseFailure(
 }
 
 interface BatchScenarioResult {
+  /** The candidate as added: any undocumented assertions are already removed. */
   candidate: AIScenarioCandidate;
   scenario: ReturnType<typeof candidateToScenario>;
+  strippedAssertions: AIStrippedAssertion[];
 }
 
 interface BatchRunContext {
@@ -161,7 +165,13 @@ function classifyAgainstBaseline(
     );
     if (!retained) continue;
     if (retained.id === item.scenario.id) {
-      outcomes.added.push({ candidate: item.candidate, scenarioId: item.scenario.id });
+      outcomes.added.push({
+        candidate: item.candidate,
+        scenarioId: item.scenario.id,
+        ...(item.strippedAssertions.length > 0
+          ? { strippedAssertions: item.strippedAssertions }
+          : {}),
+      });
     } else {
       outcomes.deduplicated.push({
         candidate: item.candidate,
@@ -243,11 +253,15 @@ async function runOneBatch(
       continue;
     }
     candidateIds.add(rawCandidate.candidateId);
-    const semanticFindings = validateAICandidateSemantics(rawCandidate, apiModel);
-    if (semanticFindings.length > 0) {
+    // An undocumented status code removes that assertion, not the candidate (specs/005 amendment
+    // 2026-10-15). Any other finding still makes the candidate non-executable, and is reported
+    // against the candidate as the model sent it, with every finding it had.
+    const { candidate: validatedCandidate, strippedAssertions } =
+      stripUndocumentedStatusAssertions(rawCandidate, apiModel);
+    if (validateAICandidateSemantics(validatedCandidate, apiModel).length > 0) {
       outcomes.nonExecutable.push({
         candidate: rawCandidate,
-        findings: semanticFindings,
+        findings: validateAICandidateSemantics(rawCandidate, apiModel),
       });
       continue;
     }
@@ -258,14 +272,16 @@ async function runOneBatch(
     );
     if (!operation) continue;
     aiScenarios.push({
-      candidate: rawCandidate,
+      candidate: validatedCandidate,
       scenario: candidateToScenario(
-        rawCandidate,
+        validatedCandidate,
         operation,
         response.modelId,
         response.provider,
         batchIndex,
+        strippedAssertions,
       ),
+      strippedAssertions,
     });
   }
   return aiScenarios;

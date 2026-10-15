@@ -134,6 +134,38 @@ describe("TestScenarioReviewDetail", () => {
     );
   });
 
+  it("lists assertions removed as undocumented, and omits the section otherwise", () => {
+    const stripped: ReviewScenarioWire = {
+      ...aiItem,
+      scenario: {
+        ...aiItem.scenario,
+        provenance: {
+          ...(aiItem.scenario.provenance as Extract<
+            ReviewScenarioWire["scenario"]["provenance"],
+            { source: "AI" }
+          >),
+          aiStrippedAssertions: [
+            {
+              assertion: { type: "status-code", expectedStatusCode: "418" },
+              reason: "undocumented-status-code",
+            },
+          ],
+        },
+      },
+    };
+    const { unmount } = render(<TestScenarioReviewDetail item={stripped} />);
+
+    expect(screen.getByTestId("review-scenario-stripped-assertions")).toHaveTextContent(
+      "Status code: 418",
+    );
+    unmount();
+
+    render(<TestScenarioReviewDetail item={aiItem} />);
+    expect(
+      screen.queryByTestId("review-scenario-stripped-assertions"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a gap message when no assertions are documented", () => {
     render(<TestScenarioReviewDetail item={aiItem} />);
 

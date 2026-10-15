@@ -114,6 +114,27 @@ export function TestScenarioReviewDetail({
                 </dd>
               </div>
             )}
+            {provenance.aiStrippedAssertions !== undefined &&
+              provenance.aiStrippedAssertions.length > 0 && (
+                <div data-testid="review-scenario-stripped-assertions">
+                  <dt className="text-muted">Removed assertions</dt>
+                  <dd>
+                    <p className="text-xs text-muted">
+                      The AI proposed these, but the specification does not document the
+                      status code, so they are not asserted.
+                    </p>
+                    <ul className="ml-4 list-disc">
+                      {provenance.aiStrippedAssertions.map(({ assertion }) => (
+                        <li key={JSON.stringify(assertion)}>
+                          {assertion.type === "status-code"
+                            ? `Status code: ${assertion.expectedStatusCode}`
+                            : `Response schema conformance (status ${assertion.expectedStatusCode ?? "unspecified"})`}
+                        </li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              )}
           </dl>
         )}
       </section>

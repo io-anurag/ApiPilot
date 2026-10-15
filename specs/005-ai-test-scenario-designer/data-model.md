@@ -19,6 +19,7 @@ inferences; only validated candidates become scenarios in `EnhancedTestModel`.
 | `aiRationale`             | `string`         | Non-empty explanation of the semantic risk               |
 | `aiConfidence`            | `number`         | Inclusive range $0 \leq confidence \leq 1$               |
 | `aiAssumptions`           | `string[]`       | Explicit assumptions or uncertainty; defaults to `[]`    |
+| `aiStrippedAssertions`    | `{ assertion: Assertion; reason: "undocumented-status-code" }[]` \| absent | Present only when assertions were removed because their status code is undocumented (2026-10-15 amendment) |
 
 ## AIScenarioCandidate
 
@@ -33,7 +34,7 @@ The structured candidate returned by the AI response contract before domain conv
 | `targetLocation`  | location union     | Must match the referenced operation input location                                     |
 | `targetField`     | `string`           | Required when targeting a field; must resolve in operation schemas/parameters          |
 | `request`         | `GeneratedRequest` | Must use only supported operation inputs; an omitted or null `pathParameters`, `queryParameters` or `headers` map is read as `{}` (2026-10-14 amendment) |
-| `assertions`      | `Assertion[]`      | Status codes and schemas must be documented in `ApiModel`                              |
+| `assertions`      | `Assertion[]`      | Status codes and schemas must be documented in `ApiModel`. An assertion on an undocumented status code is removed and the candidate kept (2026-10-15 amendment); a schema that does not match a documented response still makes the candidate `nonExecutable` |
 | `rationale`       | `string`           | Required, non-empty                                                                    |
 | `confidence`      | `number`           | Required and bounded from 0 through 1                                                  |
 | `assumptions`     | `string[]`         | Explicitly identifies inferred context                                                 |
@@ -54,7 +55,11 @@ Metadata policy (FR-014): `candidateId` must be a non-empty string (`invalid-can
 
 `EnhancementResult.aiCandidates` partitions candidates into:
 
-- `added`: validated candidates added to the executable model.
+- `added`: validated candidates added to the executable model. `candidate` is the candidate as
+  added. When assertions were removed because their status code is not documented (2026-10-15
+  amendment), they are listed in an optional `strippedAssertions` array
+  (`{ assertion, reason: "undocumented-status-code" }`) and mirrored in the scenario's
+  `aiStrippedAssertions` provenance; the field is absent otherwise.
 - `deduplicated`: candidates equivalent to an existing scenario or another AI candidate,
   with retained scenario identity and contributing candidate IDs.
 - `rejected`: malformed or contract-invalid candidates with findings.

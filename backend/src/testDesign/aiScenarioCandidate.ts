@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   AIScenarioCandidate,
+  AIStrippedAssertion,
   ApiOperation,
   TestScenario,
 } from "@apipilot/shared-domain";
@@ -14,7 +15,9 @@ export function candidateScenarioId(candidate: AIScenarioCandidate): string {
  * Converts a validated AI scenario candidate into an executable TestScenario, attaching AI
  * provenance (model, provider, rationale, confidence, assumptions). `batchIndex`, when supplied,
  * tags the scenario with the batch that produced it (specs/015-ai-batch-retry FR-010), so a
- * later retry of that same batch can be scoped correctly.
+ * later retry of that same batch can be scoped correctly. `strippedAssertions`, when non-empty, is
+ * recorded on the provenance so a reviewer can see what the model proposed and what was removed
+ * (specs/005 amendment 2026-10-15).
  */
 export function candidateToScenario(
   candidate: AIScenarioCandidate,
@@ -22,6 +25,7 @@ export function candidateToScenario(
   modelId: string,
   provider: "local" | "mock",
   batchIndex?: number,
+  strippedAssertions: readonly AIStrippedAssertion[] = [],
 ): TestScenario {
   return {
     id: candidateScenarioId(candidate),
@@ -44,6 +48,9 @@ export function candidateToScenario(
       aiConfidence: candidate.confidence,
       aiAssumptions: candidate.assumptions,
       aiBatchIndex: batchIndex,
+      ...(strippedAssertions.length > 0
+        ? { aiStrippedAssertions: [...strippedAssertions] }
+        : {}),
     },
   };
 }

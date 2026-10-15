@@ -155,8 +155,12 @@ status codes absent from the model. Valid AI provenance includes rationale, boun
 assumptions, provider/model identity, and candidate identity when available. Invalid or
 non-executable candidates stay outside the executable scenario set with an explainable result.
 Handling is per candidate, not per response: one invalid candidate (a malformed ID or confidence, an
-unknown field, an undocumented status code) never discards its valid siblings, and the deterministic
-baseline is always returned unchanged. A provider that is unavailable, times out, or returns
+unknown field) never discards its valid siblings, and the deterministic baseline is always returned
+unchanged. A status-code assertion the specification does not document is the one case handled per
+assertion: it is removed (`stripUndocumentedStatusAssertions`) and the candidate kept, with the removal
+recorded on the added candidate and in `AIProvenance.aiStrippedAssertions`. Stripping runs before
+deduplication, so equivalence is judged on the retained assertions. A schema that does not match a
+documented response is not repaired and still makes the candidate non-executable. A provider that is unavailable, times out, or returns
 unparseable output yields the baseline plus a structured outcome.
 
 ### Dependency workflows

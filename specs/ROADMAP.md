@@ -3870,3 +3870,20 @@ Implementation
       validator rejects that correctly. Relaxing FR-009 (keep the candidate, drop the undocumented assertion) or a stronger model
       are the only ways forward, and neither is decided.
     - Version bumped to 19.50.2 (root, backend, frontend, shared-domain).
+
+94. **AP-005 amendment: an undocumented status code removes the assertion, not the candidate; version 19.51.0 (2026-10-15).**
+    - Resolves the "not decided" item in 93. A candidate whose assertion names a status code the operation does not document is
+      now kept with that assertion removed (`stripUndocumentedStatusAssertions`), instead of being `nonExecutable` as a whole.
+      FR-009 still holds: the invented code never becomes an executable fact. A schema mismatch under a documented code, and
+      every other finding, still make the candidate `nonExecutable`.
+    - Each removal is recorded: `AIAddedCandidate.strippedAssertions` and `AIProvenance.aiStrippedAssertions`
+      (shared-domain), and the review detail panel lists them. Stripping runs before deduplication. It also applies to
+      single-scenario regeneration and to the benchmark's usable-reply check.
+    - A candidate left with no assertions is kept (an empty assertion set is valid) and stays `pending` for review.
+    - `specs/005` Amendments, `data-model.md`, `contracts/enhanced-test-models-api.md`, `docs/architecture.md` and
+      `docs/USER_MANUAL.md` updated.
+    - `benchmark-results.json` regenerated on `ap013-enhancement-v3` from the cached models, with reply lengths identical to the
+      previous run: Qwen3-1.7B fp32 7 of 8 (was 6 of 8; 29 s, 8.9 GB), q8 1 of 8, Qwen2.5-0.5B fp32 0 of 8, both unchanged. The
+      one remaining fp32 failure was not diagnosed, and regeneration (3 of 7) was not re-measured. Details in `specs/013`
+      research.md Decision 11 follow-up.
+    - Version bumped to 19.51.0 (root, backend, frontend, shared-domain).

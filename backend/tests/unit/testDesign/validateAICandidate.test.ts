@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aiScenarioApiModel } from "../../fixtures/testDesign/aiScenarioDesignerFixtures";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "../../../src/testDesign/validateAICandidate";
@@ -63,6 +64,34 @@ describe("AI candidate validation", () => {
         expect.objectContaining({ code: "undocumented-status-code" }),
       ]),
     );
+  });
+
+  it("strips only assertions on undocumented status codes, in order, without mutating the input", () => {
+    const documented = { type: "status-code" as const, expectedStatusCode: "409" };
+    const invented = { type: "status-code" as const, expectedStatusCode: "418" };
+    const input = { ...candidate, assertions: [invented, documented] };
+
+    const result = stripUndocumentedStatusAssertions(input, aiScenarioApiModel);
+
+    expect(result.candidate.assertions).toEqual([documented]);
+    expect(result.strippedAssertions).toEqual([
+      { assertion: invented, reason: "undocumented-status-code" },
+    ]);
+    expect(input.assertions).toEqual([invented, documented]);
+    expect(validateAICandidateSemantics(result.candidate, aiScenarioApiModel)).toEqual([]);
+  });
+
+  it("returns the same candidate when nothing is undocumented or the operation is unknown", () => {
+    expect(stripUndocumentedStatusAssertions(candidate, aiScenarioApiModel)).toEqual({
+      candidate,
+      strippedAssertions: [],
+    });
+    const unknown = {
+      ...candidate,
+      operationPath: "/missing",
+      assertions: [{ type: "status-code" as const, expectedStatusCode: "418" }],
+    };
+    expect(stripUndocumentedStatusAssertions(unknown, aiScenarioApiModel).candidate).toBe(unknown);
   });
 
   it("rejects an empty candidate ID", () => {

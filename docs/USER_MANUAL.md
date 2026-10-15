@@ -243,6 +243,9 @@ This is where you decide what actually ships. You'll see:
 - Per-scenario detail: the exact request JSON, the expected assertions, its provenance
   (which rule or AI rationale/confidence/assumptions produced it), and its review
   history. If the operation requires authentication, a note names the required scheme(s).
+  When the AI proposed an expected status code that the specification does not document, that
+  assertion is left out of the scenario and listed under "Removed assertions" in its
+  provenance; the scenario itself is kept and still needs your review.
   Authentication is added automatically when the collection is exported or run, so it is
   not shown as a header in the request JSON.
 - A side panel counting how many of the scenarios are currently accepted, broken down by

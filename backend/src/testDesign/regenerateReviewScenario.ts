@@ -8,6 +8,7 @@ import type {
 import { buildAIScenarioRequest } from "./aiScenarioPrompt";
 import { isCandidateShape, parseAIScenarioResponse } from "./parseAIScenarioResponse";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "./validateAICandidate";
@@ -76,7 +77,13 @@ async function attemptRegeneration(
         message: "AI provider returned a malformed replacement candidate",
       };
     }
-    const semanticFindings = validateAICandidateSemantics(rawCandidate, apiModel);
+    // An undocumented status code removes that assertion, not the candidate (specs/005 amendment
+    // 2026-10-15); the removal is recorded on the replacement scenario's provenance.
+    const { candidate, strippedAssertions } = stripUndocumentedStatusAssertions(
+      rawCandidate,
+      apiModel,
+    );
+    const semanticFindings = validateAICandidateSemantics(candidate, apiModel);
     if (semanticFindings.length > 0) {
       return {
         ok: false,
@@ -86,10 +93,12 @@ async function attemptRegeneration(
     return {
       ok: true,
       scenario: candidateToScenario(
-        rawCandidate,
+        candidate,
         operation,
         response.modelId,
         response.provider,
+        undefined,
+        strippedAssertions,
       ),
     };
   } catch (error) {

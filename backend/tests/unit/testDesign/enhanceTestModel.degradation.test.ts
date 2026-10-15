@@ -165,8 +165,11 @@ describe("enhanceTestModel partially valid responses (specs/005 FR-007, FR-011, 
     );
 
     expect(result.aiProviderOutcome).toBe("success");
+    // An undocumented status code costs the candidate its assertion, not its place
+    // (specs/005 amendment 2026-10-15).
     expect(result.aiCandidates.added.map((item) => item.candidate.candidateId)).toEqual([
       "valid-1",
+      "invented-status",
     ]);
     expect(
       result.aiCandidates.rejected.map((item) => item.findings.map((f) => f.code)),
@@ -179,10 +182,127 @@ describe("enhanceTestModel partially valid responses (specs/005 FR-007, FR-011, 
     ).toEqual([
       ["unknown-field", ["field-not-found"]],
       ["unknown-op", ["operation-not-found"]],
-      ["invented-status", ["undocumented-status-code"]],
     ]);
     expect(result.aiCandidates.nonExecutable.every((i) => i.findings.every((f) => !f.executable)))
       .toBe(true);
+  });
+
+  describe("an undocumented status code removes the assertion, not the candidate (specs/005 amendment 2026-10-15)", () => {
+    const inventedStatus = { type: "status-code", expectedStatusCode: "418" } as const;
+    const documentedStatus = validCandidate.assertions[0];
+
+    async function enhance(candidates: unknown[]) {
+      return enhanceTestModel(
+        aiScenarioApiModel,
+        baseline,
+        providerWith(respond(candidatesResponse(candidates))),
+      );
+    }
+
+    it("keeps the candidate, drops only the undocumented assertion, and records it on the result and provenance", async () => {
+      const result = await enhance([
+        { ...validCandidate, assertions: [documentedStatus, inventedStatus] },
+      ]);
+
+      expect(result.aiCandidates.nonExecutable).toEqual([]);
+      expect(result.aiCandidates.added).toHaveLength(1);
+      const [added] = result.aiCandidates.added;
+      expect(added.candidate.assertions).toEqual([documentedStatus]);
+      expect(added.strippedAssertions).toEqual([
+        { assertion: inventedStatus, reason: "undocumented-status-code" },
+      ]);
+      const scenario = result.enhancedTestModel.scenarios.find((s) => s.id === added.scenarioId);
+      expect(scenario?.assertions).toEqual([documentedStatus]);
+      expect(scenario?.provenance).toMatchObject({
+        source: "AI",
+        aiStrippedAssertions: [
+          { assertion: inventedStatus, reason: "undocumented-status-code" },
+        ],
+      });
+    });
+
+    it("keeps a candidate whose every assertion was removed, with an empty assertion set", async () => {
+      const result = await enhance([{ ...validCandidate, assertions: [inventedStatus] }]);
+
+      expect(result.aiCandidates.added).toHaveLength(1);
+      expect(result.aiCandidates.added[0].candidate.assertions).toEqual([]);
+      const scenario = result.enhancedTestModel.scenarios.find(
+        (s) => s.id === result.aiCandidates.added[0].scenarioId,
+      );
+      expect(scenario?.assertions).toEqual([]);
+    });
+
+    it("removes a schema assertion carried on the undocumented code", async () => {
+      const result = await enhance([
+        {
+          ...validCandidate,
+          assertions: [
+            { type: "schema-conformance", expectedStatusCode: "418", expectedSchema: { type: "object", required: [], properties: {} } },
+          ],
+        },
+      ]);
+
+      expect(result.aiCandidates.nonExecutable).toEqual([]);
+      expect(result.aiCandidates.added[0].candidate.assertions).toEqual([]);
+      expect(result.aiCandidates.added[0].strippedAssertions).toHaveLength(1);
+    });
+
+    it("still makes a schema mismatch under a documented code non-executable", async () => {
+      const result = await enhance([
+        {
+          ...validCandidate,
+          assertions: [
+            { type: "schema-conformance", expectedStatusCode: "409", expectedSchema: { type: "object", required: ["invented"], properties: {} } },
+          ],
+        },
+      ]);
+
+      expect(result.aiCandidates.added).toEqual([]);
+      expect(result.aiCandidates.nonExecutable[0].findings.map((f) => f.code)).toEqual([
+        "schema-not-found",
+      ]);
+    });
+
+    it("does not keep a candidate merely because its assertion was also removed", async () => {
+      const result = await enhance([
+        { ...validCandidate, targetField: "nope", assertions: [inventedStatus] },
+      ]);
+
+      expect(result.aiCandidates.added).toEqual([]);
+      expect(result.aiCandidates.nonExecutable).toHaveLength(1);
+      const [item] = result.aiCandidates.nonExecutable;
+      // Reported as the model sent it, with every finding it had.
+      expect(item.candidate.assertions).toEqual([inventedStatus]);
+      expect(item.findings.map((f) => f.code).sort()).toEqual([
+        "field-not-found",
+        "undocumented-status-code",
+      ]);
+    });
+
+    it("deduplicates on the retained assertions, so candidates differing only in a removed assertion are equivalent", async () => {
+      const result = await enhance([
+        { ...validCandidate, candidateId: "a", assertions: [documentedStatus] },
+        { ...validCandidate, candidateId: "b", assertions: [documentedStatus, inventedStatus] },
+      ]);
+
+      expect(result.aiCandidates.added.map((item) => item.candidate.candidateId)).toEqual(["a"]);
+      expect(result.aiCandidates.deduplicated.map((item) => item.candidate.candidateId)).toEqual(["b"]);
+    });
+
+    it("produces the same result for the same provider output (FR-013)", async () => {
+      const candidates = [{ ...validCandidate, assertions: [inventedStatus, documentedStatus] }];
+      expect(await enhance(candidates)).toEqual(await enhance(candidates));
+    });
+
+    it("leaves a candidate with only documented assertions free of stripping metadata", async () => {
+      const result = await enhance([validCandidate]);
+
+      expect(result.aiCandidates.added[0]).not.toHaveProperty("strippedAssertions");
+      const scenario = result.enhancedTestModel.scenarios.find(
+        (s) => s.id === result.aiCandidates.added[0].scenarioId,
+      );
+      expect(scenario?.provenance).not.toHaveProperty("aiStrippedAssertions");
+    });
   });
 
   it("returns every deterministic scenario unchanged and in order, plus only the valid candidate", async () => {

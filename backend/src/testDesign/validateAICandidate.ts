@@ -1,7 +1,9 @@
 import type {
   AIValidationFinding,
   AIScenarioCandidate,
+  AIStrippedAssertion,
   ApiModel,
+  Assertion,
   SchemaConstraint,
   ScenarioCategory,
 } from "@apipilot/shared-domain";
@@ -304,6 +306,43 @@ export function validateAICandidateSemantics(
     }
   }
   return findings;
+}
+
+/**
+ * Removes the assertions whose status code the operation does not document, keeping the candidate
+ * (specs/005 amendment 2026-10-15). A `schema-conformance` assertion on such a code goes with it,
+ * since no documented response exists to ground it. Assertions on a documented code are never
+ * touched, so a schema mismatch there still surfaces as `schema-not-found` from
+ * `validateAICandidateSemantics`. Pure: the input candidate is not mutated, and the retained
+ * assertions keep their order. An unknown operation leaves the candidate unchanged for the
+ * validator to report.
+ */
+export function stripUndocumentedStatusAssertions(
+  candidate: AIScenarioCandidate,
+  apiModel: ApiModel,
+): { candidate: AIScenarioCandidate; strippedAssertions: AIStrippedAssertion[] } {
+  const operation = apiModel.operations.find(
+    (item) =>
+      item.path === candidate.operationPath &&
+      item.method.toUpperCase() === candidate.operationMethod.toUpperCase(),
+  );
+  if (!operation) return { candidate, strippedAssertions: [] };
+  const retained: Assertion[] = [];
+  const strippedAssertions: AIStrippedAssertion[] = [];
+  for (const assertion of candidate.assertions) {
+    const undocumented =
+      Boolean(assertion.expectedStatusCode) &&
+      !operation.responses.some(
+        (response) => response.statusCode === assertion.expectedStatusCode,
+      );
+    if (undocumented) {
+      strippedAssertions.push({ assertion, reason: "undocumented-status-code" });
+    } else {
+      retained.push(assertion);
+    }
+  }
+  if (strippedAssertions.length === 0) return { candidate, strippedAssertions };
+  return { candidate: { ...candidate, assertions: retained }, strippedAssertions };
 }
 
 function hasContent(value: unknown): boolean {

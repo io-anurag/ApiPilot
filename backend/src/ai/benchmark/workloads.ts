@@ -3,6 +3,7 @@ import { parseAIScenarioResponse } from "../../testDesign/parseAIScenarioRespons
 import { buildAIScenarioRequest } from "../../testDesign/aiScenarioPrompt";
 import { generateTestModel } from "../../testDesign/generateTestModel";
 import {
+  stripUndocumentedStatusAssertions,
   validateAICandidateSemantics,
   validateAICandidateShape,
 } from "../../testDesign/validateAICandidate";
@@ -306,12 +307,12 @@ export function isEnhancementReplyUsable(
   }
   return candidates.some((candidate) => {
     if (validateAICandidateShape(candidate).length > 0) return false;
-    return (
-      validateAICandidateSemantics(
-        candidate as Parameters<typeof validateAICandidateSemantics>[0],
-        apiModel,
-      ).length === 0
+    // Mirrors the pipeline: an undocumented status code costs the assertion, not the candidate.
+    const { candidate: retained } = stripUndocumentedStatusAssertions(
+      candidate as Parameters<typeof validateAICandidateSemantics>[0],
+      apiModel,
     );
+    return validateAICandidateSemantics(retained, apiModel).length === 0;
   });
 }
 

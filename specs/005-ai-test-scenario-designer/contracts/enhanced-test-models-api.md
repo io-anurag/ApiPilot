@@ -71,8 +71,13 @@ failure, for backward compatibility.
 
 - The route invokes AI only through `AIProvider`; it never imports a concrete inference
   runtime.
-- AI candidates referencing unknown operations, methods, fields, schemas, or undocumented
-  status codes are rejected or marked non-executable and never enter the executable model.
+- AI candidates referencing unknown operations, methods, fields, or schemas are rejected or
+  marked non-executable and never enter the executable model.
+- An AI assertion on a status code the operation does not document is removed and the candidate
+  kept (2026-10-15 amendment). The candidate appears under `added` with an optional
+  `strippedAssertions` array (`{ assertion, reason: "undocumented-status-code" }`), and the
+  scenario's `provenance.aiStrippedAssertions` carries the same list. The field is absent when
+  nothing was removed. A candidate with any other finding stays `nonExecutable`.
 - AI content is never promoted to specification-derived or rule-derived provenance.
 - Equivalent scenarios are represented once, with contributing AI origin details preserved.
 - The endpoint does not approve, authorize, execute, or generate an artifact from a scenario.

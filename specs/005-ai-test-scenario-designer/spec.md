@@ -277,3 +277,53 @@ documents. Qwen3-1.7B then produced a usable candidate for 5 of 6 operations.
   operation that declares no request body is rejected as `field-not-found` (`request.body`). An absent,
   null or empty-object body is accepted, because that is what a candidate with nothing to send looks like.
   Previously an invented body for such an operation passed validation.
+
+### 2026-10-15: an undocumented status code removes the assertion, not the candidate (FR-007, FR-009, FR-016)
+
+A candidate whose request is valid but whose assertion names a status code the operation does not
+document used to be reported `nonExecutable` as a whole (`undocumented-status-code`), discarding a usable
+request because of one guessed value. The candidate is now kept and only the unsupported assertion is
+removed. This changes what is done with the candidate, not what is allowed to become a contract fact:
+FR-009 still forbids an AI-invented status code from becoming an executable fact, and removal is how that
+is enforced here.
+
+- **What is stripped.** An assertion whose `expectedStatusCode` is not among the operation's documented
+  response codes is removed from the candidate, whatever its type. A `schema-conformance` assertion carried
+  on that same undocumented code is removed with it, because there is no documented response to ground it
+  in. The remaining assertions are validated exactly as before and keep their order.
+- **What is not stripped.** An assertion on a documented status code whose `expectedSchema` does not match
+  that response's documented schema is not repaired: the candidate is still `nonExecutable` with
+  `schema-not-found`. A schema mismatch under a documented code is a stronger sign that the model
+  invented contract content than a wrong status code is. All other findings (`operation-not-found`,
+  `method-not-found`, `field-not-found`, request-shape and confidence findings) are unchanged, and a
+  candidate that has any of them is not kept merely because its assertion was also stripped.
+- **No silent mutation.** Each removed assertion is recorded, with its original status code and the reason
+  (`undocumented-status-code`), on the added candidate in the enhancement result and on the scenario's AI
+  provenance, so a reviewer can see what the model proposed and what was removed. The AI's `rationale` is
+  kept verbatim as AI-inferred text and may still mention the removed code; it is never promoted to
+  specification information (FR-008).
+- **Candidate with no assertions left.** A candidate whose assertions were all removed is still kept. An
+  empty assertion set is valid when the specification documents no expectation, and it is not padded with a
+  fabricated one. It is left `pending` for review (FR-018), which is the control for a weak scenario.
+- **Result reporting (FR-016).** Stripping is reported as a distinct, countable signal on `added`
+  candidates and not as a fifth outcome: the four existing outcomes keep their meaning. A candidate that
+  previously appeared under `nonExecutable` for this finding alone now appears under `added`.
+- **Order of operations.** Stripping happens after structural validation and before deduplication, so
+  FR-010's request/assertion equivalence is evaluated on the retained assertions. Two candidates that
+  differ only in a removed assertion are therefore equivalent and deduplicate; the contributing provenance
+  is preserved as before. For identical input and equivalent provider output, the result is identical
+  (FR-013).
+- **Unchanged.** The deterministic baseline, the prompt contract (the allowed status codes are still
+  listed to the model), FR-014 and every other validation rule are unchanged. No provider retry or
+  re-prompt is introduced to repair the assertion.
+
+- **Where it applies.** The same stripping applies to a single-scenario regeneration (specs/006): the
+  replacement is kept and the removal is recorded on its provenance. The benchmark's "usable reply" check
+  uses the same rule, so it measures what the pipeline would keep. `validateAICandidateSemantics` itself
+  is unchanged and still reports `undocumented-status-code`; the pipeline strips before calling it.
+- **Implemented in version 19.51.0** (`stripUndocumentedStatusAssertions` in
+  `backend/src/testDesign/validateAICandidate.ts`; `AIStrippedAssertion` and
+  `AIProvenance.aiStrippedAssertions` in `packages/shared-domain/src/testModel.ts`;
+  `AIAddedCandidate.strippedAssertions`). `data-model.md`, `contracts/enhanced-test-models-api.md`,
+  `docs/architecture.md` and `docs/USER_MANUAL.md` are updated, and the review detail panel lists the
+  removed assertions.

@@ -556,3 +556,19 @@ model asserting `400` for an operation that documents only `201` or `200`/`404`,
 rejects (FR-009); the fourth names a wrong operation path. Closing that would mean deliberately relaxing FR-009
 (for example keeping the candidate with its undocumented assertion removed, which CLAUDE.md section 13 allows
 as an empty assertion set) or using a stronger model; neither was done.
+
+**Follow-up, 2026-10-15: assertion removal adopted (specs/005 Amendments, version 19.51.0).** An undocumented
+status code now removes the assertion and keeps the candidate, and the benchmark's usable-reply check applies the
+same rule. Re-run on the same eight operations (`ap013-enhancement-v3`), from the cached models, with replies of
+identical mean length to the previous run (404.4, 455.6 and 416.4 characters), so the gain comes from validation and
+not from different model output:
+
+| Candidate | Before | After | Latency | Peak RSS |
+|---|---|---|---|---|
+| Qwen3-1.7B fp32 | 6 of 8 (75%) | **7 of 8 (88%)** | 28.7 s | 8.9 GB |
+| Qwen3-1.7B q8 | 1 of 8 | 1 of 8 | 35.5 s | 4.5 GB |
+| Qwen2.5-0.5B fp32 | 0 of 8 | 0 of 8 | 10.2 s | 3.6 GB |
+
+One reply is recovered; q8 and the 0.5B model are unchanged, so their failures are not status-code assertions. The one
+remaining Qwen3-1.7B fp32 failure was not diagnosed. Regeneration (seven operations) was not re-measured and still
+stands at 3 of 7 from the run above. Latency and memory differences from the earlier run are run-to-run noise.
