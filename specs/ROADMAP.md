@@ -3913,3 +3913,98 @@ Implementation
       type-checked by `tsc -p frontend/tsconfig.tooling.json` in the frontend build (`@types/node` added to the frontend).
     - Not covered: `vite preview` and the backend's own start command (unchanged), TLS, accounts, a sign-out.
     - Version bumped to 19.52.0 (root, backend, frontend, shared-domain).
+
+96. **AP-050: Performance Source step redesign; version 19.53.0 (2026-10-15).**
+    - `specs/050-performance-source-step-redesign`. Presentation only: no route, contract, shared-domain type, stored value or state
+      transition changed, and the Operations, Plan, Load and Run steps are untouched. The design was reviewed as a light and a dark
+      mock before it was built, using only the existing tokens.
+    - The four sources are cards with an icon, their description and a "Needs ..." line; a check marks the current one (the card
+      stays a button with `aria-pressed`, because the entry screen uses the same picker as an action list and shows no check).
+    - The upload, the uploaded-specification summary and the note for the other sources sit in one card with the anatomy of the start
+      screen's upload card (accent bar, title and "OpenAPI 3.x · YAML · up to 10 MB", heading, local-processing sentence, drop area).
+      Its state is a dot and a word, Required or Ready. The sentence is the start screen's own copy.
+    - The bordered header strip of the path became a plain top row (Back to start, Plans, name, status) above the unchanged stepper,
+      and Back and Next share one footer bar with the reason beside Next. The mock's sticky footer was not carried over: it would
+      pin on the long Plan and Load steps as well.
+    - Tests: card content, Ready and Required in words, the other sources, no card once a plan exists, the top row and the footer;
+      the existing 047 tests pass unchanged.
+    - The running page was captured in both themes at 1280 px and 390 px. Not covered: 320 px, a keyboard and screen-reader pass (T009 in tasks.md).
+    - Version bumped to 19.53.0 (root, backend, frontend, shared-domain).
+
+97. **AP-051: Run k6 Script page redesign; version 19.54.0 (2026-10-15).**
+    - `specs/051-user-script-page-redesign`. Presentation only: no route, contract, shared-domain type, stored value or behaviour
+      changed, and the start screen is untouched (it already follows the landing pages). Colour comes from the existing tokens.
+    - Every group of content after the start screen is a card with the Source step's anatomy (accent bar, header with title, meta
+      and a dot-and-word state, body, optional footer). The page's top row is plain, like the Performance path's.
+    - The three views are a boxed navigation in the style of the Import & Run stepper, with a hint each (run count or "A run is in
+      progress"), replacing the underline tabs. Each keeps its accessible name; `Tabs` itself is unchanged.
+    - The stored script and the editor are one component with a read-only and an editing state, replacing the read-only code block, so
+      Edit does not move the layout. Edit, Save and Cancel sit in its bar and Rename, Replace with upload, Download and Delete under it.
+    - Run setup is a column of configuration cards. The launch card (Ready to run or Not ready to run yet, with the reason, the start
+      button, target, load and hosts) leads Runs & reports, above the live run and the history, as the
+      Performance Run step's does (moved there at the engineer's request). The load choice is two option cards that remain radio buttons with their labels. The confirmation
+      dialog, refusal list, value mapping table and run history were restyled with the same content.
+    - A view whose work is done (checked and confirmed, a target chosen, a run completed) is green with a check, like the Performance
+      stepper's done steps; its hint says so in words. The live dashboard's failure share no longer reads "0.0% of requests" beside a
+      non-zero failure count ("0.02%", or "<0.01%").
+    - Fixed on the way: the editor's string and number colours used theme steps that do not exist, so they were hard to read in dark
+      mode; and `sr-only` elements in wide tables widened the page at 390 px (44 px of horizontal scroll on Run setup).
+    - Tests: read-only and editing states, the open row, the views navigation and hints, the header facts, the launch card states, the
+      option cards' descriptions and the missing-values count; every earlier AP-034 test passes unchanged.
+    - The running page was driven in headless Edge in both themes at 1280 px and 390 px. Not covered: a live run, a failed run and a
+      report (they need k6), 320 px, a keyboard and screen-reader pass. The shared environment picker, load profile editor and
+      threshold editor keep their own look inside the new cards.
+    - Version bumped to 19.54.0 (root, backend, frontend, shared-domain).
+
+98. **AP-052: Recent failures for Run k6 Script runs; version 19.55.0 (2026-10-15).**
+    - `specs/052-user-script-recent-failures`. At the engineer's request, the live dashboard's Recent failures section (AP-045 FR-005a,
+      added for Performance runs as AP-049) now also lists the latest 15 failed requests of a Run k6 Script run, newest first, with UTC
+      time, request, method, path and status, in the same table and with the same bounds.
+    - It is built from the k6 points the latest-requests list already reads: a request is a failure by k6's own verdict
+      (`expected_response` false) or when no response arrived, and the list keeps one entry a second for each request name and status.
+      No k6 option, output or route was added, and the stored result, reports and logs are unchanged: the list is in memory only.
+    - The response is not shown: a supplied script is run as it is and its console is never read, and `--http-debug` would write every
+      request and header at load. `FailureResponse` gains `not-captured` (`reason: "user-script"`); a request with no response keeps
+      `none-received`. A row says "Not captured" and the section says why. `error` and `error_code` are not shown either, since the
+      error text can carry a URL with its query and a code table would be invented here.
+    - Also on this version: the Failures tile caption no longer reads "0.0% of requests" beside a non-zero count ("0.02%", or "<0.01%"),
+      and the Script, Run setup and Runs & reports views of a script turn green with a check once their work is done (AP-051).
+    - Tests: the sampler (list from points, named and unnamed requests, k6's verdict, no response, one a second, the 15 bound, same
+      points same list, privacy, not in the stored result, the snapshot), the list and the dashboard for a script run. The page was
+      driven with real k6 2.3.0 against a local target that answered 500, 422 and dropped connections: the list showed them and no
+      query string or response body reached the page.
+    - Version bumped to 19.55.0 (root, backend, frontend, shared-domain).
+
+99. **AP-053: Debug run for Run k6 Script, and Run setup and Runs & reports as Performance's; version 19.56.0 (2026-10-15).**
+    - `specs/053-user-script-debug-run`, under constitution **v3.1.0** (a MINOR amendment of principle XVII's 2026-09-30 exception,
+      added at the engineer's request: the Debug run of a confirmed, supplied script and its conditions). Spec 034 FR-040 notes it.
+    - **Start debug run on NAME** runs the confirmed script once, with k6's own `--vus 1 --iterations 1` (which replaces the script's
+      own scenarios) and `--http-debug=full`, and shows each request and response in the launch card, in the UI only. Only k6's
+      `http-debug` records are read (pairing by request id, chunk framing removed, a compressed body marked as such); the script's
+      console output is still dropped unread. Everything passes the request-chain Debug run's masker: every environment value mapped
+      to the script is masked and never revealable, credential-looking values are masked and can be revealed one at a time. Held in
+      memory only (never in the database, a report, a snapshot or a log; no run record), bounded at 200 requests and 60 seconds,
+      cancelled by aborting the request. It takes no execution slot and refuses while another execution holds it. The script is never
+      rewritten and the load profile and ApiPilot's thresholds do not apply. `POST /:id/debug-runs`, `GET .../values/:valueId`,
+      `DELETE .../:debugRunId`; the run start's checks are shared (`prepareUserScriptRun`).
+    - **Not available**, and said so on screen: the request's scheme and time (k6 does not log them), so addresses are host and path
+      and no durations are shown; the body of a compressed response; the script's console output.
+    - **Run setup** is one Configuration card of `SetupItem` rows like Performance's (target environment, values, load with the shared
+      profile editor and chart, thresholds collapsed behind Edit, the script with its SHA-256), and **Runs & reports** follows the
+      Performance Run step: the launch card leads (status line, Cancel run, facts strip, values and hosts panels, a note that writes
+      are not checked), then the live dashboard, Last run with Run again, "This run used", the runs list and the report. The
+      separate target card above the live dashboard is gone (the launch card keeps the target on screen, AP-034 FR-023).
+    - The live dashboard of a script run now has what Performance's has: the **Requests** list in place of Chains (each request name's
+      requests, failures and pass/fail bar; first 20 names, then Other requests), **Total / By request** on the graph (first three
+      names and one Other line, groups added as names appear: `createLiveSeries({ dynamicGroups })`), and the planned-time progress bar
+      and time axis, with a planned duration read from a literal `options.duration` or `stages` (no scenarios, iterations or computed
+      values; otherwise none, never a guess: `plannedDuration.ts`, `plannedDurationMs` on the check). None of it is stored.
+    - The report's header was cluttered (four columns of mixed text, the hash on a wrapped line, each mapped name printed twice). It is
+      now eight facts in two rows, the SHA-256 on its own line and a two-column table of mapped names and sources.
+    - The "Add a name the script builds at run time" field now says when to use it.
+    - Tests: the log parser (requests, responses, chunked, compressed, no response, redirects, console dropped, spoofing, limits), the
+      pinned arguments, the service through the routes (masking, reveal, privacy, not stored, gating, limits, overlap, cancel, slot,
+      determinism), the output and launch card, and the new layouts. Driven with real k6 2.3.0 against a local target (500, 422, a
+      dropped connection): four requests shown, no environment value, query token, bearer header or console line reached the page.
+    - Not covered: a compressed or very large real response, a script that times out, 320 px, a keyboard and screen-reader pass.
+    - Version bumped to 19.56.0 (root, backend, frontend, shared-domain).

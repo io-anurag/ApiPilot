@@ -27,4 +27,20 @@ describe("SourcePicker (FR-002, FR-006, FR-014)", () => {
     expect(screen.getByRole("button", { name: /Guided workflow/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Empty plan/ })).toBeDisabled();
   });
+
+  it("states what each source needs, so the engineer knows before choosing (050 FR-001)", () => {
+    render(<SourcePicker onPick={() => undefined} />);
+    expect(screen.getByRole("button", { name: /OpenAPI specification/ })).toHaveAccessibleName(/Needs a YAML file/);
+    expect(screen.getByRole("button", { name: /Guided workflow/ })).toHaveAccessibleName(/Needs approved workflows/);
+    expect(screen.getByRole("button", { name: /Postman collection/ })).toHaveAccessibleName(/Needs a collection/);
+    expect(screen.getByRole("button", { name: /Empty plan/ })).toHaveAccessibleName(/Needs nothing/);
+  });
+
+  it("marks only the chosen card as pressed, so the choice is not carried by colour alone (050 FR-002)", () => {
+    render(<SourcePicker selected="collection" onPick={() => undefined} />);
+    expect(screen.getByRole("button", { name: /Postman collection/ })).toHaveAttribute("aria-pressed", "true");
+    for (const name of [/OpenAPI specification/, /Guided workflow/, /Empty plan/]) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute("aria-pressed", "false");
+    }
+  });
 });

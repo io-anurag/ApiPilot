@@ -88,6 +88,8 @@ Under `/api/user-scripts` (`specs/034-run-user-k6-script/contracts/user-scripts-
 | `GET`             | `/:id/values?environmentId=`            | Which mapped values the environment has, never the values.                                                    |
 | `GET`             | `/readiness`                            | k6 readiness.                                                                                                 |
 | `POST`            | `/:id/runs`                             | Start a run on `{ environmentId, scriptSha256 }`.                                                             |
+| `POST`            | `/:id/debug-runs`                       | A one-shot Debug run on `{ environmentId, scriptSha256 }` (AP-053): one virtual user, one iteration, answers with every request and response, masked, when it ends; abort the request to cancel. Nothing is stored. `409` as a run, plus `debug_run_in_progress`. |
+| `GET`, `DELETE`   | `/:id/debug-runs/:debugRunId[/values/:valueId]` | Reveal one masked value (`404 debug_value_not_found` for an environment value, an expired or discarded one); discard what the server held (`204`). |
 | `GET`             | `/runs[?scriptId=]`, `/runs/:runId`     | Runs, or one run with progress, result and, for a failed start, k6's message.                                 |
 | `POST`            | `/runs/:runId/cancel`                   | Stop a run in progress (`202`).                                                                               |
 | `GET`             | `/runs/:runId/report`                   | The self-contained HTML report; `?download=true` adds `Content-Disposition`.                                  |

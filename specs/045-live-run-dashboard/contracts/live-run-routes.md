@@ -31,6 +31,6 @@ Headers: `Cache-Control: no-store`.
 ## Guarantees
 
 - `totals` equals the run's own progress totals at the same moment, and the final snapshot equals the report.
-- Contains only fields listed in `data-model.md`; never headers, cookies, resolved URLs or `rawCapture`, and bodies only as the masked, size-limited `recentFailures[].response` of a request-chain run (AP-049), which is never stored.
+- Contains only fields listed in `data-model.md`; never headers, cookies, resolved URLs or `rawCapture`, and bodies only as the masked, size-limited `recentFailures[].response` of a request-chain run (AP-049), which is never stored. A Run k6 Script run (AP-052) has `recentFailures` too, with no body at all: its `response` is `none-received` or `not-captured`.
 - Cheap: no database write and no full-result recomputation per request.
 - Existing run routes, progress and report contracts are unchanged. The only additions to existing responses are the optional fields listed in `data-model.md`.

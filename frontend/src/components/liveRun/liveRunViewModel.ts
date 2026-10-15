@@ -30,9 +30,16 @@ export const LIVE_STATE_TITLE: Record<LiveRunStatus, string> = {
   error: "Run",
 };
 
-/** Failures as a share of requests, one decimal; null when no request was sent (not 0%). */
+/**
+ * Failures as a share of requests, one decimal; null when no request was sent (not 0%). A share below
+ * 0.1% that is not zero gets two decimals, and below 0.01% reads "<0.01%", so a red failure count is
+ * never captioned "0.0% of requests".
+ */
 export function failureShare(failures: number, requests: number): string | null {
-  return requests > 0 ? `${((failures / requests) * 100).toFixed(1)}% of requests` : null;
+  if (requests <= 0) return null;
+  const percent = (failures / requests) * 100;
+  if (failures > 0 && percent < 0.1) return `${percent < 0.01 ? "<0.01" : percent.toFixed(2)}% of requests`;
+  return `${percent.toFixed(1)}% of requests`;
 }
 
 /** The highest virtual-user count in the series, or null when the run has none. */

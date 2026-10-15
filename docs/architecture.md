@@ -1129,6 +1129,37 @@ upload / editor save
   → NDJSON → createUserScriptAggregate (by k6 request name) → renderUserScriptReport
 ```
 
+- **Page look (AP-051, `specs/051-user-script-page-redesign`).** Presentation only: no route, contract, shared-domain type or
+  stored value changed. Everything after the start screen is built from `userScript/ScriptPanel` (accent bar, header with
+  title, meta and a dot-and-word state, body, footer), the same anatomy as the Performance Source step's card. `ScriptTabs`
+  replaces the shared underline `Tabs` for the three views, in the style of `ImportRunStepper`; each button keeps its label as
+  its accessible name and the hint is its description. `ScriptEditor` is one document component with a read-only and an
+  editable state (`readOnly`, a `toolbar` and a `footer` slot) and replaces the read-only `CodeBlock`, so Edit does not move the
+  layout. `UserScriptRunTrigger` is a launch card in the layout of `CollectionRunSetupCard`. The environment picker, load
+  profile editor and threshold editor are shared with the Performance path and were not restyled. Scroll wrappers and cards
+  are `relative`, so the `sr-only` elements inside wide tables are clipped with them instead of widening the page.
+- **Debug run (AP-053, `specs/053-user-script-debug-run`, constitution v3.1.0).** `POST /:id/debug-runs` runs the confirmed
+  script once and answers with the exchanges when k6 exits (the request stays open; aborting it cancels k6). It shares the
+  run start's checks (`prepareUserScriptRun`, minus the load-profile check), copies and re-hashes the script as a run does, and
+  starts k6 with `buildUserScriptDebugK6Args` (pinned: `--http-debug=full --vus 1 --iterations 1 --log-format json`, no
+  `--stage`, no `--out`; `--vus/--iterations` replace the script's own scenarios, checked against k6 2.3.0). `parseDebugLog.ts`
+  keeps only records with `source: "http-debug"`, pairs a request and response by `request_id`, removes chunk framing and
+  marks compressed bodies; every other record, the script's console output among them, is dropped unread. `debugRunService.ts`
+  masks everything with the request-chain Debug run's `Masker` (every environment value mapped to the script is a secret and
+  never revealable; credential-looking values are revealable through the shared held-values store, keyed by script), bounds the
+  run (200 exchanges, 60 seconds, then k6 is cancelled and the outcome is `cut-off`), and logs only ids, counts, a duration and
+  an outcome. It creates no run record, report or live snapshot and takes no execution slot, like the Performance Debug run; it
+  refuses while another execution holds the slot. The UI (`UserScriptDebugOutput`, `useUserScriptDebugRun`) reuses the
+  request-chain output's masked-text, header and body parts and reveal state (`RevealProvider`).
+- **Live parity (AP-051).** `userScriptAggregate` fills the dashboard fields a Performance run uses: `chains` (one row per request
+  name, the first `LIVE_REQUEST_ROWS` and an "Other requests" row), series groups (`createLiveSeries` accepts groups declared as they
+  appear; the first three names and one "other" group), and, for the progress bar, the run's `plannedDurationMs`, which for a script's
+  own load comes from `plannedDurationOf` (`plannedDuration.ts`, a literal `options.duration` or `stages` only, from the AST, never by
+  running the script). All in memory; `toResult` is unchanged. The user-script report header is `HEADER_STYLE` plus the `rf` facts grid.
+- **Runs & reports and Run setup layout (AP-051).** The Run setup view is one `Configuration` card of `SetupItem` rows, as
+  Performance's `SetupPane`, with the shared editors in `compact` mode; Thresholds is a collapsible row. Runs & reports is
+  `UserScriptRunTrigger` (the launch card, as `RunLaunchCard`, holding the debug run and its output) then
+  `UserScriptRunActivity` (live dashboard, Last run with Run again, "This run used", runs list, report, as `ChainRunPanel`).
 - **The check** (`checkUserScript.ts`, `numericGuarantee.ts`; research R2 to R5) accepts only
   the nine allowlisted modules and a JavaScript subset in which `open()`, `require()`, the global
   object and the function constructor cannot be reached:
@@ -1180,6 +1211,15 @@ and session-scoped.
   against real k6: the same tags as `http_reqs`); its path is the plan's template (`liveStepInfo.ts`), never a resolved URL.
   A finished run keeps serving its in-memory view; otherwise the stored `liveSeries` on the result (written once, with the
   final result, not at every checkpoint) is used.
+- **Recent failures.** A chain run's failures come from the generated script's `APIPILOT_FAILURE` console lines
+  (`failureSamples.ts`, with the response masked and cut). A Run k6 Script run (AP-052,
+  `specs/052-user-script-recent-failures`) cannot do that: the script is run as supplied and its console is dropped unread,
+  and `--http-debug` would write every request and its headers at load. So `userScriptAggregate.ts` samples the same
+  `http_req_duration` points that feed the latest requests: a point whose `expected_response` is false, or whose status is 0,
+  becomes an entry, at most one a second for each request display name and status (a small bounded map remembers the last
+  second). Its response is `none-received` or the new `not-captured` kind. The ring is returned by `liveParts` only and is
+  never in `toResult`, so it is not stored, reported or logged. The same `RecentFailuresList` renders both, and shows "Not
+  captured" for a row without a response.
 - **Collection kind.** No k6 and no live record: the snapshot is derived from the settled results
   (`externalCollections/liveSnapshot.ts`, series from the pure `runSeries.ts`, shared with both reports). The planned total,
   the request in flight and each request's authored path are held in memory by `liveRunState.ts` (not stored, no schema
@@ -1281,6 +1321,13 @@ and every stored value are unchanged; the journey is merged, not the model. The 
   nothing. This narrows specs/037 FR-026 ("never re-derived") to the operations the engineer selects; a changed source alone still
   changes nothing. What counts as edited is derived from fields the plan already stores (`isChainEdited`, `isEngineerChain`,
   `seededOperationKeys`, `isPlanEdited` in `packages/shared-domain/src/requestChain.ts`).
+- **Source step look (AP-050, `specs/050-performance-source-step-redesign`).** Presentation only: no route, contract, shared-domain
+  type or state transition changed. `path/SourcePicker` stays a group of buttons (it is also the entry screen's action list, so
+  it keeps `aria-pressed` and shows a check only once something is selected) and gains an icon and a "Needs ..." line per source.
+  `path/SourceDetailCard` is the card under it, with the anatomy of the start screen's upload card, and holds the upload, the
+  uploaded-specification summary or the note for the other sources. `PathFrame` in `path/PerformancePath` drops the bordered header
+  strip for a plain top row (Back to start, Plans, name, status) above the unchanged `PerformanceStepper`, and keeps Back and Next
+  with the reason beside Next in one footer bar.
 - **No new gate before a run.** The launch card names the target and lists every write beside Start, as before (AP-029, AP-040);
   nothing is sent until Start (constitution XVII).
 - **Recent runs.** There is no cross-plan runs read, so the entry screen reads the runs of the ten most recently updated plans and

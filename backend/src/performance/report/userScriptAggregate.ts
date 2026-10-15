@@ -1,4 +1,5 @@
 import type {
+  LiveChainRow,
   CustomMetricSummary,
   LatencyPercentiles,
   LatencySummary,
@@ -18,6 +19,7 @@ import type { MetricType, ParsedLine } from "../k6/metricsStream";
 import { timelineBucketMs } from "./aggregate";
 import { latencyOf, type LiveParts } from "../live/buildSnapshot";
 import { createLiveSeries } from "../live/liveSeries";
+import { createFailureRing } from "../live/failureSamples";
 import { createRecentRing, pathOfUrl } from "../live/recentRing";
 import { LatencyHistogram } from "./histogram";
 
@@ -33,6 +35,13 @@ export const OTHER_REQUESTS = "Other requests";
 const MAX_TRACKED = 100;
 const MAX_HOSTS = 50;
 const MAX_TIMELINE_BUCKETS = 200;
+/** Bounds the sampler's memory of which request and status last gave a failure, and in which second. */
+const MAX_FAILURE_SAMPLE_KEYS = 500;
+/** The live graph draws the first three request names as their own lines and everything after them as one (AP-051). */
+const SERIES_NAMED_GROUPS = 3;
+const SERIES_OTHER_GROUP = "other";
+/** The live Requests list shows this many request names, then one "Other requests" row for the rest. */
+export const LIVE_REQUEST_ROWS = 20;
 const ADAPTIVE_START_BUCKET_MS = 5_000;
 
 /** Metrics k6 emits itself; any other metric is the script's own (FR-033). */
@@ -190,8 +199,29 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
   let dataReceived = 0;
   let currentVirtualUsers = 0;
   // AP-045: the live dashboard's bounded series and latest-requests ring, fed from the same points.
-  const liveSeries = createLiveSeries({ withVirtualUsers: true });
+  const liveSeries = createLiveSeries({ withVirtualUsers: true, dynamicGroups: true });
+  const seriesGroups = new Map<string, string>();
+  let otherSeriesGroup = false;
+  /** The graph line a request name belongs to: its own for the first three names, else the shared "Other requests". */
+  function seriesGroupFor(displayName: string): string {
+    const known = seriesGroups.get(displayName);
+    if (known) return known;
+    if (seriesGroups.size < SERIES_NAMED_GROUPS) {
+      const id = `g${seriesGroups.size + 1}`;
+      seriesGroups.set(displayName, id);
+      liveSeries.declareGroup({ id, label: displayName });
+      return id;
+    }
+    if (!otherSeriesGroup) {
+      otherSeriesGroup = true;
+      liveSeries.declareGroup({ id: SERIES_OTHER_GROUP, label: OTHER_REQUESTS });
+    }
+    return SERIES_OTHER_GROUP;
+  }
   const liveRing = createRecentRing();
+  // AP-052: failed requests sampled for the live view; held in memory only, never in the result.
+  const failureRing = createFailureRing();
+  const lastFailureSecond = new Map<string, number>();
   const secondOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - startedAtMs) / 1000));
 
   const indexOf = (timeMs: number) => Math.max(0, Math.floor((timeMs - startedAtMs) / bucketMs));
@@ -310,15 +340,28 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
     const code = Number.isFinite(status) ? status : 0;
     const source = tags.name !== undefined && tags.name !== "" ? tags.name : (tags.url ?? "");
     const parsed = named ? null : parseUrl(source);
-    liveRing.push({
+    const failed = tags.expected_response === "false" || code === 0;
+    const entry = {
       second: secondOf(timeMs),
       chain: named ? displayName : (parsed?.host ?? ""),
       method: (tags.method ?? "").toUpperCase(),
       path: named ? "" : pathOfUrl(source),
       status: code === 0 ? null : code,
-      failed: tags.expected_response === "false" || code === 0,
-      durationMs: round2(durationMs),
-    });
+    };
+    liveRing.push({ ...entry, failed, durationMs: round2(durationMs) });
+    if (failed) sampleFailure(`${displayName}|${code}`, entry);
+  }
+
+  /**
+   * AP-052: one Recent failures entry per second for each request display name and status, so a burst of
+   * identical failures is one row and the list reaches back further than the last second. The response is
+   * never available for a supplied script: a request with no response says so, any other is not captured.
+   */
+  function sampleFailure(key: string, entry: { second: number; chain: string; method: string; path: string; status: number | null }): void {
+    if (lastFailureSecond.get(key) === entry.second) return;
+    if (lastFailureSecond.size >= MAX_FAILURE_SAMPLE_KEYS) lastFailureSecond.clear();
+    lastFailureSecond.set(key, entry.second);
+    failureRing.push({ ...entry, response: entry.status === null ? { kind: "none-received" } : { kind: "not-captured", reason: "user-script" } });
   }
 
   function add(line: ParsedLine): void {
@@ -396,7 +439,7 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
       }
       runBucket(index).requests += 1;
       groupBucket(group, index).requests += 1;
-      liveSeries.recordRequest(secondOf(timeMs));
+      liveSeries.recordRequest(secondOf(timeMs), seriesGroupFor(group.displayName));
       recordHost(tags);
       return;
     }
@@ -426,6 +469,24 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
         group.writes.set(method, entry);
       }
     }
+  }
+
+  /**
+   * The live dashboard's per-request rows (the Chains section of a Performance run): each request name's requests
+   * and failures so far, in order of first appearance, the first `LIVE_REQUEST_ROWS` of them and then one
+   * "Other requests" row that adds up the rest.
+   */
+  function requestRows(): LiveChainRow[] {
+    const all = [...groups.values()].map((group) => ({ id: group.displayName, label: group.displayName, requests: group.requests, failures: group.failures }));
+    const rows: LiveChainRow[] = all.slice(0, LIVE_REQUEST_ROWS);
+    const rest = all.slice(LIVE_REQUEST_ROWS);
+    const overflow = other as (GroupStats & { names: Set<string> }) | null;
+    if (rest.length > 0 || overflow) {
+      const requests = rest.reduce((sum, row) => sum + row.requests, 0) + (overflow?.requests ?? 0);
+      const failures = rest.reduce((sum, row) => sum + row.failures, 0) + (overflow?.failures ?? 0);
+      rows.push({ id: SERIES_OTHER_GROUP, label: OTHER_REQUESTS, requests, failures });
+    }
+    return rows;
   }
 
   function metricsOf(measures: Measures, seconds: number): RequestGroupMetrics {
@@ -537,9 +598,10 @@ export function createUserScriptAggregate(options: { plannedDurationMs: number |
         totals: { requests: totals.requests, failures: totals.failures },
         currentVirtualUsers,
         latency: latencyOf(totals.histogram),
-        chains: [],
+        chains: requestRows(),
         series: liveSeries.view(Math.floor(elapsedMs / 1000)),
         recent: liveRing.list(),
+        recentFailures: failureRing.list(),
       };
     },
     storedLiveSeries(endMs) {

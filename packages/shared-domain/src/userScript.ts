@@ -70,6 +70,11 @@ export interface ScriptCheckAccepted {
   envNames: ScriptEnvName[];
   /** FR-027: a load profile override needs a default function. */
   hasDefaultFunction: boolean;
+  /**
+   * How long the script's own load is planned to run, when its `options` say so plainly (a literal `duration`
+   * or literal `stages`, with no scenarios); otherwise null. Read from the text, never by running it.
+   */
+  plannedDurationMs?: number | null;
 }
 
 export interface ScriptCheckRefused {

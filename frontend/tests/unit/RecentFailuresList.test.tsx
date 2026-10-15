@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { RecentFailure } from "@apipilot/shared-domain";
-import { RecentFailuresList } from "../../src/components/liveRun/RecentFailuresList";
+import { NOT_CAPTURED_NOTE, RecentFailuresList } from "../../src/components/liveRun/RecentFailuresList";
 
 /** AP-049: the live dashboard's Recent failures section. */
 
@@ -72,5 +72,45 @@ describe("RecentFailuresList", () => {
     expect(screen.getByText("No failed requests have been sampled.")).toBeInTheDocument();
     expect(screen.getByText(/not every failure/)).toBeInTheDocument();
     expect(screen.getByText(/nothing here is saved/i)).toBeInTheDocument();
+  });
+});
+
+/** AP-052: a Run k6 Script run lists the same columns, but ApiPilot cannot see a response. */
+describe("RecentFailuresList for a Run k6 Script run", () => {
+  const scriptFailure = (overrides: Partial<RecentFailure> = {}) =>
+    failure({ chain: "Create order", method: "POST", path: "", status: 422, response: { kind: "not-captured", reason: "user-script" }, ...overrides });
+
+  it("keeps the table's columns and says Not captured instead of offering a response", () => {
+    render(<RecentFailuresList kind="user-script" failures={[scriptFailure(), scriptFailure({ second: 70, chain: "127.0.0.1:18089", method: "GET", path: "/bad", status: 500 })]} startedAt="2026-10-12T13:35:10.000Z" />);
+    const table = within(screen.getByTestId("live-run-failures")).getByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual(["Time (UTC)", "Step", "Method", "Path", "Status", "Response"]);
+    expect(within(table).getByText("Create order")).toBeInTheDocument();
+    expect(within(table).getByText("Failed 422")).toBeInTheDocument();
+    expect(within(table).getByText("/bad")).toBeInTheDocument();
+    expect(within(table).getAllByText("Not captured")).toHaveLength(2);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Response body")).not.toBeInTheDocument();
+  });
+
+  it("explains why there is no response, that it is a sample and that nothing is saved, even when the list is empty", () => {
+    render(<RecentFailuresList kind="user-script" failures={[]} />);
+    expect(screen.getByText("No failed requests have been sampled.")).toBeInTheDocument();
+    expect(screen.getByText(/not every failure/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(NOT_CAPTURED_NOTE.slice(0, 40)))).toBeInTheDocument();
+    expect(screen.getByText(/nothing here is saved/i)).toBeInTheDocument();
+    expect(screen.queryByText(/with the response each one got/)).not.toBeInTheDocument();
+  });
+
+  it("still offers the explanation for a request that got no response at all", () => {
+    render(<RecentFailuresList kind="user-script" failures={[scriptFailure({ status: null, response: { kind: "none-received" } })]} />);
+    expect(screen.getByText("No response")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide response" })).toBeInTheDocument();
+    expect(screen.getByText(/No response was received/)).toBeInTheDocument();
+  });
+
+  it("leaves a request-chain run's text and responses as they were", () => {
+    render(<RecentFailuresList failures={[]} />);
+    expect(screen.getByText(/with the response each one got/)).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(NOT_CAPTURED_NOTE.slice(0, 40)))).not.toBeInTheDocument();
   });
 });

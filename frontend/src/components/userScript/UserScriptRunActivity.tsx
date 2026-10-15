@@ -1,54 +1,59 @@
-import type { UserScriptRun, UserScriptRunSummary } from "@apipilot/shared-domain";
+import type { Environment, K6Readiness, UserScript, UserScriptRun, UserScriptRunSummary } from "@apipilot/shared-domain";
 import type { PerformanceRunsClient } from "../../services/performanceTestingClient";
 import type { UserScriptStartInput } from "../../services/userScriptClient";
+import { formatDateTimeUtc, formatTimeUtc } from "../../dateTime";
 import { BUTTON_STYLES } from "../controlStyles";
 import { CodeBlock } from "../CodeBlock";
 import { StatusBadge } from "../StatusBadge";
 import { LiveRunDashboard } from "../liveRun/LiveRunDashboard";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
-import { runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
+import { loadProfileSummary, runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
 import type { PerformanceRuns } from "../performance/usePerformanceRuns";
-import { LOAD_ORIGIN } from "./UserScriptRunTrigger";
-import { formatTimeUtc } from "../../dateTime";
+import { PanelState, ScriptPanel } from "./ScriptPanel";
+import { runAgainBlockedReason } from "./UserScriptRunTrigger";
+
+const SECTION_LABEL = "text-xs font-semibold uppercase tracking-wide text-muted";
+const FULL_BUTTON = "w-full justify-center text-center";
 
 /**
- * A script's live run, its failure message, its report and its run history (AP-034 FR-019,
- * FR-023, FR-029, FR-035). The target stays on screen throughout a run. k6's message for a run it
- * could not start is shown only here, never in the list or the report.
+ * What a Run k6 Script run leaves to read, laid out as the Performance Run step's second half
+ * (specs/051-user-script-page-redesign FR-004; AP-040): the run in progress with Cancel, then the last
+ * run with Run again and what it used, above the script's runs, then the open report. Starting a run is
+ * the launch card's job (`UserScriptRunTrigger`); the target stays on screen through a run in that card
+ * (AP-034 FR-023). k6's message for a run it could not start is shown only here, never in the list or the
+ * report.
  */
 export function UserScriptRunActivity({
   runs,
   client,
+  script,
+  environments,
+  readiness,
+  onRunAgain,
+  onGoToSetup,
 }: Readonly<{
   runs: PerformanceRuns<UserScriptRun, UserScriptRunSummary, UserScriptStartInput>;
   client: PerformanceRunsClient<UserScriptRun, UserScriptRunSummary, UserScriptStartInput>;
+  script: UserScript;
+  environments: readonly Environment[];
+  readiness: K6Readiness | null;
+  /** Starts a run on this environment: Run again (AP-034 FR-019: only the engineer's click). */
+  onRunAgain: (environmentId: string) => void;
+  onGoToSetup: () => void;
 }>) {
-  const { run, inProgress, runs: history, reportRunId, showReport, cancelling, cancel } = runs;
+  const { run, inProgress, runs: history, reportRunId, showReport, cancelling, cancel, latestFinished: latest } = runs;
+  const againBlocked = latest ? runAgainBlockedReason(latest, { script, environments, readiness, inProgress }) : null;
+  const latestEnvironment = latest ? environments.find((candidate) => candidate.id === latest.environment.id) : undefined;
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       {run && inProgress && (
-        <div className="space-y-4" data-testid="user-script-live">
-          <section aria-labelledby="user-script-live-title" className="space-y-2 rounded-lg border border-border bg-surface p-5">
-            <h3 id="user-script-live-title" className="sr-only">
-              Target of run {run.id.slice(0, 8)}
-            </h3>
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs font-semibold text-muted">TARGET</span>
-              <span className="font-semibold">{run.environment.name}</span>
-              <StatusBadge label={`Tier: ${run.environment.tier}`} tone={TIER_TONE[run.environment.tier]} />
-              <span className="break-all font-mono text-xs">{run.environment.baseUrl}</span>
-              <span className="text-xs text-muted">{LOAD_ORIGIN}</span>
-            </p>
-            <p className="text-xs text-muted">
-              Hosts written in the script: {run.snapshot.hostsFound.length === 0 ? "none found" : run.snapshot.hostsFound.join(", ")}. ApiPilot cannot restrict where the script sends requests.
-            </p>
-          </section>
+        <div data-testid="user-script-live">
           <LiveRunDashboard
             key={run.id}
             kind="user-script"
             runId={run.id}
-            meta={`Run ${run.id.slice(0, 8)} · ${run.snapshot.scriptName} · started ${formatTimeUtc(run.startedAt)}`}
+            meta={`${run.environment.name} · ${run.snapshot.scriptName} · started ${formatTimeUtc(run.startedAt)}`}
             actions={
               <button type="button" className={BUTTON_STYLES.danger} disabled={cancelling || run.cancelRequested} onClick={() => void cancel()}>
                 {cancelling || run.cancelRequested ? "Cancelling…" : "Cancel run"}
@@ -59,71 +64,162 @@ export function UserScriptRunActivity({
       )}
 
       {run && !inProgress && run.status === "failed" && (
-        <section aria-labelledby="user-script-failed-title" className="space-y-2 rounded-lg border border-danger-300 bg-surface p-5 dark:border-danger-500/50" data-testid="user-script-failed">
-          <h3 id="user-script-failed-title" className="text-base font-semibold">
-            Run <span className="font-mono">{run.id.slice(0, 8)}</span> failed · {run.failure?.category ?? "unknown"}
-          </h3>
+        <ScriptPanel
+          title={`Run ${run.id.slice(0, 8)} failed · ${run.failure?.category ?? "unknown"}`}
+          titleId="user-script-failed-title"
+          meta="k6 could not complete this run."
+          accent="danger"
+          aside={<PanelState tone="blocked" label="Failed" />}
+          testId="user-script-failed"
+        >
           {run.failure?.k6Message ? <CodeBlock label="k6's message (at most 2,000 characters)" content={run.failure.k6Message} /> : <p className="text-sm text-muted">k6 printed no error message.</p>}
+        </ScriptPanel>
+      )}
+
+      <aside aria-label="Run actions" className="grid gap-4 md:grid-cols-2">
+        <section aria-labelledby="user-script-last-run-title" data-section="results" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+          <h3 id="user-script-last-run-title" className={SECTION_LABEL}>
+            Last run
+          </h3>
+          {latest ? (
+            <>
+              <p className="text-base font-semibold">{formatDateTimeUtc(latest.startedAt)}</p>
+              <p className="flex flex-wrap gap-1.5">
+                <StatusBadge {...runStatusLabel(latest)} />
+                <StatusBadge label={latestEnvironment?.name ?? latest.environment.name} />
+              </p>
+              <div className="mt-auto space-y-2 pt-1">
+                <button
+                  type="button"
+                  className={`${BUTTON_STYLES.primary} ${FULL_BUTTON} py-2.5`}
+                  disabled={againBlocked !== null || runs.starting}
+                  onClick={() => onRunAgain(latest.environment.id)}
+                >
+                  Run again on {latestEnvironment?.name ?? latest.environment.name}
+                </button>
+                {againBlocked && (
+                  <p className="text-left text-xs text-muted hyphens-none" data-testid="run-again-blocked">
+                    {againBlocked}
+                  </p>
+                )}
+                <button type="button" className={`${BUTTON_STYLES.secondary} ${FULL_BUTTON} py-2.5`} onClick={onGoToSetup}>
+                  Go to Run setup
+                </button>
+                <p className="text-left text-xs text-muted hyphens-none">Run again is offered only while the script and its confirmation are unchanged since this run and its environment still exists. When it is blocked, the reason appears here in words.</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted">No finished run yet.</p>
+              <button type="button" className={`${BUTTON_STYLES.secondary} ${FULL_BUTTON} py-2.5`} onClick={onGoToSetup}>
+                Go to Run setup
+              </button>
+            </>
+          )}
         </section>
-      )}
 
-      {reportRunId && !(inProgress && run?.id === reportRunId) && (
-        <LiveRunDashboard key={reportRunId} kind="user-script" runId={reportRunId} meta={`Run ${reportRunId.slice(0, 8)}`} />
-      )}
+        {latest && (
+          <section aria-labelledby="user-script-used-title" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+            <h3 id="user-script-used-title" className={SECTION_LABEL}>
+              This run used
+            </h3>
+            <dl className="space-y-2 text-sm">
+              <div>
+                <dt className="text-xs font-medium text-muted">Script</dt>
+                <dd className="break-words font-semibold">
+                  {latest.snapshot.scriptName} <span className="font-mono text-xs font-normal" title={latest.snapshot.scriptSha256}>sha256 {latest.snapshot.scriptSha256.slice(0, 12)}…</span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-muted">Load</dt>
+                <dd className="font-semibold">{latest.snapshot.load.kind === "script" ? "The script's own load settings" : loadProfileSummary(latest.snapshot.load.profile)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-muted">Thresholds set in ApiPilot</dt>
+                <dd className="font-semibold">{latest.snapshot.thresholds.length === 0 ? "None" : String(latest.snapshot.thresholds.length)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-muted">Hosts written in the script</dt>
+                <dd className="font-mono text-xs">{latest.snapshot.hostsFound.length === 0 ? <span className="font-sans text-sm font-normal text-muted">None found.</span> : latest.snapshot.hostsFound.join(", ")}</dd>
+              </div>
+            </dl>
+            <p className="mt-auto text-left text-xs text-muted hyphens-none">The settings are read from the run&apos;s record. Nothing here changes the script or starts a run.</p>
+          </section>
+        )}
+      </aside>
 
-      {reportRunId && <PerformanceReportFrame client={client} runId={reportRunId} />}
-
-      <section aria-labelledby="user-script-runs-title" className="space-y-2 rounded-lg border border-border bg-surface p-5">
-        <h3 id="user-script-runs-title" className="text-base font-semibold">
-          Runs of this script
-        </h3>
+      <section aria-labelledby="user-script-runs-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="px-5 py-4">
+          <h3 id="user-script-runs-title" className="text-base font-semibold">
+            Runs of this script
+          </h3>
+          <p className="text-xs text-muted">Open a run to read its report. Reports are rendered by the server and never run scripts.</p>
+        </div>
         {history.length === 0 ? (
-          <p className="text-sm text-muted">No runs yet. Start one from Run setup; its live progress shows here and the report opens when it ends.</p>
+          <p className="border-t border-border px-5 py-4 text-sm text-muted" data-testid="user-script-runs-empty">
+            No runs yet. Start one from the card above; its live progress shows here and the report opens when it ends.
+          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-chrome text-left text-xs text-muted">
-                  <th scope="col" className="px-3 py-2 font-semibold">Run</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Status</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Environment</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Script SHA-256</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">Started</th>
-                  <th scope="col" className="px-3 py-2 font-semibold">
+          <div className="relative overflow-x-auto border-t border-border">
+            <table className="w-full min-w-[32rem] text-left text-sm">
+              <caption className="sr-only">Runs of this script</caption>
+              <thead className="text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Started</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Environment</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">Script SHA-256</th>
+                  <th scope="col" className="px-5 py-2.5 font-semibold">
                     <span className="sr-only">Report</span>
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {history.map((summary) => (
-                  <tr key={summary.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-mono text-xs">{summary.id.slice(0, 8)}</td>
-                    <td className="px-3 py-2">
-                      <StatusBadge {...runStatusLabel(summary)} />
-                    </td>
-                    <td className="px-3 py-2">
-                      {summary.environment.name} <StatusBadge label={summary.environment.tier} tone={TIER_TONE[summary.environment.tier]} />
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs" title={summary.snapshot.scriptSha256}>
-                      {summary.snapshot.scriptSha256.slice(0, 12)}…
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">{summary.startedAt}</td>
-                    <td className="px-3 py-2">
-                      {summary.status === "in-progress" ? (
-                        <span className="text-xs text-muted">After it ends</span>
-                      ) : (
-                        <button type="button" className={BUTTON_STYLES.ghost} onClick={() => showReport(summary.id)}>
-                          View report
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-border border-t border-border">
+                {history.map((summary) => {
+                  const open = summary.id === reportRunId;
+                  return (
+                    <tr key={summary.id} className={open ? "bg-brand-50 dark:bg-brand-500/10" : ""}>
+                      <td className="px-5 py-3 font-mono text-xs">{formatDateTimeUtc(summary.startedAt)}</td>
+                      <td className="px-5 py-3">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          {summary.environment.name} <StatusBadge label={summary.environment.tier} tone={TIER_TONE[summary.environment.tier]} />
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusBadge {...runStatusLabel(summary)} />
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs" title={summary.snapshot.scriptSha256}>
+                        {summary.snapshot.scriptSha256.slice(0, 12)}…
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        {open ? (
+                          <span aria-current="true" className="text-sm font-semibold text-brand-700 dark:text-brand-300">
+                            Viewing report
+                          </span>
+                        ) : (
+                          summary.status !== "in-progress" && (
+                            <button type="button" className={BUTTON_STYLES.ghost} onClick={() => showReport(summary.id)}>
+                              View report
+                            </button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
+
+      {reportRunId && !(inProgress && run?.id === reportRunId) && <LiveRunDashboard key={reportRunId} kind="user-script" runId={reportRunId} meta={`Run ${reportRunId.slice(0, 8)}`} />}
+
+      {reportRunId && (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <PerformanceReportFrame client={client} runId={reportRunId} />
+        </div>
+      )}
     </div>
   );
 }

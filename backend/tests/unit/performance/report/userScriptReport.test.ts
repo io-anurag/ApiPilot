@@ -88,7 +88,9 @@ describe("renderUserScriptReport (FR-030 to FR-036)", () => {
       "v1.2.0",
       "The script&#39;s own load settings",
       "BASE_URL",
-      "environment base URL",
+      "Environment base URL",
+      "Environment values the script received",
+      "Script SHA-256",
       "API_KEY",
       "Hosts that received requests",
       "203.0.113.10",
@@ -104,6 +106,29 @@ describe("renderUserScriptReport (FR-030 to FR-036)", () => {
       expect(html).toContain(text);
     }
     expect(html).toContain("Orders &lt;script&gt;");
+  });
+
+  it("lays the header out as one fact to a cell, the hash on its own row and the mapped values as a table", () => {
+    const html = renderUserScriptReport(runWith(basicLines()));
+    const facts = /<dl class="rf">([\s\S]*?)<\/dl>/.exec(html)![1];
+    const labels = [...facts.matchAll(/<dt>([^<]+)<\/dt>/g)].map((match) => match[1]);
+    expect(labels).toEqual(["Script", "Environment", "Base URL", "Load used", "Started", "Ended", "k6", "Outcome"]);
+    // Started and ended are separate facts, and the hash is not inside the grid of facts.
+    expect(facts).not.toContain("a".repeat(64));
+    expect(html).toMatch(/<dl class="rf-id"><dt>Script SHA-256<\/dt><dd><code class="hash">a{64}<\/code><\/dd><\/dl>/);
+    // Each mapped name is listed once, with where it comes from, not repeated as a source.
+    const mapping = /<div class="rv">([\s\S]*?)<\/div>/.exec(html)![1];
+    expect(mapping).toContain("<th>Name the script reads</th><th>Comes from</th>");
+    expect(mapping).toMatch(/<td><code>BASE_URL<\/code><\/td><td>Environment base URL<\/td>/);
+    expect(mapping).toMatch(/<td><code>API_KEY<\/code><\/td><td>Environment value<\/td>/);
+    expect(mapping).not.toMatch(/Environment value <code>API_KEY<\/code>/);
+    expect(mapping).toContain("Names and sources only; values are never recorded.");
+  });
+
+  it("names the environment value a name comes from only when it differs", () => {
+    const run = runWith(basicLines());
+    const html = renderUserScriptReport({ ...run, snapshot: { ...run.snapshot, mapping: [{ name: "TOKEN", source: { kind: "environment-value", valueName: "STAGING_TOKEN" } }] } });
+    expect(html).toMatch(/<td><code>TOKEN<\/code><\/td><td>Environment value <code>STAGING_TOKEN<\/code><\/td>/);
   });
 
   it("is self-contained and byte-identical when rendered twice", () => {

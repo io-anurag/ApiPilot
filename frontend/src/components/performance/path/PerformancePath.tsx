@@ -25,8 +25,9 @@ import { changeOperationsAvailability, usePlanReselect } from "./usePlanReselect
 
 /**
  * The frame around every step (specs/047-unified-performance-tab FR-006, FR-009, FR-010, FR-012): the
- * header, the stepper, the step body and Back and Next with the reason Next is unavailable. Back only
- * moves; nothing is discarded by moving between steps.
+ * top row (Back to start, Plans, the plan name and status), the stepper, the step body and Back and Next
+ * with the reason Next is unavailable. Back only moves; nothing is discarded by moving between steps.
+ * The top row and footer follow specs/050-performance-source-step-redesign FR-004, FR-005.
  */
 function PathFrame({
   path,
@@ -41,38 +42,39 @@ function PathFrame({
   const { state } = path;
   return (
     <div className="space-y-4" data-testid="performance-path">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <button type="button" className={BUTTON_STYLES.ghost} onClick={path.leave}>
-            ← Plans
-          </button>
-          <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
-          <span className="font-semibold" data-testid="path-title">
-            {title}
-          </span>
-          {status}
-        </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         {onExit && (
-          <button type="button" aria-label="Exit performance testing and return to the start screen" className={BUTTON_STYLES.ghost} onClick={onExit}>
-            Back to start
-          </button>
+          <>
+            <button type="button" aria-label="Exit performance testing and return to the start screen" className={BUTTON_STYLES.ghost} onClick={onExit}>
+              ← Back to start
+            </button>
+            <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+          </>
         )}
+        <button type="button" className={BUTTON_STYLES.ghost} onClick={path.leave}>
+          ← Plans
+        </button>
+        <span className="font-semibold" data-testid="path-title">
+          {title}
+        </span>
+        {status}
       </div>
       <PerformanceStepper current={state.step} reached={state.reached} source={state.source} onSelect={path.go} />
       <div>{children}</div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-chrome px-4 py-3">
         <button type="button" className={BUTTON_STYLES.secondary} disabled={previousStep(state.step, state.source) === null || busy} onClick={path.back}>
           ← Back
         </button>
-        {state.step !== "run" && (
-          <button type="button" className={BUTTON_STYLES.primary} disabled={!gate.available || busy} onClick={onNext}>
-            Next →
-          </button>
-        )}
+        <span className="flex-1" />
         {gate.reason && (
           <p role="status" className="text-sm text-muted">
             {gate.reason}
           </p>
+        )}
+        {state.step !== "run" && (
+          <button type="button" className={BUTTON_STYLES.primary} disabled={!gate.available || busy} onClick={onNext}>
+            Next →
+          </button>
         )}
       </div>
     </div>

@@ -257,3 +257,14 @@ export function createK6Runner(dependencies: Partial<K6RunnerDependencies> = {})
     },
   };
 }
+
+/**
+ * Pinned by a unit test, as `buildUserScriptK6Args` is (specs/053-user-script-debug-run FR-002;
+ * constitution v3.1.0, XVII, Debug run of a supplied script). The script is run once, for one virtual
+ * user and one iteration, which replaces its own scenarios, and k6 logs each request and response as
+ * JSON records (`--http-debug=full`). No metrics output, no `--stage`, no remote output, no usage
+ * report. The script is never rewritten.
+ */
+export function buildUserScriptDebugK6Args(scriptPath: string): string[] {
+  return ["run", "--no-usage-report", "--quiet", "--no-color", "--log-format", "json", "--http-debug=full", "--vus", "1", "--iterations", "1", scriptPath];
+}

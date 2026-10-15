@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { LiveRunDashboard } from "../../src/components/liveRun/LiveRunDashboard";
 import { fetchLiveRun, type LiveRunResult } from "../../src/services/liveRunClient";
-import { collectionSnapshot, liveSnapshot, recentRequest } from "./liveRunFixtures";
+import { collectionSnapshot, livePoint, liveSnapshot, recentRequest } from "./liveRunFixtures";
 
 vi.mock("../../src/services/liveRunClient", () => ({ fetchLiveRun: vi.fn() }));
 
@@ -24,6 +24,95 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("LiveRunDashboard for a Run k6 Script run", () => {
+  it("shows the Recent failures section, with no response to open, when the snapshot carries failures", async () => {
+    fetchMock.mockResolvedValue(
+      ok(
+        liveSnapshot({
+          kind: "user-script",
+          totals: { requests: 50, failures: 1 },
+          recentFailures: [{ second: 2, chain: "127.0.0.1:18089", method: "GET", path: "/bad", status: 500, response: { kind: "not-captured", reason: "user-script" } }],
+        }),
+      ),
+    );
+    render(<LiveRunDashboard kind="user-script" runId="run-1" />);
+    await settle();
+    const section = screen.getByTestId("live-run-failures");
+    expect(within(section).getByText("Failed 500")).toBeInTheDocument();
+    expect(within(section).getByText("Not captured")).toBeInTheDocument();
+    expect(within(section).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("lists each request name with its pass and fail bar, and offers Total and By request on the graph", async () => {
+    fetchMock.mockResolvedValue(
+      ok(
+        liveSnapshot({
+          kind: "user-script",
+          plannedDurationMs: 8_000,
+          elapsedMs: 4_000,
+          chains: [
+            { id: "List", label: "List items", requests: 10, failures: 0 },
+            { id: "Create", label: "Create order", requests: 4, failures: 3 },
+          ],
+          series: {
+            fromSecond: 0,
+            bucketSeconds: 1,
+            groups: [
+              { id: "g1", label: "List items" },
+              { id: "g2", label: "Create order" },
+            ],
+            points: [livePoint(0, { byGroup: { g1: 2, g2: 1 } }), livePoint(1, { byGroup: { g1: 3, g2: 1 } })],
+          },
+        }),
+      ),
+    );
+    render(<LiveRunDashboard kind="user-script" runId="run-1" />);
+    await settle();
+    const section = screen.getByTestId("live-run-chains");
+    expect(within(section).getByRole("heading", { name: "Requests" })).toBeInTheDocument();
+    expect(within(section).getByText(/per request/)).toBeInTheDocument();
+    expect(within(section).getByText("List items")).toBeInTheDocument();
+    expect(within(section).getByRole("img", { name: "Create order: 1 passed, 3 failed" })).toBeInTheDocument();
+    expect(within(section).getByText("10 req")).toBeInTheDocument();
+
+    const toggle = screen.getByRole("group", { name: "Requests view" });
+    expect(within(toggle).getByRole("button", { name: "Total" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(toggle).getByRole("button", { name: "By request" }));
+    expect(within(toggle).getByRole("button", { name: "By request" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByTestId("live-run-legend")).getByText("Create order")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "By chain" })).not.toBeInTheDocument();
+  });
+
+  it("shows the planned-time progress bar when the run has a planned duration", async () => {
+    fetchMock.mockResolvedValue(ok(liveSnapshot({ kind: "user-script", plannedDurationMs: 8_000, elapsedMs: 4_000 })));
+    render(<LiveRunDashboard kind="user-script" runId="run-1" />);
+    await settle();
+    expect(screen.getByRole("progressbar", { name: "Planned time elapsed" })).toHaveAttribute("value", "50");
+    expect(within(tile("Elapsed")).getByText("of 00:08 planned")).toBeInTheDocument();
+  });
+
+  it("keeps a chain run's wording: Chains and By chain", async () => {
+    fetchMock.mockResolvedValue(
+      ok(
+        liveSnapshot({
+          series: { fromSecond: 0, bucketSeconds: 1, groups: [{ id: "a", label: "A" }, { id: "b", label: "B" }], points: [livePoint(0, { byGroup: { a: 1, b: 1 } })] },
+        }),
+      ),
+    );
+    render(<LiveRunDashboard kind="chain" runId="run-1" />);
+    await settle();
+    expect(within(screen.getByTestId("live-run-chains")).getByRole("heading", { name: "Chains" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "By chain" })).toBeInTheDocument();
+  });
+
+  it("shows no section when the snapshot has no failure sample, as for a run no longer held", async () => {
+    fetchMock.mockResolvedValue(ok(liveSnapshot({ kind: "user-script" })));
+    render(<LiveRunDashboard kind="user-script" runId="run-1" />);
+    await settle();
+    expect(screen.queryByTestId("live-run-failures")).not.toBeInTheDocument();
+  });
 });
 
 describe("LiveRunDashboard", () => {

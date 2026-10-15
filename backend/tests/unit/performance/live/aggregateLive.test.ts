@@ -87,7 +87,13 @@ describe("live parts from a real user-script capture", () => {
     expect(parts.totals).toEqual({ requests: aggregate.requestCount, failures: 2 });
     expect(parts.series.points.reduce((sum, p) => sum + p.requests, 0)).toBe(4);
     expect(parts.series.points.reduce((sum, p) => sum + p.failures, 0)).toBe(2);
-    expect(parts.chains).toEqual([]);
+    // AP-051: a script run's "chains" are its request names, each with its own requests and failures.
+    expect(parts.chains).toEqual([
+      { id: "List orders", label: "List orders", requests: 2, failures: 0 },
+      { id: "GET 127.0.0.1:18089/bad", label: "GET 127.0.0.1:18089/bad", requests: 2, failures: 2 },
+    ]);
+    expect(parts.chains.reduce((sum, row) => sum + row.requests, 0)).toBe(parts.totals.requests);
+    expect(parts.chains.reduce((sum, row) => sum + row.failures, 0)).toBe(parts.totals.failures);
   });
 
   it("names a named request by its name and an unnamed one by host and path", () => {
@@ -106,7 +112,8 @@ describe("the two kinds agree on the shape of a live view", () => {
       expect(seconds).toEqual([...new Set(seconds)].sort((a, b) => a - b));
       expect(parts.totals.requests).toBeGreaterThanOrEqual(parts.totals.failures);
       for (const point of parts.series.points) {
-        expect(Object.keys(point).sort()).toEqual(["failures", "latencyMs", "requests", "second", "virtualUsers"]);
+        // A series with two or more groups (a script run with two or more request names) also breaks requests down.
+        expect(Object.keys(point).sort()).toEqual(parts.series.groups ? ["byGroup", "failures", "latencyMs", "requests", "second", "virtualUsers"] : ["failures", "latencyMs", "requests", "second", "virtualUsers"]);
         expect(point.requests).toBeGreaterThanOrEqual(point.failures);
       }
       expect(Object.keys(parts.recent[0]!).sort()).toEqual(["chain", "durationMs", "failed", "method", "path", "second", "status"]);

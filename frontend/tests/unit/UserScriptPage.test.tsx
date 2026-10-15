@@ -112,6 +112,99 @@ describe("UserScriptPage", () => {
     expect(within(table).getByText("Needs confirmation")).toBeInTheDocument();
   });
 
+  it("marks the open script in the list, in words as well as by its look", async () => {
+    stubFetch(routes(userScript()));
+    render(<UserScriptPage />);
+    const table = await screen.findByRole("table", { name: "Scripts in this session" });
+    expect(within(table).queryByText("Open")).not.toBeInTheDocument();
+    fireEvent.click(within(table).getByRole("button", { name: "Orders" }));
+    await screen.findByTestId("user-script-workspace");
+    expect(within(table).getByText("Open")).toBeInTheDocument();
+    expect(within(table).getByRole("row", { name: /Orders/ })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("offers the views as a navigation with a hint each, and marks the open one", async () => {
+    stubFetch(routes(userScript()));
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    const nav = await screen.findByRole("navigation", { name: "Script views" });
+    const script = within(nav).getByRole("button", { name: "Script" });
+    const setup = within(nav).getByRole("button", { name: "Run setup" });
+    const runs = within(nav).getByRole("button", { name: "Runs & reports" });
+    expect(script).toHaveAttribute("aria-current", "page");
+    expect(setup).not.toHaveAttribute("aria-current");
+    expect(runs).toHaveAccessibleDescription("No runs yet");
+    fireEvent.click(setup);
+    expect(setup).toHaveAttribute("aria-current", "page");
+    expect(script).not.toHaveAttribute("aria-current");
+  });
+
+  it("says in words which views are done: checked and confirmed, then a target chosen", async () => {
+    stubFetch(routes(userScript()));
+    const { unmount } = render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    const nav = await screen.findByRole("navigation", { name: "Script views" });
+    expect(within(nav).getByRole("button", { name: "Script" })).toHaveAccessibleDescription("Needs confirmation");
+    expect(within(nav).getByRole("button", { name: "Run setup" })).toHaveAccessibleDescription("Target, values, load and thresholds");
+    unmount();
+    vi.unstubAllGlobals();
+
+    stubFetch(routes(userScript({ confirmed: true, confirmation: { sha256: SHA, confirmedAt: "x", hostsStated: [] } })));
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    const done = await screen.findByRole("navigation", { name: "Script views" });
+    expect(within(done).getByRole("button", { name: "Script" })).toHaveAccessibleDescription("Checked and confirmed");
+    await waitFor(() => expect(within(done).getByRole("button", { name: "Run setup" })).toHaveAccessibleDescription("Target chosen"));
+  });
+
+  it("shows what the check found and the load, values and last run in the header facts", async () => {
+    stubFetch(routes(userScript()));
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    const facts = await screen.findByTestId("user-script-facts");
+    expect(within(facts).getByText("Accepted")).toBeInTheDocument();
+    expect(within(facts).getByText("Script's own")).toBeInTheDocument();
+    expect(within(facts).getByText("2 mapped")).toBeInTheDocument();
+    expect(within(facts).getByText("None")).toBeInTheDocument();
+    expect(screen.getByText("https://api.example.test:443")).toBeInTheDocument();
+  });
+
+  it("puts the launch card on Runs & reports, not on Run setup, with a way back to the setup", async () => {
+    stubFetch(routes(userScript()));
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
+    await screen.findByRole("heading", { name: "Target environment" });
+    expect(screen.queryByTestId("user-script-trigger")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Runs & reports" }));
+    const card = await screen.findByTestId("user-script-trigger");
+    expect(card.compareDocumentPosition(screen.getByText("Runs of this script")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Go to Run setup" }));
+    expect(await screen.findByRole("heading", { name: "Target environment" })).toBeInTheDocument();
+    expect(screen.queryByTestId("user-script-trigger")).not.toBeInTheDocument();
+  });
+
+  it("says the launch card is not ready, with the reason, until the script is confirmed, and ready afterwards", async () => {
+    stubFetch(routes(userScript()));
+    const { unmount } = render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runs & reports" }));
+    const blocked = await screen.findByTestId("user-script-trigger");
+    expect(within(blocked).getByRole("heading", { name: "Not ready to run yet" })).toBeInTheDocument();
+    expect(within(blocked).getByTestId("user-script-trigger-blocked")).toHaveTextContent("The script has not been confirmed.");
+    unmount();
+    vi.unstubAllGlobals();
+
+    stubFetch(routes(userScript({ confirmed: true, confirmation: { sha256: SHA, confirmedAt: "x", hostsStated: [] } })));
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runs & reports" }));
+    const ready = await screen.findByTestId("user-script-trigger");
+    expect(await within(ready).findByRole("heading", { name: "Ready to run" })).toBeInTheDocument();
+    expect(within(ready).queryByTestId("user-script-trigger-blocked")).not.toBeInTheDocument();
+    expect(within(ready).getByText("Nothing runs until you press this button.")).toBeInTheDocument();
+  });
+
   it("states FR-014's points and the SHA-256 when confirming, and confirms exactly that SHA-256", async () => {
     const script = userScript();
     const calls = stubFetch(routes(script, { [`POST ${BASE}/${script.id}/confirmation`]: () => [200, { script: userScript({ confirmed: true, confirmation: { sha256: SHA, confirmedAt: "x", hostsStated: script.check.accepted ? script.check.hosts : [] } }) }] }));
@@ -129,7 +222,7 @@ describe("UserScriptPage", () => {
     stubFetch(routes(userScript()));
     const { unmount } = render(<UserScriptPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runs & reports" }));
     expect(await screen.findByText("The script has not been confirmed. Confirm its current content first.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Run on perf-local/ })).toBeDisabled();
     unmount();
@@ -138,7 +231,7 @@ describe("UserScriptPage", () => {
     stubFetch(routes(userScript({ confirmed: true, confirmation: { sha256: SHA, confirmedAt: "x", hostsStated: [] } })));
     render(<UserScriptPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runs & reports" }));
     const trigger = await screen.findByTestId("user-script-trigger");
     await waitFor(() => expect(within(trigger).getByRole("button", { name: "Run on perf-local" })).toBeEnabled());
     expect(within(trigger).getByText("Tier: local")).toBeInTheDocument();
@@ -156,13 +249,19 @@ describe("UserScriptPage", () => {
     }));
     render(<UserScriptPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Orders" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Runs & reports" }));
     const button = await screen.findByRole("button", { name: "Run on perf-local" });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     const live = await screen.findByTestId("user-script-live");
     expect(calls.find((call) => call.method === "POST" && call.url.endsWith("/runs"))!.body).toEqual({ environmentId: "env-1", scriptSha256: SHA });
     expect(await within(live).findByText("120")).toBeInTheDocument();
-    expect(within(live).getByText("perf-local")).toBeInTheDocument();
+    expect(within(live).getByText(/perf-local · Orders · started/)).toBeInTheDocument();
+    // The target stays on screen through the run, in the launch card (AP-034 FR-023), which turns into Cancel run.
+    const card = screen.getByTestId("user-script-trigger");
+    expect(within(card).getByText("perf-local")).toBeInTheDocument();
+    expect(within(card).getByRole("heading", { name: "Run in progress" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Cancel run" })).toBeInTheDocument();
+    expect(within(card).getByText(/Running · \d+ s · \d+ requests · \d+ failures/)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FailureResponse, RecentFailure } from "@apipilot/shared-domain";
+import type { FailureResponse, LiveRunKind, RecentFailure } from "@apipilot/shared-domain";
 import { LIVE_RECENT_FAILURE_LIMIT } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
@@ -9,6 +9,9 @@ import { formatClockUtc, formatResponseText } from "./liveRunViewModel";
 
 const COLUMNS = 6;
 
+/** Why a script run's failures have no response (specs/052-user-script-recent-failures FR-005). */
+export const NOT_CAPTURED_NOTE = "ApiPilot runs a script you supply as it is and cannot see the response, so none is shown.";
+
 function statusLabel(status: number | null): string {
   return status === null ? "No response" : `Failed ${status}`;
 }
@@ -16,6 +19,9 @@ function statusLabel(status: number | null): string {
 function ResponseView({ response }: Readonly<{ response: FailureResponse }>) {
   if (response.kind === "none-received") {
     return <p className="text-sm text-muted">No response was received: the connection failed or the request timed out.</p>;
+  }
+  if (response.kind === "not-captured") {
+    return <p className="text-sm text-muted">{NOT_CAPTURED_NOTE}</p>;
   }
   if (response.kind === "withheld") {
     return <p className="text-sm text-muted">Response not kept: this plan uses secret data set columns, and an error response could echo one back.</p>;
@@ -40,9 +46,11 @@ function ResponseView({ response }: Readonly<{ response: FailureResponse }>) {
  * The failed requests of a request-chain run, newest first, each with the response the server sent
  * (AP-049). It is a sample: at most one failure a second per virtual user, and only the latest few are
  * kept. The response is held in memory while the run is open; it is masked for secrets, cut to a size
- * limit, and never stored, reported or logged. The counts elsewhere on the dashboard are exact.
+ * limit, and never stored, reported or logged. The counts elsewhere on the dashboard are exact. A Run k6
+ * Script run (AP-052) lists the same columns, but ApiPilot cannot see the response of a script it does not
+ * generate, so each such row says "Not captured" instead of offering a response.
  */
-export function RecentFailuresList({ failures, startedAt }: Readonly<{ failures: readonly RecentFailure[]; startedAt?: string }>) {
+export function RecentFailuresList({ failures, startedAt, kind = "chain" }: Readonly<{ failures: readonly RecentFailure[]; startedAt?: string; kind?: LiveRunKind }>) {
   // The newest failure starts open; the engineer's own choices stand after that.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
   const keyOf = (failure: RecentFailure, index: number) => `${failure.second}-${failure.status}-${failure.path}-${index}`;
@@ -53,9 +61,15 @@ export function RecentFailuresList({ failures, startedAt }: Readonly<{ failures:
         <h4 id="live-run-failures-title" className="text-sm font-semibold">
           Recent failures
         </h4>
-        <p className="text-xs text-muted">
-          A sample of the latest {LIVE_RECENT_FAILURE_LIMIT} failed requests with the response each one got, not every failure. Secret values are masked, long responses are cut, and nothing here is saved to the run, its report or any log.
-        </p>
+        {kind === "user-script" ? (
+          <p className="text-xs text-muted">
+            A sample of the latest {LIVE_RECENT_FAILURE_LIMIT} failed requests, not every failure: at most one for each request and status in a second. {NOT_CAPTURED_NOTE} Only the request and its status are kept, and nothing here is saved to the run, its report or any log.
+          </p>
+        ) : (
+          <p className="text-xs text-muted">
+            A sample of the latest {LIVE_RECENT_FAILURE_LIMIT} failed requests with the response each one got, not every failure. Secret values are masked, long responses are cut, and nothing here is saved to the run, its report or any log.
+          </p>
+        )}
       </div>
       {failures.length === 0 ? (
         <p className="rounded-md border border-dashed border-border bg-surface-subtle px-3 py-4 text-center text-sm text-muted">No failed requests have been sampled.</p>
@@ -75,7 +89,8 @@ export function RecentFailuresList({ failures, startedAt }: Readonly<{ failures:
             </thead>
             {failures.map((failure, index) => {
               const key = keyOf(failure, index);
-              const open = toggled.get(key) ?? index === 0;
+              const captured = failure.response.kind !== "not-captured";
+              const open = captured && (toggled.get(key) ?? index === 0);
               const panelId = `live-run-failure-${index}`;
               return (
                 <tbody key={key} className="border-b border-border last:border-b-0">
@@ -88,15 +103,19 @@ export function RecentFailuresList({ failures, startedAt }: Readonly<{ failures:
                       <StatusBadge label={statusLabel(failure.status)} tone="danger" />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        className={BUTTON_STYLES.ghost}
-                        aria-expanded={open}
-                        aria-controls={panelId}
-                        onClick={() => setToggled((current) => new Map(current).set(key, !open))}
-                      >
-                        {open ? "Hide response" : "Show response"}
-                      </button>
+                      {captured ? (
+                        <button
+                          type="button"
+                          className={BUTTON_STYLES.ghost}
+                          aria-expanded={open}
+                          aria-controls={panelId}
+                          onClick={() => setToggled((current) => new Map(current).set(key, !open))}
+                        >
+                          {open ? "Hide response" : "Show response"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted">Not captured</span>
+                      )}
                     </td>
                   </tr>
                   {open && (

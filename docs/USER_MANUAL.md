@@ -677,7 +677,14 @@ written beside it; **Back** moves without discarding anything.
 - A saved plan you open lands on **Plan**, and every step can be selected, so you can go straight to
   **Load** or **Run**.
 
-**1. Source.** Upload one OpenAPI 3.x YAML file. The same checks as the guided workflow apply (size
+**1. Source.** The four sources are cards, each with an icon, what it produces and what it needs
+(for example "Needs a YAML file"); the one you chose is ticked. Below them a card for the
+chosen source follows the same layout as the upload card on the start screen. For a specification it
+says "Upload specification", that the document stays in your local workflow and is never sent to a
+cloud AI provider, and offers the drop area; its header shows the accepted input (OpenAPI 3.x, YAML,
+up to 10 MB) and **Required**, which becomes **Ready** once a specification is analyzed. The other
+three sources show what they will do and that there is nothing to upload. Above the steps, **← Back to
+start** and **← Plans** sit on a plain row with the plan name and whether it is a draft or saved. The upload takes one OpenAPI 3.x YAML file. The same checks as the guided workflow apply (size
 limit, YAML, OpenAPI version), with the same error messages, and nothing is created when the file is
 rejected. The specification you uploaded earlier in the session is offered for reuse with its file name
 and operation count. **Upload a different specification** asks first: plans already created from the old
@@ -958,9 +965,18 @@ the script.
 - exporting `handleSummary`, which k6 uses to write files: ApiPilot produces the report instead.
 
 **What the list shows.** Each script has its name, size, SHA-256, whether its current content is
-confirmed, and its last run. Opening a script shows its content, the hosts written in it as
-absolute URLs, and the environment values it reads through `__ENV`. Values built while the
-script runs cannot be found, and the page says so.
+confirmed, and its last run. The script you have open is marked **Open** in the list. Opening a
+script shows a header with its name, SHA-256 and confirmation, and four facts: whether ApiPilot's
+check accepted it, its load, how many value names are mapped, and its last run. Below it, three
+views are chosen from a row of boxes, each with a one-line hint (**Script**, **Run setup** and
+**Runs & reports**, whose hint says whether a run is in progress or how many runs exist).
+
+**The script view.** The stored script is shown highlighted with line numbers and marked **Read
+only**. **Edit** turns the same view into the editor (marked **Editing**, with **Save** and
+**Cancel**); the editor never runs the script. **Rename**, **Replace with upload**, **Download**
+and **Delete** are in the bar under it. Below that, the page lists the hosts written in the
+script as absolute URLs and the environment values it reads through `__ENV`. Values built while
+the script runs cannot be found, and the page says so.
 
 **Confirming.** A script runs only after you confirm its exact content. The confirmation says
 that ApiPilot did not write or verify the script, lists every host it found, says that hosts
@@ -968,39 +984,71 @@ built while the script runs cannot be listed, and states that ApiPilot cannot re
 script sends requests. It is tied to the script's SHA-256: any change, whether **Replace with
 upload** or a save in the editor, needs a new confirmation. Renaming keeps it.
 
-**Run setup.**
+**Run setup.** One **Configuration** card, laid out like Performance's, with a marked row for each part (a
+tick when it is ready, a dash when it is optional, **Needs attention** in words when it is not):
 
 - **Target environment.** The environments are the same set as the guided and quick paths, and
   they open as soon as you store a script.
 - **Environment values the script receives.** Each name the script reads is mapped to the
   environment's base URL (`BASE_URL` by default) or to an environment value (the same name by
-  default). You can change a source, remove a name, or add one the script builds at run time.
-  Names may contain letters, digits and underscores, may not start with a digit, and may not
-  start with `K6_` or be one k6 needs to start (`PATH`, `SYSTEMROOT`, `TEMP`, `TMP`, `HOME`,
-  `TMPDIR`). Values are never shown: each row says whether the chosen environment has the value.
-  A missing value does not block a run; the script receives nothing for that name. Values reach
-  k6 only as its process environment for that run.
-- **Load.** By default the script's own load settings are used. Choose a load profile to pass
-  its stages to k6 as `--stage` options, which replace the script's own scenarios. A script with
-  no default function cannot take a profile and runs with its own settings.
-- **Thresholds set in ApiPilot (optional)** apply to the whole run or to one request name, and
-  are evaluated from the measurements. They are never added to the script.
+  default). You can change a source, remove a name, or add one the script builds at run time (the
+  field says when to use it). Names may contain letters, digits and underscores, may not start
+  with a digit, and may not start with `K6_` or be one k6 needs to start (`PATH`, `SYSTEMROOT`,
+  `TEMP`, `TMP`, `HOME`, `TMPDIR`). Values are never shown: each row says whether the chosen
+  environment has the value, and the row's heading says how many are missing. A missing value
+  does not block a run; the script receives nothing for that name. Values reach k6 only as its
+  process environment for that run.
+- **Load.** Two option cards. By default the script's own load settings are used. Choose a load
+  profile to pass its stages to k6 as `--stage` options, which replace the script's own
+  scenarios; the profile has the same editor and chart as Performance's. A script with no
+  default function cannot take a profile and runs with its own settings.
+- **Thresholds (optional)** apply to the whole run or to one request name, and are evaluated
+  from the measurements. They are never added to the script. The row shows how many are set and
+  opens with **Edit**.
+- **k6 script** shows whether the script is confirmed, its SHA-256 and **Download script**. It
+  never has a confirm button: **Review and confirm** is at the top of the script's page.
 
 Changing the setup never changes the script, so the confirmation is kept.
 
-**Running.** The trigger names the environment, its tier and base URL, repeats the hosts found
-in the script, and says that load comes from the machine running the backend. A run starts only
-when you press it, never after an upload, a confirmation or a restart. It shares the
-one-run-at-a-time slot with every other run. While it runs you see elapsed time, virtual users,
-requests and failures, and you can cancel it. If k6 cannot run the script (for example, an error
-in its start-up code), the run fails and k6's message, at most 2,000 characters, is shown on the
-run's page only. The script's `console` output is never kept or shown.
+**Running.** The launch card leads **Runs & reports**, as on Performance's Run step. It says
+**Ready to run**, **Not ready to run yet** (with the reason) or **Run in progress**, shows the last
+run in one line with **View runs & reports**, and holds **Run on NAME**, which becomes **Cancel
+run** while a run is in progress, and **Start debug run on NAME**. A strip under it names the
+target, its tier and base URL, the load, the script's SHA-256 and how many hosts were found; two
+panels list the values the script receives (names only) and the hosts written in the script; and
+a note says that ApiPilot cannot tell which requests the script sends or whether they change data.
+Load comes from the machine running the backend, and the card says so. A run starts only when you
+press it, never after an upload, a confirmation or a restart. It shares the one-run-at-a-time
+slot with every other run. While it runs you see the status line (elapsed time, requests and
+failures) and the live dashboard, and you can cancel it. If k6 cannot run the script (for
+example, an error in its start-up code), the run fails and k6's message, at most 2,000
+characters, is shown on the run's page only. The script's `console` output is never kept or shown.
+
+Under the live dashboard, **Last run** shows the newest ended run with **Run again on NAME** and
+**Go to Run setup**; Run again is offered only while the script is unchanged since that run and its
+environment still exists, and says why in words when it is not. **This run used** lists the script,
+load, thresholds and hosts from the run's record. **Runs of this script** lists every run with its
+start time, environment, status and the script's SHA-256, and **View report** opens its report.
+
+**Debug run.** **Start debug run on NAME** runs the confirmed script once, with one virtual user
+and one iteration, whatever load the script or its setup defines (the load profile and the
+thresholds set in ApiPilot do not apply), and shows each request it sent and each response it got
+inside the launch card. It sends real requests, including writes, to the target, and only when you
+press the button. Each request is a card with its method, address (host and path: k6 does not log
+the scheme), headers, body and the response's status, headers and body; a request that got no
+response says so; each redirect is its own card; a compressed response says it is compressed and
+is not shown. Authorization, cookie and API key values, credential-looking query, form and JSON
+values, and every value mapped from the environment are masked. A masked value that came from the
+target can be revealed one at a time and is hidden again on reload; an environment value never can.
+The script's own console output is never shown. A debug run stops after 200 requests or 60
+seconds and says so. Nothing is stored: the output is gone when you close it, reload the page or
+restart the backend, and no run, report or record is created. **Cancel debug run** stops it.
 
 **The report** says the script was supplied by you and not generated by ApiPilot, with its name
 and SHA-256. It covers:
 
-- the environment, the k6 version and the load used;
-- the mapped names and their sources, never their values;
+- a header of eight facts in two rows (script, environment, base URL, load used, start, end, k6 version and outcome), the
+  script's full SHA-256 on its own line, and the mapped names and where each comes from in a small table, never their values;
 - requests grouped by k6's request name: a request you did not name is shown by method, host
   and path without its query string, and beyond 100 names the rest are combined into "Other
   requests", with a note on naming requests;
@@ -1041,10 +1089,18 @@ you can start: a **performance plan run** (on the Run step), a **Run k6 Script**
 - **State.** The badge says Live, Completed, Cancelled or Failed. If no reply arrives for 10 seconds, the dashboard says its
   figures are **stale**, since when, and keeps the last values until the connection returns. Reloading the page in the
   middle of a run shows the run so far.
+- **Progress bar and Requests list (Run k6 Script).** A bar under the counters shows how much of the planned time has passed
+  whenever the run has a planned length: always for a load profile, and for the script's own load only when its `options` say
+  so plainly, as a literal `duration` or literal `stages` with no scenarios, iteration counts or computed values (ApiPilot
+  reads the text and never guesses; otherwise there is no bar and the graph's time axis grows with the run). In place of a
+  plan's Chains, a **Requests** list gives each request name its requests, its failures and a passed and failed bar: the names
+  the script gave its requests, or method, host and path for those it did not (never a query string). It lists the first 20
+  names and adds up the rest as **Other requests**.
 - **Graph.** Requests per second and failures per second on a labelled left axis, virtual users on a labelled right axis, and
   elapsed time along the bottom (the axis spans the planned run, so you see how much is left). Gridlines mark every tick. Move
   the pointer over the graph to read off any second. For a plan with several chains, **By chain** draws one line per chain
-  instead of the total. A second graph beneath shows the average response time per second. The lines differ by style and are
+  instead of the total; for a script with two or more request names, **By request** draws one line for each of the first three
+  names and one for all the others. A second graph beneath shows the average response time per second. The lines differ by style and are
   named in a legend, not only by colour, and a table of the plotted values sits under the graph. After about 30 minutes, older
   seconds are merged into wider steps (the graph says so); totals do not change.
 - **Latest requests.** The 15 most recent completed requests, newest first, with the time into the run, step, method, path,
@@ -1056,6 +1112,12 @@ you can start: a **performance plan run** (on the Run step), a **Run k6 Script**
   exact. A response is cut to 2,048 characters, and secret environment values and credential-looking fields such as tokens
   are shown as `[masked]`. If the plan uses a secret data set column, no response text is kept. A response is held in memory
   while the run is open: it is never saved, put in a report or written to a log, so it is gone after a backend restart.
+- **Recent failures** (Run k6 Script runs). The same section for a script you supply: the latest 15 failed requests, newest
+  first, with UTC time, request (its name, or its host), method, path and status. A request that got no response says
+  **No response**. ApiPilot runs your script as it is and cannot see what a server answered, so each row says **Not
+  captured** instead of offering a response, and the section says so. It is a sample: at most one entry a second for each
+  request and status, and the counts elsewhere are exact. Only the request and its status are kept, never a query string,
+  header, token or body, and the list lives in memory while the run is open, so it is gone after a backend restart.
 - **After the run.** The graph and final totals stay on the dashboard of a finished run, and the k6 HTML reports and the
   collection HTML and PDF reports include the graph. Runs from before this feature show no graph in their k6 report, and
   the latest-requests list is empty once the backend has restarted.

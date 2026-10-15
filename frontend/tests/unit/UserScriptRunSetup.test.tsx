@@ -91,14 +91,64 @@ describe("ValueMappingEditor", () => {
 });
 
 describe("Run setup", () => {
+  it("is one Configuration card of marked rows, like Performance's, with the thresholds collapsed", async () => {
+    stubFetch(routes(script()));
+    render(<UserScriptPage />);
+    await openSetup();
+    const card = await screen.findByTestId("user-script-configuration");
+    expect(within(card).getByRole("heading", { name: "Configuration" })).toBeInTheDocument();
+    expect(within(card).getByText("Review each part, edit only what needs to change.")).toBeInTheDocument();
+    for (const title of ["Target environment", "Environment values the script receives", "Load", "Thresholds (optional)", "k6 script"]) {
+      expect(within(card).getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+    // A confirmed script with a target is marked ready, in words as well as by the mark.
+    expect(within(card).getAllByText("Ready:").length).toBeGreaterThan(0);
+    expect(within(card).getByText("Confirmed")).toBeInTheDocument();
+    expect(within(card).getByText(`sha256 ${SHA}`)).toBeInTheDocument();
+    expect(within(card).getByText("None set. The report shows measurements with no pass/fail verdict.")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Edit Thresholds (optional)" })).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(within(card).getByRole("button", { name: "Edit Thresholds (optional)" }));
+    expect(within(card).getByRole("button", { name: "Hide Thresholds (optional)" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("says in the script row, in words, that an unconfirmed script is not ready", async () => {
+    stubFetch(routes(script({ confirmed: false, confirmation: null })));
+    render(<UserScriptPage />);
+    await openSetup();
+    const card = await screen.findByTestId("user-script-configuration");
+    expect(within(card).getByText("Needs confirmation")).toBeInTheDocument();
+    expect(within(card).getByText(/Not confirmed yet/)).toBeInTheDocument();
+    expect(within(card).getAllByText("Needs attention:").length).toBeGreaterThan(0);
+  });
+
   it("defaults to the script's own load, and offers request-name thresholds", async () => {
     stubFetch(routes(script()));
     render(<UserScriptPage />);
     await openSetup();
     expect(await screen.findByLabelText("The script's own load settings")).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Thresholds (optional)" }));
     const scope = screen.getByLabelText("Applies to");
     expect(within(scope).getByRole("option", { name: "Whole run" })).toBeInTheDocument();
     expect(within(scope).getByRole("option", { name: "A request name…" })).toBeInTheDocument();
+  });
+
+  it("describes each load option on its card, and marks the chosen one", async () => {
+    stubFetch(routes(script()));
+    render(<UserScriptPage />);
+    await openSetup();
+    const own = await screen.findByLabelText("The script's own load settings");
+    const profile = screen.getByLabelText("A load profile, passed to k6 as --stage options");
+    expect(own).toHaveAccessibleDescription("k6 uses the scenarios and options written in the script.");
+    expect(profile).toHaveAccessibleDescription("The stages you set here replace the script's scenarios.");
+    expect(own).toBeChecked();
+    expect(profile).not.toBeChecked();
+  });
+
+  it("shows how many mapped values are missing in the chosen environment, in words", async () => {
+    stubFetch(routes(script()));
+    render(<UserScriptPage />);
+    await openSetup();
+    expect(await screen.findByText("1 missing")).toBeInTheDocument();
   });
 
   it("disables the profile override, with the reason, for a script with no default function", async () => {
@@ -115,6 +165,7 @@ describe("Run setup", () => {
     const calls = stubFetch(routes(current, { [`PUT ${BASE}/${current.id}/settings`]: () => [200, { script: saved }] }));
     render(<UserScriptPage />);
     await openSetup();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Thresholds (optional)" }));
     fireEvent.change(await screen.findByLabelText("At most"), { target: { value: "400" } });
     fireEvent.click(screen.getByRole("button", { name: "+ Add threshold" }));
     await waitFor(() => expect(calls.some((call) => call.method === "PUT" && call.url.endsWith("/settings"))).toBe(true));

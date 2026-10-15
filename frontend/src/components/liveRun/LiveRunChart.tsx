@@ -186,7 +186,7 @@ type View = "total" | "groups";
  * `LoadProfileChart`, tokens only. Series differ by line style and are named in a legend, so colour is
  * never the only cue; hovering reads off any second; the same figures are in a table. Nothing animates.
  */
-export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt }: Readonly<{ series: LiveSeries; thinned: boolean; plannedSeconds?: number | null; startedAt?: string }>) {
+export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt, groupNoun = "chain" }: Readonly<{ series: LiveSeries; thinned: boolean; plannedSeconds?: number | null; startedAt?: string; groupNoun?: "chain" | "request" }>) {
   const { points, bucketSeconds } = series;
   // The actual UTC time of a second of the run; the run-relative m:ss only when the start is not known.
   const timeLabel = (second: number) => (startedAt ? formatClockUtc(startedAt, second) : formatAxisTime(second));
@@ -302,7 +302,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt
                 onClick={() => setView(option)}
                 className={`px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${mode === option ? "bg-brand-600 text-white" : "bg-surface text-text-secondary hover:bg-surface-hover"}`}
               >
-                {option === "total" ? "Total" : "By chain"}
+                {option === "total" ? "Total" : `By ${groupNoun}`}
               </button>
             ))}
           </span>
@@ -335,7 +335,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt
       </div>
 
       <p className="text-xs text-muted">
-        Solid line{groups && mode === "groups" ? "s" : ""}: requests per second{groups && mode === "groups" ? ", one per chain" : ""}. Dashed line: failures per second.
+        Solid line{groups && mode === "groups" ? "s" : ""}: requests per second{groups && mode === "groups" ? `, one per ${groupNoun}` : ""}. Dashed line: failures per second.
         {model.showUsers && " Dotted line: virtual users (right axis)."}
       </p>
       {thinned && (

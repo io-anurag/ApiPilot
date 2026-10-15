@@ -2,11 +2,13 @@ import express, { Router, type Request, type Response } from "express";
 import { USER_SCRIPT_MAX_BYTES } from "@apipilot/shared-domain";
 import { getEnvironment } from "../execution/environmentStore";
 import {
+  DebugValueNotFoundError,
   InvalidMappingNameError,
   InvalidUserScriptSettingsError,
   LoadOverrideUnavailableError,
   PerformanceRunNotFoundError,
   UserScriptChangedError,
+  UserScriptDebugRunInProgressError,
   UserScriptNotConfirmedError,
   UserScriptNotFoundError,
   UserScriptRefusedError,
@@ -15,6 +17,7 @@ import {
 import { getUserScriptLiveSnapshot, parseLiveCursor } from "../performance/live/liveRunService";
 import { renderUserScriptReport } from "../performance/report/renderUserScriptReport";
 import { cancelLiveRun } from "../performance/runPerformanceTest";
+import { discardUserScriptDebugRun, executeUserScriptDebugRun, revealUserScriptDebugValue } from "../performance/userScript/debug/debugRunService";
 import { EXAMPLE_SCRIPT } from "../performance/userScript/exampleScript";
 import { parseSettings } from "../performance/userScript/settings";
 import { ExecutionSlotTakenError, K6NotReadyError, startUserScriptRun, type UserScriptRunDependencies } from "../performance/userScript/startUserScriptRun";
@@ -45,6 +48,7 @@ import { fail, handleKnownError, logReceived, logSucceeded } from "./performance
  */
 const BASE = "/user-scripts";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEBUG_VALUE_ID = /^v[0-9]{1,6}$/;
 
 const rawBody = express.raw({ type: "application/octet-stream", limit: USER_SCRIPT_MAX_BYTES });
 
@@ -53,6 +57,8 @@ function handleError(req: Request, res: Response, startedAt: number, err: unknow
   if (err instanceof UserScriptRefusedError) return fail(req, res, startedAt, 422, "script_refused", err.message, { problems: err.problems });
   if (err instanceof UserScriptChangedError) return fail(req, res, startedAt, 409, "script_changed", err.message);
   if (err instanceof UserScriptNotConfirmedError) return fail(req, res, startedAt, 409, "script_not_confirmed", err.message);
+  if (err instanceof UserScriptDebugRunInProgressError) return fail(req, res, startedAt, 409, "debug_run_in_progress", err.message);
+  if (err instanceof DebugValueNotFoundError) return fail(req, res, startedAt, 404, "debug_value_not_found", err.message);
   if (err instanceof UserScriptRunInProgressError) return fail(req, res, startedAt, 409, "run_in_progress", err.message, { runId: err.runId });
   if (err instanceof LoadOverrideUnavailableError) return fail(req, res, startedAt, 409, "load_override_unavailable", err.message);
   if (err instanceof K6NotReadyError) return fail(req, res, startedAt, 409, "k6_unavailable", err.message, { readiness: err.readiness });
@@ -332,6 +338,47 @@ export function createUserScriptsRouter(deps: UserScriptRunDependencies): Router
       const run = await startUserScriptRun(req.params.id, (req.body ?? {}) as Record<string, unknown>, deps);
       res.status(200).json({ run });
       logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  // AP-053 (specs/053-user-script-debug-run): an explicit, one-shot Debug run of the confirmed script. The
+  // request stays open until the run ends; the browser cancels by aborting it. Nothing is stored.
+  router.post(
+    `${BASE}/:id/debug-runs`,
+    route(async (req, res, startedAt) => {
+      requireUuid(req.params.id, "script");
+      res.setHeader("Cache-Control", "no-store");
+      const controller = new AbortController();
+      res.on("close", () => {
+        if (!res.writableFinished) controller.abort();
+      });
+      const result = await executeUserScriptDebugRun(req.params.id, (req.body ?? {}) as Record<string, unknown>, controller.signal, deps);
+      if (controller.signal.aborted) return;
+      res.status(200).json(result);
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  router.get(
+    `${BASE}/:id/debug-runs/:debugRunId/values/:valueId`,
+    route((req, res, startedAt) => {
+      requireUuid(req.params.id, "script");
+      res.setHeader("Cache-Control", "no-store");
+      const { debugRunId, valueId } = req.params;
+      if (!UUID.test(debugRunId) || !DEBUG_VALUE_ID.test(valueId)) return fail(req, res, startedAt, 404, "debug_value_not_found", "That value is not available. Run the Debug run again to see it.");
+      res.status(200).json({ value: revealUserScriptDebugValue(req.params.id, debugRunId, valueId) });
+      logSucceeded(req, startedAt, 200);
+    }),
+  );
+
+  router.delete(
+    `${BASE}/:id/debug-runs/:debugRunId`,
+    route((req, res, startedAt) => {
+      requireUuid(req.params.id, "script");
+      res.setHeader("Cache-Control", "no-store");
+      if (UUID.test(req.params.debugRunId)) discardUserScriptDebugRun(req.params.id, req.params.debugRunId);
+      res.status(204).end();
+      logSucceeded(req, startedAt, 204);
     }),
   );
 

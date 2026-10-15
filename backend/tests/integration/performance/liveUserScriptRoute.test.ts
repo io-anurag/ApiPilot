@@ -51,7 +51,12 @@ describe("GET /api/user-scripts/runs/:runId/live", () => {
     expect(response.status).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     const snapshot = response.body as LiveRunSnapshot;
-    expect(snapshot).toMatchObject({ runId, kind: "user-script", state: "live", totals: { requests: 2, failures: 1 }, currentVirtualUsers: 3, chains: [] });
+    expect(snapshot).toMatchObject({ runId, kind: "user-script", state: "live", totals: { requests: 2, failures: 1 }, currentVirtualUsers: 3 });
+    // AP-051: a script run's rows are its request names, with their own requests and failures, and no query string.
+    expect(snapshot.chains).toEqual([
+      { id: "List orders", label: "List orders", requests: 1, failures: 0 },
+      { id: "GET 127.0.0.1:4600/orders/42", label: "GET 127.0.0.1:4600/orders/42", requests: 1, failures: 1 },
+    ]);
     expect(snapshot.series.points.reduce((sum, p) => sum + p.failures, 0)).toBe(1);
     expect(snapshot.recent).toEqual([
       expect.objectContaining({ chain: "127.0.0.1:4600", method: "GET", path: "/orders/42", status: 500, failed: true }),

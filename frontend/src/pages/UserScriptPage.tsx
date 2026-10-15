@@ -11,6 +11,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { CREDENTIALS_NOTE, ScriptEditor } from "../components/userScript/ScriptEditor";
 import { ScriptList } from "../components/userScript/ScriptList";
 import { ScriptProblems } from "../components/userScript/ScriptProblems";
+import { PlusGlyph, SCRIPT_INPUT, UploadGlyph, WITH_ICON } from "../components/userScript/ScriptPanel";
 import { ScriptWorkspace } from "../components/userScript/ScriptWorkspace";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 
@@ -38,15 +39,6 @@ const USER_SCRIPT_FEATURES: ReadonlyArray<{ label: string; description: string; 
   { label: "CONFIRMED", description: "You approve its exact content", icon: "visible" },
   { label: "LOCAL", description: "Runs with your own k6", icon: "local" },
 ];
-
-function UploadIcon({ className }: Readonly<{ className?: string }>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className} aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 14.5V19a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-4.5" />
-    </svg>
-  );
-}
 
 export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   const [list, setList] = useState<ListState>({ kind: "loading" });
@@ -195,7 +187,7 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
                   className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-surface-subtle opacity-60" : "cursor-pointer border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"}`}
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
-                    <UploadIcon className="h-5 w-5" />
+                    <UploadGlyph className="h-5 w-5" />
                   </span>
                   <span className="text-sm font-medium text-text-primary">{uploading ? "Checking…" : "Upload a k6 script"}</span>
                   <span className="text-xs text-muted">Click to browse your files</span>
@@ -230,28 +222,28 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
 
       {working && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              {backButton && (
-                <>
-                  {backButton}
-                  <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
-                </>
-              )}
-              <h2 className="font-semibold">Run k6 Script</h2>
-              <StatusBadge label={scripts.length === 1 ? "1 script in this session" : `${scripts.length} scripts in this session`} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className={`${BUTTON_STYLES.secondary} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500`}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            {backButton && (
+              <>
+                {backButton}
+                <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
+              </>
+            )}
+            <h2 className="font-semibold">Run k6 Script</h2>
+            <StatusBadge label={scripts.length === 1 ? "1 script in this session" : `${scripts.length} scripts in this session`} />
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <label className={`${BUTTON_STYLES.secondary} ${WITH_ICON} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500`}>
+                <UploadGlyph className="h-3.5 w-3.5" />
                 {uploading ? "Checking…" : "Upload script"}
                 <input type="file" accept={ACCEPT} aria-label="Upload a k6 script" disabled={uploading} onChange={(event) => void handleUpload(event)} className="sr-only" />
               </label>
-              <button type="button" className={BUTTON_STYLES.secondary} onClick={() => request({ kind: "new" })}>
+              <button type="button" className={`${BUTTON_STYLES.secondary} ${WITH_ICON}`} onClick={() => request({ kind: "new" })}>
+                <PlusGlyph className="h-3.5 w-3.5" />
                 Write a new script
               </button>
             </div>
           </div>
-          <p className="max-w-3xl text-sm text-muted">{CREDENTIALS_NOTE}</p>
+          {selectedId === null && !newScript && <p className="max-w-3xl rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-muted">{CREDENTIALS_NOTE}</p>}
           {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
           {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
           {scripts.length > 0 && <ScriptList scripts={scripts} selectedId={selectedId} onSelect={(scriptId) => request({ kind: "select", scriptId })} />}
@@ -259,23 +251,35 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
       )}
 
       {newScript && (
-        <section aria-labelledby="new-script-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 id="new-script-title" className="text-lg font-semibold">
-            New script
-          </h2>
-          <label className="flex max-w-md flex-col gap-1 text-xs text-muted">
-            Name
-            <input value={newScript.name} maxLength={100} onChange={(event) => setNewScript({ ...newScript, name: event.target.value })} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary" />
-          </label>
-          <ScriptEditor value={newScript.content} onChange={(content) => setNewScript({ ...newScript, content })} problems={newScript.problems} label="New script" />
-          <div className="flex gap-2">
-            <button type="button" className={BUTTON_STYLES.primary} disabled={newSaving || newScript.content.trim() === ""} onClick={() => void saveNew()}>
-              {newSaving ? "Saving…" : "Save"}
-            </button>
-            <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setPendingLeave({ kind: "select", scriptId: selectedId ?? "" })}>
-              Cancel
-            </button>
+        <section aria-labelledby="new-script-title" className="space-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h2 id="new-script-title" className="text-base font-semibold">
+              New script
+            </h2>
+            <span className="text-sm text-muted">It is checked when you save, and nothing is stored if the check refuses it.</span>
           </div>
+          <ScriptEditor
+            value={newScript.content}
+            onChange={(content) => setNewScript({ ...newScript, content })}
+            problems={newScript.problems}
+            label="New script"
+            fileName={
+              <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted">
+                Name
+                <input value={newScript.name} maxLength={100} onChange={(event) => setNewScript({ ...newScript, name: event.target.value })} className={`${SCRIPT_INPUT} w-64 max-w-full`} />
+              </label>
+            }
+            footer={
+              <>
+                <button type="button" className={BUTTON_STYLES.primary} disabled={newSaving || newScript.content.trim() === ""} onClick={() => void saveNew()}>
+                  {newSaving ? "Saving…" : "Save"}
+                </button>
+                <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setPendingLeave({ kind: "select", scriptId: selectedId ?? "" })}>
+                  Cancel
+                </button>
+              </>
+            }
+          />
         </section>
       )}
 

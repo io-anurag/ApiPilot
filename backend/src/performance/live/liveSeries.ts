@@ -28,6 +28,11 @@ export interface LiveSeriesView {
 
 export interface LiveSeries {
   recordRequest(second: number, groupId?: string): void;
+  /**
+   * A group that appears while the run is going (a Run k6 Script request name, which is not known at the start).
+   * Only for a series made with `dynamicGroups`; a group already declared, or one past the maximum, is ignored.
+   */
+  declareGroup(group: LiveSeriesGroup): void;
   recordFailure(second: number): void;
   recordVirtualUsers(second: number, count: number): void;
   /** A completed request's duration, in ms, in the second it finished. */
@@ -44,10 +49,10 @@ export interface LiveSeries {
 /** More groups than this are not drawn separately: the graph would have more lines than can be told apart. */
 export const LIVE_SERIES_MAX_GROUPS = 8;
 
-export function createLiveSeries(options: { withVirtualUsers: boolean; maxPoints?: number; groups?: readonly LiveSeriesGroup[] }): LiveSeries {
+export function createLiveSeries(options: { withVirtualUsers: boolean; maxPoints?: number; groups?: readonly LiveSeriesGroup[]; dynamicGroups?: boolean }): LiveSeries {
   const maxPoints = options.maxPoints ?? LIVE_SERIES_MAX_POINTS;
-  const groups = options.groups && options.groups.length >= 2 && options.groups.length <= LIVE_SERIES_MAX_GROUPS ? options.groups.map((group) => ({ ...group })) : undefined;
-  const groupIds = new Set(groups?.map((group) => group.id));
+  const groups: LiveSeriesGroup[] = options.groups && options.groups.length >= 2 && options.groups.length <= LIVE_SERIES_MAX_GROUPS ? options.groups.map((group) => ({ ...group })) : [];
+  const groupIds = new Set(groups.map((group) => group.id));
   let bucketSeconds = 1;
   let cells = new Map<number, Cell>();
   let lastSecond = 0;
@@ -97,6 +102,11 @@ export function createLiveSeries(options: { withVirtualUsers: boolean; maxPoints
       cell.requests += 1;
       if (groupId !== undefined && groupIds.has(groupId)) cell.groups.set(groupId, (cell.groups.get(groupId) ?? 0) + 1);
     },
+    declareGroup: (group) => {
+      if (!options.dynamicGroups || groupIds.has(group.id) || groups.length >= LIVE_SERIES_MAX_GROUPS) return;
+      groups.push({ ...group });
+      groupIds.add(group.id);
+    },
     recordFailure: (second) => {
       cellAt(second).failures += 1;
     },
@@ -110,6 +120,8 @@ export function createLiveSeries(options: { withVirtualUsers: boolean; maxPoints
     },
     view(nowSecond) {
       fit(clamp(nowSecond));
+      // The graph breaks requests down only when there are at least two groups to tell apart.
+      const shown = groups.length >= 2 ? groups.map((group) => ({ ...group })) : undefined;
       const lastIndex = Math.floor(lastSecond / bucketSeconds);
       const points: LivePoint[] = [];
       let carried: number | null = null;
@@ -123,10 +135,10 @@ export function createLiveSeries(options: { withVirtualUsers: boolean; maxPoints
           virtualUsers: options.withVirtualUsers ? carried : null,
           latencyMs: cell && cell.latencyCount > 0 ? Math.round((cell.latencySum / cell.latencyCount) * 100) / 100 : null,
         };
-        if (groups) point.byGroup = Object.fromEntries(groups.map((group) => [group.id, cell?.groups.get(group.id) ?? 0]));
+        if (shown) point.byGroup = Object.fromEntries(shown.map((group) => [group.id, cell?.groups.get(group.id) ?? 0]));
         points.push(point);
       }
-      return { bucketSeconds, points, ...(groups ? { groups } : {}) };
+      return { bucketSeconds, points, ...(shown ? { groups: shown } : {}) };
     },
     get bucketSeconds() {
       return bucketSeconds;

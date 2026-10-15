@@ -306,7 +306,7 @@ function Detail({ snapshot }: Readonly<{ snapshot: LiveRunSnapshot }>) {
   const hasChains = snapshot.chains.length > 0;
   return (
     <div className="@container space-y-4">
-      {hasChains && <ChainRows chains={snapshot.chains} />}
+      {hasChains && <ChainRows chains={snapshot.chains} kind={snapshot.kind} />}
       <section
         aria-label="Requests over time"
         className="min-w-0 rounded-2xl border border-border bg-surface p-5"
@@ -315,6 +315,7 @@ function Detail({ snapshot }: Readonly<{ snapshot: LiveRunSnapshot }>) {
           series={snapshot.series}
           thinned={snapshot.thinned}
           startedAt={snapshot.startedAt}
+          groupNoun={snapshot.kind === "user-script" ? "request" : "chain"}
           plannedSeconds={
             snapshot.plannedDurationMs === null
               ? null
@@ -322,13 +323,15 @@ function Detail({ snapshot }: Readonly<{ snapshot: LiveRunSnapshot }>) {
           }
         />
       </section>
-      {snapshot.recentFailures && <RecentFailuresList failures={snapshot.recentFailures} startedAt={snapshot.startedAt} />}
+      {snapshot.recentFailures && <RecentFailuresList failures={snapshot.recentFailures} startedAt={snapshot.startedAt} kind={snapshot.kind} />}
       <LatestRequestsTable requests={snapshot.recent} startedAt={snapshot.startedAt} />
     </div>
   );
 }
 
-function ChainRows({ chains }: Readonly<{ chains: readonly LiveChainRow[] }>) {
+function ChainRows({ chains, kind }: Readonly<{ chains: readonly LiveChainRow[]; kind: LiveRunKind }>) {
+  // A script run has no chains: its rows are its request names (AP-051).
+  const noun = kind === "user-script" ? "request" : "chain";
   return (
     <section
       aria-labelledby="live-run-chains-title"
@@ -336,9 +339,9 @@ function ChainRows({ chains }: Readonly<{ chains: readonly LiveChainRow[] }>) {
       data-testid="live-run-chains"
     >
       <h4 id="live-run-chains-title" className="text-sm font-semibold">
-        Chains
+        {kind === "user-script" ? "Requests" : "Chains"}
       </h4>
-      <p className="pb-2 text-xs text-muted">Requests and failures so far, per chain. Each bar shows that chain's passed (green) and failed (red) share.</p>
+      <p className="pb-2 text-xs text-muted">Requests and failures so far, per {noun}. Each bar shows that {noun}&apos;s passed (green) and failed (red) share.{kind === "user-script" ? " A request is listed by the name the script gave it, or by its method, host and path; later names are added up as Other requests." : ""}</p>
       <ul className="divide-y divide-border">
         {chains.map((chain) => (
           <li key={chain.id} className="flex items-start justify-between gap-3 py-2">

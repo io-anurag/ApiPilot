@@ -130,7 +130,7 @@ shape of the run once it ends.
   memory for the live view only: it MUST NOT be written to the database, a report, a snapshot of a settled run or any log,
   and it MUST be cut to 2,048 characters, with secret environment values and credential-looking JSON fields masked. A plan
   that uses a secret data set column MUST show no response text. Request content and response headers are never kept. This
-  amends AP-037 SC-005 for this one in-memory view and changes nothing else in it.
+  amends AP-037 SC-005 for this one in-memory view and changes nothing else in it. *(AP-052, 2026-10-15, at the engineer's request)*: a Run k6 Script run lists the same section with the same bounds, but with no response, because the script is run as supplied and its console is never read; see specs/052-user-script-recent-failures.
 - **FR-006**: The dashboard MUST distinguish loading, live, stale (connection lost), completed, cancelled and failed states,
   and MUST NOT present an unavailable-data state as zero requests. Figures become stale after 10 seconds without a
   fresh reply; until then the last figures stay shown as live.

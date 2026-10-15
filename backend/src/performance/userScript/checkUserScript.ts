@@ -4,6 +4,7 @@ import { USER_SCRIPT_MAX_BYTES } from "@apipilot/shared-domain";
 import { compareCodeUnits } from "../../postman/ordering";
 import { validateMappingName } from "./mappingNames";
 import { analyzeScopes, child, childEntries, children, type EsNode, type Scope, type ScopeAnalysis } from "./numericGuarantee";
+import { plannedDurationOf } from "./plannedDuration";
 
 /**
  * AP-034's script check (specs/034-run-user-k6-script FR-004 to FR-009; research R1 to R5). It
@@ -414,6 +415,7 @@ export function checkUserScript(bytes: Uint8Array): ScriptCheckResult {
     hosts: hostsInText(text),
     envNames: [...envNames.values()].sort((a, b) => compareCodeUnits(a.name, b.name)),
     hasDefaultFunction,
+    plannedDurationMs: plannedDurationOf(program),
   };
 }
 

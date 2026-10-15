@@ -424,6 +424,10 @@ stored script is unchanged, and the unsaved text is still in the editor.
 - **FR-039**: Logs MUST NOT contain script content, environment values, k6's error messages,
   resolved URLs, or request or response bodies.
 - **FR-040**: The script's console output MUST NOT be kept, logged or shown.
+  *(Amended 2026-10-15, AP-053, constitution v3.1.0: a Debug run of a confirmed script (specs/053-user-script-debug-run) reads k6's
+  HTTP debug records, which are not console output, and shows the requests and responses in the UI only, masked and never stored.
+  The script's console output is still dropped unread there, and a normal run is unchanged. FR-029's metrics-only record applies
+  to runs; a Debug run creates no record.)*
 - **FR-041**: The run's working copy of the script MUST be removed when the run ends. The run record
   MUST keep the script's name and SHA-256, not its content.
 

@@ -99,6 +99,22 @@ describe("PerformancePath: a specification to the Run step (US1)", () => {
     expect(within(screen.getByTestId("operation-selection")).getByText("3 of 3 selected")).toBeInTheDocument();
   });
 
+  it("has Back to start and Plans in the top row and the reason Next is unavailable beside Next (specs/050 FR-004, FR-005)", async () => {
+    stubFetch(baseRoutes({ [`GET ${QUICK}`]: () => NO_QUICK_TEST, "GET /api/chain-plans": () => [200, { plans: [] }] }));
+    const onExit = vi.fn();
+    render(<PerformancePage onExit={onExit} />);
+    fireEvent.click(await screen.findByRole("button", { name: /OpenAPI specification/ }));
+    expect(screen.getByTestId("path-title")).toHaveTextContent("New performance test");
+    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "← Plans" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Exit performance testing and return to the start screen" }));
+    expect(onExit).toHaveBeenCalledTimes(1);
+    const reason = screen.getByRole("status");
+    expect(reason).toHaveTextContent("Upload the specification to continue");
+    expect(next()).toBeDisabled();
+    expect(reason.parentElement).toContainElement(next());
+  });
+
   it("keeps the selection when the engineer goes Back and forward again, and locks Next with the reason when nothing is chosen", async () => {
     stubFetch(baseRoutes({ [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }], "GET /api/chain-plans": () => [200, { plans: [] }] }));
     render(<PerformancePage />);

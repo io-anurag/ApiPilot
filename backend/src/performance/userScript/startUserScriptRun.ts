@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { Environment, K6Readiness, UserScriptResult, UserScriptRun } from "@apipilot/shared-domain";
+import type { Environment, K6Readiness, ScriptCheckResult, UserScriptResult, UserScriptRun } from "@apipilot/shared-domain";
 import { getEnvironment } from "../../execution/environmentStore";
 import { findExecutionInProgress } from "../../execution/executionSlot";
 import { createLogger } from "../../logger";
@@ -38,6 +38,8 @@ export interface UserScriptRunDependencies {
   tickIntervalMs: number;
   now: () => Date;
   runDirectoryRoot?: string;
+  /** Tests only: the bounds of a Debug run (specs/053 FR-007). */
+  debugLimits?: { maxExchanges?: number; timeLimitMs?: number };
 }
 
 /** `409 k6_unavailable`, with the readiness the probe returned. */
@@ -69,8 +71,25 @@ export function mappedValues(script: Pick<StoredUserScript, "settings">, environ
   return values;
 }
 
-/** Research R17's checks, in order; then the run record and the background run. */
-export async function startUserScriptRun(scriptId: string, body: { environmentId?: unknown; scriptSha256?: unknown }, deps: UserScriptRunDependencies): Promise<UserScriptRun> {
+/** What the checks of a run start leave in hand: the script, its accepted check, k6 and the environment. */
+export interface PreparedUserScriptRun {
+  stored: StoredUserScript;
+  check: Extract<ScriptCheckResult, { accepted: true }>;
+  k6Version: string;
+  binaryPath: string;
+  environment: Environment;
+}
+
+/**
+ * Research R17's checks, in order, shared by a run start and a Debug run (specs/053 FR-001). A Debug run
+ * ignores the load profile, so it skips the load-override check (4).
+ */
+export async function prepareUserScriptRun(
+  scriptId: string,
+  body: { environmentId?: unknown; scriptSha256?: unknown },
+  deps: Pick<UserScriptRunDependencies, "probe">,
+  options: { checkLoadOverride: boolean },
+): Promise<PreparedUserScriptRun> {
   // 1. The script exists.
   const stored = getStoredUserScript(scriptId);
   // 2. It still passes the current check.
@@ -80,15 +99,21 @@ export async function startUserScriptRun(scriptId: string, body: { environmentId
   if (!stored.confirmation || stored.confirmation.sha256 !== stored.sha256) throw new UserScriptNotConfirmedError();
   if (body.scriptSha256 !== stored.sha256) throw new UserScriptChangedError();
   // 4. A load profile override needs a default function (FR-027).
-  if (stored.settings.load.kind === "profile" && !check.hasDefaultFunction) throw new LoadOverrideUnavailableError();
+  if (options.checkLoadOverride && stored.settings.load.kind === "profile" && !check.hasDefaultFunction) throw new LoadOverrideUnavailableError();
   // 5. k6 is ready, probed now (FR-021).
   const probe = await deps.probe({ recheck: true });
   if (probe.readiness.state !== "ready" || !probe.binaryPath) throw new K6NotReadyError(probe.readiness);
   // 6. The environment exists.
   const environment = getEnvironment(typeof body.environmentId === "string" ? body.environmentId : "");
-  // 7. The shared slot. The check and the insert are synchronous, with no await between them.
+  // 7. The shared slot. The check and the insert (or the start) are synchronous, with no await between them.
   const inProgress = findExecutionInProgress();
   if (inProgress) throw new ExecutionSlotTakenError(inProgress.runId);
+  return { stored, check, k6Version: probe.readiness.version, binaryPath: probe.binaryPath, environment };
+}
+
+/** Research R17's checks, in order; then the run record and the background run. */
+export async function startUserScriptRun(scriptId: string, body: { environmentId?: unknown; scriptSha256?: unknown }, deps: UserScriptRunDependencies): Promise<UserScriptRun> {
+  const { stored, check, k6Version, binaryPath, environment } = await prepareUserScriptRun(scriptId, body, deps, { checkLoadOverride: true });
 
   const load = stored.settings.load;
   const run: UserScriptRun = {
@@ -105,16 +130,16 @@ export async function startUserScriptRun(scriptId: string, body: { environmentId
       thresholds: stored.settings.thresholds,
       hostsFound: check.hosts,
     },
-    k6Version: probe.readiness.version,
+    k6Version,
     k6ExitCode: null,
     exitMeaning: null,
-    plannedDurationMs: load.kind === "profile" ? load.profile.plannedDurationMs : null,
+    plannedDurationMs: load.kind === "profile" ? load.profile.plannedDurationMs : (check.plannedDurationMs ?? null),
     startedAt: deps.now().toISOString(),
     cancelRequested: false,
   };
   const sessionId = getSessionId();
   getUserScriptRunRepository().create(sessionId, run);
-  void runUserScript({ sessionId, run, content: stored.content, values: mappedValues(stored, environment), binaryPath: probe.binaryPath, deps }).catch((error: Error) =>
+  void runUserScript({ sessionId, run, content: stored.content, values: mappedValues(stored, environment), binaryPath, deps }).catch((error: Error) =>
     logger.error("user_script_run_unhandled_error", { runId: run.id, errorCategory: error.name }),
   );
   return run;

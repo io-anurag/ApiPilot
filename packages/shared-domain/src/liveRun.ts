@@ -73,9 +73,14 @@ export type FailureResponse =
   /** No response arrived: the connection failed or the request timed out. */
   | { kind: "none-received" }
   /** Not kept, because the plan uses secret data set columns and the response could echo one. */
-  | { kind: "withheld"; reason: "secret-data-columns" };
+  | { kind: "withheld"; reason: "secret-data-columns" }
+  /** Run k6 Script runs: ApiPilot runs the script as supplied and cannot see the response, so none is kept. */
+  | { kind: "not-captured"; reason: "user-script" };
 
-/** A failed request sampled for the live view (at most one per second per virtual user). */
+/**
+ * A failed request sampled for the live view. A request-chain run samples at most one per second per
+ * virtual user; a Run k6 Script run at most one per second for each request name and status.
+ */
 export interface RecentFailure {
   second: number;
   chain: string;
@@ -120,7 +125,7 @@ export interface LiveRunSnapshot {
   series: LiveSeries;
   /** Newest first, at most `LIVE_RECENT_REQUEST_LIMIT`. */
   recent: RecentRequest[];
-  /** Request-chain runs only, newest first, at most `LIVE_RECENT_FAILURE_LIMIT`; a sample, not every failure. Absent once the run is no longer held in memory. */
+  /** Request-chain and Run k6 Script runs, newest first, at most `LIVE_RECENT_FAILURE_LIMIT`; a sample, not every failure. Absent once the run is no longer held in memory. */
   recentFailures?: RecentFailure[];
   /** Name of the request being sent (collection only). */
   inFlight: string | null;

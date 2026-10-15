@@ -85,6 +85,46 @@ describe("SourceStep (US1: FR-023, FR-025)", () => {
   });
 });
 
+describe("SourceStep upload card (specs/050 FR-003)", () => {
+  it("presents the upload like the start screen's card: accepted input, local-processing note and the drop area", async () => {
+    stubFetch({ [`GET ${QUICK}`]: () => NONE });
+    render(<Harness />);
+    const card = await screen.findByRole("region", { name: "Performance test from a specification" });
+    expect(within(card).getByText("OpenAPI 3.x · YAML · up to 10 MB")).toBeInTheDocument();
+    expect(within(card).getByRole("heading", { name: "Upload specification" })).toBeInTheDocument();
+    expect(within(card).getByText("The document stays in your local workflow and is never sent to a cloud AI provider.")).toBeInTheDocument();
+    expect(within(card).getByText("Drag and drop your specification here")).toBeInTheDocument();
+    expect(within(card).getByText("or click to browse your files")).toBeInTheDocument();
+    expect(within(card).getByText("Required")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Upload OpenAPI specification")).toBeEnabled();
+  });
+
+  it("says Ready, in words, and shows the uploaded specification in the same card", async () => {
+    stubFetch({ [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }] });
+    render(<Harness />);
+    const card = await screen.findByRole("region", { name: "Performance test from a specification" });
+    expect(within(card).getByText("Ready")).toBeInTheDocument();
+    expect(within(card).queryByText("Required")).not.toBeInTheDocument();
+    expect(within(card).getByTestId("uploaded-specification")).toHaveTextContent("13 operations analyzed");
+  });
+
+  it("explains each other source in the same card, with nothing to upload", async () => {
+    stubFetch({ [`GET ${QUICK}`]: () => NONE });
+    render(<Harness initialSource="collection" />);
+    const card = await screen.findByRole("region", { name: "Performance test from postman collection" });
+    expect(within(card).getByText("Nothing to upload")).toBeInTheDocument();
+    expect(within(card).getByText("You choose the collection and its requests on the next step.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Upload OpenAPI specification")).not.toBeInTheDocument();
+  });
+
+  it("shows no upload card for a specification once a plan exists", async () => {
+    stubFetch({ [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }] });
+    render(<Harness locked planSourceLabel="old-spec.yaml" />);
+    await screen.findByText(/This plan was seeded from old-spec.yaml/);
+    expect(screen.queryByRole("region", { name: "Performance test from a specification" })).not.toBeInTheDocument();
+  });
+});
+
 describe("SourceStep replace flow (US6: FR-024)", () => {
   it("asks first, states what is kept, and sends nothing on Cancel", async () => {
     const calls = stubFetch({ [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }] });

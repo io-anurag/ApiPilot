@@ -68,6 +68,24 @@ describe("ScriptEditor", () => {
     expect(screen.queryByTestId("script-editor-overlay")).not.toBeInTheDocument();
   });
 
+  it("is one document in two states: read only shows the stored text, editing adds the line-ending note", () => {
+    const { rerender } = render(<ScriptEditor value={CONTENT} problems={[]} label="Script Smoke" fileName="Smoke" readOnly toolbar={<button type="button">Edit</button>} footer={<button type="button">Rename</button>} />);
+    const bar = screen.getByTestId("script-editor");
+    expect(screen.getByRole("textbox", { name: "Script Smoke" })).toHaveAttribute("readonly");
+    expect(within(bar).getByText("Read only")).toBeInTheDocument();
+    expect(within(bar).getByText("5 lines")).toBeInTheDocument();
+    expect(within(bar).getByText("Smoke")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByText(CREDENTIALS_NOTE)).toBeInTheDocument();
+    expect(screen.queryByText(LINE_ENDING_NOTE)).not.toBeInTheDocument();
+
+    rerender(<ScriptEditor value={CONTENT} onChange={() => undefined} problems={[]} label="Script Smoke" fileName="Smoke" />);
+    expect(screen.getByRole("textbox", { name: "Script Smoke" })).not.toHaveAttribute("readonly");
+    expect(within(screen.getByTestId("script-editor")).getByText("Editing")).toBeInTheDocument();
+    expect(screen.getByText(LINE_ENDING_NOTE)).toBeInTheDocument();
+  });
+
   it("never evaluates the script", () => {
     const evalSpy = vi.spyOn(globalThis, "eval");
     const onChange = vi.fn();
@@ -79,6 +97,27 @@ describe("ScriptEditor", () => {
 });
 
 describe("editing in the page", () => {
+  it("shows the stored script read only, and Edit turns the same document editable until Cancel", async () => {
+    stubFetch(routes());
+    render(<UserScriptPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Smoke" }));
+    const textbox = await screen.findByRole("textbox", { name: "Script Smoke" });
+    expect(textbox).toHaveAttribute("readonly");
+    await waitFor(() => expect(textbox).toHaveValue(CONTENT));
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    for (const name of ["Rename", "Replace with upload", "Delete"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("textbox", { name: "Script Smoke" })).not.toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("textbox", { name: "Script Smoke" })).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
   it("opens a new script on the example, and keeps refused text in the editor with its reasons", async () => {
     stubFetch(routes({ [`POST ${BASE}`]: () => [422, { error: "script_refused", message: "refused", problems: [{ rule: "import-remote", line: 1, column: 15, message: "Imports a module from a URL." }] }] }));
     render(<UserScriptPage />);

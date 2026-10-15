@@ -128,6 +128,14 @@ export class UserScriptRunInProgressError extends Error {
   }
 }
 
+/** AP-053 `409 debug_run_in_progress`: a Debug run of this script is already executing. */
+export class UserScriptDebugRunInProgressError extends Error {
+  constructor() {
+    super("A Debug run of this script is already running. Wait for it to end or cancel it first.");
+    this.name = "UserScriptDebugRunInProgressError";
+  }
+}
+
 /** AP-034 `409 load_override_unavailable` (FR-027). */
 export class LoadOverrideUnavailableError extends Error {
   constructor() {

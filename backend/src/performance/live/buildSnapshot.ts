@@ -21,7 +21,7 @@ export interface LiveRunSource {
   chains: LiveChainRow[];
   series: LiveSeriesView;
   recent: RecentRequest[];
-  /** Request-chain runs only (AP-049). */
+  /** Request-chain runs (AP-049) and Run k6 Script runs (AP-052). */
   recentFailures?: RecentFailure[];
   inFlight: string | null;
 }

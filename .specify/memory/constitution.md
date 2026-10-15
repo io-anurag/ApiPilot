@@ -1,6 +1,41 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 3.0.0 → 3.1.0 (minor: XVII's 2026-09-30 exception gains a Debug run of a supplied script)
+
+Trigger: the user asked for a Debug run on Run k6 Script, as on Performance (2026-10-15), and chose
+to show every request the script sent and every response it received over a list of requests drawn
+from k6's metrics. The 2026-09-30 exception lets a supplied script's run report only k6's own
+metrics and never read its console, so showing exchanges is new guidance and needed an amendment
+before specs/053-user-script-debug-run could be built.
+
+Bump reasoning: the exception is widened by one permitted activity with its own conditions. No
+existing condition, principle or exception is removed or redefined, and a normal run is unchanged
+(MINOR).
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: the 2026-09-30 exception now also covers one
+    user-initiated Debug run of a confirmed supplied script. It runs the unmodified confirmed bytes
+    once, with k6's own command-line options for one virtual user, one iteration and its HTTP debug
+    log, and shows the requests and responses in the UI only. Conditions: the same explicit,
+    per-run action as a run, naming the target and hosts and stating that real requests, including
+    writes, are sent and that nothing is stored; output read only from k6's HTTP debug records, with
+    the script's own console output still dropped unread; every value masked before it leaves the
+    server (environment values mapped to the script never revealable); held in memory for the live
+    view only, never written to the database, a report, a stored result or a log; bounded in
+    requests, size and time; no run record or report. The rationale records the reasoning.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs: none.
+
+Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version in the
+same change.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 2.8.0 → 3.0.0 (major: XVII's 2026-09-24 exception consolidated onto request-chain
 plans; the derived-plan meanings of "approved" and their conditions removed)
 
@@ -742,6 +777,27 @@ MAY execute that script with k6, only when all of the following hold:
   by ApiPilot (XIII), identify it by its SHA-256, and report only k6's own metrics; the user
   interface states that load is generated from the machine running the ApiPilot backend.
 
+**Debug run (2026-10-15 amendment)**: The same exception covers one user-initiated Debug run of a
+confirmed, user-supplied script, which shows the engineer the requests the script sent and the
+responses it received, only when every condition above holds for it as for a run, and in addition:
+- k6 executes the confirmed bytes once, for one virtual user and one iteration, and logs its HTTP
+  requests and responses. These are k6's own command-line options; ApiPilot never rewrites, wraps,
+  injects into or appends to the script, and load stages and other settings made in ApiPilot do not
+  apply. No remote output is passed;
+- the action that starts it is its own, explicit and per run, and names the target environment by
+  name, tier label and base URL, repeats the hosts found in the script, and states that the script
+  sends real requests, including writes, to the target and that the output is shown and not stored.
+  ApiPilot never starts or repeats a Debug run automatically, on a schedule, or as a retry, and
+  never while another execution holds the session's slot;
+- the output is read only from k6's HTTP debug records. The script's own console output is dropped
+  unread, as for every run, and k6's own error messages are kept in memory only, as for a run;
+- every piece of text in the output passes the Debug run masker before it leaves the server:
+  credential-looking headers, cookies, query, form and JSON values are masked and can be revealed
+  one at a time; every value mapped from the environment is masked and can never be revealed;
+- the output is held in memory for the live view only. It is never written to the database, a
+  report, a stored result, a snapshot or a log, never sent to or produced by AI, and no run record
+  is created. It is bounded in the number of requests, the size of each body and the time taken.
+
 A script ApiPilot generated that the user downloads, changes and supplies again is a
 user-supplied script under this exception, never ApiPilot's output under the 2026-09-24
 exception. This exception does not apply to AI output, uploaded OpenAPI specifications or any
@@ -781,7 +837,11 @@ Because ApiPilot cannot know what a user's script does, the conditions narrow wh
 instead: one file of allowlisted k6 built-ins closes local file access, process and browser
 launch, extensions and remote code; binding the confirmation to the exact bytes means no edit
 or re-upload runs unconfirmed; and listing hosts while stating plainly that they cannot be
-restricted keeps the one remaining risk, where requests go, visible to the person accepting it.
+restricted keeps the one remaining risk, where requests go, visible to the person accepting it. The Debug run of a supplied script (2026-10-15) rests on the same footing as the
+Performance Debug run: the engineer asks, once, to see why a script behaves as it does, and the
+output is a view, not a record. It is the one place a supplied script's traffic is read, so it
+carries its own masking, memory-only and bounds conditions, and it does not read what the script
+prints.
 
 ### XVIII. Secrets Must Never Be Part of Generated Artifacts
 
@@ -1002,4 +1062,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 3.0.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-03
+**Version**: 3.1.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-15

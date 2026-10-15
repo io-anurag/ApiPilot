@@ -4,39 +4,115 @@ import { LOAD_PROFILE_STARTING_STAGES } from "@apipilot/shared-domain";
 import { fetchEnvironments } from "../../services/environmentsClient";
 import { userScriptClient, userScriptRunsClient, type UserScriptSettingsInput, type UserScriptStartInput } from "../../services/userScriptClient";
 import { BUTTON_STYLES } from "../controlStyles";
-import { CodeBlock } from "../CodeBlock";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { ErrorState } from "../ErrorState";
 import { PromptDialog } from "../PromptDialog";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge } from "../StatusBadge";
-import { Tabs } from "../Tabs";
 import { EnvironmentPicker } from "../performance/EnvironmentPicker";
 import { LoadProfileEditor } from "../performance/LoadProfileEditor";
 import { ThresholdEditor } from "../performance/ThresholdEditor";
+import { runStatusLabel } from "../performance/performanceViewModel";
 import { usePerformanceRuns } from "../performance/usePerformanceRuns";
 import { ScriptConfirmDialog } from "./ScriptConfirmDialog";
 import { ScriptEditor } from "./ScriptEditor";
 import { ScriptProblems } from "./ScriptProblems";
 import { formatSize } from "./ScriptList";
+import { PanelState, ScriptFact, ScriptFacts, ScriptPanel } from "./ScriptPanel";
+import { SetupItem, type SetupItemState } from "../performance/SetupItem";
+import { SCRIPT_TAB_ICONS, ScriptTabs, type ScriptTabItem } from "./ScriptTabs";
 import { UserScriptRunActivity } from "./UserScriptRunActivity";
 import { UserScriptRunTrigger } from "./UserScriptRunTrigger";
+import { useUserScriptDebugRun } from "./useUserScriptDebugRun";
 import { ValueMappingEditor } from "./ValueMappingEditor";
 
 type WorkspaceTab = "script" | "setup" | "runs";
 
-const TABS: Array<{ id: WorkspaceTab; label: string }> = [
-  { id: "script", label: "Script" },
-  { id: "setup", label: "Run setup" },
-  { id: "runs", label: "Runs & reports" },
-];
-
 export const RUN_TIME_NOTE = "Values built while the script runs cannot be found.";
+
+/** The hint under "Runs & reports": what is there to see, in words. */
+function runsHint(inProgress: boolean, count: number): string {
+  if (inProgress) return "A run is in progress";
+  if (count === 0) return "No runs yet";
+  return count === 1 ? "1 run and its report" : `${count} runs and their reports`;
+}
+
+/** What the check found in an accepted script: the hosts written in it and the environment values it reads. */
+function CheckFindings({ hosts, envNames }: Readonly<{ hosts: readonly string[]; envNames: ReadonlyArray<{ name: string; mappable: boolean }> }>) {
+  return (
+    <dl className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-1.5 rounded-lg border border-border bg-surface-subtle p-3">
+        <dt className="text-xs font-semibold uppercase text-muted">Hosts written in the script</dt>
+        <dd className="text-sm">
+          {hosts.length === 0 ? (
+            "None found in the script text."
+          ) : (
+            <ul className="flex flex-wrap gap-1.5">
+              {hosts.map((host) => (
+                <li key={host} className="break-all rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs">
+                  {host}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dd className="text-xs text-muted">{RUN_TIME_NOTE}</dd>
+      </div>
+      <div className="space-y-1.5 rounded-lg border border-border bg-surface-subtle p-3">
+        <dt className="text-xs font-semibold uppercase text-muted">Environment values the script reads</dt>
+        <dd className="text-sm">
+          {envNames.length === 0 ? (
+            "None found."
+          ) : (
+            <ul className="flex flex-wrap gap-1.5">
+              {envNames.map((entry) => (
+                <li key={entry.name} className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs">
+                  {entry.name}
+                  {!entry.mappable && <span className="ml-2 font-sans text-danger-700 dark:text-danger-200">cannot be mapped</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dd className="text-xs text-muted">{RUN_TIME_NOTE}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** One way to choose the load: a radio button whose whole card is its label (specs/051 FR-005). */
+function LoadOption({
+  id,
+  checked,
+  disabled = false,
+  label,
+  description,
+  onChange,
+}: Readonly<{ id: string; checked: boolean; disabled?: boolean; label: string; description: string; onChange: () => void }>) {
+  return (
+    <div
+      className={`relative flex gap-3 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-brand-500 ${
+        checked ? "border-brand-600 bg-brand-600/10 ring-1 ring-brand-600 dark:border-brand-500 dark:ring-brand-500" : "border-border bg-surface hover:border-brand-500"
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      <input id={id} type="radio" name="user-script-load" checked={checked} disabled={disabled} onChange={onChange} aria-describedby={`${id}-description`} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 focus:outline-none" />
+      <div className="min-w-0">
+        <label htmlFor={id} className={`block text-sm font-semibold text-text-primary after:absolute after:inset-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+          {label}
+        </label>
+        <p id={`${id}-description`} className="mt-0.5 text-xs text-muted">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 /**
  * One stored script (AP-034 US1 to US3): its content and check results, its run setup and its
  * runs. Keyed by the script's id, so its runs hook belongs to that script alone. Reports unsaved
- * editor changes to the page, which asks before leaving them (FR-011).
+ * editor changes to the page, which asks before leaving them (FR-011). The look follows
+ * specs/051-user-script-page-redesign.
  */
 export function ScriptWorkspace({
   scriptId,
@@ -71,6 +147,9 @@ export function ScriptWorkspace({
   const [environmentId, setEnvironmentId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<MappedValueStatus[] | null>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
+
+  const environment = environments.find((candidate) => candidate.id === environmentId) ?? null;
+  const debug = useUserScriptDebugRun({ scriptId, script, environment, readiness: runs.readiness, runInProgress: runs.inProgress });
 
   const dirty = draft !== null && draft !== content;
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -195,9 +274,9 @@ export function ScriptWorkspace({
     else setActionError(result.message);
   }
 
-  async function start() {
-    if (!script || !environmentId) return;
-    const started = await runs.start({ environmentId, scriptSha256: script.sha256 });
+  async function start(onEnvironmentId: string | null = environmentId) {
+    if (!script || !onEnvironmentId) return;
+    const started = await runs.start({ environmentId: onEnvironmentId, scriptSha256: script.sha256 });
     if (started) {
       setTab("runs");
       onChanged();
@@ -212,125 +291,172 @@ export function ScriptWorkspace({
   if (loadError) return <ErrorState message="The script could not be loaded." detail={loadError} testId="user-script-load-error" />;
   if (!script) return <Skeleton className="h-64 w-full rounded bg-surface-strong" />;
 
-  const environment = environments.find((candidate) => candidate.id === environmentId) ?? null;
   const check = script.check;
   const lastResult = runs.latestFinished?.result;
   const requestNames = lastResult ? lastResult.requestGroups.map((group) => group.displayName) : [];
+  const needsConfirmation = !script.confirmed && check.accepted;
+  const loadSetting = script.settings.load;
+  const missingValues = statuses ? statuses.filter((status) => !status.present).length : null;
+
+  const scriptDone = check.accepted && script.confirmed;
+  const setupDone = scriptDone && environment !== null;
+  const runsDone = runs.runs.some((run) => run.status === "completed");
+  let scriptHint = "Needs confirmation";
+  if (!check.accepted) scriptHint = "Check refused";
+  else if (script.confirmed) scriptHint = "Checked and confirmed";
+  let mappingState: SetupItemState = "todo";
+  if (script.settings.mapping.length === 0) mappingState = "optional";
+  else if (missingValues === 0) mappingState = "done";
+  else if (missingValues !== null) mappingState = "attention";
+  const thresholdCount = script.settings.thresholds.length;
+  const thresholdsSummary = thresholdCount > 0 ? `${thresholdCount} ${thresholdCount === 1 ? "threshold" : "thresholds"} set.` : "None set. The report shows measurements with no pass/fail verdict.";
+  let scriptRowSummary = "ApiPilot never changes your script; what you set here reaches it only as k6 options and environment values.";
+  if (!check.accepted) scriptRowSummary = "ApiPilot's check refuses the current script, so it cannot run. Open the Script view to see why.";
+  else if (!script.confirmed) scriptRowSummary = "Not confirmed yet. Use Review and confirm at the top before the next run.";
+
+  const tabs: ReadonlyArray<ScriptTabItem<WorkspaceTab>> = [
+    { id: "script", label: "Script", hint: scriptHint, icon: SCRIPT_TAB_ICONS.script, done: scriptDone },
+    { id: "setup", label: "Run setup", hint: setupDone ? "Target chosen" : "Target, values, load and thresholds", icon: SCRIPT_TAB_ICONS.setup, done: setupDone },
+    { id: "runs", label: "Runs & reports", hint: runsHint(runs.inProgress, runs.runs.length), icon: SCRIPT_TAB_ICONS.runs, done: runsDone },
+  ];
+
+  const fileActions = (
+    <>
+      <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setAskRename(true)}>
+        Rename
+      </button>
+      <button type="button" className={BUTTON_STYLES.secondary} disabled={busy} onClick={() => replaceInput.current?.click()}>
+        Replace with upload
+      </button>
+      <input
+        ref={replaceInput}
+        type="file"
+        accept=".js,text/javascript,application/javascript"
+        aria-label="Choose a file to replace this script"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) setPendingReplacement(file);
+        }}
+      />
+      <a className={BUTTON_STYLES.secondary} href={userScriptClient.downloadUrl(script.id)} download>
+        Download
+      </a>
+      <button type="button" className={`${BUTTON_STYLES.danger} ml-auto`} onClick={() => setAskDelete(true)}>
+        Delete
+      </button>
+    </>
+  );
+
+  const editActions =
+    draft === null ? (
+      <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setDraft(content ?? "")}>
+        Edit
+      </button>
+    ) : (
+      <>
+        <button type="button" className={BUTTON_STYLES.primary} disabled={busy || !dirty} onClick={() => void saveDraft()}>
+          Save
+        </button>
+        <button
+          type="button"
+          className={BUTTON_STYLES.secondary}
+          onClick={() => {
+            setDraft(null);
+            setDraftProblems([]);
+          }}
+        >
+          Cancel
+        </button>
+      </>
+    );
 
   return (
-    <section aria-labelledby="user-script-title" className="space-y-4" data-testid="user-script-workspace">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 id="user-script-title" className="text-lg font-semibold">
-            {script.name}
-          </h2>
-          <span className="font-mono text-xs text-muted">{formatSize(script.sizeBytes)}</span>
-          <span className="break-all font-mono text-xs text-muted" title="SHA-256 of the stored bytes">
-            sha256 {script.sha256}
+    <div className="space-y-4" data-testid="user-script-workspace">
+      <ScriptPanel
+        title={script.name}
+        titleId="user-script-title"
+        level={2}
+        meta={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span className="font-mono">{formatSize(script.sizeBytes)}</span>
+            <span className="break-all font-mono" title="SHA-256 of the stored bytes">
+              sha256 {script.sha256}
+            </span>
           </span>
-          <StatusBadge label={script.confirmed ? "Confirmed" : "Needs confirmation"} tone={script.confirmed ? "success" : "warning"} />
-        </div>
-        {!script.confirmed && check.accepted && (
-          <button type="button" className={BUTTON_STYLES.warning} onClick={() => setAskConfirm(true)}>
-            Review and confirm
-          </button>
-        )}
-      </div>
+        }
+        aside={
+          <span className="flex flex-wrap items-center gap-2">
+            <StatusBadge label={script.confirmed ? "Confirmed" : "Needs confirmation"} tone={script.confirmed ? "success" : "warning"} />
+            {needsConfirmation && (
+              <button type="button" className={BUTTON_STYLES.warning} onClick={() => setAskConfirm(true)}>
+                Review and confirm
+              </button>
+            )}
+          </span>
+        }
+        footer={
+          <ScriptFacts className="w-full grid-cols-2 lg:grid-cols-4" testId="user-script-facts">
+            <ScriptFact label="ApiPilot's check">
+              <StatusBadge label={check.accepted ? "Accepted" : "Refused"} tone={check.accepted ? "success" : "danger"} />
+            </ScriptFact>
+            <ScriptFact label="Load">{loadSetting.kind === "script" ? "Script's own" : `${loadSetting.profile.kind.charAt(0).toUpperCase()}${loadSetting.profile.kind.slice(1)} profile`}</ScriptFact>
+            <ScriptFact label="Value names">{script.settings.mapping.length === 1 ? "1 mapped" : `${script.settings.mapping.length} mapped`}</ScriptFact>
+            <ScriptFact label="Last run">{script.lastRun ? <StatusBadge {...runStatusLabel(script.lastRun)} /> : <span className="font-normal text-muted">None</span>}</ScriptFact>
+          </ScriptFacts>
+        }
+      >
+        <p className="text-sm text-muted">
+          {script.confirmed
+            ? "You confirmed this exact content, so it can run until it changes."
+            : "This content has not been confirmed. Confirm exactly what it will run before the next run."}
+        </p>
+      </ScriptPanel>
+
       {message && (
-        <p role="status" className="text-sm text-success-700 dark:text-success-200">
+        <p role="status" className="flex items-start gap-2 rounded-md border border-success-600/30 bg-success-600/10 px-3 py-2 text-sm text-text-primary">
+          <span aria-hidden="true" className="mt-px text-success">
+            ✓
+          </span>
           {message}
         </p>
       )}
       {actionError && <ErrorState message={actionError} testId="user-script-action-error" />}
 
-      <Tabs tabs={TABS} activeTab={tab} onChange={changeTab} label="Script views" />
+      <ScriptTabs tabs={tabs} activeTab={tab} onChange={changeTab} label="Script views" />
 
       {tab === "script" && (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {draft === null ? (
-              <button type="button" className={BUTTON_STYLES.secondary} disabled={content === null} onClick={() => setDraft(content ?? "")}>
-                Edit
-              </button>
-            ) : (
-              <>
-                <button type="button" className={BUTTON_STYLES.primary} disabled={busy || !dirty} onClick={() => void saveDraft()}>
-                  Save
-                </button>
-                <button
-                  type="button"
-                  className={BUTTON_STYLES.secondary}
-                  onClick={() => {
-                    setDraft(null);
-                    setDraftProblems([]);
-                  }}
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-            <button type="button" className={BUTTON_STYLES.secondary} onClick={() => setAskRename(true)}>
-              Rename
-            </button>
-            <button type="button" className={BUTTON_STYLES.secondary} disabled={busy} onClick={() => replaceInput.current?.click()}>
-              Replace with upload
-            </button>
-            <input
-              ref={replaceInput}
-              type="file"
-              accept=".js,text/javascript,application/javascript"
-              aria-label="Choose a file to replace this script"
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) setPendingReplacement(file);
-              }}
-            />
-            <a className={BUTTON_STYLES.secondary} href={userScriptClient.downloadUrl(script.id)} download>
-              Download
-            </a>
-            <button type="button" className={BUTTON_STYLES.danger} onClick={() => setAskDelete(true)}>
-              Delete
-            </button>
-          </div>
-
-          {draft !== null ? (
-            <ScriptEditor value={draft} onChange={setDraft} problems={draftProblems} label={`Script ${script.name}`} />
-          ) : (
+          {draft === null && draftProblems.length > 0 && <ScriptProblems problems={draftProblems} title="The uploaded file was refused" />}
+          {content === null ? (
             <>
-              {draftProblems.length > 0 && <ScriptProblems problems={draftProblems} title="The uploaded file was refused" />}
-              {content !== null ? <CodeBlock label="Stored script (read only; the editor never runs it)" content={content} /> : <ErrorState message="The script's content could not be loaded." />}
+              <ErrorState message="The script's content could not be loaded." />
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-chrome px-4 py-3">{fileActions}</div>
             </>
+          ) : (
+            <ScriptEditor
+              value={draft ?? content}
+              onChange={setDraft}
+              readOnly={draft === null}
+              problems={draft === null ? [] : draftProblems}
+              label={`Script ${script.name}`}
+              fileName={script.name}
+              toolbar={editActions}
+              footer={fileActions}
+            />
           )}
 
           {check.accepted ? (
-            <dl className="grid gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-xs font-semibold text-muted">Hosts written in the script</dt>
-                <dd className="mt-1 text-sm">{check.hosts.length === 0 ? "None found in the script text." : <ul className="font-mono text-xs">{check.hosts.map((host) => <li key={host}>{host}</li>)}</ul>}</dd>
-                <dd className="mt-1 text-xs text-muted">{RUN_TIME_NOTE}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-semibold text-muted">Environment values the script reads</dt>
-                <dd className="mt-1 text-sm">
-                  {check.envNames.length === 0 ? (
-                    "None found."
-                  ) : (
-                    <ul className="font-mono text-xs">
-                      {check.envNames.map((entry) => (
-                        <li key={entry.name}>
-                          {entry.name}
-                          {!entry.mappable && <span className="ml-2 font-sans text-danger-700 dark:text-danger-200">cannot be mapped</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </dd>
-                <dd className="mt-1 text-xs text-muted">{RUN_TIME_NOTE}</dd>
-              </div>
-            </dl>
+            <ScriptPanel
+              title="What ApiPilot found in the script"
+              titleId="user-script-found-title"
+              meta="Recomputed from the stored content with the current rules."
+              aside={<PanelState tone="ready" label="Check accepted" />}
+            >
+              <CheckFindings hosts={check.hosts} envNames={check.envNames} />
+            </ScriptPanel>
           ) : (
             <ScriptProblems problems={check.problems} title="ApiPilot's current check refuses this stored script" />
           )}
@@ -338,100 +464,161 @@ export function ScriptWorkspace({
       )}
 
       {tab === "setup" && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-          <div className="space-y-4">
-            <section aria-labelledby="user-script-environment-title" className="space-y-2 rounded-lg border border-border bg-surface p-4">
-              <h3 id="user-script-environment-title" className="text-base font-semibold">
-                Target environment
-              </h3>
-              {environmentsError ? (
-                <ErrorState message="The environments could not be loaded." detail={environmentsError} testId="user-script-environments-error" />
-              ) : (
-                <EnvironmentPicker
-                  environments={environments}
-                  selectedId={environmentId}
-                  suggestedNames={script.settings.mapping.flatMap((entry) => (entry.source.kind === "environment-value" ? [entry.source.valueName] : []))}
-                  onSelect={setEnvironmentId}
-                  onSaved={(saved) => {
-                    setEnvironmentId(saved.id);
-                    void loadEnvironments();
-                  }}
-                />
-              )}
-            </section>
-            <section aria-labelledby="user-script-mapping-title" className="space-y-2 rounded-lg border border-border bg-surface p-4">
-              <h3 id="user-script-mapping-title" className="text-base font-semibold">
-                Environment values the script receives
-              </h3>
-              <ValueMappingEditor
-                mapping={script.settings.mapping}
-                removedNames={script.settings.removedNames}
-                statuses={statuses}
-                environmentValueNames={environment ? Object.keys(environment.variableValues) : []}
-                busy={busy}
-                onSave={(mapping, removedNames) => void saveSettings({ mapping, removedNames })}
-              />
-            </section>
-            <section aria-labelledby="user-script-load-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-              <h3 id="user-script-load-title" className="text-base font-semibold">
-                Load
-              </h3>
-              <fieldset className="space-y-2" disabled={busy}>
-                <legend className="sr-only">Load choice</legend>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="radio" name="user-script-load" checked={script.settings.load.kind === "script"} onChange={() => void saveSettings({ load: { kind: "script" } })} />
-                  The script&apos;s own load settings
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="user-script-load"
-                    checked={script.settings.load.kind === "profile"}
-                    disabled={check.accepted && !check.hasDefaultFunction}
-                    onChange={() => void saveSettings({ load: { kind: "profile", profile: { kind: "smoke", stages: LOAD_PROFILE_STARTING_STAGES.smoke.map((stage) => ({ ...stage })), plannedDurationMs: LOAD_PROFILE_STARTING_STAGES.smoke.reduce((total, stage) => total + stage.durationMs, 0) } } })}
-                  />
-                  A load profile, passed to k6 as --stage options
-                </label>
-                {check.accepted && !check.hasDefaultFunction && (
-                  <p className="text-xs text-warning-800 dark:text-warning-100">This script has no default function, so a load profile cannot replace its scenarios. It runs with its own load settings.</p>
-                )}
-              </fieldset>
-              {script.settings.load.kind === "profile" && (
-                <LoadProfileEditor
-                  profile={script.settings.load.profile}
-                  startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
-                  busy={busy}
-                  onSave={(profile) => void saveSettings({ load: { kind: "profile", profile: { ...profile, plannedDurationMs: profile.stages.reduce((total, stage) => total + stage.durationMs, 0) } } })}
-                />
-              )}
-            </section>
-            <section aria-labelledby="user-script-thresholds-title" className="space-y-2 rounded-lg border border-border bg-surface p-4">
-              <h3 id="user-script-thresholds-title" className="text-base font-semibold">
-                Thresholds set in ApiPilot (optional)
-              </h3>
-              <p className="text-xs text-muted">Evaluated by ApiPilot from the measurements and never added to the script. Thresholds the script defines are reported separately.</p>
-              <ThresholdEditor<UserScriptThresholdScope>
-                thresholds={script.settings.thresholds}
-                scopeOptions={[{ key: "run", label: "Whole run", scope: { kind: "run" } }]}
-                scopeLabel={(scope) => (scope.kind === "run" ? "Run" : scope.name)}
-                customScope={{ optionLabel: "A request name…", inputLabel: "Request name", suggestions: requestNames, toScope: (name) => ({ kind: "request-name", name }) }}
-                busy={busy}
-                onSave={(thresholds) => void saveSettings({ thresholds })}
-              />
-            </section>
+        <section aria-labelledby="user-script-config-title" className="overflow-hidden rounded-2xl border border-border bg-surface" data-testid="user-script-configuration">
+          <div className="px-5 py-4">
+            <h2 id="user-script-config-title" className="text-base font-semibold">
+              Configuration
+            </h2>
+            <p className="text-xs text-muted">Review each part, edit only what needs to change.</p>
           </div>
-          <div className="space-y-3">
-            {!script.confirmed && check.accepted && (
-              <button type="button" className={BUTTON_STYLES.warning} onClick={() => setAskConfirm(true)}>
-                Review and confirm the script
-              </button>
+          <SetupItem
+            variant="row"
+            state={environment ? "done" : "todo"}
+            title="Target environment"
+            titleId="user-script-environment-title"
+            summary="Holds the base URL and every value the script is mapped to. The run's load is aimed at it."
+          >
+            {environmentsError ? (
+              <ErrorState message="The environments could not be loaded." detail={environmentsError} testId="user-script-environments-error" />
+            ) : (
+              <EnvironmentPicker
+                compact
+                environments={environments}
+                selectedId={environmentId}
+                suggestedNames={script.settings.mapping.flatMap((entry) => (entry.source.kind === "environment-value" ? [entry.source.valueName] : []))}
+                onSelect={setEnvironmentId}
+                onSaved={(saved) => {
+                  setEnvironmentId(saved.id);
+                  void loadEnvironments();
+                }}
+              />
             )}
-            <UserScriptRunTrigger script={script} environment={environment} readiness={runs.readiness} inProgress={runs.inProgress} starting={runs.starting} error={runs.error} onStart={() => void start()} />
-          </div>
-        </div>
+          </SetupItem>
+          <SetupItem
+            variant="row"
+            state={mappingState}
+            title="Environment values the script receives"
+            titleId="user-script-mapping-title"
+            summary="Names and sources only. A value is never shown here."
+            status={missingValues === null ? undefined : <PanelState tone={missingValues === 0 ? "ready" : "attention"} label={missingValues === 0 ? "All present" : `${missingValues} missing`} />}
+          >
+            <ValueMappingEditor
+              mapping={script.settings.mapping}
+              removedNames={script.settings.removedNames}
+              statuses={statuses}
+              environmentValueNames={environment ? Object.keys(environment.variableValues) : []}
+              busy={busy}
+              onSave={(mapping, removedNames) => void saveSettings({ mapping, removedNames })}
+            />
+          </SetupItem>
+          <SetupItem variant="row" state="done" title="Load" titleId="user-script-load-title" summary="Where the load shape comes from.">
+            <fieldset className="grid gap-2 sm:grid-cols-2" disabled={busy}>
+              <legend className="sr-only">Load choice</legend>
+              <LoadOption
+                id="user-script-load-script"
+                checked={loadSetting.kind === "script"}
+                label="The script's own load settings"
+                description="k6 uses the scenarios and options written in the script."
+                onChange={() => void saveSettings({ load: { kind: "script" } })}
+              />
+              <LoadOption
+                id="user-script-load-profile"
+                checked={loadSetting.kind === "profile"}
+                disabled={check.accepted && !check.hasDefaultFunction}
+                label="A load profile, passed to k6 as --stage options"
+                description="The stages you set here replace the script's scenarios."
+                onChange={() => void saveSettings({ load: { kind: "profile", profile: { kind: "smoke", stages: LOAD_PROFILE_STARTING_STAGES.smoke.map((stage) => ({ ...stage })), plannedDurationMs: LOAD_PROFILE_STARTING_STAGES.smoke.reduce((total, stage) => total + stage.durationMs, 0) } } })}
+              />
+            </fieldset>
+            {check.accepted && !check.hasDefaultFunction && (
+              <p className="rounded-md border border-warning-600/30 bg-warning-600/10 px-3 py-2 text-xs text-text-primary">
+                This script has no default function, so a load profile cannot replace its scenarios. It runs with its own load settings.
+              </p>
+            )}
+            {loadSetting.kind === "profile" && (
+              <LoadProfileEditor
+                compact
+                profile={loadSetting.profile}
+                startingStages={(kind) => LOAD_PROFILE_STARTING_STAGES[kind].map((stage) => ({ ...stage }))}
+                busy={busy}
+                onSave={(profile) => void saveSettings({ load: { kind: "profile", profile: { ...profile, plannedDurationMs: profile.stages.reduce((total, stage) => total + stage.durationMs, 0) } } })}
+              />
+            )}
+          </SetupItem>
+          <SetupItem
+            variant="row"
+            collapsible
+            startOpen={false}
+            state={script.settings.thresholds.length > 0 ? "done" : "optional"}
+            title="Thresholds (optional)"
+            titleId="user-script-thresholds-title"
+            summary="Evaluated by ApiPilot from the measurements and never added to the script. Thresholds the script defines are reported separately."
+            collapsedSummary={thresholdsSummary}
+          >
+            <ThresholdEditor<UserScriptThresholdScope>
+              compact
+              thresholds={script.settings.thresholds}
+              scopeOptions={[{ key: "run", label: "Whole run", scope: { kind: "run" } }]}
+              scopeLabel={(scope) => (scope.kind === "run" ? "Run" : scope.name)}
+              customScope={{ optionLabel: "A request name…", inputLabel: "Request name", suggestions: requestNames, toScope: (name) => ({ kind: "request-name", name }) }}
+              busy={busy}
+              onSave={(thresholds) => void saveSettings({ thresholds })}
+            />
+          </SetupItem>
+          <SetupItem
+            variant="row"
+            state={scriptDone ? "done" : "attention"}
+            title="k6 script"
+            titleId="user-script-script-title"
+            status={
+              <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+                <span className="shrink-0">
+                  <StatusBadge label={script.confirmed ? "Confirmed" : "Needs confirmation"} tone={script.confirmed ? "success" : "warning"} />
+                </span>
+                <span className="min-w-0 truncate font-mono text-xs" title={`sha256 ${script.sha256}`}>
+                  sha256 {script.sha256}
+                </span>
+              </span>
+            }
+            actions={
+              <a className={BUTTON_STYLES.ghost} href={userScriptClient.downloadUrl(script.id)} download>
+                Download script
+              </a>
+            }
+            summary={scriptRowSummary}
+          />
+        </section>
       )}
 
-      {tab === "runs" && <UserScriptRunActivity runs={runs} client={runsClient} />}
+      {tab === "runs" && (
+        <div className="space-y-5">
+          <UserScriptRunTrigger
+            script={script}
+            environment={environment}
+            readiness={runs.readiness}
+            inProgress={runs.inProgress}
+            starting={runs.starting}
+            cancelling={runs.cancelling}
+            error={runs.error}
+            latest={runs.latestFinished ?? null}
+            run={runs.run ?? null}
+            statuses={statuses}
+            onStart={() => void start()}
+            onCancel={() => void runs.cancel()}
+            onViewRuns={() => document.getElementById("user-script-runs-title")?.scrollIntoView?.({ block: "start" })}
+            debug={debug}
+          />
+          <UserScriptRunActivity
+            runs={runs}
+            client={runsClient}
+            script={script}
+            environments={environments}
+            readiness={runs.readiness}
+            onRunAgain={(againEnvironmentId) => void start(againEnvironmentId)}
+            onGoToSetup={() => changeTab("setup")}
+          />
+        </div>
+      )}
 
       {askConfirm && check.accepted && (
         <ScriptConfirmDialog scriptName={script.name} sha256={script.sha256} hosts={check.hosts} confirming={confirming} onCancel={() => setAskConfirm(false)} onConfirm={() => void confirm()} />
@@ -473,6 +660,6 @@ export function ScriptWorkspace({
           }}
         />
       )}
-    </section>
+    </div>
   );
 }

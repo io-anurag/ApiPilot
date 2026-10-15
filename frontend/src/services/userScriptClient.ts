@@ -3,6 +3,7 @@ import type {
   MappedValueStatus,
   ScriptProblem,
   UserScript,
+  UserScriptDebugResult,
   UserScriptRun,
   UserScriptRunSettings,
   UserScriptRunSummary,
@@ -42,6 +43,8 @@ async function call<T>(
   try {
     response = await fetch(path, init);
   } catch (err) {
+    // The engineer cancelled (a Debug run is cancelled by aborting its request): not a failure.
+    if (err instanceof DOMException && err.name === "AbortError") return { ok: false, error: "aborted", message: "Cancelled." };
     logger.error("network_error", { operation, errorCategory: "network_error" });
     return { ok: false, error: "network_error", message: err instanceof Error ? err.message : "Request failed" };
   }
@@ -99,6 +102,17 @@ export const userScriptClient = {
       baseUrl: String(body.baseUrl ?? ""),
     })),
   downloadUrl: (scriptId: string) => `${scriptPath(scriptId)}/download`,
+  /**
+   * AP-053: one Debug run of the confirmed script. The request stays open until the run ends; aborting
+   * `signal` cancels it on the server. Nothing is stored or put in the URL; `discardDebugRun` tells the
+   * server to forget the values it kept for `revealDebugValue`.
+   */
+  debugRun: (scriptId: string, input: UserScriptStartInput, signal?: AbortSignal) =>
+    call("debugRun", `${scriptPath(scriptId)}/debug-runs`, { ...json("POST", input), signal }, (_r, body) => ({ result: body as unknown as UserScriptDebugResult })),
+  revealDebugValue: (scriptId: string, debugRunId: string, valueId: string) =>
+    call("revealDebugValue", `${scriptPath(scriptId)}/debug-runs/${encodeURIComponent(debugRunId)}/values/${encodeURIComponent(valueId)}`, undefined, (_r, body) => ({ value: String(body.value ?? "") })),
+  discardDebugRun: (scriptId: string, debugRunId: string) =>
+    call("discardDebugRun", `${scriptPath(scriptId)}/debug-runs/${encodeURIComponent(debugRunId)}`, { method: "DELETE" }, () => ({}), "none"),
 };
 
 /** A `PUT /settings` body: names and sources only; threshold ids are content-derived by the server. */

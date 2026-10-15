@@ -34,6 +34,7 @@ export * from "./externalCollections";
 export * from "./failureAnalysis";
 export * from "./performance";
 export * from "./userScript";
+export * from "./userScriptDebug";
 export * from "./capturePath";
 export * from "./dynamicVariables";
 export * from "./requestChain";

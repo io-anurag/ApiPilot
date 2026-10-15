@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type {
   DebugBody,
   DebugCheckOutcome,
@@ -91,14 +91,14 @@ export function extractorFailureText(reason: DebugExtractorFailure): string {
   }
 }
 
-function formatBytes(size: number): string {
+export function formatBytes(size: number): string {
   if (size < 1024) return `${size} bytes`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 /** Text with each masked piece drawn as a marker, and a reveal control where the server allows one. */
-function Masked({ text }: Readonly<{ text: MaskedText }>) {
+export function Masked({ text }: Readonly<{ text: MaskedText }>) {
   const state = useContext(RevealContext);
   return (
     <>
@@ -142,7 +142,7 @@ function Masked({ text }: Readonly<{ text: MaskedText }>) {
   );
 }
 
-function BodyBlock({ body, label }: Readonly<{ body: DebugBody; label: string }>) {
+export function BodyBlock({ body, label }: Readonly<{ body: DebugBody; label: string }>) {
   if (body.kind === "none") return <p className="text-xs text-muted">{label}: none.</p>;
   if (body.kind === "binary") return <p className="text-xs text-muted">{label}: binary content ({body.contentType ?? "unknown type"}, {formatBytes(body.sizeBytes)}) is not shown.</p>;
   return (
@@ -161,7 +161,7 @@ function BodyBlock({ body, label }: Readonly<{ body: DebugBody; label: string }>
   );
 }
 
-function HeaderTable({ headers, label }: Readonly<{ headers: readonly DebugHeader[]; label: string }>) {
+export function HeaderTable({ headers, label }: Readonly<{ headers: readonly DebugHeader[]; label: string }>) {
   if (headers.length === 0) return <p className="text-xs text-muted">{label}: none set.</p>;
   return (
     <div className="min-w-0 space-y-1">
@@ -361,7 +361,11 @@ function ChainSection({ chain }: Readonly<{ chain: DebugChainOutcome }>) {
   );
 }
 
-export function DebugRunOutput({ result, onReveal }: Readonly<{ result: DebugRunResult; onReveal: RevealValue }>) {
+/**
+ * Holds the revealed values of one debug output, in this component's state only, so closing or reloading
+ * masks them again (specs/039 FR-015a). Shared by the request-chain and the Run k6 Script debug outputs.
+ */
+export function RevealProvider({ onReveal, children }: Readonly<{ onReveal: RevealValue; children: ReactNode }>) {
   const [revealed, setRevealed] = useState<ReadonlyMap<string, string>>(new Map());
   const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(new Set());
   const reveal = useCallback(
@@ -381,10 +385,14 @@ export function DebugRunOutput({ result, onReveal }: Readonly<{ result: DebugRun
     });
   }, []);
   const state = useMemo<RevealState>(() => ({ revealed, unavailable, reveal, hide }), [revealed, unavailable, reveal, hide]);
+  return <RevealContext.Provider value={state}>{children}</RevealContext.Provider>;
+}
+
+export function DebugRunOutput({ result, onReveal }: Readonly<{ result: DebugRunResult; onReveal: RevealValue }>) {
   const outcome = OUTCOME[result.outcome];
 
   return (
-    <RevealContext.Provider value={state}>
+    <RevealProvider onReveal={onReveal}>
       <section aria-labelledby="debug-result-title" className="space-y-4" data-testid="debug-run-output">
         <div className="space-y-1">
           <h3 id="debug-result-title" className="text-sm font-semibold">
@@ -417,6 +425,6 @@ export function DebugRunOutput({ result, onReveal }: Readonly<{ result: DebugRun
           <ChainSection key={chain.chainId} chain={chain} />
         ))}
       </section>
-    </RevealContext.Provider>
+    </RevealProvider>
   );
 }
