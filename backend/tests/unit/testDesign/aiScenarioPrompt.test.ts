@@ -492,9 +492,9 @@ describe("AI scenario prompt version 4 (specs/013 T072)", () => {
             purpose,
           ),
         ) as Record<string, unknown>;
-      const { task: _a, ...enhance } = build("enhance");
-      const { task: _b, ...replace } = build("replace");
-      expect(replace).toEqual(enhance);
+      const withoutTask = (prompt: Record<string, unknown>) =>
+        Object.fromEntries(Object.entries(prompt).filter(([key]) => key !== "task"));
+      expect(withoutTask(build("replace"))).toEqual(withoutTask(build("enhance")));
     });
   });
 
