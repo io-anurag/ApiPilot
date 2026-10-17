@@ -110,7 +110,7 @@ docs and housekeeping
 ├── docs/http-api.md                      # MODIFY: status row
 ├── specs/004-ai-provider-local-inference/contracts/ai-status-api.md  # MODIFY: amendment pointer
 ├── specs/ROADMAP.md                      # MODIFY: entry and version
-└── package.json x4                       # MODIFY via `npm run version:bump -- feature` (19.56.0 -> 19.58.0: two bumps, assuming AP-054 merges first)
+└── package.json x4                       # MODIFY via `npm run version:bump -- feature` (19.56.0 -> 19.58.0: two bumps; AP-054 and its 19.57.0 landed first)
 ```
 
 **Structure Decision**: Backend and shared-domain only. `frontend/` is untouched because nothing there reads
