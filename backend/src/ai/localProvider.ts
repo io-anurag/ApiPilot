@@ -5,6 +5,7 @@
  * `inference_start`, `load_success`). Raw prompt/response content is never logged.
  */
 import type {
+  AcceleratorVerification,
   AIProvider,
   AIProviderMode,
   InferenceHooks,
@@ -13,6 +14,12 @@ import type {
   ModelConfig,
   ReadinessState,
 } from "@apipilot/shared-domain";
+import {
+  ACCELERATOR_CANARY_INPUT,
+  ACCELERATOR_CANARY_MAX_NEW_TOKENS,
+  ACCELERATOR_CANARY_VERSION,
+  evaluateCanaryReply,
+} from "./acceleratorVerification";
 import { AIProviderError, buildErrorResponse } from "./errors";
 import { CHARS_PER_TOKEN_ESTIMATE, type InferencePlanningConfig } from "./modelConfig";
 import { ReadinessTracker } from "./readiness";
@@ -83,6 +90,17 @@ export interface TextGenerationEngine {
    * disagree (FR-008).
    */
   capacity?: ModelCapacity;
+  /**
+   * Token count of `text` under the model's own tokenizer. Used only for the throughput figure
+   * reported after accelerator verification (specs/055-accelerator-canary-check); when absent, that
+   * figure is omitted rather than estimated.
+   */
+  countTokens?: (text: string) => number;
+  /**
+   * Releases the engine's native resources. Called on an accelerated engine that failed
+   * verification, before the CPU engine loads, so two copies of a large model are not held at once.
+   */
+  dispose?: () => Promise<void> | void;
 }
 
 /** Loads the configured model into a TextGenerationEngine for the given device. */
@@ -176,11 +194,45 @@ const SYSTEM_PROMPTS: Record<"text" | "json", string> = {
  * being combined with any execution provider other than `"cpu"`, throwing "DML EP can only be
  * used with CPU EPs." at session creation — so every accelerator attempt failed and silently (to
  * the user) fell back to CPU. Requesting `"dml"` directly on Windows selects only that one
- * execution provider and avoids the invalid combination. Other platforms are unaffected (Linux's
- * `"gpu"` resolves to CUDA alone; macOS's to CoreML alone), so they keep using the generic value.
+ * execution provider and avoids the invalid combination. Other platforms keep using the generic
+ * value unchanged. What it resolves to there has not been measured: per the library source
+ * (`deviceToExecutionProviders`), `"gpu"` filters to `webgpu`, `cuda` and `dml`, so on macOS it
+ * selects WebGPU rather than CoreML, and CUDA applies only on Linux x64. Only Windows/DirectML has
+ * been verified (specs/055-accelerator-canary-check research Decision 7).
  */
 function resolveAcceleratorDevice(): "gpu" | "dml" {
   return process.platform === "win32" ? "dml" : "gpu";
+}
+
+/**
+ * Descriptive accelerator name reported in the readiness state, limited to what was measured:
+ * "DirectML" on Windows, and the generic "Accelerator" everywhere else, where the library's
+ * per-platform choice is unverified. Reporting an inferred vendor name would present a guess as fact
+ * (constitution XIV). Free text, never the library's device string (constitution VI).
+ */
+export function acceleratorLabelForPlatform(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "DirectML" : "Accelerator";
+}
+
+/**
+ * End-to-end rate of the verification inference, in output tokens per second, or undefined when it
+ * cannot be computed honestly: the engine cannot count tokens, the duration is not positive, or the
+ * result is not a positive finite number. Never throws, so a tokenizer failure cannot turn a passed
+ * verification into a failed one.
+ */
+function canaryThroughput(
+  engine: TextGenerationEngine,
+  content: string,
+  durationMs: number,
+): number | undefined {
+  try {
+    const outputTokens = engine.countTokens?.(content);
+    if (outputTokens === undefined || durationMs <= 0) return undefined;
+    const rate = outputTokens / (durationMs / 1000);
+    return Number.isFinite(rate) && rate > 0 ? rate : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -216,6 +268,12 @@ export async function loadTransformersEngine(
 
   return {
     capacity,
+    async dispose() {
+      await generator.dispose();
+    },
+    countTokens(text) {
+      return generator.tokenizer.encode(text).length;
+    },
     async generate(input, options) {
       const maxNewTokens = options.maxNewTokens ?? 256;
 
@@ -610,25 +668,22 @@ export class LocalProvider implements AIProvider {
         modelId: this.config.modelId,
         acceleratorRequested: false,
         acceleratorActive: false,
+        inferenceDevice: "cpu",
       });
       logger.info("load_success", { modelId: this.config.modelId });
       return engine;
     }
 
+    // Only the accelerated load itself is inside this try/catch: a failure to *load* falls back to
+    // CPU below (FR-008), but the verification and its own CPU fallback further down must not be
+    // re-caught here, or a CPU load failure after a failed verification would be retried once.
+    let acceleratedEngine: TextGenerationEngine;
     try {
-      const engine = await this.loadEngine(
+      acceleratedEngine = await this.loadEngine(
         this.config,
         "gpu",
         this.planning.contextFloorTokens,
       );
-      this.acceleratorActive = true;
-      this.readiness.markReady({
-        modelId: this.config.modelId,
-        acceleratorRequested: true,
-        acceleratorActive: true,
-      });
-      logger.info("load_success", { modelId: this.config.modelId });
-      return engine;
     } catch (error) {
       // Accelerator explicitly enabled but unavailable at runtime: fall back to CPU
       // automatically, but surface a visible (never silent) notice (FR-008). The readiness
@@ -653,11 +708,127 @@ export class LocalProvider implements AIProvider {
         modelId: this.config.modelId,
         acceleratorRequested: true,
         acceleratorActive: false,
+        inferenceDevice: "cpu",
         reason:
           "Accelerator was requested but unavailable at runtime; using CPU inference instead",
       });
       logger.info("load_success", { modelId: this.config.modelId });
       return engine;
+    }
+
+    // The accelerator loaded, which does not mean it works: verify it before reporting ready, so no
+    // request can reach an unverified device (specs/055-accelerator-canary-check FR-001, FR-008).
+    const verification = await this.verifyAccelerator(acceleratedEngine);
+    const acceleratorLabel = acceleratorLabelForPlatform(process.platform);
+    logger.info("accelerator_verification", {
+      modelId: this.config.modelId,
+      outcome: verification.outcome,
+      failureCategory: verification.failureCategory,
+      durationMs: verification.durationMs,
+      canaryVersion: verification.canaryVersion,
+      accelerator: acceleratorLabel,
+    });
+
+    if (verification.outcome === "passed") {
+      this.acceleratorActive = true;
+      this.readiness.markReady({
+        modelId: this.config.modelId,
+        acceleratorRequested: true,
+        acceleratorActive: true,
+        inferenceDevice: "accelerator",
+        acceleratorLabel,
+        acceleratorVerification: verification,
+      });
+      logger.info("load_success", { modelId: this.config.modelId });
+      return acceleratedEngine;
+    }
+
+    // Loaded but unusable: say so, release it, and use CPU. Never another provider (004 FR-007). A
+    // CPU load failure here propagates unchanged to `runInference`, which marks the provider
+    // unavailable; nothing retries it (004 FR-019).
+    this.acceleratorActive = false;
+    await this.releaseRejectedEngine(acceleratedEngine);
+    const cpuEngine = await this.loadEngine(
+      this.config,
+      "cpu",
+      this.planning.contextFloorTokens,
+    );
+    this.readiness.markReady({
+      modelId: this.config.modelId,
+      acceleratorRequested: true,
+      acceleratorActive: false,
+      inferenceDevice: "cpu",
+      acceleratorVerification: verification,
+      reason: `Accelerator loaded but failed verification (${verification.failureCategory ?? "unknown"}); using CPU inference instead`,
+    });
+    logger.info("load_success", { modelId: this.config.modelId });
+    return cpuEngine;
+  }
+
+  /**
+   * Runs the one fixed canary inference on a freshly loaded accelerated engine (FR-001, FR-002,
+   * FR-003). Never throws: every outcome, including a timeout or an engine error, is a result. It
+   * never returns, stores or logs the canary reply (constitution XX).
+   */
+  private async verifyAccelerator(engine: TextGenerationEngine): Promise<AcceleratorVerification> {
+    const startedAt = Date.now();
+    // An async wrapper turns a synchronous throw from `generate` into a rejection, like any other.
+    const generation = (async () =>
+      engine.generate(ACCELERATOR_CANARY_INPUT, {
+        maxNewTokens: ACCELERATOR_CANARY_MAX_NEW_TOKENS,
+        expectedOutputFormat: "json",
+      }))();
+    try {
+      const content = await withTimeout(generation, this.config.inferenceTimeoutMs);
+      const durationMs = Date.now() - startedAt;
+      const evaluation = evaluateCanaryReply(content);
+      const tokensPerSecond = evaluation.passed
+        ? canaryThroughput(engine, content, durationMs)
+        : undefined;
+      return evaluation.passed
+        ? {
+            outcome: "passed",
+            durationMs,
+            ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
+            canaryVersion: ACCELERATOR_CANARY_VERSION,
+          }
+        : {
+            outcome: "failed",
+            failureCategory: evaluation.failureCategory,
+            durationMs,
+            canaryVersion: ACCELERATOR_CANARY_VERSION,
+          };
+    } catch (error) {
+      // Measured at the decision, before any wait for an abandoned run below.
+      const durationMs = Date.now() - startedAt;
+      const timedOut = error instanceof TimeoutError;
+      if (timedOut) {
+        // The runtime exposes no abort signal, so the abandoned generation keeps running. Wait for it
+        // to settle (the 12-token cap bounds this) so it cannot compete with the CPU engine that
+        // loads next, as `013-ai-enhancement-viability` FR-017 does for real inferences.
+        await generation.then(
+          () => undefined,
+          () => undefined,
+        );
+      }
+      return {
+        outcome: "failed",
+        failureCategory: timedOut ? "timeout" : "inference-error",
+        durationMs,
+        canaryVersion: ACCELERATOR_CANARY_VERSION,
+      };
+    }
+  }
+
+  /** Frees a rejected accelerated engine's native memory before the CPU engine loads. */
+  private async releaseRejectedEngine(engine: TextGenerationEngine): Promise<void> {
+    try {
+      await engine.dispose?.();
+    } catch (error) {
+      logger.warn("accelerator_dispose_failed", {
+        modelId: this.config.modelId,
+        errorCategory: error instanceof Error ? error.name : "UNKNOWN",
+      });
     }
   }
 }

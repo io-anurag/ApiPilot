@@ -22,7 +22,7 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                            | Unset; fp32 is the measured CPU default |
 | `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                                |
 | `AI_MODEL_CONTEXT_FLOOR_TOKENS`      | Conservative context estimate when a model reports none                         | `2048`                                  |
-| `AI_USE_ACCELERATOR`                 | Attempt hardware acceleration                                                   | `false`                                 |
+| `AI_USE_ACCELERATOR`                 | Experimental hardware acceleration; verified after load, may be slower          | `false`                                 |
 | `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Operations per scenario-enhancement batch                                       | `1`                                     |
 | `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                                        | `300000` (5 minutes)                    |
 | `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Operations per AI dependency batch                                              | `3`                                     |
@@ -33,7 +33,19 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | `APIPILOT_DB_PATH`                   | SQLite database path                                                            | `~/.apipilot/apipilot.db`               |
 | `K6_BINARY_PATH`                     | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded                 | Unset: the first `k6` on `PATH`         |
 
-On Windows, an enabled accelerator requests DirectML; Linux uses CUDA where available and macOS uses CoreML where available. Check `/api/ai/status` because requesting an accelerator does not guarantee that it initialized. The default local model is roughly 1.7 GB on disk and measured at about 2.75 GB peak process RSS on the reference CPU profile; actual requirements depend on the selected model and dtype.
+**`AI_USE_ACCELERATOR` is experimental, and CPU is the recommended setting.** On Windows an enabled accelerator requests DirectML. On Linux and macOS the inference library chooses a device for its generic GPU request; ApiPilot has not measured that, so do not assume a specific accelerator there.
+
+It was measured slower than CPU for the models ApiPilot ships (2026-10-17, one Windows laptop with Intel integrated graphics and an NVIDIA RTX 500 Ada with 4 GB of VRAM, `onnxruntime-node` 1.30.0, `@huggingface/transformers` 4.3.1, each configuration in its own process). Qwen2.5-0.5B at fp32 was correct but 2x to 4x slower than CPU on real scenario-enhancement prompts. Qwen3-1.7B, the default, returned unusable output on DirectML (garbage text or an empty reply) at fp32 and fp16 on both GPUs, while CPU returned coherent output. Other machines may differ, which is why ApiPilot verifies the accelerator at run time.
+
+After an accelerator loads, ApiPilot runs one small fixed check inference and keeps the accelerator only if the reply is usable. If the accelerator fails to load, or loads but fails the check (`unusable-reply`, `timeout` or `inference-error`), ApiPilot falls back to CPU and records why in `reason`; it never falls back to another provider. `GET /api/ai/status` reports the device in use (`inferenceDevice`), a descriptive `acceleratorLabel` (`DirectML` on Windows, the generic `Accelerator` elsewhere), `acceleratorAdapter` (always `null`: the runtime does not expose the adapter) and `acceleratorVerification`. Its `tokensPerSecond` is a coarse, cold, single end-to-end sample that includes prompt prefill, for noticing order-of-magnitude differences rather than benchmarking, and the status does not itself compare against CPU. Reference rates measured the same way on the same laptop's CPU:
+
+| Configuration                                    | Reported rate                       |
+| ------------------------------------------------ | ----------------------------------- |
+| Qwen2.5-0.5B, CPU                                | about 8.9 tokens/s (4 tokens, 0.45 s) |
+| Qwen3-1.7B, CPU                                  | about 2.9 tokens/s (4 tokens, 1.4 s)  |
+| Qwen2.5-0.5B, DirectML, as the status reports it | median about 4.0 tokens/s (2.2 to 4.5 over 20 loads) |
+
+The default local model is roughly 1.7 GB on disk and measured at about 2.75 GB peak process RSS on the reference CPU profile; actual requirements depend on the selected model and dtype.
 
 ## Persistence and sessions
 

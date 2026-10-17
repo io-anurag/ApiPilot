@@ -172,6 +172,8 @@ comparable metrics for each, without requiring any other AI-powered feature to b
   configuration. If an accelerator is explicitly enabled but is not actually available at
   runtime, the system MUST automatically fall back to CPU inference and surface a visible
   notice that acceleration is unavailable.
+  *Extended by `specs/055-accelerator-canary-check`: an accelerator that loads but fails a post-load
+  verification is also replaced by CPU, with a visible reason.*
 - **FR-009**: System MUST define a structured inference request/response contract that
   every AI provider implementation conforms to, independent of the underlying model or
   runtime.

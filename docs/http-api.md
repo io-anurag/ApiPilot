@@ -10,7 +10,7 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | ------ | ------------------ | --------------------------------------------------------------------------------------------- |
 | `GET`  | `/api/health`      | Returns `{ status: "ok", timestamp }`.                                                        |
 | `GET`  | `/api/version`     | Returns the application version and commit identifier.                                        |
-| `GET`  | `/api/ai/status`   | Returns provider readiness, model/accelerator information, and persisted diagnostics.         |
+| `GET`  | `/api/ai/status`   | Returns readiness, model, device in use, accelerator verification and diagnostics.            |
 | `POST` | `/api/client-logs` | Accepts size-limited frontend warning/error logs after credential-shaped fields are filtered. |
 
 ## Stateless/domain endpoints

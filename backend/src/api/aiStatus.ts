@@ -28,6 +28,20 @@ export function createAiStatusRouter(provider: AIProvider): Router {
           acceleratorActive: readiness.acceleratorActive,
           reason: readiness.reason ?? null,
           updatedAt: readiness.updatedAt,
+          // Additive (specs/055-accelerator-canary-check): live, in-process state only, null when the
+          // provider has nothing to report. `acceleratorAdapter` is null until a runtime exposes one.
+          inferenceDevice: readiness.inferenceDevice ?? null,
+          acceleratorLabel: readiness.acceleratorLabel ?? null,
+          acceleratorAdapter: readiness.acceleratorAdapter ?? null,
+          acceleratorVerification: readiness.acceleratorVerification
+            ? {
+                outcome: readiness.acceleratorVerification.outcome,
+                failureCategory: readiness.acceleratorVerification.failureCategory ?? null,
+                durationMs: readiness.acceleratorVerification.durationMs,
+                tokensPerSecond: readiness.acceleratorVerification.tokensPerSecond ?? null,
+                canaryVersion: readiness.acceleratorVerification.canaryVersion,
+              }
+            : null,
           // Historical/diagnostic only (specs/025-local-persistence-layer) — never a substitute
           // for the live `state` above, which always reflects a real load attempt in this
           // process (research.md D5).
