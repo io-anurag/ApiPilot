@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { LocalProvider } from "../../src/ai/localProvider";
+import {
+  ACCELERATOR_CANARY_INPUT,
+  ACCELERATOR_CANARY_MAX_NEW_TOKENS,
+  evaluateCanaryReply,
+} from "../../src/ai/acceleratorVerification";
+import { LocalProvider, loadTransformersEngine } from "../../src/ai/localProvider";
 
 const REAL_MODEL_ENABLED = process.env.AI_TEST_REAL_MODEL === "1";
 
@@ -46,5 +51,30 @@ describe.runIf(REAL_MODEL_ENABLED)("LocalProvider (real model, opt-in)", () => {
 
     expect(response.status).toBe("error");
     expect(response.errorCategory).toBe("INVALID_REQUEST");
+  }, 120_000);
+
+  // Calibration guard for the accelerator canary (specs/055-accelerator-canary-check, research
+  // Decision 2): its wording is load-bearing, because two natural phrasings make a healthy small
+  // model answer `{}`. The canary runs only on an accelerated load, so this checks the reference
+  // device: the configured model must pass it on CPU. Re-run it for every shipped model whenever
+  // the canary text, cap or pass rule changes.
+  it("passes the accelerator verification canary on CPU for the configured model", async () => {
+    const engine = await loadTransformersEngine(
+      {
+        modelId: process.env.AI_MODEL_ID ?? "onnx-community/Qwen3-1.7B-ONNX",
+        cacheDir: process.env.AI_MODEL_CACHE_DIR ?? `${process.env.HOME ?? process.env.USERPROFILE}/.apipilot/models`,
+        useAccelerator: false,
+        inferenceTimeoutMs: 120_000,
+      },
+      "cpu",
+    );
+
+    const reply = await engine.generate(ACCELERATOR_CANARY_INPUT, {
+      maxNewTokens: ACCELERATOR_CANARY_MAX_NEW_TOKENS,
+      expectedOutputFormat: "json",
+    });
+
+    expect(evaluateCanaryReply(reply)).toEqual({ passed: true });
+    await engine.dispose?.();
   }, 120_000);
 });

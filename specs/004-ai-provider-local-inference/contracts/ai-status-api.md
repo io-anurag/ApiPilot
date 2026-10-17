@@ -82,3 +82,9 @@ that state (constitution XIX, Fail Safely).
   concrete need (see the Amendment note above) and added `lastKnownReadiness` and
   `latestBenchmarkRun`; any further extension still requires the same bar — a real feature
   need, not speculation.
+
+**Amendment note (`specs/055-accelerator-canary-check`)**: FR-008 made an accelerator fallback visible only
+when the accelerator failed to *load*; a loaded-but-unusable accelerator was reported as healthy. That is
+the concrete need for four further additive, optional fields: `inferenceDevice`, `acceleratorLabel`,
+`acceleratorAdapter` and `acceleratorVerification`. No existing field changed meaning or type. See
+[the amendment](../../055-accelerator-canary-check/contracts/ai-status-api-amendment.md).

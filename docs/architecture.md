@@ -337,8 +337,8 @@ states are explicit: `not-loaded`, `loading`, `ready`, and `unavailable`. Reques
 run serially, and a request whose inference timed out holds the queue until that abandoned computation
 actually settles (the engine cannot be interrupted), so the next request never competes with work already
 given up on. Load failures are surfaced, require explicit retry, and never trigger a cloud
-fallback. CPU is the guaranteed mode; an explicitly enabled unavailable accelerator falls back to
-CPU with a notice.
+fallback. CPU is the guaranteed mode; an explicitly enabled accelerator that is unavailable, or that loads but fails
+post-load verification, falls back to CPU with a notice (see "Accelerator verification" below).
 
 AP-031 added two optional, backward-compatible members to the contract (specs/004 data-model
 amendment 2026-09-23). `InferenceRequest.systemPrompt` lets a feature supply its own system
@@ -354,6 +354,30 @@ made the accelerator fall back to CPU on every Windows run regardless of real GP
 (`backend/src/ai/localProvider.ts`'s `resolveAcceleratorDevice()`; see
 [specs/004-ai-provider-local-inference/research.md](../specs/004-ai-provider-local-inference/research.md)
 Decision 6 addendum).
+
+### Accelerator verification
+
+An accelerator can load without error and still produce unusable inference, so loading is not trusted
+on its own. When `AI_USE_ACCELERATOR` is enabled and the accelerated engine loads, the local provider
+runs one fixed, deterministic check inference (greedy decoding, a 12-token cap, bounded by
+`AI_INFERENCE_TIMEOUT_MS`) and keeps the accelerator only if the reply parses as a JSON object with a
+`candidates` array (`backend/src/ai/acceleratorVerification.ts`; specs/055-accelerator-canary-check).
+Readiness stays `loading` until that decision, so no request reaches an unverified device and the FIFO
+queue is unchanged. A failed check (`unusable-reply`, `timeout` or `inference-error`) disposes the
+accelerated engine, waits for any abandoned generation to settle (it cannot be interrupted), loads the
+CPU engine, and reports `ready` on CPU with a `reason` naming the category. The fallback never targets
+another provider, and a CPU load failure after it ends `unavailable` with no automatic retry; an
+explicit retry repeats the check. The result (device in use, label, and a coarse throughput sample)
+is live status only, exposed additively by `GET /api/ai/status` and not persisted.
+
+The accelerator is experimental and was measured slower than CPU for the shipped models: on
+2026-10-17, on one Windows laptop (Intel integrated graphics plus an NVIDIA RTX 500 Ada with 4 GB of
+VRAM), `onnxruntime-node` 1.30.0 and `@huggingface/transformers` 4.3.1, each configuration in its own
+process, Qwen2.5-0.5B (fp32) was correct but 2x to 4x slower than CPU on real enhancement prompts,
+and Qwen3-1.7B returned unusable output on DirectML at fp32 and fp16 on both GPUs. The reported
+throughput is a coarse cold sample for reading against the CPU reference rates in
+[configuration](configuration.md) (about 8.9 tokens/s for Qwen2.5-0.5B and 2.9 for Qwen3-1.7B on that
+laptop's CPU), not a benchmark. The check detects an unusable accelerator, not a slow or weak one.
 
 ### Batching, viability, and pacing
 
@@ -385,7 +409,9 @@ No GPU is required for any ApiPilot capability. Local inference runs on CPU by d
 `AI_USE_ACCELERATOR` defaults to `false`, and an explicitly enabled but unavailable accelerator
 falls back to CPU with a visible notice rather than failing silently. When a real accelerator is
 present and enabled, Windows uses DirectML (see "Provider boundary" above); other platforms use
-Transformers.js's generic GPU device resolution (CUDA on Linux x64, CoreML on macOS).
+Transformers.js's generic GPU device resolution, which ApiPilot has not measured (per the library
+source it selects WebGPU on macOS rather than CoreML, and CUDA only on Linux x64). The accelerator is
+experimental and verified at run time (see "Accelerator verification" above).
 
 The project's own benchmark harness (`npm run ai:benchmark -w backend`, recorded in
 [specs/004-ai-provider-local-inference/benchmark-results.json](../specs/004-ai-provider-local-inference/benchmark-results.json))

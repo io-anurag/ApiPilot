@@ -1,4 +1,4 @@
-import type { ReadinessState } from "@apipilot/shared-domain";
+import type { AcceleratorVerification, ReadinessState } from "@apipilot/shared-domain";
 import { getAiDiagnosticsRepository } from "../persistence/aiDiagnosticsRepository";
 
 /**
@@ -38,6 +38,10 @@ export class ReadinessTracker {
     acceleratorActive: boolean;
     /** Visible notice, e.g. an accelerator-unavailable fallback (FR-008); optional otherwise. */
     reason?: string;
+    /** Live status only (specs/055-accelerator-canary-check): not persisted by `recordTransition`. */
+    inferenceDevice?: "cpu" | "accelerator";
+    acceleratorLabel?: string;
+    acceleratorVerification?: AcceleratorVerification;
   }): void {
     this.state = {
       state: "ready",
@@ -46,6 +50,11 @@ export class ReadinessTracker {
       acceleratorRequested: params.acceleratorRequested,
       acceleratorActive: params.acceleratorActive,
       updatedAt: new Date().toISOString(),
+      ...(params.inferenceDevice !== undefined ? { inferenceDevice: params.inferenceDevice } : {}),
+      ...(params.acceleratorLabel !== undefined ? { acceleratorLabel: params.acceleratorLabel } : {}),
+      ...(params.acceleratorVerification !== undefined
+        ? { acceleratorVerification: params.acceleratorVerification }
+        : {}),
     };
     this.recordTransition();
   }

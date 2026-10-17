@@ -49,6 +49,26 @@ export interface InferenceResponse {
   durationMs: number;
 }
 
+/**
+ * Outcome of the one-off check run on an accelerator right after it loads
+ * (specs/055-accelerator-canary-check). Describes the current process's load only; never persisted.
+ * Never contains the check's input or the model's reply.
+ */
+export interface AcceleratorVerification {
+  outcome: "passed" | "failed";
+  /** Present if and only if `outcome` is "failed". */
+  failureCategory?: "unusable-reply" | "timeout" | "inference-error";
+  /** Wall time of the check, in milliseconds. */
+  durationMs: number;
+  /**
+   * Present if and only if `outcome` is "passed". A coarse, cold, single end-to-end sample
+   * (it includes prompt prefill) for noticing order-of-magnitude differences, not a benchmark.
+   */
+  tokensPerSecond?: number;
+  /** Version of the fixed check input that produced this result. */
+  canaryVersion: number;
+}
+
 /** Current lifecycle status of local inference (FR-004). */
 export interface ReadinessState {
   state: "not-loaded" | "loading" | "ready" | "unavailable";
@@ -58,6 +78,17 @@ export interface ReadinessState {
   acceleratorRequested: boolean;
   acceleratorActive: boolean;
   updatedAt: string;
+  /** The device the loaded engine runs on; absent until an engine has loaded. */
+  inferenceDevice?: "cpu" | "accelerator";
+  /**
+   * Descriptive name of the accelerator in use, produced behind the provider boundary. Free text,
+   * never a runtime's device identifier, so this contract does not name an inference technology.
+   */
+  acceleratorLabel?: string;
+  /** The physical adapter, only if the runtime exposes it. Reserved: no runtime does today. */
+  acceleratorAdapter?: string;
+  /** Present when an accelerated engine loaded and was verified. */
+  acceleratorVerification?: AcceleratorVerification;
 }
 
 /**

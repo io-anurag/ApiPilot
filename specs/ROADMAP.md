@@ -4008,3 +4008,37 @@ Implementation
       dropped connection): four requests shown, no environment value, query token, bearer header or console line reached the page.
     - Not covered: a compressed or very large real response, a script that times out, 320 px, a keyboard and screen-reader pass.
     - Version bumped to 19.56.0 (root, backend, frontend, shared-domain).
+
+101. **AP-055: Accelerator verification and visibility; version 19.58.0 (2026-10-17).**
+    - `specs/055-accelerator-canary-check`, extending 004 FR-008. With `AI_USE_ACCELERATOR=true` an accelerator could load without
+      error, be reported healthy, and still produce unusable inference (measured on the reference Windows laptop: Qwen3-1.7B, the
+      default model, returned garbage text or an empty reply on DirectML at fp32 and fp16 on both GPUs, where CPU was coherent), so
+      every enhancement batch failed or timed out with nothing pointing at the accelerator.
+    - After an enabled accelerator loads, the local provider runs **one fixed, deterministic check inference** (`Reply with exactly:
+      {"candidates":[]}`, greedy, a 12-token cap, bounded by `AI_INFERENCE_TIMEOUT_MS`) and keeps the accelerator only if the reply
+      parses to a JSON object with a `candidates` array. A failure (`unusable-reply`, `timeout`, `inference-error`) waits for any
+      abandoned run to settle, disposes the accelerated engine, loads CPU and reports ready on CPU with a reason naming the category.
+      A CPU load failure after that ends unavailable with no automatic retry, and an explicit retry repeats the check. Readiness stays
+      loading until the decision, the FIFO queue is unchanged, and it never falls back to another provider.
+    - `GET /api/ai/status` gains four additive fields: `inferenceDevice`, `acceleratorLabel` (`DirectML` on Windows, the generic
+      `Accelerator` elsewhere), `acceleratorAdapter` (always `null`: the runtime does not expose the adapter) and
+      `acceleratorVerification` (outcome, failure category, duration, a coarse cold tokens-per-second sample, canary version). Live
+      state only: not persisted, no new environment variable, no frontend change.
+    - The canary wording is load-bearing and was calibrated by measurement: two natural phrasings make a healthy Qwen2.5-0.5B answer
+      `{}` on CPU, which would reject a working accelerator. The chosen text passes on CPU for both shipped models and fails every
+      accelerator configuration measured (research.md Decisions 2 to 4). Opt-in real-model test: `npm run test:ai-real -w backend`.
+    - Measured with the real provider on the reference laptop (fresh process per load): the failing configuration (Qwen3-1.7B fp32 on
+      DirectML) verified in 13.5 to 14.1 s against the 15 s budget (about 1 s of margin) and ended ready on CPU; the healthy one
+      (Qwen2.5-0.5B fp32 on DirectML) kept the accelerator in 20 of 20 loads, verifying in 0.9 to 1.8 s, with a median reported rate of
+      about 4.0 tokens/s against about 8.9 on CPU.
+    - Docs now call the accelerator experimental and measured slower than CPU (`.env.example`, `docs/configuration.md`,
+      `docs/architecture.md`, `docs/http-api.md`, and a note on the 004 contract and FR-008). They also drop the unsupported claims
+      that macOS uses CoreML and Linux uses CUDA: per the library source the generic `gpu` request filters to WebGPU, CUDA and
+      DirectML, so macOS resolves to WebGPU and CUDA applies only on Linux x64.
+    - Tests: the reply check, the provider with fake engines (fallback on garbage, timeout and engine error, CPU failure and retry,
+      accelerator off, queue ordering, no sensitive logging, device and throughput reporting), and the status route.
+    - Not covered: Linux and macOS are unmeasured; the throughput figure is one coarse cold sample; a configuration that passes the
+      short check but degrades on long prompts is not detected; the 0.5B model is still correct but slower than CPU when its
+      accelerator is kept; the 15 s budget has little margin on a slower machine (the 12-token cap is the lever).
+    - Version bumped to 19.58.0 (root, backend, frontend, shared-domain), assuming `AP-054` (entry 100, 19.57.0) merges first; if this
+      merges first, renumber to entry 100 and 19.57.0.
