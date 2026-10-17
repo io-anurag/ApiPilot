@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { isSettableHeader, isValidHeaderName, STEP_METHODS, type ChainStep, type StepMethod } from "@apipilot/shared-domain";
+import { FIELD_STYLES } from "../controlStyles";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { StatusBadge } from "../StatusBadge";
 import { Tabs } from "../Tabs";
@@ -27,7 +28,7 @@ const RUNS: { value: ChainStep["runs"]; label: string; description: string }[] =
 ];
 
 const STATUS = /^[1-5](?:[0-9]{2}|XX)$/;
-const FIELD_CLASS = "rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+const FIELD_CLASS = FIELD_STYLES;
 
 function headerRefusal(name: string): string | null {
   if (name === "") return null;

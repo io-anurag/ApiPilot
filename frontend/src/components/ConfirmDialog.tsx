@@ -91,7 +91,7 @@ export function ConfirmDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-border bg-surface p-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+              className="w-full rounded-md border border-border-control bg-surface p-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             />
           </div>
         )}

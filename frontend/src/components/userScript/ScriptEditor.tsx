@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useRef, type ReactNode } from "react";
 import type { ScriptProblem } from "@apipilot/shared-domain";
-import { StatusBadge } from "../StatusBadge";
+import { Pill } from "../patterns/Pill";
 import { highlightJavaScript, type TokenKind } from "./highlightJavaScript";
 import { DocumentGlyph } from "./ScriptPanel";
 import { ScriptProblems } from "./ScriptProblems";
@@ -16,7 +16,7 @@ const TOKEN_CLASSES: Record<TokenKind, string> = {
   string: "text-success",
   template: "text-success",
   number: "text-warning",
-  keyword: "font-semibold text-brand-700 dark:text-brand-300",
+  keyword: "font-semibold text-brand-700",
   identifier: "text-text-primary",
   punctuation: "text-muted",
   whitespace: "",
@@ -72,16 +72,15 @@ export function ScriptEditor({
   }
 
   return (
-    <div className="relative min-w-0 overflow-hidden rounded-xl border border-border-strong bg-surface shadow-sm" data-testid="script-editor">
-      <div className="h-1 bg-brand-600 dark:bg-brand-500" />
+    <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-sm" data-testid="script-editor">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border bg-surface-subtle px-4 py-2.5 sm:px-5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <span className="inline-flex min-w-0 items-center gap-2 text-text-primary">
-            <DocumentGlyph className="h-4 w-4 shrink-0 text-brand-700 dark:text-brand-300" />
+            <DocumentGlyph className="h-4 w-4 shrink-0 text-brand-700" />
             {typeof fileName === "string" || fileName === undefined ? <span className="truncate font-mono text-xs font-semibold">{fileName ?? label}</span> : fileName}
           </span>
           <span className="text-xs text-muted">{lineCount === 1 ? "1 line" : `${lineCount} lines`}</span>
-          <StatusBadge label={readOnly ? "Read only" : "Editing"} tone={readOnly ? "neutral" : "info"} />
+          <Pill tone={readOnly ? "line" : "mint"}>{readOnly ? "Read only" : "Editing"}</Pill>
         </div>
         {toolbar && <div className="flex flex-wrap items-center gap-2">{toolbar}</div>}
       </div>

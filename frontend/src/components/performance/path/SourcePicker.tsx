@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Pill } from "../../patterns/Pill";
 import { SOURCE_LABELS, type SourceKind } from "./pathState";
 
 const DESCRIPTIONS: Record<SourceKind, string> = {
@@ -14,6 +15,14 @@ const NEEDS: Record<SourceKind, string> = {
   workflow: "Needs approved workflows",
   collection: "Needs a collection",
   empty: "Needs nothing",
+};
+
+/** The icon tile's fill per source, from the pattern set's tints (the mock's lime, mint, sage and olive tiles). */
+const TILE_TONES: Record<SourceKind, string> = {
+  specification: "bg-accent text-on-accent",
+  workflow: "bg-mint text-text-primary",
+  collection: "bg-sage text-text-primary",
+  empty: "bg-olive text-text-primary",
 };
 
 const ORDER: readonly SourceKind[] = ["specification", "workflow", "collection", "empty"];
@@ -39,7 +48,7 @@ const ICON_PATHS: Record<SourceKind, ReactNode> = {
 
 function SourceIcon({ source }: Readonly<{ source: SourceKind }>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-[18px] w-[18px]" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5" aria-hidden="true">
       {ICON_PATHS[source]}
     </svg>
   );
@@ -78,26 +87,22 @@ export function SourcePicker({
             aria-pressed={selected === null ? undefined : isSelected}
             disabled={disabled || (locked && !isSelected)}
             onClick={() => onPick(source)}
-            className={`grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-stretch gap-3 rounded-lg border p-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60 ${
-              isSelected ? "border-brand-600 bg-brand-600/10 ring-1 ring-brand-600 dark:border-brand-500 dark:ring-brand-500" : "border-border bg-surface hover:border-brand-500 hover:bg-surface-hover"
+            className={`relative flex min-w-0 flex-col gap-2 rounded-xl border p-3.5 text-left motion-safe:transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60 ${
+              isSelected ? "border-brand-500 bg-lime-pale ring-1 ring-brand-500" : "border-border bg-surface enabled:hover:border-brand-500 enabled:hover:bg-surface-hover"
             }`}
           >
-            <span
-              className={`flex h-10 w-10 items-center justify-center self-start rounded-lg border ${
-                isSelected ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500/20 dark:text-brand-300" : "border-border bg-surface-strong text-text-secondary"
-              }`}
-            >
+            <span aria-hidden="true" className={`flex h-10 w-10 items-center justify-center rounded-xl ${TILE_TONES[source]}`}>
               <SourceIcon source={source} />
             </span>
-            <span className="flex min-w-0 flex-col">
-              <span className="block text-sm font-semibold text-text-primary">{SOURCE_LABELS[source]}</span>
-              <span className="mt-0.5 block text-sm text-muted">{DESCRIPTIONS[source]}</span>
-              <span className="mt-auto block pt-2.5 font-mono text-xs text-text-secondary">{NEEDS[source]}</span>
+            <span className="block pr-6 text-sm font-semibold text-text-primary">{SOURCE_LABELS[source]}</span>
+            <span className="block text-xs leading-snug text-text-secondary">{DESCRIPTIONS[source]}</span>
+            <span className="mt-auto pt-1.5">
+              <Pill tone="line">{NEEDS[source]}</Pill>
             </span>
             {selected !== null && (
               <span
                 aria-hidden="true"
-                className={`mt-0.5 flex h-[18px] w-[18px] items-center justify-center self-start rounded-full border ${isSelected ? "border-brand-600 bg-brand-600 text-white dark:border-brand-500 dark:bg-brand-500 dark:text-code-surface" : "border-border-strong bg-surface"}`}
+                className={`absolute right-3 top-3 flex h-4.5 w-4.5 items-center justify-center rounded-full border ${isSelected ? "border-brand-500 bg-accent text-on-accent" : "border-border-control bg-surface"}`}
               >
                 {isSelected && <CheckIcon />}
               </span>

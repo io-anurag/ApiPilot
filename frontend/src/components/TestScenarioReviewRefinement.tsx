@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReviewEditContent } from "@apipilot/shared-domain";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 
 /** Edit and AI-regeneration controls for AI-derived and user-modified scenarios (US3, FR-011-FR-016). */
@@ -52,7 +52,7 @@ export function TestScenarioReviewRefinement({
       className="space-y-2 border-t border-border pt-4"
     >
       <div className="flex flex-col gap-1">
-        <label htmlFor="review-edit-body" className="text-xs font-medium text-muted">
+        <label htmlFor="review-edit-body" className="text-xs font-medium text-text-secondary">
           Request body
         </label>
         <textarea
@@ -61,7 +61,7 @@ export function TestScenarioReviewRefinement({
           onChange={(e) => setBody(e.target.value)}
           disabled={submitting}
           rows={6}
-          className="w-full rounded-md border border-border bg-surface p-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
+          className={`${FIELD_STYLES} w-full font-mono`}
         />
       </div>
       {bodyError && <ErrorState testId="review-edit-body-error" message={bodyError} />}

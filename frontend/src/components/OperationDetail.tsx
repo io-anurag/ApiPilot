@@ -5,14 +5,14 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
   return (
     <article
       data-testid="operation-detail"
-      className="space-y-4 rounded-md border border-border bg-surface p-4"
+      className="space-y-4 rounded-xl border border-border bg-surface p-4"
     >
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+      <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-text-primary">
         <HttpMethodBadge method={operation.method} />
-        <span className="font-mono">{operation.path}</span>
+        <span className="min-w-0 break-all font-mono">{operation.path}</span>
       </h3>
       <section>
-        <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Parameters
         </h4>
         {operation.parameters.length === 0 ? (
@@ -30,7 +30,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
       </section>
       {operation.requestBody && (
         <section>
-          <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
             Request Body{operation.requestBody.required ? " (required)" : ""}
           </h4>
           <ul className="mt-1 space-y-1 text-sm text-text-secondary">
@@ -43,7 +43,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
         </section>
       )}
       <section>
-        <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Responses
         </h4>
         <ul className="mt-1 space-y-1 text-sm text-text-secondary">
@@ -56,7 +56,7 @@ export function OperationDetail({ operation }: Readonly<{ operation: ApiOperatio
         </ul>
       </section>
       <section>
-        <h4 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Security
         </h4>
         {operation.security.length === 0 ? (

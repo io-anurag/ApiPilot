@@ -1,9 +1,11 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import type { CoverageFilter, CoverageSortKey, CoverageSnapshot } from "@apipilot/shared-domain";
 import { ActiveViewContext } from "../components/requestChain/activeView";
-import { BUTTON_STYLES } from "../components/controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "../components/controlStyles";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
+import { Banner } from "../components/patterns/Banner";
+import { Card, CardHeader } from "../components/patterns/Card";
 import { CoverageHero } from "../components/apiCoverage/CoverageHero";
 import { CoverageSteps, type CoverageNeed } from "../components/apiCoverage/CoverageSteps";
 import { CategoryCoverage } from "../components/apiCoverage/CategoryCoverage";
@@ -53,12 +55,12 @@ function Header({
         snapshot ? (
         <>
           {exec && exec.availableRuns.length > 0 && (
-            <label className="flex items-center gap-2 text-xs font-semibold text-muted">
+            <label className="flex flex-wrap items-center gap-2 text-xs font-semibold text-text-secondary">
               Evaluate run
               <select
                 value={runId}
                 onChange={(event) => onRunChange(event.target.value)}
-                className="max-w-72 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-normal text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                className={`${FIELD_STYLES} w-full max-w-72 font-normal sm:w-auto`}
               >
                 <option value={LATEST_RUN}>Latest qualifying result per scenario</option>
                 {exec.availableRuns.map((run) => (
@@ -98,15 +100,17 @@ function Header({
 }
 
 function SideLists({ snapshot }: Readonly<{ snapshot: CoverageSnapshot }>) {
+  const outOfScope = snapshot.outOfScopeOperations.length;
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="text-sm font-semibold text-text-primary">
-          Out of scope
-          {snapshot.outOfScopeOperations.length > 0 && <span className="ml-1 font-normal text-muted">({snapshot.outOfScopeOperations.length})</span>}
-        </h3>
-        <p className="mb-2 text-xs text-muted">Operations not selected for generation. They are not counted as gaps.</p>
-        {snapshot.outOfScopeOperations.length === 0 ? (
+      <Card as="section" aria-labelledby="out-of-scope-title">
+        <CardHeader
+          title={outOfScope > 0 ? `Out of scope (${outOfScope})` : "Out of scope"}
+          titleId="out-of-scope-title"
+          level={3}
+          subtitle="Operations not selected for generation. They are not counted as gaps."
+        />
+        {outOfScope === 0 ? (
           <p className="text-xs text-muted">None. Every operation is in scope.</p>
         ) : (
           // Can hold hundreds of operations: scroll inside the card; focusable so the keyboard can scroll it.
@@ -121,10 +125,9 @@ function SideLists({ snapshot }: Readonly<{ snapshot: CoverageSnapshot }>) {
             ))}
           </ul>
         )}
-      </section>
-      <section className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="text-sm font-semibold text-text-primary">Not measurable</h3>
-        <p className="mb-2 text-xs text-muted">Excluded from every denominator, with the reason.</p>
+      </Card>
+      <Card as="section" aria-labelledby="not-measurable-title">
+        <CardHeader title="Not measurable" titleId="not-measurable-title" level={3} subtitle="Excluded from every denominator, with the reason." />
         {snapshot.notMeasurable.length === 0 ? (
           <p className="text-xs text-muted">Nothing was excluded.</p>
         ) : (
@@ -141,15 +144,15 @@ function SideLists({ snapshot }: Readonly<{ snapshot: CoverageSnapshot }>) {
           <strong className="font-semibold">Security and authorization:</strong> unavailable. No scenario category identifies
           authorization intent.
         </p>
-      </section>
-      <section className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="text-sm font-semibold text-text-primary">How priority is scored</h3>
-        <p className="text-xs text-muted">
-          A heuristic from declared facts: the gap's state, whole-operation gaps, documented responses, mutating methods
-          (DELETE, PUT, PATCH, POST), declared security requirements and contract complexity. Cross-run failure history is
-          not used. It is not a security assessment.
-        </p>
-      </section>
+      </Card>
+      <Card as="section" aria-labelledby="priority-scoring-title">
+        <CardHeader
+          title="How priority is scored"
+          titleId="priority-scoring-title"
+          level={3}
+          subtitle="A heuristic from declared facts: the gap's state, whole-operation gaps, documented responses, mutating methods (DELETE, PUT, PATCH, POST), declared security requirements and contract complexity. Cross-run failure history is not used. It is not a security assessment."
+        />
+      </Card>
     </div>
   );
 }
@@ -204,18 +207,19 @@ export function CoveragePage({
       <div data-testid="coverage-page" className="space-y-4">
         {header}
         <div data-testid="coverage-no-workflow" className="space-y-3">
-          <div className="space-y-1 rounded-lg border border-border bg-surface p-4">
-            <p className="text-sm font-semibold text-text-primary">No active specification</p>
-            <p className="text-sm text-text-secondary">
-              Coverage measures your tests against an OpenAPI specification loaded in the Guided Workflow, and matches run
-              results from Import &amp; Run Collection to the scenarios generated from it.
-            </p>
-            <p className="text-sm text-text-secondary">
-              A collection run on its own has no specification to be measured against. The same applies when the session
-              was restarted or expired, because the specification and scenarios are not kept. Start the Guided Workflow with
-              the specification, then run its collection.
-            </p>
-          </div>
+          <Banner tone="neutral" title="No active specification">
+            <div className="space-y-2">
+              <p>
+                Coverage measures your tests against an OpenAPI specification loaded in the Guided Workflow, and matches run
+                results from Import &amp; Run Collection to the scenarios generated from it.
+              </p>
+              <p>
+                A collection run on its own has no specification to be measured against. The same applies when the session
+                was restarted or expired, because the specification and scenarios are not kept. Start the Guided Workflow with
+                the specification, then run its collection.
+              </p>
+            </div>
+          </Banner>
           <CoverageSteps need="specification" onOpenWorkflow={onOpenWorkflow} />
         </div>
       </div>
@@ -280,14 +284,14 @@ export function CoveragePage({
           title="Specification coverage"
           caption="a qualifying generated scenario exists"
           metrics={specMetrics}
-          barClassName="bg-info-600"
+          barClassName="bg-chart-1"
         />
         <MetricGroup
           testId="runtime-metrics"
           title="Runtime-verified coverage"
           caption="execution evidence passed"
           metrics={runtimeMetrics}
-          barClassName="bg-success-600"
+          barClassName="bg-chart-2"
           extra={lastExecutionExtra(snapshot.execution.lastQualifyingExecutionAt)}
           notes={{
             "runtime-assertions": `${snapshot.assertionOutcomes.failed} failed · ${snapshot.assertionOutcomes.notEvaluated} not evaluated (outside the denominator)`,
@@ -296,23 +300,20 @@ export function CoveragePage({
       </div>
       <CategoryCoverage snapshot={snapshot} selected={filter.category} />
       <CoverageBars requirements={snapshot.requirements} />
-      <section aria-labelledby="coverage-gaps-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-        <div>
-          <h3 id="coverage-gaps-title" className="text-sm font-semibold text-text-primary">
-            Coverage gaps
-          </h3>
-          <p className="text-xs text-muted">
-            Showing {snapshot.operations.length} of {snapshot.totals.operations} operations and {snapshot.gaps.length} of{" "}
-            {snapshot.totals.gaps} gaps.
-          </p>
-        </div>
+      <Card as="section" aria-labelledby="coverage-gaps-title" className="space-y-3">
+        <CardHeader
+          title="Coverage gaps"
+          titleId="coverage-gaps-title"
+          level={3}
+          subtitle={`Showing ${snapshot.operations.length} of ${snapshot.totals.operations} operations and ${snapshot.gaps.length} of ${snapshot.totals.gaps} gaps.`}
+        />
         <GapFilters value={filter} onChange={setFilter} onReset={reset} />
-        <label className="inline-flex items-center gap-2 text-xs text-muted">
+        <label className="inline-flex items-center gap-2 text-xs text-text-secondary">
           <input
             type="checkbox"
             checked={showVerified}
             onChange={(event) => setShowVerified(event.target.checked)}
-            className="h-4 w-4 rounded border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="h-4 w-4 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
           Show verified requirements in operation details
         </label>
@@ -331,17 +332,17 @@ export function CoveragePage({
           availableRuns={snapshot.execution.availableRuns}
           onOpenWorkflow={onOpenWorkflow}
         />
-      </section>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section aria-labelledby="recommendations-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <div>
-            <h3 id="recommendations-title" className="text-sm font-semibold text-text-primary">
-              Recommended next tests
-            </h3>
-            <p className="text-xs text-muted">Ranked by the same rules as priority. Each one traces to a specific gap.</p>
-          </div>
+      </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <Card as="section" aria-labelledby="recommendations-title" className="space-y-3">
+          <CardHeader
+            title="Recommended next tests"
+            titleId="recommendations-title"
+            level={3}
+            subtitle="Ranked by the same rules as priority. Each one traces to a specific gap."
+          />
           <Recommendations recommendations={snapshot.recommendations} onOpenWorkflow={onOpenWorkflow} />
-        </section>
+        </Card>
         <SideLists snapshot={snapshot} />
       </div>
     </div>

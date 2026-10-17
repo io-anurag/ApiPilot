@@ -1,37 +1,32 @@
 import type { ReactNode } from "react";
+import { FIELD_STYLES } from "../controlStyles";
+import { Card } from "../patterns/Card";
+import { Pill, type PillTone } from "../patterns/Pill";
 
 /**
- * The building blocks of the Run k6 Script page (specs/051-user-script-page-redesign FR-001): one card
- * anatomy for every group of content, the same as the Performance Source step's card (specs/050) and
- * the start screen's upload card, an accent bar, a header with a title, a meta line and a state, a body
- * and an optional footer bar. Presentation only.
+ * The building blocks of the Run k6 Script page, on the shared pattern set (AP-054 FR-013, FR-014): one
+ * widget card for every group of content, with a heading, an optional sub-line, an aside and an optional
+ * footer, and the key-value tile for a fact. Presentation only.
  */
-
-type Accent = "brand" | "success" | "warning" | "danger";
-
-const ACCENT_BAR: Record<Accent, string> = {
-  brand: "bg-brand-600 dark:bg-brand-500",
-  success: "bg-success-600 dark:bg-success-500",
-  warning: "bg-warning-600 dark:bg-warning-500",
-  danger: "bg-danger-600 dark:bg-danger-500",
-};
 
 export type PanelStateTone = "pending" | "ready" | "attention" | "blocked";
 
-const STATE_DOT: Record<PanelStateTone, string> = {
-  pending: "bg-brand-500",
-  ready: "bg-success",
-  attention: "bg-warning",
-  blocked: "bg-danger",
+const STATE_TONE: Record<PanelStateTone, PillTone> = {
+  pending: "mint",
+  ready: "ok",
+  attention: "warn",
+  blocked: "bad",
 };
 
-/** The state at the right of a card header: a dot and a word, so it never rests on colour alone. */
+const STATE_MARK: Record<PanelStateTone, string> = { pending: "", ready: "✓", attention: "!", blocked: "✕" };
+
+/** The state at the right of a card header: a pill with a mark and a word, so it never rests on colour alone. */
 export function PanelState({ tone, label }: Readonly<{ tone: PanelStateTone; label: string }>) {
+  const mark = STATE_MARK[tone];
   return (
-    <span className="inline-flex shrink-0 items-center gap-2 text-xs text-muted">
-      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${STATE_DOT[tone]}`} />
+    <Pill tone={STATE_TONE[tone]} icon={mark ? <span aria-hidden="true">{mark}</span> : undefined}>
       {label}
-    </span>
+    </Pill>
   );
 }
 
@@ -40,11 +35,9 @@ export function ScriptPanel({
   titleId,
   meta,
   aside,
-  accent = "brand",
   level = 3,
   testId,
   footer,
-  flush = false,
   children,
 }: Readonly<{
   title: string;
@@ -52,55 +45,50 @@ export function ScriptPanel({
   meta?: ReactNode;
   /** The right of the header: a `PanelState`, a count or an action. */
   aside?: ReactNode;
-  accent?: Accent;
   level?: 2 | 3;
   testId?: string;
   footer?: ReactNode;
-  /** No body padding, for a table or a document that runs edge to edge. */
-  flush?: boolean;
   children: ReactNode;
 }>) {
   const Heading = level === 2 ? "h2" : "h3";
   return (
-    <section aria-labelledby={titleId} data-testid={testId} className="relative min-w-0 overflow-hidden rounded-xl border border-border-strong bg-surface shadow-sm">
-      <div className={`h-1 ${ACCENT_BAR[accent]}`} />
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border bg-surface-subtle px-4 py-3 sm:px-5">
+    <Card as="section" aria-labelledby={titleId} data-testid={testId}>
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <Heading id={titleId} className="text-left text-sm font-semibold text-text-primary">
+          <Heading id={titleId} className="text-left text-base font-semibold text-text-primary">
             {title}
           </Heading>
           {meta && <div className="mt-0.5 text-left text-xs text-muted">{meta}</div>}
         </div>
-        {aside}
+        {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
       </div>
-      <div className={flush ? "" : "space-y-4 p-4 sm:p-5"}>{children}</div>
-      {footer && <div className="flex flex-wrap items-center gap-2 border-t border-border bg-chrome px-4 py-3 sm:px-5">{footer}</div>}
-    </section>
+      <div className="space-y-4">{children}</div>
+      {footer && <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">{footer}</div>}
+    </Card>
   );
 }
 
-/** One cell of a facts grid (the same cell as the collection and plan launch cards). */
+/** One tile of a facts grid: a small label over a value, as the pattern set's key-value block. */
 export function ScriptFact({ label, children, className = "" }: Readonly<{ label: string; children: ReactNode; className?: string }>) {
   return (
-    <div className={`min-w-0 bg-surface-subtle px-3 py-2 ${className}`}>
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words text-sm font-semibold">{children}</dd>
+    <div className={`flex min-w-0 flex-col gap-0.5 rounded-xl bg-surface-subtle p-3 ${className}`}>
+      <dt className="text-xs font-semibold text-muted">{label}</dt>
+      <dd className="break-words text-sm font-semibold text-text-primary">{children}</dd>
     </div>
   );
 }
 
-/** A grid of `ScriptFact`s, hairline-divided like the launch cards' facts. */
+/** A grid of `ScriptFact`s; the caller sets the columns, which collapse on a narrow card. */
 export function ScriptFacts({ children, className = "", testId }: Readonly<{ children: ReactNode; className?: string; testId?: string }>) {
   return (
-    <dl data-testid={testId} className={`grid gap-px overflow-hidden rounded-md border border-border bg-border ${className}`}>
+    <dl data-testid={testId} className={`grid gap-3 ${className}`}>
       {children}
     </dl>
   );
 }
 
 /** A single-line text field, as the other forms of the app style theirs. */
-export const SCRIPT_INPUT =
-  "rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+export const SCRIPT_INPUT = FIELD_STYLES;
 
 /** A button with a leading icon. The icon is decorative; the text is the accessible name. */
 export const WITH_ICON = "inline-flex items-center gap-1.5";

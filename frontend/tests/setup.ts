@@ -9,4 +9,8 @@ configure({ asyncUtilTimeout: 4000 });
 
 afterEach(() => {
   cleanup();
+  // jsdom keeps `location` across cases and destinations are addressed by the hash (AP-054), so an
+  // address left by one test would otherwise decide where the next one starts.
+  // (Some suites run in the node environment, where there is no window.)
+  if (typeof window !== "undefined") window.history.replaceState(null, "", "/");
 });

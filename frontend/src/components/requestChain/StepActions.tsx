@@ -27,7 +27,7 @@ export function StepActions({ plan, step, busy, actions }: Readonly<{ plan: Chai
         <label className="inline-flex items-center gap-1">
           <span>Move to</span>
           <select
-            className="rounded border border-border bg-surface px-1 py-0.5"
+            className="rounded border border-border-control bg-surface px-1 py-0.5"
             value=""
             disabled={busy}
             onChange={(event) => event.target.value && actions.onMoveStepToChain(step.id, event.target.value)}

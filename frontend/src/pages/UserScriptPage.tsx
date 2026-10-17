@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import type { ScriptProblem, UserScriptSummary } from "@apipilot/shared-domain";
 import { userScriptClient } from "../services/userScriptClient";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
-import { EntryFeatureIcon, type EntryFeatureIconName } from "../components/EntryFeatureIcon";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
-import { StatusBadge } from "../components/StatusBadge";
 import { CREDENTIALS_NOTE, ScriptEditor } from "../components/userScript/ScriptEditor";
 import { ScriptList } from "../components/userScript/ScriptList";
 import { ScriptProblems } from "../components/userScript/ScriptProblems";
-import { PlusGlyph, SCRIPT_INPUT, UploadGlyph, WITH_ICON } from "../components/userScript/ScriptPanel";
+import { DocumentGlyph, PlusGlyph, SCRIPT_INPUT, UploadGlyph, WITH_ICON } from "../components/userScript/ScriptPanel";
 import { ScriptWorkspace } from "../components/userScript/ScriptWorkspace";
-import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
+import { Banner } from "../components/patterns/Banner";
+import { Card, CardHeader } from "../components/patterns/Card";
+import { DropZone } from "../components/patterns/DropZone";
+import { KeyValueGrid, type KeyValueItem } from "../components/patterns/KeyValueGrid";
+import { Pill } from "../components/patterns/Pill";
+import { StepTrail, type StepTrailItem } from "../components/patterns/StepTrail";
 
 /**
  * AP-034 Run k6 Script (specs/034-run-user-k6-script). Upload a k6 script or write one, see what
@@ -23,24 +26,28 @@ import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 type ListState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; scripts: UserScriptSummary[] };
 
 /** An action that would leave unsaved editor changes; it waits for the engineer's answer (FR-011). */
-type LeaveAction = { kind: "select"; scriptId: string } | { kind: "new" } | { kind: "exit" };
+type LeaveAction = { kind: "select"; scriptId: string } | { kind: "new" };
 
 const ACCEPT = ".js,text/javascript,application/javascript";
 
-const USER_SCRIPT_PATH_STEPS = [
-  { label: "k6 Script", icon: "upload" },
-  { label: "Check", icon: "analyze" },
-  { label: "Confirm", icon: "design" },
-  { label: "Run", icon: "run" },
-] as const;
-
-const USER_SCRIPT_FEATURES: ReadonlyArray<{ label: string; description: string; icon: EntryFeatureIconName }> = [
-  { label: "CHECKED", description: "Only allowed k6 modules", icon: "review" },
-  { label: "CONFIRMED", description: "You approve its exact content", icon: "visible" },
-  { label: "LOCAL", description: "Runs with your own k6", icon: "local" },
+/**
+ * The path a script takes, shown on the empty screen as the pattern set's stepper (AP-054 FR-016): the
+ * first step is current and the rest are locked until a script exists, with the reason in words.
+ */
+const USER_SCRIPT_STEPS: readonly StepTrailItem[] = [
+  { id: "script", label: "k6 Script", hint: "Upload or write one" },
+  { id: "check", label: "Check", hint: "Allowed modules only", lockReason: "Allowed modules only, once a script is added" },
+  { id: "confirm", label: "Confirm", hint: "You approve the content", lockReason: "You approve the content, once a script is added" },
+  { id: "run", label: "Run", hint: "Runs with your own k6", lockReason: "Runs with your own k6, once a script is confirmed" },
 ];
 
-export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
+const USER_SCRIPT_FEATURES: readonly KeyValueItem[] = [
+  { label: "Checked", value: "Only allowed k6 modules" },
+  { label: "Confirmed", value: "You approve its exact content" },
+  { label: "Local", value: "Runs with your own k6" },
+];
+
+export function UserScriptPage({ openRunRequest }: Readonly<{ openRunRequest?: Readonly<{ scriptId: string; runId: string; token: number }> }> = {}) {
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -50,6 +57,7 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   const [newSaving, setNewSaving] = useState(false);
   const [workspaceDirty, setWorkspaceDirty] = useState(false);
   const [pendingLeave, setPendingLeave] = useState<LeaveAction | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const refresh = useCallback(async () => {
     const result = await userScriptClient.fetchScripts();
@@ -71,11 +79,6 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
 
   function perform(action: LeaveAction) {
     setWorkspaceDirty(false);
-    if (action.kind === "exit") {
-      setNewScript(null);
-      onExit?.();
-      return;
-    }
     if (action.kind === "new") {
       void startNew();
       return;
@@ -89,10 +92,30 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
     else perform(action);
   }
 
+  // Home's Recent runs asks for one run: open the script that owns it (asking first if there are
+  // unsaved changes, as choosing another script does); the workspace then opens the run's report.
+  const handledOpenRun = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!openRunRequest || handledOpenRun.current === openRunRequest.token) return;
+    handledOpenRun.current = openRunRequest.token;
+    if (selectedId !== openRunRequest.scriptId) request({ kind: "select", scriptId: openRunRequest.scriptId });
+  });
+
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (file) await uploadFile(file);
+  }
+
+  /** A file dropped on the drop zone is checked exactly as one chosen through the file picker. */
+  async function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file && !uploading) await uploadFile(file);
+  }
+
+  async function uploadFile(file: File) {
     setUploading(true);
     setUploadError(null);
     setUploadProblems([]);
@@ -128,94 +151,66 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
   // Like the quick performance test: the full-height landing only while there is nothing to work
   // on; once a script or a draft exists, a compact bar keeps the list and workspace in view.
   const working = scripts.length > 0 || newScript !== null;
-
-  const backButton = onExit && (
-    <button type="button" aria-label="Exit Run k6 Script and return to the start screen" onClick={() => request({ kind: "exit" })} className={BUTTON_STYLES.ghost}>
-      ← Back to start
-    </button>
-  );
+  let dropTitle = "Upload a k6 script";
+  if (uploading) dropTitle = "Checking…";
+  else if (dragging) dropTitle = "Drop the script to check it";
 
   return (
     <div className="space-y-5" data-testid="user-script-page">
-      {!working && backButton && <div className="flex justify-start">{backButton}</div>}
       {list.kind === "loading" && <Skeleton className="h-40 w-full rounded bg-surface-strong" />}
 
       {list.kind !== "loading" && !working && (
-        <section aria-labelledby="user-script-title" className="relative isolate overflow-hidden">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
-          />
-          <div className="grid min-h-[calc(100vh-9rem)] content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-                  <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
-                  <span>Bring your own k6 script</span>
-                </p>
-                <h2 id="user-script-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl">
+        <section aria-labelledby="user-script-title" className="space-y-5">
+          <Card>
+            <StepTrail ariaLabel="Run k6 Script progress" columns={4} items={USER_SCRIPT_STEPS} currentId="script" onSelect={() => undefined} />
+          </Card>
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <div className="space-y-5">
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Bring your own k6 script</p>
+                <h2 id="user-script-title" className="font-display text-2xl font-bold text-text-primary">
                   Run k6 Script
                 </h2>
-                <p className="max-w-2xl text-base leading-7 text-muted">
+                <p className="max-w-2xl text-sm text-text-secondary">
                   Run a k6 script you supply with the k6 installed on this machine. ApiPilot checks that it uses only allowed k6 modules and nothing that reads local files, asks you to
                   confirm its exact content, and runs it only when you press the trigger.
                 </p>
                 <p className="max-w-2xl text-sm text-muted">{CREDENTIALS_NOTE}</p>
               </div>
-              <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
-                {USER_SCRIPT_FEATURES.map(({ label, description, icon }, index) => (
-                  <div key={label} className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}>
-                    <EntryFeatureIcon name={icon} />
-                    <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">{label}</dt>
-                    <dd className="text-xs text-muted">{description}</dd>
-                  </div>
-                ))}
-              </dl>
+              <KeyValueGrid items={USER_SCRIPT_FEATURES} />
             </div>
-            <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
-              <div className="h-1 bg-brand-600" />
-              <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">Add a k6 script</p>
-                  <p className="mt-0.5 text-xs text-muted">JavaScript · checked before it is stored</p>
-                </div>
-                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
-              </div>
-              <div className="space-y-4 p-5 sm:p-6">
-                <label
-                  htmlFor="user-script-upload"
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${uploading ? "cursor-not-allowed border-border bg-surface-subtle opacity-60" : "cursor-pointer border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"}`}
+            <Card>
+              <CardHeader title="Add a k6 script" subtitle="JavaScript · checked before it is stored" />
+              <div className="space-y-4">
+                <DropZone
+                  active={dragging}
+                  disabled={uploading}
+                  icon={<UploadGlyph className="h-5 w-5" />}
+                  title={dropTitle}
+                  hint="Click to browse your files"
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!uploading) setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => void handleDrop(event)}
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
-                    <UploadGlyph className="h-5 w-5" />
-                  </span>
-                  <span className="text-sm font-medium text-text-primary">{uploading ? "Checking…" : "Upload a k6 script"}</span>
-                  <span className="text-xs text-muted">Click to browse your files</span>
-                  <input
-                    id="user-script-upload"
-                    type="file"
-                    accept={ACCEPT}
-                    aria-label="Upload a k6 script"
-                    disabled={uploading}
-                    onChange={(event) => void handleUpload(event)}
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                  />
-                </label>
+                  <input id="user-script-upload" type="file" accept={ACCEPT} aria-label="Upload a k6 script" disabled={uploading} onChange={(event) => void handleUpload(event)} className="sr-only" />
+                </DropZone>
                 <button type="button" className={`${BUTTON_STYLES.secondary} w-full`} onClick={() => request({ kind: "new" })}>
                   Write a new script
                 </button>
                 {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
                 {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase text-muted">Scripts in this session</h3>
+                  <h3 className="text-xs font-semibold text-muted">Scripts in this session</h3>
                   {list.kind === "error" && <ErrorState message="The scripts could not be loaded." detail={list.message} testId="user-script-list-error" />}
                   {list.kind === "ready" && scripts.length === 0 && (
-                    <EmptyState compact message="No scripts yet." description="Nothing runs until you confirm a script and press its trigger." testId="user-script-empty" />
+                    <EmptyState message="No scripts yet." description="Nothing runs until you confirm a script and press its trigger." icon={<DocumentGlyph className="h-5 w-5" />} testId="user-script-empty" />
                   )}
                 </div>
               </div>
-            </div>
-            <WorkflowPathPreview steps={USER_SCRIPT_PATH_STEPS} />
+            </Card>
           </div>
         </section>
       )}
@@ -223,14 +218,8 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
       {working && (
         <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-            {backButton && (
-              <>
-                {backButton}
-                <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
-              </>
-            )}
-            <h2 className="font-semibold">Run k6 Script</h2>
-            <StatusBadge label={scripts.length === 1 ? "1 script in this session" : `${scripts.length} scripts in this session`} />
+            <h2 className="font-display text-xl font-bold text-text-primary">Run k6 Script</h2>
+            <Pill tone="mint">{scripts.length === 1 ? "1 script in this session" : `${scripts.length} scripts in this session`}</Pill>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <label className={`${BUTTON_STYLES.secondary} ${WITH_ICON} cursor-pointer focus-within:ring-2 focus-within:ring-brand-500`}>
                 <UploadGlyph className="h-3.5 w-3.5" />
@@ -243,7 +232,11 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
               </button>
             </div>
           </div>
-          {selectedId === null && !newScript && <p className="max-w-3xl rounded-md border border-border bg-surface-subtle px-3 py-2 text-sm text-muted">{CREDENTIALS_NOTE}</p>}
+          {selectedId === null && !newScript && (
+            <Banner tone="neutral" title="Keep credentials out of the script">
+              {CREDENTIALS_NOTE}
+            </Banner>
+          )}
           {uploadError && <ErrorState message={uploadError} testId="user-script-upload-error" />}
           {uploadProblems.length > 0 && <ScriptProblems problems={uploadProblems} />}
           {scripts.length > 0 && <ScriptList scripts={scripts} selectedId={selectedId} onSelect={(scriptId) => request({ kind: "select", scriptId })} />}
@@ -287,6 +280,7 @@ export function UserScriptPage({ onExit }: Readonly<{ onExit?: () => void }>) {
         <ScriptWorkspace
           key={selectedId}
           scriptId={selectedId}
+          openRun={openRunRequest && openRunRequest.scriptId === selectedId ? openRunRequest : undefined}
           onChanged={() => void refresh()}
           onDeleted={() => {
             setSelectedId(null);

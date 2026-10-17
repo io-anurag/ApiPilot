@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { UserScript, UserScriptRun } from "@apipilot/shared-domain";
-import { EntryChooser } from "../../src/components/EntryChooser";
 import { CONFIRM_CANNOT_RESTRICT, CONFIRM_NOT_VERIFIED, CONFIRM_RUN_TIME_HOSTS } from "../../src/components/userScript/ScriptConfirmDialog";
 import { UserScriptPage } from "../../src/pages/UserScriptPage";
 import { liveSnapshot } from "./liveRunFixtures";
@@ -68,25 +67,42 @@ function routes(script: UserScript, extra: Record<string, Parameters<typeof stub
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Run k6 Script entry", () => {
-  it("is offered on the start screen", () => {
-    const onSelect = vi.fn();
-    render(<EntryChooser onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole("button", { name: "Run k6 Script" }));
-    expect(onSelect).toHaveBeenCalledWith("user-script");
-  });
-});
-
 describe("UserScriptPage", () => {
-  it("shows an empty state with upload, the credentials note and Back to start", async () => {
+  it("shows an empty state with upload and the credentials note, and no exit control (AP-054)", async () => {
     stubFetch({ [`GET ${BASE}`]: () => [200, { scripts: [] }] });
-    const onExit = vi.fn();
-    render(<UserScriptPage onExit={onExit} />);
+    render(<UserScriptPage />);
     expect(await screen.findByTestId("user-script-empty")).toBeInTheDocument();
     expect(screen.getByLabelText("Upload a k6 script")).toBeInTheDocument();
     expect(screen.getByText(/Credentials belong in environment values/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Exit Run k6 Script and return to the start screen" }));
-    expect(onExit).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Back to start|Exit Run k6 Script/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the path on the empty screen as a stepper, with the first step current and the others locked in words (AP-054 FR-016)", async () => {
+    stubFetch({ [`GET ${BASE}`]: () => [200, { scripts: [] }] });
+    render(<UserScriptPage />);
+    const trail = await screen.findByRole("navigation", { name: "Run k6 Script progress" });
+    expect(within(trail).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      expect.stringContaining("k6 Script"),
+      expect.stringContaining("Check"),
+      expect.stringContaining("Confirm"),
+      expect.stringContaining("Run"),
+    ]);
+    expect(within(trail).getByRole("button", { name: /k6 Script/ }).closest("li")).toHaveAttribute("aria-current", "step");
+    expect(within(trail).getByRole("button", { name: /Check/ })).toHaveAttribute("aria-disabled", "true");
+    expect(within(trail).getByText("Allowed modules only, once a script is added")).toBeInTheDocument();
+  });
+
+  it("checks a file dropped on the drop zone as it checks one chosen from the picker", async () => {
+    const upload = vi.fn(() => [422, { error: "script_refused", message: "refused", problems: [{ rule: "import-remote", line: 1, column: 1, message: "Imports a module from a URL." }] }] as [number, unknown]);
+    stubFetch({ [`GET ${BASE}`]: () => [200, { scripts: [] }], [`POST ${BASE}/upload`]: upload });
+    render(<UserScriptPage />);
+    const zone = (await screen.findByLabelText("Upload a k6 script")).closest("label") as HTMLElement;
+    fireEvent.dragOver(zone);
+    expect(zone).toHaveAttribute("data-active", "true");
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["x"], "orders.js")] } });
+    expect(await screen.findByTestId("script-problems")).toBeInTheDocument();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(zone).not.toHaveAttribute("data-active");
   });
 
   it("lists every reason of a refused upload by line, and stores nothing", async () => {

@@ -27,10 +27,9 @@ export function ScriptConfirmDialog({
   }, []);
 
   return (
-    <Dialog role="alertdialog" labelledBy="script-confirm-title" testId="script-confirm-dialog" onClose={onCancel} panelClassName="w-full max-w-xl overflow-hidden rounded-xl border border-warning-300 bg-surface shadow-xl dark:border-warning-500">
-      <div className="h-1 bg-warning-600 dark:bg-warning-500" />
+    <Dialog role="alertdialog" labelledBy="script-confirm-title" testId="script-confirm-dialog" onClose={onCancel} panelClassName="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
       <div className="flex items-start gap-3 border-b border-border bg-surface-subtle px-5 py-4">
-        <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-warning-600/40 bg-warning-600/15 text-base font-bold text-text-primary">
+        <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-warning-100 text-base font-bold text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
           !
         </span>
         <div className="min-w-0">
@@ -41,19 +40,19 @@ export function ScriptConfirmDialog({
         </div>
       </div>
       <div className="space-y-4 p-5">
-        <ul className="space-y-2 rounded-lg border border-warning-600/30 bg-warning-600/10 px-4 py-3 text-sm text-text-primary">
+        <ul className="space-y-2 rounded-xl border border-warning-600/30 bg-warning-100 px-4 py-3 text-sm text-text-primary dark:bg-warning-500/10">
           <li>{CONFIRM_NOT_VERIFIED}</li>
           <li>{CONFIRM_CANNOT_RESTRICT}</li>
           <li>{CONFIRM_RUN_TIME_HOSTS}</li>
         </ul>
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold uppercase text-muted">Hosts written in the script</p>
+          <p className="text-xs font-semibold text-muted">Hosts written in the script</p>
           {hosts.length === 0 ? (
             <p className="text-sm">None were found in the script text.</p>
           ) : (
             <ul className="flex flex-wrap gap-1.5">
               {hosts.map((host) => (
-                <li key={host} className="break-all rounded-md border border-border bg-surface-subtle px-2 py-1 font-mono text-xs">
+                <li key={host} className="break-all rounded-lg bg-surface-subtle px-2 py-1 font-mono text-xs text-text-primary">
                   {host}
                 </li>
               ))}
@@ -61,18 +60,18 @@ export function ScriptConfirmDialog({
           )}
         </div>
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold uppercase text-muted">You confirm exactly this content (SHA-256)</p>
-          <p className="break-all rounded-md border border-code-border bg-code-surface px-3 py-2 font-mono text-xs text-code-text">
+          <p className="text-xs font-semibold text-muted">You confirm exactly this content (SHA-256)</p>
+          <p className="break-all rounded-lg border border-code-border bg-code-surface px-3 py-2 font-mono text-xs text-code-text">
             <span>{sha256}</span>
           </p>
           <p className="text-xs text-muted">Any change to the script needs a new confirmation.</p>
         </div>
       </div>
-      <div className="flex justify-end gap-2 border-t border-border bg-chrome px-5 py-3">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border bg-chrome px-5 py-3">
         <button type="button" ref={cancelRef} className={BUTTON_STYLES.secondary} onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className={BUTTON_STYLES.warning} disabled={confirming} onClick={onConfirm}>
+        <button type="button" className={BUTTON_STYLES.primary} disabled={confirming} onClick={onConfirm}>
           {confirming ? "Confirming…" : "Confirm this script"}
         </button>
       </div>

@@ -60,7 +60,7 @@ export function PromptDialog({
             type="text"
             value={value}
             onChange={(event) => setValue(event.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="w-full rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
         </div>
         <div className="flex justify-end gap-2">

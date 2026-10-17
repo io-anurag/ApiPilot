@@ -9,7 +9,7 @@ import { RESULTS_VIEWS, WORKFLOWS, type TopLevelView } from "./workflowCatalog";
 
 export type Command =
   | { readonly kind: "workflow"; readonly id: TopLevelView; readonly label: string }
-  | { readonly kind: "back-to-start"; readonly label: "Back to start" }
+  | { readonly kind: "go-home"; readonly label: "Go to Home" }
   | {
       readonly kind: "theme";
       readonly target: Theme;
@@ -17,18 +17,18 @@ export type Command =
     };
 
 /** The fixed command list for the current state (FR-015): the five workflows in tab order, then the results views (AP-046),
- * "Back to start" only while a workflow view is shown, and the opposite theme. */
+ * "Go to Home" (AP-054; what "Back to start" was) except on Home itself, and the opposite theme. */
 export function buildCommands({
-  workflowShown,
+  homeShown,
   theme,
-}: Readonly<{ workflowShown: boolean; theme: Theme }>): Command[] {
+}: Readonly<{ homeShown: boolean; theme: Theme }>): Command[] {
   const commands: Command[] = WORKFLOWS.map((workflow) => ({
     kind: "workflow" as const,
     id: workflow.id,
     label: workflow.title,
   }));
   for (const view of RESULTS_VIEWS) commands.push({ kind: "workflow", id: view.id, label: view.title });
-  if (workflowShown) commands.push({ kind: "back-to-start", label: "Back to start" });
+  if (!homeShown) commands.push({ kind: "go-home", label: "Go to Home" });
   commands.push(
     theme === "light"
       ? { kind: "theme", target: "dark", label: "Switch to dark theme" }

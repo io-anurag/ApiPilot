@@ -144,11 +144,10 @@ describe("PerformanceHome", () => {
     expect(section).toHaveTextContent("Recorded before request-chain plans");
   });
 
-  it("offers a way back to the start screen", async () => {
+  it("has no exit control of its own: the sidebar leads home (AP-054)", async () => {
     stubFetch({ ...LEGACY_EMPTY, "GET /api/chain-plans": () => [200, { plans: [] }] });
-    const onExit = vi.fn();
-    render(<PerformanceHome {...handlers} onExit={onExit} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Exit performance testing and return to the start screen" }));
-    expect(onExit).toHaveBeenCalled();
+    render(<PerformanceHome {...handlers} />);
+    await screen.findByTestId("performance-home");
+    expect(screen.queryByRole("button", { name: /Back to start|Exit performance testing/ })).not.toBeInTheDocument();
   });
 });

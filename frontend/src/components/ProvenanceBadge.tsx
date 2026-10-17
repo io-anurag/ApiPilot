@@ -5,7 +5,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const SOURCE_CLASSES: Record<string, string> = {
   RULE: "border border-border-strong text-text-secondary",
-  AI: "border border-section-ai/50 text-section-ai",
+  AI: "border border-brand-500/50 text-brand-700 dark:text-brand-300",
 };
 const USER_MODIFIED_CLASSES =
   "border border-warning-300 text-warning-700 dark:border-warning-500 dark:text-warning-100";

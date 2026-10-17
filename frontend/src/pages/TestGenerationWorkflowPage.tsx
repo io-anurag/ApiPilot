@@ -36,7 +36,6 @@ import { AnalysisSummary } from "../components/AnalysisSummary";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
-import { STAGE_SECTIONS, type SectionId } from "../components/sectionCatalog";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
 import { useWorkflowStageRefresh } from "../hooks/useWorkflowStageRefresh";
 
@@ -163,18 +162,14 @@ const HOME_FEATURES: {
  * stage screen (FR-017). Always resumes from server state on mount (FR-014, FR-018).
  */
 export function TestGenerationWorkflowPage({
-  onExit,
-  onSectionChange,
   onHandoffToExecution,
   onOpenChainPlan,
   onOpenCoverage,
+  onWorkflowChange,
+  onViewedStageChange,
   stageRequest,
   isVisible = false,
 }: Readonly<{
-  /** Returns to the top-level entry chooser without discarding the in-progress workflow. */
-  onExit?: () => void;
-  /** AP-041: reports the colour section of the stage on screen (the page itself stays neutral). */
-  onSectionChange?: (section: SectionId) => void;
   /** Fired the moment the workflow reaches the `execution` stage with a generated Postman
    * artifact — the guided workflow no longer runs collections itself (requirement 4); it hands
    * off to "Import & Run Collection" instead. */
@@ -187,6 +182,11 @@ export function TestGenerationWorkflowPage({
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: opens the Coverage view from scenario review. */
   onOpenCoverage?: () => void;
+  /** AP-054: reports the session's workflow once it has been read and after every change, so the
+   * sidebar's stage states and Home stay current. `null` means there is none. */
+  onWorkflowChange?: (workflow: TestGenerationWorkflow | null) => void;
+  /** AP-054: reports the stage on screen, so the address and the sidebar follow it. */
+  onViewedStageChange?: (stageId: WorkflowStageId | null) => void;
   /** The user deliberately asked for a stage (e.g. Coverage's "Open scenarios"). A new `token`
    * shows that stage; when present on mount it also replaces the automatic hand-off to Import &
    * Run that otherwise follows resuming a workflow already at `execution`. */
@@ -220,6 +220,13 @@ export function TestGenerationWorkflowPage({
   // changes exactly when a fresh Postman artifact was produced.
   const lastHandoffKey = useRef<string | null>(null);
   useWorkflowStageRefresh(workflow, setWorkflow, isVisible);
+
+  useEffect(() => {
+    if (!loading) onWorkflowChange?.(workflow);
+  }, [workflow, loading, onWorkflowChange]);
+  useEffect(() => {
+    if (!loading) onViewedStageChange?.(viewedStageId);
+  }, [viewedStageId, loading, onViewedStageChange]);
 
   // A refresh (not a user action) can move the active stage on while the user is still looking at
   // the stage that was active — dependency analysis finishing. Follow it, but never pull the
@@ -386,13 +393,6 @@ export function TestGenerationWorkflowPage({
   const postmanGenerationAlwaysActionable =
     displayStageId === "postmanGeneration" || displayStageId === "performanceTesting";
 
-  const displaySection: SectionId = displayStageId
-    ? STAGE_SECTIONS[displayStageId]
-    : "spec";
-  useEffect(() => {
-    onSectionChange?.(displaySection);
-  }, [displaySection, onSectionChange]);
-
   if (loading) {
     return (
       <div
@@ -409,18 +409,6 @@ export function TestGenerationWorkflowPage({
 
   return (
     <section data-testid="test-generation-workflow-page" className="space-y-5">
-      {onExit && (
-        <div className="flex justify-start">
-          <button
-            type="button"
-            aria-label="Exit the guided workflow and return to the start screen"
-            onClick={onExit}
-            className={BUTTON_STYLES.ghost}
-          >
-            ← Back to start
-          </button>
-        </div>
-      )}
       {confirmDiscard && (
         <div
           role="alertdialog"

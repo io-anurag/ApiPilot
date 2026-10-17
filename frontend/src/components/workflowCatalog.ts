@@ -1,11 +1,9 @@
 /**
  * The four top-level workflows, the results views and the three artifacts that lead into them (AP-038, research.md D4):
  * the single source the start screen, the top tab menu, the command palette and the help dialog
- * all read, so a title, description or colour cannot drift between them. Presentation metadata
- * only — not domain data, so it lives here rather than in shared-domain.
- *
- * `tone` values are literal class strings (not built from the id) so Tailwind's scanner sees
- * them; each derives from the workflow's `--color-wf-*` token in index.css.
+ * all read, so a title or description cannot drift between them. Presentation metadata only — not
+ * domain data, so it lives here rather than in shared-domain. AP-054: workflows no longer carry an
+ * identity colour; one accent serves the whole application.
  */
 
 export type EntryChoice =
@@ -27,21 +25,6 @@ export type TopLevelView = EntryChoice | ResultsViewId;
 export type WorkflowIconName = "guided" | "import" | "performance" | "script";
 export type ArtifactIconName = "openapi" | "postman" | "k6";
 
-export interface WorkflowTone {
-  /** Small colour square shown beside the workflow's name (tabs, palette, artifact controls). */
-  readonly marker: string;
-  /** Icon tile: tinted background, border and icon colour (20% tint, 60% border: visible on light and dark). */
-  readonly tile: string;
-  /** Colour of the card's arrow icon; its box is the shared `ENTRY_CONTROL`. */
-  readonly action: string;
-  /** Card hover/focus border. */
-  readonly border: string;
-  /** Solid top edge of a workflow card: the colour that identifies it at a glance, in both themes. */
-  readonly edgeTop: string;
-  /** Solid left edge of an artifact card, taken from the workflow that artifact leads to first. */
-  readonly edgeLeft: string;
-}
-
 export interface WorkflowEntry {
   readonly id: EntryChoice;
   /** Start-screen, palette and help title. */
@@ -51,7 +34,6 @@ export interface WorkflowEntry {
   readonly description: string;
   readonly icon: WorkflowIconName;
   readonly recommended: boolean;
-  readonly tone: WorkflowTone;
 }
 
 export const WORKFLOWS: readonly WorkflowEntry[] = [
@@ -63,14 +45,6 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
       "Turn an OpenAPI specification into reviewed API tests and a ready-to-run Postman collection.",
     icon: "guided",
     recommended: true,
-    tone: {
-      marker: "bg-wf-guided",
-      tile: "border-wf-guided/60 bg-wf-guided/20 text-wf-guided",
-      action: "text-wf-guided",
-      border: "hover:border-wf-guided",
-      edgeTop: "border-t-wf-guided",
-      edgeLeft: "border-l-wf-guided",
-    },
   },
   {
     id: "import-collection",
@@ -80,14 +54,6 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
       "Bring in a Postman collection and environment, review every request, then run it against your API.",
     icon: "import",
     recommended: false,
-    tone: {
-      marker: "bg-wf-import",
-      tile: "border-wf-import/60 bg-wf-import/20 text-wf-import",
-      action: "text-wf-import",
-      border: "hover:border-wf-import",
-      edgeTop: "border-t-wf-import",
-      edgeLeft: "border-l-wf-import",
-    },
   },
   {
     id: "performance",
@@ -97,14 +63,6 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
       "Turn a specification, a guided workflow or a collection into a k6 load test: pick a source, review the plan, set the load and run.",
     icon: "performance",
     recommended: false,
-    tone: {
-      marker: "bg-wf-plans",
-      tile: "border-wf-plans/60 bg-wf-plans/20 text-wf-plans",
-      action: "text-wf-plans",
-      border: "hover:border-wf-plans",
-      edgeTop: "border-t-wf-plans",
-      edgeLeft: "border-l-wf-plans",
-    },
   },
   {
     id: "user-script",
@@ -114,14 +72,6 @@ export const WORKFLOWS: readonly WorkflowEntry[] = [
       "Run a k6 script you own after confirming exactly what will execute on this machine.",
     icon: "script",
     recommended: false,
-    tone: {
-      marker: "bg-wf-k6",
-      tile: "border-wf-k6/60 bg-wf-k6/20 text-wf-k6",
-      action: "text-wf-k6",
-      border: "hover:border-wf-k6",
-      edgeTop: "border-t-wf-k6",
-      edgeLeft: "border-l-wf-k6",
-    },
   },
 ];
 
@@ -130,8 +80,6 @@ export interface ResultsViewEntry {
   readonly title: string;
   readonly tabLabel: string;
   readonly description: string;
-  /** Colour square beside the name, from the results section token. */
-  readonly marker: string;
 }
 
 export const RESULTS_VIEWS: readonly ResultsViewEntry[] = [
@@ -141,7 +89,6 @@ export const RESULTS_VIEWS: readonly ResultsViewEntry[] = [
     tabLabel: "Coverage",
     description:
       "See how much of the API your generated tests cover and how much real runs have verified, with the gaps to close next.",
-    marker: "bg-section-results",
   },
 ];
 

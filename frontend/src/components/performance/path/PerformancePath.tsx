@@ -8,7 +8,8 @@ import { BUTTON_STYLES } from "../../controlStyles";
 import { ConfirmDialog } from "../../ConfirmDialog";
 import { ErrorState } from "../../ErrorState";
 import { Skeleton } from "../../Skeleton";
-import { StatusBadge } from "../../StatusBadge";
+import { Card } from "../../patterns/Card";
+import { Pill } from "../../patterns/Pill";
 import { SaveStatus } from "../../requestChain/SaveStatus";
 import { useChainPlanSession, type ChainPlanSession } from "../../requestChain/useChainPlanSession";
 import { ChangeOperationsPanel } from "./ChangeOperationsPanel";
@@ -25,7 +26,7 @@ import { changeOperationsAvailability, usePlanReselect } from "./usePlanReselect
 
 /**
  * The frame around every step (specs/047-unified-performance-tab FR-006, FR-009, FR-010, FR-012): the
- * top row (Back to start, Plans, the plan name and status), the stepper, the step body and Back and Next
+ * top row (Plans, the plan name and status), the stepper, the step body and Back and Next
  * with the reason Next is unavailable. Back only moves; nothing is discarded by moving between steps.
  * The top row and footer follow specs/050-performance-source-step-redesign FR-004, FR-005.
  */
@@ -36,38 +37,33 @@ function PathFrame({
   gate,
   onNext,
   busy = false,
-  onExit,
   children,
-}: Readonly<{ path: PathApi; title: string; status: ReactNode; gate: NextAvailability; onNext: () => void; busy?: boolean; onExit?: () => void; children: ReactNode }>) {
+}: Readonly<{ path: PathApi; title: string; status: ReactNode; gate: NextAvailability; onNext: () => void; busy?: boolean; children: ReactNode }>) {
   const { state } = path;
   return (
     <div className="space-y-4" data-testid="performance-path">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        {onExit && (
-          <>
-            <button type="button" aria-label="Exit performance testing and return to the start screen" className={BUTTON_STYLES.ghost} onClick={onExit}>
-              ← Back to start
-            </button>
-            <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
-          </>
-        )}
-        <button type="button" className={BUTTON_STYLES.ghost} onClick={path.leave}>
-          ← Plans
-        </button>
-        <span className="font-semibold" data-testid="path-title">
-          {title}
-        </span>
-        {status}
-      </div>
-      <PerformanceStepper current={state.step} reached={state.reached} source={state.source} onSelect={path.go} />
+      <Card>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <button type="button" className={BUTTON_STYLES.ghost} onClick={path.leave}>
+            ← Plans
+          </button>
+          <span className="min-w-0 break-words font-semibold text-text-primary" data-testid="path-title">
+            {title}
+          </span>
+          {status}
+        </div>
+      </Card>
+      <Card>
+        <PerformanceStepper current={state.step} reached={state.reached} source={state.source} onSelect={path.go} />
+      </Card>
       <div>{children}</div>
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-chrome px-4 py-3">
+      <Card variant="flat" className="flex flex-wrap items-center gap-3">
         <button type="button" className={BUTTON_STYLES.secondary} disabled={previousStep(state.step, state.source) === null || busy} onClick={path.back}>
           ← Back
         </button>
         <span className="flex-1" />
         {gate.reason && (
-          <p role="status" className="text-sm text-muted">
+          <p role="status" className="text-sm text-text-secondary">
             {gate.reason}
           </p>
         )}
@@ -76,7 +72,7 @@ function PathFrame({
             Next →
           </button>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -84,7 +80,7 @@ function PathFrame({
 const DEFAULT_NAMES: Record<Exclude<SourceKind, "specification">, string> = { workflow: "Guided workflow plan", collection: "Collection plan", empty: "New plan" };
 
 /** A test with no plan yet: Source and Operations. The plan is created when the engineer first moves on (FR-011). */
-function PathWithoutPlan({ path, quickTest, onExit }: Readonly<{ path: PathApi; quickTest: QuickTestSession; onExit?: () => void }>) {
+function PathWithoutPlan({ path, quickTest }: Readonly<{ path: PathApi; quickTest: QuickTestSession }>) {
   const { state } = path;
   const [environmentId, setEnvironmentId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,7 +143,7 @@ function PathWithoutPlan({ path, quickTest, onExit }: Readonly<{ path: PathApi; 
   }
 
   return (
-    <PathFrame path={path} title="New performance test" status={<StatusBadge label="Draft" tone="warning" />} gate={gate} onNext={handleNext} busy={busy} onExit={onExit}>
+    <PathFrame path={path} title="New performance test" status={<Pill tone="warn">Draft</Pill>} gate={gate} onNext={handleNext} busy={busy}>
       {state.step === "source" && (
         <SourceStep
           source={source}
@@ -186,12 +182,12 @@ function PathWithoutPlan({ path, quickTest, onExit }: Readonly<{ path: PathApi; 
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((key) => b.includes(key));
 
 /** A path with a plan: the same steps, over the plan the engineer owns, every edit saved as it is made (FR-011, FR-013, FR-014). */
-function PathWithPlan({ planId, path, quickTest, onExit }: Readonly<{ planId: string; path: PathApi; quickTest: QuickTestSession; onExit?: () => void }>) {
+function PathWithPlan({ planId, path, quickTest }: Readonly<{ planId: string; path: PathApi; quickTest: QuickTestSession }>) {
   const loaded = useChainPlanSession(planId, undefined, path.state.runId ?? undefined);
 
   if (loaded.status !== "ready") {
     return (
-      <PathFrame path={path} title="Performance plan" status={null} gate={{ available: false, reason: null }} onNext={() => undefined} onExit={onExit}>
+      <PathFrame path={path} title="Performance plan" status={null} gate={{ available: false, reason: null }} onNext={() => undefined}>
         {loaded.status === "error" ? (
           <ErrorState message="The plan could not be opened." detail={loaded.message} testId="performance-plan-load-error" />
         ) : (
@@ -202,11 +198,11 @@ function PathWithPlan({ planId, path, quickTest, onExit }: Readonly<{ planId: st
       </PathFrame>
     );
   }
-  return <PlanPath session={loaded.session} path={path} quickTest={quickTest} onExit={onExit} />;
+  return <PlanPath session={loaded.session} path={path} quickTest={quickTest} />;
 }
 
 /** The steps of a plan that is open: Change operations and Reset to seed live here, because they read the plan and the specification together. */
-function PlanPath({ session, path, quickTest, onExit }: Readonly<{ session: ChainPlanSession; path: PathApi; quickTest: QuickTestSession; onExit?: () => void }>) {
+function PlanPath({ session, path, quickTest }: Readonly<{ session: ChainPlanSession; path: PathApi; quickTest: QuickTestSession }>) {
   const { state } = path;
   const { plan } = session;
   const quick = quickTest.state.kind === "ready" ? quickTest.state.quickTest : null;
@@ -259,13 +255,12 @@ function PlanPath({ session, path, quickTest, onExit }: Readonly<{ session: Chai
       status={
         <>
           <SaveStatus session={session} />
-          <span className="text-xs text-muted">{seededFromText(plan)}</span>
+          <span className="text-xs text-text-secondary">{seededFromText(plan)}</span>
         </>
       }
       gate={gate}
       onNext={() => void handleNext()}
       busy={reselect.busy}
-      onExit={onExit}
     >
       {state.step === "source" && (
         <SourceStep source={state.source} locked planSourceLabel={origin.label} onSourceChange={() => undefined} quickTest={quickTest} replacing={false} onReplacingChange={() => undefined} onSpecificationUploaded={() => undefined} />
@@ -319,8 +314,8 @@ function PlanPath({ session, path, quickTest, onExit }: Readonly<{ session: Chai
 }
 
 /** The five-step Performance path (specs/047-unified-performance-tab). */
-export function PerformancePathView({ path, quickTest, onExit }: Readonly<{ path: PathApi; quickTest: QuickTestSession; onExit?: () => void }>) {
+export function PerformancePathView({ path, quickTest }: Readonly<{ path: PathApi; quickTest: QuickTestSession }>) {
   const planId = path.state.planId;
-  if (planId) return <PathWithPlan key={planId} planId={planId} path={path} quickTest={quickTest} onExit={onExit} />;
-  return <PathWithoutPlan path={path} quickTest={quickTest} onExit={onExit} />;
+  if (planId) return <PathWithPlan key={planId} planId={planId} path={path} quickTest={quickTest} />;
+  return <PathWithoutPlan path={path} quickTest={quickTest} />;
 }

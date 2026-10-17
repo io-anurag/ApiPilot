@@ -11,19 +11,21 @@ import { useQuickTest } from "../hooks/useQuickTest";
 import { usePerformancePath } from "../hooks/usePerformancePath";
 import { createPlan, fetchPlan } from "../services/requestChainClient";
 
-/** A request from another view (a seeding entry point) to open one plan. The nonce makes a repeat request distinct. */
+/** A request from another view (a seeding entry point, or Home's Recent runs) to open one plan, optionally on one of its runs. The nonce makes a repeat request distinct. */
 export interface OpenPerformancePlanRequest {
   planId: string;
   nonce: number;
+  /** Opens the plan on this run's results (AP-054). */
+  runId?: string;
 }
 
 /**
  * The Performance tab (specs/047-unified-performance-tab): the entry screen, and the five-step path it
  * opens. It replaces Quick Performance Test and Performance Plans. State lives in the mounted page and is
- * kept by App across "Back to start" and tab switches (FR-021); nothing new is persisted. It never sends
+ * kept by App while other destinations are shown (FR-021); nothing new is persisted. It never sends
  * a request to any system: a run starts only from the Run step's own Start (constitution XVII).
  */
-export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly<{ onExit?: () => void; openRequest?: OpenPerformancePlanRequest | null; onDraftChange?: (hasDraft: boolean) => void }>) {
+export function PerformancePage({ openRequest, onDraftChange }: Readonly<{ openRequest?: OpenPerformancePlanRequest | null; onDraftChange?: (hasDraft: boolean) => void }>) {
   const path = usePerformancePath();
   const { openPlan } = path;
   const quickTest = useQuickTest();
@@ -52,7 +54,7 @@ export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly
 
   // A seeding entry point opened a plan (specs/037 FR-020): land on its Plan step.
   useEffect(() => {
-    if (openRequest) void open(openRequest.planId);
+    if (openRequest) void open(openRequest.planId, openRequest.runId);
   }, [openRequest, open]);
 
   /** An empty plan has nothing to choose, so it is created at once and opens on its Plan step (FR-007). */
@@ -106,14 +108,13 @@ export function PerformancePage({ onExit, openRequest, onDraftChange }: Readonly
     path.pick(source, loaded !== null, source === "specification" && loaded ? operationKeysOf(loaded) : []);
   }
 
-  if (path.visible) return <div data-testid="performance-page"><PerformancePathView path={path} quickTest={quickTest} onExit={onExit} /></div>;
+  if (path.visible) return <div data-testid="performance-page"><PerformancePathView path={path} quickTest={quickTest} /></div>;
   return (
     <div className="space-y-4" data-testid="performance-page">
       {openError && <ErrorState message="The plan could not be opened." detail={openError} testId="performance-open-error" />}
       <PerformanceHome
         onPick={handlePick}
         onOpen={handleOpen}
-        onExit={onExit}
         busy={opening}
         banner={path.draft ? <DraftBanner draft={path.state} onResume={path.resume} onDiscard={path.discard} /> : undefined}
       />

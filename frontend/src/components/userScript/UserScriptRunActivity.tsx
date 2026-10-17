@@ -5,6 +5,8 @@ import { formatDateTimeUtc, formatTimeUtc } from "../../dateTime";
 import { BUTTON_STYLES } from "../controlStyles";
 import { CodeBlock } from "../CodeBlock";
 import { StatusBadge } from "../StatusBadge";
+import { Card } from "../patterns/Card";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { LiveRunDashboard } from "../liveRun/LiveRunDashboard";
 import { PerformanceReportFrame } from "../performance/PerformanceReportFrame";
 import { loadProfileSummary, runStatusLabel, TIER_TONE } from "../performance/performanceViewModel";
@@ -12,7 +14,7 @@ import type { PerformanceRuns } from "../performance/usePerformanceRuns";
 import { PanelState, ScriptPanel } from "./ScriptPanel";
 import { runAgainBlockedReason } from "./UserScriptRunTrigger";
 
-const SECTION_LABEL = "text-xs font-semibold uppercase tracking-wide text-muted";
+const SECTION_LABEL = "text-base font-semibold text-text-primary";
 const FULL_BUTTON = "w-full justify-center text-center";
 
 /**
@@ -68,7 +70,6 @@ export function UserScriptRunActivity({
           title={`Run ${run.id.slice(0, 8)} failed · ${run.failure?.category ?? "unknown"}`}
           titleId="user-script-failed-title"
           meta="k6 could not complete this run."
-          accent="danger"
           aside={<PanelState tone="blocked" label="Failed" />}
           testId="user-script-failed"
         >
@@ -77,7 +78,7 @@ export function UserScriptRunActivity({
       )}
 
       <aside aria-label="Run actions" className="grid gap-4 md:grid-cols-2">
-        <section aria-labelledby="user-script-last-run-title" data-section="results" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+        <Card as="section" aria-labelledby="user-script-last-run-title" className="flex flex-col gap-3">
           <h3 id="user-script-last-run-title" className={SECTION_LABEL}>
             Last run
           </h3>
@@ -116,10 +117,10 @@ export function UserScriptRunActivity({
               </button>
             </>
           )}
-        </section>
+        </Card>
 
         {latest && (
-          <section aria-labelledby="user-script-used-title" className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+          <Card as="section" aria-labelledby="user-script-used-title" className="flex flex-col gap-3">
             <h3 id="user-script-used-title" className={SECTION_LABEL}>
               This run used
             </h3>
@@ -144,56 +145,56 @@ export function UserScriptRunActivity({
               </div>
             </dl>
             <p className="mt-auto text-left text-xs text-muted hyphens-none">The settings are read from the run&apos;s record. Nothing here changes the script or starts a run.</p>
-          </section>
+          </Card>
         )}
       </aside>
 
-      <section aria-labelledby="user-script-runs-title" className="overflow-hidden rounded-2xl border border-border bg-surface">
-        <div className="px-5 py-4">
-          <h3 id="user-script-runs-title" className="text-base font-semibold">
+      <Card as="section" aria-labelledby="user-script-runs-title">
+        <div className="mb-3.5">
+          <h3 id="user-script-runs-title" className="text-base font-semibold text-text-primary">
             Runs of this script
           </h3>
           <p className="text-xs text-muted">Open a run to read its report. Reports are rendered by the server and never run scripts.</p>
         </div>
         {history.length === 0 ? (
-          <p className="border-t border-border px-5 py-4 text-sm text-muted" data-testid="user-script-runs-empty">
+          <p className="rounded-xl bg-surface-subtle px-4 py-3 text-sm text-text-secondary" data-testid="user-script-runs-empty">
             No runs yet. Start one from the card above; its live progress shows here and the report opens when it ends.
           </p>
         ) : (
-          <div className="relative overflow-x-auto border-t border-border">
-            <table className="w-full min-w-[32rem] text-left text-sm">
+          <div role="region" aria-label="Runs table" tabIndex={0} className={`${TABLE_STYLES.scroll} focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}>
+            <table className={TABLE_STYLES.table}>
               <caption className="sr-only">Runs of this script</caption>
-              <thead className="text-xs uppercase tracking-wide text-muted">
+              <thead>
                 <tr>
-                  <th scope="col" className="px-5 py-2.5 font-semibold">Started</th>
-                  <th scope="col" className="px-5 py-2.5 font-semibold">Environment</th>
-                  <th scope="col" className="px-5 py-2.5 font-semibold">Status</th>
-                  <th scope="col" className="px-5 py-2.5 font-semibold">Script SHA-256</th>
-                  <th scope="col" className="px-5 py-2.5 font-semibold">
+                  <th scope="col" className={TABLE_STYLES.th}>Started</th>
+                  <th scope="col" className={TABLE_STYLES.th}>Environment</th>
+                  <th scope="col" className={TABLE_STYLES.th}>Status</th>
+                  <th scope="col" className={TABLE_STYLES.th}>Script SHA-256</th>
+                  <th scope="col" className={TABLE_STYLES.th}>
                     <span className="sr-only">Report</span>
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border border-t border-border">
+              <tbody>
                 {history.map((summary) => {
                   const open = summary.id === reportRunId;
                   return (
-                    <tr key={summary.id} className={open ? "bg-brand-50 dark:bg-brand-500/10" : ""}>
-                      <td className="px-5 py-3 font-mono text-xs">{formatDateTimeUtc(summary.startedAt)}</td>
-                      <td className="px-5 py-3">
+                    <tr key={summary.id} className={open ? "bg-lime-pale" : ""}>
+                      <td className={`${TABLE_STYLES.tdMono} border-l-2 ${open ? "border-l-brand-500" : "border-l-transparent"}`}>{formatDateTimeUtc(summary.startedAt)}</td>
+                      <td className={TABLE_STYLES.td}>
                         <span className="inline-flex flex-wrap items-center gap-1.5">
                           {summary.environment.name} <StatusBadge label={summary.environment.tier} tone={TIER_TONE[summary.environment.tier]} />
                         </span>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className={TABLE_STYLES.td}>
                         <StatusBadge {...runStatusLabel(summary)} />
                       </td>
-                      <td className="px-5 py-3 font-mono text-xs" title={summary.snapshot.scriptSha256}>
+                      <td className={TABLE_STYLES.tdMono} title={summary.snapshot.scriptSha256}>
                         {summary.snapshot.scriptSha256.slice(0, 12)}…
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className={`${TABLE_STYLES.td} text-right`}>
                         {open ? (
-                          <span aria-current="true" className="text-sm font-semibold text-brand-700 dark:text-brand-300">
+                          <span aria-current="true" className="text-sm font-semibold text-brand-700">
                             Viewing report
                           </span>
                         ) : (
@@ -211,14 +212,14 @@ export function UserScriptRunActivity({
             </table>
           </div>
         )}
-      </section>
+      </Card>
 
       {reportRunId && !(inProgress && run?.id === reportRunId) && <LiveRunDashboard key={reportRunId} kind="user-script" runId={reportRunId} meta={`Run ${reportRunId.slice(0, 8)}`} />}
 
       {reportRunId && (
-        <div className="rounded-2xl border border-border bg-surface p-5">
+        <Card>
           <PerformanceReportFrame client={client} runId={reportRunId} />
-        </div>
+        </Card>
       )}
     </div>
   );

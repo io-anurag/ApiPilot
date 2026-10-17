@@ -12,7 +12,7 @@ const KIND_LABELS: Record<CheckKind, string> = {
   "time-at-most": "Response time at most",
 };
 
-const FIELD_CLASS = "w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+const FIELD_CLASS = "w-full min-w-0 rounded-md border border-border-control bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 function problemOf(check: StepCheck): string | null {
   if (check.kind === "field-exists" || check.kind === "field-equals") {
@@ -142,7 +142,7 @@ export function CheckRows({
       </ul>
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={`${id}-kind`} className="sr-only">Kind of check</label>
-        <select id={`${id}-kind`} className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={kind} onChange={(event) => setKind(event.target.value as CheckKind)}>
+        <select id={`${id}-kind`} className="rounded-md border border-border-control bg-surface px-2 py-1 text-sm" value={kind} onChange={(event) => setKind(event.target.value as CheckKind)}>
           {(Object.keys(KIND_LABELS) as CheckKind[]).map((option) => (
             <option key={option} value={option}>
               {KIND_LABELS[option]}

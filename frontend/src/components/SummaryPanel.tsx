@@ -1,4 +1,5 @@
 import { BUTTON_STYLES } from "./controlStyles";
+import { Card, CardHeader } from "./patterns/Card";
 
 /** Extends `StatusTone` (StatusBadge.tsx) with "brand" for a breakdown segment whose natural
  * color is the brand teal rather than any semantic status (e.g. an HTTP method or provenance
@@ -115,30 +116,29 @@ export function SummaryPanel({
   action?: SummaryPanelAction;
 }>) {
   return (
-    <aside
-      data-testid={testId}
-      className="space-y-5 self-start rounded-lg border border-border bg-surface p-5 shadow-sm lg:sticky lg:top-4"
-    >
-      <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <div>
-        <p className="font-display text-4xl font-semibold tracking-tight text-text-primary">
-          {statValue}
-        </p>
-        <p className="text-sm text-muted">{statLabel}</p>
-      </div>
-      {segments && <SummaryBreakdown segments={segments} />}
-      {description && <p className="text-xs leading-5 text-muted">{description}</p>}
-      {beforeAction}
-      {action && (
-        <button
-          type="button"
-          onClick={action.onClick}
-          disabled={action.disabled}
-          className={`${BUTTON_STYLES.primary} flex w-full items-center justify-center gap-1.5`}
-        >
-          {action.label}
-        </button>
-      )}
+    <aside data-testid={testId} className="self-start lg:sticky lg:top-4">
+      <Card className="space-y-5">
+        <CardHeader title={label} />
+        <div className="-mt-2">
+          <p className="font-display text-4xl font-bold tracking-tight text-text-primary">
+            {statValue}
+          </p>
+          <p className="text-sm text-muted">{statLabel}</p>
+        </div>
+        {segments && <SummaryBreakdown segments={segments} />}
+        {description && <p className="text-xs leading-5 text-muted">{description}</p>}
+        {beforeAction}
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            disabled={action.disabled}
+            className={`${BUTTON_STYLES.primary} flex w-full items-center justify-center gap-1.5`}
+          >
+            {action.label}
+          </button>
+        )}
+      </Card>
     </aside>
   );
 }

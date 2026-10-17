@@ -176,7 +176,7 @@ export function SuggestionCombobox({
           close();
           onCommit?.();
         }}
-        className={`w-full rounded-md border ${invalid ? "border-danger-500" : "border-border"} bg-surface py-1 pl-2 pr-8 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${monospace ? "font-mono" : ""}`}
+        className={`w-full rounded-md border ${invalid ? "border-danger-500" : "border-border-control"} bg-surface py-1 pl-2 pr-8 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${monospace ? "font-mono" : ""}`}
       />
       <button
         type="button"

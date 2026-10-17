@@ -50,9 +50,9 @@ export function Recommendations({
       {visible.map((rec) => {
         const [method, ...path] = rec.operationKey.split(" ");
         return (
-          <li key={rec.gapId} data-testid="recommendation" className="space-y-1.5 rounded-lg border border-border bg-surface p-3">
+          <li key={rec.gapId} data-testid="recommendation" className="space-y-1.5 rounded-xl bg-surface-subtle p-3.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs font-semibold text-muted">#{rec.rank}</span>
+              <span className="font-mono text-xs font-semibold text-text-secondary">#{rec.rank}</span>
               <HttpMethodBadge method={method} />
               <span className="font-mono text-xs text-text-primary">{path.join(" ")}</span>
               <PriorityBadge priority={rec.priority} />
@@ -69,7 +69,7 @@ export function Recommendations({
               <span className="font-semibold">Evidence: </span>
               {describeEvidence(rec)}
             </p>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-text-secondary">
               <span className="font-semibold">Priority rationale: </span>
               {rec.rationale}
             </p>

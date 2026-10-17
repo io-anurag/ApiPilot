@@ -62,15 +62,15 @@ export function CoverageEntryCard({
       data-testid={`coverage-entry-${variant}`}
       className={
         variant === "inline"
-          ? "border-l-4 border-l-section-results pl-3"
-          : `rounded-xl border border-l-4 border-border-strong border-l-section-results bg-surface-elevated shadow-sm ${panel ? "px-4 py-3" : "p-5"}`
+          ? "border-l-4 border-l-brand-500 pl-3"
+          : `rounded-2xl border border-l-4 border-border border-l-brand-500 bg-surface shadow-sm ${panel ? "px-4 py-3" : "p-5"}`
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0 max-w-3xl space-y-1">
           {!panel && (
             <p className="flex items-center gap-2 font-mono text-xs font-semibold uppercase text-muted">
-              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm bg-section-results" />
+              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm bg-brand-600" />
               {ready ? `Results · ${ready.specification}` : "Results"}
             </p>
           )}
@@ -118,7 +118,7 @@ export function CoverageEntryCard({
             aria-describedby={reason ? reasonId : undefined}
             className={`${ENTRY_CONTROL} px-3 py-1.5`}
           >
-            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm bg-section-results" />
+            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm bg-brand-600" />
             {panel ? "View coverage" : "Open Coverage"}
           </button>
         </div>

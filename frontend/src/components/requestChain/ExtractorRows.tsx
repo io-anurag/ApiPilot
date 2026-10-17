@@ -2,7 +2,7 @@ import { CHAIN_PLAN_LIMITS, isValidHeaderName, parseCapturePath, REFERENCE_NAME,
 import { BUTTON_STYLES } from "../controlStyles";
 
 const FIELD_CLASS =
-  "w-full min-w-0 rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+  "w-full min-w-0 rounded-md border border-border-control bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 function problemOf(extractor: Extractor): string | null {
   if (!REFERENCE_NAME.test(extractor.name)) return "A name holds letters, digits and underscores only.";

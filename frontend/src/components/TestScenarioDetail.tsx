@@ -10,7 +10,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
   return (
     <article
       data-testid="test-scenario-detail"
-      className="space-y-4 rounded-md border border-border bg-surface p-4"
+      className="space-y-4 rounded-xl border border-border bg-surface p-4"
     >
       <div>
         <h4 className="text-sm font-semibold text-text-primary">
@@ -22,7 +22,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
         </p>
       </div>
       <section className="space-y-1">
-        <h5 className="text-xs font-medium uppercase text-muted">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
           {scenario.provenance.source === "RULE" ? "Rule" : "AI source"}
         </h5>
         <p data-testid="scenario-rule" className="font-mono text-xs text-text-secondary">
@@ -33,13 +33,13 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
         </p>
       </section>
       <section className="space-y-1">
-        <h5 className="text-xs font-medium uppercase text-muted">Request</h5>
-        <pre className="max-w-full overflow-x-auto rounded-md border border-code-border bg-code-surface p-3 font-mono text-xs leading-5 text-code-text">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">Request</h5>
+        <pre className="max-w-full overflow-x-auto rounded-lg border border-code-border bg-code-surface p-3 font-mono text-xs leading-5 text-code-text">
           {JSON.stringify(scenario.request, null, 2)}
         </pre>
       </section>
       <section className="space-y-1">
-        <h5 className="text-xs font-medium uppercase text-muted">Expected Assertions</h5>
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">Expected Assertions</h5>
         {scenario.assertions.length === 0 ? (
           <p className="text-sm text-muted">
             No documented response was available to assert against.

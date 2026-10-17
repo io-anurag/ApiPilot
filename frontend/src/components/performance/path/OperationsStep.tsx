@@ -1,6 +1,7 @@
 import { toOperationKey, type QuickPerformanceTestView } from "@apipilot/shared-domain";
 import type { GuidedWorkflowSummary } from "../../../hooks/useGuidedWorkflowSummary";
 import { ErrorState } from "../../ErrorState";
+import { Card, CardHeader } from "../../patterns/Card";
 import { OperationSelection } from "../../requestChain/OperationSelection";
 import { EnvironmentForCredentials } from "../EnvironmentForCredentials";
 import { CollectionRequests } from "./CollectionRequests";
@@ -50,22 +51,22 @@ export function OperationsStep({
   if (existingPlan && !(existingPlan.selectable && quickTest)) {
     const why = existingPlan.unavailableReason ?? (source === "specification" ? "Changing the selection is offered on the Plan step." : "A plan seeded from this source keeps the steps it was seeded with; add or remove steps on the Plan step.");
     return (
-      <div className="space-y-2" data-testid="operations-step-readonly">
-        <h3 className="text-base font-semibold">{stepLabel("operations", source)}</h3>
-        <p className="text-sm text-muted">
+      <Card as="section" aria-labelledby="operations-step-title" data-testid="operations-step-readonly">
+        <CardHeader title={stepLabel("operations", source)} titleId="operations-step-title" />
+        <p className="text-sm text-text-secondary">
           This plan was seeded from {existingPlan.sourceLabel} with {existingPlan.selectedCount} {existingPlan.selectedCount === 1 ? "item" : "items"}. {why}
         </p>
-      </div>
+      </Card>
     );
   }
 
   if (!existingPlan && (source === "workflow" || source === "collection")) {
     return (
-      <div className="space-y-4" data-testid={source === "workflow" ? "operations-step-workflow" : "operations-step-collection"}>
+      <Card as="section" aria-labelledby="operations-step-title" className="space-y-4" data-testid={source === "workflow" ? "operations-step-workflow" : "operations-step-collection"}>
         <div className="space-y-1">
-          <h3 className="text-base font-semibold">{source === "workflow" ? "Seed the guided workflow" : "Choose the requests to include"}</h3>
+          <CardHeader title={source === "workflow" ? "Seed the guided workflow" : "Choose the requests to include"} titleId="operations-step-title" />
           {source === "collection" && (
-            <p className="max-w-3xl text-sm text-muted">The plan gets one chain for each top-level folder, in the collection's run order, with the requests you choose. You then edit every request yourself. Nothing is sent to any system until you trigger a run.</p>
+            <p className="max-w-3xl text-sm text-text-secondary">The plan gets one chain for each top-level folder, in the collection's run order, with the requests you choose. You then edit every request yourself. Nothing is sent to any system until you trigger a run.</p>
           )}
         </div>
         {source === "workflow" ? <WorkflowSummary summary={workflow} /> : <CollectionRequests collectionId={collectionId} selection={selection} onCollectionChange={onCollectionChange} onSelectionChange={onSelectionChange} />}
@@ -73,30 +74,30 @@ export function OperationsStep({
           <EnvironmentForCredentials environmentId={environmentId} onChange={onEnvironmentChange} />
         </div>
         {creating && (
-          <p role="status" className="text-sm text-muted">
+          <p role="status" className="text-sm text-text-secondary">
             Creating the plan...
           </p>
         )}
         {error && <ErrorState message={error} testId="plan-create-error" />}
-      </div>
+      </Card>
     );
   }
 
   if (source !== "specification" || !quickTest) {
     return (
-      <div className="space-y-2" data-testid="operations-step-unavailable">
-        <h3 className="text-base font-semibold">{stepLabel("operations", source)}</h3>
-        <p className="text-sm text-muted">{source === "specification" ? "Upload a specification on the Source step first." : `Starting from ${SOURCE_LABELS[source].toLowerCase()} is not available here yet.`}</p>
-      </div>
+      <Card as="section" aria-labelledby="operations-step-title" data-testid="operations-step-unavailable">
+        <CardHeader title={stepLabel("operations", source)} titleId="operations-step-title" />
+        <p className="text-sm text-text-secondary">{source === "specification" ? "Upload a specification on the Source step first." : `Starting from ${SOURCE_LABELS[source].toLowerCase()} is not available here yet.`}</p>
+      </Card>
     );
   }
 
   const checked = new Set(selection);
   return (
-    <div className="space-y-4" data-testid="operations-step">
+    <Card as="section" aria-labelledby="operations-step-title" className="space-y-4" data-testid="operations-step">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold">{existingPlan ? "Change the operations in this plan" : "Choose the operations to include"}</h3>
-        <p className="max-w-3xl text-sm text-muted">
+        <CardHeader title={existingPlan ? "Change the operations in this plan" : "Choose the operations to include"} titleId="operations-step-title" />
+        <p className="max-w-3xl text-sm text-text-secondary">
           {existingPlan
             ? "Next applies the new selection to the plan: deselected operations are removed, newly selected ones are added at the end, and your edits to the steps that stay are kept. If a removal would discard steps you edited, you are asked first."
             : "The plan gets one step for each chosen operation, from its generated positive scenario, with credential requests run once before the load. You then edit every request yourself. Nothing is sent to any system until you trigger a run."}
@@ -109,11 +110,11 @@ export function OperationsStep({
         </div>
       )}
       {creating && (
-        <p role="status" className="text-sm text-muted">
+        <p role="status" className="text-sm text-text-secondary">
           {existingPlan ? "Applying the selection..." : "Creating the plan..."}
         </p>
       )}
       {error && <ErrorState message={error} testId="plan-create-error" />}
-    </div>
+    </Card>
   );
 }

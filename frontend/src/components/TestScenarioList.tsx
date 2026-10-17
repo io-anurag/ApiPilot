@@ -37,13 +37,13 @@ export function TestScenarioList({
       {[...groups.entries()].map(([operationKey, operationScenarios]) => (
         <section
           key={operationKey}
-          className="overflow-hidden rounded-md border border-border bg-surface"
+          className="overflow-hidden rounded-xl border border-border bg-surface"
         >
-          <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-subtle px-3 py-2">
+          <div className="flex items-center justify-between gap-3 bg-mint px-3.5 py-2.5">
             <h4 className="min-w-0 break-all font-mono text-xs font-semibold text-text-primary">
               {operationKey}
             </h4>
-            <span className="shrink-0 text-xs text-muted">
+            <span className="shrink-0 text-xs text-text-secondary">
               {operationScenarios.length} scenario
               {operationScenarios.length === 1 ? "" : "s"}
             </span>
@@ -54,7 +54,7 @@ export function TestScenarioList({
                 <button
                   type="button"
                   onClick={() => onSelect(scenario)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
+                  className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-sm text-text-secondary transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
                 >
                   <span>
                     {scenario.category}

@@ -3,10 +3,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { CommandPalette } from "../../src/components/CommandPalette";
 import { buildCommands } from "../../src/components/paletteCommands";
 
-function renderPalette(workflowShown = false) {
+function renderPalette(homeShown = true) {
   const onRun = vi.fn();
   const onClose = vi.fn();
-  const commands = buildCommands({ workflowShown, theme: "light" });
+  const commands = buildCommands({ homeShown, theme: "light" });
   render(<CommandPalette commands={commands} onRun={onRun} onClose={onClose} shortcutHint="Ctrl K" />);
   return { onRun, onClose, commands, input: screen.getByRole("combobox", { name: "Filter commands" }) };
 }
@@ -45,13 +45,13 @@ describe("CommandPalette (AP-038 US3)", () => {
   });
 
   it("runs the active command on Enter, and a clicked command on click", () => {
-    const { input, onRun, commands } = renderPalette(true);
+    const { input, onRun, commands } = renderPalette(false);
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onRun).toHaveBeenLastCalledWith(commands[1]);
 
-    fireEvent.click(screen.getByRole("option", { name: /Back to start/ }));
-    expect(onRun).toHaveBeenLastCalledWith({ kind: "back-to-start", label: "Back to start" });
+    fireEvent.click(screen.getByRole("option", { name: /Go to Home/ }));
+    expect(onRun).toHaveBeenLastCalledWith({ kind: "go-home", label: "Go to Home" });
   });
 
   it("does nothing on Enter when no command matches", () => {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Environment } from "@apipilot/shared-domain";
-import { BUTTON_STYLES } from "../controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "../controlStyles";
 import { Dialog } from "../Dialog";
 import { EnvironmentForm } from "../EnvironmentForm";
 import { StatusBadge } from "../StatusBadge";
@@ -55,7 +55,7 @@ export function EnvironmentPicker({
             id="performance-environment"
             value={selectedId ?? ""}
             onChange={(event) => onSelect(event.target.value)}
-            className={`rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${compact ? "w-64 max-w-full" : "min-w-48 flex-1"}`}
+            className={`${FIELD_STYLES} ${compact ? "w-64 max-w-full" : "min-w-48 flex-1"}`}
           >
             {/* Without this, the browser shows the first environment as chosen when none is. */}
             {!selected && (
@@ -103,7 +103,7 @@ export function EnvironmentPicker({
         // stay in view while only the form body between them scrolls.
         <Dialog
           labelledBy="environment-dialog-title"
-          panelClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col rounded-lg border border-border bg-surface shadow-xl"
+          panelClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col rounded-2xl border border-border bg-surface shadow-xl"
           onClose={() => setEditing(null)}
         >
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">

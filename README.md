@@ -34,13 +34,13 @@ The `.env` file is optional when defaults are acceptable. The default developmen
 ## Quick start
 
 1. Open `http://localhost:5173`. The Vite frontend proxies `/api` to the backend at `http://localhost:4000`.
-2. Choose **Guided Workflow** and upload an OpenAPI 3.x YAML document.
+2. ApiPilot opens on **Home**. Choose **Guided Workflow** (on Home or in the sidebar) and upload an OpenAPI 3.x YAML document.
 3. Review the operations, select the ones to test, and generate deterministic scenarios.
 4. Optionally run local AI enhancement, then accept, reject, edit, or regenerate scenarios.
 5. Review dependencies and workflows, approve them, and generate the Postman artifacts.
 6. Continue to **Import & Run Collection**, fill in values for an authorized target, and explicitly start the run.
 
-To run an existing Postman collection instead, choose **Import & Run Collection** on the start screen. Use `npm run stop` to stop the development servers.
+To run an existing Postman collection instead, choose **Import & Run Collection** on Home or in the sidebar. Every screen has its own address (`#/performance`, `#/k6`, `#/coverage`, `#/guided/<stage>`), so Back, Forward, refresh and bookmarks return to it. Use `npm run stop` to stop the development servers.
 
 ApiPilot is single-user and local-only. It has no authentication, executes scripts you confirm, and holds stored credentials, so the backend binds to `127.0.0.1` by default, and so does the dev server. To open ApiPilot from another device on a network you trust, set `FRONTEND_DEV_HOST`: a non-loopback address makes a per-launch access token mandatory (printed once in the terminal; plain HTTP, so see the limits). Do not otherwise expose it to a network without adding authentication first; see [Configuration, persistence, and security](docs/configuration.md#security-model-single-user-local-only).
 

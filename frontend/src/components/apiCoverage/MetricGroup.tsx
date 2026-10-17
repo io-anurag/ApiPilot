@@ -1,5 +1,9 @@
 import type { CoverageMetric } from "@apipilot/shared-domain";
+import { Card, CardHeader } from "../patterns/Card";
 import { formatFraction, formatPercentage, formatTimestamp } from "./coverageViewModel";
+
+/** One figure of a group: the pattern set's key-value tile, tinted, with its bar under the numbers. */
+const TILE = "min-w-0 rounded-xl bg-surface-subtle p-3";
 
 /** One card: a titled group of metrics, each with numerator, denominator, percentage and a bar. */
 export function MetricGroup({
@@ -22,21 +26,11 @@ export function MetricGroup({
   testId: string;
 }>) {
   return (
-    <section aria-labelledby={`${testId}-title`} data-testid={testId} className="rounded-lg border border-border bg-surface">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-4 pt-3">
-        <h3 id={`${testId}-title`} className="text-sm font-semibold text-text-primary">
-          {title}
-        </h3>
-        <p className="text-xs text-muted">{caption}</p>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 border-t border-border">
+    <Card as="section" aria-labelledby={`${testId}-title`} data-testid={testId}>
+      <CardHeader title={title} titleId={`${testId}-title`} level={3} subtitle={caption} />
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map((metric) => (
-          <div
-            key={metric.id}
-            data-testid="metric-tile"
-            data-metric={metric.id}
-            className="min-w-0 border-b border-r border-border px-4 py-3"
-          >
+          <div key={metric.id} data-testid="metric-tile" data-metric={metric.id} className={TILE}>
             <dt className="text-xs font-semibold text-muted" title={metric.basis}>
               {metric.label}
             </dt>
@@ -62,14 +56,14 @@ export function MetricGroup({
           </div>
         ))}
         {extra && (
-          <div data-testid="metric-tile" data-metric="extra" className="min-w-0 border-b border-r border-border px-4 py-3">
+          <div data-testid="metric-tile" data-metric="extra" className={TILE}>
             <dt className="text-xs font-semibold text-muted">{extra.label}</dt>
             <dd className="break-words font-mono text-sm font-semibold text-text-primary">{extra.value}</dd>
             {extra.sub && <dd className="text-xs text-muted">{extra.sub}</dd>}
           </div>
         )}
       </dl>
-    </section>
+    </Card>
   );
 }
 

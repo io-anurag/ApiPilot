@@ -1,10 +1,9 @@
 import { COVERAGE_GAP_KINDS, COVERAGE_STATES, type CoverageFilter, type CoveragePriority, type CoverageState } from "@apipilot/shared-domain";
-import { BUTTON_STYLES } from "../controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "../controlStyles";
 import { GAP_KIND_LABELS, PRIORITY_LABELS, STATE_LABELS } from "./coverageViewModel";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-const FIELD =
-  "rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1";
+const FIELD = FIELD_STYLES;
 
 export const EMPTY_FILTER: CoverageFilter = { sort: "priority", order: "asc" };
 

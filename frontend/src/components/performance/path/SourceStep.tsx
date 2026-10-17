@@ -5,7 +5,9 @@ import { BUTTON_STYLES } from "../../controlStyles";
 import { ConfirmDialog } from "../../ConfirmDialog";
 import { ErrorState } from "../../ErrorState";
 import { Skeleton } from "../../Skeleton";
-import { StatusBadge } from "../../StatusBadge";
+import { Card, CardHeader } from "../../patterns/Card";
+import { DropZone } from "../../patterns/DropZone";
+import { Pill } from "../../patterns/Pill";
 import { SourceDetailCard } from "./SourceDetailCard";
 import { SourcePicker } from "./SourcePicker";
 import { SOURCE_LABELS, type SourceKind } from "./pathState";
@@ -89,14 +91,11 @@ export function SourceStep({
   const showUpload = source === "specification" && !locked && quickTest.state.kind !== "loading" && (current === null || replacing);
 
   return (
-    <div className="space-y-5" data-testid="source-step">
+    <Card as="section" aria-labelledby="performance-source-title" className="space-y-5" data-testid="source-step">
       <div className="space-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h3 className="text-base font-semibold">Choose a source</h3>
-          {!locked && <span className="text-sm text-muted">Where should the plan&apos;s steps come from?</span>}
-        </div>
+        <CardHeader title="Choose a source" titleId="performance-source-title" subtitle={locked ? undefined : "Where should the plan's steps come from?"} />
         {locked && (
-          <p className="text-sm text-muted">
+          <p className="text-sm text-text-secondary">
             This plan was seeded from {planSourceLabel ?? (source ? SOURCE_LABELS[source].toLowerCase() : "its source")}. The source cannot change once a plan exists; start a new test from the entry screen to use another.
           </p>
         )}
@@ -104,7 +103,7 @@ export function SourceStep({
       <SourcePicker selected={source} locked={locked} onPick={onSourceChange} />
 
       {source === "specification" && locked && current && planSourceLabel && planSourceLabel !== current.specification.filename && (
-        <p className="text-sm text-muted" data-testid="spec-source-changed">
+        <p className="text-sm text-text-secondary" data-testid="spec-source-changed">
           The uploaded specification is now {current.specification.filename}. This plan keeps working from its saved steps.
         </p>
       )}
@@ -112,18 +111,18 @@ export function SourceStep({
       {source === "specification" && !locked && (
         <SourceDetailCard title="Performance test from a specification" meta={SPECIFICATION_META} stateLabel={current && !replacing ? "Ready" : "Required"} ready={current !== null && !replacing}>
           <div className="space-y-1">
-            <h4 className="font-display text-lg font-semibold text-text-primary">Upload specification</h4>
-            <p className="text-sm leading-6 text-muted">The document stays in your local workflow and is never sent to a cloud AI provider.</p>
+            <h3 className="font-display text-lg font-semibold text-text-primary">Upload specification</h3>
+            <p className="text-sm leading-6 text-text-secondary">The document stays in your local workflow and is never sent to a cloud AI provider.</p>
           </div>
 
           {quickTest.state.kind === "loading" && <Skeleton className="h-16 w-full rounded bg-surface-strong" />}
 
           {current && !replacing && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface-subtle px-4 py-3 text-sm" data-testid="uploaded-specification">
-              <span className="font-semibold">{current.specification.info?.title ?? current.specification.filename}</span>
-              <span className="font-mono text-xs text-muted">{current.specification.filename}</span>
-              <StatusBadge label={`${current.specification.operationCount} operations analyzed`} />
-              <span className="text-muted">Uploaded earlier in this session.</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm" data-testid="uploaded-specification">
+              <span className="font-semibold text-text-primary">{current.specification.info?.title ?? current.specification.filename}</span>
+              <span className="break-all font-mono text-xs text-muted">{current.specification.filename}</span>
+              <Pill tone="mint">{`${current.specification.operationCount} operations analyzed`}</Pill>
+              <span className="text-text-secondary">Uploaded earlier in this session.</span>
               <button type="button" className={`${BUTTON_STYLES.secondary} ml-auto`} onClick={() => onReplacingChange(true)}>
                 Upload a different specification
               </button>
@@ -132,15 +131,14 @@ export function SourceStep({
 
           {showUpload && (
             <div className="space-y-2">
-              <label
+              <DropZone
                 htmlFor="performance-specification-upload"
-                className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${quickTest.uploading ? "cursor-not-allowed border-border bg-surface-subtle opacity-60" : "cursor-pointer border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"}`}
+                disabled={quickTest.uploading}
+                icon={<UploadIcon />}
+                title="Drag and drop your specification here"
+                hint="or click to browse your files"
+                className="relative"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
-                  <UploadIcon />
-                </span>
-                <span className="text-sm font-medium text-text-primary">Drag and drop your specification here</span>
-                <span className="text-xs text-muted">or click to browse your files</span>
                 <input
                   id="performance-specification-upload"
                   type="file"
@@ -150,9 +148,9 @@ export function SourceStep({
                   onChange={handleFile}
                   className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
-              </label>
+              </DropZone>
               {quickTest.uploading && (
-                <p role="status" className="text-sm text-muted">
+                <p role="status" className="text-sm text-text-secondary">
                   Analyzing the specification...
                 </p>
               )}
@@ -171,8 +169,8 @@ export function SourceStep({
       {source && source !== "specification" && (
         <SourceDetailCard title={`Performance test from ${SOURCE_LABELS[source].toLowerCase()}`} meta="Nothing to upload" stateLabel="Ready" ready>
           <div className="space-y-1">
-            <h4 className="font-display text-lg font-semibold text-text-primary">{SOURCE_HEADINGS[source]}</h4>
-            <p className="text-sm leading-6 text-muted">{SOURCE_NOTES[source]}</p>
+            <h3 className="font-display text-lg font-semibold text-text-primary">{SOURCE_HEADINGS[source]}</h3>
+            <p className="text-sm leading-6 text-text-secondary">{SOURCE_NOTES[source]}</p>
           </div>
         </SourceDetailCard>
       )}
@@ -190,6 +188,6 @@ export function SourceStep({
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }

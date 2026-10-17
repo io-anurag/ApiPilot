@@ -7,6 +7,7 @@ import { OperationList } from "./OperationList";
 import { Pagination, pageCount } from "./Pagination";
 import { SummaryPanel } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
+import { Card, CardHeader } from "./patterns/Card";
 import {
   continueApiReview,
   type WorkflowResult,
@@ -118,15 +119,15 @@ export function ApiReviewStage({
   return (
     <section
       data-testid="api-review-stage"
-      className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
+      className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
-      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-text-primary">Review Discovered APIs</h2>
+      <Card className="space-y-4">
+        <CardHeader title="Review Discovered APIs" />
         <AnalysisSummary summary={apiModel.summary} />
         {!readOnly && total > 0 && (
           <div
             data-testid="api-review-selection-bar"
-            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500 dark:bg-brand-500/10"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-mint px-3.5 py-2.5"
           >
             <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
               <input
@@ -137,11 +138,11 @@ export function ApiReviewStage({
                 }}
                 onChange={() => setCheckedKeys(allChecked ? new Set() : new Set(allKeys))}
                 disabled={continuing}
-                className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-4 w-4 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               />
               Select all ({total})
             </label>
-            <p className="text-sm text-muted" aria-live="polite">
+            <p className="text-sm text-text-secondary" aria-live="polite">
               {checkedCount === 0 ? "None selected" : `${checkedCount} selected`}
             </p>
           </div>
@@ -158,7 +159,7 @@ export function ApiReviewStage({
           renderSelected={(operation) => (
             <div className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">
                   Operation details
                 </p>
                 <button
@@ -189,7 +190,7 @@ export function ApiReviewStage({
           />
         )}
         {error && <ErrorState testId="api-review-error" message={error} />}
-      </div>
+      </Card>
       <SummaryPanel
         testId="api-review-summary-panel"
         statValue={inScopeOperations.length}

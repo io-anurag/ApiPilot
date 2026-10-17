@@ -89,7 +89,7 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged, row }: Readonly<{
               </p>
               <label className="flex items-center gap-1 text-xs">
                 <span>Mode</span>
-                <select className="rounded border border-border bg-surface px-1 py-0.5" value={dataSet.mode} disabled={busy} onChange={(event) => save(dataSet, { mode: event.target.value as DataSetMode })}>
+                <select className="rounded border border-border-control bg-surface px-1 py-0.5" value={dataSet.mode} disabled={busy} onChange={(event) => save(dataSet, { mode: event.target.value as DataSetMode })}>
                   {(Object.keys(MODE_LABELS) as DataSetMode[]).map((option) => (
                     <option key={option} value={option}>
                       {MODE_LABELS[option]}
@@ -217,13 +217,13 @@ export function DataSetsPanel({ plan, analysis, onPlanChanged, row }: Readonly<{
               <label htmlFor={`${id}-name`} className="text-xs font-medium text-muted">
                 Data set name
               </label>
-              <input id={`${id}-name`} className="block w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={name} onChange={(event) => { setName(event.target.value); setNameEdited(true); }} />
+              <input id={`${id}-name`} className="block w-56 max-w-full rounded-md border border-border-control bg-surface px-2 py-1 text-sm" value={name} onChange={(event) => { setName(event.target.value); setNameEdited(true); }} />
             </div>
             <div className="space-y-1">
               <label htmlFor={`${id}-mode`} className="text-xs font-medium text-muted">
                 Mode
               </label>
-              <select id={`${id}-mode`} className="block w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={mode} onChange={(event) => setMode(event.target.value as DataSetMode)}>
+              <select id={`${id}-mode`} className="block w-56 max-w-full rounded-md border border-border-control bg-surface px-2 py-1 text-sm" value={mode} onChange={(event) => setMode(event.target.value as DataSetMode)}>
                 {(Object.keys(MODE_LABELS) as DataSetMode[]).map((option) => (
                   <option key={option} value={option}>
                     {MODE_LABELS[option]}
