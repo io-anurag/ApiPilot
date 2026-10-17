@@ -1,5 +1,5 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { AIProvider } from "@apipilot/shared-domain";
 import { createApp } from "../../src/app";
 import { resetStore } from "../../src/testGenerationWorkflow/workflowStore";
@@ -51,6 +51,23 @@ function extractSessionId(response: request.Response): string {
 }
 
 describe("session isolation", () => {
+  // These tests exercise session isolation, not the AI pre-flight viability check. That check refuses
+  // a whole run when its worst unit projects past the per-request budget, and the projection moves
+  // with the default planning rates and AI_SCENARIO_MAX_OUTPUT_TOKENS: raising the output cap from
+  // 192 to 256 tokens took the larger fixture from 106,200 ms to 122,200 ms against the default
+  // 120,000 ms and turned its enhancement into "skipped". Pin a generous budget so this suite does
+  // not depend on unrelated tuning.
+  const previousTimeout = process.env.AI_INFERENCE_TIMEOUT_MS;
+
+  beforeAll(() => {
+    process.env.AI_INFERENCE_TIMEOUT_MS = "600000";
+  });
+
+  afterAll(() => {
+    if (previousTimeout === undefined) delete process.env.AI_INFERENCE_TIMEOUT_MS;
+    else process.env.AI_INFERENCE_TIMEOUT_MS = previousTimeout;
+  });
+
   beforeEach(() => {
     resetStore();
     resetRegistryForTest();
