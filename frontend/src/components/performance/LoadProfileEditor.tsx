@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { LoadProfile, LoadProfileKind, LoadStage } from "@apipilot/shared-domain";
-import { BUTTON_STYLES } from "../controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "../controlStyles";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { LoadProfileChart } from "./LoadProfileChart";
 import { formatDuration, secondsToMs } from "./performanceViewModel";
 
@@ -10,7 +11,7 @@ import { formatDuration, secondsToMs } from "./performanceViewModel";
  * half-typed number never reaches the plan.
  */
 const KINDS: LoadProfileKind[] = ["smoke", "load", "stress", "spike", "soak"];
-const INPUT = "w-24 rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+const INPUT = `${FIELD_STYLES} w-24`;
 
 interface DraftStage {
   seconds: string;
@@ -66,7 +67,7 @@ export function LoadProfileEditor({
   return (
     <div className={compact ? "grid items-start gap-x-8 gap-y-3 lg:grid-cols-[24rem_minmax(0,1fr)]" : "space-y-3"}>
       <div className="flex items-center gap-2">
-        <label htmlFor="load-profile-kind" className="text-sm font-medium">
+        <label htmlFor="load-profile-kind" className="text-sm font-medium text-text-primary">
           Profile
         </label>
         <select
@@ -78,7 +79,7 @@ export function LoadProfileEditor({
             setKind(next);
             setStages(toDraft(startingStages(next)));
           }}
-          className="rounded-md border border-border bg-surface px-2 py-1 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className={`${FIELD_STYLES} capitalize`}
         >
           {KINDS.map((value) => (
             <option key={value} value={value}>
@@ -87,38 +88,40 @@ export function LoadProfileEditor({
           ))}
         </select>
       </div>
-      <table className={`border-collapse text-sm ${compact ? "w-auto" : "w-full"}`}>
-        <thead>
-          <tr className="bg-chrome text-left text-xs text-muted">
-            <th scope="col" className="px-2 py-1.5 font-semibold">Stage</th>
-            <th scope="col" className="px-2 py-1.5 font-semibold">Duration (s)</th>
-            <th scope="col" className="px-2 py-1.5 font-semibold">Target VUs</th>
-            <th scope="col" className="px-2 py-1.5 font-semibold">
-              <span className="sr-only">Remove</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {stages.map((stage, index) => (
-            <tr key={index} className="border-t border-border">
-              <td className="px-2 py-1.5 text-muted">{index + 1}</td>
-              <td className="px-2 py-1.5">
-                <input aria-label={`Stage ${index + 1} duration in seconds`} type="number" min={1} value={stage.seconds} disabled={busy} onChange={(event) => update(index, { seconds: event.target.value })} className={INPUT} />
-              </td>
-              <td className="px-2 py-1.5">
-                <input aria-label={`Stage ${index + 1} target virtual users`} type="number" min={0} value={stage.target} disabled={busy} onChange={(event) => update(index, { target: event.target.value })} className={INPUT} />
-              </td>
-              <td className="px-2 py-1.5">
-                {stages.length > 1 && (
-                  <button type="button" aria-label={`Remove stage ${index + 1}`} disabled={busy} onClick={() => setStages((current) => current.filter((_, i) => i !== index))} className="rounded px-1 text-muted hover:text-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
-                    ✕
-                  </button>
-                )}
-              </td>
+      <div className={`${TABLE_STYLES.scroll} min-w-0`}>
+        <table className={`border-collapse text-sm ${compact ? "w-auto" : "w-full"}`}>
+          <thead>
+            <tr>
+              <th scope="col" className={TABLE_STYLES.th}>Stage</th>
+              <th scope="col" className={TABLE_STYLES.th}>Duration (s)</th>
+              <th scope="col" className={TABLE_STYLES.th}>Target VUs</th>
+              <th scope="col" className={TABLE_STYLES.th}>
+                <span className="sr-only">Remove</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {stages.map((stage, index) => (
+              <tr key={index} className="border-t border-border">
+                <td className="px-3.5 py-2 text-text-secondary">{index + 1}</td>
+                <td className="px-3.5 py-2">
+                  <input aria-label={`Stage ${index + 1} duration in seconds`} type="number" min={1} value={stage.seconds} disabled={busy} onChange={(event) => update(index, { seconds: event.target.value })} className={INPUT} />
+                </td>
+                <td className="px-3.5 py-2">
+                  <input aria-label={`Stage ${index + 1} target virtual users`} type="number" min={0} value={stage.target} disabled={busy} onChange={(event) => update(index, { target: event.target.value })} className={INPUT} />
+                </td>
+                <td className="px-3.5 py-2">
+                  {stages.length > 1 && (
+                    <button type="button" aria-label={`Remove stage ${index + 1}`} disabled={busy} onClick={() => setStages((current) => current.filter((_, i) => i !== index))} className="rounded px-1 text-muted hover:text-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                      ✕
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {valid && (
         <div className={compact ? "min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-5" : undefined}>
           <LoadProfileChart stages={parsed.map((stage) => ({ durationMs: secondsToMs(stage.seconds), targetVirtualUsers: stage.target }))} />

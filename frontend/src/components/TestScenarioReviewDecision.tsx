@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReviewScenarioWire } from "../services/reviewsClient";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 
 /** Accept/reject controls with required rejection feedback and failure recovery (US2, FR-006-FR-010). */
@@ -27,7 +27,7 @@ export function TestScenarioReviewDecision({
   return (
     <div
       data-testid="review-scenario-decision"
-      className="space-y-3 rounded-md border border-border bg-surface p-3"
+      className="space-y-3 rounded-xl border border-border bg-surface p-3.5"
     >
       {!isPending && (
         <p data-testid="review-decision-state" className="text-sm text-muted">
@@ -43,7 +43,7 @@ export function TestScenarioReviewDecision({
         >
           Accept
         </button>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="review-rejection-reason"
             className="text-xs font-medium text-text-secondary"
@@ -56,7 +56,7 @@ export function TestScenarioReviewDecision({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={submitting || !isPending}
-            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
+            className={FIELD_STYLES}
           />
         </div>
         <button

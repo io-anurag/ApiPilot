@@ -99,16 +99,14 @@ describe("PerformancePath: a specification to the Run step (US1)", () => {
     expect(within(screen.getByTestId("operation-selection")).getByText("3 of 3 selected")).toBeInTheDocument();
   });
 
-  it("has Back to start and Plans in the top row and the reason Next is unavailable beside Next (specs/050 FR-004, FR-005)", async () => {
+  it("has Plans in the top row, no exit control (AP-054), and the reason Next is unavailable beside Next (specs/050 FR-004, FR-005)", async () => {
     stubFetch(baseRoutes({ [`GET ${QUICK}`]: () => NO_QUICK_TEST, "GET /api/chain-plans": () => [200, { plans: [] }] }));
-    const onExit = vi.fn();
-    render(<PerformancePage onExit={onExit} />);
+    render(<PerformancePage />);
     fireEvent.click(await screen.findByRole("button", { name: /OpenAPI specification/ }));
     expect(screen.getByTestId("path-title")).toHaveTextContent("New performance test");
     expect(screen.getByText("Draft")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "← Plans" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Exit performance testing and return to the start screen" }));
-    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Back to start|Exit performance testing/ })).not.toBeInTheDocument();
     const reason = screen.getByRole("status");
     expect(reason).toHaveTextContent("Upload the specification to continue");
     expect(next()).toBeDisabled();
@@ -187,6 +185,14 @@ describe("PerformancePath: an opened plan (US2)", () => {
     expect(current()).toHaveTextContent("Source");
     rerender(<PerformancePage openRequest={{ planId: PLAN_ID, nonce: 2 }} />);
     await waitFor(() => expect(current()).toHaveTextContent("Plan"));
+  });
+
+  it("opens a plan on the Run step when the request names one of its runs (AP-054, Home's Recent runs)", async () => {
+    const plan = seededPlan();
+    stubFetch(baseRoutes({ [`GET ${QUICK}`]: () => [200, { quickTest: quickTestView() }], "GET /api/chain-plans": () => [200, { plans: [summary] }], [`GET ${PLAN}`]: () => [200, viewOf(plan)] }));
+    render(<PerformancePage openRequest={{ planId: PLAN_ID, nonce: 1, runId: "run-1" }} />);
+    await waitFor(() => expect(current()).toHaveTextContent("Run"));
+    expect(screen.getByTestId("performance-step-run").closest("li")).toHaveAttribute("aria-current", "step");
   });
 
   it("goes back to the entry screen without creating a draft, and lists the plan again", async () => {

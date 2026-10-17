@@ -1227,3 +1227,53 @@ describe("TestGenerationWorkflowPage background stages", () => {
     );
   });
 });
+
+describe("TestGenerationWorkflowPage reports to the shell (AP-054)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubCurrent(workflow: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/test-generation-workflow")) {
+          return workflow === null
+            ? { ok: true, status: 204, json: () => Promise.resolve(null) }
+            : { ok: true, status: 200, json: () => Promise.resolve({ workflow }) };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+  }
+
+  it("reports that there is no workflow only once the first read has settled", async () => {
+    stubCurrent(null);
+    const onWorkflowChange = vi.fn();
+    render(<TestGenerationWorkflowPage onWorkflowChange={onWorkflowChange} />);
+    expect(onWorkflowChange).not.toHaveBeenCalled();
+    await waitFor(() => expect(onWorkflowChange).toHaveBeenCalledWith(null));
+  });
+
+  it("reports the resumed workflow and the stage on screen, and follows a requested stage", async () => {
+    const workflow = workflowAt("apiReview");
+    (workflow.stages as Record<string, { stageId: string; status: string }>).upload = { stageId: "upload", status: "complete" };
+    (workflow.stages as Record<string, { stageId: string; status: string }>).analysis = { stageId: "analysis", status: "complete" };
+    stubCurrent(workflow);
+    const onWorkflowChange = vi.fn();
+    const onViewedStageChange = vi.fn();
+    const { rerender } = render(
+      <TestGenerationWorkflowPage onWorkflowChange={onWorkflowChange} onViewedStageChange={onViewedStageChange} />,
+    );
+    await waitFor(() => expect(onWorkflowChange).toHaveBeenCalledWith(expect.objectContaining({ id: "wf-1" })));
+    await waitFor(() => expect(onViewedStageChange).toHaveBeenLastCalledWith("apiReview"));
+
+    rerender(
+      <TestGenerationWorkflowPage
+        onWorkflowChange={onWorkflowChange}
+        onViewedStageChange={onViewedStageChange}
+        stageRequest={{ stageId: "analysis", token: 1 }}
+      />,
+    );
+    await waitFor(() => expect(onViewedStageChange).toHaveBeenLastCalledWith("analysis"));
+  });
+});

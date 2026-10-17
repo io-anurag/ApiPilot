@@ -19,10 +19,10 @@ export function EditedRemovalDialog({ pending, busy, onConfirm, onCancel }: Read
         <h2 id={titleId} className="text-lg font-semibold">
           Remove {count === 1 ? "a step you edited" : `${count} steps you edited`}?
         </h2>
-        <p className="text-sm text-muted">This selection no longer includes {count === 1 ? "an operation" : "operations"} whose step you changed. Removing {count === 1 ? "it" : "them"} discards your edits to {count === 1 ? "it" : "them"}.</p>
+        <p className="text-sm text-text-secondary">This selection no longer includes {count === 1 ? "an operation" : "operations"} whose step you changed. Removing {count === 1 ? "it" : "them"} discards your edits to {count === 1 ? "it" : "them"}.</p>
         <ul className="space-y-1 text-sm" aria-label="Edited steps that would be removed">
           {pending.edited.map((entry) => (
-            <li key={entry.stepId} className="rounded-md border border-border px-2 py-1">
+            <li key={entry.stepId} className="rounded-xl border border-border bg-surface-subtle px-3 py-1.5">
               <span className="font-medium">{entry.stepName}</span> <span className="font-mono text-xs text-muted">{entry.operationKey}</span>
             </li>
           ))}

@@ -42,12 +42,12 @@ export function ChangeOperationsPanel({
 
   // The edited-removal question is on top of the panel while it is open: closing the panel then would hide it.
   return (
-    <Dialog labelledBy={titleId} testId="change-operations-panel" panelClassName="w-full max-w-4xl space-y-4 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl dark:border-brand-500" onClose={reselect.pending ? () => undefined : onClose}>
+    <Dialog labelledBy={titleId} testId="change-operations-panel" panelClassName="w-full max-w-4xl space-y-4 rounded-2xl border border-border bg-surface p-5 shadow-xl" onClose={reselect.pending ? () => undefined : onClose}>
       <div className="space-y-1">
         <h2 id={titleId} ref={headingRef} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
           Change operations
         </h2>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-text-secondary">
           Deselected operations are removed from the plan and newly selected ones are added at the end. Your edits to the steps that stay are kept, in the order you gave them.
         </p>
       </div>

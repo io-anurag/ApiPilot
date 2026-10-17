@@ -16,7 +16,6 @@ import {
   type WorkflowPhase,
   type WorkflowPhaseId,
 } from "./workflowStageViewModel";
-import { STAGE_SECTIONS } from "./sectionCatalog";
 
 function CheckIcon({ className }: Readonly<{ className?: string }>) {
   return (
@@ -107,30 +106,31 @@ function StageIcon({ stageId }: Readonly<{ stageId: WorkflowStageId }>) {
 }
 
 /**
- * Chip container styling per stage status. Every class resolves through a theme-aware token, so the
- * same classes serve light and dark: no `dark:` overrides, hence the same hues in both themes. The
- * badge text remains the sole load-bearing signal (FR-016).
+ * Chip container styling per stage status, in the pattern set's step vocabulary (AP-054): mint when
+ * done, pale lime with a deep-olive edge when active, dashed when not yet reached. Every class
+ * resolves through a theme-aware token, so the same classes serve light and dark. The badge text
+ * remains the sole load-bearing signal (FR-016).
  */
 const CHIP_TONE_CLASSES: Record<StageStatus, string> = {
-  "not-yet-reached": "border-dashed border-border-strong bg-surface-subtle text-muted",
-  active: "border-brand-600/40 bg-brand-600/10",
-  complete: "border-success-600/30 bg-success-600/10",
-  stale: "border-warning-600/40 bg-warning-600/10",
+  "not-yet-reached": "border-dashed border-border-strong bg-transparent text-muted",
+  active: "border-brand-500 bg-lime-pale",
+  complete: "border-transparent bg-mint",
+  stale: "border-warning-600/40 bg-warning-100 dark:bg-warning-500/10",
   skipped: "border-border bg-surface-subtle",
-  partial: "border-warning-600/40 bg-warning-600/10",
+  partial: "border-warning-600/40 bg-warning-100 dark:bg-warning-500/10",
 };
 
-/** Phase tile styling, from the same tokens (and the same no-`dark:` rule) as the chips. */
+/** Phase tile styling, from the same tokens as the chips and the shared step trail. */
 const PHASE_TONE_CLASSES: Record<PhaseStatus, string> = {
-  complete: "border-success-600/30 bg-success-600/10",
-  "in-progress": "border-brand-600/30 bg-brand-600/10",
-  attention: "border-warning-600/40 bg-warning-600/10",
-  locked: "border-dashed border-border-strong bg-surface-subtle text-muted",
+  complete: "border-transparent bg-mint",
+  "in-progress": "border-brand-500 bg-lime-pale",
+  attention: "border-warning-600/40 bg-warning-100 dark:bg-warning-500/10",
+  locked: "border-dashed border-border-strong bg-transparent text-muted",
 };
 
 const PHASE_INDEX_CLASSES: Record<PhaseStatus, string> = {
-  complete: "bg-success-600 text-white",
-  "in-progress": "bg-brand-600 text-white",
+  complete: "bg-surface text-success-700 dark:text-success",
+  "in-progress": "bg-accent text-on-accent ring-1 ring-brand-500",
   attention: "bg-warning-600 text-white",
   locked: "bg-surface-strong text-text-secondary",
 };
@@ -307,10 +307,7 @@ export function WorkflowStageTracker({
       <li
         key={stageId}
         aria-current={isCurrentlyViewed ? "step" : undefined}
-        // AP-041: the chip takes its stage's section accent (icon, current-step ring). Its tint and
-        // badge stay status-coloured, so section and status never share a colour.
-        data-section={STAGE_SECTIONS[stageId]}
-        className={`group relative flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-text-primary" : "text-text-secondary"}`}
+        className={`group relative flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-text-primary" : "text-text-secondary"}`}
       >
         <StageIcon stageId={stageId} />
         <span>{STAGE_LABELS[stageId]}</span>
@@ -333,9 +330,6 @@ export function WorkflowStageTracker({
     const progress = getPhaseProgress(phase, workflow);
     const isCurrent = phase.id === currentPhase.id;
     const isExpanded = phase.id === expandedPhaseId;
-    // The current tile takes the section of the stage on screen; the others that of their first
-    // stage. The accent only colours the tile's index disc and ring, never its status tint.
-    const section = STAGE_SECTIONS[isCurrent ? currentlyDisplayedStageId : phase.stages[0]];
     let summary = `${progress.doneCount} of ${progress.totalCount} done`;
     if (progress.status === "complete") {
       summary = "Complete";
@@ -348,7 +342,6 @@ export function WorkflowStageTracker({
       <li
         key={phase.id}
         aria-current={isCurrent ? "step" : undefined}
-        data-section={section}
         data-testid={`phase-tile-${phase.id}`}
         className="min-w-0"
       >
@@ -357,11 +350,11 @@ export function WorkflowStageTracker({
           aria-expanded={isExpanded}
           aria-controls={`phase-stages-${phase.id}`}
           onClick={() => togglePhase(phase.id)}
-          className={`flex w-full min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${PHASE_TONE_CLASSES[progress.status]} ${isCurrent ? "ring-2 ring-inset ring-brand-500 text-text-primary" : "text-text-secondary"}`}
+          className={`flex w-full min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${PHASE_TONE_CLASSES[progress.status]} ${isCurrent ? "ring-2 ring-inset ring-brand-500 text-text-primary" : "text-text-secondary"}`}
         >
           <span
             aria-hidden="true"
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold ${PHASE_INDEX_CLASSES[progress.status]}`}
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${PHASE_INDEX_CLASSES[progress.status]}`}
           >
             {progress.status === "complete" ? <CheckIcon className="h-3 w-3" /> : index + 1}
           </span>
@@ -380,7 +373,7 @@ export function WorkflowStageTracker({
         Step {currentStepNumber} of {WORKFLOW_STAGE_ORDER.length} · {currentPhase.label} ›{" "}
         {STAGE_LABELS[currentlyDisplayedStageId]}
       </div>
-      <ol className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
+      <ol className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {WORKFLOW_PHASES.map(renderPhase)}
       </ol>
       {expandedPhase && (

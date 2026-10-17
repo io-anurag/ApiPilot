@@ -46,6 +46,13 @@ describe("OperationCounts", () => {
     expect(screen.getByTestId("operation-counts")).toHaveTextContent("not available (0 eligible)");
     expect(document.body.textContent).not.toMatch(/NaN|Infinity/);
   });
+
+  it("marks exactly one stat tile as the mint highlight (AP-054)", () => {
+    render(<OperationCounts counts={{ eligible: 8, withScenarios: 7, withPassingVerification: 6, withFailures: 2, withNoScenarios: 1 }} />);
+    const highlighted = within(screen.getByTestId("operation-counts")).getAllByTestId("stat-tile").filter((tile) => tile.dataset.highlight === "true");
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0]).toHaveTextContent("With generated scenarios");
+  });
 });
 
 describe("CategoryCoverage", () => {
@@ -64,6 +71,14 @@ describe("CategoryCoverage", () => {
     expect(security).toHaveTextContent("No scenario category identifies authorization intent");
     expect(security).not.toHaveTextContent("%");
     expect(screen.getByTestId("category-coverage")).toHaveTextContent("operations declare a security requirement (declared in the specification, not tested)");
+  });
+
+  it("says in words which category the gap filter is on, not by the edge alone (AP-054)", () => {
+    render(<CategoryCoverage snapshot={snapshot()} selected="positive" />);
+    const cards = screen.getAllByTestId("category-card");
+    const positive = cards.find((c) => c.dataset.category === "positive") as HTMLElement;
+    expect(positive).toHaveTextContent("Filtered to this category");
+    expect(screen.getAllByText("Filtered to this category")).toHaveLength(1);
   });
 
   it("reads a category with no eligible requirements as not available, and lists unclassified requirements", () => {

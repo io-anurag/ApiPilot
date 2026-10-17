@@ -166,7 +166,7 @@ export function MoveItemDialog({
                     value={destination.containerId}
                     checked={targetId === destination.containerId}
                     onChange={() => setTargetId(destination.containerId)}
-                    className="h-4 w-4 shrink-0 border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="h-4 w-4 shrink-0 border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   />
                   <span className="min-w-0 truncate text-text-primary">{destination.label}</span>
                 </label>

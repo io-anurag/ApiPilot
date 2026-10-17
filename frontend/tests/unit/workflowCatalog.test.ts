@@ -40,8 +40,10 @@ describe("workflowCatalog (AP-038 research.md D4)", () => {
     ]);
   });
 
-  it("gives every workflow its own colour", () => {
-    expect(new Set(WORKFLOWS.map((w) => w.tone.marker)).size).toBe(WORKFLOWS.length);
+  it("gives every workflow its own title and id, and no identity colour (AP-054)", () => {
+    expect(new Set(WORKFLOWS.map((w) => w.title)).size).toBe(WORKFLOWS.length);
+    expect(new Set(WORKFLOWS.map((w) => w.id)).size).toBe(WORKFLOWS.length);
+    expect(WORKFLOWS.every((w) => !("tone" in w))).toBe(true);
   });
 
   it("points each artifact only at workflows that exist and accept it (FR-009)", () => {

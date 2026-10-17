@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { Environment } from "@apipilot/shared-domain";
 import { fetchEnvironments } from "../../services/environmentsClient";
+import { FIELD_STYLES } from "../controlStyles";
 
 /**
  * The optional environment a plan's literal credentials move into when it is seeded (specs/037 FR-027).
@@ -29,14 +30,14 @@ export function EnvironmentForCredentials({
 
   return (
     <div className="space-y-1">
-      <label htmlFor={`${id}-environment`} className="text-sm font-medium">
+      <label htmlFor={`${id}-environment`} className="text-sm font-medium text-text-primary">
         {offerCollectionSettings
           ? "Target environment"
           : "Environment for credentials (optional)"}
       </label>
       <select
         id={`${id}-environment`}
-        className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+        className={`${FIELD_STYLES} w-full`}
         value={environmentId}
         onChange={(event) => onChange(event.target.value)}
       >

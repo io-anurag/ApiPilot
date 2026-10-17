@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ExportResult, WorkflowStageId } from "@apipilot/shared-domain";
 import { fetchHealth, type HealthCheckResult } from "./services/healthClient";
-import { AppHeader } from "./components/AppHeader";
-import { Tabs, type TabItem } from "./components/Tabs";
-import { EntryChooser, type EntryChoice } from "./components/EntryChooser";
-import { RESULTS_VIEWS, WORKFLOWS, isResultsView, type TopLevelView } from "./components/workflowCatalog";
-import { WORKFLOW_SECTIONS, type SectionId } from "./components/sectionCatalog";
+import { AppShell } from "./components/shell/AppShell";
+import type { EntryChoice } from "./components/workflowCatalog";
+import type { RecentRun } from "./components/home/homeViewModel";
+import { HomePage } from "./pages/HomePage";
+import { isResultsView } from "./components/workflowCatalog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   buildCommands,
@@ -21,6 +21,10 @@ import type { OpenPerformancePlanRequest } from "./pages/PerformancePage";
 import { ActiveViewContext } from "./components/requestChain/activeView";
 import { useCoverageEntry } from "./hooks/useCoverageEntry";
 import { useTheme } from "./hooks/useTheme";
+import { useWorkflowSnapshot } from "./hooks/useWorkflowSnapshot";
+import { destinationOfView, viewOfDestination } from "./navigation/destinations";
+import type { DestinationId, Route } from "./navigation/routes";
+import { useRoute } from "./navigation/useRoute";
 
 // Each top-level view is its own chunk, fetched the first time it is mounted: bundled together they
 // exceeded Vite's 500 kB chunk warning, and a session usually visits only one or two of them. The
@@ -41,6 +45,9 @@ const CoveragePage = lazy(() => import("./pages/CoveragePage").then((m) => ({ de
 const PerformancePlanScaleMockPage = lazy(() =>
   import("./pages/PerformancePlanScaleMockPage").then((m) => ({ default: m.PerformancePlanScaleMockPage })),
 );
+const PatternLibraryPage = lazy(() =>
+  import("./pages/PatternLibraryPage").then((m) => ({ default: m.PatternLibraryPage })),
+);
 
 /** One boundary per view, so the first load of one view never suspends (and hides) another that
  * is already mounted. A chunk that fails to load throws to `AppErrorBoundary` (main.tsx). */
@@ -58,66 +65,61 @@ function LazyView({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-type ActiveTab = TopLevelView;
-
-/** Mutually exclusive, top-level views (research.md D9, FR-011) — no react-router: a handful of
- * views does not warrant a routing dependency, mirroring AP-009's own original decision. AP-032
- * adds the quick performance test as the third, AP-034 Run k6 Script, and AP-037 request-chain
- * Performance Plans; AP-047 merges the last two into one Performance view. AP-038 reads labels and
- * colours from the shared workflow catalog. */
-const TABS: Array<TabItem<ActiveTab>> = [
-  ...WORKFLOWS.map((workflow) => ({
-    id: workflow.id as ActiveTab,
-    label: workflow.tabLabel,
-    markerClassName: workflow.tone.marker,
-  })),
-  // AP-046: a results view, not a workflow; it is in the tab menu and palette, not on the start screen.
-  ...RESULTS_VIEWS.map((view) => ({ id: view.id as ActiveTab, label: view.tabLabel, markerClassName: view.marker })),
-];
-
+/**
+ * The application. Each destination has a hash address (navigation/routes.ts; no router library,
+ * mirroring AP-009's original decision) and is shown inside one shell (AP-054): a persistent
+ * sidebar and a page header. A page, once reached, stays mounted and is merely hidden while another
+ * destination is shown, which is what keeps drafts, selections, editor changes and run progress
+ * across navigation (FR-005).
+ */
 export function App() {
-  const showPerformancePlanScaleMock =
-    new URLSearchParams(window.location.search).get("mock") === "performance-plan-scale";
+  // `?mock=` opens a design preview instead of the pages: the Performance plan at scale, and (AP-054
+  // FR-014) the pattern library. Neither reads or writes anything.
+  const mockPreview = new URLSearchParams(window.location.search).get("mock");
+  const showPerformancePlanScaleMock = mockPreview === "performance-plan-scale";
+  const showPatternLibrary = mockPreview === "pattern-library";
   const [health, setHealth] = useState<HealthCheckResult | null>(null);
   const { theme, setTheme } = useTheme();
   // AP-038 US3: the command palette. Its commands are derived from state on every opening and
-  // never stored; every action goes through the same handlers the cards, tabs and theme control
+  // never stored; every action goes through the same handlers the sidebar and the theme control
   // use (research.md D8), so the palette cannot reach a state they cannot.
   const [paletteOpen, setPaletteOpen] = useState(false);
   const shortcutHint = shortcutLabel(isMacPlatform(typeof navigator === "undefined" ? undefined : navigator));
-  // No choice made yet: only the entry chooser is shown, no tab menu (requirement: menu bar
-  // visible only once a path is picked, see EntryChooser).
-  const [started, setStarted] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("guided-workflow");
-  // AP-046: the start screen and Import & Run Collection show what is known about coverage; it is
-  // read only while one of them is on screen, and again whenever the user comes back to one.
-  const coverageEntry = useCoverageEntry(!started || activeTab === "import-collection");
-  // The guided workflow hides the tab menu while in progress so the user completes it before
-  // switching away; "Import & Run Collection" never needs that since it is a self-contained,
-  // one-shot action rather than a multi-stage flow.
-  const [tabsVisible, setTabsVisible] = useState(false);
-  // Set once the user first reaches the guided workflow, then never reset — see its use below for
-  // why this must survive "Back to start" even though `started` itself does not.
-  const [guidedWorkflowMounted, setGuidedWorkflowMounted] = useState(false);
-  const [guidedSection, setGuidedSection] = useState<SectionId>("spec");
+
+  const snapshot = useWorkflowSnapshot();
+  const { route, notice, navigate, replaceRoute } = useRoute({ workflow: snapshot.workflow, ready: snapshot.ready });
+  const view = route.view;
+  // The stage the Guided Workflow page reports it is showing, for the address and the sidebar.
+  const [viewedStage, setViewedStage] = useState<WorkflowStageId | null>(null);
+
+  // Pages reached at least once, kept mounted from then on (only `hidden` toggles). Updated while
+  // rendering, so the page appears in the same commit as the destination change.
+  const [mounted, setMounted] = useState<ReadonlySet<DestinationId>>(() => new Set([view]));
+  // An address that names a Guided Workflow stage cannot be judged until the workflow has been read.
+  const awaitingWorkflow = view === "guided" && route.stage !== undefined && !snapshot.ready;
+  if (!awaitingWorkflow && !mounted.has(view)) setMounted(new Set(mounted).add(view));
+
+  // AP-046: Import & Run Collection shows what is known about coverage; it is read only while it
+  // is on screen, and again whenever the user comes back to it. (Home reads its own figures.)
+  const coverageEntry = useCoverageEntry(view === "import");
   // Coverage's "Open results" asks Import & Run to open the results of that run.
   const [importRunRequest, setImportRunRequest] = useState<{ runId: string; token: number }>();
-  // Coverage's "Open scenarios" asks the guided workflow to show its scenario review stage.
+  // An address `#/guided/<stage>` (or Coverage's "Open scenarios") asks the guided workflow to show
+  // that stage. Derived while rendering so a page mounting on such an address receives it at mount,
+  // which also replaces the automatic hand-off to Import & Run that resuming at `execution` would do.
   const [guidedStageRequest, setGuidedStageRequest] = useState<{ stageId: WorkflowStageId; token: number }>();
-  // Same idea for "Import & Run Collection": once reached it stays mounted, so "Back to start"
-  // keeps its in-memory state (selection, per-run order, an in-progress run's view).
-  const [importCollectionMounted, setImportCollectionMounted] = useState(false);
-  // AP-047: Performance (formerly the quick performance test and Performance Plans), like Import &
-  // Run, stays mounted once reached so "Back to start" and tab switches keep its draft, open plan, step
-  // and run progress (FR-021); the uploaded specification and the plans also live on the server.
-  const [performanceMounted, setPerformanceMounted] = useState(false);
+  const [lastRoutedStage, setLastRoutedStage] = useState<WorkflowStageId | undefined>();
+  const routedStage = view === "guided" && snapshot.ready ? route.stage : undefined;
+  if (routedStage !== lastRoutedStage) {
+    setLastRoutedStage(routedStage);
+    if (routedStage !== undefined) {
+      setGuidedStageRequest((previous) => ({ stageId: routedStage, token: (previous?.token ?? 0) + 1 }));
+    }
+  }
+  // Home's Recent runs asks Run k6 Script to open one run's report on its owning script.
+  const [k6RunRequest, setK6RunRequest] = useState<{ scriptId: string; runId: string; token: number }>();
   // Whether Performance holds an unfinished test with no plan yet, so the start screen can say so (AP-047 FR-019).
   const [performanceDraft, setPerformanceDraft] = useState(false);
-  // AP-034: Run k6 Script stays mounted once reached, like the other standalone paths.
-  const [userScriptMounted, setUserScriptMounted] = useState(false);
-  // AP-046: the Coverage view stays mounted once reached, so its filters and sort survive switching
-  // views (they reset on a full page refresh).
-  const [coverageMounted, setCoverageMounted] = useState(false);
   // AP-037: a seeding entry point opens a plan by id; since AP-047 it opens in Performance, on the Plan step.
   const [openChainPlanRequest, setOpenChainPlanRequest] = useState<OpenPerformancePlanRequest | null>(null);
   const openChainPlanNonce = useRef(0);
@@ -159,88 +161,69 @@ export function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [paletteOpen]);
 
-  function mount(view: ActiveTab) {
-    const mounters: Record<ActiveTab, (mounted: boolean) => void> = {
-      "guided-workflow": setGuidedWorkflowMounted,
-      "import-collection": setImportCollectionMounted,
-      performance: setPerformanceMounted,
-      "user-script": setUserScriptMounted,
-      coverage: setCoverageMounted,
-    };
-    mounters[view](true);
-  }
+  // The Guided Workflow page reports the stage it is showing. Keep the address on it, without a
+  // history entry, so a refresh or a bookmark returns to the same stage.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const handleViewedStageChange = useCallback(
+    (stageId: WorkflowStageId | null) => {
+      setViewedStage(stageId);
+      if (stageId !== null && viewRef.current === "guided") replaceRoute({ view: "guided", stage: stageId });
+    },
+    [replaceRoute],
+  );
 
   /** AP-037 FR-020: an entry point seeded a request-chain plan; show it in Performance, on its Plan step. */
   function handleOpenChainPlan(planId: string) {
     openChainPlanNonce.current += 1;
     setOpenChainPlanRequest({ planId, nonce: openChainPlanNonce.current });
-    setStarted(true);
-    setActiveTab("performance");
-    setTabsVisible(true);
-    setPerformanceMounted(true);
+    navigate({ view: "performance" });
   }
 
   /** AP-046: open Coverage from a contextual link (scenario review, run results) or the palette. */
   function handleOpenCoverage() {
-    setStarted(true);
-    setActiveTab("coverage");
-    setTabsVisible(true);
-    setCoverageMounted(true);
+    navigate({ view: "coverage" });
   }
 
-  /** Coverage's own links back into the workflows: same behaviour as picking that tab. */
-  function handleOpenWorkflowFromCoverage(view: "guided-workflow" | "import-collection", options?: { runId?: string }) {
-    if (view === "guided-workflow") {
-      setGuidedStageRequest((prev) => ({ stageId: "scenarioReview", token: (prev?.token ?? 0) + 1 }));
-      handleSelect(view);
-      setTabsVisible(true);
+  /** Coverage's own links back into the workflows. */
+  function handleOpenWorkflowFromCoverage(target: "guided-workflow" | "import-collection", options?: { runId?: string }) {
+    if (target === "guided-workflow") {
+      navigate({ view: "guided", stage: "scenarioReview" });
     } else {
       const runId = options?.runId;
       if (runId) setImportRunRequest((prev) => ({ runId, token: (prev?.token ?? 0) + 1 }));
-      handleSelect(view);
+      navigate({ view: "import" });
     }
   }
 
   function handleSelect(choice: EntryChoice) {
-    setStarted(true);
-    setActiveTab(choice);
-    // Both standalone paths are self-contained, so the tab menu stays visible on them.
-    setTabsVisible(choice !== "guided-workflow");
-    mount(choice);
+    navigate({ view: destinationOfView(choice) });
   }
 
-  /** The "Back to start" control on both views (requirement: an escape hatch while the guided
-   * workflow hides the tab menu) — returns to the chooser without discarding anything. The guided
-   * workflow remains resumable via `fetchCurrentWorkflow`, and both pages stay mounted, so picking
-   * either path again picks up where the user left off. */
-  function handleExitToStart() {
-    setStarted(false);
-    setActiveTab("guided-workflow");
-    setTabsVisible(false);
+  /** Home's Recent runs: open one run's results on its own screen. The request is held in memory
+   * with a token (the pattern the other seeding requests use); the address carries no id. */
+  function handleOpenRun(run: RecentRun) {
+    const { workflow, ownerId, runId } = run.target;
+    if (workflow === "import") {
+      setImportRunRequest((prev) => ({ runId, token: (prev?.token ?? 0) + 1 }));
+      navigate({ view: "import" });
+    } else if (workflow === "performance") {
+      openChainPlanNonce.current += 1;
+      setOpenChainPlanRequest({ planId: ownerId, nonce: openChainPlanNonce.current, runId });
+      navigate({ view: "performance" });
+    } else {
+      setK6RunRequest((prev) => ({ scriptId: ownerId, runId, token: (prev?.token ?? 0) + 1 }));
+      navigate({ view: "k6" });
+    }
   }
 
-  // AP-041: the start screen keeps the product accent (no section). A standalone workflow has a
-  // fixed section; the guided workflow reports the section of the stage it is showing.
-  let section: SectionId | undefined;
-  if (started) {
-    section = activeTab === "guided-workflow" ? guidedSection : WORKFLOW_SECTIONS[activeTab];
-  }
-
-  function handleTabChange(tab: ActiveTab) {
-    setActiveTab(tab);
-    mount(tab);
-  }
-
-  /** FR-019: a workflow opens as its tab would when the tab menu is shown, and as its start-screen
-   * card would otherwise (start screen, or the guided workflow hiding the menu). */
   function runCommand(command: Command) {
     setPaletteOpen(false);
     if (command.kind === "workflow") {
       if (isResultsView(command.id)) handleOpenCoverage();
-      else if (started && tabsVisible) handleTabChange(command.id);
       else handleSelect(command.id);
-    } else if (command.kind === "back-to-start") {
-      handleExitToStart();
+    } else if (command.kind === "go-home") {
+      navigate({ view: "home" });
     } else {
       setTheme(command.target);
     }
@@ -258,70 +241,81 @@ export function App() {
     setImportPreload(
       toImportPreload(postmanArtifact, specTitle, importPreloadTokenRef.current, workflowId),
     );
-    setActiveTab("import-collection");
-    setTabsVisible(true);
-    setImportCollectionMounted(true);
+    navigate({ view: "import" });
   }
 
+  const goTo = useCallback((next: Route) => navigate(next), [navigate]);
+
   return (
-    <main
-      // AP-041: inside a workflow, the accent follows the section on screen (index.css).
-      data-section={section}
-      className="technical-grid min-h-screen bg-background text-text-primary">
-      <AppHeader
+    <>
+      <AppShell
+        route={route}
+        workflow={snapshot.workflow}
+        viewedStage={viewedStage}
+        notice={notice}
         health={health}
         theme={theme}
         onThemeChange={setTheme}
         onOpenCommandPalette={() => setPaletteOpen(true)}
         shortcutHint={shortcutHint}
-      />
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        {showPerformancePlanScaleMock ? (
+        onNavigate={goTo}
+      >
+        {showPerformancePlanScaleMock && (
           <LazyView>
             <PerformancePlanScaleMockPage />
           </LazyView>
-        ) : (
-          <ActiveViewContext.Provider value={started ? activeTab : "start"}>
-            {!started && <EntryChooser onSelect={handleSelect} coverage={coverageEntry} onOpenCoverage={handleOpenCoverage} performanceDraft={performanceDraft} />}
-            {started && tabsVisible && (
-              <Tabs
-                tabs={TABS}
-                activeTab={activeTab}
-                onChange={handleTabChange}
-                label="Top-level views"
-                accent="neutral"
-              />
+        )}
+        {showPatternLibrary && (
+          <LazyView>
+            <PatternLibraryPage />
+          </LazyView>
+        )}
+        {!showPerformancePlanScaleMock && !showPatternLibrary && (
+          <ActiveViewContext.Provider value={viewOfDestination(view)}>
+            {mounted.has("home") && (
+              <div hidden={view !== "home"}>
+                <HomePage
+                  active={view === "home"}
+                  workflow={snapshot.workflow}
+                  performanceDraft={performanceDraft}
+                  onSelect={handleSelect}
+                  onOpen={goTo}
+                  onOpenRun={handleOpenRun}
+                />
+              </div>
             )}
-            {/* Deliberately NOT gated on `started`: once the guided workflow has been reached, it
-             * stays mounted for the rest of the session (only `hidden` toggles), even across "Back to
-             * start". Its own resume-on-mount effect re-fetches the current workflow and, if that
-             * workflow already reached the `execution` stage, automatically hands off to "Import & Run
-             * Collection" — guarded by a `useRef` so it fires at most once per *mounted instance*.
-             * Unmounting it on "Back to start" (by gating it on `started`) would reset that guard on
-             * every remount, so simply reselecting "Guided Workflow" would immediately re-trigger the
-             * handoff and bounce the user straight back to "Import & Run Collection" instead of
-             * letting them view the guided workflow again. */}
-            {guidedWorkflowMounted && (
-              <div hidden={!started || activeTab !== "guided-workflow"}>
+            {awaitingWorkflow && (
+              <div role="status" aria-label="Loading view">
+                <Skeleton className="h-40 w-full rounded bg-surface-strong" />
+              </div>
+            )}
+            {/* Deliberately kept mounted once reached (only `hidden` toggles): its own resume-on-mount
+             * effect re-fetches the current workflow and, if that workflow already reached the
+             * `execution` stage, automatically hands off to "Import & Run Collection" — guarded by a
+             * `useRef` so it fires at most once per *mounted instance*. Unmounting it whenever another
+             * destination is shown would reset that guard on every remount, so simply returning to the
+             * Guided Workflow would immediately re-trigger the handoff and bounce the user straight
+             * back to "Import & Run Collection". */}
+            {mounted.has("guided") && (
+              <div hidden={view !== "guided"}>
                 <LazyView>
                   <TestGenerationWorkflowPage
-                    onExit={handleExitToStart}
-                    onSectionChange={setGuidedSection}
                     onHandoffToExecution={handleHandoffToExecution}
                     onOpenChainPlan={handleOpenChainPlan}
                     onOpenCoverage={handleOpenCoverage}
+                    onWorkflowChange={snapshot.update}
+                    onViewedStageChange={handleViewedStageChange}
                     stageRequest={guidedStageRequest}
-                    isVisible={started && activeTab === "guided-workflow"}
+                    isVisible={view === "guided"}
                   />
                 </LazyView>
               </div>
             )}
-            {importCollectionMounted && (
-              <div hidden={!started || activeTab !== "import-collection"}>
+            {mounted.has("import") && (
+              <div hidden={view !== "import"}>
                 <LazyView>
                   <ExternalCollectionsPage
                     preload={importPreload}
-                    onExit={handleExitToStart}
                     onOpenChainPlan={handleOpenChainPlan}
                     coverage={coverageEntry}
                     onOpenCoverage={handleOpenCoverage}
@@ -330,38 +324,38 @@ export function App() {
                 </LazyView>
               </div>
             )}
-            {performanceMounted && (
-              <div hidden={!started || activeTab !== "performance"}>
+            {mounted.has("performance") && (
+              <div hidden={view !== "performance"}>
                 <LazyView>
-                  <PerformancePage onExit={handleExitToStart} openRequest={openChainPlanRequest} onDraftChange={setPerformanceDraft} />
+                  <PerformancePage openRequest={openChainPlanRequest} onDraftChange={setPerformanceDraft} />
                 </LazyView>
               </div>
             )}
-            {coverageMounted && (
-              <div hidden={!started || activeTab !== "coverage"}>
+            {mounted.has("coverage") && (
+              <div hidden={view !== "coverage"}>
                 <LazyView>
                   <CoveragePage onOpenWorkflow={handleOpenWorkflowFromCoverage} />
                 </LazyView>
               </div>
             )}
-            {userScriptMounted && (
-              <div hidden={!started || activeTab !== "user-script"}>
+            {mounted.has("k6") && (
+              <div hidden={view !== "k6"}>
                 <LazyView>
-                  <UserScriptPage onExit={handleExitToStart} />
+                  <UserScriptPage openRunRequest={k6RunRequest} />
                 </LazyView>
               </div>
             )}
           </ActiveViewContext.Provider>
         )}
-      </div>
+      </AppShell>
       {paletteOpen && (
         <CommandPalette
-          commands={buildCommands({ workflowShown: started, theme })}
+          commands={buildCommands({ homeShown: view === "home", theme })}
           onRun={runCommand}
           onClose={() => setPaletteOpen(false)}
           shortcutHint={shortcutHint}
         />
       )}
-    </main>
+    </>
   );
 }

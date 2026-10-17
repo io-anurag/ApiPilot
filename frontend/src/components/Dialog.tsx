@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 /**
  * Single source of truth for the modal shell (backdrop, focus trap, Escape-to-close, and
@@ -10,7 +11,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 export function Dialog({
   role = "dialog",
   labelledBy,
-  panelClassName = "w-full max-w-md space-y-3 rounded-lg border border-brand-300 bg-surface p-4 shadow-xl dark:border-brand-500",
+  panelClassName = "w-full max-w-md space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-xl",
   testId = "dialog",
   onClose,
   onBackdropClick,
@@ -27,41 +28,7 @@ export function Dialog({
   children: ReactNode;
 }>) {
   const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement;
-    return () => {
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusable || focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useFocusTrap(panelRef, onClose);
 
   // The backdrop scrolls, and the panel is centred with auto margins rather than `items-center`:
   // a dialog taller than the window (an environment with many values) then starts at the top and

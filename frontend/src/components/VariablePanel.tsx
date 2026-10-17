@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { VariableBinding } from "@apipilot/shared-domain";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
+import { Banner } from "./patterns/Banner";
+import { Card } from "./patterns/Card";
+import { Pill } from "./patterns/Pill";
 
 interface VariableRow {
   name: string;
@@ -97,12 +100,9 @@ export function VariablePanel({
   }
 
   return (
-    <div
-      data-testid="variable-panel"
-      className="space-y-3 rounded-md border border-border bg-surface p-4"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted">
+    <Card data-testid="variable-panel" className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 text-xs text-text-secondary">
           Values used to resolve every <code>{"{{variable}}"}</code> placeholder in this
           collection's requests.
         </p>
@@ -121,12 +121,7 @@ export function VariablePanel({
         </div>
       </div>
       {locked && (
-        <p
-          role="status"
-          className="rounded-md border border-warning-100 bg-warning-50 px-2 py-1 text-xs text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100"
-        >
-          This collection is read-only while a run is in progress.
-        </p>
+        <Banner tone="warning" role="status" title="This collection is read-only while a run is in progress." />
       )}
       <div className="space-y-2">
         {rows.map((row, index) => {
@@ -140,7 +135,7 @@ export function VariablePanel({
           // row, before saving.
           const hasValue = row.value.trim().length > 0;
           return (
-            <div key={index} className="flex items-center gap-2">
+            <div key={index} className="flex flex-wrap items-center gap-2">
               {row.source === "new" ? (
                 <input
                   type="text"
@@ -149,11 +144,11 @@ export function VariablePanel({
                   value={row.name}
                   disabled={locked}
                   onChange={(event) => updateRow(index, { name: event.target.value })}
-                  className="w-40 shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`w-full shrink-0 font-mono sm:w-40 ${FIELD_STYLES}`}
                 />
               ) : (
                 <span
-                  className="w-40 shrink-0 truncate font-mono text-sm"
+                  className="w-full shrink-0 truncate font-mono text-sm text-text-primary sm:w-40"
                   title={row.name}
                 >
                   {row.name}
@@ -170,9 +165,9 @@ export function VariablePanel({
                 value={row.value}
                 disabled={locked}
                 onChange={(event) => updateRow(index, { value: event.target.value })}
-                className={`flex-1 rounded-md border px-2 py-1 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border bg-surface" : "border-danger-200 bg-danger-50 dark:border-danger-500 dark:bg-danger-500/10"}`}
+                className={`min-w-48 flex-1 rounded-md border px-2 py-1.5 font-mono text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border-control bg-surface" : "border-danger-600 bg-danger-50 dark:bg-danger-500/10"}`}
               />
-              <span className="w-32 shrink-0 text-xs text-muted">
+              <span className="shrink-0 text-xs text-muted sm:w-32">
                 {SOURCE_LABEL[row.source]}
               </span>
               {changedThisSession && (
@@ -183,8 +178,8 @@ export function VariablePanel({
                 />
               )}
               {!row.referenced && (
-                <span className="shrink-0 text-[10px] uppercase text-muted">
-                  unreferenced
+                <span className="shrink-0 uppercase">
+                  <Pill tone="line">unreferenced</Pill>
                 </span>
               )}
               <button
@@ -196,7 +191,7 @@ export function VariablePanel({
                 }
                 disabled={locked}
                 onClick={() => removeRow(index)}
-                className="text-sm text-muted hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-danger-400"
+                className="rounded text-sm text-muted hover:text-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-danger-400"
               >
                 ✕
               </button>
@@ -219,6 +214,6 @@ export function VariablePanel({
       </div>
 
       {error && <ErrorState message={error} />}
-    </div>
+    </Card>
   );
 }

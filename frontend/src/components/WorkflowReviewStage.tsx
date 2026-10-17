@@ -306,7 +306,7 @@ export function WorkflowReviewStage({
             onChange={toggleSelectAll}
             aria-label="Select all workflows"
             data-testid="workflow-review-select-all"
-            className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="h-4 w-4 rounded border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
           Select all
         </label>
@@ -350,7 +350,7 @@ export function WorkflowReviewStage({
                     checked={manualSelectionIds.has(workflow.id)}
                     onChange={() => toggleManualSelection(workflow.id)}
                     aria-label={`Select workflow ${workflow.id}`}
-                    className="mt-1 h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="mt-1 h-4 w-4 rounded border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   />
                   <ol className="flex-1 space-y-1.5">
                     {workflowSummary(workflow, dependencyAnalysis.graph).map(

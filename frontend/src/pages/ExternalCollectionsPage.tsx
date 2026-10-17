@@ -30,6 +30,9 @@ import { MoveItemDialog, describeMoveResult } from "../components/MoveItemDialog
 import { RequestEditorPanel } from "../components/RequestEditorPanel";
 import { VariablePanel } from "../components/VariablePanel";
 import { ErrorState } from "../components/ErrorState";
+import { EmptyState } from "../components/EmptyState";
+import { Banner } from "../components/patterns/Banner";
+import { Card, CardHeader } from "../components/patterns/Card";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
@@ -103,7 +106,6 @@ function containerOf(
  */
 export function ExternalCollectionsPage({
   preload,
-  onExit,
   onOpenChainPlan,
   coverage,
   onOpenCoverage,
@@ -112,7 +114,6 @@ export function ExternalCollectionsPage({
   /** AP-046: Coverage's "Open results": a new `token` selects the collection holding `runId` and opens that run's results. */
   openRunRequest?: Readonly<{ runId: string; token: number }>;
   preload?: ImportPreload | null;
-  onExit?: () => void;
   /** AP-037 FR-020: opens a request-chain plan seeded from the run panel's ordered selection. */
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: what is known about coverage, shown beside the run flow. */
@@ -422,23 +423,7 @@ export function ExternalCollectionsPage({
 
   return (
     <div className="space-y-5">
-      {onExit && (
-        <div className="flex justify-start">
-          <button
-            type="button"
-            aria-label="Exit Import & Run Collection and return to the start screen"
-            onClick={onExit}
-            className={BUTTON_STYLES.ghost}
-          >
-            ← Back to start
-          </button>
-        </div>
-      )}
-      {runLookupNotice && (
-        <output data-testid="run-lookup-notice" className="block rounded-md border border-warning-600 bg-surface px-3 py-2 text-sm text-text-primary">
-          {runLookupNotice}
-        </output>
-      )}
+      {runLookupNotice && <Banner tone="warning" role="status" testId="run-lookup-notice" title={runLookupNotice} />}
       <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />
       <ImportRunHero
         compact={step !== "collection"}
@@ -446,47 +431,37 @@ export function ExternalCollectionsPage({
         // Always mounted (hidden by the hero on later steps), so a half-filled upload form and the
         // list's selection survive a visit to another step.
         aside={
-          <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
-            <div className="h-1 bg-brand-600" />
-            <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
-              <div>
-                <p className="text-sm font-semibold text-text-primary">
-                  Import a Postman collection
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Collection + environment JSON · exported from Postman, shared by a
-                  teammate, or hand-authored
-                </p>
-              </div>
-              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
+          <Card className="flex h-full flex-col gap-5">
+            <CardHeader
+              level={3}
+              title="Import a Postman collection"
+              subtitle="Collection + environment JSON · exported from Postman, shared by a teammate, or hand-authored"
+            />
+            <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Uploaded collections
+              </h3>
+              <ExternalCollectionList
+                uploadedCollections={uploadedCollections}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onRemoved={handleRemoved}
+              />
             </div>
-            <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
-              <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase text-muted">
-                  Uploaded collections
-                </h3>
-                <ExternalCollectionList
-                  uploadedCollections={uploadedCollections}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onRemoved={handleRemoved}
-                />
+            {selected && (
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+                <p className="text-xs text-muted">Selected: {selected.name}</p>
+                <button
+                  type="button"
+                  onClick={() => setRequestedStep("review")}
+                  className={BUTTON_STYLES.primary}
+                >
+                  Review requests →
+                </button>
               </div>
-              {selected && (
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                  <p className="text-xs text-muted">Selected: {selected.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => setRequestedStep("review")}
-                    className={BUTTON_STYLES.primary}
-                  >
-                    Review requests →
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          </Card>
         }
       />
 
@@ -514,11 +489,7 @@ export function ExternalCollectionsPage({
         <section className="space-y-3">
           {viewError && <ErrorState message={viewError} />}
           {moveNotice && (
-            <div
-              role="status"
-              className="flex items-start justify-between gap-3 rounded-md bg-info-50 px-3 py-2 text-sm text-info-700 dark:bg-info-500/15 dark:text-info-100"
-            >
-              <p>{moveNotice}</p>
+            <Banner tone="neutral" role="status" title={moveNotice}>
               <button
                 type="button"
                 onClick={() => setMoveNotice(null)}
@@ -526,7 +497,7 @@ export function ExternalCollectionsPage({
               >
                 Dismiss
               </button>
-            </div>
+            </Banner>
           )}
           <div className="grid items-start gap-4 lg:grid-cols-[320px_1fr]">
             {/* A fixed height rather than stretching to the right column: a large collection then
@@ -556,7 +527,7 @@ export function ExternalCollectionsPage({
                     type="button"
                     aria-pressed={mainView === "variables"}
                     onClick={() => setMainView("variables")}
-                    className={`flex items-center gap-1.5 ${BUTTON_STYLES.ghost} ${mainView === "variables" ? "underline" : ""}`}
+                    className={`flex items-center gap-1.5 ${BUTTON_STYLES.ghost} ${mainView === "variables" ? "border-b-2 border-brand-500 underline" : ""}`}
                   >
                     Variables
                     {collectionView.variables.some((v) => !v.resolved) && (
@@ -597,9 +568,10 @@ export function ExternalCollectionsPage({
                   variables={collectionView?.variables}
                 />
               ) : (
-                <p className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">
-                  Select a request from the collection to view and edit it.
-                </p>
+                <EmptyState
+                  testId="request-editor-empty"
+                  message="Select a request from the collection to view and edit it."
+                />
               )}
             </div>
           </div>

@@ -26,6 +26,8 @@ import { TestScenarioReviewRefinement } from "./TestScenarioReviewRefinement";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SummaryPanel } from "./SummaryPanel";
 import { BUTTON_STYLES } from "./controlStyles";
+import { Banner } from "./patterns/Banner";
+import { Card, CardHeader } from "./patterns/Card";
 import { groupScenarioCategories } from "../utils/scenarioCategoryGroups";
 
 /**
@@ -208,24 +210,24 @@ export function ScenarioReviewStage({
   return (
     <section
       data-testid="scenario-review-stage"
-      className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
+      className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
     >
-      <div className="min-w-0 space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-text-primary">
-            Review Generated Scenarios
-          </h2>
-          {onOpenCoverage && (
-            <button
-              type="button"
-              onClick={onOpenCoverage}
-              title="See which operations, parameters and responses these scenarios cover, and what is still missing."
-              className={BUTTON_STYLES.secondary}
-            >
-              View coverage
-            </button>
-          )}
-        </div>
+      <Card className="space-y-4">
+        <CardHeader
+          title="Review Generated Scenarios"
+          actions={
+            onOpenCoverage && (
+              <button
+                type="button"
+                onClick={onOpenCoverage}
+                title="See which operations, parameters and responses these scenarios cover, and what is still missing."
+                className={BUTTON_STYLES.secondary}
+              >
+                View coverage
+              </button>
+            )
+          }
+        />
         <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
         <AiEnhancementOutcomeSummary workflow={workflow} />
         {/* A disabled fieldset natively disables every control inside it — row selection,
@@ -253,13 +255,13 @@ export function ScenarioReviewStage({
           onBulkDecision={handleBulkDecision}
           renderSelected={(item) => (
             <div
-              className="space-y-4 border-2 border-brand-200 bg-brand-50/40 p-4 dark:border-brand-500 dark:bg-brand-500/10"
+              className="space-y-4 p-4"
               aria-label="Selected scenario review"
               data-testid="selected-scenario-panel"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">
                     Selected scenario
                   </p>
                   <p className="text-sm text-text-secondary">
@@ -294,43 +296,34 @@ export function ScenarioReviewStage({
         />
         </fieldset>
         {bulkDecision.status === "running" && (
-          <output
-            data-testid="scenario-bulk-progress"
-            className="block w-full rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-100"
-          >
-            Applying decisions: {bulkDecision.processed} of {bulkDecision.total} complete…
-          </output>
+          <Banner
+            tone="neutral"
+            role="status"
+            testId="scenario-bulk-progress"
+            title={`Applying decisions: ${bulkDecision.processed} of ${bulkDecision.total} complete…`}
+          />
         )}
         {bulkDecision.status === "done" && (
-          <output
-            data-testid="scenario-bulk-summary"
-            className="block w-full rounded-md border border-border bg-surface-subtle px-3 py-3 text-sm text-text-secondary"
+          <Banner
+            tone={bulkDecision.failed.length > 0 ? "warning" : "neutral"}
+            role="status"
+            testId="scenario-bulk-summary"
+            title="Bulk review complete"
           >
-            <p className="font-semibold text-text-primary">Bulk review complete</p>
-            <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+            <dl className="flex flex-wrap gap-x-5 gap-y-1">
               <div>
-                <dt className="inline text-muted">Accepted or rejected: </dt>
-                <dd className="inline font-medium text-success-700 dark:text-success-400">
-                  {bulkDecision.succeeded}
-                </dd>
+                <dt className="inline">Accepted or rejected: </dt>
+                <dd className="inline font-semibold text-text-primary">{bulkDecision.succeeded}</dd>
               </div>
               <div>
-                <dt className="inline text-muted">Failed: </dt>
-                <dd
-                  className={
-                    bulkDecision.failed.length > 0
-                      ? "inline font-medium text-danger-700 dark:text-danger-400"
-                      : "inline font-medium text-text-secondary"
-                  }
-                >
-                  {bulkDecision.failed.length}
-                </dd>
+                <dt className="inline">Failed: </dt>
+                <dd className="inline font-semibold text-text-primary">{bulkDecision.failed.length}</dd>
               </div>
             </dl>
             {bulkDecision.failed.length > 0 && (
-              <div className="mt-2 rounded-md border border-danger-200 bg-danger-50 p-2 text-danger-800 dark:border-danger-500 dark:bg-danger-500/10 dark:text-danger-100">
-                <p className="font-medium">Items needing attention</p>
-                <ul className="mt-1 ml-4 list-disc">
+              <div className="mt-2 rounded-lg border border-danger-600/30 bg-surface p-2.5 text-text-primary">
+                <p className="font-semibold">Items needing attention</p>
+                <ul className="mt-1 ml-4 list-disc break-words text-text-secondary">
                   {bulkDecision.failed.map((failure) => (
                     <li key={failure.id}>
                       {failure.id}: {failure.message}
@@ -339,7 +332,7 @@ export function ScenarioReviewStage({
                 </ul>
               </div>
             )}
-          </output>
+          </Banner>
         )}
         {(finalizing || finalizeError) && (
           <div className="space-y-2 border-t border-border pt-4">
@@ -359,7 +352,7 @@ export function ScenarioReviewStage({
             {finalizeError && <ErrorState testId="finalize-error" message={finalizeError} />}
           </div>
         )}
-      </div>
+      </Card>
       <SummaryPanel
         testId="scenario-review-summary-panel"
         statValue={acceptedCount}
@@ -378,7 +371,7 @@ export function ScenarioReviewStage({
                 checked={aiDependencyAnalysis}
                 disabled={finalizing}
                 onChange={(event) => setAiDependencyAnalysis(event.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               />
               <span>
                 Use local AI to find extra dependencies

@@ -300,7 +300,7 @@ export function LiveRunChart({ series, thinned, plannedSeconds = null, startedAt
                 type="button"
                 aria-pressed={mode === option}
                 onClick={() => setView(option)}
-                className={`px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${mode === option ? "bg-brand-600 text-white" : "bg-surface text-text-secondary hover:bg-surface-hover"}`}
+                className={`px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${mode === option ? "bg-accent text-on-accent" : "bg-surface text-text-secondary hover:bg-surface-hover"}`}
               >
                 {option === "total" ? "Total" : `By ${groupNoun}`}
               </button>

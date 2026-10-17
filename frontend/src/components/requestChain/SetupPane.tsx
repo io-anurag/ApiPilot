@@ -50,7 +50,7 @@ export function SetupPane({ session }: Readonly<{ session: ChainPlanSession }>) 
               <input
                 type="number"
                 min={0}
-                className="w-28 rounded-lg border border-border bg-surface px-2 py-1"
+                className="w-28 rounded-lg border border-border-control bg-surface px-2 py-1"
                 value={plan.thinkTimeMs}
                 onChange={(event) => change({ ...plan, thinkTimeMs: Math.max(0, Math.round(Number(event.target.value) || 0)) })}
                 onBlur={() => void save()}

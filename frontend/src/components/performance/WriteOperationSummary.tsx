@@ -72,7 +72,7 @@ export function WriteOperationSummary({
 
   if (variant === "trigger") {
     return (
-      <section aria-label="Write operations this run sends" data-testid="write-summary-trigger" className="space-y-1.5 rounded-md border border-warning-500 bg-warning-50 p-3 dark:bg-warning-500/10">
+      <section aria-label="Write operations this run sends" data-testid="write-summary-trigger" className="space-y-1.5 rounded-xl border border-warning-600/30 bg-warning-100 p-3 dark:bg-warning-500/10">
         <p className="text-sm font-semibold text-warning-700 dark:text-warning-100">
           <StatusBadge label="Writes" tone="warning" /> {writeCountLabel(summary.total)}
           {listId && (
@@ -93,7 +93,7 @@ export function WriteOperationSummary({
   }
 
   return (
-    <section id={listId} aria-labelledby="write-summary-title" data-testid="write-summary-plan" className="rounded-md border border-warning-500 bg-warning-50 dark:bg-warning-500/10">
+    <section id={listId} aria-labelledby="write-summary-title" data-testid="write-summary-plan" className="rounded-xl border border-warning-600/30 bg-warning-100 dark:bg-warning-500/10">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
         <h3 id="write-summary-title" className="text-sm font-semibold text-warning-700 dark:text-warning-100">
           <StatusBadge label="Writes" tone="warning" /> {writeCountLabel(summary.total)}
@@ -101,8 +101,8 @@ export function WriteOperationSummary({
         {counts}
         {actions && <div className="ml-auto">{actions}</div>}
       </div>
-      <p className="border-t border-warning-500/40 px-3 py-1.5 text-xs text-warning-700 dark:text-warning-100">{WRITE_REPETITION_SENTENCE}</p>
-      <div className="border-t border-warning-500/40 px-3 py-2">
+      <p className="border-t border-warning-600/30 px-3 py-1.5 text-xs text-warning-700 dark:text-warning-100">{WRITE_REPETITION_SENTENCE}</p>
+      <div className="border-t border-warning-600/30 px-3 py-2">
         <CountedOperationList label={(count) => `${count} write operations`} entries={entries} collapseAbove={Infinity} columns onSelect={onSelect} testId="write-summary-plan-list" />
       </div>
     </section>

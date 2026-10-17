@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: User description: "Redesign the ApiPilot application shell and visual language across every screen, based on the approved design mock (design-reference/apipilot-design.html, Lodgify-inspired): a persistent left sidebar, one single-accent palette sampled from the Lodgify Figma in light and dark, and the same patterns (stat tiles, cards, chips, steppers, tables, banners, empty states, dialogs) on every screen, with a drawer on narrow windows, left-aligned text, and a Home screen that shows only data that exists."
 

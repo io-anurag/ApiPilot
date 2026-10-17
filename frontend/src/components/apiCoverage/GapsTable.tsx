@@ -4,6 +4,8 @@ import { BUTTON_STYLES } from "../controlStyles";
 import { EmptyState } from "../EmptyState";
 import { HttpMethodBadge } from "../HttpMethodBadge";
 import { Pagination } from "../Pagination";
+import { Pill } from "../patterns/Pill";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { PriorityBadge, StateBadge } from "./CoverageBadges";
 import { OperationRequirements } from "./OperationRequirements";
 import { formatFraction, formatPercentage, presentStates, resultRunForOperation, type OpenWorkflow } from "./coverageViewModel";
@@ -26,11 +28,11 @@ function SortHeader({
 }>) {
   const isActive = active === sortKey;
   return (
-    <th scope="col" aria-sort={isActive ? (order === "asc" ? "ascending" : "descending") : "none"} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+    <th scope="col" aria-sort={isActive ? (order === "asc" ? "ascending" : "descending") : "none"} className={TABLE_STYLES.th}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className="inline-flex items-center gap-1 uppercase tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className="inline-flex items-center gap-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         {label}
         <span aria-hidden="true">{isActive ? (order === "asc" ? "▲" : "▼") : ""}</span>
@@ -48,15 +50,16 @@ function Fraction({ numerator, denominator }: Readonly<{ numerator: number; deno
   );
 }
 
-const CHIP = "inline-flex items-center rounded border px-1.5 py-0.5 text-xs";
+/** A body cell of this table: top-aligned, because a row holds several lines (states, scenarios, what is missing). */
+const TD = TABLE_STYLES.td.replace("align-middle", "align-top");
 
 /** Membership of the operation-level counts, as text chips: neither one is a completeness claim. */
 function Membership({ row }: Readonly<{ row: OperationCoverage }>) {
   return (
     <div className="flex flex-wrap gap-1">
-      {row.scenarioCount === 0 && <span className={`${CHIP} border-dashed border-border text-text-primary`}>No scenarios</span>}
-      {row.scenarioVerdicts.passed > 0 && <span className={`${CHIP} border-success-600 text-success-700 dark:text-success-100`}>Has passing verification</span>}
-      {row.scenarioVerdicts.failed > 0 && <span className={`${CHIP} border-danger-600 text-danger-700 dark:text-danger-100`}>Has execution failures</span>}
+      {row.scenarioCount === 0 && <Pill tone="line">No scenarios</Pill>}
+      {row.scenarioVerdicts.passed > 0 && <Pill tone="ok" icon={<span aria-hidden="true">✓</span>}>Has passing verification</Pill>}
+      {row.scenarioVerdicts.failed > 0 && <Pill tone="bad" icon={<span aria-hidden="true">✕</span>}>Has execution failures</Pill>}
     </div>
   );
 }
@@ -135,20 +138,20 @@ export function GapsTable({
   const visible = operations.slice((page - 1) * pageSize, page * pageSize);
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table data-testid="gaps-table" className="w-full min-w-[56rem] border-collapse text-sm">
+      <div role="region" aria-label="Coverage gaps table" tabIndex={0} className={`${TABLE_STYLES.scroll} focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}>
+        <table data-testid="gaps-table" className="w-full min-w-4xl border-collapse text-sm">
           <caption className="sr-only">
             Coverage by operation, showing {operations.length} of {totalOperations} operations
           </caption>
-          <thead className="bg-surface-subtle">
+          <thead>
             <tr>
               <SortHeader label="Method" sortKey="method" active={sort} order={order} onSort={onSort} />
               <SortHeader label="Endpoint" sortKey="path" active={sort} order={order} onSort={onSort} />
               <SortHeader label="Specification" sortKey="specification" active={sort} order={order} onSort={onSort} />
               <SortHeader label="Runtime verified" sortKey="runtime" active={sort} order={order} onSort={onSort} />
-              <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Requirement states and scenarios</th>
+              <th scope="col" className={TABLE_STYLES.th}>Requirement states and scenarios</th>
               <SortHeader label="Priority" sortKey="priority" active={sort} order={order} onSort={onSort} />
-              <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
+              <th scope="col" className={TABLE_STYLES.th}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -162,18 +165,18 @@ export function GapsTable({
                 resultRunForOperation(scenarios, row.operationKey, availableRuns, false);
               return (
                 <Fragment key={row.operationKey}>
-                  <tr data-testid="gap-row" data-operation={row.operationKey} className="border-t border-border align-top">
-                    <td className="px-3 py-2"><HttpMethodBadge method={row.method} /></td>
-                    <td className="px-3 py-2 font-mono text-xs text-text-primary">{row.path}</td>
-                    <td className="px-3 py-2">
+                  <tr data-testid="gap-row" data-operation={row.operationKey}>
+                    <td className={TD}><HttpMethodBadge method={row.method} /></td>
+                    <td className={`${TD} font-mono text-xs`}>{row.path}</td>
+                    <td className={TD}>
                       <Fraction numerator={row.specification.covered} denominator={row.specification.total} />
                       <span className="block text-xs text-muted">requirements</span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className={TD}>
                       <Fraction numerator={row.runtime.verified} denominator={row.runtime.total} />
                       <span className="block text-xs text-muted">requirements</span>
                     </td>
-                    <td className="space-y-1.5 px-3 py-2">
+                    <td className={`${TD} space-y-1.5`}>
                       <Membership row={row} />
                       <ul className="flex flex-col items-start gap-1">
                         {presentStates(row.stateCounts).map(([state, count]) => (
@@ -202,8 +205,8 @@ export function GapsTable({
                         </ul>
                       )}
                     </td>
-                    <td className="px-3 py-2"><PriorityBadge priority={row.priority} /></td>
-                    <td className="px-3 py-2">
+                    <td className={TD}><PriorityBadge priority={row.priority} /></td>
+                    <td className={TD}>
                       <div className="flex flex-col items-start gap-1 whitespace-nowrap">
                         <button
                           type="button"
@@ -229,8 +232,8 @@ export function GapsTable({
                     </td>
                   </tr>
                   {isOpen && (
-                    <tr data-testid="gap-detail-row" className="bg-surface-subtle">
-                      <td colSpan={COLUMN_COUNT} className="px-4 py-3">
+                    <tr data-testid="gap-detail-row">
+                      <td colSpan={COLUMN_COUNT} className="border-b border-border bg-surface-subtle px-4 py-3">
                         <OperationRequirements
                           row={row}
                           requirements={requirements.filter((r) => r.operationKey === row.operationKey)}

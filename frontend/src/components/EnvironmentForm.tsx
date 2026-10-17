@@ -5,7 +5,7 @@ import {
   updateEnvironment,
   type EnvironmentInput,
 } from "../services/environmentsClient";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
 
 /**
@@ -15,11 +15,10 @@ import { ErrorState } from "./ErrorState";
  * values a plan needs.
  */
 const TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
-const INPUT =
-  "rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1";
+const INPUT = FIELD_STYLES;
 /** Denser than `INPUT`: a plan can suggest dozens of value rows. */
 const ROW_INPUT =
-  "min-w-0 rounded border border-border bg-surface px-2 py-1 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
+  "min-w-0 rounded border border-border-control bg-surface px-2 py-1 font-mono text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500";
 
 interface VariableRow {
   key: string;

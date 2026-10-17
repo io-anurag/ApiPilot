@@ -5,8 +5,9 @@ import {
   type UploadedCollectionSummary,
 } from "../services/externalCollectionsClient";
 import type { ImportPreload } from "../services/importPreload";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
 import { ErrorState } from "./ErrorState";
+import { DropZone } from "./patterns/DropZone";
 
 const TIERS: EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 
@@ -17,6 +18,7 @@ function FileIcon({ className }: Readonly<{ className?: string }>) {
       fill="none"
       stroke="currentColor"
       strokeWidth={1.75}
+      aria-hidden="true"
       className={className}
     >
       <path
@@ -29,7 +31,26 @@ function FileIcon({ className }: Readonly<{ className?: string }>) {
   );
 }
 
-/** A compact, click-to-browse file field styled like the Guided Workflow upload dropzone. */
+function CheckIcon({ className }: Readonly<{ className?: string }>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+      className={className}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5L20 7" />
+    </svg>
+  );
+}
+
+/**
+ * A click-to-browse (or drop) file field built on the shared `DropZone`. The file input stays inside
+ * the zone's label, visually hidden but keyboard reachable; a chosen file is shown by its name and a
+ * check icon, not by colour. Dropping a file selects it, as the earlier full-size input did natively.
+ */
 function FilePickerField({
   id,
   label,
@@ -45,45 +66,39 @@ function FilePickerField({
   onChange: (file: File | null) => void;
   inputRef: RefObject<HTMLInputElement>;
 }>) {
+  const [dragging, setDragging] = useState(false);
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-medium text-muted">
+    <div className="flex min-w-0 flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-text-secondary">
         {label}
       </label>
-      <label
-        htmlFor={id}
-        className={`relative flex items-center gap-2.5 rounded-md border border-dashed px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-1 ${
-          file
-            ? "border-brand-300 bg-brand-50/50 dark:border-brand-500 dark:bg-brand-500/15"
-            : "cursor-pointer border-border-strong bg-surface hover:border-brand-400 hover:bg-brand-50/30 dark:hover:bg-brand-500/10"
-        }`}
+      <DropZone
+        active={dragging}
+        icon={file ? <CheckIcon className="h-5 w-5" /> : <FileIcon className="h-5 w-5" />}
+        title={file ? file.name : "Choose file"}
+        hint={file ? hint : `${hint} · click to browse`}
+        className="min-w-0 break-all"
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          const dropped = event.dataTransfer.files[0];
+          if (dropped) onChange(dropped);
+        }}
       >
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
-            file
-              ? "border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300"
-              : "border-border bg-surface-subtle text-muted"
-          }`}
-        >
-          <FileIcon className="h-4 w-4" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-text-primary">
-            {file ? file.name : "Choose file"}
-          </span>
-          <span className="block truncate text-xs text-muted">
-            {file ? hint : `${hint} · click to browse`}
-          </span>
-        </span>
         <input
           id={id}
           ref={inputRef}
           type="file"
           accept=".json,application/json"
           onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          className="sr-only"
         />
-      </label>
+      </DropZone>
     </div>
   );
 }
@@ -155,10 +170,10 @@ export function ExternalCollectionUpload({
   return (
     <div data-testid="external-collection-upload" className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="external-collection-name"
-            className="text-xs font-medium text-muted"
+            className="text-xs font-medium text-text-secondary"
           >
             Name
           </label>
@@ -167,13 +182,13 @@ export function ExternalCollectionUpload({
             type="text"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+            className={FIELD_STYLES}
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="external-collection-tier"
-            className="text-xs font-medium text-muted"
+            className="text-xs font-medium text-text-secondary"
           >
             Tier
           </label>
@@ -181,7 +196,7 @@ export function ExternalCollectionUpload({
             id="external-collection-tier"
             value={tier}
             onChange={(event) => setTier(event.target.value as EnvironmentTier)}
-            className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+            className={FIELD_STYLES}
           >
             {TIERS.map((value) => (
               <option key={value} value={value}>
@@ -190,6 +205,8 @@ export function ExternalCollectionUpload({
             ))}
           </select>
         </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FilePickerField
           id="external-collection-collection-file"
           label="Collection (.json)"

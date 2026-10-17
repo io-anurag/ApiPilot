@@ -62,25 +62,43 @@ The header shows a live connection indicator — **Connecting…**, **Connected*
 light/dark theme toggle. Your choice is remembered on that browser; until you choose
 explicitly, ApiPilot follows your operating system's light/dark preference.
 
-Each part of the workflow has its own accent colour (for example blue for the specification, violet for AI
-enhancement, teal for execution), shown on the stage tracker, tabs and primary buttons. Colour never carries a
-result on its own: success, warnings and failures always have a text label and use their own green, amber and red.
+ApiPilot uses one accent, lime, for the screen you are on, the current step, selected items and primary
+buttons (always with dark text), with mint and olive tints for surfaces and a deeper olive wherever lime would be too pale to
+read. Colour never carries a result on its own: success, warnings and failures always have a text label or icon and use their
+own green, amber and red, and HTTP methods keep their own colours beside their names. Input and button outlines are dark
+enough to see clearly in both themes.
+
+### The shell
+
+Every screen sits in one frame. The **sidebar** on the left lists **Home**, **Guided Workflow**, **Import & Run Collection**,
+**Performance**, **Run k6 Script** and **Coverage**, and marks the one you are on in words and with a lime highlight. Under
+**Guided Workflow** (the small arrow beside it opens or closes the list) are its eleven stages in four groups: Prepare, Design,
+Organize and Execute. Each stage shows a check when done, **Redo** when it must be redone, and a lock when it cannot be opened
+yet; point at or focus a locked stage to read why. The **page header** names the screen with its parent above it (for example
+**Guided Workflow › Design** over **Scenario Review**), and holds the command palette, the connection status, the theme control
+and help. On a narrow window the sidebar becomes a drawer: use the menu button at the top left; **Esc**, choosing a destination or
+choosing outside it closes the drawer and returns you to the menu button.
+
+Each screen has its own address, so **Back** and **Forward** move between the screens you visited, a refresh opens the same screen
+and a bookmark returns to it. An address for a stage you cannot open yet opens the nearest screen that you can, with a note saying
+why. The address holds only which screen it is, never your specification, names or values; unsaved work held only in the open page is
+not restored by a refresh, as before. Moving between screens never discards anything: each keeps its state while another is shown.
 
 The header also has two shortcuts:
 
 - **Command palette** (the search button showing **Ctrl K**, or **⌘ K** on macOS, or that key
   combination anywhere outside a text field): type a few letters to open any of the five
-  workflows, return to the start screen, or switch between light and dark theme. Use ↑ and ↓
+  workflows, go to Home, or switch between light and dark theme. Use ↑ and ↓
   to move, **Enter** to choose and **Esc** to close. The palette offers only these commands; it
   does not search your specifications, collections, plans or runs, sends nothing to the backend
   and stores nothing except the theme choice. It does not open while you are typing in a field
   or while another dialog is open.
 - **Help** (the **?** button): lists the keyboard shortcuts and what each workflow is for.
 
-### The start screen
+### Home
 
-The start screen begins with **Start with the artifact you have.** Below it, three boxes name
-the kind of input you may already hold and the workflows that accept it:
+**Home** begins with **Start with the artifact you have**. Three boxes name the kind of input you may already hold and the
+workflows that accept it:
 
 | You have | Workflows offered |
 |---|---|
@@ -88,28 +106,36 @@ the kind of input you may already hold and the workflows that accept it:
 | A Postman collection | Import & Run Collection |
 | A k6 script | Run k6 Script |
 
-Each workflow name there is a button. Under **Launch a test session**, the four workflows also
-appear as cards, with **Guided Workflow** marked **Recommended**. A workflow opens the same way
-whether you choose it from an artifact box, its card, its tab or the command palette. Each
-workflow keeps one colour everywhere it appears (cards, tabs, palette), always next to its name:
-indigo for Guided Workflow, fuchsia for Import & Run Collection, violet for Performance and pink
-for Run k6 Script. While a workflow is open, its pages take on its colour throughout: buttons, the
-active tab, the progress tracker and highlights. The start screen keeps ApiPilot's teal. These
-colours are never used for statuses: green, amber, red and cyan always mean success, warning, failure and information.
-Paragraph text is justified, evenly spread between its margins.
+Each workflow name there is a button. Under **Launch a test session**, the four workflows also appear as cards, with
+**Guided Workflow** marked **Recommended**; a Performance test left unfinished says **Draft in progress**. A workflow opens the same
+way whether you choose it from an artifact box, its card, the sidebar or the command palette.
+
+Below the cards, Home shows only what ApiPilot already holds, and says in words when it holds nothing:
+
+- **Summary tiles**: specification coverage, runtime-verified coverage, open high-priority gaps and scenarios pending review, the
+  same figures as the Coverage screen. With no specification loaded they say **Needs a specification from the Guided Workflow.**
+  and show no number.
+- **Coverage by area** and **Operations in scope**, by HTTP method.
+- **Next steps**: for example **Continue Scenario Review**, **Review 12 pending scenarios**, **Cover 3 operations with no generated
+  tests**, **Finish the draft load test**; each opens the screen where it is done. **Nothing is waiting on you.** when nothing is.
+- **Recent runs**: the runs Import & Run Collection, Performance and Run k6 Script hold for this session, newest first, with the
+  workflow, what was run, when it started and its status in words; **Open results** goes to that run. A Debug run is never listed
+  (it creates no run record). If one workflow's runs cannot be read, Home says so.
+- **AI provider**: whether local AI is ready, loading or unavailable (and why), and which provider is configured.
+
+Home reads this once each time you open it and does not refresh on its own. Paragraph text is left-aligned. The
+**pattern library** (the same cards, chips, steppers, tables, banners, drop zones and dialogs every screen is built from) opens at
+`?mock=pattern-library` on ApiPilot's address.
 
 ## 3. The guided workflow
 
-The start screen offers four paths: **Guided Workflow** (described in this section, including
+Home offers four paths: **Guided Workflow** (described in this section, including
 the optional performance test in section 3.11),
 **Import & Run Collection** (described in [section 4](#4-importing-and-running-your-own-postman-collection)),
 **Performance** (described in [section 5](#5-performance)) and
 **Run k6 Script** (described in [section 6](#6-run-k6-script)).
-While the guided workflow is in progress the tab bar is hidden so you can finish it; use
-**← Back to start** to return to the start screen at any time. Nothing is discarded —
-choosing **Guided Workflow** again resumes where you left off. The tab bar appears once you
-are in **Import & Run Collection**, **Performance** or **Run k6 Script**, each of which has its own
-**← Back to start** too, and switching between the views never discards any one's state.
+Open any other screen from the sidebar at any time, or go to **Home**. Nothing is discarded: choosing **Guided Workflow** again
+resumes where you left off, and switching between the screens never discards any one's state.
 
 Within the guided workflow, every step below is reached in this fixed order, and a
 completed step can be revisited read-only (or, for the two review stages, reopened) by
@@ -139,7 +165,7 @@ completed**.
 
 ### 3.1 Upload
 
-On the start screen, choose a `.yaml` or `.yml` file (up to 10 MB). Only OpenAPI 3.x is
+On Home or in the sidebar, choose **Guided Workflow**, then choose a `.yaml` or `.yml` file (up to 10 MB). Only OpenAPI 3.x is
 supported — Swagger 2.0 and JSON OpenAPI documents are rejected. If the file cannot be
 parsed as YAML, or is not OpenAPI 3.x, an explicit error is shown before anything else
 runs.
@@ -389,11 +415,10 @@ recorded from the guided plan this stage held before version 19.19.0 are listed 
 
 ## 4. Importing and running your own Postman collection
 
-Choose **Import & Run Collection** on the start screen (or its tab, once the tab bar is
-visible). This area never requires an OpenAPI upload or a guided workflow. It is also
+Choose **Import & Run Collection** on Home or in the sidebar. This area never requires an OpenAPI upload or a guided workflow. It is also
 where a collection generated by the guided workflow is run (section 3.10); apart from
-that hand-off, nothing you do in the guided workflow affects it. Use **← Back to start** to
-return to the start screen; your selection and run order are kept for when you choose
+that hand-off, nothing you do in the guided workflow affects it. Open another screen from the
+sidebar whenever you like; your selection and run order are kept for when you choose
 **Import & Run Collection** again.
 
 The area is four steps, shown in a bar across the top: **Collection**, **Review requests**,
@@ -648,8 +673,8 @@ Treat the result as a starting point for your own investigation.
 
 ## 5. Performance
 
-Choose **Performance** on the start screen (or its tab, once the tab bar is visible) to load-test an
-API. One tab covers the whole journey, from a source to a running k6 test. It replaces the separate
+Choose **Performance** on Home or in the sidebar to load-test an
+API. One screen covers the whole journey, from a source to a running k6 test. It replaces the separate
 **Quick Performance Test** and **Performance Plans** tabs of earlier versions; your plans, runs and
 reports are unchanged. Nothing is sent to any system until you press **Start** on the last step.
 
@@ -679,7 +704,7 @@ written beside it; **Back** moves without discarding anything.
 
 **1. Source.** The four sources are cards, each with an icon, what it produces and what it needs
 (for example "Needs a YAML file"); the one you chose is ticked. Below them a card for the
-chosen source follows the same layout as the upload card on the start screen. For a specification it
+chosen source follows the same layout as the upload card in the Guided Workflow. For a specification it
 says "Upload specification", that the document stays in your local workflow and is never sent to a
 cloud AI provider, and offers the drop area; its header shows the accepted input (OpenAPI 3.x, YAML,
 up to 10 MB) and **Required**, which becomes **Ready** once a specification is analyzed. The other
@@ -734,9 +759,9 @@ the card is the check, and nothing is sent until you press **Start run**. Below 
 
 **Leaving and coming back.** **← Plans** returns to the entry screen. For a test with no plan yet, your source
 choice and selection are kept as a **draft**: the entry screen shows **Draft in progress** with **Resume** and
-**Discard**, and the Performance card on the start screen says the same in text. Choosing another source, or
+**Discard**, and the Performance card on Home says the same in text. Choosing another source, or
 opening a saved plan, while a draft exists asks before it replaces the draft. A plan is saved as you edit it,
-so leaving a plan keeps no draft. **← Back to start** and switching to another tab keep everything, including
+so leaving a plan keeps no draft. Opening another screen from the sidebar keeps everything, including
 the step you were on and a run in progress, for your session.
 
 **Where things live.** The uploaded specification is held in memory for your session (a backend restart loses
@@ -772,7 +797,7 @@ under **Earlier runs** in Performance.
 
 A **performance plan** is a load test you build and own outright, as in Postman or JMeter. It
 holds one or more **chains**. A chain is an ordered list of **steps**, and every step is a concrete
-request you can edit freely. Open **Performance** (or choose it on the start screen) to list your
+request you can edit freely. Open **Performance** (from Home or the sidebar) to list your
 plans, start an empty one, open, duplicate or delete one ([section 5](#5-performance)). Plans are
 saved on this machine, so they are still there after ApiPilot restarts, for as long as your
 browser session lasts.
@@ -937,7 +962,7 @@ returned.
 
 ## 6. Run k6 Script
 
-Choose **Run k6 Script** on the start screen (or its tab, once the tab bar is visible) to run a
+Choose **Run k6 Script** on Home or in the sidebar to run a
 k6 script you supply with the k6 installed on the backend machine. It needs no specification,
 guided workflow or plan, and it never changes either of them.
 
@@ -1128,10 +1153,10 @@ memory and nothing is sent to a third party.
 ## 6b. Coverage
 
 **Coverage** shows how much of your API the generated tests cover and how much of that real runs have proved. Open it from
-the **Coverage** tab, from the **API Test Coverage** entry under the workflow cards on the start screen, from the **Feeds API
+**Coverage** in the sidebar, from the figures and next steps on Home, from the **Feeds API
 Test Coverage** panel in Import & Run Collection, from **View coverage** in Review Generated Scenarios or in a run's results, or
-with Ctrl+K and **API Test Coverage**. The start screen entry and the panel show the current figures once a specification exists;
-before that their button is disabled and says what is needed. It needs a specification from the guided workflow; without one the
+with Ctrl+K and **API Test Coverage**. Home and the panel show the current figures once a specification exists;
+before that they say what is needed. It needs a specification from the guided workflow; without one the
 page says so and offers one action, **Start the Guided Workflow**. Once scenarios exist and nothing has run, the one action is
 **Go to Import & Run**, and after a run it becomes **Run again in Import & Run**. **Recalculate** and the export links appear
 only when there is something to calculate.
@@ -1342,7 +1367,7 @@ Variable and credential values are encrypted before being stored.
 | **Generate script** stays disabled | **Plan check** on the Plan step lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the header says **Not saved** | Choose **Go to step** in Plan check to go to the problem, or fix the error shown under the plan's name |
 | Performance: uploading a different specification asks to replace the current one | A session holds one uploaded specification at a time | Confirm to replace it; plans created from it, runs and reports are kept |
 | Performance: **Change operations…** is disabled | The uploaded specification is not the one the plan was seeded from, or none is uploaded (the reason is shown beside the button) | Upload the specification the plan was seeded from, from the entry screen, then open the plan again |
-| Performance: **Draft in progress** on the start screen | A test with no plan yet was left | Choose Performance and **Resume**, or **Discard** it |
+| Performance: **Draft in progress** on Home | A test with no plan yet was left | Choose Performance and **Resume**, or **Discard** it |
 | Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the plan check lists which are missing |
 | Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
 | Run k6 Script: "Imports a module from a URL" | The script imports from `https://…`, such as jslib.k6.io | Copy the helper you need into the script; remote code is never loaded |

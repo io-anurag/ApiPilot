@@ -132,7 +132,7 @@ describe("editing in the page", () => {
 
   it("asks before leaving unsaved changes, and Cancel keeps the text", async () => {
     stubFetch(routes());
-    render(<UserScriptPage onExit={() => undefined} />);
+    render(<UserScriptPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Smoke" }));
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     const textbox = await screen.findByRole("textbox", { name: "Script Smoke" });
@@ -142,8 +142,6 @@ describe("editing in the page", () => {
     expect(within(dialog).getByText("Discard your unsaved changes to the script?")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("textbox", { name: "Script Smoke" })).toHaveValue(`${CONTENT}// changed\n`);
-    fireEvent.click(screen.getByRole("button", { name: "Exit Run k6 Script and return to the start screen" }));
-    expect(await screen.findByTestId("confirm-dialog")).toBeInTheDocument();
   });
 
   it("saves from the version shown and reports that it needs confirmation again", async () => {

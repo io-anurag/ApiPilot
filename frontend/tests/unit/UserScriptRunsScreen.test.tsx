@@ -95,6 +95,14 @@ describe("Runs & reports, laid out as Performance's Run step", () => {
     expect(card.compareDocumentPosition(screen.getByText("Runs of this script")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("opens the owning script on its Runs & reports view, showing the requested run (AP-054, Home's Recent runs)", async () => {
+    const run = finishedRun();
+    stubFetch(routes(userScript(), [run]));
+    render(<UserScriptPage openRunRequest={{ scriptId: userScript().id, runId: run.id, token: 1 }} />);
+    expect(await screen.findByTestId("user-script-trigger")).toBeInTheDocument();
+    expect(await screen.findByText("Viewing report")).toBeInTheDocument();
+  });
+
   it("with no run yet: no finished run, a way to the setup, and an empty list that says how to start", async () => {
     stubFetch(routes(userScript()));
     render(<UserScriptPage />);

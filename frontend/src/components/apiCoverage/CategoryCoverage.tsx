@@ -1,4 +1,6 @@
 import type { CoverageCategoryCoverage, CoverageSnapshot } from "@apipilot/shared-domain";
+import { Card, CardHeader } from "../patterns/Card";
+import { Pill } from "../patterns/Pill";
 import { BreakdownBar } from "./CoverageBars";
 import { breakdownFromCounts, CATEGORY_TITLES, formatRatio } from "./coverageViewModel";
 
@@ -14,16 +16,22 @@ function Figure({ label, numerator, denominator }: Readonly<{ label: string; num
   );
 }
 
+function SelectedMark({ selected }: Readonly<{ selected: boolean }>) {
+  return selected ? <Pill tone="accent">Filtered to this category</Pill> : null;
+}
+
 function CategoryCard({ category, selected }: Readonly<{ category: CoverageCategoryCoverage; selected: boolean }>) {
+  // The selected category carries a brand edge and the words, not the edge alone.
   const ring = selected ? "ring-2 ring-brand-500" : "";
   if (category.group === "security" || !category.available) {
     return (
       <article
         data-testid="category-card"
         data-category={category.group}
-        className={`space-y-2 rounded-lg border border-dashed border-border bg-surface-subtle p-3 ${ring}`}
+        className={`space-y-2 rounded-xl border border-dashed border-border-strong bg-surface-subtle p-3 ${ring}`}
       >
         <h4 className="text-sm font-semibold text-text-primary">{CATEGORY_TITLES[category.group]}</h4>
+        <SelectedMark selected={selected} />
         {category.group === "security" ? (
           <p className="text-sm font-semibold text-text-primary">Unavailable</p>
         ) : (
@@ -34,8 +42,9 @@ function CategoryCard({ category, selected }: Readonly<{ category: CoverageCateg
     );
   }
   return (
-    <article data-testid="category-card" data-category={category.group} className={`space-y-2 rounded-lg border border-border p-3 ${ring}`}>
+    <article data-testid="category-card" data-category={category.group} className={`space-y-2 rounded-xl bg-surface-subtle p-3 ${ring}`}>
       <h4 className="text-sm font-semibold text-text-primary">{CATEGORY_TITLES[category.group]}</h4>
+      <SelectedMark selected={selected} />
       <dl className="space-y-1">
         <Figure label="Specification coverage" numerator={category.specCovered} denominator={category.eligible} />
         <Figure label="Runtime-verified" numerator={category.verified} denominator={category.eligible} />
@@ -58,16 +67,13 @@ export function CategoryCoverage({
   const securityDeclared = snapshot.operations.filter((o) => o.securityDeclared).length;
   const unclassified = snapshot.unclassified.requirements;
   return (
-    <section aria-labelledby="category-coverage-title" data-testid="category-coverage" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-      <div>
-        <h3 id="category-coverage-title" className="text-sm font-semibold text-text-primary">
-          Coverage by scenario category
-        </h3>
-        <p className="text-xs text-muted">
-          Each requirement belongs to one category. Both figures count that category&apos;s own eligible requirements and are never
-          combined into a score.
-        </p>
-      </div>
+    <Card as="section" aria-labelledby="category-coverage-title" data-testid="category-coverage" className="space-y-3">
+      <CardHeader
+        title="Coverage by scenario category"
+        titleId="category-coverage-title"
+        level={3}
+        subtitle="Each requirement belongs to one category. Both figures count that category's own eligible requirements and are never combined into a score."
+      />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {snapshot.categoryCoverage.map((category) => (
           <CategoryCard key={category.group} category={category} selected={selected === category.group} />
@@ -84,6 +90,6 @@ export function CategoryCoverage({
               .join("; ")}) are in no category denominator; they stay in response-code coverage as their own keys.`}{" "}
         Unclassified scenarios: {snapshot.unclassified.scenarios}.
       </p>
-    </section>
+    </Card>
   );
 }

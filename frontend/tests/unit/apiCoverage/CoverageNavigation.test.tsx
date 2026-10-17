@@ -4,7 +4,6 @@ import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 import { App } from "../../../src/App";
 import { ScenarioReviewStage } from "../../../src/components/ScenarioReviewStage";
 import { RESULTS_VIEWS, isResultsView } from "../../../src/components/workflowCatalog";
-import { WORKFLOW_SECTIONS } from "../../../src/components/sectionCatalog";
 import { snapshot } from "./coverageFixtures";
 
 /** Responses by URL; anything else is refused loudly so an unexpected call fails the test. */
@@ -40,22 +39,21 @@ async function openCoverageFromPalette(): Promise<void> {
 }
 
 describe("Coverage in the results section (AP-046)", () => {
-  it("is a results view in the results section, not a start-screen workflow", () => {
+  it("is a results view, not a start-screen workflow", () => {
     expect(RESULTS_VIEWS.map((v) => v.id)).toEqual(["coverage"]);
     expect(isResultsView("coverage")).toBe(true);
     expect(isResultsView("guided-workflow")).toBe(false);
-    expect(WORKFLOW_SECTIONS.coverage).toBe("results");
   });
 
-  it("is reachable from the command palette, with the tab menu and the Coverage view", async () => {
+  it("is reachable from the command palette, with the sidebar marking it and the Coverage view", async () => {
     stubFetch();
     render(<App />);
     await openCoverageFromPalette();
     expect(await screen.findByRole("heading", { name: "API Test Coverage" })).toBeInTheDocument();
-    const nav = screen.getByRole("navigation", { name: "Top-level views" });
-    expect(within(nav).getByRole("button", { name: "Coverage" })).toHaveAttribute("aria-current", "page");
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: "Coverage" })).toHaveAttribute("aria-current", "page");
+    expect(window.location.hash).toBe("#/coverage");
     await screen.findByTestId("spec-metrics");
-    expect(document.querySelector("main")?.getAttribute("data-section")).toBe("results");
   });
 
   it("does not add Coverage as a start-screen card", () => {
@@ -78,11 +76,11 @@ describe("Coverage in the results section (AP-046)", () => {
     await screen.findByTestId("gaps-table");
     fireEvent.change(screen.getByLabelText("Method"), { target: { value: "POST" } });
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => String(u).includes("method=POST"))).toBe(true));
-    const nav = screen.getByRole("navigation", { name: "Top-level views" });
-    fireEvent.click(within(nav).getByRole("button", { name: "Import & Run Collection" }));
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Import & Run Collection" }));
     expect(screen.getByTestId("coverage-page").parentElement).toHaveAttribute("hidden");
     const callsBefore = fetchMock.mock.calls.filter(([u]) => String(u).includes("/api/coverage")).length;
-    fireEvent.click(within(nav).getByRole("button", { name: "Coverage" }));
+    fireEvent.click(within(nav).getByRole("link", { name: "Coverage" }));
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([u]) => String(u).includes("/api/coverage")).length).toBeGreaterThan(callsBefore),
     );
@@ -95,8 +93,8 @@ describe("Coverage in the results section (AP-046)", () => {
     await openCoverageFromPalette();
     await screen.findByTestId("gaps-table");
     fireEvent.click(screen.getByRole("button", { name: "Run again in Import & Run" }));
-    const nav = screen.getByRole("navigation", { name: "Top-level views" });
-    expect(within(nav).getByRole("button", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page");
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page");
   });
 });
 

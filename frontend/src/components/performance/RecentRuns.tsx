@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { ChainPlanSummary, ChainRunSummary } from "@apipilot/shared-domain";
 import { chainRunsClient } from "../../services/requestChainClient";
 import { BUTTON_STYLES } from "../controlStyles";
+import { EmptyState } from "../EmptyState";
 import { ErrorState } from "../ErrorState";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge, type StatusTone } from "../StatusBadge";
 import { formatDateTimeUtc } from "../../dateTime";
@@ -60,36 +62,36 @@ export function RecentRuns({ plans, onOpenRun, busy = false }: Readonly<{ plans:
   if (state.kind === "loading") {
     return (
       <div role="status" aria-label="Loading recent runs">
-        <Skeleton className="h-16 w-full rounded bg-surface-strong" />
+        <Skeleton className="h-16 w-full rounded-xl bg-surface-strong" />
       </div>
     );
   }
   if (state.kind === "error") return <ErrorState message="Recent runs could not be loaded." detail={state.message} testId="recent-runs-error" />;
-  if (state.rows.length === 0) return <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted">No runs yet. A run you start from a plan appears here.</p>;
+  if (state.rows.length === 0) return <EmptyState message="No runs yet." description="A run you start from a plan appears here." testId="recent-runs-empty" />;
   return (
-    <div className="relative overflow-x-auto rounded-lg border border-border bg-surface" data-testid="recent-runs">
-      <table className="w-full min-w-[34rem] text-left text-sm">
+    <div className={TABLE_STYLES.scroll} data-testid="recent-runs">
+      <table className={TABLE_STYLES.table}>
         <caption className="sr-only">Recent runs</caption>
-        <thead className="border-b border-border text-xs uppercase text-muted">
+        <thead>
           <tr>
-            <th scope="col" className="px-3 py-2 font-medium">Plan</th>
-            <th scope="col" className="px-3 py-2 font-medium">Started</th>
-            <th scope="col" className="px-3 py-2 font-medium">Environment</th>
-            <th scope="col" className="px-3 py-2 font-medium">Status</th>
-            <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Actions</span></th>
+            <th scope="col" className={TABLE_STYLES.th}>Plan</th>
+            <th scope="col" className={TABLE_STYLES.th}>Started</th>
+            <th scope="col" className={TABLE_STYLES.th}>Environment</th>
+            <th scope="col" className={TABLE_STYLES.th}>Status</th>
+            <th scope="col" className={TABLE_STYLES.th}><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody>
           {state.rows.map(({ run, planId, planName }) => (
             <tr key={run.id}>
-              <td className="px-3 py-2 font-medium text-text-primary">{planName}</td>
-              <td className="px-3 py-2 text-muted">{formatDateTimeUtc(run.startedAt)}</td>
-              <td className="px-3 py-2">{run.environment.name}</td>
-              <td className="px-3 py-2">
+              <td className={`${TABLE_STYLES.td} font-medium`}>{planName}</td>
+              <td className={TABLE_STYLES.td}>{formatDateTimeUtc(run.startedAt)}</td>
+              <td className={TABLE_STYLES.td}>{run.environment.name}</td>
+              <td className={TABLE_STYLES.td}>
                 <StatusBadge label={STATUS[run.status].label} tone={STATUS[run.status].tone} />
               </td>
-              <td className="px-3 py-2 text-right">
-                <button type="button" className={BUTTON_STYLES.secondary} aria-label={`Open the run of ${planName} started ${formatDateTimeUtc(run.startedAt)}`} disabled={busy} onClick={() => onOpenRun(planId, run.id)}>
+              <td className={`${TABLE_STYLES.td} text-right`}>
+                <button type="button" className={BUTTON_STYLES.primary} aria-label={`Open the run of ${planName} started ${formatDateTimeUtc(run.startedAt)}`} disabled={busy} onClick={() => onOpenRun(planId, run.id)}>
                   Open run
                 </button>
               </td>

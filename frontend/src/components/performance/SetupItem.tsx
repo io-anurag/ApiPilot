@@ -22,7 +22,7 @@ const MARK: Record<SetupItemState, { symbol: string; label: string; className: s
     label: "Needs attention",
     className: "bg-warning-100 font-bold text-warning-700 dark:bg-warning-500/20 dark:text-warning-100",
   },
-  todo: { symbol: "", label: "Not done yet", className: "border-2 border-border" },
+  todo: { symbol: "", label: "Not done yet", className: "border-2 border-border-control" },
   optional: { symbol: "–", label: "Optional", className: "border border-dashed border-muted text-muted" },
 };
 
@@ -97,7 +97,7 @@ export function SetupItem({
             aria-expanded={open}
             aria-controls={bodyId}
             aria-label={`${open ? "Hide" : "Edit"} ${title}`}
-            className="shrink-0 rounded-lg border border-border bg-surface px-3 py-1 text-sm font-medium hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="shrink-0 rounded-lg border border-border-control bg-surface px-3 py-1 text-sm font-medium hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             onClick={() => setOpen(!open)}
           >
             {open ? "Hide" : "Edit"}

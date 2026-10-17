@@ -11,7 +11,7 @@ import { runBlockedReason, STATUS_TEXT, summarizeChains, type ChainRunProps } fr
 import { formatDateTimeUtc } from "../../dateTime";
 
 const HERO_BUTTON = "inline-flex min-h-11 items-center rounded-lg px-5 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-const HERO_PRIMARY = `${HERO_BUTTON} bg-brand-600 text-white hover:bg-brand-700`;
+const HERO_PRIMARY = `${HERO_BUTTON} bg-accent text-on-accent hover:brightness-95`;
 const HERO_SECONDARY = `${HERO_BUTTON} border border-border bg-surface hover:bg-surface-hover`;
 const HERO_DANGER = `${HERO_BUTTON} bg-danger-600 text-white hover:bg-danger-700`;
 

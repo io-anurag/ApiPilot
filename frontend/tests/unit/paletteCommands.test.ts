@@ -18,8 +18,8 @@ const key = (overrides: Partial<Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey
 });
 
 describe("buildCommands (AP-038 FR-015)", () => {
-  it("lists the four workflows in tab order, the Coverage results view (AP-046) and the opposite theme, with no Back to start on the start screen", () => {
-    expect(buildCommands({ workflowShown: false, theme: "light" }).map((c) => c.label)).toEqual([
+  it("lists the four workflows in tab order, the Coverage results view (AP-046) and the opposite theme, with no Go to Home on Home itself", () => {
+    expect(buildCommands({ homeShown: true, theme: "light" }).map((c) => c.label)).toEqual([
       "Guided Workflow",
       "Import & Run Collection",
       "Performance",
@@ -29,14 +29,14 @@ describe("buildCommands (AP-038 FR-015)", () => {
     ]);
   });
 
-  it("offers Back to start while a workflow view is shown, and the light theme from dark", () => {
-    const labels = buildCommands({ workflowShown: true, theme: "dark" }).map((c) => c.label);
-    expect(labels.slice(-2)).toEqual(["Back to start", "Switch to light theme"]);
+  it("offers Go to Home (AP-054) away from Home, and the light theme from dark", () => {
+    const labels = buildCommands({ homeShown: false, theme: "dark" }).map((c) => c.label);
+    expect(labels.slice(-2)).toEqual(["Go to Home", "Switch to light theme"]);
   });
 });
 
 describe("filterCommands (FR-016)", () => {
-  const commands = buildCommands({ workflowShown: true, theme: "light" });
+  const commands = buildCommands({ homeShown: false, theme: "light" });
 
   it("keeps every command, in order, for an empty or blank query", () => {
     expect(filterCommands(commands, "   ")).toEqual(commands);

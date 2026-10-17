@@ -5,7 +5,7 @@ Implements FR-001 to FR-005, FR-011, FR-015, FR-022 to FR-024, SC-007 to SC-009.
 ## Landmarks and order
 
 1. A skip link ("Skip to main content") first in the tab order, visible on focus.
-2. `<nav aria-label="Primary">`: the sidebar. Brand, logo and version at its top; then Home, Guided Workflow (a disclosure with its eleven stages), Import & Run Collection, Performance, Run k6 Script, Coverage. Nothing else (FR-002).
+2. `<nav aria-label="Primary">` inside the `<aside data-testid="sidebar">`: the sidebar. Brand, logo and version at its top; then Home, Guided Workflow (with a disclosure for its eleven stages), Import & Run Collection, Performance, Run k6 Script, Coverage. Nothing else (FR-002).
 3. `<header>`: breadcrumb and `<h1>` for the screen; the command-palette button, connection status, theme control and help control.
 4. `<main id="main">`: the notice live region (`role="status"`), then the page.
 
@@ -15,8 +15,8 @@ Implements FR-001 to FR-005, FR-011, FR-015, FR-022 to FR-024, SC-007 to SC-009.
 |---|---|
 | Destination | A link (`<a href="#/...">`) named by the workflow title from `workflowCatalog` ("Import & Run Collection" in full), or "Home" / "Coverage". The current one has `aria-current="page"`. |
 | Home launch tile | A button whose whole accessible name is the workflow title; artifact controls keep "{title}, for {artifact phrase}". Roles differ from the sidebar links, so by-role queries stay unique. |
-| Guided Workflow entry | A button with `aria-expanded` controlling the stage list. |
-| Stage item | Done: a link, with an icon labelled "Done". Current: `aria-current="step"`. Locked: not a link; `aria-disabled="true"` with its reason in `aria-describedby` text ("Complete X first"). State is text or an icon with an accessible name, never colour alone. |
+| Guided Workflow entry | A link to `#/guided` like the other destinations, with a separate disclosure button beside it (`aria-label` "Show/Hide Guided Workflow stages", `aria-expanded`, `aria-controls` the stage list). The Home tile keeps the button role, and the sidebar keeps the link role, so by-role queries stay unique. The list opens by itself while the Guided Workflow is the current page. |
+| Stage item | Done: a link, with an icon labelled "Done" (a stale stage is a link marked "Redo"). Current: `aria-current="step"`. Locked: a button (not a link) with `aria-disabled="true"`, an icon labelled "Locked" and its reason in `aria-describedby` text ("Complete X first", or "Upload a specification first" with no workflow), shown as a tooltip on hover and focus. State is text or an icon with an accessible name, never colour alone. |
 | Menu button (narrow) | `aria-label="Open navigation"`, `aria-expanded`, `aria-controls` the sidebar. |
 | Drawer | Opens over a dimming layer; focus moves inside and is trapped; Escape, a destination choice or the dimming layer closes it and focus returns to the menu button. Uses the shared `useFocusTrap` also used by `Dialog`. |
 | Connection status | Keeps `data-testid="connection-status"`, the three states Connecting, Connected, Disconnected as words, and `role="alert"` for Disconnected. |

@@ -9,6 +9,8 @@ import { ErrorState } from "../ErrorState";
 import { PromptDialog } from "../PromptDialog";
 import { Skeleton } from "../Skeleton";
 import { StatusBadge } from "../StatusBadge";
+import { Banner } from "../patterns/Banner";
+import { Card, CardHeader } from "../patterns/Card";
 import { EnvironmentPicker } from "../performance/EnvironmentPicker";
 import { LoadProfileEditor } from "../performance/LoadProfileEditor";
 import { ThresholdEditor } from "../performance/ThresholdEditor";
@@ -41,15 +43,15 @@ function runsHint(inProgress: boolean, count: number): string {
 function CheckFindings({ hosts, envNames }: Readonly<{ hosts: readonly string[]; envNames: ReadonlyArray<{ name: string; mappable: boolean }> }>) {
   return (
     <dl className="grid gap-3 sm:grid-cols-2">
-      <div className="space-y-1.5 rounded-lg border border-border bg-surface-subtle p-3">
-        <dt className="text-xs font-semibold uppercase text-muted">Hosts written in the script</dt>
-        <dd className="text-sm">
+      <div className="space-y-1.5 rounded-xl bg-surface-subtle p-3">
+        <dt className="text-xs font-semibold text-muted">Hosts written in the script</dt>
+        <dd className="text-sm text-text-primary">
           {hosts.length === 0 ? (
             "None found in the script text."
           ) : (
             <ul className="flex flex-wrap gap-1.5">
               {hosts.map((host) => (
-                <li key={host} className="break-all rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs">
+                <li key={host} className="break-all rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs text-text-primary">
                   {host}
                 </li>
               ))}
@@ -58,17 +60,17 @@ function CheckFindings({ hosts, envNames }: Readonly<{ hosts: readonly string[];
         </dd>
         <dd className="text-xs text-muted">{RUN_TIME_NOTE}</dd>
       </div>
-      <div className="space-y-1.5 rounded-lg border border-border bg-surface-subtle p-3">
-        <dt className="text-xs font-semibold uppercase text-muted">Environment values the script reads</dt>
-        <dd className="text-sm">
+      <div className="space-y-1.5 rounded-xl bg-surface-subtle p-3">
+        <dt className="text-xs font-semibold text-muted">Environment values the script reads</dt>
+        <dd className="text-sm text-text-primary">
           {envNames.length === 0 ? (
             "None found."
           ) : (
             <ul className="flex flex-wrap gap-1.5">
               {envNames.map((entry) => (
-                <li key={entry.name} className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs">
+                <li key={entry.name} className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs text-text-primary">
                   {entry.name}
-                  {!entry.mappable && <span className="ml-2 font-sans text-danger-700 dark:text-danger-200">cannot be mapped</span>}
+                  {!entry.mappable && <span className="ml-2 font-sans text-danger-700 dark:text-danger-100">cannot be mapped</span>}
                 </li>
               ))}
             </ul>
@@ -91,8 +93,8 @@ function LoadOption({
 }: Readonly<{ id: string; checked: boolean; disabled?: boolean; label: string; description: string; onChange: () => void }>) {
   return (
     <div
-      className={`relative flex gap-3 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-brand-500 ${
-        checked ? "border-brand-600 bg-brand-600/10 ring-1 ring-brand-600 dark:border-brand-500 dark:ring-brand-500" : "border-border bg-surface hover:border-brand-500"
+      className={`relative flex gap-3 rounded-xl border p-3 motion-safe:transition-colors focus-within:ring-2 focus-within:ring-brand-500 ${
+        checked ? "border-brand-500 bg-lime-pale ring-1 ring-brand-500" : "border-border bg-surface hover:border-brand-500"
       } ${disabled ? "opacity-60" : ""}`}
     >
       <input id={id} type="radio" name="user-script-load" checked={checked} disabled={disabled} onChange={onChange} aria-describedby={`${id}-description`} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 focus:outline-none" />
@@ -119,11 +121,14 @@ export function ScriptWorkspace({
   onChanged,
   onDeleted,
   onDirtyChange,
+  openRun,
 }: Readonly<{
   scriptId: string;
   onChanged: () => void;
   onDeleted: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** AP-054: Home's Recent runs asks for one run's report; a new `token` opens it on the Runs & reports view. */
+  openRun?: Readonly<{ runId: string; token: number }>;
 }>) {
   const runsClient = useMemo(() => userScriptRunsClient(scriptId), [scriptId]);
   const runs = usePerformanceRuns<UserScriptRun, UserScriptRunSummary, UserScriptStartInput>(runsClient);
@@ -283,6 +288,15 @@ export function ScriptWorkspace({
     }
   }
 
+  const { showReport } = runs;
+  const handledOpenRun = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!openRun || !script || handledOpenRun.current === openRun.token) return;
+    handledOpenRun.current = openRun.token;
+    setTab("runs");
+    showReport(openRun.runId);
+  }, [openRun, script, showReport]);
+
   function changeTab(next: WorkspaceTab) {
     if (dirty && next !== "script") setPendingTab(next);
     else setTab(next);
@@ -391,7 +405,7 @@ export function ScriptWorkspace({
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge label={script.confirmed ? "Confirmed" : "Needs confirmation"} tone={script.confirmed ? "success" : "warning"} />
             {needsConfirmation && (
-              <button type="button" className={BUTTON_STYLES.warning} onClick={() => setAskConfirm(true)}>
+              <button type="button" className={BUTTON_STYLES.primary} onClick={() => setAskConfirm(true)}>
                 Review and confirm
               </button>
             )}
@@ -416,8 +430,8 @@ export function ScriptWorkspace({
       </ScriptPanel>
 
       {message && (
-        <p role="status" className="flex items-start gap-2 rounded-md border border-success-600/30 bg-success-600/10 px-3 py-2 text-sm text-text-primary">
-          <span aria-hidden="true" className="mt-px text-success">
+        <p role="status" className="flex items-start gap-2 rounded-xl border border-success-600/30 bg-success-100 px-3.5 py-3 text-sm text-text-primary dark:bg-success-500/10">
+          <span aria-hidden="true" className="mt-px font-bold text-success-700 dark:text-success-100">
             ✓
           </span>
           {message}
@@ -433,7 +447,9 @@ export function ScriptWorkspace({
           {content === null ? (
             <>
               <ErrorState message="The script's content could not be loaded." />
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-chrome px-4 py-3">{fileActions}</div>
+              <Card variant="flat" className="flex flex-wrap items-center gap-2">
+                {fileActions}
+              </Card>
             </>
           ) : (
             <ScriptEditor
@@ -464,13 +480,10 @@ export function ScriptWorkspace({
       )}
 
       {tab === "setup" && (
-        <section aria-labelledby="user-script-config-title" className="overflow-hidden rounded-2xl border border-border bg-surface" data-testid="user-script-configuration">
-          <div className="px-5 py-4">
-            <h2 id="user-script-config-title" className="text-base font-semibold">
-              Configuration
-            </h2>
-            <p className="text-xs text-muted">Review each part, edit only what needs to change.</p>
-          </div>
+        <Card as="section" aria-labelledby="user-script-config-title" data-testid="user-script-configuration" className="overflow-hidden">
+          <CardHeader title="Configuration" titleId="user-script-config-title" subtitle="Review each part, edit only what needs to change." />
+          {/* The rows run edge to edge inside the card, divided by hairlines (the card's padding is taken back). */}
+          <div className="-mx-4 -mb-4 border-t border-border sm:-mx-5 sm:-mb-5">
           <SetupItem
             variant="row"
             state={environment ? "done" : "todo"}
@@ -531,9 +544,7 @@ export function ScriptWorkspace({
               />
             </fieldset>
             {check.accepted && !check.hasDefaultFunction && (
-              <p className="rounded-md border border-warning-600/30 bg-warning-600/10 px-3 py-2 text-xs text-text-primary">
-                This script has no default function, so a load profile cannot replace its scenarios. It runs with its own load settings.
-              </p>
+              <Banner tone="warning" title="This script has no default function, so a load profile cannot replace its scenarios. It runs with its own load settings." />
             )}
             {loadSetting.kind === "profile" && (
               <LoadProfileEditor
@@ -587,7 +598,8 @@ export function ScriptWorkspace({
             }
             summary={scriptRowSummary}
           />
-        </section>
+          </div>
+        </Card>
       )}
 
       {tab === "runs" && (

@@ -211,7 +211,7 @@ export function RequestAuthEditor({
                     ?.value;
             if (type) onChange({ ...draft, type });
           }}
-          className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-64"
+          className="w-full rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-64"
         >
           {draft.storedType &&
             !AUTH_TYPE_OPTIONS.some((option) => option.value === draft.storedType) && (
@@ -320,7 +320,7 @@ export function RequestAuthEditor({
                   apiKeyIn: event.target.value === "query" ? "query" : "header",
                 })
               }
-              className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="header">Header</option>
               <option value="query">Query params</option>

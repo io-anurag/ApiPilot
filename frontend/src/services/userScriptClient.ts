@@ -80,6 +80,8 @@ export function nameFromFile(file: File): string {
 }
 
 export const userScriptClient = {
+  /** Every run of every script this session holds, newest first (the existing `GET /runs` without `scriptId`); Home lists the latest. */
+  fetchAllRuns: () => call("fetchAllRuns", `${USER_SCRIPTS_BASE}/runs`, undefined, (_r, body) => ({ runs: (body.runs ?? []) as UserScriptRunSummary[] })),
   fetchScripts: () => call("fetchScripts", USER_SCRIPTS_BASE, undefined, (_r, body) => ({ scripts: (body.scripts ?? []) as UserScriptSummary[] })),
   fetchScript: (scriptId: string) => call("fetchScript", scriptPath(scriptId), undefined, toScript),
   /** FR-002: the file's bytes exactly, so the SHA-256 is the file's. */
