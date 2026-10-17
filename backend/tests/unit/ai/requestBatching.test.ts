@@ -342,6 +342,31 @@ describe("runBatchedInference", () => {
     expect(summary.outcome).toBe("success");
   });
 
+  it("does not retry a failed batch after the run budget expires", async () => {
+    const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
+    let budgetExpired = false;
+    const onBatchRetry = vi.fn();
+    const runBatch = vi.fn(async () => {
+      budgetExpired = true;
+      throw new AIProviderError("TIMEOUT", "batch timed out");
+    });
+
+    const summary = await runBatchedInference(batches, runBatch, {
+      retryFailedBatches: 1,
+      isTimedOut: () => budgetExpired,
+      onBatchRetry,
+    });
+
+    expect(runBatch).toHaveBeenCalledTimes(1);
+    expect(onBatchRetry).not.toHaveBeenCalled();
+    expect(summary.runs[0].outcome).toMatchObject({
+      status: "failed",
+      errorCategory: "TIMEOUT",
+    });
+    expect(summary.runs[1].outcome).toEqual({ status: "not-attempted" });
+    expect(summary.outcome).toBe("timeout");
+  });
+
   it("marks remaining batches as not-attempted once isTimedOut() reports true", async () => {
     const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }];
     let calls = 0;
@@ -452,7 +477,11 @@ describe("runBatchedInference", () => {
 });
 
 describe("runBatchedInference cancelSignal (specs/013 FR-020, SC-008)", () => {
-  const batches: Batch<number>[] = [{ operations: [1] }, { operations: [2] }, { operations: [3] }];
+  const batches: Batch<number>[] = [
+    { operations: [1] },
+    { operations: [2] },
+    { operations: [3] },
+  ];
 
   it("abandons the in-flight batch at once, records it and the rest not-attempted, and never starts another", async () => {
     const controller = new AbortController();
@@ -559,7 +588,10 @@ describe("runBatchedInference cancelSignal (specs/013 FR-020, SC-008)", () => {
   });
 
   it("behaves exactly as before when no signal is supplied", async () => {
-    const summary = await runBatchedInference(batches, async (batch) => batch.operations[0]);
+    const summary = await runBatchedInference(
+      batches,
+      async (batch) => batch.operations[0],
+    );
     expect(summary.outcome).toBe("success");
     expect(summary.runs.map((run) => run.data)).toEqual([1, 2, 3]);
   });
@@ -568,7 +600,9 @@ describe("runBatchedInference cancelSignal (specs/013 FR-020, SC-008)", () => {
 describe("raceCancellation", () => {
   it("returns the value when the work settles before the signal aborts", async () => {
     const controller = new AbortController();
-    await expect(raceCancellation(Promise.resolve(7), controller.signal)).resolves.toEqual({
+    await expect(
+      raceCancellation(Promise.resolve(7), controller.signal),
+    ).resolves.toEqual({
       abandoned: false,
       value: 7,
     });

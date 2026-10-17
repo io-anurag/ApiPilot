@@ -340,7 +340,12 @@ export async function runBatchedInference<TOperation, TBatchData>(
           options.retryFailedBatches > 0
             ? Math.floor(options.retryFailedBatches)
             : 0;
-        if (attempt < retryLimit && !options.isCancelled?.() && !options.cancelSignal?.aborted) {
+        if (
+          attempt < retryLimit &&
+          !options.isTimedOut?.() &&
+          !options.isCancelled?.() &&
+          !options.cancelSignal?.aborted
+        ) {
           attempt += 1;
           options.onBatchRetry?.(index, total, attempt);
           continue;

@@ -24,7 +24,8 @@ addendum, Phase 8/T063). The mechanism this contract describes is unaffected.
 
 - Elapsed time is measured from **`generatingSince`**, not from the HTTP request, so a one-time model
   load is not charged to the budget — the distinction `012-ai-enhancement-progress` established.
-- Checked at unit boundaries only, alongside the existing cancellation check.
+- Checked at unit boundaries only, including before an automatic retry, alongside the existing
+  cancellation check. A failed attempt remains failed if the ceiling prevents its retry.
 - On exhaustion: no further units are started; remaining units are recorded `not-attempted`; the run
   settles `partial`; everything already generated is retained (FR-010).
 - A unit in flight when the ceiling elapses **runs to completion and its result is kept**. The ceiling
@@ -65,6 +66,11 @@ planned work the ceiling permits (FR-012). All existing fields are unchanged.
 
 `totalBatches` now reflects the planned unit count, fixed at run start and immutable thereafter — a
 run's denominator must not move while the user watches it.
+
+Backend diagnostics record `run_planned`, `unit_started`, `unit_retry`, and `unit_settled` with a
+request identifier and numeric counts. The plan includes per-request and run time budgets, so a
+long first inference can be distinguished from missing batching without logging specification,
+prompt, or response content.
 
 ## Test expectations
 

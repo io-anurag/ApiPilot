@@ -293,7 +293,11 @@ async function runOneBatch(
  * cumulative tallies — specs/015-ai-batch-retry research.md Decision 7), or a structured failure.
  */
 export type RetryOneBatchResult =
-  | { outcome: "succeeded"; scenarios: TestScenario[]; candidateOutcomes: AICandidateOutcomes }
+  | {
+      outcome: "succeeded";
+      scenarios: TestScenario[];
+      candidateOutcomes: AICandidateOutcomes;
+    }
   | { outcome: "failed"; errorCategory: AIErrorCategory; errorMessage: string };
 
 /**
@@ -356,7 +360,11 @@ export async function retryOneBatch(
     testModel.scenarios,
     outcomes,
   );
-  return { outcome: "succeeded", scenarios: retainedScenarios, candidateOutcomes: outcomes };
+  return {
+    outcome: "succeeded",
+    scenarios: retainedScenarios,
+    candidateOutcomes: outcomes,
+  };
 }
 
 /** Optional progress hooks for one `enhanceTestModel` run (specs/012-ai-enhancement-progress). */
@@ -545,6 +553,14 @@ export async function enhanceTestModel(
   // *started*, never what is discarded. `runBudgetExhausted` records that the ceiling — rather than
   // a user cancellation, the other producer of `not-attempted` — is what stopped the run.
   const runBudgetMs = options.runBudgetMs ?? config.planning.enhancementRunBudgetMs;
+  logger.info("run_planned", {
+    requestId,
+    totalUnits: batches.length,
+    operationCount: apiModel.operations.length,
+    maxOutputTokens: AI_SCENARIO_MAX_OUTPUT_TOKENS,
+    perRequestTimeoutMs: config.model.inferenceTimeoutMs,
+    runBudgetMs,
+  });
   let runBudgetExhausted = false;
   const isRunBudgetExhausted = (): boolean => {
     if (Date.now() - generationStartedAt < runBudgetMs) return false;
@@ -580,8 +596,24 @@ export async function enhanceTestModel(
       isCancelled: options.isCancelled,
       cancelSignal: options.cancelSignal,
       retryFailedBatches: 1,
-      onBatchStart: options.onBatchStart,
-      onBatchRetry: options.onBatchRetry,
+      onBatchStart: (index, total) => {
+        logger.info("unit_started", {
+          requestId,
+          unitIndex: index,
+          totalUnits: total,
+          operationCount: batches[index].operations.length,
+        });
+        options.onBatchStart?.(index, total);
+      },
+      onBatchRetry: (index, total, retryNumber) => {
+        logger.info("unit_retry", {
+          requestId,
+          unitIndex: index,
+          totalUnits: total,
+          retryNumber,
+        });
+        options.onBatchRetry?.(index, total, retryNumber);
+      },
       onBatchSettled: (index, total, outcome) => {
         // Per-unit diagnostics (specs/014-ai-batching-policy FR-018, constitution XX). Without
         // this, a run where every unit failed logged nothing at all about why: the
@@ -589,6 +621,7 @@ export async function enhanceTestModel(
         // only trace was a provider-level `inference_success` followed by an unexplained
         // `INVALID_RESPONSE`. Categories and counts only — never prompt or reply content.
         logger.info("unit_settled", {
+          requestId,
           unitIndex: index,
           totalUnits: total,
           operationCount: batches[index]?.operations.length,

@@ -38,13 +38,9 @@ export const AI_SCENARIO_RESPONSE_VERSION = 5;
  * Generation bound for a scenario-design response, sized against measured throughput
  * (specs/014-ai-batching-policy research.md Decision 2).
  *
- * With one candidate requested per operation, 192 tokens leaves room for the complete response
- * while reducing the amount of CPU generation the local 0.5B model can spend on a single batch.
- * The earlier 256-token allowance still timed out on larger real specifications because the model
- * sometimes continued generating until the cap instead of closing the JSON document.
- *
- * A larger allowance is not free on this model: when it does not stop at the closing brace, every
- * reserved token increases CPU time and can push the request into the timeout window.
+ * The measured single-operation allowance is 256 tokens. At 192, body-heavy responses truncate
+ * before closing their JSON document (research.md Decision 2). A shorter cap is not a latency fix:
+ * an incomplete response is rejected and a retry repeats the inference work.
  *
  * This was 384 when a request covered every operation that fit the context window. That is no longer
  * what a request is: sizing work by operation (research.md Decision 1) is what makes the reply short
@@ -53,7 +49,7 @@ export const AI_SCENARIO_RESPONSE_VERSION = 5;
  * Passed to both `getInputBudget()` (so batch planning reserves this much context for the output)
  * and the request itself, so the two never disagree about how much output room exists.
  */
-export const AI_SCENARIO_MAX_OUTPUT_TOKENS = 192;
+export const AI_SCENARIO_MAX_OUTPUT_TOKENS = 256;
 
 /**
  * Candidates requested per operation, rather than per request (FR-003).

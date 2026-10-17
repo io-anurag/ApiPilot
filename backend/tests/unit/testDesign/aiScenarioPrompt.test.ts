@@ -300,9 +300,8 @@ describe("AI scenario prompt scope and worked example (specs/014-ai-batching-pol
   });
 
   it("sizes the output allowance to a single unit's reply (research.md Decision 2)", () => {
-    // One candidate per operation keeps 192 tokens sufficient while avoiding long local-model
-    // generations that can consume the entire per-request timeout.
-    expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(192);
+    // The measured body-heavy unit truncates at 192 tokens but completes at 256.
+    expect(AI_SCENARIO_MAX_OUTPUT_TOKENS).toBe(256);
   });
 });
 

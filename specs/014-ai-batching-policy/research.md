@@ -7,7 +7,7 @@ All figures below were measured on this repository's shipped default configurati
 6-operation springdoc-style specification used in the QA session that produced this feature.
 
 > **Measurement hygiene**: an initial pass produced non-monotonic results — a 1-operation request
-> at 128 output tokens measured *slower* (48.2s) than a 3-operation request at 192 tokens (34.8s).
+> at 128 output tokens measured _slower_ (48.2s) than a 3-operation request at 192 tokens (34.8s).
 > The cause was a second backend process on the machine running inference concurrently (7.5 GB
 > resident, ~2.5 cores sustained). Every figure below was re-measured with that process confirmed
 > idle (0 CPU seconds over a 6-second sample). **Any future re-measurement must verify machine
@@ -24,12 +24,12 @@ configuration default, so faster hardware or a stronger model can raise it witho
 **Rationale**: One operation per unit is the difference between reliably usable output and no output
 at all — it is not a tuning preference. Measured, with a 192-token allowance and no worked example:
 
-| Unit size | Result |
-| --- | --- |
-| 1 operation | 5 of 6 operations produced a valid candidate list (14.6–28.2s each) |
-| 2 operations | Truncated mid-document even at a 256-token allowance (36.0s) |
-| 3 operations | Truncated mid-document at a 192-token allowance (33.0s) |
-| 6 operations (today) | Echoed the request back, truncated, `INVALID_RESPONSE` (~57s) |
+| Unit size            | Result                                                              |
+| -------------------- | ------------------------------------------------------------------- |
+| 1 operation          | 5 of 6 operations produced a valid candidate list (14.6–28.2s each) |
+| 2 operations         | Truncated mid-document even at a 256-token allowance (36.0s)        |
+| 3 operations         | Truncated mid-document at a 192-token allowance (33.0s)             |
+| 6 operations (today) | Echoed the request back, truncated, `INVALID_RESPONSE` (~57s)       |
 
 The failure mode changes qualitatively with unit size. At six operations the model **restates the
 request** instead of answering it; at two or three it attempts an answer but cannot finish it inside
@@ -38,10 +38,10 @@ operation is 837–1,209 characters, small enough that the reply is a short, clo
 
 **Alternatives considered**:
 
-- *Two to three operations per unit* (the range assumed in the specification's Assumptions section):
+- _Two to three operations per unit_ (the range assumed in the specification's Assumptions section):
   rejected on measurement. Both truncate. The specification's assumed range was written before these
   figures existed and is superseded by this decision.
-- *Keep context-capacity sizing and only shrink the output allowance*: rejected. A smaller allowance
+- _Keep context-capacity sizing and only shrink the output allowance_: rejected. A smaller allowance
   applied to a large batch truncates sooner, it does not make the reply shorter.
 
 ---
@@ -54,10 +54,10 @@ operation is 837–1,209 characters, small enough that the reply is a short, clo
 operation with the largest request body (four fields). At 256 that operation succeeds, giving **6 of
 6**:
 
-| Operation | 192 tokens | 256 tokens |
-| --- | --- | --- |
-| `PUT /v1/jobs` (largest body) | truncated (28.2s) | valid (30.4s) |
-| Other five operations | valid (13.0–20.6s) | — |
+| Operation                     | 192 tokens         | 256 tokens    |
+| ----------------------------- | ------------------ | ------------- |
+| `PUT /v1/jobs` (largest body) | truncated (28.2s)  | valid (30.4s) |
+| Other five operations         | valid (13.0–20.6s) | —             |
 
 A larger allowance costs nothing on operations that do not need it: the same easy operation measured
 14.6s at a 192-token allowance and 14.3s at 320. The allowance is a cap, not a price — generation
@@ -66,10 +66,20 @@ penalising the common case.
 
 **Alternatives considered**:
 
-- *192 tokens*: rejected — leaves body-heavy operations systematically failing, which would silently
+- _192 tokens_: rejected — leaves body-heavy operations systematically failing, which would silently
   bias AI coverage toward simple operations.
-- *320 tokens*: measured valid (32.8s) but buys nothing over 256 on this corpus while raising the
+- _320 tokens_: measured valid (32.8s) but buys nothing over 256 on this corpus while raising the
   worst-case duration closer to the per-request timeout.
+
+### 2026-10-17 Regression
+
+The implementation had dropped this allowance back to 192 tokens despite the measurement above.
+A reported 14-unit run completed its first inference in 139,964ms, but its 305-character JSON-like
+response failed parsing and triggered another inference for the same unit. The log does not contain
+the response or a token-limit finish reason, so it does not prove that particular output was
+truncated. Restore the measured 256-token allowance for generation, context reservation and
+viability planning, retaining strict JSON parsing. Completion with the configured model still
+requires a real-model run; increasing the timeout alone cannot repair malformed output.
 
 ---
 
@@ -83,10 +93,10 @@ than demonstrating it. Decision 1 shows that is not the cause — one operation 
 correctly shaped reply with no example at all. But the example is not therefore useless: the paired
 comparisons show it helps exactly where truncation threatens, and costs time where it does not.
 
-| Operation | No example | With example | Effect |
-| --- | --- | --- | --- |
-| `GET /v1/jobs` — no body, short reply | **17.1s / 17.3s** (2 runs, valid) | 23.9s (valid) | example costs ~6.6s |
-| `PUT /v1/jobs` — 4-field body, longest reply | 30.4s (valid) | **21.2s** (valid) | example saves ~9.1s |
+| Operation                                    | No example                        | With example      | Effect              |
+| -------------------------------------------- | --------------------------------- | ----------------- | ------------------- |
+| `GET /v1/jobs` — no body, short reply        | **17.1s / 17.3s** (2 runs, valid) | 23.9s (valid)     | example costs ~6.6s |
+| `PUT /v1/jobs` — 4-field body, longest reply | 30.4s (valid)                     | **21.2s** (valid) | example saves ~9.1s |
 
 `PUT /v1/jobs` is the only operation in the corpus that was ever at risk: it truncated at a 192-token
 allowance and is what forced Decision 2 to 256. It is also the one the example helped. The mechanism
@@ -106,12 +116,12 @@ not always-off** — truncation loses the whole unit, whereas the overhead only 
 
 **Alternatives considered**:
 
-- *No example at all*: this research phase's original recommendation, based only on the easy-operation
+- _No example at all_: this research phase's original recommendation, based only on the easy-operation
   comparison. Rejected on the paired hard-operation result, which is the case that actually fails.
-- *Always include it*: rejected as the default because it spends measurable time on body-less
+- _Always include it_: rejected as the default because it spends measurable time on body-less
   operations for no measured benefit, and under a ceiling that time is lost coverage. Retained as the
   fallback if the conditional is impractical.
-- *Grammar-constrained decoding*: already out of scope; not supported by the current runtime.
+- _Grammar-constrained decoding_: already out of scope; not supported by the current runtime.
 
 ---
 
@@ -124,8 +134,8 @@ not always-off** — truncation loses the whole unit, whereas the overhead only 
 Contracts (XXIII) requires this be visible rather than silent, exactly as `013-ai-enhancement-viability`
 incremented 1→2 when it replaced the serialized model with a contract projection.
 
-Note this holds even though Decision 3 declines the example: the *structure* of the request is
-unchanged, but its *scope* is not, and scope is what determines the reply.
+Note this holds even though Decision 3 declines the example: the _structure_ of the request is
+unchanged, but its _scope_ is not, and scope is what determines the reply.
 
 ---
 
@@ -137,10 +147,10 @@ unchanged, but its *scope* is not, and scope is what determines the reply.
 time is now linear in specification size:
 
 | Specification size | Projected full-run duration |
-| --- | --- |
-| 6 operations | ~2 minutes |
-| 50 operations | ~17 minutes |
-| 200 operations | ~70 minutes |
+| ------------------ | --------------------------- |
+| 6 operations       | ~2 minutes                  |
+| 50 operations      | ~17 minutes                 |
+| 200 operations     | ~70 minutes                 |
 
 A ceiling is therefore not optional — it is what stops Decision 1 from replacing "fails in one
 minute" with "runs for an hour". Five minutes covers roughly 14 operations, is within what a user
@@ -148,16 +158,16 @@ will plausibly wait while watching scenarios stream in, and settles as `partial`
 generated retained.
 
 **This makes operation selection the critical follow-up, not a nicety.** At ~21s per operation,
-whole-specification enhancement is impractical beyond roughly 15–30 operations at *any* ceiling. The
+whole-specification enhancement is impractical beyond roughly 15–30 operations at _any_ ceiling. The
 ceiling converts an impossible run into a useful partial one; selecting operations is what makes the
 budget land on operations the user actually cares about. This is recorded as a limitation of this
 feature in `plan.md`'s Complexity Tracking.
 
 **Alternatives considered**:
 
-- *No ceiling, rely on cancellation*: rejected. Requires the user to babysit the run, and Fail Safely
+- _No ceiling, rely on cancellation_: rejected. Requires the user to babysit the run, and Fail Safely
   (XIX) argues for a bounded default over an unbounded one.
-- *A ceiling derived from operation count*: rejected as surprising — the user cannot predict it, and
+- _A ceiling derived from operation count_: rejected as surprising — the user cannot predict it, and
   it would make the same specification behave differently on different hardware.
 
 **Addendum (Phase 8/T063, after real-specification measurement): the per-unit figure above was an
@@ -166,7 +176,7 @@ estimate, not yet a measurement, and the real figure is worse.** Running enhance
 when the model closes its JSON document and run to the full timeout when it does not. At that real
 rate the 5-minute default covers roughly **5-10 operations**, not 14, and the "15-30 operations"
 practical ceiling stated below and in `plan.md`'s Complexity Tracking is correspondingly optimistic.
-The ceiling's *purpose* is unaffected — it still converts an impossible unbounded run into a useful
+The ceiling's _purpose_ is unaffected — it still converts an impossible unbounded run into a useful
 partial one — but a reader sizing a specification against this feature should use 5-10 as the
 current, measured figure. Recorded in `backend/src/ai/modelConfig.ts`'s
 `DEFAULT_ENHANCEMENT_RUN_BUDGET_MS` comment and `tasks.md`'s US3 status note when the real
@@ -184,11 +194,11 @@ the enhancement prompt. Both changes are in scope for this feature (FR-027).
 every schema, every response, every nested property. It never received the projection treatment.
 Measured prompt sizes and outcomes:
 
-| Unit size | Prompt | Outcome (60s provider limit) |
-| --- | --- | --- |
-| 2 operations | 9,410 chars | `TIMEOUT` |
-| 4 operations | 13,181 chars | `TIMEOUT` |
-| 6 operations | 17,151 chars | `TIMEOUT` |
+| Unit size    | Prompt       | Outcome (60s provider limit) |
+| ------------ | ------------ | ---------------------------- |
+| 2 operations | 9,410 chars  | `TIMEOUT`                    |
+| 4 operations | 13,181 chars | `TIMEOUT`                    |
+| 6 operations | 17,151 chars | `TIMEOUT`                    |
 
 For comparison, a **one-operation enhancement** prompt is 837–1,209 characters. Dependency analysis
 spends roughly **ten times more prompt per operation**, and times out at every unit size tested —
@@ -204,8 +214,8 @@ worse than today.
 
 **Alternatives considered**:
 
-- *Batching only, projection deferred*: rejected on the measurement above.
-- *Drop the AI pass from dependency analysis*: not chosen here, but noted as a legitimate option if
+- _Batching only, projection deferred_: rejected on the measurement above.
+- _Drop the AI pass from dependency analysis_: not chosen here, but noted as a legitimate option if
   projection plus batching still fails to beat deterministic matching. Conservative Dependency
   Inference (XV) means a pass contributing nothing is no loss.
 
@@ -218,7 +228,7 @@ constant. Enhancement passes 1. Dependency analysis passes a value set after its
 lands, and must be validated against a specification with known relationships (SC-013).
 
 **Rationale**: The two passes have opposite pressures. Enhancement reasons about one operation's
-contract, so the smallest unit is the best unit. Dependency analysis infers relationships *between*
+contract, so the smallest unit is the best unit. Dependency analysis infers relationships _between_
 operations and cannot find a relationship whose two ends are in different units — for it, smaller
 units directly cost coverage. A single shared constant would have to be wrong for one of them.
 
@@ -231,17 +241,17 @@ rather than for completing inside `AI_DEPENDENCY_TIMEOUT_MS`.**
 
 Measured directly from the shipped projection (`buildAIDependencyPrompt`, not an estimate):
 
-| Fixture | Unit size | Prompt |
-| --- | --- | --- |
-| `crudChainApiModel` | 1 op | 706 chars |
-| `crudChainApiModel` | 3 ops | 1,106 chars |
-| `buildLargeApiModel` | 1 op | 675 chars |
-| `buildLargeApiModel` | 3 ops | 1,008 chars |
-| `buildLargeApiModel` | 5 ops | 1,341 chars |
+| Fixture              | Unit size                           | Prompt                      |
+| -------------------- | ----------------------------------- | --------------------------- |
+| `crudChainApiModel`  | 1 op                                | 706 chars                   |
+| `crudChainApiModel`  | 3 ops                               | 1,106 chars                 |
+| `buildLargeApiModel` | 1 op                                | 675 chars                   |
+| `buildLargeApiModel` | 3 ops                               | 1,008 chars                 |
+| `buildLargeApiModel` | 5 ops                               | 1,341 chars                 |
 | `buildLargeApiModel` | 51 ops (today's unbounded behavior) | 8,907 chars (≈2,969 tokens) |
 
 The 51-operation figure is the one that actually crashed: sent as a single unbounded unit, it produced
-a ~20,500-token *tokenized* prompt (tokenization is not linear with the character estimate at this
+a ~20,500-token _tokenized_ prompt (tokenization is not linear with the character estimate at this
 size) that the local ONNX runtime failed to allocate memory for — a native "bad allocation", not a
 graceful over-budget refusal. 3 operations keeps a unit in the same low-hundreds-of-tokens range as
 one enhancement unit, nowhere near that failure mode, while still letting operations up to two
@@ -249,7 +259,7 @@ positions apart share a unit (`knownRelationships`' actual spread, T050's covera
 
 Applying this codebase's own already-measured throughput seeds (`DEFAULT_PREFILL_MS_PER_TOKEN=42`,
 `CHARS_PER_TOKEN_ESTIMATE=3`, both from real measurement on the reference profile, Decision 6/10) to
-these real character counts projects **prefill alone** at ~9.9s for a *single*-operation unit
+these real character counts projects **prefill alone** at ~9.9s for a _single_-operation unit
 (706 chars ÷ 3 × 42ms) — already past the 8s `AI_DEPENDENCY_TIMEOUT_MS`, before any decode time and
 before any unit size larger than one. This is consistent with the earlier finding that this pass fails
 even more decisively at the shipped timeout (Decision 6): on this reference hardware, no unit size
@@ -258,7 +268,7 @@ generation (`localProvider.ts`) — the real call in the crash log ran 28.3s aga
 timeout, confirming the setting reports lateness rather than preventing it.
 
 The consequence is that `AI_DEPENDENCY_RUN_BUDGET_MS` (T056), not unit size, is what actually bounds
-this pass's wall-clock cost on hardware like the reference profile: it is checked *between* units
+this pass's wall-clock cost on hardware like the reference profile: it is checked _between_ units
 (where JavaScript can act on it) rather than relied on to interrupt one already in flight. A `partial`
 outcome — some units settle before the run budget elapses, the rest become "not-attempted" — is
 therefore the expected steady state here, not a bug; deterministic relationships are unaffected either
@@ -268,13 +278,13 @@ configuration, not a code change.
 
 **Alternatives considered**:
 
-- *One shared constant*: rejected — guarantees the wrong size for at least one caller.
-- *Fix the dependency figure now (before Decision 6 landed)*: rejected — it would have been a guess
+- _One shared constant_: rejected — guarantees the wrong size for at least one caller.
+- _Fix the dependency figure now (before Decision 6 landed)_: rejected — it would have been a guess
   presented as a measurement, which is what this research phase exists to prevent.
-- *Size for sub-8-second completion*: rejected — the measurement above shows no unit size achieves
+- _Size for sub-8-second completion_: rejected — the measurement above shows no unit size achieves
   this on the reference hardware; sizing for it would mean an ever-shrinking unit chasing a target it
   cannot reach while actively losing cross-unit coverage (Decision 7's core tradeoff) for no benefit.
-- *A live multi-run timing sweep against the real local model in this environment*: not performed —
+- _A live multi-run timing sweep against the real local model in this environment_: not performed —
   each real call on this hardware measures 14-30+ seconds even for a single small unit (observed in
   production logs), and the character-count-plus-established-rate projection above already answers the
   question a timing sweep would (whether any practical unit size fits the 8s budget: no) without
@@ -298,7 +308,7 @@ The configured seed rates are approximately correct on this hardware and need no
 
 **Alternatives considered**:
 
-- *Estimate the whole run and refuse if it exceeds the run ceiling*: rejected — that is what `partial`
+- _Estimate the whole run and refuse if it exceeds the run ceiling_: rejected — that is what `partial`
   is for. A long run that delivers useful partial results must not be refused outright.
 
 **Addendum (Phase 8/T063): `DEFAULT_DECODE_MS_PER_TOKEN` is `180` in the shipped code, not the `130`
@@ -333,19 +343,19 @@ changed unilaterally, and both have now been settled and applied:
 assertion shapes in the `output` contract for every prompt — not only those carrying the worked
 example.
 
-**Rationale**: Phase 0 measured *reply validity* — whether the model returned a parseable document
-containing a `candidates` array. It did not measure *candidate acceptance*. Implementing US1 and
+**Rationale**: Phase 0 measured _reply validity_ — whether the model returned a parseable document
+containing a `candidates` array. It did not measure _candidate acceptance_. Implementing US1 and
 running against the real model exposed the difference.
 
 First real-model run after work-bounded batching landed, against the 3-operation Pet Store fixture:
 
-| Measure | Result |
-| --- | --- |
-| Units | 3, one per operation |
-| Unit outcomes | 3 of 3 **succeeded** — no echo, no truncation |
-| Candidates produced | 5 |
-| Candidates accepted | **0** |
-| Rejection reason | `unsupported-category`, all five |
+| Measure             | Result                                        |
+| ------------------- | --------------------------------------------- |
+| Units               | 3, one per operation                          |
+| Unit outcomes       | 3 of 3 **succeeded** — no echo, no truncation |
+| Candidates produced | 5                                             |
+| Candidates accepted | **0**                                         |
+| Rejection reason    | `unsupported-category`, all five              |
 
 The model invented category names — `"Positive Response"`, `"Negative Response"`,
 `"Invalid Request Type"`, `"invalid-request"` — because nothing in the prompt told it the vocabulary
@@ -360,17 +370,17 @@ which is **not** a supported category, so the example was teaching an invalid va
 
 After adding `categories`, `output.requestShape` and `output.assertionShape`, the same fixture:
 
-| Measure | Before | After |
-| --- | --- | --- |
-| Shape rejections | 5 | **0** |
-| AI scenarios accepted | 0 | **1** |
-| Deterministic scenarios preserved | yes | yes |
+| Measure                           | Before | After |
+| --------------------------------- | ------ | ----- |
+| Shape rejections                  | 5      | **0** |
+| AI scenarios accepted             | 0      | **1** |
+| Deterministic scenarios preserved | yes    | yes   |
 
 The one remaining rejection is semantic, not structural: a candidate placed body fields into
 `pathParameters` and was refused by `validateAICandidateSemantics`. That is the validator working as
 designed — refusing to fabricate contract facts — not a regression.
 
-**Consequence for Decision 3**: the evidence for the *conditional* example rule is now weaker than it
+**Consequence for Decision 3**: the evidence for the _conditional_ example rule is now weaker than it
 looked. The example demonstrates request shape as well as reply shape, and body-less operations were
 measured getting request shape wrong without it. Stating `requestShape` for every prompt addresses
 that without paying the example's cost everywhere, but T060 should re-examine whether always-on is
@@ -378,10 +388,10 @@ now the better rule.
 
 **Alternatives considered**:
 
-- *Relax the validator to accept invented categories*: rejected outright. Category is contract
+- _Relax the validator to accept invented categories_: rejected outright. Category is contract
   vocabulary; accepting anything the model emits is precisely how unexplained scenarios enter the
   test model (constitution I, III, IV).
-- *Map invented categories onto supported ones*: rejected as guessing at malformed content, which
+- _Map invented categories onto supported ones_: rejected as guessing at malformed content, which
   constitution IV forbids for exactly this reason.
 
 ## Unknowns remaining

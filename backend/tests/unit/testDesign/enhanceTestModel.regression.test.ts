@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AIProvider, InferenceRequest, InferenceResponse } from "@apipilot/shared-domain";
+import type {
+  AIProvider,
+  InferenceRequest,
+  InferenceResponse,
+} from "@apipilot/shared-domain";
 import { AIProviderError } from "../../../src/ai/errors";
 import { enhanceTestModel } from "../../../src/testDesign/enhanceTestModel";
 import { deduplicate } from "../../../src/testDesign/deduplicate";
@@ -45,7 +49,9 @@ function success(request: InferenceRequest, content: string): InferenceResponse 
 
 /** One valid candidate per operation present in the request, read from the real serialized prompt. */
 function candidatesFor(request: InferenceRequest): string {
-  const prompt = JSON.parse(request.input) as { operations: { path: string; method: string }[] };
+  const prompt = JSON.parse(request.input) as {
+    operations: { path: string; method: string }[];
+  };
   const candidates = prompt.operations.map((operation) => ({
     candidateId: `c-${operation.method}-${operation.path}`,
     operationPath: operation.path,
@@ -53,7 +59,12 @@ function candidatesFor(request: InferenceRequest): string {
     category: "invalid-format",
     targetLocation: "body",
     targetField: "email",
-    request: { pathParameters: {}, queryParameters: {}, headers: {}, body: { email: "bad" } },
+    request: {
+      pathParameters: {},
+      queryParameters: {},
+      headers: {},
+      body: { email: "bad" },
+    },
     assertions: [{ type: "status-code", expectedStatusCode: "409" }],
     rationale: `Exercise a malformed email on ${operation.path}.`,
     confidence: 0.8,
@@ -63,7 +74,12 @@ function candidatesFor(request: InferenceRequest): string {
 }
 
 function provider(infer: AIProvider["infer"]): AIProvider {
-  return { mode: "mock", getReadiness: readiness, getInputBudget: async () => undefined, infer };
+  return {
+    mode: "mock",
+    getReadiness: readiness,
+    getInputBudget: async () => undefined,
+    infer,
+  };
 }
 
 const working = (): AIProvider =>
@@ -128,19 +144,24 @@ describe("SC-010: the deterministic baseline survives every outcome path", () =>
     ],
   ];
 
-  it.each(paths)("%s: every deterministic scenario is present, unchanged and in order", async (_name, run) => {
-    const result = await run();
-    const scenarios = result.enhancedTestModel.scenarios;
+  it.each(paths)(
+    "%s: every deterministic scenario is present, unchanged and in order",
+    async (_name, run) => {
+      const result = await run();
+      const scenarios = result.enhancedTestModel.scenarios;
 
-    expect(scenarios.slice(0, baseline.scenarios.length)).toEqual(baseline.scenarios);
-    expect(scenarios.slice(0, baseline.scenarios.length).map((s) => s.id)).toEqual(
-      baseline.scenarios.map((s) => s.id),
-    );
-    // Whatever the outcome, anything after the baseline is AI-derived, never a replacement.
-    expect(
-      scenarios.slice(baseline.scenarios.length).every((s) => s.provenance.source === "AI"),
-    ).toBe(true);
-  });
+      expect(scenarios.slice(0, baseline.scenarios.length)).toEqual(baseline.scenarios);
+      expect(scenarios.slice(0, baseline.scenarios.length).map((s) => s.id)).toEqual(
+        baseline.scenarios.map((s) => s.id),
+      );
+      // Whatever the outcome, anything after the baseline is AI-derived, never a replacement.
+      expect(
+        scenarios
+          .slice(baseline.scenarios.length)
+          .every((s) => s.provenance.source === "AI"),
+      ).toBe(true);
+    },
+  );
 
   it("the paths really differ: success adds scenarios, partial adds fewer, the rest add none", async () => {
     const added = async (run: (typeof paths)[number][1]) =>
@@ -170,7 +191,8 @@ describe("SC-009: identical input yields identical retained scenarios in identic
 
   it("is unaffected by the order in which the provider happens to answer slowly or quickly", async () => {
     const slowFirst = provider(async (request) => {
-      if (request.requestId.endsWith("-batch0")) await new Promise((r) => setTimeout(r, 15));
+      if (request.requestId.endsWith("-batch0"))
+        await new Promise((r) => setTimeout(r, 15));
       return success(request, candidatesFor(request));
     });
     const plain = await enhanceTestModel(apiModel, baseline, working());
@@ -232,6 +254,25 @@ describe("constitution XX: nothing sensitive reaches the logs", () => {
     );
 
     expect(logs.length).toBeGreaterThan(0);
+    const records: unknown[] = logs.map((line) => JSON.parse(line));
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "run_planned",
+          totalUnits: sensitiveModel.operations.length,
+          operationCount: sensitiveModel.operations.length,
+          maxOutputTokens: 256,
+          perRequestTimeoutMs: expect.any(Number),
+          runBudgetMs: expect.any(Number),
+        }),
+        expect.objectContaining({
+          event: "unit_started",
+          unitIndex: 0,
+          operationCount: 1,
+        }),
+        expect.objectContaining({ event: "unit_retry", unitIndex: 0, retryNumber: 1 }),
+      ]),
+    );
     const everything = logs.join("\n");
     for (const sentinel of [SPEC_SENTINEL, PROMPT_SENTINEL, RESPONSE_SENTINEL]) {
       expect(everything).not.toContain(sentinel);
