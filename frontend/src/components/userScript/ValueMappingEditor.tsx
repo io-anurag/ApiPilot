@@ -3,6 +3,7 @@ import type { MappedValueStatus, UserScriptValueMapping, UserScriptValueSource }
 import { MAPPING_NAME_REFUSAL_TEXT, validateMappingName } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
 import { StatusBadge } from "../StatusBadge";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { SCRIPT_INPUT } from "./ScriptPanel";
 
 type Entry = Pick<UserScriptValueMapping, "name" | "source"> & { foundInScript: boolean };
@@ -56,17 +57,17 @@ export function ValueMappingEditor({
   return (
     <div className="space-y-4" data-testid="value-mapping-editor">
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong bg-surface-subtle p-4 text-sm text-muted">The script reads no environment values that ApiPilot could find. Add a name it builds at run time below.</p>
+        <p className="rounded-xl border border-dashed border-border-strong bg-surface-subtle p-4 text-sm text-text-secondary">The script reads no environment values that ApiPilot could find. Add a name it builds at run time below.</p>
       ) : (
-        <div className="relative overflow-x-auto rounded-lg border border-border">
-          <table className="w-full border-collapse text-sm">
+        <div role="region" aria-label="Environment values table" tabIndex={0} className={`${TABLE_STYLES.scroll} focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}>
+          <table className={TABLE_STYLES.table}>
             <caption className="sr-only">Environment values the script receives</caption>
             <thead>
-              <tr className="bg-chrome text-left text-xs text-muted">
-                <th scope="col" className="px-3 py-2 font-semibold">Name the script reads</th>
-                <th scope="col" className="px-3 py-2 font-semibold">Comes from</th>
-                <th scope="col" className="px-3 py-2 font-semibold">In the chosen environment</th>
-                <th scope="col" className="px-3 py-2 font-semibold">
+              <tr>
+                <th scope="col" className={TABLE_STYLES.th}>Name the script reads</th>
+                <th scope="col" className={TABLE_STYLES.th}>Comes from</th>
+                <th scope="col" className={TABLE_STYLES.th}>In the chosen environment</th>
+                <th scope="col" className={TABLE_STYLES.th}>
                   <span className="sr-only">Remove</span>
                 </th>
               </tr>
@@ -75,16 +76,16 @@ export function ValueMappingEditor({
               {rows.map((row) => {
                 const status = statusOf(row.name);
                 return (
-                  <tr key={row.name} className="border-t border-border align-top">
-                    <td className="px-3 py-2.5">
-                      <code className="font-mono text-xs font-semibold">{row.name}</code>
+                  <tr key={row.name} className="align-top">
+                    <td className={TABLE_STYLES.td}>
+                      <code className="font-mono text-xs font-semibold text-text-primary">{row.name}</code>
                       {!row.foundInScript && (
                         <div className="mt-1">
                           <StatusBadge label="Not found in the script" tone="neutral" />
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={TABLE_STYLES.td}>
                       <div className="flex flex-wrap items-center gap-2">
                         <label className="sr-only" htmlFor={`mapping-source-${row.name}`}>
                           Source of {row.name}
@@ -116,11 +117,11 @@ export function ValueMappingEditor({
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-xs">
+                    <td className={`${TABLE_STYLES.td} text-xs`}>
                       {status ? <StatusBadge label={status.present ? "Present" : "Missing"} tone={status.present ? "success" : "warning"} /> : <span className="text-muted">Choose an environment</span>}
                       <div className="mt-1 text-muted">Value hidden</div>
                     </td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className={`${TABLE_STYLES.td} text-right`}>
                       <button
                         type="button"
                         aria-label={`Remove ${row.name}`}
@@ -147,14 +148,14 @@ export function ValueMappingEditor({
         ))}
       </datalist>
       {dirty && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand-600/30 bg-brand-600/10 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-500 bg-lime-pale px-3 py-2">
           <p className="text-sm text-text-primary">You changed where a value comes from. It is used once you save.</p>
           <button type="button" className={`${BUTTON_STYLES.primary} ml-auto`} disabled={busy} onClick={() => save(rows, [...removedNames])}>
             Save sources
           </button>
         </div>
       )}
-      <div className="space-y-1.5 rounded-lg border border-border bg-surface-subtle p-3">
+      <div className="space-y-1.5 rounded-xl bg-surface-subtle p-3">
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted">
             Add a name the script builds at run time
@@ -176,7 +177,7 @@ export function ValueMappingEditor({
         <p id="mapping-name-help" className="text-left text-xs text-muted hyphens-none">
           Use this for a name the check cannot find because the script builds it while it runs, for example <code className="font-mono">__ENV[`KEY_${"{i}"}`]</code>. The name is then mapped like any other, so the script receives its value.
         </p>
-        <p id="mapping-name-refusal" role={nameProblem ? "alert" : undefined} className="text-xs text-danger-700 empty:hidden dark:text-danger-200">
+        <p id="mapping-name-refusal" role={nameProblem ? "alert" : undefined} className="text-xs text-danger-700 empty:hidden dark:text-danger-100">
           {nameProblem}
         </p>
       </div>

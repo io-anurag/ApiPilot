@@ -1,4 +1,5 @@
 import type { CoverageRequirementResult } from "@apipilot/shared-domain";
+import { Card, CardHeader } from "../patterns/Card";
 import { breakdownFor, breakdownLabel, type Breakdown } from "./coverageViewModel";
 
 /** One stacked bar with its legend; the counts under it carry the exact values, so the bar is never the only way to read them. */
@@ -9,7 +10,7 @@ export function BreakdownBar({ breakdown }: Readonly<{ breakdown: Breakdown }>) 
       <div
         role="img"
         aria-label={breakdownLabel(breakdown)}
-        className="flex h-4 overflow-hidden rounded bg-surface-strong ring-1 ring-inset ring-border"
+        className="flex h-4 overflow-hidden rounded-full bg-surface-strong ring-1 ring-inset ring-border"
       >
         {breakdown.segments.map(
           (segment) =>
@@ -51,16 +52,13 @@ export function CoverageBars({ requirements }: Readonly<{ requirements: readonly
     breakdownFor("Response codes", requirements, ["response-code"]),
   ];
   return (
-    <section aria-labelledby="coverage-breakdown-title" className="space-y-3 rounded-lg border border-border bg-surface p-4">
-      <div>
-        <h3 id="coverage-breakdown-title" className="text-sm font-semibold text-text-primary">
-          Requirement breakdown
-        </h3>
-        <p className="text-xs text-muted">
-          Each bar partitions the eligible requirements of one kind. Verified and failed come from execution evidence; generated means a
-          scenario exists but has not been executed.
-        </p>
-      </div>
+    <Card as="section" aria-labelledby="coverage-breakdown-title">
+      <CardHeader
+        title="Requirement breakdown"
+        titleId="coverage-breakdown-title"
+        level={3}
+        subtitle="Each bar partitions the eligible requirements of one kind. Verified and failed come from execution evidence; generated means a scenario exists but has not been executed."
+      />
       <div className="grid gap-5 md:grid-cols-3">
         {breakdowns.map((breakdown) =>
           breakdown.total === 0 ? (
@@ -73,6 +71,6 @@ export function CoverageBars({ requirements }: Readonly<{ requirements: readonly
           ),
         )}
       </div>
-    </section>
+    </Card>
   );
 }

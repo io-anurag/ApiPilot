@@ -4008,6 +4008,30 @@ Implementation
       dropped connection): four requests shown, no environment value, query token, bearer header or console line reached the page.
     - Not covered: a compressed or very large real response, a script that times out, 320 px, a keyboard and screen-reader pass.
     - Version bumped to 19.56.0 (root, backend, frontend, shared-domain).
+100. **AP-054: Sidebar shell and shared visual language; version 19.57.0 (2026-10-17).**
+    - `specs/054-sidebar-shell-redesign`, frontend only (no endpoint, payload, stored datum or shared-domain type changed). Supersedes AP-041's
+      per-section accents and AP-038's top tab menu, start screen and "Back to start" controls.
+    - **Shell and addresses.** One frame for every screen: a persistent sidebar (Home, Guided Workflow with its eleven stages in
+      Prepare, Design, Organize and Execute as done, redo or locked with the reason, Import & Run Collection, Performance, Run k6
+      Script, Coverage), a page header with the title and parent, and a drawer below 1024 px (focus trapped, Esc and the dimmed layer
+      close it). Each destination has a hash address (`#/guided/<stage>`, `#/import`, `#/performance`, `#/k6`, `#/coverage`) with a pure
+      route module and no routing library; an address that cannot be shown opens the nearest valid screen with a notice; the query
+      string (AP-049 token, `?mock=`) is untouched. Pages stay mounted when hidden, so nothing is discarded by navigating.
+    - **One accent and literal tokens.** Lime `#E7F68F` with dark text for the current item and primary actions, mint, sage and olive
+      tints, a deeper olive ramp for text and lines, status colours independent of the accent, a derived dark theme, left-aligned text.
+      Input and secondary-button outlines reach 3:1. `contrast.test.ts` checks every pairing in both themes (one tuning: danger-600);
+      `colourTokens.test.ts` forbids hex, palette utilities, white on lime, the retired tokens and justified text. The eight section hues
+      and four workflow hues, `sectionCatalog` and `data-section` are gone.
+    - **Pattern set and library.** `Card`, `Pill`, `TaskCard`, `Banner`, `StepTrail`, `DropZone`, `KeyValueGrid`, tinted tables, a highlighted
+      `StatTile`; Import & Run, Performance and the script views share one stepper; API Review, Scenario Review, Import & Run,
+      Performance, Run k6 Script, Coverage, the help dialog and the palette are rebuilt from them with no behaviour change.
+      `?mock=pattern-library` shows each pattern live.
+    - **Home** replaces the start screen: launch tiles (same accessible names), summary tiles equal to the Coverage figures, coverage by
+      area, operations by method, next steps, Recent runs from the three workflows (each opening its results), and AI status. Only data
+      the application already holds; a figure with none is a text reason. No coverage-over-runs chart or trend (no data source).
+    - **Not in scope, follow-ups:** Guided stages 6 to 11 and the deep steps of the workflows adopt the patterns once mocked (they inherit the
+      shell and colours now); a per-run coverage history for Home needs its own specification.
+    - Version bumped to 19.57.0 (root, backend, frontend, shared-domain).
 
 101. **AP-055: Accelerator verification and visibility; version 19.58.0 (2026-10-17).**
     - `specs/055-accelerator-canary-check`, extending 004 FR-008. With `AI_USE_ACCELERATOR=true` an accelerator could load without
@@ -4040,5 +4064,4 @@ Implementation
     - Not covered: Linux and macOS are unmeasured; the throughput figure is one coarse cold sample; a configuration that passes the
       short check but degrades on long prompts is not detected; the 0.5B model is still correct but slower than CPU when its
       accelerator is kept; the 15 s budget has little margin on a slower machine (the 12-token cap is the lever).
-    - Version bumped to 19.58.0 (root, backend, frontend, shared-domain), assuming `AP-054` (entry 100, 19.57.0) merges first; if this
-      merges first, renumber to entry 100 and 19.57.0.
+    - Version bumped to 19.58.0 (root, backend, frontend, shared-domain), after `AP-054` (entry 100, 19.57.0).

@@ -8,7 +8,7 @@ function CommandIcon({ command }: Readonly<{ command: Command }>) {
   if (command.kind === "workflow") {
     if (isResultsView(command.id)) {
       return (
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-section-results/30 bg-section-results/10 text-section-results">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-500/40 bg-lime-pale text-brand-700 dark:bg-brand-50 dark:text-brand-300">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
             <path d="M5 20V10m7 10V4m7 16v-7" />
           </svg>
@@ -17,7 +17,7 @@ function CommandIcon({ command }: Readonly<{ command: Command }>) {
     }
     const workflow = workflowById(command.id);
     return (
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${workflow.tone.tile}`}>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-500/40 bg-lime-pale text-brand-700 dark:bg-brand-50 dark:text-brand-300">
         <WorkflowIcon name={workflow.icon} className="h-4 w-4" />
       </span>
     );
@@ -25,7 +25,7 @@ function CommandIcon({ command }: Readonly<{ command: Command }>) {
   return (
     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-        {command.kind === "back-to-start" ? (
+        {command.kind === "go-home" ? (
           <path d="M19 12H5m6 6-6-6 6-6" />
         ) : command.target === "dark" ? (
           <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
@@ -42,7 +42,7 @@ function CommandIcon({ command }: Readonly<{ command: Command }>) {
 
 const KIND_LABEL: Record<Command["kind"], string> = {
   workflow: "Workflow",
-  "back-to-start": "Navigation",
+  "go-home": "Navigation",
   theme: "Theme",
 };
 
@@ -95,7 +95,7 @@ export function CommandPalette({
       testId="command-palette"
       onClose={onClose}
       onBackdropClick={onClose}
-      panelClassName="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+      panelClassName="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-xl"
     >
       <h2 id={titleId} className="sr-only">
         Command palette
@@ -123,7 +123,7 @@ export function CommandPalette({
           onKeyDown={handleKeyDown}
           className="w-full bg-transparent text-sm text-text-primary placeholder:text-muted focus:outline-none"
         />
-        <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted sm:inline">
+        <kbd className="hidden shrink-0 rounded border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-[10px] text-muted sm:inline">
           Esc
         </kbd>
       </div>
@@ -144,7 +144,7 @@ export function CommandPalette({
               onClick={() => onRun(command)}
               className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-sm ${
                 index === active
-                  ? "bg-surface-strong text-text-primary"
+                  ? "bg-lime-pale text-text-primary ring-1 ring-inset ring-brand-500"
                   : "text-text-secondary"
               }`}
             >

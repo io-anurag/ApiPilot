@@ -181,7 +181,7 @@ export function RequestEditorPanel({
             value={method}
             disabled={locked}
             onChange={(event) => setMethod(event.target.value)}
-            className="w-28 shrink-0 rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-28 shrink-0 rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {METHODS.map((value) => (
               <option key={value} value={value}>
@@ -371,7 +371,7 @@ export function RequestEditorPanel({
                 'pm.test("Status code is 200", function () {\n  pm.response.to.have.status(200);\n});'
               }
               onChange={(event) => setTestScript(event.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-border-control bg-surface px-2 py-1.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <p className="text-xs text-muted">
               This is what a run's pass/fail results are checked against. Clearing it

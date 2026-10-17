@@ -13,7 +13,7 @@ export function Disclosure({ title, summary, open, onToggle, children }: Readonl
         type="button"
         aria-expanded={open}
         aria-controls={bodyId}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-surface px-4 py-2 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border-control bg-surface px-4 py-2 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         onClick={onToggle}
       >
         <span aria-hidden="true" className={`text-xs text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}>

@@ -45,7 +45,7 @@ export function CountedOperationList({
 }>) {
   if (entries.length === 0) return null;
   const items = (
-    <ul className={columns ? "grid gap-x-4 gap-y-1 @xl:grid-cols-2 @5xl:grid-cols-3" : "divide-y divide-border rounded-md border border-border"}>
+    <ul className={columns ? "grid gap-x-4 gap-y-1 @xl:grid-cols-2 @5xl:grid-cols-3" : "divide-y divide-border rounded-xl border border-border"}>
       {entries.map((entry) => {
         const { method, path } = entry.request ?? splitOperationKey(entry.operationKey);
         return (
@@ -60,7 +60,7 @@ export function CountedOperationList({
                 type="button"
                 onClick={() => onSelect(entry.operationKey)}
                 aria-label={selectLabel(entry.operationKey)}
-                className="min-w-0 rounded text-left text-brand-800 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-200"
+                className="min-w-0 rounded text-left text-brand-800 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <WrappingPath path={path} />
               </button>

@@ -109,7 +109,7 @@ export function PostmanGenerationStage({
           value={baseUrl}
           onChange={(event) => setBaseUrl(event.target.value)}
           disabled={status === "loading"}
-          className="w-full max-w-sm rounded-md border border-border bg-surface px-2 py-1.5 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
+          className="w-full max-w-sm rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
         />
       </div>
       <button

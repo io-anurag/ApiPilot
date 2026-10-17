@@ -6,7 +6,8 @@ import { EmptyState } from "./EmptyState";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
-import { BUTTON_STYLES } from "./controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "./controlStyles";
+import { TABLE_STYLES } from "./patterns/tableStyles";
 
 function operationKey(item: ReviewScenarioWire): string {
   return `${item.scenario.operationMethod} ${item.scenario.operationPath}`;
@@ -165,11 +166,11 @@ export function TestScenarioReviewList({
 
   return (
     <div data-testid="review-scenario-list" className="flex flex-col gap-3">
-      <div className="order-2 flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
+      <div className="order-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="review-operation-filter"
-            className="text-xs font-medium text-muted"
+            className="text-xs font-medium text-text-secondary"
           >
             Operation
           </label>
@@ -177,7 +178,7 @@ export function TestScenarioReviewList({
             id="review-operation-filter"
             value={operationFilter}
             onChange={(e) => updateOperationFilter(e.target.value)}
-            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className={`${FIELD_STYLES} w-full`}
           >
             <option value="all">All operations</option>
             {operations.map((op) => (
@@ -188,10 +189,10 @@ export function TestScenarioReviewList({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="review-category-filter"
-            className="text-xs font-medium text-muted"
+            className="text-xs font-medium text-text-secondary"
           >
             Category
           </label>
@@ -199,7 +200,7 @@ export function TestScenarioReviewList({
             id="review-category-filter"
             value={categoryFilter}
             onChange={(e) => updateCategoryFilter(e.target.value)}
-            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className={`${FIELD_STYLES} w-full`}
           >
             <option value="all">All categories</option>
             {categories.map((category) => (
@@ -210,10 +211,10 @@ export function TestScenarioReviewList({
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label
             htmlFor="review-source-filter"
-            className="text-xs font-medium text-muted"
+            className="text-xs font-medium text-text-secondary"
           >
             Source
           </label>
@@ -221,7 +222,7 @@ export function TestScenarioReviewList({
             id="review-source-filter"
             value={sourceFilter}
             onChange={(e) => updateSourceFilter(e.target.value)}
-            className="max-w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className={`${FIELD_STYLES} w-full`}
           >
             <option value="all">All sources</option>
             {sources.map((source) => (
@@ -241,8 +242,9 @@ export function TestScenarioReviewList({
             message="No scenarios match the current filters."
           />
         ) : (
-          <ul className="min-w-0 overflow-hidden divide-y divide-border rounded-lg border border-border">
-            <li className="flex flex-col gap-1 border-b border-border bg-surface-subtle px-3 py-2 text-xs font-semibold text-muted">
+          <div className={`${TABLE_STYLES.scroll} border border-border`}>
+          <ul className="min-w-xl divide-y divide-border">
+            <li className="flex flex-col gap-1 bg-mint px-3.5 py-2.5 text-xs font-medium text-text-secondary">
               <div className="flex items-center gap-3">
                 <span className="w-4" aria-hidden="true" />
                 <div
@@ -255,7 +257,7 @@ export function TestScenarioReviewList({
                   <span>Status</span>
                 </div>
               </div>
-              <p className="pl-7 text-[11px] font-normal normal-case text-muted">
+              <p className="pl-7 text-[11px] font-normal normal-case text-text-secondary">
                 Select individual rows or use Select all filtered above
               </p>
             </li>
@@ -265,13 +267,13 @@ export function TestScenarioReviewList({
                 : item.scenario.category;
               return (
                 <Fragment key={item.scenarioId}>
-                  <li className="flex min-w-0 items-center gap-3 px-3 py-2">
+                  <li className="flex min-w-0 items-center gap-3 px-3.5 py-2">
                     <input
                       type="checkbox"
                       checked={manualSelectionIds.has(item.scenarioId)}
                       onChange={() => toggleManualSelection(item.scenarioId)}
                       aria-label={`Select ${operationKey(item)} — ${item.scenario.category} scenario`}
-                      className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      className="h-4 w-4 shrink-0 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     />
                     <button
                       type="button"
@@ -279,7 +281,7 @@ export function TestScenarioReviewList({
                       aria-pressed={item.scenarioId === selectedScenarioId}
                       onClick={() => onSelect(item)}
                       className={`grid min-w-0 flex-1 items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${STATE_ROW_TONE_CLASSES[item.state]} ${
-                        item.scenarioId === selectedScenarioId ? "ring-2 ring-inset ring-brand-400" : ""
+                        item.scenarioId === selectedScenarioId ? "ring-2 ring-inset ring-brand-500" : ""
                       }`}
                     >
                       <HttpMethodBadge method={item.scenario.operationMethod} />
@@ -306,7 +308,7 @@ export function TestScenarioReviewList({
                     </button>
                   </li>
                   {item.scenarioId === selectedScenarioId && (
-                    <li className="border-t border-brand-200 bg-brand-50/20 dark:border-brand-500 dark:bg-brand-500/10">
+                    <li className="border-l-4 border-brand-500 bg-surface-subtle">
                       {renderSelected?.(item)}
                     </li>
                   )}
@@ -314,6 +316,7 @@ export function TestScenarioReviewList({
               );
             })}
           </ul>
+          </div>
         )}
       </div>
 
@@ -323,7 +326,7 @@ export function TestScenarioReviewList({
           names (e.g. "Accept all filtered (76)") are unchanged. */}
       <div
         data-testid="review-bulk-actions"
-        className="order-1 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 dark:border-brand-500 dark:bg-brand-500/10"
+        className="order-1 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-mint px-3.5 py-2.5"
       >
         <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
           <input
@@ -339,13 +342,13 @@ export function TestScenarioReviewList({
               });
             }}
             aria-label="Select all filtered scenarios"
-            className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="h-4 w-4 shrink-0 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
           Select all filtered ({filtered.length})
         </label>
         {filtered.length > 0 && (
-          <div role="group" aria-label="Filtered scenario actions" className="flex items-center gap-2">
-            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <div role="group" aria-label="Filtered scenario actions" className="flex flex-wrap items-center gap-2">
+            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
               Filtered
             </span>
             <button
@@ -372,9 +375,9 @@ export function TestScenarioReviewList({
           <div
             role="group"
             aria-label="Selected scenario actions"
-            className="flex items-center gap-2 border-l border-brand-200 pl-4 dark:border-brand-500"
+            className="flex flex-wrap items-center gap-2 sm:border-l sm:border-border-strong sm:pl-4"
           >
-            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
               Selected
             </span>
             <button
@@ -408,7 +411,7 @@ export function TestScenarioReviewList({
       </div>
 
       {filtered.length > 0 && (
-        <div className="order-4 flex items-center justify-between text-sm text-muted">
+        <div className="order-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
           <span>
             Showing {Math.min(visibleCount, filtered.length)} of {filtered.length}
           </span>

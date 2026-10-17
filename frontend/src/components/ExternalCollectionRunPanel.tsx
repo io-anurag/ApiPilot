@@ -27,7 +27,10 @@ import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { Tabs, type TabItem } from "./Tabs";
 import { CollectionRunSetupCard } from "./CollectionRunSetupCard";
 import { summarizeCollectionRun } from "../utils/collectionRunSetup";
-import { BUTTON_STYLES, ENTRY_CONTROL } from "./controlStyles";
+import { BUTTON_STYLES } from "./controlStyles";
+import { Banner } from "./patterns/Banner";
+import { Card, CardHeader } from "./patterns/Card";
+import { KeyValueGrid } from "./patterns/KeyValueGrid";
 import { SeededPlans } from "./requestChain/SeededPlans";
 import { SeedPlanDialog } from "./requestChain/SeedPlanDialog";
 import { applyRunOrder, moveRunOrderItem, type RunOrder } from "../utils/runOrder";
@@ -80,36 +83,29 @@ function runStatusTone(status: UploadedCollectionExecutionRun["status"]): Status
   return "success";
 }
 
-/** One labeled number in the run overview stat row. */
-function OverviewStat({ label, value, tone }: Readonly<{ label: string; value: string; tone?: StatusTone }>) {
-  const toneClass: Record<StatusTone, string> = {
-    neutral: "text-text-primary",
-    info: "text-info-700 dark:text-info-400",
-    success: "text-success-700 dark:text-success-400",
-    warning: "text-warning-700 dark:text-warning-400",
-    danger: "text-danger-700 dark:text-danger-400",
-  };
-  return (
-    <div className="min-w-[6rem]">
-      <dt className="text-xs font-medium uppercase text-muted">{label}</dt>
-      <dd className={`text-lg font-semibold ${toneClass[tone ?? "neutral"]}`}>{value}</dd>
-    </div>
-  );
+const OVERVIEW_TONE_CLASS: Record<StatusTone, string> = {
+  neutral: "text-text-primary",
+  info: "text-info-700 dark:text-info-100",
+  success: "text-success-700 dark:text-success-100",
+  warning: "text-warning-700 dark:text-warning-100",
+  danger: "text-danger-700 dark:text-danger-100",
+};
+
+function overviewValue(value: string, tone: StatusTone = "neutral") {
+  return <span className={`text-lg ${OVERVIEW_TONE_CLASS[tone]}`}>{value}</span>;
 }
 
 function RunOverview({ run }: Readonly<{ run: UploadedCollectionExecutionRun }>) {
   return (
-    <dl className="flex flex-wrap gap-4 rounded-md border border-border bg-surface-subtle p-3">
-      <OverviewStat label="Requests" value={String(run.summary.total)} />
-      <OverviewStat label="Passed" value={String(run.summary.passed)} tone="success" />
-      <OverviewStat
-        label="Failed"
-        value={String(run.summary.failed)}
-        tone={run.summary.failed > 0 ? "danger" : "neutral"}
-      />
-      <OverviewStat label="Not attempted" value={String(run.summary.notAttempted)} />
-      <OverviewStat label="Duration" value={`${run.summary.durationMs} ms`} />
-    </dl>
+    <KeyValueGrid
+      items={[
+        { label: "Requests", value: overviewValue(String(run.summary.total)) },
+        { label: "Passed", value: overviewValue(String(run.summary.passed), "success") },
+        { label: "Failed", value: overviewValue(String(run.summary.failed), run.summary.failed > 0 ? "danger" : "neutral") },
+        { label: "Not attempted", value: overviewValue(String(run.summary.notAttempted)) },
+        { label: "Duration", value: overviewValue(`${run.summary.durationMs} ms`) },
+      ]}
+    />
   );
 }
 
@@ -249,14 +245,14 @@ function UnverifiedContentDialog({
     <div
       role="alertdialog"
       data-testid="unverified-content-dialog"
-      className="space-y-3 border-l-4 border-warning-500 bg-warning-50 p-4 shadow-sm dark:bg-warning-500/10"
+      className="space-y-3 rounded-xl border border-warning-600/30 bg-warning-100 px-3.5 py-3 dark:bg-warning-500/10"
     >
       <p className="text-left text-sm text-warning-700 hyphens-none dark:text-warning-100">
         This collection&apos;s requests, and any embedded pre-request/test scripts, were{" "}
         <strong>not generated or verified by ApiPilot</strong>. They will execute exactly as
         authored, with the same real network access Postman/Newman itself would give them.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onConfirm} className={BUTTON_STYLES.danger}>
           Confirm and run
         </button>
@@ -281,22 +277,27 @@ function RunHistory({
   return (
     <div className="space-y-2">
       <h3 className="text-xs font-semibold uppercase text-muted">Run history</h3>
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
         {runs.map((historyRun) => (
           <li key={historyRun.id}>
             <button
               type="button"
               onClick={() => onSelect(historyRun.id)}
               aria-current={historyRun.id === selectedRunId}
-              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 py-2 text-left text-sm hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-                historyRun.id === selectedRunId ? "bg-surface-subtle" : ""
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 border-l-2 px-3 py-2 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                historyRun.id === selectedRunId ? "border-brand-500 bg-lime-pale" : "border-transparent hover:bg-surface-hover"
               }`}
             >
               <span className="flex min-w-0 items-center gap-2">
+                {historyRun.id === selectedRunId && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-700">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5L20 7" />
+                  </svg>
+                )}
                 <StatusBadge label={RUN_STATUS_LABEL[historyRun.status]} tone={runStatusTone(historyRun.status)} />
                 <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />
               </span>
-              <span className="text-xs text-muted">
+              <span className="text-xs text-text-secondary">
                 {historyRun.summary.passed} passed · {historyRun.summary.failed} failed
               </span>
             </button>
@@ -386,25 +387,28 @@ function RunOrderChecklist({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-border bg-surface p-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase text-muted">Run order</h4>
-        <span className="text-xs text-muted">
-          <span>
-            {selectedIds.size} of {requests.length} selected
-          </span>{" "}
-          ·{" "}
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={disabled || !canReset}
-            title={canReset ? "Select every request and use the collection's own order" : "Every request is selected, in the collection's own order"}
-            className={BUTTON_STYLES.ghost}
-          >
-            Reset
-          </button>
-        </span>
-      </div>
+    <Card className="space-y-2">
+      <CardHeader
+        level={3}
+        title="Run order"
+        actions={
+          <span className="text-xs text-text-secondary">
+            <span>
+              {selectedIds.size} of {requests.length} selected
+            </span>{" "}
+            ·{" "}
+            <button
+              type="button"
+              onClick={onReset}
+              disabled={disabled || !canReset}
+              title={canReset ? "Select every request and use the collection's own order" : "Every request is selected, in the collection's own order"}
+              className={BUTTON_STYLES.ghost}
+            >
+              Reset
+            </button>
+          </span>
+        }
+      />
       {onMove && (
         <p className="text-xs text-muted">
           Drag a request, or use ↑ and ↓, to set the order for runs. The collection keeps its own order.
@@ -441,7 +445,7 @@ function RunOrderChecklist({
                 endDrag();
               }}
               onDragEnd={endDrag}
-              className={`flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-surface-hover ${dropIndicator} ${
+              className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-1 py-1 text-sm hover:bg-surface-hover ${dropIndicator} ${
                 draggedId === item.id ? "opacity-50" : ""
               }`}
             >
@@ -460,12 +464,12 @@ function RunOrderChecklist({
                 checked={selectedIds.has(item.id)}
                 disabled={disabled}
                 onChange={() => onToggle(item.id)}
-                className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
+                className="h-4 w-4 shrink-0 rounded border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed"
               />
               <span className="w-5 shrink-0 text-right font-mono text-xs text-muted">{index + 1}</span>
               {placements && <RunOrderFolder folderPath={placements.get(item.id)?.folderPath ?? []} />}
               <HttpMethodBadge method={item.raw.method} />
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary" title={item.name}>
+              <span className="min-w-32 flex-1 truncate font-mono text-xs text-text-secondary" title={item.name}>
                 {item.name}
               </span>
               <span className="min-w-0 max-w-xs shrink truncate font-mono text-xs text-muted" title={item.raw.url}>
@@ -485,7 +489,7 @@ function RunOrderChecklist({
           );
         })}
       </ul>
-    </div>
+    </Card>
   );
 }
 
@@ -857,7 +861,7 @@ export function ExternalCollectionRunPanel({
       type="button"
       onClick={() => setSeedingChainPlan(true)}
       disabled={selectedIds.size === 0 || requests.length === 0}
-      className={`${ENTRY_CONTROL} px-3 py-1.5`}
+      className={BUTTON_STYLES.secondary}
     >
       Create request-chain plan
     </button>
@@ -899,8 +903,8 @@ export function ExternalCollectionRunPanel({
     </>
   );
   const resultsBlock = run && (
-    <div data-testid="external-collection-run-summary" data-section="results" className="space-y-3 border-l-2 border-brand-600 pl-3 dark:border-brand-400">
-      <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Results</p>
+    <div data-testid="external-collection-run-summary" className="space-y-3 border-l-2 border-brand-500 pl-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Results</p>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge label="Uploaded" tone="neutral" title={UPLOADED_BADGE_TITLE} />
       </div>
@@ -998,9 +1002,7 @@ export function ExternalCollectionRunPanel({
         />
         <div className="min-w-0">
           {orderBlock || (
-            <p className="rounded-md border border-border bg-surface p-3 text-sm text-muted">
-              Every request in the collection runs, in the collection&apos;s own order.
-            </p>
+            <Banner tone="neutral" title="Every request in the collection runs, in the collection's own order." />
           )}
         </div>
         {chainPlanDialog}
@@ -1010,13 +1012,12 @@ export function ExternalCollectionRunPanel({
 
   if (view === "results") {
     return (
-      <section
-        data-testid="external-collection-run-panel"
-        className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-text-primary">{uploadedCollection.name}</h3>
-          <div className="flex flex-wrap items-center gap-2">
+      <Card as="section" data-testid="external-collection-run-panel" className="space-y-4">
+        <CardHeader
+          level={3}
+          title={uploadedCollection.name}
+          actions={
+            <>
             {run && run.status !== "in-progress" && (
               <>
                 <button
@@ -1054,35 +1055,40 @@ export function ExternalCollectionRunPanel({
                 Run again
               </button>
             )}
-          </div>
-        </div>
+            </>
+          }
+        />
         {reportError && <ErrorState message={reportError} testId="run-report-error" />}
         {resultsBlock || (
           <p className="text-sm text-muted">Select a run from the history to see its results.</p>
         )}
         {historyBlock}
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section
+    <Card
+      as="section"
       data-testid="external-collection-run-panel"
-      className="space-y-4 rounded-lg border border-border bg-surface p-5 shadow-sm"
+      className="space-y-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-text-primary">{uploadedCollection.name}</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          {chainPlanButton}
-          {startButton}
-        </div>
-      </div>
+      <CardHeader
+        level={3}
+        title={uploadedCollection.name}
+        actions={
+          <>
+            {chainPlanButton}
+            {startButton}
+          </>
+        }
+      />
       {seededPlans}
       {orderBlock}
       {gates}
       {resultsBlock}
       {historyBlock}
       {chainPlanDialog}
-    </section>
+    </Card>
   );
 }

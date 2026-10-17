@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import type { CollectionFolderView, CollectionRequestView } from "@apipilot/shared-domain";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { BUTTON_STYLES } from "./controlStyles";
+import { Banner } from "./patterns/Banner";
+import { Card } from "./patterns/Card";
+import { Pill } from "./patterns/Pill";
 
 /**
  * Every request in `items`/`folders`, flattened into the same folders-then-items order this
@@ -196,20 +199,17 @@ function RequestRow({
   return (
     <li>
       <div
-        className={`group flex items-center gap-2 rounded-md px-2 py-1.5 ${isSelected ? "bg-brand-50 dark:bg-brand-500/10" : "hover:bg-surface-hover"}`}
+        className={`group flex items-center gap-2 rounded-md border-l-2 px-2 py-1.5 ${isSelected ? "border-brand-500 bg-lime-pale" : "border-transparent hover:bg-surface-hover"}`}
       >
         <button
           type="button"
           onClick={() => onSelectRequest(item)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+          aria-current={isSelected ? "true" : undefined}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           <HttpMethodBadge method={item.raw.method} />
-          <span className="min-w-0 truncate text-text-primary">{item.name}</span>
-          {item.wasEdited && (
-            <span className="shrink-0 rounded bg-warning-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
-              Edited
-            </span>
-          )}
+          <span className={`min-w-0 truncate text-text-primary ${isSelected ? "font-semibold" : ""}`}>{item.name}</span>
+          {item.wasEdited && <Pill tone="warn">Edited</Pill>}
         </button>
         <RowActionsMenu
           label={item.name}
@@ -258,7 +258,7 @@ function FolderRow({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((current) => !current)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-text-primary"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded text-left text-sm font-medium text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           <span aria-hidden="true" className="shrink-0">
             {expanded ? "▾" : "▸"}
@@ -353,8 +353,8 @@ export function CollectionTreeView({
     // `flex-1 min-h-0` (a flex item inside the page's own fixed-height `flex-col` wrapper) so this
     // box fills that height; the list below then takes whatever remains via its own
     // `flex-1 min-h-0` and scrolls once the tree outgrows it.
-    <div className="flex min-h-0 flex-1 flex-col space-y-2 rounded-md border border-border bg-surface p-3">
-      <div className="flex items-center gap-2">
+    <Card className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {headerAction}
         <button
           type="button"
@@ -369,9 +369,7 @@ export function CollectionTreeView({
         </button>
       </div>
       {locked && (
-        <p role="status" className="rounded-md border border-warning-100 bg-warning-50 px-2 py-1 text-xs text-warning-700 dark:border-warning-500 dark:bg-warning-500/10 dark:text-warning-100">
-          This collection is read-only while a run is in progress.
-        </p>
+        <Banner tone="warning" role="status" title="This collection is read-only while a run is in progress." />
       )}
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
         {folders.map((folder, i) => (
@@ -401,6 +399,6 @@ export function CollectionTreeView({
           />
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }

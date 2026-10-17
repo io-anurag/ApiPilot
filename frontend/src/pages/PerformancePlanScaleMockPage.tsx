@@ -192,7 +192,7 @@ export function PerformancePlanScaleMockPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search method, path, or scenario"
-                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="w-full rounded-md border border-border-control bg-surface px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               />
             </label>
             <div
@@ -206,7 +206,7 @@ export function PerformancePlanScaleMockPage() {
                     key={candidate}
                     type="button"
                     onClick={() => setMethod(candidate)}
-                    className={`rounded px-2 py-1 text-xs font-medium ${method === candidate ? "bg-brand-600 text-white" : "bg-surface-strong text-text-secondary hover:bg-brand-50"}`}
+                    className={`rounded px-2 py-1 text-xs font-medium ${method === candidate ? "bg-accent text-on-accent" : "bg-surface-strong text-text-secondary hover:bg-brand-50"}`}
                   >
                     {candidate}
                   </button>
@@ -217,7 +217,7 @@ export function PerformancePlanScaleMockPage() {
               aria-label="Filter endpoint state"
               value={state}
               onChange={(event) => setState(event.target.value as EndpointState | "all")}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <option value="all">All states</option>
               <option value="ready">Ready</option>
@@ -340,7 +340,7 @@ export function PerformancePlanScaleMockPage() {
             </dl>
             <button
               type="button"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="w-full rounded-md border border-border-control px-3 py-2 text-sm font-medium hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               Inspect generated request
             </button>
@@ -365,7 +365,7 @@ export function PerformancePlanScaleMockPage() {
                   key={candidate}
                   type="button"
                   onClick={() => setProfile(candidate)}
-                  className={`rounded px-2 py-1.5 text-xs font-medium ${profile === candidate ? "bg-brand-600 text-white" : "bg-surface-strong text-text-secondary hover:bg-brand-50"}`}
+                  className={`rounded px-2 py-1.5 text-xs font-medium ${profile === candidate ? "bg-accent text-on-accent" : "bg-surface-strong text-text-secondary hover:bg-brand-50"}`}
                 >
                   {candidate}
                 </button>
@@ -403,7 +403,7 @@ export function PerformancePlanScaleMockPage() {
               value={environment}
               onChange={(event) => setEnvironment(event.target.value)}
               aria-label="Target environment"
-              className="w-full rounded-md border border-border bg-surface px-2 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="w-full rounded-md border border-border-control bg-surface px-2 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <option>QA sandbox</option>
               <option>Staging</option>
@@ -443,7 +443,7 @@ export function PerformancePlanScaleMockPage() {
             </p>
             <button
               type="button"
-              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               Review write operations
             </button>
@@ -461,14 +461,14 @@ export function PerformancePlanScaleMockPage() {
             <button
               type="button"
               disabled
-              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white opacity-50"
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent opacity-50"
             >
               Generate script
             </button>
             <button
               type="button"
               disabled
-              className="w-full rounded-md border border-border px-3 py-2 text-sm font-medium opacity-50"
+              className="w-full rounded-md border border-border-control px-3 py-2 text-sm font-medium opacity-50"
             >
               Run against {environment}
             </button>

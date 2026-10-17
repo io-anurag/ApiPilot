@@ -3,7 +3,7 @@ import { StatusBadge } from "../StatusBadge";
 import { StateBadge } from "./CoverageBadges";
 import { CAUSE_LABELS, GROUP_LABELS, VERDICT_LABELS, VERDICT_TONES } from "./coverageViewModel";
 
-const TH = "px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted";
+const TH = "whitespace-nowrap bg-mint px-2 py-1.5 text-left text-xs font-medium text-text-secondary first:rounded-l-lg last:rounded-r-lg";
 
 function tallyText(r: CoverageRequirementResult): string {
   const t = r.tally;
@@ -41,9 +41,9 @@ export function OperationRequirements({
   const top = [...gaps].sort((a, b) => b.score - a.score)[0];
   return (
     <div data-testid="operation-detail" className="space-y-3">
-      <div className="overflow-x-auto">
-        <h4 className="mb-1 text-xs font-semibold text-text-primary">Scenarios of {row.operationKey}</h4>
-        <table className="w-full min-w-[40rem] border-collapse rounded border border-border bg-surface text-xs">
+      <div className="overflow-x-auto rounded-xl">
+        <h4 className="mb-1.5 text-xs font-semibold text-text-primary">Scenarios of {row.operationKey}</h4>
+        <table className="w-full min-w-2xl border-collapse text-xs">
           <caption className="sr-only">Scenarios and their verdicts for {row.operationKey}</caption>
           <thead>
             <tr>
@@ -61,11 +61,11 @@ export function OperationRequirements({
               </tr>
             ) : (
               scenarios.map((s) => (
-                <tr key={s.scenarioId} data-testid="scenario-row" className="border-t border-border">
+                <tr key={s.scenarioId} data-testid="scenario-row" className="border-b border-border">
                   <td className="px-2 py-1.5 font-mono">{s.scenarioId}</td>
-                  <td className="px-2 py-1.5">{GROUP_LABELS[s.group]}</td>
-                  <td className="px-2 py-1.5">{s.reviewState}</td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-2 py-1.5 text-text-primary">{GROUP_LABELS[s.group]}</td>
+                  <td className="px-2 py-1.5 text-text-primary">{s.reviewState}</td>
+                  <td className="px-2 py-1.5 text-text-primary">
                     <StatusBadge label={VERDICT_LABELS[s.verdict]} tone={VERDICT_TONES[s.verdict]} />
                     {s.cause && <span className="ml-1.5 text-muted">{CAUSE_LABELS[s.cause]}</span>}
                   </td>
@@ -76,12 +76,12 @@ export function OperationRequirements({
           </tbody>
         </table>
       </div>
-      <div className="overflow-x-auto">
-        <h4 className="mb-1 text-xs font-semibold text-text-primary">
+      <div className="overflow-x-auto rounded-xl">
+        <h4 className="mb-1.5 text-xs font-semibold text-text-primary">
           Requirements ({shown.length} of {requirements.length}
           {showVerified ? "" : ", non-verified only"})
         </h4>
-        <table className="w-full min-w-[56rem] border-collapse rounded border border-border bg-surface text-xs">
+        <table className="w-full min-w-4xl border-collapse text-xs">
           <caption className="sr-only">Requirements and their states for {row.operationKey}</caption>
           <thead>
             <tr>
@@ -100,13 +100,13 @@ export function OperationRequirements({
               </tr>
             ) : (
               shown.map((r) => (
-                <tr key={r.id} data-testid="requirement-row" data-state={r.state} className="border-t border-border align-top">
-                  <td className="px-2 py-1.5">
+                <tr key={r.id} data-testid="requirement-row" data-state={r.state} className="border-b border-border align-top">
+                  <td className="px-2 py-1.5 text-text-primary">
                     {r.label}
                     <div className="text-muted">{r.kind.replace("-", " ")}</div>
                   </td>
-                  <td className="px-2 py-1.5">{GROUP_LABELS[r.group]}</td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-2 py-1.5 text-text-primary">{GROUP_LABELS[r.group]}</td>
+                  <td className="px-2 py-1.5 text-text-primary">
                     {r.state === "not-covered" ? (
                       "Not covered"
                     ) : (
@@ -118,7 +118,7 @@ export function OperationRequirements({
                       </>
                     )}
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-2 py-1.5 text-text-primary">
                     <StateBadge state={r.state} />
                     {r.cause && <div className="mt-0.5 text-muted">{CAUSE_LABELS[r.cause]}</div>}
                   </td>

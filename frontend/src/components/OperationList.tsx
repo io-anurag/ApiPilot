@@ -18,7 +18,7 @@ const ROW_GRID_COLUMNS = "grid-cols-[4.5rem_minmax(0,1fr)] justify-items-start";
  * the two states stay distinguishable when they coincide.
  */
 const INCLUDED_ROW_TONE = "bg-success-50 dark:bg-success-500/15";
-const EXPANDED_ROW_RING = "ring-2 ring-inset ring-brand-400";
+const EXPANDED_ROW_RING = "ring-2 ring-inset ring-brand-500";
 
 /**
  * Optional per-row inclusion checkboxes (specs/009 Clarifications 2026-09-23). Kept separate from
@@ -47,18 +47,18 @@ export function OperationList({
 }) {
   if (operations.length === 0) {
     return (
-      <p data-testid="operation-list-empty" className="text-sm text-muted">
+      <p data-testid="operation-list-empty" className="rounded-xl bg-surface-subtle px-4 py-6 text-center text-sm text-muted">
         No operations were discovered in this specification.
       </p>
     );
   }
 
   return (
-    <ul data-testid="operation-list" className="overflow-hidden divide-y divide-border rounded-lg border border-border">
+    <ul data-testid="operation-list" className="divide-y divide-border overflow-hidden rounded-xl border border-border">
       <li
         aria-hidden="true"
-        className={`grid items-center gap-3 border-b border-border bg-surface-subtle py-2 text-xs font-semibold text-muted ${ROW_GRID_COLUMNS} ${
-          inclusion ? "pl-10 pr-3" : "px-3"
+        className={`grid items-center gap-3 bg-mint py-2.5 text-xs font-medium text-text-secondary ${ROW_GRID_COLUMNS} ${
+          inclusion ? "pl-10 pr-3.5" : "px-3.5"
         }`}
       >
         <span>Method</span>
@@ -74,11 +74,11 @@ export function OperationList({
             onClick={() => onSelect(operation)}
             aria-pressed={isSelected}
             className={`grid items-center gap-3 py-2 text-left text-sm hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${ROW_GRID_COLUMNS} ${
-              inclusion ? "min-w-0 flex-1 pr-3" : "w-full px-3"
+              inclusion ? "min-w-0 flex-1 pr-3.5" : "w-full px-3.5"
             } ${isSelected ? EXPANDED_ROW_RING : ""}`}
           >
             <HttpMethodBadge method={operation.method} />
-            <span className="min-w-0 truncate font-mono text-text-primary" title={operation.path}>
+            <span className="min-w-0 break-all font-mono text-xs text-text-primary" title={operation.path}>
               {operation.path}
             </span>
           </button>
@@ -93,7 +93,7 @@ export function OperationList({
                   onChange={() => inclusion.onToggle(key)}
                   disabled={inclusion.disabled}
                   aria-label={`Include ${key}`}
-                  className="h-4 w-4 shrink-0 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-4 w-4 shrink-0 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 {rowButton}
               </li>
@@ -101,7 +101,7 @@ export function OperationList({
               <li>{rowButton}</li>
             )}
             {isSelected && (
-              <li className="border-t border-brand-200 bg-brand-50/20 dark:border-brand-500 dark:bg-brand-500/10">
+              <li className="border-l-4 border-brand-500 bg-surface-subtle">
                 {renderSelected?.(operation)}
               </li>
             )}

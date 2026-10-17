@@ -29,7 +29,7 @@ export function HelpDialog({
       testId="help-dialog"
       onClose={onClose}
       onBackdropClick={onClose}
-      panelClassName="w-full max-w-xl space-y-5 rounded-xl border border-border bg-surface p-5 shadow-2xl"
+      panelClassName="w-full max-w-xl space-y-5 rounded-2xl border border-border bg-surface p-5 shadow-xl"
     >
       <div className="flex items-start justify-between gap-4">
         <h2 id={titleId} className="font-display text-lg font-bold text-text-primary">
@@ -39,7 +39,7 @@ export function HelpDialog({
           ref={closeRef}
           type="button"
           onClick={onClose}
-          className="rounded-md border border-border px-2.5 py-1 text-sm font-medium text-text-secondary hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="rounded-md border border-border-control px-2.5 py-1 text-sm font-medium text-text-secondary hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           Close
         </button>
@@ -50,7 +50,7 @@ export function HelpDialog({
           {shortcuts.map(([keys, action]) => (
             <tr key={action} className="border-b border-border last:border-0">
               <th scope="row" className="w-40 py-2 pr-4 text-left font-normal">
-                <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-xs text-text-primary">
+                <kbd className="rounded border border-border-strong bg-surface-subtle px-1.5 py-0.5 font-mono text-xs text-text-primary">
                   {keys}
                 </kbd>
               </th>
@@ -67,19 +67,19 @@ export function HelpDialog({
         <ul className="space-y-2.5">
           {WORKFLOWS.map((workflow) => (
             <li key={workflow.id} className="flex gap-3 text-sm">
-              <span aria-hidden="true" className={`mt-1.5 h-2 w-2 shrink-0 rounded-sm ${workflow.tone.marker}`} />
+              <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-sm bg-brand-500" />
               <span>
                 <span className="font-medium text-text-primary">{workflow.title}</span>
-                <span className="block hyphens-auto text-justify text-muted">{workflow.description}</span>
+                <span className="block text-muted">{workflow.description}</span>
               </span>
             </li>
           ))}
           {RESULTS_VIEWS.map((view) => (
             <li key={view.id} className="flex gap-3 text-sm">
-              <span aria-hidden="true" className={`mt-1.5 h-2 w-2 shrink-0 rounded-sm ${view.marker}`} />
+              <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-sm bg-brand-500" />
               <span>
                 <span className="font-medium text-text-primary">{view.title}</span>
-                <span className="block hyphens-auto text-justify text-muted">{view.description}</span>
+                <span className="block text-muted">{view.description}</span>
               </span>
             </li>
           ))}

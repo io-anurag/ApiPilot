@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PerformanceThresholdMetric } from "@apipilot/shared-domain";
-import { BUTTON_STYLES } from "../controlStyles";
+import { BUTTON_STYLES, FIELD_STYLES } from "../controlStyles";
+import { EmptyState } from "../EmptyState";
 
 /**
  * User-set pass/fail thresholds (FR-018, FR-037). Empty by default: ApiPilot proposes no targets.
@@ -72,7 +73,7 @@ export function ThresholdEditor<S>({
   return (
     <div className="space-y-3">
       {thresholds.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">No thresholds set. The report will show measurements with no pass/fail verdict.</p>
+        <EmptyState compact message="No thresholds set." description="The report will show measurements with no pass/fail verdict." />
       ) : (
         <ul className="space-y-1.5 text-sm">
           {thresholds.map((threshold) => (
@@ -95,9 +96,9 @@ export function ThresholdEditor<S>({
       <fieldset className="flex min-w-0 flex-wrap items-end gap-2" disabled={busy}>
         <legend className="sr-only">Add a threshold</legend>
         {/* A step's operation key can be long; the select never grows wider than its column. */}
-        <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-muted">
+        <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-text-secondary">
           Applies to
-          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className={`max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary ${compact ? "w-52" : ""}`}>
+          <select value={scopeKey} onChange={(event) => setScopeKey(event.target.value)} className={`${FIELD_STYLES} max-w-full ${compact ? "w-52" : ""}`}>
             {scopeOptions.map((option) => (
               <option key={option.key} value={option.key}>
                 {option.label}
@@ -107,13 +108,13 @@ export function ThresholdEditor<S>({
           </select>
         </label>
         {custom && customScope && (
-          <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
+          <label className="flex min-w-0 flex-col gap-1 text-xs text-text-secondary">
             {customScope.inputLabel}
             <input
               list="threshold-custom-scope-suggestions"
               value={customText}
               onChange={(event) => setCustomText(event.target.value)}
-              className="w-56 max-w-full rounded-md border border-border bg-surface px-2 py-1 font-mono text-sm"
+              className={`${FIELD_STYLES} w-56 max-w-full font-mono`}
             />
             <datalist id="threshold-custom-scope-suggestions">
               {customScope.suggestions.map((suggestion) => (
@@ -122,9 +123,9 @@ export function ThresholdEditor<S>({
             </datalist>
           </label>
         )}
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-text-secondary">
           Metric
-          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className={`rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary ${compact ? "w-44" : ""}`}>
+          <select value={metric} onChange={(event) => setMetric(event.target.value as PerformanceThresholdMetric)} className={`${FIELD_STYLES} ${compact ? "w-44" : ""}`}>
             {METRICS.map((entry) => (
               <option key={entry.value} value={entry.value}>
                 {entry.label}
@@ -132,9 +133,9 @@ export function ThresholdEditor<S>({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-xs text-text-secondary">
           At most
-          <input type="number" value={limit} onChange={(event) => setLimit(event.target.value)} className="w-24 rounded-md border border-border bg-surface px-2 py-1 text-sm" />
+          <input type="number" value={limit} onChange={(event) => setLimit(event.target.value)} className={`${FIELD_STYLES} w-24`} />
         </label>
         <button
           type="button"

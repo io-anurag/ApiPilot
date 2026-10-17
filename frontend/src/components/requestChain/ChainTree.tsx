@@ -96,7 +96,7 @@ export function ChainTree({
             type="search"
             value={filter}
             placeholder="Filter steps by method, name or URL"
-            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="w-full rounded-md border border-border-control bg-surface px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             onChange={(event) => setFilter(event.target.value)}
           />
           <p className="sr-only" role="status" aria-live="polite">

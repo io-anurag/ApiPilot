@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ApiPilot - redesigned screens (preview)</title>
+<link rel="stylesheet" href="apipilot-design.css">
+<style>
+.chart{width:100%;height:auto;display:block;overflow:visible}.chart text{font-family:var(--font-sans);font-size:11px;fill:var(--muted)}
+.donutwrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.donutwrap svg{width:160px;height:160px;flex:none}
+.dl{display:flex;flex-direction:column;gap:9px;flex:1;min-width:160px}.dl div{display:grid;grid-template-columns:12px auto 1fr;gap:10px;align-items:center;font-size:13px}.dl i{width:12px;height:12px;border-radius:4px}.dl em{font-style:normal;color:var(--muted);text-align:right}
+.score{display:flex;align-items:center;gap:12px;margin-bottom:12px}.score .big{background:var(--sage);color:#10201a;border-radius:10px;padding:8px 10px;font-size:24px;font-weight:600}
+:root[data-theme="dark"] .score .big{background:var(--lime);color:var(--on-lime)}.score small{display:block;color:var(--muted);font-size:11.5px}
+.sumbig{font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.hint{font-size:12.5px;color:var(--text-2);margin:0}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}.sw div{border-radius:12px;padding:12px;font-size:12px;border:1px solid var(--border)}.sw b{display:block;font-size:13px}
+.note{font-size:11.5px;color:var(--muted);margin:0}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="guided" viewBox="0 0 24 24"><path d="M4 6h10M4 12h16M4 18h8"/><path d="m16 16 2 2 4-4"/></symbol>
+<symbol id="import" viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></symbol>
+<symbol id="perf" viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-9"/><path d="M15 6h5v5"/></symbol>
+<symbol id="script" viewBox="0 0 24 24"><path d="m8 8-5 4 5 4m8-8 5 4-5 4M14 5l-4 14"/></symbol>
+<symbol id="cov" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3"/></symbol>
+<symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+<symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.8c0 1.7-2.4 2.2-2.4 3.7M12 17h.01"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="m5 15 5-5 4 4 5-6"/><path d="M15 8h4v4"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="m5 9 5 5 4-4 5 6"/><path d="M15 16h4v-4"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+<symbol id="upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4m0 3h.01"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="side" id="side" aria-label="Primary">
+    <div class="brand"><img src="file:///D:/api/ApiPilot/frontend/public/logo-icon.png" alt=""><b>ApiPilot</b><span class="ver mono">v19.56</span></div>
+    <nav class="nav" aria-label="Views" id="nav"></nav>
+    <div class="promo">
+      <b>Local-first AI</b>
+      <p>Scenario enhancement runs on this machine. Your specification never leaves it.</p>
+      <button class="btn lime" type="button">AI settings <svg class="i s"><use href="#arrow"/></svg></button>
+    </div>
+  </aside>
+  <div class="drawer-scrim" id="dscrim"></div>
+
+  <main class="main">
+    <header class="head">
+      <button class="icbtn menu" type="button" id="menuBtn" aria-label="Open navigation"><svg class="i"><use href="#menu"/></svg></button>
+      <div class="titles"><div class="crumb" id="crumb"></div><h1 id="title"></h1></div>
+      <button class="search" type="button" id="palBtn" aria-label="Open command palette"><svg class="i"><use href="#search"/></svg><span>Search workflows, specs, runs…</span><kbd>Ctrl K</kbd></button>
+      <p class="conn" data-testid="connection-status"><i></i><span>Connected</span></p>
+      <button class="icbtn" type="button" id="theme" aria-label="Switch theme"><svg class="i"><use href="#moon"/></svg></button>
+      <button class="icbtn" type="button" id="helpBtn" aria-label="Keyboard shortcuts and help"><svg class="i"><use href="#help"/></svg></button>
+    </header>
+    <div id="views"></div>
+    <p class="note mono">Design preview - sample data. Layout language: sidebar shell, stat tiles, widget cards, pill chips, lime actions.</p>
+  </main>
+</div>
+
+<div class="scrim" id="sHelp"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="hT">
+  <header><h2 id="hT">Keyboard shortcuts and workflows</h2><button class="btn" type="button" data-close>Close</button></header>
+  <div class="body">
+    <div class="krow"><span>Open the command palette</span><span class="kbd">Ctrl K</span></div>
+    <div class="krow"><span>Close a dialog or the palette</span><span class="kbd">Esc</span></div>
+    <div class="krow"><span>Move and choose in the palette</span><span><span class="kbd">↑</span> <span class="kbd">↓</span> and <span class="kbd">Enter</span></span></div>
+    <p class="nl" style="margin:6px 0 0">Workflows</p>
+    <div class="g2">
+      <div class="card flat"><b>Guided Workflow</b><p class="hint">Turn an OpenAPI specification into reviewed API tests and a ready-to-run Postman collection.</p></div>
+      <div class="card flat"><b>Import &amp; Run Collection</b><p class="hint">Bring in a Postman collection and environment, review every request, then run it.</p></div>
+      <div class="card flat"><b>Performance</b><p class="hint">Turn a specification, workflow or collection into a k6 load test and run it.</p></div>
+      <div class="card flat"><b>Run k6 Script</b><p class="hint">Run a k6 script you own after confirming exactly what will execute.</p></div>
+    </div>
+  </div></div></div>
+<div class="scrim" id="sPal"><div class="dlg" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="cmdin"><svg class="i"><use href="#search"/></svg><span>Type a command or search…</span><span class="kbd" style="margin-left:auto">Esc</span></div>
+  <div class="cmd">
+    <div class="nl" style="margin:6px 12px 2px">Workflows</div>
+    <div class="it sel2"><svg class="i"><use href="#guided"/></svg>Guided Workflow<span class="tag">Open</span></div>
+    <div class="it"><svg class="i"><use href="#import"/></svg>Import &amp; Run Collection<span class="tag">Open</span></div>
+    <div class="it"><svg class="i"><use href="#perf"/></svg>Performance<span class="tag">Open</span></div>
+    <div class="it"><svg class="i"><use href="#script"/></svg>Run k6 Script<span class="tag">Open</span></div>
+    <div class="it"><svg class="i"><use href="#cov"/></svg>API Test Coverage<span class="tag">Results</span></div>
+    <div class="nl" style="margin:10px 12px 2px">Appearance</div>
+    <div class="it"><svg class="i"><use href="#moon"/></svg>Switch to dark theme<span class="tag">Theme</span></div>
+  </div></div></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), root=document.documentElement;
+const ic=(n,c='')=>`<svg class="i ${c}"><use href="#${n}"/></svg>`;
+const M={GET:'--m-get',POST:'--m-post',PUT:'--m-put',PATCH:'--m-patch',DELETE:'--m-delete'};
+const mb=m=>`<span class="mb${m==='PUT'?' dk':''}" style="background:var(${M[m]})">${m}</span>`;
+const chk=on=>`<span class="chk${on?' on':''}" role="checkbox" aria-checked="${!!on}">${on?ic('check'):''}</span>`;
+const sel=(t)=>`<button class="sel" type="button">${t} ${ic('chev','s')}</button>`;
+const go=(t)=>`<span class="link">${t} ${ic('arrow','s')}</span>`;
+
+/* ---------- navigation ---------- */
+const STAGES=[['Prepare',[['upload','Upload','#guided'],['analysis','Analysis','#guided'],['api-review','API Review','#api-review']]],
+ ['Design',[['det','Deterministic Generation','#guided'],['ai','AI Enhancement','#guided'],['scenario-review','Scenario Review','#scenario-review']]],
+ ['Organize',[['dep','Dependency Analysis','#guided'],['wfr','Workflow Review','#guided'],['pm','Postman Generation','#guided']]],
+ ['Execute',[['exe','Execution','#guided'],['pt','Performance Testing','#guided']]]];
+const DONE={upload:1,analysis:1,det:1,ai:1,'api-review':0,'scenario-review':0};
+const ROUTES={
+ home:{t:'Home',c:'Workspace',nav:'home'},
+ 'api-review':{t:'Review Discovered APIs',c:'Guided Workflow / Prepare',nav:'guided',stage:'api-review'},
+ 'scenario-review':{t:'Review Generated Scenarios',c:'Guided Workflow / Design',nav:'guided',stage:'scenario-review'},
+ import:{t:'Import & Run Collection',c:'Workflows',nav:'import'},
+ performance:{t:'Performance',c:'Workflows',nav:'performance'},
+ k6:{t:'Run k6 Script',c:'Workflows',nav:'k6'},
+ coverage:{t:'API Test Coverage',c:'Results',nav:'coverage'},
+ patterns:{t:'Pattern library',c:'Design system',nav:'patterns'}};
+function renderNav(route){
+  const r=ROUTES[route], gOpen=r.nav==='guided';
+  const item=(id,href,icon,label,extra='')=>`<a href="${href}"${r.nav===id&&!extra?' aria-current="page"':''}>${ic(icon)}${label}</a>`;
+  $('#nav').innerHTML=`
+   ${item('home','#home','home','Home')}
+   <p class="nl mono">Workflows</p>
+   <button class="nv${gOpen?' open':''}" type="button" id="gBtn" aria-expanded="${gOpen}" style="${gOpen?'background:var(--lime-pale);color:var(--text);font-weight:600':''}">${ic('guided')}Guided Workflow<svg class="i s chev"><use href="#chev"/></svg></button>
+   <div class="sub${gOpen?' show':''}" id="gSub">${STAGES.map(([g,list])=>`<div class="gl mono">${g}</div>`+list.map(([id,l,h])=>{
+      const cur=r.stage===id, done=DONE[id], locked=!cur&&!done&&!['api-review','scenario-review'].includes(id);
+      return `<a href="${h}"${cur?' aria-current="page"':''} class="${locked?'lock':''}">${l}${done?`<span class="st">${ic('check')}</span>`:''}${locked?ic('lock','s').replace('class="i s"','class="i s" style="margin-left:auto"'):''}</a>`}).join('')).join('')}</div>
+   ${item('import','#import','import','Import & Run')}
+   ${item('performance','#performance','perf','Performance')}
+   ${item('k6','#k6','script','Run k6 Script')}
+   <p class="nl mono">Results</p>
+   ${item('coverage','#coverage','cov','Coverage')}
+   <p class="nl mono">Design system</p>
+   ${item('patterns','#patterns','layers','Pattern library')}`;
+  $('#gBtn').onclick=()=>{$('#gSub').classList.toggle('show');$('#gBtn').classList.toggle('open')};
+}
+
+/* ---------- shared pieces ---------- */
+const stageTracker=(step,total,path,groups,chips)=>`<section class="card" aria-label="Workflow progress">
+  <div class="ch"><h2 class="mono" style="font-size:12px;font-weight:500;color:var(--muted)">Step ${step} of ${total} · ${path}</h2><button class="btn" type="button">Start a new workflow</button></div>
+  <div class="steps" style="grid-template-columns:repeat(4,minmax(0,1fr))">${groups.map(([n,s,st],i)=>`<div class="step ${st}"${st==='act'?' aria-current="step"':''}><span class="n"><i>${st==='done'?ic('check'):i+1}</i>${n}</span><small>${s}</small></div>`).join('')}</div>
+  <div class="chips" style="margin-top:12px">${chips.map(([n,s,st])=>`<span class="sc ${st}">${n}${s?`<em>${s}</em>`:''}</span>`).join('')}</div></section>`;
+const trail=(items)=>`<div class="steps" style="grid-template-columns:repeat(${items.length},minmax(0,1fr))" role="list">${items.map(([n,s,st],i)=>`<div class="step ${st}" role="listitem"${st==='act'?' aria-current="step"':''}><span class="n"><i>${st==='done'?ic('check'):i+1}</i>${n}</span><small>${s}</small></div>`).join('')}</div>`;
+const trioHTML=(a)=>`<div class="trio">${a.map(([i,t,s])=>`<div><span class="ic">${ic(i)}</span><span><b>${t}</b><small>${s}</small></span></div>`).join('')}</div>`;
+
+/* ---------- views ---------- */
+const V={};
+V.home=()=>`<div class="cols"><div class="stack">
+  <section class="g4" aria-label="Summary">
+   <article class="card stat hi"><div class="t"><span>API coverage</span><span class="ic">${ic('cov')}</span></div><b>68%</b><div class="delta"><span class="pill">${ic('up','s')}6.00 pts</span>since last run</div></article>
+   <article class="card stat"><div class="t"><span>Scenarios</span><span class="ic">${ic('layers')}</span></div><b>530</b><div class="delta"><span class="pill">${ic('up','s')}41</span>new this session</div></article>
+   <article class="card stat"><div class="t"><span>Pass rate</span><span class="ic">${ic('shield')}</span></div><b>94%</b><div class="delta"><span class="pill bad">${ic('down','s')}1.06 pts</span>since last run</div></article>
+   <article class="card stat"><div class="t"><span>Verified by runs</span><span class="ic">${ic('check')}</span></div><b>52%</b><div class="delta"><span class="pill">${ic('up','s')}5.70 pts</span>since last run</div></article></section>
+  <section class="card" aria-labelledby="lt"><div class="ch"><h2 id="lt">Launch a test session</h2><button class="dots" type="button" aria-label="More">${ic('more')}</button></div>
+   <div class="g4">
+    <button class="tilebtn rec" type="button" aria-label="Guided Workflow"><span class="tile t-lime">${ic('guided')}</span><b>Guided Workflow <span class="pill">Recommended</span></b><small>Turn an OpenAPI specification into reviewed API tests and a ready-to-run Postman collection.</small><span class="go">Open ${ic('arrow','s')}</span></button>
+    <button class="tilebtn" type="button" aria-label="Import &amp; Run Collection"><span class="tile t-mint">${ic('import')}</span><b>Import &amp; Run Collection</b><small>Bring in a Postman collection and environment, review every request, then run it.</small><span class="go">Open ${ic('arrow','s')}</span></button>
+    <button class="tilebtn" type="button" aria-label="Performance"><span class="tile t-sage">${ic('perf')}</span><b>Performance <span class="pill warn">Draft in progress</span></b><small>Turn a specification, workflow or collection into a k6 load test and run it.</small><span class="go">Resume ${ic('arrow','s')}</span></button>
+    <button class="tilebtn" type="button" aria-label="Run k6 Script"><span class="tile t-olive">${ic('script')}</span><b>Run k6 Script</b><small>Run a k6 script you own after confirming exactly what will execute on this machine.</small><span class="go">Open ${ic('arrow','s')}</span></button></div></section>
+  <section class="split">
+   <article class="card"><div class="ch"><h2>Coverage over runs</h2>${sel('Last 8 runs')}</div><svg id="line" class="chart" viewBox="0 0 620 330" role="img" aria-label="API coverage rose from 41 to 68 percent over the last 8 runs"></svg></article>
+   <article class="card"><div class="ch"><h2>Operations by method</h2></div><div class="donutwrap"><svg id="donut" viewBox="0 0 42 42" role="img" aria-label="142 operations by HTTP method"></svg><div class="dl" id="dl"></div></div></article></section>
+  <section class="card"><div class="ch"><h2>Recent sessions</h2><div class="tools"><span class="tin">${ic('search','s')}Search source, status…</span>${sel('All status')}</div></div>
+   <div class="tscroll" tabindex="0" role="region" aria-label="Recent sessions table"><table><thead><tr><th scope="col">Session</th><th scope="col">Source</th><th scope="col">Workflow</th><th scope="col">Operations</th><th scope="col">Started</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>
+    <tr><td class="mono">AP-S0142</td><td><span class="pill mint">${ic('file','s')}petstore.yaml</span></td><td>Guided Workflow</td><td>142</td><td>Today, 10:42</td><td><span class="pill warn">${ic('clock','s')}In progress</span></td><td><button class="btn lime" type="button">Resume ${ic('arrow','s')}</button></td></tr>
+    <tr><td class="mono">AP-S0141</td><td><span class="pill mint">${ic('file','s')}orders.postman.json</span></td><td>Import &amp; Run</td><td>24</td><td>Today, 09:15</td><td><span class="pill ok">${ic('check','s')}Completed</span></td><td><button class="btn lime" type="button">Results ${ic('arrow','s')}</button></td></tr>
+    <tr><td class="mono">AP-S0140</td><td><span class="pill mint">${ic('file','s')}checkout-load.js</span></td><td>Run k6 Script</td><td>-</td><td>Yesterday, 17:03</td><td><span class="pill bad">${ic('x','s')}Failed</span></td><td><button class="btn lime" type="button">Details ${ic('arrow','s')}</button></td></tr></tbody></table></div></section>
+  </div><aside class="stack" aria-label="Insights">
+   <article class="card"><div class="ch"><h2>Coverage by area</h2></div><div class="score"><span class="big">68<small style="display:inline;font-size:13px">/100</small></span><div><b>Good</b><small>142 operations analysed</small></div></div>
+    ${[['Positive',92],['Required fields',81],['Types & formats',74],['Enums',66],['Boundaries',34]].map(([n,v])=>`<div class="prog"><span>${n}</span><div class="tr"><span style="width:${v}%"></span></div><em>${v}%</em></div>`).join('')}</article>
+   <article class="card"><div class="ch"><h2>Next steps</h2></div><div class="todo">
+    <div class="task"><small>Guided Workflow</small><b>Review 12 pending scenarios</b>${ic('arrow','s arr')}</div>
+    <div class="task l"><small>Coverage</small><b>Cover 3 operations with no generated tests</b>${ic('arrow','s arr')}</div>
+    <div class="task"><small>Results</small><b>Investigate 25 failing assertions from the last run</b>${ic('arrow','s arr')}</div>
+    <div class="task"><small>Performance</small><b>Finish the draft load test</b>${ic('arrow','s arr')}</div></div></article>
+   <article class="card"><div class="ch"><h2>AI provider</h2><span class="pill ok">${ic('check','s')}Ready</span></div><p class="hint"><b>Local inference</b> - prompts and specs stay on this machine. Last used 12 min ago.</p></article></aside></div>`;
+
+const scenRows=[['POST','/api/v1/customers','positive'],['POST','/api/v1/customers','missing-field — name'],['POST','/api/v1/customers','null-value — name'],['GET','/api/v1/customers/{id}','positive'],['PUT','/api/v1/customers/{id}','invalid-type — id'],['PUT','/api/v1/customers/{id}','empty-value — name'],['DELETE','/api/v1/customers/{id}','positive'],['POST','/api/v1/orders','missing-field — customerId']];
+V['scenario-review']=()=>`<div class="stack">
+  ${stageTracker(6,11,'Design › Scenario Review',[['Prepare','Complete','done'],['Design','2 of 3 done','act'],['Organize','Locked',''],['Execute','Locked','']],[['Deterministic Generation','Complete — view','done'],['AI Enhancement','Skipped — view','done'],['Scenario Review','Active','act']])}
+  <div class="cols"><div class="stack">
+   <section class="card"><div class="ch"><h2>Review Generated Scenarios</h2><a class="link" href="#coverage">View coverage ${ic('arrow','s')}</a></div>
+    <div class="chips" style="margin-bottom:14px"><span class="pill line">Total <b>30</b></span><span class="pill">Pending <b>30</b></span><span class="pill line">Accepted <b>0</b></span><span class="pill line">Rejected <b>0</b></span><span class="pill line">Requires review <b>0</b></span></div>
+    <div class="banner" role="status">${ic('alert')}<div><b>AI enhancement completed without adding a unique scenario</b><p>The model returned no usable candidates. The list currently contains only deterministic scenarios.</p><ul class="mono"><li>Batch 1: Failed — The AI model replied with output that couldn't be used.</li><li>Batch 2: Failed — The AI model replied with output that couldn't be used.</li></ul></div></div>
+    <div class="row" style="margin:14px 0;padding:10px 12px;border-radius:12px;background:var(--lime-pale);border:1px solid var(--olive)">${chk(false)}<b style="font-size:13px">Select all filtered (30)</b><span class="pill line">Filtered</span><span style="margin-left:auto" class="row"><button class="btn" type="button">Accept all (30)</button><button class="btn" type="button">Reject all (30)</button></span></div>
+    <div class="g3" style="margin-bottom:14px">${['Operation|All operations','Category|All categories','Source|All sources'].map(x=>{const [l,v]=x.split('|');return `<label class="field">${l}<span class="input">${v}${ic('chev','s chev')}</span></label>`}).join('')}</div>
+    <div class="tscroll" tabindex="0" role="region" aria-label="Scenarios table"><table><thead><tr><th scope="col" style="width:40px">${chk(false)}</th><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Category</th><th scope="col">Source</th><th scope="col">Status</th></tr></thead><tbody>
+     ${scenRows.map(([m,p,c])=>`<tr><td>${chk(false)}</td><td>${mb(m)}</td><td class="mono">${p}</td><td>${c}</td><td><span class="pill line">Deterministic rule</span></td><td><span class="pill warn">Pending review</span></td></tr>`).join('')}</tbody></table></div>
+    <div class="pager"><span>Showing 8 of 30</span><div class="pg"><button class="on">1</button><button>2</button><button>3</button><button>4</button><button aria-label="Next page">${ic('arrow','s')}</button></div></div></section></div>
+   <aside class="stack"><article class="card"><div class="ch"><h2>Summary</h2></div><div class="sumbig">0</div><p class="hint" style="margin:4px 0 12px">of 30 scenarios accepted</p><p class="hint">Accept at least one scenario to finalize. Pending and rejected scenarios are excluded from the approved suite.</p>
+    <label class="row" style="margin:14px 0">${chk(true)}<span style="font-size:13px">Use local AI to find extra dependencies</span></label><p class="note" style="margin-bottom:14px">Can take a few minutes. Turn off to use deterministic matching only.</p><button class="btn lime block" type="button">Finalize Review</button></article>
+    <article class="card"><div class="ch"><h2>By category</h2></div>${[['positive',0],['missing-field',0],['null-value',0],['invalid-type',0]].map(([n,v])=>`<div class="prog"><span>${n}</span><div class="tr"><span style="width:${v}%"></span></div><em>${v}/${n==='positive'?6:8}</em></div>`).join('')}</article></aside></div></div>`;
+
+V['api-review']=()=>`<div class="stack">
+  ${stageTracker(3,11,'Prepare › API Review',[['Prepare','2 of 3 done','act'],['Design','Locked',''],['Organize','Locked',''],['Execute','Locked','']],[['Upload','Complete — view','done'],['Analysis','Complete — view','done'],['API Review','Active','act']])}
+  <div class="cols"><section class="card"><div class="ch"><h2>Review Discovered APIs</h2></div>
+   <div class="chips" style="margin-bottom:14px"><span class="pill line">Operations <b>6</b></span><span class="pill line">Schemas <b>22</b></span><span class="pill line">Security schemes <b>0</b></span></div>
+   <div class="row" style="margin-bottom:14px;padding:10px 12px;border-radius:12px;background:var(--lime-pale);border:1px solid var(--olive)">${chk(false)}<b style="font-size:13px">Select all (6)</b><span class="hint" style="margin-left:auto">None selected</span></div>
+   <div class="tscroll" tabindex="0" role="region" aria-label="Operations table"><table><thead><tr><th scope="col" style="width:40px"></th><th scope="col">Method</th><th scope="col">Path</th></tr></thead><tbody>
+    ${[['POST','/api/v1/customers'],['GET','/api/v1/customers/{id}'],['PUT','/api/v1/customers/{id}'],['DELETE','/api/v1/customers/{id}'],['POST','/api/v1/orders'],['GET','/api/v1/orders/{id}']].map(([m,p])=>`<tr><td>${chk(false)}</td><td>${mb(m)}</td><td class="mono">${p}</td></tr>`).join('')}</tbody></table></div></section>
+   <aside class="card"><div class="ch"><h2>Summary</h2></div><div class="sumbig">0</div><p class="hint" style="margin:4px 0 12px">of 6 operations selected</p><p class="hint" style="margin-bottom:14px">Select at least one operation to continue, or use Select all to include every operation.</p><button class="btn lime block" type="button" disabled>Continue</button></aside></div></div>`;
+
+V.import=()=>`<div class="stack">
+  <section class="card" aria-label="Progress">${trail([['Collection','Upload or pick one','act'],['Review requests','Select a collection first',''],['Run','Select a collection first',''],['Results','Select a collection first','']])}</section>
+  <div class="hero"><div class="stack"><div><span class="eyebrow mono">Bring your own collection</span><h2>Run an existing collection against your API</h2><p>Import a Postman collection and environment without first uploading an OpenAPI specification. Review its requests, choose an order, and explicitly trigger each run.</p></div>
+   ${trioHTML([['import','Import','Use a collection you already trust'],['edit','Review','Edit requests before execution'],['shield','Control','Choose exactly what runs']])}
+   <article class="card stat hi"><div class="t"><span>Feeds API Test Coverage</span><span class="ic">${ic('cov')}</span></div><div class="row" style="justify-content:space-between"><div><b>0%</b><br><small>Verified now · no run yet</small></div>${go('View coverage')}</div></article></div>
+   <section class="card"><div class="ch"><h2>Import a Postman collection</h2><span class="sub2">Collection + environment JSON, exported from Postman</span></div>
+    <div class="g2" style="margin-bottom:12px"><label class="field">Name<span class="input ph">e.g. Orders smoke tests</span></label><label class="field">Tier<span class="input">local${ic('chev','s chev')}</span></label></div>
+    <div class="g2" style="margin-bottom:14px"><div class="field">Collection (.json)<span class="drop" style="padding:14px"><span class="ic" style="width:34px;height:34px">${ic('upload')}</span><b style="font-size:13px">Choose file</b><small>Postman collection…</small></span></div><div class="field">Environment (.json)<span class="drop" style="padding:14px"><span class="ic" style="width:34px;height:34px">${ic('upload')}</span><b style="font-size:13px">Choose file</b><small>Postman environment…</small></span></div></div>
+    <button class="btn lime" type="button" disabled>Upload collection</button>
+    <p class="nl" style="margin:18px 0 8px">Uploaded collections</p><div class="empty"><span class="ic">${ic('folder')}</span><b>No uploaded collections yet</b><p>Upload a collection above to run it here.</p></div></section></div></div>`;
+
+V.performance=()=>`<div class="stack">
+  <section class="card" aria-label="Performance test progress">${trail([['Source','Where the plan starts','act'],['Operations','What to include',''],['Plan','Review and edit',''],['Load','Environment and load',''],['Run','Start and read results','']]).replace('repeat(5','repeat(5')}</section>
+  <section class="card"><div class="ch"><div><span class="eyebrow mono">Performance testing with k6</span><h2 style="font-size:22px;margin-top:8px">Turn what you have into a load test</h2></div></div>
+   <p class="hint" style="margin-bottom:14px;max-width:70ch">Pick a source. A guided path takes you from it to a running k6 test: operations, plan, load profile, run. Every request stays editable and nothing is sent until you run.</p>
+   <div class="g4">${[['file','OpenAPI specification','One step for each operation you choose, from its generated positive scenario.','Needs a YAML file','t-lime'],['guided','Guided workflow','One chain for each approved workflow of the guided workflow.','Needs approved workflows','t-mint'],['folder','Postman collection','The requests you select from an imported Postman collection, in run order.','Needs a collection','t-sage'],['plus','Empty plan','Write every step yourself, as in Postman.','Needs nothing','t-olive']].map(([i,t,d,n,c])=>`<button class="tilebtn" type="button"><span class="tile ${c}">${ic(i)}</span><b>${t}</b><small>${d}</small><span class="go"><span class="pill line">${n}</span></span></button>`).join('')}</div></section></div>`;
+
+V.k6=()=>`<div class="stack">
+  <section class="card" aria-label="Progress">${trail([['k6 Script','Upload or write one','act'],['Check','Allowed modules only',''],['Confirm','You approve the content',''],['Run','Runs with your own k6','']])}</section>
+  <div class="hero"><div class="stack"><div><span class="eyebrow mono">Bring your own k6 script</span><h2>Run k6 Script</h2><p>Run a k6 script you supply with the k6 installed on this machine. ApiPilot checks that it uses only allowed k6 modules and nothing that reads local files, asks you to confirm its exact content, and runs it only when you press the trigger.</p>
+   <p class="hint">Credentials belong in environment values, not in the script: read them through <span class="mono">__ENV</span> and map each name in Run setup.</p></div>
+   ${trioHTML([['shield','Checked','Only allowed k6 modules'],['check','Confirmed','You approve its exact content'],['lock','Local','Runs with your own k6']])}</div>
+   <section class="card"><div class="ch"><h2>Add a k6 script</h2><span class="sub2">JavaScript · checked before it is stored</span></div>
+    <div class="drop"><span class="ic">${ic('upload')}</span><b>Upload a k6 script</b><small>Click to browse your files</small></div>
+    <button class="btn block" type="button" style="margin-top:12px">${ic('edit','s')} Write a new script</button>
+    <p class="nl" style="margin:18px 0 8px">Scripts in this session</p><div class="empty"><span class="ic">${ic('script')}</span><b>No scripts yet</b><p>Nothing runs until you confirm a script and press its trigger.</p></div></section></div></div>`;
+
+V.coverage=()=>`<div class="stack">
+  <div class="row" style="justify-content:space-between"><p class="hint" style="max-width:70ch">How much of the API your generated tests cover, and how much of that real runs have verified.</p><div class="row"><button class="btn" type="button">Recalculate</button><button class="btn" type="button">Export this view (HTML)</button><button class="btn lime" type="button">Export all (JSON)</button></div></div>
+  <section class="g4" aria-label="Coverage summary">
+   <article class="card stat hi"><div class="t"><span>Specification coverage</span><span class="ic">${ic('cov')}</span></div><b>100%</b><small>6 of 6 operations</small></article>
+   <article class="card stat"><div class="t"><span>Runtime-verified</span><span class="ic">${ic('check')}</span></div><b>0%</b><small>No run yet</small></article>
+   <article class="card stat"><div class="t"><span>Open gaps</span><span class="ic">${ic('alert')}</span></div><b>6</b><small>0 high priority</small></article>
+   <article class="card stat"><div class="t"><span>Scenarios</span><span class="ic">${ic('layers')}</span></div><b>30</b><small>0 accepted · 30 pending</small></article></section>
+  <div class="cols"><div class="stack">
+   <section class="g2"><div class="task"><small>Step 1 · Done</small><b>Specification and scenarios</b><span style="font-size:12px;color:var(--text-2)">30 scenarios (0 accepted, 30 pending).</span></div><div class="task l" style="gap:8px"><small>Step 2 · Next</small><b>Run the tests to verify them</b><span style="font-size:12px">Nothing is runtime-verified yet. Generating a test never counts as verifying it.</span><button class="btn" type="button" style="align-self:flex-start;background:var(--on-lime);color:var(--lime);border-color:var(--on-lime)">Go to Import &amp; Run</button></div></section>
+   <section class="card"><div class="ch"><h2>Coverage by scenario category</h2><span class="sub2">Each requirement belongs to one category</span></div><div class="g2">
+    ${[['Positive / happy path','24 / 24','100%',100,0],['Negative / invalid input','17 / 17','100%',100,0]].map(([n,a,p,v,r])=>`<div class="card flat"><b>${n}</b><div class="prog" style="grid-template-columns:96px 1fr 70px"><span>Specification</span><div class="tr"><span style="width:${v}%"></span></div><em>${a}</em></div><div class="prog" style="grid-template-columns:96px 1fr 70px"><span>Runtime</span><div class="tr"><span style="width:${r}%"></span></div><em>0 / ${a.split(' / ')[1]}</em></div></div>`).join('')}
+    <div class="card flat"><b>Boundary / edge conditions</b><p class="hint" style="margin-top:6px"><span class="pill line">Not available (0 eligible)</span></p></div><div class="card flat"><b>Security / authorization</b><p class="hint" style="margin-top:6px"><span class="pill line">Unavailable</span> No scenario category identifies authorization intent.</p></div></div></section>
+   <section class="card"><div class="ch"><h2>Requirement breakdown</h2><span class="sub2">Verified and failed come from execution evidence</span></div>
+    ${[['Parameters',5],['Request-schema elements',12],['Response codes',9]].map(([n,c])=>`<div style="margin-bottom:14px"><div class="row" style="justify-content:space-between;font-size:13px"><b>${n}</b><span class="mono" style="color:var(--muted)">${c} requirements</span></div><div class="stk" style="margin-top:6px"><span style="width:100%;background:var(--sage)"></span></div></div>`).join('')}
+    <div class="leg"><span><i style="background:var(--ok-bg);box-shadow:inset 0 0 0 1px var(--ok)"></i>Verified</span><span><i style="background:var(--bad-bg);box-shadow:inset 0 0 0 1px var(--bad)"></i>Executed, failed</span><span><i style="background:var(--sage)"></i>Generated, not executed</span><span><i style="background:var(--track);box-shadow:inset 0 0 0 1px var(--border-strong)"></i>Not covered</span></div></section>
+   <section class="card"><div class="ch"><h2>Coverage gaps</h2><div class="tools"><span class="tin">${ic('search','s')}Path contains…</span>${sel('All priority')}${sel('All gap types')}</div></div>
+    <div class="tscroll" tabindex="0" role="region" aria-label="Coverage gaps table"><table><thead><tr><th scope="col">Method</th><th scope="col">Endpoint</th><th scope="col">Specification</th><th scope="col">Runtime</th><th scope="col">Priority</th><th scope="col">Actions</th></tr></thead><tbody>
+     ${[['DELETE','/api/v1/customers/{id}','4 / 4'],['POST','/api/v1/customers','5 / 5'],['PUT','/api/v1/customers/{id}','6 / 6'],['GET','/api/v1/orders/{id}','3 / 3']].map(([m,p,s])=>`<tr><td>${mb(m)}</td><td class="mono">${p}</td><td>${s}</td><td>0 / ${s.split(' / ')[1]}</td><td><span class="pill warn">Medium</span></td><td><span class="row"><a class="link" href="#">Details</a><a class="link" href="#scenario-review">Open scenarios</a></span></td></tr>`).join('')}</tbody></table></div></section></div>
+   <aside class="stack"><article class="card"><div class="ch"><h2>Evaluation context</h2></div><div class="stack" style="gap:10px"><div class="card flat"><small class="nl" style="margin:0">Specification</small><b>User Journeys Fixture v1.0</b><br><span class="mono" style="font-size:12px;color:var(--muted)">f193882fdb</span></div><div class="card flat"><small class="nl" style="margin:0">Execution evidence</small><b>No execution evidence</b><br><span style="font-size:12px;color:var(--muted)">No execution yet</span></div><div class="card flat"><small class="nl" style="margin:0">Scope of this view</small><b>All 6 eligible operations</b></div></div></article>
+   <article class="card"><div class="ch"><h2>About these figures</h2></div><ul class="hint" style="padding-left:18px;margin:0;display:flex;flex-direction:column;gap:6px"><li>Generated scenarios contribute to specification coverage.</li><li>Runtime-verified coverage requires qualifying execution evidence.</li><li>Security and authorization coverage is unavailable.</li></ul></article></aside></div></div>`;
+
+V.patterns=()=>`<div class="stack">
+  <section class="card"><div class="ch"><h2>Palette (sampled from the Lodgify Figma)</h2><span class="sub2">Light and dark pair</span></div><div class="sw">
+   ${[['Lime','--lime','Active, primary action'],['Lime pale','--lime-pale','Recommended, selected rows'],['Mint','--mint','Highlight card, done'],['Sage','--sage','Secondary series'],['Olive','--olive','Tertiary series'],['Surface','--surface','Cards'],['Background','--bg','App surface'],['Border','--border','Dividers']].map(([n,v,u])=>`<div style="background:var(${v});color:${v==='--lime'?'var(--on-lime)':'var(--text)'}"><b>${n}</b>${u}</div>`).join('')}</div></section>
+  <div class="g2"><section class="card"><div class="ch"><h2>Buttons &amp; controls</h2></div><div class="row"><button class="btn lime" type="button">Primary</button><button class="btn" type="button">Secondary</button><button class="btn" type="button" disabled>Disabled</button>${sel('Select')}<span class="kbd">Ctrl K</span></div><div class="g2" style="margin-top:14px"><label class="field">Text input<span class="input ph">Placeholder</span></label><label class="field">Select<span class="input">local${ic('chev','s chev')}</span></label></div><div class="row" style="margin-top:14px">${chk(true)} Checked ${chk(false)} Unchecked</div></section>
+  <section class="card"><div class="ch"><h2>Status &amp; HTTP methods</h2></div><div class="row"><span class="pill ok">${ic('check','s')}Completed</span><span class="pill warn">${ic('clock','s')}In progress</span><span class="pill bad">${ic('x','s')}Failed</span><span class="pill mint">Info</span><span class="pill line">Neutral</span></div><div class="row" style="margin-top:14px">${['GET','POST','PUT','PATCH','DELETE'].map(mb).join('')}</div><p class="note" style="margin-top:10px">State is always icon + text, never colour alone.</p></section></div>
+  <div class="g3"><article class="card stat hi"><div class="t"><span>Highlight stat</span><span class="ic">${ic('cov')}</span></div><b>68%</b><div class="delta"><span class="pill">${ic('up','s')}6.00 pts</span>since last run</div></article>
+   <div class="task"><small>Task card</small><b>Review 12 pending scenarios</b>${ic('arrow','s arr')}</div><div class="task l"><small>Task card · highlighted</small><b>Cover 3 operations with no tests</b>${ic('arrow','s arr')}</div></div>
+  <div class="g2"><section class="card"><div class="ch"><h2>Stepper</h2></div>${trail([['Source','Where it starts','done'],['Plan','Review and edit','act'],['Run','Locked','']])}</section>
+   <section class="card"><div class="ch"><h2>Banner &amp; empty state</h2></div><div class="banner">${ic('alert')}<div><b>Heads up</b><p>Explicit warning with text, never colour alone.</p></div></div><div class="empty" style="margin-top:12px"><span class="ic">${ic('folder')}</span><b>Nothing here yet</b><p>Empty and error states use the same card.</p></div></section></div></div>`;
+
+/* ---------- charts (home) ---------- */
+function css(n){return getComputedStyle(root).getPropertyValue(n).trim()}
+function el(t,a,p){const e=document.createElementNS('http://www.w3.org/2000/svg',t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function drawCharts(){
+  const s=$('#line'); if(!s)return; s.innerHTML='';
+  const data=[41,48,52,57,55,63,64,68],L=44,R=610,T=16,B=290,x0=L+14,x1=R-14,X=i=>x0+i*(x1-x0)/7,Y=v=>B-(v/100)*(B-T);
+  [0,25,50,75,100].forEach(v=>{el('line',{x1:L,x2:R,y1:Y(v),y2:Y(v),stroke:css('--border'),'stroke-dasharray':'3 4'},s);el('text',{x:0,y:Y(v)+4},s).textContent=v+'%'});
+  const p=data.map((v,i)=>[X(i),Y(v)]);let d='M'+p[0].join(' ');
+  for(let i=0;i<7;i++){const a=p[i-1]||p[i],b=p[i],c=p[i+1],e=p[i+2]||c;d+=` C${b[0]+(c[0]-a[0])/6} ${b[1]+(c[1]-a[1])/6},${c[0]-(e[0]-b[0])/6} ${c[1]-(e[1]-b[1])/6},${c[0]} ${c[1]}`}
+  const df=el('defs',{},s),g=el('linearGradient',{id:'lg',x1:0,y1:0,x2:0,y2:1},df);el('stop',{offset:0,'stop-color':css('--lime'),'stop-opacity':.55},g);el('stop',{offset:1,'stop-color':css('--lime'),'stop-opacity':0},g);
+  el('path',{d:d+` L${p[7][0]} ${B} L${p[0][0]} ${B}Z`,fill:'url(#lg)'},s);el('path',{d,fill:'none',stroke:css('--olive-600'),'stroke-width':2.5,'stroke-linecap':'round'},s);
+  el('line',{x1:p[5][0],x2:p[5][0],y1:p[5][1],y2:B,stroke:css('--olive-600'),'stroke-dasharray':'3 4'},s);el('circle',{cx:p[5][0],cy:p[5][1],r:5,fill:css('--surface'),stroke:css('--olive-600'),'stroke-width':2.5},s);
+  const tg=el('g',{transform:`translate(${p[5][0]-48},${p[5][1]-58})`},s);el('rect',{width:96,height:42,rx:8,fill:css('--lime'),stroke:css('--olive'),'stroke-width':1},tg);
+  el('text',{x:48,y:17,'text-anchor':'middle',style:`fill:${css('--on-lime')};font-size:10px`},tg).textContent='Run #6 coverage';el('text',{x:48,y:34,'text-anchor':'middle',style:`fill:${css('--on-lime')};font-size:13px;font-weight:700`},tg).textContent='64% · 339/530';
+  p.forEach((q,i)=>{el('text',{x:q[0],y:B+22,'text-anchor':'middle'},s).textContent='#'+(i+1)});
+  const dn=$('#donut');dn.innerHTML='';const dl=$('#dl');dl.innerHTML='';
+  const Mx=[['GET',64,'--sage'],['POST',38,'--olive'],['PUT',21,'--lime'],['DELETE',12,'--mint'],['PATCH',7,'--lime-pale']];let off=25;
+  el('circle',{cx:21,cy:21,r:15.915,fill:'none',stroke:css('--track'),'stroke-width':6},dn);
+  Mx.forEach(([n,c,col])=>{const pc=c/142*100;el('circle',{cx:21,cy:21,r:15.915,fill:'none',stroke:css(col),'stroke-width':6,'stroke-dasharray':`${pc-.8} ${100-pc+.8}`,'stroke-dashoffset':off},dn);off-=pc;
+    const r=document.createElement('div');r.innerHTML=`<i style="background:${css(col)};box-shadow:inset 0 0 0 1px ${css('--border-strong')}"></i>${mb(n)}<em>${Math.round(pc)}% · ${c}</em>`;dl.appendChild(r)});
+  el('text',{x:21,y:20.5,'text-anchor':'middle',style:`font-size:7px;font-weight:600;fill:${css('--text')}`},dn).textContent='142';el('text',{x:21,y:26,'text-anchor':'middle',style:`font-size:3px;fill:${css('--muted')}`},dn).textContent='operations';
+}
+
+/* ---------- router ---------- */
+function show(){
+  let route=(location.hash||'#home').slice(1); if(!ROUTES[route])route='home';
+  const r=ROUTES[route]; $('#title').textContent=r.t; $('#crumb').innerHTML=r.c.split(' / ').map(x=>`<span>${x}</span>`).join(' <span>›</span> ');
+  $('#views').innerHTML=`<div class="view on">${V[route]()}</div>`; renderNav(route); drawCharts(); document.title=`${r.t} - ApiPilot design preview`;
+}
+window.addEventListener('hashchange',()=>{document.body.classList.remove('drawer');show()});
+const q=new URLSearchParams(location.search); if(q.get('theme'))root.dataset.theme=q.get('theme');
+$('#theme').onclick=()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';drawCharts()};
+const open=(id)=>$(id).classList.add('on');document.querySelectorAll('.scrim').forEach(s=>s.addEventListener('click',e=>{if(e.target===s||e.target.hasAttribute('data-close'))s.classList.remove('on')}));
+$('#helpBtn').onclick=()=>open('#sHelp');$('#palBtn').onclick=()=>open('#sPal');
+$('#menuBtn').onclick=()=>document.body.classList.add('drawer');$('#dscrim').onclick=()=>document.body.classList.remove('drawer');
+addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.scrim.on').forEach(s=>s.classList.remove('on'));if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();open('#sPal')}});
+show(); if(q.get('dialog')==='help')open('#sHelp'); if(q.get('dialog')==='palette')open('#sPal'); if(q.get('drawer'))document.body.classList.add('drawer');
+</script>
+</body>
+</html>

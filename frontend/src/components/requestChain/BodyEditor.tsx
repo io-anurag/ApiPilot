@@ -46,7 +46,7 @@ export function BodyEditor({
               value={body.contentType}
               onChange={(event) => onChange({ ...body, contentType: event.target.value })}
               onBlur={onCommit}
-              className="min-w-48 rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="min-w-48 rounded-md border border-border-control bg-surface px-2 py-1 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             />
             <datalist id={`${id}-types`}>
               {CONTENT_TYPES.map((type) => (

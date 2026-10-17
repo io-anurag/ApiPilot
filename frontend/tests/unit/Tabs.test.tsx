@@ -47,7 +47,7 @@ describe("Tabs", () => {
     const { container } = render(
       <Tabs
         tabs={[
-          { id: "one", label: "One", markerClassName: "bg-wf-guided" },
+          { id: "one", label: "One", markerClassName: "bg-brand-600" },
           { id: "two", label: "Two" },
         ]}
         activeTab="one"
@@ -55,7 +55,7 @@ describe("Tabs", () => {
         label="Test tabs"
       />,
     );
-    const marker = container.querySelector(".bg-wf-guided");
+    const marker = container.querySelector(".bg-brand-600");
     expect(marker).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("button", { name: "One" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Two" })).toBeInTheDocument();

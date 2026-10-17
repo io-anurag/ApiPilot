@@ -4,10 +4,12 @@ import { deletePlan, duplicatePlan, listPlans } from "../../services/requestChai
 import { BUTTON_STYLES } from "../controlStyles";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { ErrorState } from "../ErrorState";
+import { Card, CardHeader } from "../patterns/Card";
+import { Pill } from "../patterns/Pill";
+import { TABLE_STYLES } from "../patterns/tableStyles";
 import { PromptDialog } from "../PromptDialog";
 import { LegacyRunsView } from "../requestChain/LegacyRunsView";
 import { Skeleton } from "../Skeleton";
-import { StatusBadge } from "../StatusBadge";
 import { RecentRuns } from "./RecentRuns";
 import { SourcePicker } from "./path/SourcePicker";
 import type { SourceKind } from "./path/pathState";
@@ -30,10 +32,9 @@ type ListState = { kind: "loading" } | { kind: "error"; message: string } | { ki
 export function PerformanceHome({
   onPick,
   onOpen,
-  onExit,
   banner,
   busy = false,
-}: Readonly<{ onPick: (source: SourceKind) => void; onOpen: (planId: string, runId?: string) => void; onExit?: () => void; banner?: ReactNode; busy?: boolean }>) {
+}: Readonly<{ onPick: (source: SourceKind) => void; onOpen: (planId: string, runId?: string) => void; banner?: ReactNode; busy?: boolean }>) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [duplicating, setDuplicating] = useState<ChainPlanSummary | null>(null);
   const [deleting, setDeleting] = useState<ChainPlanSummary | null>(null);
@@ -76,47 +77,35 @@ export function PerformanceHome({
   const plans = state.kind === "ready" ? state.plans : [];
   const noPlans = state.kind === "ready" && plans.length === 0;
   const picker = (
-    <section aria-labelledby="performance-start-title" className="space-y-3 rounded-lg border border-border bg-surface p-4" data-testid="performance-source">
-      <div className="space-y-1">
-        <h3 id="performance-start-title" className="text-base font-semibold">
-          {noPlans ? "Start a performance test" : "Start a new performance test"}
-        </h3>
-        <p className="max-w-3xl text-sm text-muted">Pick a source. A guided path takes you from it to a running k6 test: operations, plan, load profile, run. Every request stays editable and nothing is sent until you run.</p>
-      </div>
+    <Card as="section" aria-labelledby="performance-start-title" data-testid="performance-source">
+      {noPlans && (
+        <div className="mb-4 space-y-1">
+          <p className="font-mono text-xs font-semibold uppercase text-brand-700">Performance testing with k6</p>
+          <h2 className="max-w-3xl font-display text-2xl font-semibold leading-tight tracking-tight text-text-primary">Turn what you have into a load test</h2>
+        </div>
+      )}
+      <CardHeader title={noPlans ? "Start a performance test" : "Start a new performance test"} titleId="performance-start-title" level={noPlans ? 3 : 2} />
+      <p className="mb-3.5 max-w-3xl text-sm text-text-secondary">Pick a source. A guided path takes you from it to a running k6 test: operations, plan, load profile, run. Every request stays editable and nothing is sent until you run.</p>
       <SourcePicker onPick={onPick} disabled={busy} />
-    </section>
+    </Card>
   );
 
   return (
     <div className="space-y-4" data-testid="performance-home">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5">
+      <Card>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          {onExit && (
-            <>
-              <button type="button" aria-label="Exit performance testing and return to the start screen" className={BUTTON_STYLES.ghost} onClick={onExit}>
-                ← Back to start
-              </button>
-              <span aria-hidden="true" className="hidden h-5 w-px bg-border sm:block" />
-            </>
-          )}
-          <span className="font-semibold">Performance</span>
-          {state.kind === "ready" && plans.length > 0 && <StatusBadge label={plans.length === 1 ? "1 plan" : `${plans.length} plans`} />}
+          <span className="font-semibold text-text-primary">Performance</span>
+          {state.kind === "ready" && plans.length > 0 && <Pill tone="mint">{plans.length === 1 ? "1 plan" : `${plans.length} plans`}</Pill>}
         </div>
-      </div>
+      </Card>
       {banner}
       {actionError && <ErrorState message={actionError} testId="performance-action-error" />}
 
-      {noPlans && (
-        <div className="space-y-1 pt-2">
-          <p className="font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">Performance testing with k6</p>
-          <h2 className="max-w-3xl font-display text-3xl font-semibold leading-tight tracking-tight text-text-primary">Turn what you have into a load test</h2>
-        </div>
-      )}
       {picker}
 
       {state.kind === "loading" && (
         <div role="status" aria-label="Loading plans">
-          <Skeleton className="h-24 w-full rounded bg-surface-strong" />
+          <Skeleton className="h-24 w-full rounded-2xl bg-surface-strong" />
         </div>
       )}
       {state.kind === "error" && (
@@ -128,37 +117,35 @@ export function PerformanceHome({
       )}
       {state.kind === "ready" && plans.length > 0 && (
         <>
-          <section aria-labelledby="performance-plans-title" className="space-y-2">
-            <h3 id="performance-plans-title" className="text-base font-semibold">
-              Your plans
-            </h3>
-            <div className="relative overflow-x-auto rounded-lg border border-border bg-surface">
-              <table className="w-full min-w-[40rem] text-left text-sm">
+          <Card as="section" aria-labelledby="performance-plans-title">
+            <CardHeader title="Your plans" titleId="performance-plans-title" />
+            <div className={TABLE_STYLES.scroll}>
+              <table className={TABLE_STYLES.table}>
                 <caption className="sr-only">Saved performance plans</caption>
-                <thead className="border-b border-border text-xs uppercase text-muted">
+                <thead>
                   <tr>
-                    <th scope="col" className="px-3 py-2 font-medium">Plan</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Chains</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Steps</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Data sets</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Updated</th>
-                    <th scope="col" className="px-3 py-2 font-medium"><span className="sr-only">Actions</span></th>
+                    <th scope="col" className={TABLE_STYLES.th}>Plan</th>
+                    <th scope="col" className={TABLE_STYLES.th}>Chains</th>
+                    <th scope="col" className={TABLE_STYLES.th}>Steps</th>
+                    <th scope="col" className={TABLE_STYLES.th}>Data sets</th>
+                    <th scope="col" className={TABLE_STYLES.th}>Updated</th>
+                    <th scope="col" className={TABLE_STYLES.th}><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody>
                   {plans.map((plan) => (
                     <tr key={plan.id}>
-                      <td className="px-3 py-2">
-                        <span className="font-medium text-text-primary">{plan.name}</span>
+                      <td className={TABLE_STYLES.td}>
+                        <span className="font-medium">{plan.name}</span>
                         <span className="block text-xs text-muted">{plan.seedSource ? SEED_LABELS[plan.seedSource] : "Built by you"}</span>
                       </td>
-                      <td className="px-3 py-2 tabular-nums">{plan.chainCount}</td>
-                      <td className="px-3 py-2 tabular-nums">{plan.stepCount}</td>
-                      <td className="px-3 py-2 tabular-nums">{plan.dataSetCount}</td>
-                      <td className="px-3 py-2 text-muted">{formatDateTimeUtc(plan.updatedAt)}</td>
-                      <td className="px-3 py-2">
+                      <td className={`${TABLE_STYLES.td} tabular-nums`}>{plan.chainCount}</td>
+                      <td className={`${TABLE_STYLES.td} tabular-nums`}>{plan.stepCount}</td>
+                      <td className={`${TABLE_STYLES.td} tabular-nums`}>{plan.dataSetCount}</td>
+                      <td className={TABLE_STYLES.td}>{formatDateTimeUtc(plan.updatedAt)}</td>
+                      <td className={TABLE_STYLES.td}>
                         <div className="flex flex-wrap justify-end gap-2">
-                          <button type="button" className={BUTTON_STYLES.secondary} aria-label={`Open ${plan.name}`} disabled={busy} onClick={() => onOpen(plan.id)}>
+                          <button type="button" className={BUTTON_STYLES.primary} aria-label={`Open ${plan.name}`} disabled={busy} onClick={() => onOpen(plan.id)}>
                             Open
                           </button>
                           <button type="button" className={BUTTON_STYLES.secondary} aria-label={`Duplicate ${plan.name}`} disabled={working} onClick={() => setDuplicating(plan)}>
@@ -174,13 +161,11 @@ export function PerformanceHome({
                 </tbody>
               </table>
             </div>
-          </section>
-          <section aria-labelledby="performance-runs-title" className="space-y-2">
-            <h3 id="performance-runs-title" className="text-base font-semibold">
-              Recent runs
-            </h3>
+          </Card>
+          <Card as="section" aria-labelledby="performance-runs-title">
+            <CardHeader title="Recent runs" titleId="performance-runs-title" />
             <RecentRuns plans={plans} onOpenRun={onOpen} busy={busy} />
-          </section>
+          </Card>
         </>
       )}
       <LegacyRunsView />

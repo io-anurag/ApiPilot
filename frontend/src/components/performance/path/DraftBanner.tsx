@@ -1,4 +1,5 @@
 import { BUTTON_STYLES } from "../../controlStyles";
+import { Banner } from "../../patterns/Banner";
 import { SOURCE_LABELS, PATH_STEPS, stepLabel, type PathState } from "./pathState";
 
 /**
@@ -10,18 +11,21 @@ export function DraftBanner({ draft, onResume, onDiscard }: Readonly<{ draft: Pa
   const source = draft.source ? SOURCE_LABELS[draft.source].toLowerCase() : "a performance test";
   const step = PATH_STEPS.indexOf(draft.step) + 1;
   return (
-    <div role="status" data-testid="draft-banner" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-500 bg-warning-100 px-4 py-2.5 text-sm text-warning-700 dark:bg-warning-500/15 dark:text-warning-100">
-      <span>
-        <span className="font-semibold">Draft in progress:</span> a test from {source}, at {stepLabel(draft.step, draft.source)} (step {step} of {PATH_STEPS.length}).
-      </span>
-      <span className="ml-auto flex gap-2">
-        <button type="button" className={BUTTON_STYLES.secondary} onClick={onResume}>
-          Resume
-        </button>
-        <button type="button" className={BUTTON_STYLES.secondary} onClick={onDiscard}>
-          Discard
-        </button>
-      </span>
-    </div>
+    <Banner tone="warning" role="status" testId="draft-banner" title="Draft in progress:">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="min-w-0 flex-1 basis-60">
+          {" "}
+          a test from {source}, at {stepLabel(draft.step, draft.source)} (step {step} of {PATH_STEPS.length}).
+        </p>
+        <span className="flex flex-wrap gap-2">
+          <button type="button" className={BUTTON_STYLES.primary} onClick={onResume}>
+            Resume
+          </button>
+          <button type="button" className={BUTTON_STYLES.secondary} onClick={onDiscard}>
+            Discard
+          </button>
+        </span>
+      </div>
+    </Banner>
   );
 }

@@ -1,8 +1,11 @@
 import { useEffect, useId, useState } from "react";
 import type { CollectionView } from "@apipilot/shared-domain";
 import { fetchUploadedCollections, fetchUploadedCollectionView, type UploadedCollectionSummary } from "../../../services/externalCollectionsClient";
+import { EmptyState } from "../../EmptyState";
 import { ErrorState } from "../../ErrorState";
 import { HttpMethodBadge } from "../../HttpMethodBadge";
+import { FIELD_STYLES } from "../../controlStyles";
+import { TABLE_STYLES } from "../../patterns/tableStyles";
 import { Skeleton } from "../../Skeleton";
 
 type ListState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; collections: UploadedCollectionSummary[] };
@@ -86,19 +89,17 @@ export function CollectionRequests({
   if (list.kind === "error") return <ErrorState message="The collections could not be loaded." detail={list.message} testId="collections-error" />;
   if (list.collections.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted" data-testid="no-collections">
-        No Postman collection is imported in this session. Import one in Import &amp; Run Collection, then start from it here.
-      </p>
+      <EmptyState message="No Postman collection is imported in this session." description="Import one in Import & Run Collection, then start from it here." testId="no-collections" />
     );
   }
 
   return (
     <div className="space-y-3" data-testid="collection-requests">
       <div className="max-w-md space-y-1">
-        <label htmlFor={`${id}-collection`} className="text-sm font-medium">
+        <label htmlFor={`${id}-collection`} className="text-sm font-medium text-text-primary">
           Collection
         </label>
-        <select id={`${id}-collection`} className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm" value={collectionId ?? ""} onChange={(event) => void choose(event.target.value)}>
+        <select id={`${id}-collection`} className={`${FIELD_STYLES} w-full`} value={collectionId ?? ""} onChange={(event) => void choose(event.target.value)}>
           <option value="">Choose a collection…</option>
           {list.collections.map((collection) => (
             <option key={collection.id} value={collection.id}>
@@ -113,11 +114,11 @@ export function CollectionRequests({
         </div>
       )}
       {view.kind === "error" && <ErrorState message="The collection's requests could not be loaded." detail={view.message} testId="collection-view-error" />}
-      {view.kind === "ready" && items.length === 0 && <p className="text-sm text-muted">This collection has no requests.</p>}
+      {view.kind === "ready" && items.length === 0 && <EmptyState compact message="This collection has no requests." />}
       {view.kind === "ready" && items.length > 0 && (
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-surface-subtle px-3 py-2.5">
+            <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -125,11 +126,11 @@ export function CollectionRequests({
                   if (element) element.indeterminate = selection.length > 0 && !allChecked;
                 }}
                 onChange={() => keep(allChecked ? new Set() : new Set(items.map((item) => item.id)))}
-                className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="h-4 w-4 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               />
               Select all ({items.length})
             </label>
-            <p className="text-sm text-muted" aria-live="polite">
+            <p className="text-sm text-text-secondary" aria-live="polite">
               {selection.length} of {items.length} selected
             </p>
             <label htmlFor={`${id}-filter`} className="sr-only">
@@ -141,33 +142,33 @@ export function CollectionRequests({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Filter by name or URL"
-              className="w-64 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className={`${FIELD_STYLES} w-64 max-w-full`}
             />
           </div>
-          <div className="relative max-h-[calc(100dvh-30rem)] min-h-48 overflow-auto rounded-md border border-border">
-            <table className="w-full min-w-xl border-collapse text-left text-sm">
+          <div className="relative max-h-[calc(100dvh-30rem)] min-h-48 overflow-auto rounded-xl border border-border">
+            <table className={TABLE_STYLES.table}>
               <caption className="sr-only">Requests to include in the plan</caption>
-              <thead className="sticky top-0 z-10 bg-surface-subtle text-xs font-semibold text-muted">
+              <thead className="sticky top-0 z-10">
                 <tr>
-                  <th scope="col" className="w-10 px-3 py-2">
+                  <th scope="col" className={`${TABLE_STYLES.th} w-10`}>
                     <span className="sr-only">Include</span>
                   </th>
-                  <th scope="col" className="px-2 py-2">Method</th>
-                  <th scope="col" className="px-2 py-2">Request</th>
-                  <th scope="col" className="px-2 py-2">URL</th>
+                  <th scope="col" className={TABLE_STYLES.th}>Method</th>
+                  <th scope="col" className={TABLE_STYLES.th}>Request</th>
+                  <th scope="col" className={TABLE_STYLES.th}>URL</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {shown.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-4 text-center text-sm text-muted">
+                    <td colSpan={4} className="px-3.5 py-3 text-center text-sm text-text-secondary">
                       No requests match the filter.
                     </td>
                   </tr>
                 )}
                 {shown.map((item) => (
                   <tr key={item.id} className="hover:bg-surface-hover">
-                    <td className="px-3 py-1.5">
+                    <td className={TABLE_STYLES.td}>
                       <input
                         type="checkbox"
                         checked={checked.has(item.id)}
@@ -178,14 +179,14 @@ export function CollectionRequests({
                           keep(next);
                         }}
                         aria-label={item.name}
-                        className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                        className="h-4 w-4 rounded border-border-control accent-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className={TABLE_STYLES.td}>
                       <HttpMethodBadge method={item.raw.method} />
                     </td>
-                    <td className="px-2 py-1.5">{item.name}</td>
-                    <td className="px-2 py-1.5 font-mono text-xs break-all">{item.raw.url}</td>
+                    <td className={TABLE_STYLES.td}>{item.name}</td>
+                    <td className={`${TABLE_STYLES.tdMono} break-all`}>{item.raw.url}</td>
                   </tr>
                 ))}
               </tbody>

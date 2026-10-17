@@ -55,7 +55,7 @@ export function OperationSelection({
               if (element) element.indeterminate = checkedCount > 0 && !allChecked;
             }}
             onChange={() => onChange(allChecked ? new Set() : new Set(allKeys))}
-            className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="h-4 w-4 rounded border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
           Select all ({allKeys.length})
         </label>
@@ -74,7 +74,7 @@ export function OperationSelection({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Filter by path or operation ID"
-          className="w-64 max-w-full rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="w-64 max-w-full rounded-md border border-border-control bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         />
         <label htmlFor={`${id}-method`} className="sr-only">
           Filter by method
@@ -83,7 +83,7 @@ export function OperationSelection({
           id={`${id}-method`}
           value={method}
           onChange={(event) => setMethod(event.target.value)}
-          className="rounded-md border border-border bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="rounded-md border border-border-control bg-surface px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           <option value="">All methods</option>
           {methods.map((value) => (
@@ -135,7 +135,7 @@ export function OperationSelection({
                       checked={checkedKeys.has(key)}
                       onChange={() => toggle(key)}
                       aria-label={key}
-                      className="h-4 w-4 rounded border-border text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      className="h-4 w-4 rounded border-border-control text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     />
                   </td>
                   <td className="px-2 py-1.5">

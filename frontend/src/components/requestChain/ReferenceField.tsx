@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { FIELD_STYLES } from "../controlStyles";
 
 export interface ReferenceSuggestion {
   /** What is inserted between `{{` and `}}`. */
@@ -12,8 +13,7 @@ const MIN_LIST_HEIGHT = 200;
 const MAX_LIST_HEIGHT = 320;
 const OPEN =/\{\{(\$?\w*)$/;
 const EMPTY_REFERENCE = /\{\{\}\}$/;
-const INPUT_CLASS =
-  "w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50";
+const INPUT_CLASS = `w-full ${FIELD_STYLES}`;
 
 /**
  * A text field that offers `{{name}}` references as the engineer types `{{`

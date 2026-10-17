@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../../src/App";
+
+/** The sidebar, as a Testing Library scope: links in it are the destinations (AP-054). */
+function sidebar() {
+  return within(screen.getByRole("navigation", { name: "Primary" }));
+}
 
 function stubFetch() {
   vi.stubGlobal(
@@ -27,6 +32,15 @@ function stubFetch() {
           status: 200,
           json: () => Promise.resolve({ uploadedCollections: [] }),
         });
+      }
+      if (url.includes("/api/coverage")) {
+        return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ error: "no_active_workflow", message: "none" }) });
+      }
+      if (url.includes("/api/ai/status")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ state: "ready", provider: "mock", reason: null }) });
+      }
+      if (url.includes("/api/user-scripts/runs")) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ runs: [] }) });
       }
       if (url.includes("/api/chain-plans")) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ plans: [] }) });
@@ -84,104 +98,100 @@ describe("App", () => {
     );
   });
 
-  it("shows the entry chooser first, with no tab menu, until a path is picked", async () => {
+  it("opens on Home inside the shell: a sidebar and a header, no tab menu (AP-054 FR-001)", async () => {
     stubFetch();
 
     render(<App />);
 
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "Top-level views" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Top-level views" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Back to start/ })).not.toBeInTheDocument();
+    expect(sidebar().getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("picking Guided Workflow hides the tab menu and shows the upload prompt (FR-017)", async () => {
+  it("picking Guided Workflow shows the upload prompt and marks it in the sidebar (FR-017)", async () => {
     stubFetch();
 
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
 
-    expect(
-      await screen.findByLabelText("Upload OpenAPI specification"),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "Top-level views" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeInTheDocument();
+    expect(sidebar().getByRole("link", { name: "Guided Workflow" })).toHaveAttribute("aria-current", "page");
+    expect(window.location.hash).toMatch(/^#\/guided/);
   });
 
-  it("an 'Exit workflow' control returns to the entry chooser without discarding the workflow", async () => {
+  it("Home is one click from the guided workflow, which keeps its state (AP-054 FR-005)", async () => {
     stubFetch();
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
     await screen.findByLabelText("Upload OpenAPI specification");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Exit the guided workflow and return to the start screen",
-      }),
-    );
+    fireEvent.click(sidebar().getByRole("link", { name: "Home" }));
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+    expect(screen.getByTestId("test-generation-workflow-page")).not.toBeVisible();
 
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+    fireEvent.click(sidebar().getByRole("link", { name: "Guided Workflow" }));
+    expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeVisible();
   });
 
-  it("picking 'Import & Run Collection' shows the tab menu immediately, reachable with no prior OpenAPI upload (FR-011, research.md D9)", async () => {
+  it("opens 'Import & Run Collection' from the sidebar with no prior OpenAPI upload (FR-011, research.md D9)", async () => {
     stubFetch();
 
     render(<App />);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Import & Run Collection" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import & Run Collection" }));
 
     expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
     expect(screen.getByTestId("external-collection-upload")).toBeInTheDocument();
-    expect(
-      screen.getByRole("navigation", { name: "Top-level views" }),
-    ).toBeInTheDocument();
+    expect(sidebar().getByRole("link", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page");
 
-    // Switching back preserves the guided workflow's own state rather than remounting it.
-    screen.getByRole("button", { name: "Guided Workflow" }).click();
-    expect(
-      await screen.findByLabelText("Upload OpenAPI specification"),
-    ).toBeInTheDocument();
+    // Switching to the guided workflow and back preserves the other page's state rather than remounting it.
+    fireEvent.click(sidebar().getByRole("link", { name: "Guided Workflow" }));
+    expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeInTheDocument();
   });
 
-  it("'Back to start' on Import & Run Collection returns to the entry chooser and keeps the page mounted for when it is picked again", async () => {
+  it("keeps Import & Run Collection mounted across Home: returning to it makes no second request (AP-054 stay-mounted)", async () => {
     stubFetch();
 
     render(<App />);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Import & Run Collection" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Import & Run Collection" }));
     expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
     const externalCollectionFetches = () =>
-      vi
-        .mocked(fetch)
-        .mock.calls.filter(([input]) =>
-          input.toString().includes("/api/external-collections"),
-        ).length;
+      vi.mocked(fetch).mock.calls.filter(([input]) => input.toString().includes("/api/external-collections")).length;
     await waitFor(() => expect(externalCollectionFetches()).toBeGreaterThan(0));
-    const fetchesBeforeExit = externalCollectionFetches();
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Exit Import & Run Collection and return to the start screen",
-      }),
-    );
+    // Home reads the collections' runs for Recent runs; that is its own read, so let it settle first.
+    fireEvent.click(sidebar().getByRole("link", { name: "Home" }));
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("home-recent-runs-empty")).toBeInTheDocument());
+    const fetchesBefore = externalCollectionFetches();
 
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "Top-level views" }),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
+    fireEvent.click(sidebar().getByRole("link", { name: "Import & Run Collection" }));
 
     expect(await screen.findByText("Import a Postman collection")).toBeVisible();
     // Not remounted: its uploaded-collections list is not fetched a second time.
-    expect(externalCollectionFetches()).toBe(fetchesBeforeExit);
+    expect(externalCollectionFetches()).toBe(fetchesBefore);
+  });
+
+  it("reads Home's figures once per visit and nothing while another destination is shown (AP-054 FR-019)", async () => {
+    stubFetch();
+    render(<App />);
+    await screen.findByTestId("home-page");
+    const aiReads = () => vi.mocked(fetch).mock.calls.filter(([input]) => input.toString().includes("/api/ai/status")).length;
+    await waitFor(() => expect(aiReads()).toBe(1));
+
+    fireEvent.click(sidebar().getByRole("link", { name: "Performance" }));
+    await screen.findByRole("heading", { name: "Turn what you have into a load test" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(aiReads()).toBe(1);
+
+    fireEvent.click(sidebar().getByRole("link", { name: "Home" }));
+    await waitFor(() => expect(aiReads()).toBe(2));
   });
 
   it("offers Performance next to Import & Run Collection, with its one-sentence statement (AP-047 FR-001)", async () => {
@@ -193,26 +203,18 @@ describe("App", () => {
     );
     expect(screen.queryByRole("button", { name: "Quick performance test" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Performance plans" })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Import & Run Collection" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import & Run Collection" })).toBeInTheDocument();
 
     fireEvent.click(quick);
     expect(await screen.findByRole("heading", { name: "Turn what you have into a load test" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /OpenAPI specification/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole("navigation", { name: "Top-level views" }),
-    ).toBeInTheDocument();
+    expect(sidebar().getByRole("link", { name: "Performance" })).toHaveAttribute("aria-current", "page");
 
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Exit performance testing and return to the start screen",
-      }),
-    );
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+    fireEvent.click(sidebar().getByRole("link", { name: "Home" }));
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
   });
 
-  it("keeps an unfinished Performance test across a tab switch and Back to start, and says so on the start screen (AP-047 FR-019, FR-021)", async () => {
+  it("keeps an unfinished Performance test across other destinations and Home, and says so on Home (AP-047 FR-019, FR-021)", async () => {
     stubFetch();
     render(<App />);
     expect(screen.queryByText("Draft in progress")).not.toBeInTheDocument();
@@ -221,15 +223,15 @@ describe("App", () => {
     const path = await screen.findByTestId("performance-path");
     expect(path).toBeVisible();
 
-    // Another tab and back: the path is where it was left.
-    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
+    // Another destination and back: the path is where it was left.
+    fireEvent.click(sidebar().getByRole("link", { name: "Import & Run Collection" }));
     await waitFor(() => expect(screen.getByTestId("performance-path")).not.toBeVisible());
-    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
+    fireEvent.click(sidebar().getByRole("link", { name: "Performance" }));
     expect(screen.getByTestId("performance-path")).toBeVisible();
 
-    // Back to start: the Performance card says a draft is in progress, and choosing it again resumes the same path.
-    fireEvent.click(screen.getByRole("button", { name: "Exit performance testing and return to the start screen" }));
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+    // Home: the Performance card says a draft is in progress, and choosing it again resumes the same path.
+    fireEvent.click(sidebar().getByRole("link", { name: "Home" }));
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Performance" })).toHaveAccessibleDescription(/Draft in progress/);
     expect(screen.getByText("Draft in progress")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Performance" }));
@@ -237,7 +239,7 @@ describe("App", () => {
     expect(screen.getByTestId("performance-step-source")).toHaveTextContent("Source");
   });
 
-  it("re-selecting 'Guided Workflow' after 'Back to start' resumes it instead of silently handing off to Import & Run Collection again (regression)", async () => {
+  it("returning to 'Guided Workflow' resumes it instead of silently handing off to Import & Run Collection again (regression)", async () => {
     const postmanArtifact = {
       collection: { info: { name: "c" }, item: [] },
       environment: { values: [] },
@@ -317,56 +319,124 @@ describe("App", () => {
     // Resuming directly onto the already-generated "execution" stage auto-hands-off once, as
     // intended (e.g. after a real page reload) — this is the FIRST handoff, not the regression.
     fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
-    expect(
-      await screen.findByRole("navigation", { name: "Top-level views" }),
-    ).toBeInTheDocument();
-
-    // Switch back to the guided workflow's own tab to reach its "Back to start" control.
-    fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Exit the guided workflow and return to the start screen",
-      }),
+    await waitFor(() =>
+      expect(sidebar().getByRole("link", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page"),
     );
-    expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
 
-    // Re-selecting "Guided Workflow" must resume the guided workflow's own view, not silently
+    // Back to the guided workflow through the sidebar: it must show its own view, not silently
     // hand off to "Import & Run Collection" a second time.
-    fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
+    fireEvent.click(sidebar().getByRole("link", { name: "Guided Workflow" }));
 
     expect(await screen.findByTestId("execution-handoff-notice")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: "Top-level views" }),
-    ).not.toBeInTheDocument();
+    expect(sidebar().getByRole("link", { name: "Guided Workflow" })).toHaveAttribute("aria-current", "page");
+  });
+
+  describe("addresses (AP-054 FR-029)", () => {
+    it("gives each destination its own address and follows Back and Forward", async () => {
+      stubFetch();
+      render(<App />);
+      await screen.findByTestId("home-page");
+      expect(window.location.hash).toBe("");
+
+      fireEvent.click(sidebar().getByRole("link", { name: "Performance" }));
+      expect(window.location.hash).toBe("#/performance");
+      fireEvent.click(sidebar().getByRole("link", { name: "Run k6 Script" }));
+      expect(window.location.hash).toBe("#/k6");
+      fireEvent.click(sidebar().getByRole("link", { name: "Coverage" }));
+      expect(window.location.hash).toBe("#/coverage");
+      expect(sidebar().getByRole("link", { name: "Coverage" })).toHaveAttribute("aria-current", "page");
+
+      act(() => {
+        window.history.back();
+      });
+      await waitFor(() => expect(sidebar().getByRole("link", { name: "Run k6 Script" })).toHaveAttribute("aria-current", "page"));
+      act(() => {
+        window.history.back();
+      });
+      await waitFor(() => expect(sidebar().getByRole("link", { name: "Performance" })).toHaveAttribute("aria-current", "page"));
+      act(() => {
+        window.history.forward();
+      });
+      await waitFor(() => expect(sidebar().getByRole("link", { name: "Run k6 Script" })).toHaveAttribute("aria-current", "page"));
+    });
+
+    it("opens the destination named by the address on load, and leaves the query string alone", async () => {
+      stubFetch();
+      window.history.replaceState(null, "", "/?token=abc#/k6");
+      render(<App />);
+      await waitFor(() => expect(sidebar().getByRole("link", { name: "Run k6 Script" })).toHaveAttribute("aria-current", "page"));
+      expect(window.location.search).toBe("?token=abc");
+      fireEvent.click(sidebar().getByRole("link", { name: "Coverage" }));
+      expect(window.location.search).toBe("?token=abc");
+      expect(window.location.hash).toBe("#/coverage");
+    });
+
+    it("shows Home with a notice for an address that matches nothing, never a blank page", async () => {
+      stubFetch();
+      window.history.replaceState(null, "", "/#/nonsense");
+      render(<App />);
+      expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+      expect(screen.getByTestId("route-notice")).toHaveTextContent(/does not match a screen/);
+      expect(window.location.hash).toBe("#/");
+      fireEvent.click(sidebar().getByRole("link", { name: "Performance" }));
+      expect(screen.getByTestId("route-notice")).toBeEmptyDOMElement();
+    });
+
+    it("opens the guided workflow at Upload, with a notice, for a stage address with no workflow behind it", async () => {
+      stubFetch();
+      window.history.replaceState(null, "", "/#/guided/scenarioReview");
+      render(<App />);
+      expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeVisible();
+      expect(screen.getByTestId("route-notice")).toHaveTextContent(/no workflow in progress/);
+      expect(window.location.hash).toBe("#/guided");
+    });
+  });
+
+  it("lists the guided stages in the sidebar, locked ones unavailable and saying why (AP-054 FR-003)", async () => {
+    stubFetch();
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
+    await screen.findByLabelText("Upload OpenAPI specification");
+
+    const nav = sidebar();
+    expect(nav.getByRole("link", { name: /Upload/ })).toHaveAttribute("aria-current", "step");
+    const locked = nav.getByTestId("sidebar-stage-scenarioReview");
+    expect(locked).toHaveAttribute("aria-disabled", "true");
+    expect(locked.tagName).toBe("BUTTON");
+    expect(locked).toHaveAccessibleDescription("Upload a specification first");
+    expect(nav.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Prepare",
+      "Design",
+      "Organize",
+      "Execute",
+    ]);
   });
 
   describe("command palette (AP-038 US3)", () => {
     const pressCtrlK = (target: Element | Document = document) =>
       fireEvent.keyDown(target, { key: "k", ctrlKey: true });
 
-    it("opens with Ctrl+K on the start screen, without Back to start, and opens a workflow like its card", async () => {
+    it("opens with Ctrl+K on Home, without Go to Home, and opens a workflow like its card", async () => {
       stubFetch();
       render(<App />);
-      await screen.findByTestId("entry-chooser");
+      await screen.findByTestId("home-page");
 
       pressCtrlK();
       const palette = await screen.findByRole("dialog", { name: "Command palette" });
       expect(
-        within(palette).queryByRole("option", { name: /Back to start/ }),
+        within(palette).queryByRole("option", { name: /Go to Home/ }),
       ).not.toBeInTheDocument();
 
       fireEvent.click(
         within(palette).getByRole("option", { name: /Import & Run Collection/ }),
       );
       expect(await screen.findByText("Import a Postman collection")).toBeInTheDocument();
-      expect(
-        screen.getByRole("navigation", { name: "Top-level views" }),
-      ).toBeInTheDocument();
+      expect(sidebar().getByRole("link", { name: "Import & Run Collection" })).toHaveAttribute("aria-current", "page");
       expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
 
       pressCtrlK();
-      fireEvent.click(await screen.findByRole("option", { name: /Back to start/ }));
-      expect(await screen.findByTestId("entry-chooser")).toBeInTheDocument();
+      fireEvent.click(await screen.findByRole("option", { name: /Go to Home/ }));
+      expect(await screen.findByTestId("home-page")).toBeInTheDocument();
     });
 
     it("also opens from the header button", async () => {
@@ -381,7 +451,7 @@ describe("App", () => {
     it("leaves Ctrl+K alone in a text field and while another dialog is open (FR-018)", async () => {
       stubFetch();
       render(<App />);
-      await screen.findByTestId("entry-chooser");
+      await screen.findByTestId("home-page");
 
       const field = document.createElement("input");
       document.body.appendChild(field);
@@ -401,7 +471,7 @@ describe("App", () => {
       stubFetch();
       window.localStorage.setItem("apipilot-theme", "light");
       render(<App />);
-      await screen.findByTestId("entry-chooser");
+      await screen.findByTestId("home-page");
 
       pressCtrlK();
       fireEvent.click(
@@ -416,63 +486,22 @@ describe("App", () => {
       window.localStorage.removeItem("apipilot-theme");
     });
 
-    it("with the guided workflow hiding the tab menu, opens another workflow as its card would and keeps the run (FR-019)", async () => {
+    it("from the guided workflow, opens another workflow as its card would and keeps the run (FR-019)", async () => {
       stubFetch();
       render(<App />);
       fireEvent.click(await screen.findByRole("button", { name: "Guided Workflow" }));
       await screen.findByLabelText("Upload OpenAPI specification");
-      expect(
-        screen.queryByRole("navigation", { name: "Top-level views" }),
-      ).not.toBeInTheDocument();
 
       pressCtrlK();
       fireEvent.click(
         await screen.findByRole("option", { name: /^Performance/ }),
       );
       expect(await screen.findByRole("heading", { name: "Turn what you have into a load test" })).toBeInTheDocument();
-      expect(
-        screen.getByRole("navigation", { name: "Top-level views" }),
-      ).toBeInTheDocument();
+      expect(sidebar().getByRole("link", { name: "Performance" })).toHaveAttribute("aria-current", "page");
 
-      fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
+      fireEvent.click(sidebar().getByRole("link", { name: "Guided Workflow" }));
       expect(await screen.findByLabelText("Upload OpenAPI specification")).toBeVisible();
     });
   });
 
-  it("sets the section accent from the open workflow, and leaves the start screen on the product accent (AP-041)", async () => {
-    stubFetch();
-    const { container } = render(<App />);
-    const main = container.querySelector("main") as HTMLElement;
-    await screen.findByTestId("entry-chooser");
-    expect(main).not.toHaveAttribute("data-section");
-
-    fireEvent.click(screen.getByRole("button", { name: "Import & Run Collection" }));
-    await screen.findByText("Import a Postman collection");
-    expect(main).toHaveAttribute("data-section", "execution");
-
-    fireEvent.click(screen.getByRole("button", { name: "Run k6 Script" }));
-    expect(main).toHaveAttribute("data-section", "scenarios");
-
-    fireEvent.click(screen.getByRole("button", { name: "Performance" }));
-    expect(main).toHaveAttribute("data-section", "execution");
-
-    fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Exit performance testing and return to the start screen",
-      }),
-    );
-    await screen.findByTestId("entry-chooser");
-    expect(main).not.toHaveAttribute("data-section");
-  });
-
-  it("starts the guided workflow in the Specification section (AP-041)", async () => {
-    stubFetch();
-    const { container } = render(<App />);
-    const main = container.querySelector("main") as HTMLElement;
-    await screen.findByTestId("entry-chooser");
-
-    fireEvent.click(screen.getByRole("button", { name: "Guided Workflow" }));
-    await screen.findByLabelText("Upload OpenAPI specification");
-    expect(main).toHaveAttribute("data-section", "spec");
-  });
 });

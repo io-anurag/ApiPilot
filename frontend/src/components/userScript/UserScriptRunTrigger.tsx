@@ -4,6 +4,8 @@ import { formatDateTimeUtc } from "../../dateTime";
 import { BUTTON_STYLES } from "../controlStyles";
 import { ErrorState } from "../ErrorState";
 import { StatusBadge } from "../StatusBadge";
+import { Banner } from "../patterns/Banner";
+import { Card } from "../patterns/Card";
 import { READINESS_REASON, TIER_TONE, loadProfileSummary, runStatusLabel } from "../performance/performanceViewModel";
 import { UserScriptDebugView } from "./UserScriptDebugOutput";
 import type { UserScriptDebugRun } from "./useUserScriptDebugRun";
@@ -34,15 +36,15 @@ export function runAgainBlockedReason(run: Pick<UserScriptRun, "environment" | "
 }
 
 const HERO_BUTTON = "inline-flex min-h-11 items-center rounded-lg px-5 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-const HERO_PRIMARY = `${HERO_BUTTON} bg-brand-600 text-white hover:bg-brand-700`;
-const HERO_SECONDARY = `${HERO_BUTTON} border border-border bg-surface hover:bg-surface-hover`;
+const HERO_PRIMARY = `${HERO_BUTTON} bg-accent text-on-accent hover:brightness-95`;
+const HERO_SECONDARY = `${HERO_BUTTON} border border-border-control bg-surface text-text-secondary hover:bg-surface-hover`;
 const HERO_DANGER = `${HERO_BUTTON} bg-danger-600 text-white hover:bg-danger-700`;
 
 function Fact({ label, children, mono = true }: Readonly<{ label: string; children: ReactNode; mono?: boolean }>) {
   return (
-    <div className="min-w-0 bg-surface-subtle px-6 py-3">
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className={`mt-0.5 break-words text-sm font-semibold ${mono ? "font-mono" : ""}`}>{children}</dd>
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-surface-subtle p-3">
+      <dt className="text-xs font-semibold text-muted">{label}</dt>
+      <dd className={`break-words text-sm font-semibold text-text-primary ${mono ? "font-mono" : ""}`}>{children}</dd>
     </div>
   );
 }
@@ -105,24 +107,24 @@ export function UserScriptRunTrigger({
   const statusOf = (name: string) => statuses?.find((status) => status.name === name);
 
   return (
-    <section aria-labelledby="user-script-trigger-title" data-testid="user-script-trigger" className={`overflow-hidden rounded-2xl border bg-surface ${ready ? "border-success-500" : "border-border"}`}>
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-4 p-6">
-        <div className="flex min-w-72 flex-1 items-center gap-4">
+    <section aria-labelledby="user-script-trigger-title" data-testid="user-script-trigger" className={`overflow-hidden rounded-2xl border bg-surface shadow-sm ${ready ? "border-brand-500 ring-1 ring-brand-500" : "border-border"}`}>
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-4 p-4 sm:p-5">
+        <div className="flex min-w-0 flex-1 basis-72 items-center gap-4">
           <span
             aria-hidden="true"
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border text-xl font-bold ${ready ? "border-success-500 bg-success-100 text-success-700 dark:bg-success-500/20 dark:text-success-100" : "border-border bg-surface-strong text-muted"}`}
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-xl font-bold ${ready ? "bg-accent text-on-accent ring-1 ring-brand-500" : "border border-border-strong bg-surface-subtle text-muted"}`}
           >
             {ready ? "✓" : "–"}
           </span>
           <div className="min-w-0 space-y-0.5">
-            <h3 id="user-script-trigger-title" className="text-xl font-semibold">
+            <h3 id="user-script-trigger-title" className="text-xl font-semibold text-text-primary">
               {headline}
             </h3>
             <p className="break-words text-left text-sm text-muted hyphens-none">
               Run <span className="font-semibold text-text-secondary">{script.name}</span> with your own k6.
             </p>
             {blocked && !inProgress && (
-              <p className="text-left text-sm font-medium hyphens-none" data-testid="user-script-trigger-blocked">
+              <p className="text-left text-sm font-medium text-text-primary hyphens-none" data-testid="user-script-trigger-blocked">
                 {blocked}
               </p>
             )}
@@ -181,40 +183,42 @@ export function UserScriptRunTrigger({
       </div>
 
       {run && inProgress && (
-        <p className="px-6 pb-4 text-sm" role="status">
+        <p className="px-4 pb-4 text-sm text-text-primary sm:px-5" role="status">
           Running · {Math.round((run.progress?.elapsedMs ?? 0) / 1000)} s · {run.progress?.requestsSoFar ?? 0} requests · {run.progress?.failuresSoFar ?? 0} failures
         </p>
       )}
       {error && (
-        <div className="px-6 pb-4">
+        <div className="px-4 pb-4 sm:px-5">
           <ErrorState message={error} testId="user-script-run-error" />
         </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-px border-t border-border bg-border sm:grid-cols-3 lg:grid-cols-5" data-testid="user-script-facts-strip">
-        <Fact label="Target" mono={false}>
-          {environment ? (
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="user-script-target">
-              <span>{environment.name}</span>
-              <StatusBadge label={`Tier: ${environment.tier}`} tone={TIER_TONE[environment.tier]} />
-            </span>
-          ) : (
-            <span className="font-normal text-muted">No target environment chosen.</span>
-          )}
-        </Fact>
-        <Fact label="Base URL">{environment ? <span className="break-all text-xs">{environment.baseUrl}</span> : "None"}</Fact>
-        <Fact label="Load" mono={false}>
-          {load.kind === "script" ? "The script's own load settings" : loadProfileSummary(load.profile)}
-        </Fact>
-        <Fact label="Script">{`${script.sha256.slice(0, 8)}…`}</Fact>
-        <Fact label="Hosts found" mono={false}>
-          {hosts.length === 0 ? "None" : String(hosts.length)}
-        </Fact>
-      </dl>
+      <div className="border-t border-border p-4 sm:p-5">
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="user-script-facts-strip">
+          <Fact label="Target" mono={false}>
+            {environment ? (
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="user-script-target">
+                <span>{environment.name}</span>
+                <StatusBadge label={`Tier: ${environment.tier}`} tone={TIER_TONE[environment.tier]} />
+              </span>
+            ) : (
+              <span className="font-normal text-muted">No target environment chosen.</span>
+            )}
+          </Fact>
+          <Fact label="Base URL">{environment ? <span className="break-all text-xs">{environment.baseUrl}</span> : "None"}</Fact>
+          <Fact label="Load" mono={false}>
+            {load.kind === "script" ? "The script's own load settings" : loadProfileSummary(load.profile)}
+          </Fact>
+          <Fact label="Script">{`${script.sha256.slice(0, 8)}…`}</Fact>
+          <Fact label="Hosts found" mono={false}>
+            {hosts.length === 0 ? "None" : String(hosts.length)}
+          </Fact>
+        </dl>
+      </div>
 
-      <div className="grid gap-4 border-t border-border p-6 text-sm sm:grid-cols-[3fr_2fr]">
-        <section aria-labelledby="user-script-values-title" className="rounded-xl border border-border bg-surface-subtle p-4">
-          <h4 id="user-script-values-title" className="text-sm font-semibold">
+      <div className="grid gap-4 border-t border-border p-4 text-sm sm:grid-cols-[3fr_2fr] sm:p-5">
+        <Card as="section" variant="flat" aria-labelledby="user-script-values-title">
+          <h4 id="user-script-values-title" className="text-sm font-semibold text-text-primary">
             Values the script receives <span className="font-normal text-muted">· names only, a value is never shown</span>
           </h4>
           {script.settings.mapping.length === 0 ? (
@@ -225,7 +229,7 @@ export function UserScriptRunTrigger({
                 const status = statusOf(entry.name);
                 return (
                   <li key={entry.name} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-border bg-surface px-3 py-2">
-                    <code className="min-w-0 break-all font-mono text-xs font-medium">{entry.name}</code>
+                    <code className="min-w-0 break-all font-mono text-xs font-medium text-text-primary">{entry.name}</code>
                     <span className="flex shrink-0 items-center gap-2 text-xs text-muted">
                       {entry.source.kind === "base-url" ? "Environment base URL" : "Environment value"}
                       {status ? <StatusBadge label={status.present ? "Present" : "Missing"} tone={status.present ? "success" : "warning"} /> : null}
@@ -235,15 +239,15 @@ export function UserScriptRunTrigger({
               })}
             </ul>
           )}
-        </section>
-        <section aria-labelledby="user-script-hosts-title" className="space-y-2 rounded-xl border border-border bg-surface-subtle p-4">
-          <h4 id="user-script-hosts-title" className="text-sm font-semibold">
+        </Card>
+        <Card as="section" variant="flat" aria-labelledby="user-script-hosts-title" className="space-y-2">
+          <h4 id="user-script-hosts-title" className="text-sm font-semibold text-text-primary">
             Hosts written in the script
           </h4>
           {hosts.length === 0 ? (
-            <p>None were found in the script text.</p>
+            <p className="text-text-primary">None were found in the script text.</p>
           ) : (
-            <ul className="space-y-0.5 font-mono text-xs" data-testid="trigger-hosts">
+            <ul className="space-y-0.5 font-mono text-xs text-text-primary" data-testid="trigger-hosts">
               {hosts.map((host) => (
                 <li key={host} className="break-all">
                   {host}
@@ -252,16 +256,17 @@ export function UserScriptRunTrigger({
             </ul>
           )}
           <p className="text-left text-xs text-muted hyphens-none">Hosts built while the script runs cannot be listed. ApiPilot cannot restrict where the script sends requests.</p>
-        </section>
+        </Card>
       </div>
 
-      <div role="note" data-testid="user-script-writes-note" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-warning-500 bg-warning-50 px-6 py-3 text-warning-700 dark:bg-warning-500/10 dark:text-warning-100">
-        <StatusBadge label="Writes not checked" tone="warning" />
-        <p className="text-left text-sm hyphens-none">ApiPilot cannot tell which requests the script sends or whether they change data. Read the script and the hosts above before you run it.</p>
+      <div role="note" data-testid="user-script-writes-note" className="border-t border-border p-4 sm:p-5">
+        <Banner tone="warning" title="Writes not checked">
+          ApiPilot cannot tell which requests the script sends or whether they change data. Read the script and the hosts above before you run it.
+        </Banner>
       </div>
 
       {debug && debug.state.kind !== "idle" && (
-        <div className="space-y-3 border-t border-border p-6" data-testid="debug-run-block">
+        <div className="space-y-3 border-t border-border p-4 sm:p-5" data-testid="debug-run-block">
           <UserScriptDebugView debug={debug} />
         </div>
       )}

@@ -59,16 +59,16 @@ export function TestScenarioReviewDetail({
   return (
     <article
       data-testid="review-scenario-detail"
-      className="space-y-4 rounded-md border border-border bg-surface p-4"
+      className="space-y-4 rounded-xl border border-border bg-surface p-4"
     >
       <div>
         <h4 className="text-sm font-semibold text-text-primary">
           {scenario.category}
           {scenario.targetField ? ` — ${scenario.targetField}` : ""}
         </h4>
-        <p className="mt-1 flex items-center gap-2 text-sm">
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
           <HttpMethodBadge method={scenario.operationMethod} />
-          <span className="font-mono text-text-secondary">{scenario.operationPath}</span>
+          <span className="min-w-0 break-all font-mono text-text-secondary">{scenario.operationPath}</span>
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
           <span data-testid="review-scenario-state">
@@ -84,7 +84,7 @@ export function TestScenarioReviewDetail({
       </div>
 
       <section>
-        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
           {provenance.source === "RULE" ? "Rule" : "AI source"}
         </h5>
         <p className="text-sm text-text-secondary">{provenance.description}</p>
@@ -140,12 +140,12 @@ export function TestScenarioReviewDetail({
       </section>
 
       <section>
-        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Request
         </h5>
         <pre
           data-testid="review-scenario-request"
-          className="mt-1 overflow-x-auto rounded-md border border-border bg-code-surface p-3 font-mono text-xs text-code-text"
+          className="mt-1 max-w-full overflow-x-auto rounded-lg border border-code-border bg-code-surface p-3 font-mono text-xs text-code-text"
         >
           {JSON.stringify(scenario.displayRequest, null, 2)}
         </pre>
@@ -158,7 +158,7 @@ export function TestScenarioReviewDetail({
       </section>
 
       <section>
-        <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Expected Assertions
         </h5>
         {scenario.assertions.length === 0 ? (
@@ -180,7 +180,7 @@ export function TestScenarioReviewDetail({
 
       {history.length > 0 && (
         <section>
-          <h5 className="text-xs font-medium uppercase tracking-wide text-muted">
+          <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
             Review History
           </h5>
           <ul

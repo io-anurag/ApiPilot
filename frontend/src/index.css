@@ -10,43 +10,25 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /**
- * ApiPilot colour system (AP-041) — the single authoritative token definition. Tailwind v4
- * CSS-first configuration, no tailwind.config.js (CLAUDE.md §27). Components consume the semantic
- * tokens below; they do not reference Tailwind palette colours or hex values.
+ * ApiPilot colour system (AP-054, superseding AP-041) — the single authoritative token definition.
+ * Tailwind v4 CSS-first configuration, no tailwind.config.js (CLAUDE.md §27). Components consume the
+ * semantic tokens below; they do not reference Tailwind palette colours or hex values.
  *
- *   SHARED NEUTRAL FOUNDATION  +  SECTION ACCENT  +  SEMANTIC STATUS
+ *   NEUTRAL FOUNDATION  +  ONE ACCENT  +  SEMANTIC STATUS
  *
- *   - Neutrals (background, surface*, border*, text-*) carry almost all of the UI and are the
- *     same in every section.
- *   - A section accent answers "where am I?". It is applied with `data-section` (see
- *     components/sectionCatalog.ts) and appears only as a small accent: active navigation,
- *     section icons, active tabs, selected controls, focus rings, progress, primary actions.
- *   - Status colours answer "what happened?". They are independent of the section and a section
- *     colour is never used to mean success, warning, failure or information.
- *   - A dedicated chart palette keeps data series distinguishable without relying on red/green.
+ *   - Neutrals (background, surface*, border*, text-*) carry almost all of the UI.
+ *   - One accent, lime, marks location, selection, primary actions and focus. A fill that carries
+ *     text is `bg-accent text-on-accent` (dark text on lime, never white). `brand-*` is the deeper
+ *     olive ramp for text, lines, borders and focus, where lime itself is too pale.
+ *   - Status colours answer "what happened?" and are independent of the accent; every state shown
+ *     by colour is also written as text or an icon.
+ *   - A chart palette keeps series distinguishable without relying on red/green.
  *
- * Every text/background pairing here was checked against WCAG 2.1 AA (4.5:1 text, 3:1 non-text)
- * in both themes; see specs/041-section-color-system/contrast.md.
+ * Every value is a literal hex so frontend/tests/unit/contrast.test.ts can read this file and check
+ * the pairings of specs/054-sidebar-shell-redesign/contracts/tokens.md in both themes (WCAG 2.1 AA:
+ * 4.5:1 text, 3:1 control outlines, focus marks and graphics). That test is the authority: values
+ * are tuned only to satisfy it.
  */
-
-/* Raw section hues. `--solid-*` is the light-theme accent and is theme-invariant: it is the fill
- * behind white text on primary actions, and the base the `brand` scale is derived from, so it
- * must pass 4.5:1 with white in both themes. Nothing outside this file reads these directly. */
-:root {
-  --solid-spec: #2563eb;
-  --solid-analysis: #0e7490;
-  --solid-scenarios: #4f46e5;
-  --solid-ai: #7c3aed;
-  --solid-dependencies: #a21caf;
-  --solid-artifacts: #c2410c;
-  --solid-execution: #0f766e;
-  --solid-results: #047857;
-
-  /* Default section (no `data-section`): the product accent, Specification blue. */
-  --section-solid: var(--solid-spec);
-  --section-accent: var(--color-section-spec);
-}
-
 @theme {
   --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, monospace;
@@ -54,19 +36,22 @@
 
   /* Neutral foundation (light). `muted` is the muted-text token (kept under its original name,
    * `text-muted`, which is used throughout). */
-  --color-background: #f6f8fb;
+  --color-background: #f8f8f8;
   --color-surface: #ffffff;
   --color-surface-elevated: #ffffff;
-  --color-surface-subtle: #f8fafc;
-  --color-surface-strong: #eaeff5;
-  --color-surface-hover: #f1f5f9;
+  --color-surface-subtle: #f4f7f5;
+  --color-surface-strong: #e9efeb;
+  --color-surface-hover: #f0f4f1;
   --color-chrome: #ffffff;
-  --color-border: #e1e7ef;
-  --color-border-strong: #cbd5e1;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-muted: #5b6878;
-  --color-text-disabled: #94a3b8;
+  /* `border` and `border-strong` are decorative (card edges, dividers). `border-control` is the
+   * outline of an input, select, checkbox or secondary button and must reach 3:1 (FR-009). */
+  --color-border: #e8ede9;
+  --color-border-strong: #cfd8d2;
+  --color-border-control: #7c8680;
+  --color-text-primary: #101412;
+  --color-text-secondary: #4a544e;
+  --color-muted: #66706a;
+  --color-text-disabled: #94a39a;
   /* Code and payload panels stay dark in both themes (a code block reads as a terminal); the
    * scrim dims the page behind a dialog. */
   --color-code-surface: #0f172a;
@@ -74,39 +59,52 @@
   --color-code-border: #334155;
   --color-scrim: #0f172a;
 
+  /* The accent and the palette tints sampled from the design (lime, mint, sage, olive). */
+  --color-accent: #e7f68f;
+  --color-on-accent: #2a3010;
+  --color-lime-pale: #f3fcc7;
+  --color-mint: #d5f6e5;
+  --color-sage: #bdd9ca;
+  --color-olive: #ccd97f;
+
+  /* Deeper olive ramp for text, lines, borders and focus: 700 is text, 500 is a line or focus mark. */
+  --color-brand-50: #f3fcc7;
+  --color-brand-100: #e7f68f;
+  --color-brand-200: #ccd97f;
+  --color-brand-300: #b3c45a;
+  --color-brand-400: #8fa63a;
+  --color-brand-500: #6f8a1f;
+  --color-brand-600: #66801c;
+  --color-brand-700: #5b7314;
+  --color-brand-800: #4a5e10;
+  --color-brand-900: #3a4a0c;
+
   /* Status. The scales keep their steps; 600/700 of success and warning were darkened so white
-   * text on a `-600` button passes AA (it was 3.3:1 and 3.2:1). `info` is a steel blue, kept
-   * apart from the cyan Analysis section. */
+   * text on a `-600` button passes AA. `info` is palette-neutral (a grey-green), never blue. */
   --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
+  --color-success-100: #ddf3e4;
   --color-success-500: #22c55e;
   --color-success-600: #15803d;
   --color-success-700: #166534;
 
   --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
+  --color-warning-100: #fdebc0;
   --color-warning-500: #f59e0b;
   --color-warning-600: #b45309;
   --color-warning-700: #92400e;
 
   --color-danger-50: #fef2f2;
-  --color-danger-100: #fee2e2;
+  --color-danger-100: #fdc5c7;
   --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
-  --color-danger-700: #b91c1c;
+  --color-danger-600: #d92222;
+  --color-danger-700: #8f1d1d;
 
-  --color-info-50: #f1f5fb;
-  --color-info-100: #dfe8f4;
-  --color-info-500: #6785ad;
-  --color-info-600: #476a96;
-  --color-info-700: #36557a;
-
-  /* Workflow identity on the start screen only (tiles, tab markers) — AP-038. They are not the
-   * accent of a screen: that is the section. Distinct from every status hue. */
-  --color-wf-guided: #4f46e5;
-  --color-wf-import: #a21caf;
-  --color-wf-plans: #6d28d9;
-  --color-wf-k6: #be185d;
+  --color-info-50: #eaf8f1;
+  --color-info-100: #d5f6e5;
+  --color-info-400: #9fbcae;
+  --color-info-500: #4f6b5e;
+  --color-info-600: #36574a;
+  --color-info-700: #2b463b;
 }
 
 /* Tokens that must always be emitted, even when no utility references them yet. */
@@ -116,16 +114,6 @@
   --color-warning: var(--color-warning-600);
   --color-danger: var(--color-danger-600);
   --color-info: var(--color-info-600);
-
-  /* Section accents. Theme-aware; each passes 4.5:1 as text on its theme's surfaces. */
-  --color-section-spec: var(--solid-spec);
-  --color-section-analysis: var(--solid-analysis);
-  --color-section-scenarios: var(--solid-scenarios);
-  --color-section-ai: var(--solid-ai);
-  --color-section-dependencies: var(--solid-dependencies);
-  --color-section-artifacts: var(--solid-artifacts);
-  --color-section-execution: var(--solid-execution);
-  --color-section-results: var(--solid-results);
 
   /* HTTP method identity. Solid, saturated fills that are the same in both themes (not part of the
    * theme-aware sets above), so a method is instantly recognisable. Labels sit on them in white, or
@@ -142,157 +130,70 @@
   /* Chart series. A categorical palette, at least 3:1 on the surface; pair every series with a
    * label or marker. The first four avoid status-like hues (no red, orange or amber until series
    * 5 and 6), so a plain series is not read as a warning or a failure. */
-  --color-chart-1: #2563eb;
-  --color-chart-2: #a21caf;
-  --color-chart-3: #0f766e;
-  --color-chart-4: #475569;
-  --color-chart-5: #c2410c;
-  --color-chart-6: #a16207;
+  --color-chart-1: #5b7314;
+  --color-chart-2: #2e7d5b;
+  --color-chart-3: #7c8a1d;
+  --color-chart-4: #66706a;
+  --color-chart-5: #9a6b1e;
+  --color-chart-6: #4f6b5e;
 }
 
 /**
  * Dark theme. `data-theme` is always set to a resolved "light" or "dark" before first paint — by
  * the inline script in index.html on load (falling back to prefers-color-scheme only when there is
  * no stored choice) and by useTheme.ts thereafter — so these only need to key off the attribute.
- * The neutral foundation is a very dark blue-grey, never pure black. Accents are lightened so
- * they read as text on it.
+ * The neutral foundation is a very dark green-grey, never pure black; the olive ramp inverts so
+ * `brand-700` stays the readable text step. Derived from the light palette.
  */
 :root[data-theme="dark"] {
-  --color-background: #090b10;
-  --color-surface: #11151c;
-  --color-surface-elevated: #181d26;
-  --color-surface-subtle: #161b23;
-  --color-surface-strong: #202631;
-  --color-surface-hover: #1c222c;
-  --color-chrome: #0d1016;
-  --color-border: #262d39;
-  --color-border-strong: #3a4352;
-  --color-text-primary: #f3f6fa;
-  --color-text-secondary: #c5cedb;
-  --color-muted: #98a4b8;
-  --color-text-disabled: #5f6b7e;
-  --color-code-surface: #0b0e14;
+  --color-background: #0c110e;
+  --color-surface: #141b17;
+  --color-surface-elevated: #1a231e;
+  --color-surface-subtle: #1a231e;
+  --color-surface-strong: #232d27;
+  --color-surface-hover: #1d2721;
+  --color-chrome: #0f1511;
+  --color-border: #25302a;
+  --color-border-strong: #34423a;
+  --color-border-control: #6f7d74;
+  --color-text-primary: #f2f6ef;
+  --color-text-secondary: #c4cfc7;
+  --color-muted: #9aaa9f;
+  --color-text-disabled: #5f6e65;
+  --color-code-surface: #0b0e0c;
   --color-code-text: #e2e8f0;
-  --color-code-border: #2b3342;
-  --color-scrim: #05070a;
+  --color-code-border: #2b3730;
+  --color-scrim: #050806;
 
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-danger: #f87171;
-  --color-info: #9db6d6;
+  --color-accent: #e7f68f;
+  --color-on-accent: #2a3010;
+  --color-lime-pale: #2a3114;
+  --color-mint: #1c2c25;
+  --color-sage: #3d5a4b;
+  --color-olive: #7d8a3a;
 
-  --color-section-spec: #60a5fa;
-  --color-section-analysis: #22d3ee;
-  --color-section-scenarios: #818cf8;
-  --color-section-ai: #a78bfa;
-  --color-section-dependencies: #dd86ea;
-  --color-section-artifacts: #fb923c;
-  --color-section-execution: #2dd4bf;
-  --color-section-results: #34d399;
+  --color-brand-50: #2a3114;
+  --color-brand-100: #3a4519;
+  --color-brand-200: #7d8a3a;
+  --color-brand-300: #ccd97f;
+  --color-brand-400: #e7f68f;
+  --color-brand-500: #e7f68f;
+  --color-brand-600: #d4e76a;
+  --color-brand-700: #e7f68f;
+  --color-brand-800: #f3fcc7;
+  --color-brand-900: #ffffff;
 
-  --color-chart-1: #60a5fa;
-  --color-chart-2: #dd86ea;
-  --color-chart-3: #2dd4bf;
-  --color-chart-4: #94a3b8;
-  --color-chart-5: #fb923c;
-  --color-chart-6: #facc15;
+  --color-success: #86efac;
+  --color-warning: #fcd34d;
+  --color-danger: #fca5a5;
+  --color-info: #c4cfc7;
 
-  --color-wf-guided: #a5b4fc;
-  --color-wf-import: #f0abfc;
-  --color-wf-plans: #c4b5fd;
-  --color-wf-k6: #f9a8d4;
-}
-
-/**
- * Section selection. `data-section` on any element re-points the accent for everything inside it;
- * with none, the product accent (Specification blue) applies. `--section-accent` is the
- * theme-aware accent (text, icons, borders); `--section-solid` is the AA-with-white fill.
- */
-[data-section="spec"] {
-  --section-solid: var(--solid-spec);
-  --section-accent: var(--color-section-spec);
-}
-[data-section="analysis"] {
-  --section-solid: var(--solid-analysis);
-  --section-accent: var(--color-section-analysis);
-}
-[data-section="scenarios"] {
-  --section-solid: var(--solid-scenarios);
-  --section-accent: var(--color-section-scenarios);
-}
-[data-section="ai"] {
-  --section-solid: var(--solid-ai);
-  --section-accent: var(--color-section-ai);
-}
-[data-section="dependencies"] {
-  --section-solid: var(--solid-dependencies);
-  --section-accent: var(--color-section-dependencies);
-}
-[data-section="artifacts"] {
-  --section-solid: var(--solid-artifacts);
-  --section-accent: var(--color-section-artifacts);
-}
-[data-section="execution"] {
-  --section-solid: var(--solid-execution);
-  --section-accent: var(--color-section-execution);
-}
-[data-section="results"] {
-  --section-solid: var(--solid-results);
-  --section-accent: var(--color-section-results);
-}
-
-/**
-
- * NAMING: `brand-*` means "the accent of the section on screen", not a fixed product colour. Use it
- * for interaction and context (buttons, active tabs, focus, selection, progress). Never use it for
- * a state (use success/warning/danger/info), for something with its own fixed identity (HTTP
- * methods use the chart/status tokens, the AI-suggested badge uses `section-ai`, workflows use
- * `wf-*`), or for decoration. Splitting it into separate product and section scales was
- * considered and deferred: with no section set it already resolves to the product accent.
- *
- * The `brand` scale every component already uses (buttons, tabs, focus rings, selected states,
- * tinted panels) is derived from the current section, so it follows `data-section` with no change
- * to the components. It is declared on the root and on every section element so that each one
- * re-resolves it against its own accent (a custom property that references another is resolved
- * where it is declared, not where it is used). Steps 600-900 are fills and stay on the AA-with-
- * white base in both themes; in dark, 200-500 become the lightened accent so `dark:text-brand-300`,
- * `dark:border-brand-400` and focus rings read on dark surfaces.
- */
-:root,
-[data-section] {
-  --brand-50: color-mix(in oklab, var(--section-solid) 7%, white);
-  --brand-100: color-mix(in oklab, var(--section-solid) 15%, white);
-  --brand-200: color-mix(in oklab, var(--section-solid) 30%, white);
-  --brand-300: color-mix(in oklab, var(--section-solid) 55%, white);
-  --brand-400: color-mix(in oklab, var(--section-solid) 75%, white);
-  --brand-500: color-mix(in oklab, var(--section-solid) 90%, white);
-  --brand-600: var(--section-solid);
-  --brand-700: color-mix(in oklab, var(--section-solid) 82%, black);
-  --brand-800: color-mix(in oklab, var(--section-solid) 64%, black);
-  --brand-900: color-mix(in oklab, var(--section-solid) 48%, black);
-}
-
-:root[data-theme="dark"],
-:root[data-theme="dark"] [data-section] {
-  --brand-200: color-mix(in oklab, var(--section-accent) 70%, white);
-  --brand-300: var(--section-accent);
-  --brand-400: var(--section-accent);
-  --brand-500: var(--section-accent);
-}
-
-/* `inline` makes each utility read `var(--brand-*)` at the element using it, so it resolves
- * against the nearest section. */
-@theme inline {
-  --color-brand-50: var(--brand-50);
-  --color-brand-100: var(--brand-100);
-  --color-brand-200: var(--brand-200);
-  --color-brand-300: var(--brand-300);
-  --color-brand-400: var(--brand-400);
-  --color-brand-500: var(--brand-500);
-  --color-brand-600: var(--brand-600);
-  --color-brand-700: var(--brand-700);
-  --color-brand-800: var(--brand-800);
-  --color-brand-900: var(--brand-900);
+  --color-chart-1: #e7f68f;
+  --color-chart-2: #86efac;
+  --color-chart-3: #ccd97f;
+  --color-chart-4: #9aaa9f;
+  --color-chart-5: #fbbf24;
+  --color-chart-6: #bdd9ca;
 }
 
 @layer base {
@@ -314,15 +215,6 @@
   select,
   textarea {
     font: inherit;
-  }
-
-  /* AP-038 (user request): prose is justified between its margins across the application.
-   * Hyphenation keeps the word gaps even in narrow columns; monospace paragraphs (paths, code,
-   * identifiers) are excluded so no identifier is ever hyphenated. Being a base-layer rule, any
-   * alignment utility (`text-center`, `text-left`) on a paragraph still wins. */
-  p:not(.font-mono) {
-    text-align: justify;
-    hyphens: auto;
   }
 
   /* Programming-font ligatures (JetBrains Mono / Cascadia Code) fuse `//` and `://`, which hides
@@ -347,12 +239,12 @@
   }
 
   ::selection {
-    background: var(--brand-200);
+    background: var(--color-brand-200);
     color: var(--color-text-primary);
   }
 
   :root[data-theme="dark"] ::selection {
-    background: color-mix(in oklab, var(--section-accent) 40%, transparent);
+    background: color-mix(in oklab, var(--color-brand-400) 40%, transparent);
     color: var(--color-text-primary);
   }
 }
@@ -370,12 +262,12 @@
 }
 
 @layer utilities {
-  /* A neutral grid with a small, very faint section-accent glow behind the page header only. The
-   * grid carries no colour; the glow is a hint of where you are, not a background colour, and is
-   * anchored to the top without repeating so the rest of the page is the plain neutral. */
+  /* A neutral grid with a small, very faint accent glow behind the page header only. The grid
+   * carries no colour; the glow is a hint of the accent, not a background colour, and is anchored
+   * to the top without repeating so the rest of the page is the plain neutral. */
   .technical-grid {
     background-image:
-      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 4%, transparent), transparent 70%),
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--color-brand-400) 4%, transparent), transparent 70%),
       linear-gradient(to right, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px),
       linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 6%, transparent) 1px, transparent 1px);
     background-size: 100% 100%, 28px 28px, 28px 28px;
@@ -384,7 +276,7 @@
 
   :root[data-theme="dark"] .technical-grid {
     background-image:
-      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--section-accent) 7%, transparent), transparent 70%),
+      radial-gradient(48rem 14rem at 80% -4rem, color-mix(in srgb, var(--color-brand-400) 7%, transparent), transparent 70%),
       linear-gradient(to right, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px),
       linear-gradient(to bottom, color-mix(in srgb, var(--color-muted) 5%, transparent) 1px, transparent 1px);
   }

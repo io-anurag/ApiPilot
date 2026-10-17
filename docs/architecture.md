@@ -598,7 +598,7 @@ step rules in `importRunSteps.ts`: Collection, Review requests, Run, Results) sh
 hero (`ImportRunHero`) is full on Collection and compact on the rest. `ExternalCollectionRunPanel` takes a
 `view` (`run`, `results`, `hidden`, default `all`) and stays mounted on every step, so an in-progress run
 keeps polling and the run order and history survive moving between steps. It is presentation state only:
-no API or contract change. `App.tsx` starts on an entry chooser; the tab bar
+no API or contract change. (Superseded for navigation by the AP-054 shell below: the entry chooser, tab bar and "Back to start" are gone, replaced by a sidebar, Home and addresses; the stay-mounted rule remains.) `App.tsx` starts on an entry chooser; the tab bar
 between the two views is hidden while the guided workflow is in progress and shown for "Import &
 Run Collection" and after the hand-off. Visibility is toggled rather than unmounting, so switching
 views keeps each one's in-progress state. The guided workflow page stays mounted for the rest of
@@ -1648,3 +1648,31 @@ feature-level behavior, contracts, and success criteria live in the feature dire
 status through AP-031. Directory numbers and `AP-###` identifiers do not always match: AP-017 is
 `specs/018-*`, AP-030 is `specs/029-*`, and AP-031 is `specs/030-*`. Where this document and a feature specification differ, the applicable
 specification and constitution take precedence.
+
+## Shell, addresses and shared visual language (AP-054)
+
+`specs/054-sidebar-shell-redesign`. Frontend only: no endpoint, payload, stored datum or shared-domain type changed.
+
+- **Shell.** `App` renders `components/shell/AppShell`: a skip link, the sidebar (`Sidebar`, `SidebarStages`) inside `Drawer`, the
+  `PageHeader` (title and parent, palette, connection status, theme, help, and below `lg` the menu button) and `<main id="main">`.
+  The layout switches in CSS only (no `matchMedia`); the drawer shares `hooks/useFocusTrap` with `Dialog`. The sidebar's stage list is
+  built from `workflowStageViewModel` (`WORKFLOW_PHASES`, `getLockReason`) by `navigation/destinations`, never a second copy.
+- **Addresses.** `navigation/routes` (pure `parseRoute`, `formatRoute`, `resolveRoute`) and `navigation/useRoute` use the URL hash only
+  (`#/`, `#/guided/<stageId>`, `#/import`, `#/performance`, `#/k6`, `#/coverage`), so the query string (the AP-049 token, `?mock=`) is
+  untouched and no routing library is added. An address that cannot be shown resolves to the nearest valid one with a notice
+  (`RouteNotice`). `hooks/useWorkflowSnapshot` reads the session's workflow once so the sidebar and address checks are right before the
+  guided page has mounted; the page reports changes (`onWorkflowChange`, `onViewedStageChange`) and the address follows the stage on
+  screen without a history entry. Pages are kept mounted once reached and hidden, which preserves state across navigation.
+- **Tokens.** `index.css` is the one definition: literal hex in light and dark, one accent (`accent`, `on-accent`), the olive `brand-*`
+  ramp for text, lines and focus, `border-control` (3:1) for input and secondary-button outlines, status and chart tokens. The section
+  and workflow colours (`sectionCatalog`, `data-section`, `wf-*`) are gone. `tests/unit/contrast.test.ts` reads the file and checks the
+  pairings of `contracts/tokens.md` in both themes; `colourTokens.test.ts` forbids hex, palette utilities, white text on lime, retired
+  tokens and justified text.
+- **Patterns.** `components/patterns/` (`Card`, `Pill`, `TaskCard`, `Banner`, `StepTrail`, `DropZone`, `KeyValueGrid`, `tableStyles`) plus
+  `StatTile` (highlight), `EmptyState`, `Pagination` and `controlStyles` (`FIELD_STYLES`). Import & Run, Performance and Run k6 Script
+  steppers render through `StepTrail`. `?mock=pattern-library` (`pages/PatternLibraryPage`) shows one live example of each.
+- **Home.** `pages/HomePage` with `components/home`: figures from the same coverage snapshot as the Coverage screen
+  (`homeViewModel`), next steps derived from existing state, an AI status tile over the existing `GET /api/ai/status` (`aiStatusClient`;
+  state, provider and reason only) and Recent runs merged from Import & Run, Performance and Run k6 Script (`useRecentRuns`, at most ten
+  collections and ten plans read, one k6 list). It reads only while visible and never polls. Opening a run is a frontend request held in
+  `App` with a token (`importRunRequest`, `OpenPerformancePlanRequest.runId`, `UserScriptPage openRunRequest`).

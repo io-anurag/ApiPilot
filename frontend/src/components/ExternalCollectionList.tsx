@@ -1,15 +1,15 @@
 import type { EnvironmentTier } from "@apipilot/shared-domain";
 import { removeUploadedCollection, type UploadedCollectionSummary } from "../services/externalCollectionsClient";
-import { StatusBadge, type StatusTone } from "./StatusBadge";
+import { Pill, type PillTone } from "./patterns/Pill";
 import { BUTTON_STYLES } from "./controlStyles";
 import { EmptyState } from "./EmptyState";
 
-const TIER_TONE: Record<EnvironmentTier, StatusTone> = {
-  local: "neutral",
-  dev: "neutral",
-  qa: "info",
-  staging: "warning",
-  production: "danger",
+const TIER_TONE: Record<EnvironmentTier, PillTone> = {
+  local: "line",
+  dev: "line",
+  qa: "mint",
+  staging: "warn",
+  production: "bad",
 };
 
 /** Lists, selects among, and removes uploaded collections (FR-016/FR-017). */
@@ -41,15 +41,15 @@ export function ExternalCollectionList({
   return (
     <ul
       data-testid="external-collection-list"
-      className="divide-y divide-border rounded-md border border-border"
+      className="divide-y divide-border overflow-hidden rounded-xl border border-border"
     >
       {uploadedCollections.map((uploadedCollection) => (
         <li
           key={uploadedCollection.id}
-          className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm ${
+          className={`flex flex-wrap items-center justify-between gap-2 border-l-2 px-3 py-2.5 text-sm ${
             uploadedCollection.id === selectedId
-              ? "bg-brand-50/50 dark:bg-brand-500/15"
-              : "hover:bg-surface-hover"
+              ? "border-brand-500 bg-lime-pale"
+              : "border-transparent hover:bg-surface-hover"
           }`}
         >
           <button
@@ -58,9 +58,14 @@ export function ExternalCollectionList({
             aria-current={uploadedCollection.id === selectedId}
             className="flex min-w-0 flex-1 items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            <span className="min-w-0 truncate font-medium text-text-secondary">{uploadedCollection.name}</span>
-            <StatusBadge label={uploadedCollection.tier} tone={TIER_TONE[uploadedCollection.tier]} />
-            {!uploadedCollection.confirmedAt && <StatusBadge label="Unverified" tone="warning" />}
+            {uploadedCollection.id === selectedId && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-700">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5L20 7" />
+              </svg>
+            )}
+            <span className={`min-w-0 truncate text-text-primary ${uploadedCollection.id === selectedId ? "font-semibold" : "font-medium"}`}>{uploadedCollection.name}</span>
+            <Pill tone={TIER_TONE[uploadedCollection.tier]}>{uploadedCollection.tier}</Pill>
+            {!uploadedCollection.confirmedAt && <Pill tone="warn">Unverified</Pill>}
           </button>
           <button
             type="button"

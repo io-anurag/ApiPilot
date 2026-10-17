@@ -1,9 +1,10 @@
 import type { CoverageSnapshot } from "@apipilot/shared-domain";
 import { BUTTON_STYLES } from "../controlStyles";
+import { Card, CardHeader } from "../patterns/Card";
 import { evidenceLabel, formatTimestamp } from "./coverageViewModel";
 
-const GROUP = "rounded-md border border-border bg-surface-subtle p-3";
-const GROUP_TITLE = "mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted";
+const GROUP = "rounded-xl bg-surface-subtle p-3";
+const GROUP_TITLE = "mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted";
 
 function Group({ title, children }: Readonly<{ title: string; children: React.ReactNode }>) {
   return (
@@ -17,7 +18,7 @@ function Group({ title, children }: Readonly<{ title: string; children: React.Re
 function Item({ label, testId, children }: Readonly<{ label: string; testId?: string; children: React.ReactNode }>) {
   return (
     <div data-testid={testId}>
-      <dt className="text-xs text-muted">{label}</dt>
+      <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className="break-words text-sm text-text-primary">{children}</dd>
     </div>
   );
@@ -42,10 +43,8 @@ export function CoverageContext({
   const { specification: spec, execution: exec, context } = snapshot;
   const counts = context.scenarioCounts;
   return (
-    <section aria-labelledby="coverage-context-title" data-testid="coverage-context" className="rounded-lg border border-border bg-surface p-4">
-      <h3 id="coverage-context-title" className="mb-2 text-sm font-semibold text-text-primary">
-        Evaluation context
-      </h3>
+    <Card as="section" aria-labelledby="coverage-context-title" data-testid="coverage-context">
+      <CardHeader title="Evaluation context" titleId="coverage-context-title" level={3} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Group title="Specification">
           <Item label="Name">
@@ -99,6 +98,6 @@ export function CoverageContext({
           )}
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
