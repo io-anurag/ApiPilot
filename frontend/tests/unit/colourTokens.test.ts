@@ -13,7 +13,20 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
+// Each source file is read once and shared by every check below: the checks scan the whole tree,
+// and repeating those synchronous reads per test made them time out when the full suite ran in
+// parallel on a busy machine.
+const contents = new Map<string, string>();
+function read(file: string): string {
+  let text = contents.get(file);
+  if (text === undefined) {
+    text = readFileSync(file, "utf8");
+    contents.set(file, text);
+  }
+  return text;
+}
+
+describe("colour tokens are the only source of colour (AP-041, AP-054)", { timeout: 30_000 }, () => {
   const files = sourceFiles(SRC);
 
   it("keeps hex colours out of components", () => {
@@ -22,7 +35,7 @@ describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
     const allowed = new Set(["components/WorkflowIcon.tsx"]);
     const offenders = files
       .filter((file) => !allowed.has(relative(SRC, file).replaceAll("\\", "/")))
-      .filter((file) => /#[0-9a-fA-F]{3,8}\b/.test(readFileSync(file, "utf8")))
+      .filter((file) => /#[0-9a-fA-F]{3,8}\b/.test(read(file)))
       .map((file) => relative(SRC, file));
     expect(offenders).toEqual([]);
   });
@@ -31,7 +44,7 @@ describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
     const palette =
       /\b(?:bg|text|border|ring|fill|stroke|divide|outline|caret|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black)-\d+/;
     const offenders = files
-      .filter((file) => palette.test(readFileSync(file, "utf8")))
+      .filter((file) => palette.test(read(file)))
       .map((file) => relative(SRC, file));
     expect(offenders).toEqual([]);
   });
@@ -45,7 +58,7 @@ describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
     const offenders = files
       .filter((file) => relative(SRC, file).replaceAll("\\", "/") !== "components/httpMethodStyles.ts")
       .filter((file) =>
-        (readFileSync(file, "utf8").match(literal) ?? []).some((text) => paleFill.test(text) && whiteText.test(text)),
+        (read(file).match(literal) ?? []).some((text) => paleFill.test(text) && whiteText.test(text)),
       )
       .map((file) => relative(SRC, file));
     expect(offenders).toEqual([]);
@@ -55,7 +68,7 @@ describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
     const retired =
       /data-section|--section-|--solid-|--color-section|--color-wf-|\b(?:bg|text|border|ring|fill|stroke|from|to|via)-(?:section|wf)-[a-z]/;
     const offenders = [...files.map((file) => [relative(SRC, file), file] as const), ["index.css", join(SRC, "index.css")] as const]
-      .filter(([, file]) => retired.test(readFileSync(file, "utf8")))
+      .filter(([, file]) => retired.test(read(file)))
       .map(([name]) => name);
     expect(offenders).toEqual([]);
   });
@@ -63,7 +76,7 @@ describe("colour tokens are the only source of colour (AP-041, AP-054)", () => {
   it("leaves paragraph text left-aligned (FR-012)", () => {
     expect(css).not.toMatch(/text-align:\s*justify/);
     const offenders = files
-      .filter((file) => /\btext-justify\b|\bhyphens-auto\b/.test(readFileSync(file, "utf8")))
+      .filter((file) => /\btext-justify\b|\bhyphens-auto\b/.test(read(file)))
       .map((file) => relative(SRC, file));
     expect(offenders).toEqual([]);
   });

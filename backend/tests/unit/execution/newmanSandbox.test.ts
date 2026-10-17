@@ -86,11 +86,15 @@ describe("newman sandbox: process-level restriction", () => {
 
 describe("newman sandbox: running an item", () => {
   let sandbox: NewmanSandbox;
-  beforeAll(() => {
-    sandbox = new NewmanSandbox();
-  });
-  afterAll(() => sandbox.close());
   const runNewmanInSandbox = (options: Record<string, unknown>) => sandbox.run(options);
+  beforeAll(async () => {
+    sandbox = new NewmanSandbox();
+    // The child starts lazily and cold-loads Newman and postman-sandbox, which can take far longer
+    // than a steady-state run when the full suite is saturating the machine. Pay that cost here,
+    // under a hook timeout sized for it, so the tests below only time the work they exercise.
+    await runNewmanInSandbox(options([]));
+  }, 120_000);
+  afterAll(() => sandbox.close());
 
   it("runs the item, its tests and environment writes, and returns a plain result", async () => {
     const { execution, environment } = await runNewmanInSandbox(
