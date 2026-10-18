@@ -238,7 +238,7 @@ export function CollectionRunSetupCard({
                     aria-label="Write requests table"
                     // Focusable so a keyboard user can scroll a wide or long table.
                     tabIndex={0}
-                    className={`${TABLE_STYLES.scroll} max-h-72 overflow-y-auto border border-border bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}
+                    className={`${TABLE_STYLES.scroll} max-h-96 overflow-y-auto border border-border bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}
                   >
                     <table className={TABLE_STYLES.table}>
                       <caption className="sr-only">Write requests the run will send</caption>

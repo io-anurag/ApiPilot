@@ -60,7 +60,7 @@ export function Banner({
   return (
     <div role={role} data-testid={testId} data-tone={tone} className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 text-text-primary ${TONE_CLASSES[tone]}`}>
       <ToneIcon tone={tone} />
-      <div className="min-w-0 space-y-1 text-sm">
+      <div className="min-w-0 flex-1 space-y-1 text-sm">
         <p className="font-semibold">{title}</p>
         {children && <div className="text-text-secondary">{children}</div>}
       </div>
