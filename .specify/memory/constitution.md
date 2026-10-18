@@ -1,6 +1,61 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 3.2.0 → 3.3.0 (minor: Principle XVII gains binding guidance for outbound security
+testing against a user-selected target)
+
+Trigger: the governance question raised by the plan for AP-057 (Security Lab V1;
+specs/057-security-lab-v1, plan.md "Governance question for the reviewer", research R1). Security Lab
+sends HTTP requests that ApiPilot builds from approved scenarios to a target the user selects, with
+adversarial inputs. It runs no script and no content ApiPilot did not write, so none of the earlier
+exceptions in XVII applies and none may be cited. XVII nevertheless says nothing about outbound
+destination control, request budgets or adversarial probing, and the plan chose to record that policy
+here instead of leaving it only in a feature contract
+(specs/057-security-lab-v1/contracts/execution-safety-rules.md). The user ran this amendment after the
+plan raised the question.
+
+Bump reasoning: one guidance paragraph is added to XVII, with its own conditions and rationale. It is
+guidance for a feature and not an exception, because it permits nothing XVII forbids. No principle,
+category or exception is removed or redefined, and behaviour of every existing feature is unchanged
+(MINOR).
+
+Added principles: none.
+Modified principles:
+  - XVII. Security and Privacy by Design: adds "Outbound security testing (2026-10-18 amendment,
+    AP-057)". A security-testing feature MAY send requests that ApiPilot builds itself to a user-selected
+    target only when: every request comes from an approved scenario at its approved version, from a
+    closed set of typed mutations and conditions, with no destination, host, port or header chosen by
+    model output, file or specification content, and an edit that changes what is sent needs a new
+    approval; each run is the user's explicit action naming the target, the scenario and request counts
+    and every scenario that may change data, with exact target confirmation and an authorization
+    statement for staging-like targets, and never starts, repeats or schedules itself; the server
+    validates every request's and every redirect hop's destination on the connected address against
+    allowed hosts and ports, allows private, loopback and link-local addresses only for a local-tier
+    profile that names them, never allows cloud-metadata or unspecified addresses, does not follow
+    redirects automatically and refuses production-tier targets; every run has a budget, timeout and
+    concurrency limit under hard ceilings, cancellation stops further requests and aborts those in
+    flight, and nothing is retried automatically; credentials reach a request only as references to the
+    encrypted environment store and never enter a scenario, evidence, finding, report, export, log or AI
+    prompt, with evidence redacted before storage, bounded and encrypted; scenarios that may change data
+    are confirmed individually at approval and at the run, cleanup is attempted and a failure is shown;
+    and pass or fail is decided deterministically, never by AI, with an outcome that cannot be judged
+    never reported as passed. It does not cover script execution, automatic or scheduled runs,
+    production targets or any other feature. The rationale records the reasoning.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs:
+  - Mirror: specs/constitution.md, the manually maintained copy, is still at 3.2.0 and must be resynced
+    to this version. This command writes only .specify/memory/constitution.md, so the resync is left
+    as a follow-up.
+  - specs/057-security-lab-v1/plan.md ("Governance question for the reviewer") and research.md R1
+    still describe the amendment as undecided and should be updated to cite 3.3.0.
+  - The concrete limits, fixed lists and rule identifiers stay in specs/057-security-lab-v1 by design.
+  - The amendment goes through review as the Governance section requires before it is final.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 3.1.0 → 3.2.0 (minor: observations from captured traffic and ApiPilot's inferences from
 them become two governed information categories)
 
@@ -862,6 +917,41 @@ exception. This exception does not apply to AI output, uploaded OpenAPI specific
 other artifact, and MUST NOT be cited to justify executing any other content elsewhere in the
 system.
 
+**Outbound security testing (2026-10-18 amendment, AP-057)**: This is guidance, not an exception,
+because it runs no script and no content ApiPilot did not write. A security-testing feature (AP-057,
+specs/057-security-lab-v1) MAY send requests that ApiPilot itself builds to a target the user selected,
+only when all of the following hold:
+- every request is built by ApiPilot from a scenario the user approved, at the exact version approved,
+  from a closed set of typed mutations and evaluation conditions. No model output, scenario field,
+  imported file or specification content names a URL, host, port or header chosen by content, and an
+  edit that changes what would be sent needs a new approval;
+- a run starts only on the user's explicit action within ApiPilot for that run. That action names the
+  target (environment name, tier and base URL), the number of scenarios and requests, and every scenario
+  that may change data, and states that real requests are sent. A staging-like target also requires its
+  name and base URL to be confirmed exactly and the user's statement that they are authorized to test
+  it. ApiPilot never starts, repeats or schedules a run automatically, on a timer or as a retry;
+- the server validates the destination of every request and of every redirect hop before it is sent,
+  on the address actually connected to, against the profile's allowed hosts and ports. Private,
+  loopback and link-local addresses are allowed only for a local-tier profile that names them
+  explicitly. Cloud-metadata and unspecified addresses are never allowed. Redirects are not followed
+  automatically, and production-tier targets are refused. The check is made by the server, never only
+  by the interface;
+- every run has a request budget, a per-request timeout and a concurrency limit, each within hard
+  ceilings that no profile can exceed. The budget is never exceeded, cancellation stops further requests
+  and aborts those in flight, and no request is retried automatically;
+- credentials reach a request only as references to the encrypted environment store and are held in
+  memory for the run. They never enter a scenario, evidence, finding, report, export, log or AI prompt
+  (XVIII, XX). Evidence is redacted before it is stored, bounded in size and stored encrypted;
+- a scenario that may change data, or whose created data cannot be cleaned up, is confirmed
+  individually at approval and again at the run. Cleanup is attempted after a run and after
+  cancellation, and a failed cleanup is shown in the run result;
+- pass or fail is decided by deterministic evaluation of the approved expected behavior, never by AI,
+  and an outcome that cannot be judged (blocked, errored, inconclusive, not run) is never reported
+  as passed.
+
+This guidance does not extend to executing scripts, to automatic or scheduled runs, to production
+targets or to any other feature, and MUST NOT be cited to justify them.
+
 **Rationale**: API specifications frequently describe proprietary or sensitive systems and
 must be protected with the same rigor as any confidential customer data. The narrow exception
 above exists because a QA engineer knowingly running their own already-trusted Postman
@@ -899,7 +989,13 @@ restricted keeps the one remaining risk, where requests go, visible to the perso
 Performance Debug run: the engineer asks, once, to see why a script behaves as it does, and the
 output is a view, not a record. It is the one place a supplied script's traffic is read, so it
 carries its own masking, memory-only and bounds conditions, and it does not read what the script
-prints.
+prints. Outbound security testing (2026-10-18) is guidance because ApiPilot runs nothing it did not
+write: it sends only requests it builds from typed, approved scenario versions. Its risk lies in where
+requests go and how many, since probing a target is more consequential than replaying a documented
+request. An address checked by name can be changed by DNS before the connection is made, so the check
+is made on the connected address, by the server, for every request and redirect hop. The budget, the
+per-run confirmation, the hard ceilings and the version-bound approval keep it a deliberate human act,
+and deterministic evaluation keeps its results explainable (XIII).
 
 ### XVIII. Secrets Must Never Be Part of Generated Artifacts
 
@@ -1120,4 +1216,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 3.2.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-18
+**Version**: 3.3.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-18
