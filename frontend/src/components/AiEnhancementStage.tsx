@@ -222,13 +222,13 @@ function LiveScenarioPreview({
   return (
     <section
       data-testid="ai-enhancement-live-results"
-      className="space-y-2 rounded-md border border-success-200 bg-success-50 p-3 dark:border-success-500 dark:bg-success-500/10"
+      className="space-y-2 rounded-md border border-success-700/40 bg-success-50 p-3 dark:border-success-500 dark:bg-success-500/10"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-success-900 dark:text-success-100">
           {scenarios.length} AI scenario{scenarios.length === 1 ? "" : "s"} ready
         </h3>
-        <span className="text-xs text-success-700 dark:text-success-100">
+        <span className="text-xs text-success-900 dark:text-success-100">
           Review actions unlock when generation finishes.
         </span>
       </div>
@@ -242,7 +242,7 @@ function LiveScenarioPreview({
               {item.operationMethod.toUpperCase()}
             </span>
             <span className="font-mono">{item.operationPath}</span>
-            <span className="text-success-700 dark:text-success-100">
+            <span className="text-success-900 dark:text-success-100">
               {item.category}
             </span>
           </li>

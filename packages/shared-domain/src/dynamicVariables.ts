@@ -14,6 +14,8 @@ export const SUPPORTED_DYNAMIC_VARIABLES: ReadonlySet<string> = new Set([
   "$isoTimestamp",
   // Text, numbers and colors
   "$randomInt",
+  "$randomDecimal",
+  "$randomDescription",
   "$randomAlphaNumeric",
   "$randomBoolean",
   "$randomColor",

@@ -1184,7 +1184,7 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
     runDebugRun.ts      orchestrator: setup, chains in plan order, one shared scope, stop rules,
                         120 s cap, abort; observes every exchange, then builds the masked result
     resolveRequest.ts   reference filling and request building; numbers `{{$name}}` as the renderer does
-    dynamicValues.ts    the 48 dynamic variables, with an injected clock
+    dynamicValues.ts    the 50 dynamic variables (48 Postman plus `$randomDecimal` and `$randomDescription`), with an injected clock
     extraction.ts       extractors with the reason for a failure; statusOk
     checks.ts           check evaluation; `detail` never carries a value
     masker.ts           sensitive values -> MaskedText segments; secrets are never revealable

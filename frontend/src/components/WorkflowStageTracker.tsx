@@ -271,7 +271,7 @@ export function WorkflowStageTracker({
     }
     const lockReasonId = `stage-lock-reason-${stageId}`;
     const badge = (label: string) => (
-      <StatusBadge label={label} tone={STATUS_TONES[stage.status]} />
+      <StatusBadge label={label} tone={STATUS_TONES[stage.status]} onTint />
     );
     let status: React.ReactNode;
     if (isRevisitable || isReadOnlyViewable || isReturnToActiveView || isOpenable) {
@@ -307,7 +307,7 @@ export function WorkflowStageTracker({
       <li
         key={stageId}
         aria-current={isCurrentlyViewed ? "step" : undefined}
-        className={`group relative flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-text-primary" : "text-text-secondary"}`}
+        className={`group relative flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${CHIP_TONE_CLASSES[stage.status]} ${isCurrentlyViewed ? "ring-2 ring-inset ring-brand-500 font-semibold text-text-primary" : stage.status === "not-yet-reached" ? "text-text-secondary" : "text-text-primary"}`}
       >
         <StageIcon stageId={stageId} />
         <span>{STAGE_LABELS[stageId]}</span>

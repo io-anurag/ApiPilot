@@ -261,4 +261,4 @@ describe("the k6 runtime has not changed unseen", () => {
   });
 });
 
-const EXPECTED_RUNTIME_HASH = "b003a119374da2874f1ea1126f7ceb692a1336fa444400fb892777ef52bdcc1d";
+const EXPECTED_RUNTIME_HASH = "8feb0c971ecb0e6cdf0853c466bd7275417464c624ea9b1f7a87e0049b9645de";

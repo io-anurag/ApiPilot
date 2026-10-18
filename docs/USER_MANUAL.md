@@ -1041,12 +1041,12 @@ On a narrow screen the list and the editor stack and the page scrolls.
 - the target environment.
 
 `{{$guid}}`, `{{$randomEmail}}` and the other dynamic variables are generated for each request.
-All 48 Postman dynamic variables are supported: identifiers and timestamps (`$guid`,
+All 48 Postman dynamic variables are supported, plus two of ApiPilot's own: identifiers and timestamps (`$guid`,
 `$timestamp`), text, numbers and colors (`$randomInt`, `$randomHexColor`), internet values
 (`$randomIP`, `$randomIPV6`, `$randomMACAddress`, `$randomPassword`, `$randomUserAgent`), names and
 job titles, phone numbers, addresses, countries and coordinates, dates (`$randomDateFuture`,
 `$randomDatePast`, `$randomDateRecent`, as ISO 8601), and domains, URLs and emails. Type `{{$` to
-see them all. Values are repeatable for the same virtual user, iteration and run; the ones that
+see them all. `$randomInt` is a positive whole number from 1 to 1000 (never 0), `$randomDecimal` is a positive number with two decimals from 0.01 to 999.99, and `$randomDescription` is a short product-style sentence such as "Durable notebook designed for home offices.". `$randomDecimal` and `$randomDescription` exist only in performance plans and Debug runs: Newman, which runs a collection in Import & Run Collection, does not know them, and sends them as literal text. Values are repeatable for the same virtual user, iteration and run; the ones that
 are meant to be unique (`$guid`, `$randomEmail`, `$randomUserName`) differ for each. A name that is
 not on the list is flagged by the plan check. Values extracted by every-iteration steps are cleared at the start of each iteration.
 
