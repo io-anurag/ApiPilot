@@ -17,7 +17,7 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 
 | Method | Endpoint                              | Input/output                                                             |
 | ------ | ------------------------------------- | ------------------------------------------------------------------------ |
-| `POST` | `/api/specifications`                 | Multipart `file`; returns `{ apiModel }`.                                |
+| `POST` | `/api/specifications`                 | Multipart `file` (OpenAPI, HAR or API definition); returns `{ apiModel, input }`. |
 | `POST` | `/api/test-models`                    | JSON `apiModel`; returns a deterministic `{ testModel }`.                |
 | `POST` | `/api/test-models/enhance`            | JSON model/enhancement request; returns AI-enhanced model/progress data. |
 | `POST` | `/api/test-models/reviews`            | Applies scenario review updates.                                         |
@@ -52,6 +52,73 @@ The backend mounts all routes under `/api`. The browser receives an HTTP-only `s
 | `GET`          | `/api/test-generation-workflow/execution/runs/:runId`       | Retrieve one run and its request results.                                                                |
 
 The environment and execution endpoints above are retained as an API-only path (`specs/018` Clarifications 2026-09-23); the current UI runs generated collections through the external collection endpoints below after the hand-off.
+
+## Input formats and upload errors
+
+`POST /api/specifications` and the upload at `POST /api/test-generation-workflow` take the same multipart `file` field and
+decide what it is from its content, never its name: OpenAPI 3.x (YAML or JSON), a HAR capture (JSON with a `log` object), an
+ApiPilot API definition (JSON with `"format": "apipilot.api-definition"`), or a Postman collection (recognized and
+redirected, never imported). A JSON file must match exactly one of these. The accepted formats are described in the
+[user manual](USER_MANUAL.md#31-upload) and [API definition format](api-definition-format.md).
+
+**Response.** A successful upload returns the normalized model and the detected format:
+
+- `POST /api/specifications` returns `{ apiModel, input }`.
+- `POST /api/test-generation-workflow` returns `{ workflow }`, where `workflow.input` is the same descriptor.
+- `input` is `{ format, label, filename }` with `format` one of `openapi-yaml`, `openapi-json`, `har`, `api-definition`. It is
+  also present on every later read of the workflow. `filename` is shown, never used to decide anything.
+
+The model is the same `ApiModel` for every format; the following fields are additive and absent for an OpenAPI upload:
+
+| Where | Field | Meaning |
+|---|---|---|
+| `ApiModel` | `importReport` | HAR only: `counts` (`total`, `imported`, `excluded`, `malformed`, `operations`; `imported + excluded + malformed = total`), `exclusions` (by reason, with up to 20 redacted samples each), `malformedEntries`, `origins`, `normalization`, `credentialUrlCount` and `credentialUrlEntries` (position and host, never the user name or password), `limitsApplied`, and `harVersion` and `creator` when present. |
+| `ApiModel` | `dependencyHints` | HAR and definition: proposed producer and consumer fields, each `observed` (with `matchCount`) or `declared` (with `verified`). |
+| `ApiModel` | `declaredBaseUrl` | Definition only. Informational; never used as an execution target. |
+| `ApiOperation` | `provenance`, `observed`, `description` | Origin of the operation (`declared`, `observed`), what the capture showed for it, and a declared description. |
+| `Parameter`, `RequestBody`, `Response` | `provenance`, `requiredUnknown`, `examples`, `bodyUnavailable` | Origin per fact, requiredness that is not a fact, declared or observed examples (credentials replaced), and why a body could not be used. |
+| `TestScenario` | `evidence` | Origin, observation count, derivation (`observed-example`, `inference-derived`, `declared-example`) and a one-sentence summary. |
+| `Assertion` | `basis` | `declared` or `observed`; absent means documented. |
+| `TestGenerationWorkflow` | `generationNotes` | Operations that produced no scenario, each with the reason. |
+
+`provenance.origin` is one of `documented` (absent for OpenAPI), `declared`, `observed`, `inferred`; observed and inferred
+facts carry `observationCount` and `confidence` (`high`, `medium`, `low`). No field of the model, the report, a log line or an
+error ever holds a credential value.
+
+**Errors.** Every rejection is a JSON object with an `error` code and a `message`; the message never echoes content from
+the uploaded document beyond field names, a position or a count. Nothing is imported and an existing workflow is untouched.
+
+| Status | `error` | Cause | Extra fields |
+|---|---|---|---|
+| 400 | `invalid_yaml` | Non-JSON content that is not valid YAML. | |
+| 400 | `unsupported_version` | OpenAPI that is not 3.x (including Swagger 2.0 as JSON). | |
+| 400 | `invalid_json` | Content that starts like JSON but does not parse. | |
+| 400 | `unrecognized_input_format` | A JSON object with no format marker. | |
+| 400 | `ambiguous_input_format` | A JSON object with markers of more than one format. | |
+| 400 | `postman_collection_detected` | A Postman collection. | `redirectTo: "import-run-collection"` |
+| 400 | `invalid_har` | A `log` object with no usable `entries`. | |
+| 400 | `no_operations_derived` | A HAR from which no operation can be derived. | `report` (`counts`, `exclusions`, `malformedEntries`) |
+| 400 | `invalid_definition` | A definition that breaks version 1. | `problems`: every violation as `"<JSON Pointer>: <message>"` (at most 100, then a line with the number left out) |
+| 413 | `input_limit_exceeded` | A configurable or fixed limit below. | `limit`, `maximum` |
+| 413 | `file_too_large` | Over the 10 MB upload limit. | |
+
+**Limits.** `INPUT_HAR_MAX_ENTRIES`, `INPUT_MAX_BODY_BYTES` and `INPUT_MAX_JSON_DEPTH` are read at start-up and can be set in
+the environment ([Configuration](configuration.md)); a non-positive or non-numeric value stops start-up with a message
+naming the variable. The others are fixed.
+
+| Limit | Value | Setting | When exceeded |
+|---|---|---|---|
+| Upload size | 10 MB | fixed | `413 file_too_large` |
+| Entries in a HAR | 5,000 | `INPUT_HAR_MAX_ENTRIES` | `413 input_limit_exceeded` |
+| JSON nesting depth | 128 | `INPUT_MAX_JSON_DEPTH` | `413 input_limit_exceeded` |
+| Size of one analyzed body | 1 MiB | `INPUT_MAX_BODY_BYTES` | Body skipped, listed in `importReport.limitsApplied` |
+| Operations derived from one capture | 2,000 | fixed | `413 input_limit_exceeded` |
+| Nesting depth inside an embedded body | 32 | fixed | Body skipped, listed in `importReport.limitsApplied` |
+| Request examples kept per operation | 5 | fixed | Counted in `droppedExampleCount` |
+| Values listed for a path parameter | 10 | fixed | The rest are counted in `distinctValues` |
+| Analysis issues listed per kind | 200 | fixed | One summary issue for the rest |
+| Operations in a definition | 2,000 | fixed | `invalid_definition` |
+| Problems listed for a definition | 100 | fixed | A final line gives the number left out |
 
 ## Legacy performance run endpoints
 

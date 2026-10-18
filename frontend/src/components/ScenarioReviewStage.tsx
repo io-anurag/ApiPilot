@@ -18,6 +18,7 @@ import {
 } from "../services/testGenerationWorkflowClient";
 import { useBulkDecision, type BulkChunkResult } from "../hooks/useBulkDecision";
 import { AiEnhancementOutcomeSummary } from "./AiEnhancementOutcomeSummary";
+import { GenerationNotes } from "./ScenarioEvidence";
 import { TestScenarioReviewList } from "./TestScenarioReviewList";
 import { TestScenarioReviewSummary } from "./TestScenarioReviewSummary";
 import { TestScenarioReviewDetail } from "./TestScenarioReviewDetail";
@@ -230,6 +231,7 @@ export function ScenarioReviewStage({
         />
         <TestScenarioReviewSummary summary={reviewWorkspace.summary} />
         <AiEnhancementOutcomeSummary workflow={workflow} />
+        <GenerationNotes notes={workflow.generationNotes} />
         {/* A disabled fieldset natively disables every control inside it — row selection,
             filters, bulk actions, and the selected scenario's decision/edit/regenerate panel —
             so nothing can change the review while finalize is committing it. The backend

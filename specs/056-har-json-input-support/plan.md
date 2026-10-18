@@ -292,9 +292,9 @@ detection (R12), multi-parameter paths (R14), form-style bodies (R17, R31) and r
 3. **Observed examples are filtered to the operation's primary content type.** The exporter picks one body content type per
    operation (JSON preferred, else the first declared), so an operation observed with both JSON and form bodies gets
    scenarios only for the primary one, and a note if none matches (R21).
-4. **k6 seeding cannot represent multipart.** Seeding a request-chain plan from an approved HAR-derived workflow reports a
-   multipart step as a left-out step with its reason: `buildStepRequest` returns an unsupported result and its two callers
-   record it through the existing seeding note type; urlencoded steps convert as the existing `form` kind (R31).
+4. **k6 seeding cannot represent multipart.** Seeding a request-chain plan from an approved HAR-derived workflow refuses a
+   multipart step with an explicit reason: `templateFromItem` throws `UnsupportedStepBodyError` and `buildStepRequest` converts it
+   to the existing `InvalidChainPlanError`; urlencoded steps convert as the existing `form` kind (R31).
 5. **Declared dependency hints verified against declared schemas become CONFIRMED.** The spec says hints are "subject
    to the same validation" and that confirmed needs a declared hint; the plan reads that as: both fields exist in the
    declared schemas, then CONFIRMED, otherwise LIKELY with an explanation (R20).

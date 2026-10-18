@@ -3,6 +3,7 @@ import type {
   ApiDependencyRelationship,
   AIProviderMode,
   DependencyConfidence,
+  DependencyHint,
 } from "@apipilot/shared-domain";
 import { relationshipId } from "./identifiers";
 
@@ -74,6 +75,84 @@ export function resolveProducerDisambiguation(relationships: ApiDependencyRelati
     excluded.push(...sorted.slice(1));
   }
   return { resolved, excluded };
+}
+
+/**
+ * Confidence of a relationship that comes from an input hint (specs/056 FR-038, research R20).
+ * Value reuse seen in a capture is one signal: `POSSIBLE` for a single consuming request,
+ * `LIKELY` for two or more, and never `CONFIRMED` on its own (constitution XV). A declared hint whose
+ * fields both exist in the declared schemas is `CONFIRMED`; one that could not be checked is `LIKELY`.
+ */
+export function confidenceOfHint(hint: DependencyHint): DependencyConfidence {
+  if (hint.origin === "declared") return hint.verified ? "CONFIRMED" : "LIKELY";
+  return (hint.matchCount ?? 1) >= 2 ? "LIKELY" : "POSSIBLE";
+}
+
+function hintExplanation(hint: DependencyHint): string {
+  const { producer, consumer } = hint;
+  const base = `${consumer.operationMethod} ${consumer.operationPath} takes '${consumer.field}' (${consumer.location}) from '${producer.field}' of ${producer.operationMethod} ${producer.operationPath}`;
+  if (hint.origin === "declared") {
+    return `Declared in the API definition: ${base}. ${
+      hint.verified ? "Both fields exist in the declared schemas." : "At least one field could not be checked against a declared schema."
+    }`;
+  }
+  const count = hint.matchCount ?? 1;
+  return `Observed in the capture: ${base}. A value ${producer.operationMethod} ${producer.operationPath} returned was sent ${
+    count === 1 ? "in a later request" : `in ${count} later requests`
+  }. Value reuse is evidence of a possible relationship, not proof.`;
+}
+
+function hintToRelationship(hint: DependencyHint): ApiDependencyRelationship {
+  const producer = { operationPath: hint.producer.operationPath, operationMethod: hint.producer.operationMethod, field: hint.producer.field };
+  const consumer = {
+    operationPath: hint.consumer.operationPath,
+    operationMethod: hint.consumer.operationMethod,
+    field: hint.consumer.field,
+    location: hint.consumer.location,
+  };
+  return {
+    id: relationshipId(producer, consumer),
+    producer,
+    consumer,
+    confidence: confidenceOfHint(hint),
+    source: hint.origin,
+    explanation: hintExplanation(hint),
+    inputEvidence: hint,
+  };
+}
+
+/**
+ * Adds the relationships an input's hints describe (observed value reuse, declared hints) to the
+ * deterministic ones, before disambiguation, cycle detection and workflow assembly run as usual. When
+ * the deterministic analysis found the same producer and consumer field pair, the two merge: the
+ * relationship stays deterministic, keeps the better confidence, and carries the hint as
+ * `inputEvidence`, so an existing confirming signal can still give `CONFIRMED`.
+ */
+export function mergeInputHints(
+  deterministic: ApiDependencyRelationship[],
+  hints: readonly DependencyHint[],
+): ApiDependencyRelationship[] {
+  if (hints.length === 0) return deterministic;
+  const merged = [...deterministic];
+  const indexByKey = new Map(merged.map((relationship, index) => [relationshipFieldPairKey(relationship), index]));
+  for (const hint of hints) {
+    const fromHint = hintToRelationship(hint);
+    const key = relationshipFieldPairKey(fromHint);
+    const index = indexByKey.get(key);
+    if (index === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push(fromHint);
+      continue;
+    }
+    const existing = merged[index];
+    merged[index] = {
+      ...existing,
+      confidence: CONFIDENCE_RANK[fromHint.confidence] < CONFIDENCE_RANK[existing.confidence] ? fromHint.confidence : existing.confidence,
+      explanation: `${existing.explanation} ${fromHint.explanation}`,
+      inputEvidence: hint,
+    };
+  }
+  return merged;
 }
 
 /** AI-reported confidence threshold above which an AI-only relationship reaches LIKELY (data-model.md). */

@@ -303,6 +303,7 @@ export function App() {
                     onHandoffToExecution={handleHandoffToExecution}
                     onOpenChainPlan={handleOpenChainPlan}
                     onOpenCoverage={handleOpenCoverage}
+                    onOpenImportRun={() => navigate({ view: "import" })}
                     onWorkflowChange={snapshot.update}
                     onViewedStageChange={handleViewedStageChange}
                     stageRequest={guidedStageRequest}

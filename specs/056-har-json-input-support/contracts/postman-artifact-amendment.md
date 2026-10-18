@@ -43,6 +43,11 @@ as today. For input without placeholders (every OpenAPI input) none of these bra
 | `application/x-www-form-urlencoded` | `{ mode: "urlencoded", urlencoded: [{ key, value }, …] }` | set to the content type (as for JSON today) |
 | `multipart/form-data` | `{ mode: "formdata", formdata: [{ key, value, type: "text" }, …] }` | **not set**: Postman and Newman add the boundary themselves |
 
+**Gate (implementation decision, 2026-10-18).** Form bodies are emitted only for an operation whose `provenance` is present and
+is not `documented` (observed or declared). An OpenAPI operation with a form content type keeps today's behaviour exactly: the
+`unsupported-content-type` limitation and no body. The existing exporter tests and goldens pin that behaviour, and SC-002
+requires every existing output to stay byte-identical, so widening it for documented operations is a separate change.
+
 Preconditions: the approved body is a flat object whose values are strings, numbers, booleans or null. Values are written as
 text (`String(value)`, null as the empty string), in the object's own key order. Credential-named or placeholder values become
 variable references first (section 1). If the body is not a flat object, the existing `unsupported-content-type`
@@ -71,7 +76,7 @@ operation's primary content type, so the emitted body mode always matches the ex
 | Consumer | Required behaviour |
 | --- | --- |
 | `postman/validateCollection.ts` | Per section 3. |
-| `performance/plan/stepRequest.ts` `templateFromItem` | `raw`: unchanged. `urlencoded`: body is the percent-encoded `key=value&…` text with the existing `form` body kind, which the k6 runtime already fills (AP-036 R11). `formdata`: not representable in a request-chain step, so `buildStepRequest` returns an unsupported result (`multipart-body`) instead of a template, and its two callers (`performance/plan/buildJourneys.ts`, `performance/plan/planStepRequest.ts`) skip the step and record it as a left-out step with the reason through the existing seeding note type; it is never silently dropped or sent as raw. The `templateFromItem` call for the OAuth2 token-fetch item is unaffected (never multipart). |
+| `performance/plan/stepRequest.ts` `templateFromItem` | `raw`: unchanged. `urlencoded`: body is the percent-encoded `key=value&…` text with the existing `form` body kind, which the k6 runtime already fills (AP-036 R11). `formdata`: not representable in a request-chain step. `templateFromItem` throws `UnsupportedStepBodyError`, which `buildStepRequest` converts to the existing `InvalidChainPlanError("source", …)` with the message "…uses a formdata body, which a request-chain plan cannot represent. Leave that operation out of the plan." The plan is refused with that explicit reason; the step is never silently dropped or sent as raw (no new result type or left-out-step mechanism was added). The `templateFromItem` call for the OAuth2 token-fetch item is unaffected (never multipart). |
 | `execution/newmanRunner.ts` | No change: Newman runs `urlencoded` and `formdata` natively, and the file's own comment already allows non-`raw` modes. |
 | Collection editor and view (`externalCollections/collectionView.ts`) | Operate on uploaded collections, not generated ones; unchanged. |
 
@@ -82,6 +87,19 @@ Tasks must confirm there is no other reader by building with the widened type.
 The generated README and the limitations panel keep the `unsupported-content-type` entry for content types still not
 representable (anything other than JSON, text, urlencoded and multipart text fields). Their wording is updated to list the
 supported set; no other text changes.
+
+**Implementation decision (2026-10-18, revised at the user's request).** The label now reads "Request content types this export
+cannot represent (it writes JSON and text bodies, and URL-encoded and multipart text fields for operations from a capture or an
+API definition)", in `backend/src/postman/readme.ts` and `frontend/src/components/PostmanExportLimitations.tsx`. This is the one
+reviewed change to an existing output: the single golden that contains the label
+(`shared-export-fixture.golden.txt`) was edited by hand for that string alone, and every other golden is unchanged.
+
+**No capture address in any artifact (FR-052).** The `specification-analysis-issue` limitations the README lists copy each
+issue's message. The `duplicate-operation` message for a capture names the origins it was recorded against, so for a model whose
+operations are observed or declared the exporter substitutes a fixed message that omits them ("This method and path was
+observed on more than one origin. …"). The analysis report and the review screen still show the full message. OpenAPI models
+are unaffected. `apiInput.executionSafety.test.ts` asserts that no host from the capture appears in the collection,
+environment or README.
 
 ## 6. Regression guard (SC-002)
 

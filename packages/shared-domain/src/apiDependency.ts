@@ -1,4 +1,5 @@
 import type { AIErrorCategory, AIProviderMode } from "./aiProvider";
+import type { DependencyHint } from "./apiInput";
 
 /**
  * Where a consumer reads a field from its request (data-model.md: FieldRef). `"auth"`
@@ -41,7 +42,7 @@ export interface AIDependencyCorroboration {
 export type DependencyConfidence = "CONFIRMED" | "LIKELY" | "POSSIBLE";
 
 /** Which pass(es) found this relationship (FR-006a). */
-export type DependencySource = "deterministic" | "ai" | "deterministic+ai";
+export type DependencySource = "deterministic" | "ai" | "deterministic+ai" | "observed" | "declared";
 
 /** A candidate connection between one operation's response field and another's request field. */
 export interface ApiDependencyRelationship {
@@ -56,6 +57,8 @@ export interface ApiDependencyRelationship {
   aiCorroboration?: AIDependencyCorroboration;
   /** Names the specific evidence signals or AI rationale used (FR-007). */
   explanation: string;
+  /** Present when the relationship comes from, or is corroborated by, an observed or declared input hint (specs/056 FR-038). */
+  inputEvidence?: DependencyHint;
 }
 
 /** The full analysis output before workflow assembly. */

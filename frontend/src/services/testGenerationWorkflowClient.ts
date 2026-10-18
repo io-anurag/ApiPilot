@@ -15,7 +15,16 @@ const logger = createLogger("testGenerationWorkflowClient");
 
 export type WorkflowResult =
   | { ok: true; workflow: TestGenerationWorkflow }
-  | { ok: false; error: string; message: string; problems?: string[] };
+  | {
+      ok: false;
+      error: string;
+      message: string;
+      problems?: string[];
+      /** AP-056: set when the file belongs in another workflow (a Postman collection). */
+      redirectTo?: string;
+      /** AP-056: why nothing was imported from a HAR (counts and exclusions by reason). */
+      report?: unknown;
+    };
 
 export type WorkflowOrNoneResult =
   | {
@@ -36,6 +45,8 @@ async function toWorkflowResult(response: Response, operation: string): Promise<
       error: errorCategory,
       message: (parsed?.message as string) ?? `Request failed with status ${response.status}`,
       ...(Array.isArray(parsed?.problems) ? { problems: parsed.problems as string[] } : {}),
+      ...(typeof parsed?.redirectTo === "string" ? { redirectTo: parsed.redirectTo } : {}),
+      ...(parsed?.report !== undefined ? { report: parsed.report } : {}),
     };
   }
   return { ok: true, workflow: parsed.workflow as TestGenerationWorkflow };

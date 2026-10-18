@@ -1,6 +1,6 @@
 {
   "name": "@apipilot/backend",
-  "version": "19.58.0",
+  "version": "19.59.0",
   "private": true,
   "type": "module",
   "main": "src/server.ts",
@@ -20,6 +20,7 @@
     "@apipilot/shared-domain": "*",
     "@huggingface/transformers": "^4.3.1",
     "acorn": "^8.19.0",
+    "ajv": "^8.20.0",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

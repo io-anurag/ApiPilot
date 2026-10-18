@@ -1,4 +1,5 @@
 import type { SchemaConstraint } from "./apiModel";
+import type { FactOrigin } from "./apiInput";
 import type { AIProviderMode } from "./aiProvider";
 
 /** Classification of a generated scenario's intent, per data-model.md. */
@@ -49,6 +50,19 @@ export interface Assertion {
   type: "status-code" | "schema-conformance";
   expectedStatusCode?: string;
   expectedSchema?: SchemaConstraint;
+  /** Where the asserted fact comes from. Absent means documented. An observed `status-code` assertion never has `expectedSchema`. */
+  basis?: "documented" | "declared" | "observed";
+}
+
+/**
+ * The evidence a scenario built from observed or declared input rests on (specs/056 FR-035, FR-036).
+ * Absent for scenarios generated from an OpenAPI document.
+ */
+export interface ScenarioEvidence {
+  origin: FactOrigin;
+  observationCount?: number;
+  derivation: "observed-example" | "inference-derived" | "declared-example";
+  summary: string;
 }
 
 /** Identifies which deterministic rule produced a scenario (constitution XIII). */
@@ -105,6 +119,8 @@ export interface TestScenario {
   request: GeneratedRequest;
   assertions: Assertion[];
   provenance: Provenance;
+  /** Origin, observation count and summary of the evidence behind this scenario. Absent for OpenAPI scenarios. */
+  evidence?: ScenarioEvidence;
 }
 
 /** The framework-independent output of the Deterministic Test Designer (FR-017). */

@@ -1,0 +1,7 @@
+{
+  "hello": "world",
+  "operations": [
+    { "path": "/orders", "method": "GET" },
+    { "path": "/orders/{id}", "method": "GET" }
+  ]
+}

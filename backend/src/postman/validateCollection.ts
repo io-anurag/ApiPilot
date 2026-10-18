@@ -7,6 +7,7 @@ import type {
 import { POSTMAN_COLLECTION_SCHEMA } from "@apipilot/shared-domain";
 import {
   credentialKindForField,
+  containsRedactionPlaceholder,
   credentialKindForHeader,
   isBearerTokenValue,
 } from "../testDesign/sensitiveValueDetection";
@@ -115,19 +116,30 @@ function validateRequestItem(
   }
 
   if (request.request.body) {
-    if (request.request.body.mode !== "raw") {
-      problems.push(`${location}.request.body.mode supports only "raw"`);
+    const body = request.request.body;
+    if (body.mode === "raw") {
+      try {
+        credentialLiteralsInBody(JSON.parse(body.raw), `${location}.request.body`, problems);
+      } catch {
+        // A non-JSON raw body carries no field names to inspect; the header and URL checks
+        // above still apply.
+      }
+    } else if (body.mode === "urlencoded" || body.mode === "formdata") {
+      const entries = body.mode === "urlencoded" ? body.urlencoded : body.formdata;
+      for (const entry of entries) {
+        if (credentialKindForField(entry.key, entry.value) !== undefined && !isVariableReference(entry.value)) {
+          problems.push(`${location}.request.body["${entry.key}"] carries a credential value that is not a variable reference`);
+        }
+      }
+    } else {
+      problems.push(`${location}.request.body.mode supports only "raw", "urlencoded" and "formdata"`);
     }
-    try {
-      credentialLiteralsInBody(
-        JSON.parse(request.request.body.raw),
-        `${location}.request.body`,
-        problems,
-      );
-    } catch {
-      // A non-JSON raw body carries no field names to inspect; the header and URL checks
-      // above still apply.
-    }
+  }
+
+  // A redaction placeholder from captured input must have become a variable reference; sending the
+  // placeholder text itself would be a silent substitution gap (specs/056 FR-048).
+  if (containsRedactionPlaceholder(JSON.stringify(request.request))) {
+    problems.push(`${location}.request carries a redaction placeholder that was not replaced by a variable reference`);
   }
 
   if (request.event && request.event.some((event) => event.listen !== "test")) {

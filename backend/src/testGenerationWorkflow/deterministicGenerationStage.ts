@@ -1,5 +1,5 @@
 import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
-import { generateTestModel } from "../testDesign/generateTestModel";
+import { generateTestModelWithNotes } from "../testDesign/generateTestModel";
 import { createLogger } from "../logger";
 import { StageNotActiveError } from "./errors";
 import { scopeApiModelToSelection } from "./operationSelection";
@@ -18,8 +18,9 @@ export function runDeterministicGeneration(): TestGenerationWorkflow {
     if (!workflow || workflow.stages.deterministicGeneration.status !== "active") {
       throw new StageNotActiveError("deterministicGeneration is not the active stage.");
     }
-    const deterministicTestModel = generateTestModel(scopeApiModelToSelection(workflow));
-    patchWorkflow({ deterministicTestModel });
+    const { testModel: deterministicTestModel, notes } = generateTestModelWithNotes(scopeApiModelToSelection(workflow));
+    // Operations that produced no scenario keep their reason (specs/056 FR-040); absent when there are none.
+    patchWorkflow({ deterministicTestModel, generationNotes: notes.length > 0 ? notes : undefined });
     updateStage("deterministicGeneration", "complete");
     const result = advanceActiveStage("aiEnhancement");
     logger.info("stage_complete", {

@@ -185,3 +185,10 @@ specification's title (sanitized to a filesystem-safe slug), falling back to the
 (FR-022). The UI exposes loading, success, empty, and failure states with recovery guidance
 (FR-027), reports the validation outcome and the limitation list to the engineer (FR-014, FR-017),
 and never renders a supplied credential value back to the page.
+
+## Amendment (AP-056, 2026-10-18)
+
+`PostmanBody` is widened from the single `raw` shape to `raw`, `urlencoded` and `formdata` bodies, and a redaction placeholder
+(`[redacted:<kind>]`) is turned into the same secret variable reference as a credential-named field. Existing outputs are
+byte-identical: form bodies are emitted only for operations whose provenance is observed or declared. See
+[../../056-har-json-input-support/contracts/postman-artifact-amendment.md](../../056-har-json-input-support/contracts/postman-artifact-amendment.md).

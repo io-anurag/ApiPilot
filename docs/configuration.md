@@ -32,6 +32,9 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 | `AI_VIABILITY_SAFETY_FACTOR`         | Optional viability margin override                                              | Code default                            |
 | `APIPILOT_DB_PATH`                   | SQLite database path                                                            | `~/.apipilot/apipilot.db`               |
 | `K6_BINARY_PATH`                     | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded                 | Unset: the first `k6` on `PATH`         |
+| `INPUT_HAR_MAX_ENTRIES`              | Most entries a HAR capture may hold before the upload is refused                | `5000`                                  |
+| `INPUT_MAX_BODY_BYTES`               | Largest request or response body analyzed from a capture; larger bodies are skipped and reported | `1048576` (1 MiB)         |
+| `INPUT_MAX_JSON_DEPTH`               | Deepest object or array nesting a JSON upload may have before it is refused     | `128`                                   |
 
 **`AI_USE_ACCELERATOR` is experimental, and CPU is the recommended setting.** On Windows an enabled accelerator requests DirectML. On Linux and macOS the inference library chooses a device for its generic GPU request; ApiPilot has not measured that, so do not assume a specific accelerator there.
 

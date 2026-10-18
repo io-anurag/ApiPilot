@@ -1,6 +1,6 @@
 import "./loadEnv";
 import { createApp } from "./app";
-import { loadConfig, validateAIConfiguration } from "./config";
+import { loadConfig, validateAIConfiguration, validateInputConfiguration } from "./config";
 import { createLogger } from "./logger";
 import { isLoopbackBindAddress } from "./security/localHostGuard";
 import { getSharedConnection } from "./persistence/connection";
@@ -41,6 +41,7 @@ if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
 
 const config = loadConfig();
 validateAIConfiguration();
+validateInputConfiguration();
 
 // Opens (and, on first run, initializes) the local persistence layer before anything else
 // starts, so a corrupted/unreadable database file fails startup explicitly rather than

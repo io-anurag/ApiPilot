@@ -123,6 +123,9 @@ function resolveOperations(
   return pairs;
 }
 
+const CAPTURE_DUPLICATE_OPERATION_MESSAGE =
+  "This method and path was observed on more than one origin. An operation is identified by method and path, so only the origin with more observations was imported.";
+
 /**
  * Analysis issues the specification carried for the operations actually exported (FR-017).
  * Issues about operations no approved scenario targets are not this export's business.
@@ -132,17 +135,24 @@ function analysisIssueLimitations(
   pairs: { scenario: TestScenario; operation: ApiOperation }[],
 ): GenerationLimitation[] {
   const exportedPaths = [...new Set(pairs.map((pair) => pair.operation.path))];
+  const fromCapture = apiModel.operations.some(
+    (operation) => operation.provenance !== undefined && operation.provenance.origin !== "documented",
+  );
   const seen = new Set<string>();
   const limitations: GenerationLimitation[] = [];
   for (const issue of apiModel.summary.issues) {
     if (!exportedPaths.some((path) => issue.location.includes(path))) continue;
-    const key = `${issue.location} ${issue.message}`;
+    // A capture's duplicate-operation message names the origins it was recorded against. Those
+    // addresses must not reach an artifact (specs/056 FR-052), so the exported wording omits them.
+    const message =
+      fromCapture && issue.kind === "duplicate-operation" ? CAPTURE_DUPLICATE_OPERATION_MESSAGE : issue.message;
+    const key = `${issue.location} ${message}`;
     if (seen.has(key)) continue;
     seen.add(key);
     limitations.push({
       kind: "specification-analysis-issue",
       location: issue.location,
-      message: `The specification analysis reported "${issue.kind}" for this operation: ${issue.message}`,
+      message: `The specification analysis reported "${issue.kind}" for this operation: ${message}`,
     });
   }
   return limitations;

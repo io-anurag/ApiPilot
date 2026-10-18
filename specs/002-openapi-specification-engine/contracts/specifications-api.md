@@ -73,3 +73,12 @@ contains flagged ambiguities — see `summary.issues` below).
   (research.md "No persistence" decision).
 - A response with `summary.issues` non-empty is still a `200 OK` — issues are ambiguities
   to review, not upload failures (FR-013 vs. FR-004).
+
+## Amendment (AP-056, 2026-10-18)
+
+This endpoint now accepts a file that is OpenAPI 3.x in YAML or JSON, a HAR capture or an ApiPilot API definition, decided from
+the content alone, and its success response also carries `input` (`{ format, label, filename }`). The new request rules, the
+additive response fields and the new error codes (`invalid_json`, `unrecognized_input_format`, `ambiguous_input_format`,
+`postman_collection_detected`, `invalid_har`, `no_operations_derived`, `invalid_definition`, `input_limit_exceeded`) are
+specified in [../../056-har-json-input-support/contracts/upload-api-amendment.md](../../056-har-json-input-support/contracts/upload-api-amendment.md). The behaviour above is unchanged for an OpenAPI
+YAML upload.

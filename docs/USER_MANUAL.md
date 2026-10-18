@@ -8,7 +8,7 @@ covers what you see and do on screen.
 
 ## 1. What ApiPilot does
 
-You upload one OpenAPI 3.x YAML file and choose which of its operations to test. ApiPilot
+You upload one OpenAPI 3.x document (YAML or JSON), a HAR capture of real traffic, or a small ApiPilot API definition, and choose which of its operations to test. ApiPilot
 analyzes it, generates a baseline set of test scenarios deterministically (the same input
 always produces the same scenarios), optionally proposes additional scenarios using a
 locally running AI model, and lets you review and approve everything before anything is
@@ -165,10 +165,20 @@ completed**.
 
 ### 3.1 Upload
 
-On Home or in the sidebar, choose **Guided Workflow**, then choose a `.yaml` or `.yml` file (up to 10 MB). Only OpenAPI 3.x is
-supported — Swagger 2.0 and JSON OpenAPI documents are rejected. If the file cannot be
-parsed as YAML, or is not OpenAPI 3.x, an explicit error is shown before anything else
-runs.
+On Home or in the sidebar, choose **Guided Workflow**, then choose a file (up to 10 MB). ApiPilot recognizes what the file
+is from its content, not its name, so `.yaml`, `.yml`, `.json` and `.har` files are all accepted:
+
+| What you upload | How it is used |
+|---|---|
+| OpenAPI 3.x, YAML or JSON | The documented contract. Everything works as it always has, and a YAML file and its JSON twin give the same result. Swagger 2.0 is rejected. |
+| HAR capture | Requests and responses recorded by a browser or proxy. ApiPilot works out the operations from what was observed (section 3.1a). |
+| ApiPilot API definition (`.json`) | A small, strictly validated file you write yourself for an API that has neither an OpenAPI document nor a capture (section 3.1b). |
+| Postman collection | Not used by the guided workflow. ApiPilot says so and points you to **Import & Run Collection**; nothing is imported. |
+
+The detected format is shown next to the file name for the whole workflow. If the file cannot be understood, an explicit
+error says why before anything else runs: a JSON file that matches none of the formats, or more than one, is refused and
+the supported formats are named, and a file that is recognized but breaks that format's rules is refused with the specific
+problems listed.
 
 If you already have a workflow in progress and choose to start a new one, ApiPilot asks
 you to confirm discarding it first. Choosing **Discard and start new** discards it at once;
@@ -176,6 +186,164 @@ it cannot be resumed afterwards. While AI enhancement is still running the disca
 refused, so cancel the run and wait for it to stop first. If your previous session was idle for more than 60
 minutes, it will already have been discarded automatically, and you'll see a notice
 explaining that.
+
+### 3.1a Uploading a HAR capture
+
+A HAR file records the requests a browser or proxy made and the responses it received. It is the quickest way to test an
+API that has no OpenAPI document: ApiPilot turns what was observed into operations you can review, select and generate
+tests for. To try it with a small synthetic capture, upload [examples/sample-capture.har](examples/sample-capture.har).
+ApiPilot reports 15 entries, 12 imported and 3 excluded (a redirect, an analytics call and a static file), and lists 5
+operations.
+
+**Capturing a HAR.**
+
+- In Chrome, Edge or another Chromium browser: open developer tools (F12), choose the **Network** tab, tick **Preserve
+  log**, clear the list, perform only the actions you want tested, then right-click the list and choose **Save all as HAR
+  with content**.
+- In Firefox: open the **Network** tab, perform the actions, then use the cog menu and choose **Save All As HAR**.
+- In a proxy or recorder (mitmproxy, Charles, Fiddler, Burp and similar): record the session and export it as HAR.
+
+Capture one focused session. Include more than one request per endpoint when you can: a path segment only becomes a path
+parameter when the capture shows at least two different values for it, and negative scenarios need at least three
+observations (see below).
+
+**Strip secrets before you share a capture.** A HAR saved from developer tools normally contains cookies, `Authorization`
+headers, tokens in URLs and bodies, and anything typed into a form. ApiPilot replaces credential values with a placeholder
+when it reads the file and never stores, logs, displays or sends them (not to the AI model, not into a generated
+artifact), but the file on your disk still has them. Remove or redact them before the file is attached to a ticket,
+committed or sent to anyone. Some browsers and tools offer a sanitized HAR export; use it where available and still check
+the result.
+
+**What the import summary tells you.** When a capture has been read, API Review opens with a summary above the usual
+analysis counts: how many entries the file held, how many were imported as operations, how many were excluded and why
+(grouped by reason, with the first few examples), how many were malformed, which origins (scheme, host and port) the
+operations came from, what URL clean-up was applied, and, by position and host only, any entries whose URL carried a user
+name and password. The counts always add up: imported plus excluded plus malformed equals the total.
+
+**Reading the labels.** Every operation, parameter, status code, example and schema fact shows where it comes from, in
+words as well as colour:
+
+| Label | Meaning |
+|---|---|
+| **Documented** | Stated by an OpenAPI document you supplied. |
+| **Declared** | Stated by an API definition you wrote. |
+| **Observed ×N** | Seen in N entries of the capture. Not a promise that the API behaves that way. |
+| **Inferred ×N** | Worked out by ApiPilot from N observations, such as a path parameter or a field's type. |
+
+The word beside the count is the confidence: **high** for three or more consistent observations, **medium** for two, **low**
+for one or when observations disagree. A parameter's requirement is shown as **unknown** when a capture cannot tell (only
+path parameters are always required).
+
+#### What ApiPilot does with a capture
+
+These rules are fixed and deterministic: the same file gives the same operations, in the same order, every time.
+
+*Entries that are left out.* Each entry gets exactly one reason, from the first of these rules that applies:
+
+| # | Reason | Entries |
+|---|---|---|
+| 1 | Malformed | No usable URL (missing, relative or invalid), no method, no response status, or not an object. Counted separately and listed by position. |
+| 2 | Not HTTP | A scheme other than `http` or `https` (for example `data:` or `blob:`). |
+| 3 | CORS preflight | An `OPTIONS` request that carries `Access-Control-Request-Method`. |
+| 4 | Streaming | A WebSocket, or a server-sent-events response (`text/event-stream`). |
+| 5 | Failed request | No response was received (status 0). |
+| 6 | Not modified | Status 304. |
+| 7 | Redirect | Any other 3xx status. Redirects and 304 are never recorded as an operation's statuses. |
+| 8 | Analytics or telemetry | A host on the list below, or a subdomain of one. |
+| 9 | Static asset | A `GET` or `HEAD` for an image, font, stylesheet or script, by content type or by file extension (`js`, `mjs`, `css`, `map`, `png`, `jpg`, `jpeg`, `gif`, `svg`, `ico`, `webp`, `woff`, `woff2`, `ttf`, `otf`, `eot`). |
+| 10 | HTML document | A response whose content type is `text/html` (a page navigation). |
+| 11 | Third-party origin | An origin whose site name (the last two host labels, or three for suffixes such as `co.uk`) matches neither a page the capture was taken on nor the origin with the most API-like requests. |
+| 12 | Duplicate on another origin | The same method and path was seen on a second origin. The origin with more observations is kept (on a tie, the one that sorts first) and the other is excluded, with a `duplicate-operation` issue. An operation is one method and path, whichever server answered. |
+
+The first-party rule is approximate by design. It can leave out a real API that lives on an unrelated domain, which is why
+every exclusion is reported with its reason; if that happens, upload a capture that contains only that traffic.
+
+The analytics host list is: amplitude.com, clarity.ms, datadoghq.com, doubleclick.net, facebook.net, fullstory.com,
+google-analytics.com, googlesyndication.com, googletagmanager.com, heapanalytics.com, hotjar.com, hotjar.io, intercom.io,
+mixpanel.com, newrelic.com, nr-data.net, optimizely.com, px.ads.linkedin.com, segment.com, segment.io, sentry.io and
+snowplowanalytics.com.
+
+*URLs and paths.* The host is compared without case. In the path, `.` and `..` segments are resolved as text, repeated
+slashes are collapsed, a trailing slash is dropped and percent-encoding is normalized, so `/v1/orders/` and `/v1//orders`
+are the same path. The query string is not part of an operation's identity: its names become query parameters.
+
+*Path parameters.* A path segment is a parameter only when the capture shows at least two different identifier-like values
+at that position across otherwise identical paths for the same method. Identifier-like means: all digits, a UUID, a
+hexadecimal string of 8 or more characters, a ULID, an ISO date (`2026-01-31`), or a token of 12 or more letters, digits,
+`_` or `-` that mixes letters and digits. A single value, or a segment that is not identifier-like, stays literal, and a
+lone identifier-like value is reported as an ambiguous path instead of being guessed. The parameter is named after the
+preceding word (`/orders/…` gives `orderId`), or `id` when there is none.
+
+*Statuses, bodies and examples.* An operation lists only the statuses it was seen to return. Up to five distinct request
+examples are kept per operation. JSON bodies give field names, types and how often each field was present; URL-encoded and
+multipart bodies give their text fields. Compressed bodies are not decompressed and a multipart file part cannot be
+reproduced; both are recorded as unavailable, with the reason, and never guessed. A body above the size limit is skipped and
+reported.
+
+*Credentials.* Credential values (in headers, cookies, query strings, JSON and form fields, and the user name and password
+in a URL) are replaced by a placeholder such as `[redacted:token]` before anything else is kept. ApiPilot records that a
+credential was seen, where and of what kind, never its value. In generated tests the placeholder becomes a variable
+reference such as `{{token}}`, whose value you supply when you run.
+
+*Generated tests.* For an observed operation, deterministic generation produces:
+
+- one positive scenario for each observed 2xx status, replaying the most-observed request for that status and asserting
+  only that status code, labelled **Observed**. No header, body or schema assertion is ever generated from a capture;
+- a missing-field or wrong-type negative scenario for a request-body field only when the capture supports it: the field was
+  present in at least three request bodies (and, for a wrong type, always with the same type). These are labelled
+  **Inferred**, and they assert no failure status unless the capture showed a failure for exactly that request;
+- no scenario at all, with the reason listed under the scenarios, for an operation with no successful response or no usable
+  request.
+
+No enum, format, boundary or length scenario is generated from a capture, because a capture cannot show that a value is
+not allowed.
+
+**Observed is not documented.** A HAR describes what happened in one session, not what the API promises. A status that was
+not seen may still be valid, a field that was always present may still be optional, and a value that looked like an
+identifier may not be one. Treat scenarios from a capture as a regression baseline for observed behaviour, and review them
+before approving. An OpenAPI document or an API definition remains the better source when one exists.
+
+**Dependencies.** A value that one response returned and a later request of another operation sent is reported as a
+possible dependency: **possible** for one use and **likely** for two or more, and never **confirmed** by that evidence
+alone. Only values that look distinctive (long enough, not a flag or a common constant) and that exactly one operation and
+field produced are considered.
+
+**Limits.** Captures and definitions are bounded so that a large or hostile file cannot exhaust the machine:
+
+| Limit | Value | Setting | When it is exceeded |
+|---|---|---|---|
+| File size | 10 MB | fixed | The upload is refused. |
+| Entries in a HAR | 5,000 | `INPUT_HAR_MAX_ENTRIES` | The upload is refused; capture a narrower session. |
+| Size of one body analyzed | 1 MiB | `INPUT_MAX_BODY_BYTES` | That body is skipped and reported. |
+| JSON nesting depth | 128 | `INPUT_MAX_JSON_DEPTH` | The upload is refused. |
+| Operations derived from one capture | 2,000 | fixed | The upload is refused. |
+| Request examples kept per operation | 5 | fixed | The rest are counted, not kept. |
+| Values listed for one path parameter | 10 | fixed | The rest are counted, not listed. |
+| Nesting depth inside an embedded body | 32 | fixed | That body is skipped and reported. |
+| Analysis issues listed per kind | 200 | fixed | The rest are summarized in one line. |
+
+The three settings are environment variables; see [Configuration](configuration.md).
+
+### 3.1b Uploading an API definition
+
+When you have neither an OpenAPI document nor a capture, you can describe the API in a small JSON file in the ApiPilot
+API definition format: the operations (method, path, parameters, request body, expected responses), optional authentication
+schemes, and optional hints about which operation's output feeds another. The format is strict. A misspelled or unknown
+field is rejected, and when anything is wrong the whole file is refused with every problem listed with its location, for
+example `/operations/2/path: must start with '/' and contain no query, fragment or whitespace`. Nothing is imported until
+the file is valid.
+
+A definition never holds credentials. Anything you leave out is unknown, not defaulted: a parameter with no `required` is
+shown as requirement unknown, and an operation with no `responses` has no expected outcome, so its scenarios assert
+nothing. What you write is shown as **Declared**. Deterministic generation applies the same rules it applies to OpenAPI over
+the schemas you declared, and a base URL in the file is shown for information only: it is never used as a test target,
+because a run always goes to the environment you select.
+
+The full field reference, the validation messages and a complete example are in
+[API definition format](api-definition-format.md), with the machine-readable [schema](api-definition.v1.schema.json). Upload
+[examples/sample-api-definition.json](examples/sample-api-definition.json) to see it work: it yields 2 operations, a
+bearer-token scheme and one confirmed dependency. An OpenAPI example in JSON is in
+[examples/sample-openapi.json](examples/sample-openapi.json).
 
 ### 3.2 Analysis
 
@@ -1270,8 +1438,16 @@ Variable and credential values are encrypted before being stored.
 - Coverage (section 6b) measures only what the scenario model can express: it cannot measure security coverage, cookie
   parameters, array item constraints or `oneOf`/`anyOf` branches, and it matches run results to scenarios only for runs of
   the collection generated from the current workflow.
-- Only a single OpenAPI 3.x YAML file is supported per workflow (max 10 MB). Swagger 2.0
-  and JSON OpenAPI input are not supported.
+- One file is used per workflow (up to 10 MB). OpenAPI 3.x (YAML or JSON), a HAR capture and an ApiPilot API definition
+  are supported; Swagger 2.0 is not. The limits for captures and definitions are in section 3.1a.
+- A HAR capture is evidence of what happened in one session, not a contract (section 3.1a). Compressed bodies are not
+  decompressed and multipart file parts cannot be reproduced. The first-party rule is a heuristic and can leave out a real
+  API on an unrelated domain. One operation is one method and path, so the same method and path on two servers keeps only
+  the server with more observations. Redirects and 304 responses are excluded and never recorded as statuses. Negative
+  scenarios need at least three observations, and none is generated for enum, format or boundary rules. Negative scenarios
+  proposed by AI enhancement are validated against the observed model but are not held to that threshold.
+- Unsupported content in a capture (for example an unknown media type) is reported, not interpreted, and the operation is
+  still created from what could be read.
 - Only same-document `$ref`s are resolved; external references are reported as
   unresolved analysis issues, never fetched.
 - Request-chain performance plans (section 5b) do not support multipart bodies or file uploads,
@@ -1344,8 +1520,15 @@ Variable and credential values are encrypted before being stored.
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | "Something went wrong and this page could not be shown." | The page hit an unexpected error while displaying something | Choose **Reload page**. Saved collections, environments and run history are not affected. If it happens again, open **Technical details** (or choose **Copy details**) and report the message; it is also recorded in the backend log |
-| Upload rejected immediately | File isn't `.yaml`/`.yml`, or exceeds 10 MB | Check the extension and file size |
+| Upload rejected immediately | The file exceeds 10 MB, or its extension is not `.yaml`, `.yml`, `.json` or `.har` | Check the file size and extension |
+| "The JSON file was not recognized" | A JSON file with no OpenAPI, HAR, API definition or Postman marker | Check that it is one of the supported formats; an API definition must start with `"format": "apipilot.api-definition"` |
+| "matches more than one supported format" | A JSON file carries markers of two formats | Remove the extra markers so the file is only one of them |
+| "This file is a Postman collection" | A Postman collection was uploaded to the guided workflow | Open **Import & Run Collection** and import it there; nothing was imported |
+| "The API definition is not valid for version 1" | The definition breaks a rule | Fix each listed problem (the location is before the colon) and upload again; every problem is listed at once |
+| "No API operations could be derived from this capture" | Every entry was excluded or malformed | Read the counts by reason in the message: a capture of page loads, redirects or third-party traffic has no API calls; capture a session that exercises the API |
+| "The file exceeds the limit INPUT_HAR_MAX_ENTRIES" (or another `INPUT_` limit) | The capture is larger than the limit | Capture a narrower session, or raise the limit in the environment (see [Configuration](configuration.md)) |
 | "Invalid YAML" / "Unsupported version" error | File isn't valid YAML, or isn't OpenAPI 3.x | Validate the file locally; Swagger 2.0 must be converted to OpenAPI 3.x first |
+| An operation from a capture has no scenarios | Too little evidence: no successful response, or no usable request | Read the reason listed under the scenarios; capture more requests for it |
 | Analysis issues listed after upload | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs | Review the listed locations; generation still proceeds but treat affected operations' tests with caution |
 | "Enhance with AI" stays on "Preparing the local model" a long time | First run needs to download/load the model | Wait for first-run provisioning to finish (see the README's Install section and [Configuration](configuration.md#configuration)); subsequent runs are faster |
 | AI Enhancement ends "Partially completed" | Spec has more operations than fit the run's time budget | Use the per-batch **Retry batch N** buttons, or **Retry AI enhancement** if retryable |

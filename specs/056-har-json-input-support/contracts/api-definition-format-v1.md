@@ -48,13 +48,17 @@ There is no field for a token, key, password or secret. Credentials are supplied
 | `parameters` | no | Path, query, header and cookie parameters. **Request headers are header parameters** (give an `example`). |
 | `requestBody` | no | One content type with optional schema and examples. |
 | `responses` | no | Expected statuses with optional content type, schema and examples. |
-| `security` | no | Names from `authentication`. An empty array states the operation needs none. Absent means unknown. |
+| `security` | no | Names from `authentication`. Each name is an alternative: the operation accepts any one of them. An empty array states the operation needs none. Absent means unknown (the model holds no requirement in either case). |
 
 ### `parameters[]`
 
 `name` and `in` are required. `required` (boolean), `description`, `schema`, `example` are optional. A path parameter must
 appear in the path as `{name}`, and every `{name}` in the path must be declared; a path parameter must not set `required:
-false`.
+false`. A parameter is identified by its location and name (header names compare without case) and may be declared once.
+
+A parameter's `example` is kept in the model with credential values replaced by placeholders. The generated tests send a
+declared example for that parameter only in the declared-example scenario (see *How a definition is used to generate tests*);
+a non-path parameter that states neither a schema nor an example is not sent.
 
 ### `requestBody`
 
@@ -64,7 +68,7 @@ false`.
 ### `responses[]`
 
 `status` is required: an integer 100 to 599 or a three-digit string. `description`, `contentType`, `schema` and `examples`
-are optional. A status appears once per operation.
+are optional, except that a `schema` or `examples` need a `contentType` to belong to. A status appears once per operation.
 
 ### `schema` (closed vocabulary)
 
@@ -84,8 +88,9 @@ is ever fetched or resolved.
 }
 ```
 
-`operation` is an operation `id` or `"METHOD /path"`. `producer.field` is a dotted response field path;
-`consumer.location` is `path`, `query`, `header` or `body`. A hint naming an operation that does not exist is a validation
+`operation` is an operation `id` or `"METHOD /path"` (the path written exactly as in `operations`). `producer.field` is a
+dotted response field path (`data.id`, or `items[].id` to step into an array); `consumer.location` is `path`, `query`,
+`header` or `body`. `note` is for the author and is not used. A hint naming an operation that does not exist is a validation
 error. When both operations declare schemas and both fields exist in them, the hint is verified and treated as a confirmed
 relationship; otherwise it is likely, with the reason stated (research R20).
 
@@ -110,8 +115,34 @@ Every violation found is reported at once, as `"<JSON Pointer>: <corrective mess
 | Security reference to an undefined scheme | `/operations/0/security/0: 'bearerAuth' is not declared in authentication` |
 | `baseUrl` not absolute `http` or `https`, or has credentials | `/baseUrl: must be an absolute http or https URL without credentials` |
 | Dependency hint naming a nonexistent operation | `/dependencyHints/0/consumer/operation: no operation with id or key 'getOrdr'` |
+| Path-located hint field that is not a path parameter of the operation | `/dependencyHints/0/consumer/field: 'orderNumber' is not a path parameter of GET /orders/{orderId}` |
+| Malformed path template (unbalanced braces, bad or repeated parameter name) | `/operations/1/path: path parameters must be written as {name}, with balanced braces` |
+| Duplicate parameter (same location and name) | `/operations/1/parameters/2: duplicates parameter 1 (query 'expand')` |
+| Status declared twice for one operation | `/operations/0/responses/1/status: status 201 is already declared by response 0` |
+| Response schema or examples without a content type | `/operations/0/responses/1/contentType: is required when a schema or examples are given` |
+| Authentication field that does not belong to the type, or a missing one | `/authentication/0/in: is only valid for type 'api-key'`, `/authentication/0/tokenUrl: is required when type is 'oauth2-client-credentials'` |
+| Duplicate authentication name | `/authentication/1/name: 'bearerAuth' is already used by authentication 0` |
+| Invalid regular expression, or a minimum above its maximum, in an embedded schema | `/operations/0/requestBody/schema/properties/sku/pattern: is not a valid regular expression` |
 
-A single mistake reports one message per location: alternatives inside `oneOf` (for example, `status`) are collapsed.
+A single mistake reports one message per location: alternatives inside `oneOf` (for example, `status`) are collapsed. Messages
+may name a field or an identifier from your file (shortened, printable characters only) and never repeat a value. At most 100
+problems are listed, followed by a line giving how many more there were.
+
+## How a definition is used to generate tests
+
+Deterministic generation reads a definition the way it reads an OpenAPI document, over only what you wrote:
+
+- Required-field, type, enum, format, boundary and length scenarios come from the `schema` you declare; nothing is generated
+  for a constraint you did not write. A body, a non-path parameter or a response schema with no schema states nothing and is
+  not used to build a request or an assertion.
+- Expected statuses and response-schema assertions come from `responses`, and are labelled **Declared**. An operation with no
+  `responses` has no expected outcome, and its scenarios assert nothing.
+- An operation whose request body has `examples` but no `schema` gets one extra positive scenario that sends the first example
+  (with its parameters' examples), labelled as a declared example.
+- Dependency hints become relationships in dependency analysis. A hint is **confirmed** only when both fields exist in the
+  declared schemas; otherwise it is **likely**, and the explanation says it could not be checked.
+- `baseUrl` is shown in review for your information. It is never used as a test target; the address of a run always comes from
+  the environment you select.
 
 ## Credentials in examples
 
@@ -187,7 +218,7 @@ generated artifacts (FR-026).
 }
 ```
 
-This example validates against the schema (checked with Ajv 8.20 in strict mode during planning). It yields 2 operations,
+This example validates against the schema. It yields 2 operations,
 declared provenance on every fact, `expand` with unknown requiredness, a `bearerAuth` scheme mapped to HTTP bearer, and one
 declared, verified dependency (confirmed). Because it declares response and request schemas, the existing deterministic
 rules apply to it unchanged (positive, required-field, type, enum, numeric and string boundary scenarios).

@@ -83,7 +83,7 @@ recover which facts were observed.
 4. A JSON document that is not an object (an array, a scalar) is `unrecognized_input_format`.
 5. Classify a JSON object by **discriminating markers**, one per family:
    - OpenAPI: `openapi` is a string, or `swagger` is a string.
-   - HAR: `log` is an object and `log.entries` is an array.
+   - HAR: `log` is an object that has `entries`, `version`, `creator` or `pages` (so a capture with a broken or missing entries list still reaches the HAR validator and gets an actionable `invalid_har`, instead of being called unrecognized).
    - ApiPilot definition: `format === "apipilot.api-definition"` exactly.
    - Postman collection: `info.schema` is a string containing `schema.getpostman.com/json/collection/`, or `info` is an
      object with `_postman_id` and `item` is an array.
@@ -220,11 +220,11 @@ Order and reasons:
 6. 3xx: excluded `redirect` (the redirect target is its own entry and is judged on its own).
 7. `304`: excluded `not-modified` (a cache artifact, not an observed API outcome). 3xx and 304 are never recorded as
    observed statuses because a positive scenario asserting `302` or `304` would be wrong when executed.
-8. Static asset: `GET`/`HEAD` whose response mime type is `image/*`, `font/*`, `text/css`, `*/javascript`, or whose path
+8. Analytics and telemetry: host equals or is a subdomain of an entry in the frozen list in `analyticsHosts.ts`: excluded
+   `analytics-telemetry`. Checked before static assets, so an analytics beacon that looks like an image is still reported as analytics.
+9. Static asset: `GET`/`HEAD` whose response mime type is `image/*`, `font/*`, `text/css`, `*/javascript`, or whose path
    extension is in a fixed list (`.js .mjs .css .map .png .jpg .jpeg .gif .svg .ico .webp .woff .woff2 .ttf .otf .eot`):
    excluded `static-asset`. `text/html` responses: excluded `html-document` (page navigations).
-9. Analytics and telemetry: host equals or is a subdomain of an entry in the frozen list in `analyticsHosts.ts`:
-   excluded `analytics-telemetry`.
 10. Unrelated third-party origin (R12): excluded `third-party-origin`.
 11. Same `(method, path)` on another included origin that lost the collision rule (R13): excluded
     `duplicate-method-path-other-origin`.
@@ -277,9 +277,11 @@ builds.
 
 **Decision**: `inferPathParameters.ts`, per `(origin, method, segment count)`:
 
-1. Mark each observed segment **identifier-like** by a pure predicate: all digits; UUID; 24 hex characters; at least 8
-   hex characters; ULID (26 Crockford base32); or an alphanumeric token of 16 or more characters containing both a
-   digit and a letter. Shorter mixed tokens (`v1`, `abc12`) and ordinary words are literal.
+1. Mark each observed segment **identifier-like** by a pure predicate: all digits; UUID; at least 8 hex characters
+   (which includes a 24-character object id); ULID (26 Crockford base32); an ISO date (`YYYY-MM-DD`); or a token of 12 or
+   more letters, digits, `_` and `-` containing both a digit and a letter (`ord_7f3a9c21d4`). Shorter mixed tokens (`v1`,
+   `abc12`) and ordinary words are literal. (Implementation note, 2026-10-18: the first draft required 16 alphanumeric
+   characters, which left prefixed ids such as `ord_7f3a9c21d4` literal.)
 2. A path's **skeleton** replaces each identifier-like segment with a wildcard. Paths with equal skeletons are one
    candidate group.
 3. In a group, a wildcard position becomes a path parameter only when it has at least **2 distinct** values across the
@@ -418,8 +420,11 @@ query values, header values and JSON request-body leaves.
 
 A value counts as evidence only if it is **distinctive**: a string of at least 8 characters or an integer of at least 4
 digits; not a boolean or null; not a member of a small stoplist (common MIME types, `true`/`false` strings, ISO currency
-codes); produced by exactly one `(operation, field)` pair in the capture; and not appearing as a value of 3 or more
-different fields. The producer and consumer must be different operations.
+codes); and produced by exactly one `(operation, field)` pair in the capture. The producer and consumer must be different
+operations. (Implementation note, 2026-10-18: the draft also excluded a value appearing in 3 or more different fields; it is
+redundant with the unique-producer rule, since a value that many fields returned has many producers, so it was not built.)
+The detector works on SHA-256 digests (first 16 hex characters) of values harvested during extraction, so a pre-redaction
+value never leaves `extractEntry`; a sample is carried only for values judged plainly not sensitive.
 
 Output is a `DependencyHint`: producer and consumer `FieldRef`s, the number of distinct consuming entries, the order
 fact, and a sample value truncated to 32 characters, **withheld** when either field name is credential-like or the
@@ -575,10 +580,11 @@ no body for any non-JSON, non-text content type. Newman supports both modes nati
 
 **Risks and guards**: (1) Existing artifacts must not change: a byte-equality snapshot over all existing fixtures. (2) The
 widening could reach consumers not yet found: tasks build with the widened type before anything else. (3) k6 chain seeding
-from an approved HAR-derived workflow meets `formdata`: `buildStepRequest` returns an unsupported result and its callers
-record a left-out step with the reason (the precedent is `left-out-request` in `seedFromCollection.ts`; the first plan wrongly
-said an existing "not converted" mechanism covered this path, which it only does for uploaded collections), rather than
-inventing a representation.
+from an approved HAR-derived workflow meets `formdata`: `templateFromItem` throws `UnsupportedStepBodyError` and
+`buildStepRequest` turns it into the existing `InvalidChainPlanError("source", …)` naming the operation to leave out, rather
+than inventing a representation. (Implementation note, 2026-10-18: the draft proposed an unsupported result with callers
+recording a left-out step, after the precedent in `seedFromCollection.ts`; the explicit refusal needed no new type and no caller
+change, and a plan is still never built with a silently dropped step.)
 
 **Alternatives**: Keep form bodies unsupported (superseded by the clarification). Emit form bodies as `raw` text with a
 form `Content-Type`. Rejected: Postman and Newman treat `urlencoded` and `formdata` as structured modes, which is what

@@ -12,6 +12,7 @@ import type {
 import { getAIProvider } from "../ai";
 import { redactSensitiveRequestValues } from "../testDesign/reviewSensitiveValues";
 import { upload } from "../uploadMiddleware";
+import { wipeUpload } from "../apiInput/wipeUpload";
 import { continueApiReview } from "../testGenerationWorkflow/apiReviewStage";
 import {
   createEnvironment,
@@ -359,6 +360,9 @@ export function createTestGenerationWorkflowRouter(provider: AIProvider = getAIP
         // Forwarded to app.ts's centralized error handler, which logs this generically —
         // not duplicated here.
         next(err);
+      } finally {
+        // The raw upload is not retained once analysis has finished or failed (specs/056 FR-049).
+        wipeUpload(req.file);
       }
     })
     // Discards the in-progress workflow on its own (FR-010) — 204 whether or not there was one,

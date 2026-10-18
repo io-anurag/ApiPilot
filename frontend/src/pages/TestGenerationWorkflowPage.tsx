@@ -33,6 +33,7 @@ import { WorkflowReviewStage } from "../components/WorkflowReviewStage";
 import { PostmanGenerationStage } from "../components/PostmanGenerationStage";
 import { PerformanceTestingStage } from "../components/performance/PerformanceTestingStage";
 import { AnalysisSummary } from "../components/AnalysisSummary";
+import { InputFormatBadge } from "../components/InputFormatBadge";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
@@ -165,6 +166,7 @@ export function TestGenerationWorkflowPage({
   onHandoffToExecution,
   onOpenChainPlan,
   onOpenCoverage,
+  onOpenImportRun,
   onWorkflowChange,
   onViewedStageChange,
   stageRequest,
@@ -182,6 +184,8 @@ export function TestGenerationWorkflowPage({
   onOpenChainPlan?: (planId: string) => void;
   /** AP-046: opens the Coverage view from scenario review. */
   onOpenCoverage?: () => void;
+  /** AP-056: opens Import & Run Collection, offered when an uploaded file turns out to be a Postman collection. */
+  onOpenImportRun?: () => void;
   /** AP-054: reports the session's workflow once it has been read and after every change, so the
    * sidebar's stage states and Home stay current. `null` means there is none. */
   onWorkflowChange?: (workflow: TestGenerationWorkflow | null) => void;
@@ -199,7 +203,12 @@ export function TestGenerationWorkflowPage({
   const [viewedStageId, setViewedStageId] = useState<WorkflowStageId | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // AP-056: a rejected upload can carry a list of specific problems (an invalid API definition) and a
+  // pointer to the workflow the file belongs in (a Postman collection).
+  const [uploadProblems, setUploadProblems] = useState<string[]>([]);
+  const [uploadRedirect, setUploadRedirect] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [analyzingCapture, setAnalyzingCapture] = useState(false);
   // Clicking "Start a new workflow" while one is running must confirm the discard up front
   // (FR-010). Confirming discards it on the server right away (DELETE), so the starting page is
   // only ever shown with no workflow left to return to or to replace on upload.
@@ -314,8 +323,12 @@ export function TestGenerationWorkflowPage({
   // input's `accept` attribute entirely.
   async function processFile(file: File) {
     setUploadError(null);
-    if (!/\.ya?ml$/i.test(file.name)) {
-      setUploadError("Only .yaml or .yml OpenAPI specification files are supported.");
+    setUploadProblems([]);
+    setUploadRedirect(null);
+    if (!/\.(ya?ml|json|har)$/i.test(file.name)) {
+      setUploadError(
+        "Supported files are .yaml, .yml, .json and .har: an OpenAPI specification, a HAR capture or an ApiPilot API definition.",
+      );
       return;
     }
     await doUpload(file);
@@ -349,11 +362,17 @@ export function TestGenerationWorkflowPage({
 
   async function doUpload(file: File) {
     setUploading(true);
+    setAnalyzingCapture(/\.har$/i.test(file.name));
     setUploadError(null);
+    setUploadProblems([]);
+    setUploadRedirect(null);
     const result = await startWorkflow(file);
     setUploading(false);
+    setAnalyzingCapture(false);
     if (!result.ok) {
       setUploadError(result.message);
+      setUploadProblems(result.problems ?? []);
+      setUploadRedirect(result.redirectTo ?? null);
       return;
     }
     setWorkflow(result.workflow);
@@ -504,7 +523,7 @@ export function TestGenerationWorkflowPage({
                     New test generation run
                   </p>
                   <p className="mt-0.5 text-xs text-muted">
-                    OpenAPI 3.x · YAML · up to 10 MB
+                    OpenAPI 3.x (YAML or JSON), HAR or API definition · up to 10 MB
                   </p>
                 </div>
                 <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
@@ -517,6 +536,11 @@ export function TestGenerationWorkflowPage({
                   <p className="text-sm leading-6 text-muted">
                     The document stays in your local workflow and is never sent to a cloud
                     AI provider.
+                  </p>
+                  <p id="home-spec-upload-formats" className="text-xs leading-5 text-muted">
+                    Accepted: an OpenAPI 3.x specification (.yaml, .yml or .json), a HAR capture
+                    (.har), or an ApiPilot API definition (.json). The format is recognized from
+                    the file&apos;s content.
                   </p>
                 </div>
                 <label
@@ -540,8 +564,9 @@ export function TestGenerationWorkflowPage({
                   <input
                     id="home-spec-upload"
                     type="file"
-                    accept=".yaml,.yml"
+                    accept=".yaml,.yml,.json,.har"
                     aria-label="Upload OpenAPI specification"
+                    aria-describedby="home-spec-upload-formats"
                     onChange={handleFileChange}
                     disabled={uploading}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -562,6 +587,11 @@ export function TestGenerationWorkflowPage({
             <p className="mt-1 text-sm text-muted">
               Review and advance the generated test workflow.
             </p>
+            {workflow.input && (
+              <div className="mt-2">
+                <InputFormatBadge input={workflow.input} />
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -575,8 +605,29 @@ export function TestGenerationWorkflowPage({
           </div>
         </div>
       )}
-      {uploading && <p className="text-sm text-muted">Uploading…</p>}
-      {uploadError && <ErrorState testId="upload-error" message={uploadError} />}
+      {uploading && (
+        <p role="status" className="text-sm text-muted">
+          {analyzingCapture ? "Analyzing capture…" : "Uploading…"}
+        </p>
+      )}
+      {uploadError && (
+        <ErrorState testId="upload-error" message={uploadError}>
+          {uploadProblems.length > 0 && (
+            <ul data-testid="upload-problems" className="ml-4 max-h-64 list-disc space-y-1 overflow-y-auto pr-2">
+              {uploadProblems.map((problem) => (
+                <li key={problem} className="break-words font-mono text-xs">
+                  {problem}
+                </li>
+              ))}
+            </ul>
+          )}
+          {uploadRedirect === "import-run-collection" && onOpenImportRun && (
+            <button type="button" onClick={onOpenImportRun} className={BUTTON_STYLES.secondary}>
+              Open Import &amp; Run Collection
+            </button>
+          )}
+        </ErrorState>
+      )}
       {workflow && (
         <>
           <div className="border border-border bg-surface p-3 shadow-sm">

@@ -324,3 +324,12 @@ components (`ApiReviewStage`, `AiEnhancementStage`, `ScenarioReviewStage`, `Work
 part of this feature; `PostmanExportPanel.tsx` and the pre-existing stateless endpoints it and the
 old pages called remain in the codebase, unchanged, as independently valid, independently tested
 boundaries — just no longer reachable from the app's own UI (research.md D8, D9, D10).
+
+## Amendment (AP-056, 2026-10-18)
+
+The upload that starts a workflow (`POST /api/test-generation-workflow`) accepts the same inputs as `POST /api/specifications`
+(OpenAPI YAML or JSON, a HAR capture, an API definition). `TestGenerationWorkflow` gains two optional fields: `input`, the
+detected format, set at start for every format, and `generationNotes`, the operations that produced no scenario and why.
+Every stage, endpoint and error above is otherwise unchanged. See
+[../../056-har-json-input-support/contracts/upload-api-amendment.md](../../056-har-json-input-support/contracts/upload-api-amendment.md) and
+[../../056-har-json-input-support/contracts/observed-generation-rules.md](../../056-har-json-input-support/contracts/observed-generation-rules.md).

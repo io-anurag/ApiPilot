@@ -1,6 +1,4 @@
-import { buildApiModel } from "../openapi/buildApiModel";
-import { parseYaml } from "../openapi/parseYaml";
-import { validateSpec } from "../openapi/validateSpec";
+import { loadApiInput } from "../apiInput";
 import { createLogger } from "../logger";
 import { AiEnhancementRunningError, WorkflowInProgressError } from "./errors";
 import {
@@ -13,12 +11,15 @@ import type { TestGenerationWorkflow } from "@apipilot/shared-domain";
 const logger = createLogger("testGenerationWorkflow.startWorkflow");
 
 /**
- * Starts a new workflow from an uploaded specification (upload + analysis stages, atomically —
- * research.md D4), reusing AP-002's own parse/validate/build pipeline unmodified. Refuses with
- * `WorkflowInProgressError` unless `discardExisting` is set (FR-010).
+ * Starts a new workflow from an uploaded file (upload + analysis stages, atomically — research.md
+ * D4) through the format-independent input layer (specs/056), which runs AP-002's own
+ * parse/validate/build pipeline unmodified for OpenAPI. Refuses with `WorkflowInProgressError`
+ * unless `discardExisting` is set (FR-010).
  *
- * `InvalidYamlError`/`UnsupportedVersionError` propagate unchanged for the centralized error
- * handler in app.ts to map, exactly as `POST /api/specifications` already does.
+ * Every input error (`InvalidYamlError`, `UnsupportedVersionError`, the specs/056 typed errors)
+ * propagates unchanged for the centralized error handler in app.ts to map, exactly as
+ * `POST /api/specifications` does. The session's existing workflow is replaced only after the
+ * file has been analyzed successfully, so a failed upload leaves it untouched.
  */
 export async function startWorkflowFromUpload(
   fileBuffer: Buffer,
@@ -32,11 +33,8 @@ export async function startWorkflowFromUpload(
   if (existing) {
     logger.info("workflow_discarded", { workflowId: existing.id });
   }
-  const content = fileBuffer.toString("utf-8");
-  const rawDoc = parseYaml(content);
-  const { document, issues } = await validateSpec(rawDoc);
-  const apiModel = buildApiModel(document, issues);
-  const workflow = startWorkflowInStore({ specificationFilename: filename, apiModel });
+  const { apiModel, input } = await loadApiInput(fileBuffer, filename);
+  const workflow = startWorkflowInStore({ specificationFilename: filename, apiModel, input });
   logger.info("workflow_started", {
     workflowId: workflow.id,
     operationCount: apiModel.summary.operationCount,

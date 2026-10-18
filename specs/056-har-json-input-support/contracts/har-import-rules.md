@@ -93,9 +93,9 @@ Rules apply in this order; the first match decides. Exactly one reason per entry
 | 5 | excluded | `failed-request` | `response.status === 0` |
 | 6 | excluded | `redirect` | status 300 to 399 except 304 |
 | 7 | excluded | `not-modified` | status 304 |
-| 8 | excluded | `static-asset` | `GET` or `HEAD` and (response mime `image/*`, `font/*`, `text/css`, `*/javascript`, or path extension in `.js .mjs .css .map .png .jpg .jpeg .gif .svg .ico .webp .woff .woff2 .ttf .otf .eot`) |
-| 9 | excluded | `html-document` | response mime `text/html` |
-| 10 | excluded | `analytics-telemetry` | host equals or is a subdomain of an entry in `analyticsHosts.ts` |
+| 8 | excluded | `analytics-telemetry` | host equals or is a subdomain of an entry in `analyticsHosts.ts` (checked before static assets so an analytics beacon is reported as analytics) |
+| 9 | excluded | `static-asset` | `GET` or `HEAD` and (response mime `image/*`, `font/*`, `text/css`, `*/javascript`, or path extension in `.js .mjs .css .map .png .jpg .jpeg .gif .svg .ico .webp .woff .woff2 .ttf .otf .eot`) |
+| 10 | excluded | `html-document` | response mime `text/html` |
 | 11 | excluded | `third-party-origin` | origin not related to an anchor origin (see *First-party scope*) |
 | 12 | excluded | `duplicate-method-path-other-origin` | lost a cross-origin `(method, path)` collision |
 
@@ -125,9 +125,9 @@ ascending by code point, then method rank `GET, POST, PUT, PATCH, DELETE, HEAD, 
 
 ## Path parameter inference (FR-013)
 
-Identifier-like segment: all digits; UUID; exactly 24 hex characters; at least 8 hex characters; ULID (26 characters of
-Crockford base32); or at least 16 alphanumeric characters containing both a letter and a digit. Everything else is
-literal. Within `(origin, method, segment count)`, a path's skeleton replaces identifier-like segments with a wildcard.
+Identifier-like segment: all digits; UUID; at least 8 hex characters (which includes a 24-character object id); ULID (26
+characters of Crockford base32); an ISO date (`YYYY-MM-DD`); or at least 12 characters of letters, digits, `_` and `-` that
+contain both a letter and a digit (`ord_7f3a9c21d4`). Everything else is literal. Within `(origin, method, segment count)`, a path's skeleton replaces identifier-like segments with a wildcard.
 A wildcard position with at least 2 distinct values across a skeleton group becomes a path parameter (`inferred`,
 `observationCount` = distinct values). A wildcard position with 1 distinct value stays literal and raises
 `ambiguous-path` ("possible path parameter, insufficient evidence"). Parameter names: singularized preceding literal

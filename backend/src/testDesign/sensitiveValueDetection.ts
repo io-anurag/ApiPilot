@@ -64,3 +64,37 @@ export function credentialKindForField(
   }
   return isBearerTokenValue(value) ? "token" : undefined;
 }
+
+/**
+ * The placeholder the input layer writes in place of a credential value it removed from captured
+ * traffic (specs/056 research R18): `[redacted:<kind>]`. It is defined here, beside the other
+ * credential predicates, because it is a contract between two modules: redaction writes it, and the
+ * Postman exporter recognizes it so the value becomes a secret variable reference, whatever the
+ * name of the field that carried it (research R24). One definition, so the two cannot drift.
+ */
+export type RedactionKind = "token" | "apiKey" | "password" | "cookie" | "session";
+
+const REDACTION_PLACEHOLDER_PATTERN = /^\[redacted:(token|apiKey|password|cookie|session)\]$/;
+
+/** The text that replaces a removed credential of `kind`. */
+export function formatRedactionPlaceholder(kind: RedactionKind): string {
+  return `[redacted:${kind}]`;
+}
+
+/** True when `text` contains any redaction placeholder (used to refuse an artifact that would send one). */
+export function containsRedactionPlaceholder(text: string): boolean {
+  return text.includes("[redacted:");
+}
+
+/**
+ * Which export variable a redaction placeholder maps to, or undefined when `value` is anything other
+ * than exactly a placeholder. `cookie` and `session` credentials are supplied through the `token`
+ * variable, as the `Cookie` header already is.
+ */
+export function redactionPlaceholderKind(value: unknown): CredentialKind | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = REDACTION_PLACEHOLDER_PATTERN.exec(value);
+  if (!match) return undefined;
+  const kind = match[1] as RedactionKind;
+  return kind === "apiKey" || kind === "password" ? kind : "token";
+}

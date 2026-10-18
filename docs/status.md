@@ -30,7 +30,8 @@ Before removal, `specs/037-request-chain-performance` must settle what happens t
 
 The following capabilities are implemented in the current repository:
 
-- OpenAPI 3.x YAML upload, validation, normalization, internal `$ref` resolution, and API-model construction.
+- OpenAPI 3.x (YAML or JSON) upload, validation, normalization, internal `$ref` resolution, and API-model construction.
+- HAR capture and ApiPilot API definition input, both mapped onto the same model with explicit provenance (observed, inferred, declared), credential redaction at extraction, and the same downstream stages (see the [user manual](USER_MANUAL.md#3-1a-uploading-a-har-capture)).
 - Explicit operation selection at API review: only the chosen operations, and the schemas they reference, go to deterministic generation and AI enhancement. The full API model is kept for later stages that need unselected operations, such as auth-credential chaining to a token endpoint.
 - Deterministic positive, required-field, null/empty, invalid-type, invalid-format, invalid-enum, numeric-boundary, string-boundary, and array-boundary scenarios.
 - Specification-grounded response and schema assertions with deterministic per-operation deduplication and provenance.
@@ -57,7 +58,7 @@ The following capabilities are implemented in the current repository:
 
 Current intentional limitations include:
 
-- The guided workflow's input is one OpenAPI 3.x YAML document. Swagger 2.0, JSON input, and external reference retrieval are unsupported there. An externally-authored Postman collection may instead be imported and executed directly through the separate standalone entry point (with its own mandatory unverified-content confirmation) — this is a deliberate, narrowly-scoped exception, not a general uploaded-content execution capability.
+- The guided workflow's input is one file: OpenAPI 3.x (YAML or JSON), a HAR capture, or an ApiPilot API definition. Swagger 2.0 and external reference retrieval are unsupported there. A HAR is evidence of one session, not a contract: its tests assert only observed statuses, its negatives need three observations, and compressed bodies and multipart file parts are not used. An externally-authored Postman collection may instead be imported and executed directly through the separate standalone entry point (with its own mandatory unverified-content confirmation) — this is a deliberate, narrowly-scoped exception, not a general uploaded-content execution capability.
 - Supported parameter serialization is explicit; unsupported styles such as content-based, matrix, and label forms are reported rather than guessed where the implementation cannot safely render them.
 - Local AI performance depends heavily on the selected model and machine. Large specifications may settle as partial or not completed at the configured run budget while retaining successful units.
 - Workflow generation state is not durable across backend restarts, even though environments and execution history are persisted.

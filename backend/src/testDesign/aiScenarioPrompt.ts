@@ -8,6 +8,13 @@ import type {
 } from "@apipilot/shared-domain";
 
 /**
+ * 2026-10-18 (specs/056 AP-056), no version change. A prompt built for operations that did not come
+ * from an OpenAPI document (observed in a capture, or declared in an API definition) carries one more
+ * key, `provenanceNote`, saying that the listed statuses are observed or declared and not documented
+ * guarantees. The key is absent for an OpenAPI model, so that prompt is byte-identical and the contract
+ * version stays 5 (a snapshot test pins the OpenAPI text). The task wording is untouched, because the
+ * models were measured sensitive to what the task says and where (see the notes in the task below).
+ *
  * Version 5 (specs/013 T071 follow-up), two changes. An operation with no parameters and no request body
  * no longer gets an empty `allowedTargets` list and an instruction to pick from it: it is told to leave
  * out the target and shown an example without one, built from its own path and method. And a request to
@@ -362,6 +369,10 @@ function baselineForOperations(
  */
 export type AIScenarioPurpose = "enhance" | "replace";
 
+/** The one sentence added to a prompt for operations that are observed or declared, not documented. */
+export const PROVENANCE_NOTE =
+  "These operations come from captured or declared traffic; listed statuses are observed or declared, not documented guarantees.";
+
 export function buildAIScenarioPrompt(
   apiModel: ApiModel,
   testModel: TestModel,
@@ -375,6 +386,9 @@ export function buildAIScenarioPrompt(
   const subject = operations.length === 1 ? "the operation" : "the operations";
   const allowedStatusCodes = allowedStatusCodesFor(operations);
   const allowedTargets = allowedTargetsFor(operations);
+  const fromInferredInput = operations.some(
+    (operation) => operation.provenance !== undefined && operation.provenance.origin !== "documented",
+  );
 
   // Every field below is paid for at ~42ms per prompt token before the model emits anything
   // (research.md Decision 10), so each one has to earn its place. The worked example doubles as the
@@ -407,6 +421,10 @@ export function buildAIScenarioPrompt(
       (allowedStatusCodes.length > 0
         ? " expectedStatusCode must be one of allowedStatusCodes."
         : ""),
+    // Only for operations that are not from an OpenAPI document (specs/056 FR-039); absent otherwise.
+    ...(fromInferredInput
+      ? { provenanceNote: PROVENANCE_NOTE }
+      : {}),
     operations: operations.map(summarizeOperation),
     ...(allowedTargets.length > 0 ? { allowedTargets } : {}),
     existingCoverage: summarizeBaseline(baselineForOperations(testModel, operations)),

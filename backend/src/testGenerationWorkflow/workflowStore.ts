@@ -1,5 +1,6 @@
 import type {
   AiEnhancementProgress,
+  ApiInputDescriptor,
   ApiModel,
   BatchOutcomeRecord,
   StageStatus,
@@ -82,6 +83,8 @@ function initialStages(): Record<WorkflowStageId, WorkflowStageState> {
 export function startWorkflow(input: {
   specificationFilename: string;
   apiModel: ApiModel;
+  /** The detected input format (specs/056); omitted by callers that predate it. */
+  input?: ApiInputDescriptor;
 }): TestGenerationWorkflow {
   const sessionId = getSessionId();
   const state = getState();
@@ -110,6 +113,7 @@ export function startWorkflow(input: {
     activeStageId: "apiReview",
     stages,
     specificationFilename: input.specificationFilename,
+    ...(input.input ? { input: input.input } : {}),
     apiModel: input.apiModel,
   };
   markActive(sessionId);

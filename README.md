@@ -13,7 +13,7 @@
 [![CI](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/io-anurag/ApiPilot/actions/workflows/ci.yml)
 [![GitHub tag](https://img.shields.io/github/tag/io-anurag/ApiPilot?include_prereleases=&sort=semver&color=blue)](https://github.com/io-anurag/ApiPilot/releases/)
 
-ApiPilot is a local-first API test engineering workspace. It turns an OpenAPI 3.x YAML document into deterministic test scenarios, optional locally generated AI suggestions, reviewed dependency workflows, and validated Postman artifacts, then lets you run them explicitly. It can also run an existing Postman collection or your own k6 script. AI is bounded, validated, and local; it cannot add undocumented endpoints, fields, response codes, or assertions to the executable model.
+ApiPilot is a local-first API test engineering workspace. It turns an OpenAPI 3.x document (YAML or JSON), a HAR capture of real traffic, or a small ApiPilot API definition into deterministic test scenarios, optional locally generated AI suggestions, reviewed dependency workflows, and validated Postman artifacts, then lets you run them explicitly. It can also run an existing Postman collection or your own k6 script. AI is bounded, validated, and local; it cannot add undocumented endpoints, fields, response codes, or assertions to the executable model.
 
 ## Install
 
@@ -34,7 +34,7 @@ The `.env` file is optional when defaults are acceptable. The default developmen
 ## Quick start
 
 1. Open `http://localhost:5173`. The Vite frontend proxies `/api` to the backend at `http://localhost:4000`.
-2. ApiPilot opens on **Home**. Choose **Guided Workflow** (on Home or in the sidebar) and upload an OpenAPI 3.x YAML document.
+2. ApiPilot opens on **Home**. Choose **Guided Workflow** (on Home or in the sidebar) and upload an OpenAPI 3.x document, a HAR capture or an API definition (see [Supported inputs](#supported-inputs)).
 3. Review the operations, select the ones to test, and generate deterministic scenarios.
 4. Optionally run local AI enhancement, then accept, reject, edit, or regenerate scenarios.
 5. Review dependencies and workflows, approve them, and generate the Postman artifacts.
@@ -44,12 +44,43 @@ To run an existing Postman collection instead, choose **Import & Run Collection*
 
 ApiPilot is single-user and local-only. It has no authentication, executes scripts you confirm, and holds stored credentials, so the backend binds to `127.0.0.1` by default, and so does the dev server. To open ApiPilot from another device on a network you trust, set `FRONTEND_DEV_HOST`: a non-loopback address makes a per-launch access token mandatory (printed once in the terminal; plain HTTP, so see the limits). Do not otherwise expose it to a network without adding authentication first; see [Configuration, persistence, and security](docs/configuration.md#security-model-single-user-local-only).
 
+## Supported inputs
+
+ApiPilot recognizes what you upload from its content, not its file name.
+
+| Input | What it is | Use it when |
+|---|---|---|
+| OpenAPI 3.x, YAML or JSON | A documented contract | You have the specification. This is the most reliable source. |
+| HAR capture (`.har`) | Requests and responses recorded by a browser or proxy | There is no specification, but you can exercise the API and record it. ApiPilot infers operations from what was observed. |
+| ApiPilot API definition (`.json`) | A small, strict JSON file you write | You have neither of the above. Format: [API definition format](docs/api-definition-format.md). |
+| Postman collection | A collection of requests | Not used by the guided workflow. ApiPilot tells you to open **Import & Run Collection** and imports nothing. |
+
+Swagger 2.0 is not supported. Other JSON is refused with the supported formats named.
+
+**HAR quick start.** Record a focused session in your browser's developer tools (Network tab, then *Save all as HAR with
+content*) or export one from a proxy, choose **Guided Workflow**, and upload the `.har` file. API Review opens with an import
+summary (what was imported, excluded and why, and which origins the operations came from), and every fact is labelled
+**Observed**, **Inferred** or **Declared** so a capture is never mistaken for a contract. Observed behaviour is a baseline,
+not a guarantee: read the limits in the [user manual](docs/USER_MANUAL.md#3-1a-uploading-a-har-capture).
+
+**Captures contain secrets.** A HAR saved from developer tools normally holds cookies, `Authorization` headers and tokens.
+ApiPilot replaces credential values with a placeholder as it reads the file and never stores, logs, displays or sends them to
+the AI model or into a generated artifact, and the placeholder becomes a variable you fill in when you run. The file on your
+disk is unchanged, so strip secrets from it before you share it. A capture is analyzed only on this machine, and nothing in it
+is ever fetched or executed.
+
+**Try it.** [`docs/examples/`](docs/examples/) holds a credential-free sample capture
+([`sample-capture.har`](docs/examples/sample-capture.har)), a sample definition
+([`sample-api-definition.json`](docs/examples/sample-api-definition.json)) and an OpenAPI example in JSON
+([`sample-openapi.json`](docs/examples/sample-openapi.json)).
+
 ## Documentation
 
 - [User manual](docs/USER_MANUAL.md)
 - [Status, limitations, and feature freeze](docs/status.md)
 - [Configuration, persistence, and security](docs/configuration.md)
 - [HTTP API](docs/http-api.md)
+- [API definition format](docs/api-definition-format.md)
 - [Development and validation](docs/development.md)
 - [Architecture reference](docs/architecture.md)
 - [Product roadmap and implementation status](specs/ROADMAP.md)

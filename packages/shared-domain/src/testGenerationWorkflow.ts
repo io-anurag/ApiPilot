@@ -1,5 +1,6 @@
 import type { AIErrorCategory } from "./aiProvider";
 import type { ApiModel } from "./apiModel";
+import type { ApiInputDescriptor, GenerationNote } from "./apiInput";
 import type { DependencyAnalysisResult } from "./apiDependency";
 import type { EnhancementResult } from "./aiScenarioDesign";
 import type { ExportResult } from "./postmanArtifact";
@@ -295,6 +296,10 @@ export interface TestGenerationWorkflow {
   stages: Record<WorkflowStageId, WorkflowStageState>;
 
   specificationFilename: string;
+  /** The detected input format (specs/056). Written once at start; absent on workflows created before it existed. */
+  input?: ApiInputDescriptor;
+  /** Operations that produced no scenarios, with the reason (specs/056 FR-040). Written once, only when non-empty. */
+  generationNotes?: GenerationNote[];
   /**
    * Always the complete analyzed specification — never narrowed by `selectedOperationKeys`, since
    * later stages (e.g. Postman auth-credential chaining, specs/023) legitimately reference

@@ -1,0 +1,23 @@
+{
+  "format": "apipilot.api-definition",
+  "version": 1,
+  "info": {
+    "title": "Minimal API"
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/status"
+    },
+    {
+      "method": "POST",
+      "path": "/jobs",
+      "parameters": [
+        {
+          "name": "dryRun",
+          "in": "query"
+        }
+      ]
+    }
+  ]
+}

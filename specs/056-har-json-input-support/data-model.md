@@ -46,7 +46,7 @@ export interface FactProvenance {
 export type CredentialKind = "token" | "apiKey" | "password" | "cookie" | "session";
 
 export interface CredentialObservation {
-  location: "header" | "query" | "cookie" | "body" | "url-userinfo";
+  location: "header" | "query" | "cookie" | "body" | "url-userinfo" | "path";
   /** Header, parameter, cookie or field name. Never a value. */
   name: string;
   kind: CredentialKind;
@@ -206,6 +206,7 @@ export interface GenerationNote {
 | `ApiOperation` | `description?: string` | Definition `description`. OpenAPI summaries are not mapped (unchanged). |
 | `Parameter` | `provenance?: FactProvenance` | Per parameter (a path parameter from inference is `inferred`). |
 | `Parameter` | `requiredUnknown?: true` | `required` is `false` for compatibility but is not a fact (FR-017). |
+| `Parameter` | `example?: unknown` | Definition only. The declared example for the parameter (a request header's value, say), credential values replaced. Used by the declared-example scenario; never fabricated. |
 | `RequestBody` | `provenance?`, `requiredUnknown?`, `examples?: Record<string, unknown>` | Examples keyed by name. Declared (definition) or observed. |
 | `Response` | `provenance?: FactProvenance` | A status in `responses` is observed or declared, with count where observed. |
 | `Response` | `bodyUnavailable?: BodyUnavailableReason` | Why `contentTypes` is empty although a body was sent. |

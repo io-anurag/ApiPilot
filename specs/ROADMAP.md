@@ -4065,3 +4065,59 @@ Implementation
       short check but degrades on long prompts is not detected; the 0.5B model is still correct but slower than CPU when its
       accelerator is kept; the 15 s budget has little margin on a slower machine (the 12-token cap is the lever).
     - Version bumped to 19.58.0 (root, backend, frontend, shared-domain), after `AP-054` (entry 100, 19.57.0).
+
+102. **AP-056: HAR and JSON API definition input; version 19.59.0 (2026-10-18).**
+    - `specs/056-har-json-input-support`. The guided workflow and `POST /api/specifications` accept, besides OpenAPI YAML, OpenAPI
+      JSON, a HAR capture and an ApiPilot API definition (JSON). The format is decided from the content, never the file name; a
+      Postman collection is recognized and redirected to Import & Run Collection without importing anything. Every input ends as one
+      `ApiModel` through `loadApiInput`, so no stage after upload changed and an OpenAPI upload produces byte-identical output
+      (golden tests for the model, the AI prompt and the Postman artifacts), with one reviewed exception: the README and limitations
+      label for unsupported request content types now names the supported set.
+    - Clarifications settled with the user (2026-10-18): the same method and path on two origins keeps one operation (more
+      observations wins, a tie goes to the origin that sorts first) and reports a `duplicate-operation` issue; a third-party origin is
+      one that shares no site name with a page URL or the busiest API origin; form-style bodies (URL-encoded, multipart text)
+      generate a positive scenario from observed values and the Postman export gained `urlencoded` and `formdata` bodies; an
+      identifier-like path segment becomes a parameter only with at least two distinct values; redirects and 304 are excluded and
+      never recorded as observed statuses.
+    - Constitution amended 3.1.0 to 3.2.0: observations and inferences are categories of information of their own (Principles I,
+      XIII, XIV, XV). Facts carry `FactProvenance` (`documented`, `declared`, `observed`, `inferred`, with an observation count and
+      a confidence); scenarios carry `evidence` and assertions a `basis`; the UI states them as text.
+    - **HAR.** Twelve ordered rules decide what is left out (malformed, non-HTTP, CORS preflight, streaming, failed, 304, redirect,
+      analytics host list, static asset, HTML page, third-party origin, duplicate on another origin); every entry has exactly one
+      reason and `imported + excluded + malformed = total`. URLs and paths are normalized as text (no fetch, no file system).
+      Credentials are redacted at extraction, before any value is retained, to `[redacted:<kind>]`; only the kind, location and a
+      count are recorded. The raw upload buffer is overwritten when the request ends, and the layer logs only through typed fields.
+    - **Generation.** An observed operation gets one positive scenario per observed 2xx status asserting only that status, and
+      missing-field and wrong-type negatives only where at least three observations support them, labelled inferred and asserting no
+      failure status unless one was observed for that exact request. No enum, format or boundary scenario is generated from a
+      capture, and an operation with no scenario is listed with the reason (`generationNotes`). Observed value reuse becomes a
+      dependency hint: possible for one use, likely for two or more, never confirmed on its own.
+    - **API definition, version 1.** A strict, versioned JSON format validated by Ajv 8 in strict mode (new backend dependency) plus
+      cross-checks; every problem is reported at once as `"<JSON Pointer>: <message>"`, nothing is imported on any problem, and the
+      format carries no credential values. What is not written stays unknown (requiredness, statuses, schemas). Deterministic
+      generation runs the existing rules over only what was stated, plus one positive scenario from a declared body example when no
+      schema is declared. A declared dependency hint is confirmed only when both fields exist in the declared schemas.
+    - **Postman.** `PostmanBody` became a union. Form bodies are emitted only for observed or declared operations; a placeholder
+      becomes the same secret variable reference as a credential-named field, and a collection that would still send `[redacted:` text
+      fails validation. A `formdata` body is refused in request-chain plans with that reason. No address from a capture or a
+      definition reaches an artifact (a test found the README listing a capture's origins in a `duplicate-operation` message; it now
+      omits them), and the execution safeguards apply unchanged.
+    - **UI.** Detected-format badge, HAR import summary, origin labels with counts, scenario evidence and assertion basis, a list of
+      operations without scenarios, and the problems of an invalid definition as a list with locations.
+    - **Configuration.** `INPUT_HAR_MAX_ENTRIES` (5000), `INPUT_MAX_BODY_BYTES` (1 MiB), `INPUT_MAX_JSON_DEPTH` (128), validated at
+      start-up; the fixed limits are in `docs/http-api.md`.
+    - **Docs.** README (supported inputs), user manual sections 3.1a and 3.1b (capturing and sanitizing a HAR, the exclusion and
+      inference rules, limits, troubleshooting), architecture (input layer), HTTP API (envelope, errors, limits),
+      `docs/api-definition-format.md` with its schema, and credential-free examples in `docs/examples/` checked by a test.
+    - Tests: the full suite passes with 477 files and 4963 tests (11 skipped), against 435 files and 4242 tests before the work.
+      One pre-existing test changed because the specification mandates new wording: the rejected-extension message of the workflow
+      upload now names `.json` and `.har` (`frontend/tests/unit/TestGenerationWorkflowPage.test.tsx`). New coverage includes golden
+      byte-equality for every existing exporter output and the OpenAPI AI prompt, seeded-secret tests for a capture and for a
+      definition across the model, report, logs, AI prompt and every Postman artifact, execution-safety tests for a capture-derived
+      workflow, the definition validator, builder and equivalence against OpenAPI, and a test that the documented example files
+      produce the numbers the docs quote and reach valid Postman artifacts.
+    - Not covered: bodies are not decompressed and multipart file parts cannot be reproduced; the first-party rule is a heuristic;
+      one operation is one method and path across servers; negatives proposed by AI enhancement are validated against the observed
+      model but not held to the three-observation threshold; the dark-mode and responsive visual pass of the new screens and the
+      hand run of the quickstart in a browser were not done in this session.
+    - Version bumped to 19.59.0 (root, backend, frontend, shared-domain), after `AP-055` (entry 101, 19.58.0).

@@ -1,0 +1,492 @@
+{
+  "info": {
+    "name": "ApiPilot API tests",
+    "_postman_id": "a741efd7-fbd0-510b-8449-2bd28b25b18f",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "admin",
+      "item": [
+        {
+          "id": "db0123cb-2ac3-54c7-a2ea-00d27b73d08d",
+          "name": "DELETE /admin/keys — positive",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/admin/keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "keys"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{username}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 204\", function () {",
+                  "  pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-admin-revoke"
+          }
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "item": [
+        {
+          "id": "666a4d28-920f-55f8-a68e-9767e9a2c36b",
+          "name": "GET /orders — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": []
+          },
+          "provenance": {
+            "scenarioId": "scenario-list-default-only"
+          }
+        },
+        {
+          "id": "ed88f3a7-9829-5a5a-b3af-bb2bf56f0b6c",
+          "name": "GET /orders — positive (2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": []
+          },
+          "provenance": {
+            "scenarioId": "scenario-list-no-assertions"
+          }
+        },
+        {
+          "id": "97228eef-06db-5288-89fc-739a4449de70",
+          "name": "POST /orders/{orderId} — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "order-1"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "req-1"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"0f7d1c1e-0000-4000-8000-000000000000\",\n  \"quantity\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const expectedSchema1 = {\n  \"type\": \"object\"\n};",
+                  "pm.test(\"Response body conforms to the documented schema\", function () {",
+                  "  pm.response.to.have.jsonSchema(expectedSchema1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-order-positive"
+          }
+        },
+        {
+          "id": "0a46437b-610b-59b9-b0fb-c49bdb7ae77f",
+          "name": "POST /orders/{orderId} — invalid-type",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "order-1"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"0f7d1c1e-0000-4000-8000-000000000000\",\n  \"quantity\": \"not-a-number\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is in the 4XX class\", function () {",
+                  "  pm.expect(pm.response.code).to.be.at.least(400);",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-order-invalid-type"
+          }
+        },
+        {
+          "id": "c2bf9a52-8cd9-503e-9c88-9023f2a7685b",
+          "name": "POST /orders/{orderId} — missing-field",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "{{orderId}}"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is in the 4XX class\", function () {",
+                  "  pm.expect(pm.response.code).to.be.at.least(400);",
+                  "  pm.expect(pm.response.code).to.be.below(500);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-order-missing-path-value"
+          }
+        }
+      ]
+    },
+    {
+      "name": "reports",
+      "item": [
+        {
+          "id": "1d1b723f-81f0-5eee-8c7e-65213fa7f947",
+          "name": "POST /reports/upload — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/reports/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "upload"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "key",
+                  "value": "X-Api-Key",
+                  "type": "string"
+                },
+                {
+                  "key": "value",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                },
+                {
+                  "key": "in",
+                  "value": "header",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 202\", function () {",
+                  "  pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-report-upload"
+          }
+        }
+      ]
+    },
+    {
+      "name": "sessions",
+      "item": [
+        {
+          "id": "73fec8ad-830d-5db2-8a36-2a12032e5ed6",
+          "name": "POST /sessions — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-session-credentials"
+          }
+        }
+      ]
+    }
+  ]
+}
+
+----
+{
+  "name": "ApiPilot API tests environment",
+  "_postman_variable_scope": "environment",
+  "values": [
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "baseUrl",
+      "value": "https://qa.internal.example",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "t-1",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "username",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    }
+  ]
+}
+
+----
+"# ApiPilot API tests\n\nGenerated by ApiPilot from an approved test model. Every request here comes from a scenario a\nreviewer accepted; nothing in this export was produced by AI, and no request was executed to\ncreate it.\n\n## Coverage\n\n- Requests: 8\n- Folders: 4\n- Rule-derived scenarios: 7\n- AI-derived scenarios: 1\n- Rendered workflows: 0\n- Workflow requests: 0\n- Standalone requests: 8\n- Workflow data handoffs: 0\n- Unsupported approved workflows: 0\n- Omitted unapproved workflows: 0\n- Automatically chained requests: 0\n\nWorkflow folders contain only explicitly approved, fully supported sequences. Standalone\nfolders contain approved scenarios not covered by a rendered workflow. Requests are\norganized into one folder per workflow or API grouping:\n\n- `admin` — 1 request(s)\n- `orders` — 5 request(s)\n- `reports` — 1 request(s)\n- `sessions` — 1 request(s)\n\n## Variables to supply\n\nFill these into the accompanying environment file before running. Credential variables are\nstored as secret values in the environment and never appear in the collection.\n\n| Variable | Credential | Purpose |\n| --- | --- | --- |\n| `apiKey` | yes | API key the requests reference in place of a literal credential value. |\n| `baseUrl` | no | Address the collection runs against; every request URL is built from it. |\n| `orderId` | no | Path parameter value for \"orderId\", which an approved scenario did not supply. |\n| `password` | yes | Password the requests reference in place of a literal credential value. |\n| `token` | yes | Bearer token the requests reference in place of a literal credential value. |\n| `username` | yes | Username for the declared basic authentication scheme. |\n\n## How to run\n\n1. Import `collection.json` and `environment.json` into Postman.\n2. Select the imported environment and fill in the variables listed above.\n3. Run the collection, or any individual request.\n\nRunning the collection issues real requests to the address you supply. Generating this\nartifact is not authorization to run it: only run it against an environment you are\nauthorized to call.\n\n## Known limitations\n\nThese are cases the export could not express fully. They are reported rather than filled in\nwith an assumed value. An identically worded case recurring across several approved scenarios\nor several rendered requests (for example, the same path parameter left unresolved by many\nnegative scenarios for one operation, or one scenario reused by several workflows) is listed\nonce, with the number of requests it affects.\n\n### Operations declaring alternative authentication (1)\n\n- `DELETE /admin/keys`: The operation declares 2 alternative authentication requirements; the first declared one (basicAuth) was applied.\n\n### Scenarios with no expected outcome (1)\n\n- `GET /orders` (scenario-list-no-assertions): The approved scenario carried no assertion, so the request is generated with no expected outcome.\n\n### Operations carrying specification analysis issues (1)\n\n- `POST /sessions`: The specification analysis reported \"unsupported-construct\" for this operation: oneOf is not supported and was not expanded.\n\n### Responses the specification did not document concretely (1)\n\n- `GET /orders` (scenario-list-default-only): The specification documents the response as \"default\", which carries no status information, so no status check is asserted.\n\n### Distinct credentials this export could not identify a producer request for (3)\n\n- `security scheme \"apiKeyAuth\"`: No operation in the specification could be identified as obtaining the \"apiKeyAuth\" credential; populate {{apiKey}} manually. Affected operations: POST /reports/upload.\n- `security scheme \"basicAuth\"`: No operation in the specification could be identified as obtaining the \"basicAuth\" credential; populate {{username, password}} manually. Affected operations: DELETE /admin/keys.\n- `security scheme \"bearerAuth\"`: No operation in the specification could be identified as obtaining the \"bearerAuth\" credential; populate {{token}} manually. Affected operations: POST /orders/{orderId}.\n\n### Path parameters with no approved value (1)\n\n- `POST /orders/{orderId}` (scenario-order-missing-path-value): The approved scenario supplied no value for the \"orderId\" path parameter, so it is exposed as the \"orderId\" variable to fill in.\n\n### Authentication schemes this export cannot configure (1)\n\n- `POST /sessions`: The security scheme \"oauth2Auth\" is of type \"oauth2\", which this export cannot configure. The request is still generated, and no substitute credential mechanism is invented.\n\n### Request content types this export cannot represent (it writes JSON and text bodies, and URL-encoded and multipart text fields for operations from a capture or an API definition) (1)\n\n- `POST /reports/upload` (scenario-report-upload): The approved request body uses \"multipart/form-data\", which this export cannot represent faithfully, so no body is emitted and the test intent is not altered to fit.\n\n## Validation\n\nThe generated collection passed ApiPilot's pre-delivery validation check.\n"
+----
+[{"kind":"alternative-auth-requirement-selected","location":"DELETE /admin/keys","message":"The operation declares 2 alternative authentication requirements; the first declared one (basicAuth) was applied."},{"kind":"no-expected-outcome","scenarioId":"scenario-list-no-assertions","location":"GET /orders","message":"The approved scenario carried no assertion, so the request is generated with no expected outcome."},{"kind":"specification-analysis-issue","location":"POST /sessions","message":"The specification analysis reported \"unsupported-construct\" for this operation: oneOf is not supported and was not expanded."},{"kind":"undocumented-status-code","scenarioId":"scenario-list-default-only","location":"GET /orders","message":"The specification documents the response as \"default\", which carries no status information, so no status check is asserted."},{"kind":"unresolved-credential-producer","location":"security scheme \"apiKeyAuth\"","message":"No operation in the specification could be identified as obtaining the \"apiKeyAuth\" credential; populate {{apiKey}} manually. Affected operations: POST /reports/upload."},{"kind":"unresolved-credential-producer","location":"security scheme \"basicAuth\"","message":"No operation in the specification could be identified as obtaining the \"basicAuth\" credential; populate {{username, password}} manually. Affected operations: DELETE /admin/keys."},{"kind":"unresolved-credential-producer","location":"security scheme \"bearerAuth\"","message":"No operation in the specification could be identified as obtaining the \"bearerAuth\" credential; populate {{token}} manually. Affected operations: POST /orders/{orderId}."},{"kind":"unresolved-path-parameter","scenarioId":"scenario-order-missing-path-value","location":"POST /orders/{orderId}","message":"The approved scenario supplied no value for the \"orderId\" path parameter, so it is exposed as the \"orderId\" variable to fill in."},{"kind":"unsupported-auth-scheme","location":"POST /sessions","message":"The security scheme \"oauth2Auth\" is of type \"oauth2\", which this export cannot configure. The request is still generated, and no substitute credential mechanism is invented."},{"kind":"unsupported-content-type","scenarioId":"scenario-report-upload","location":"POST /reports/upload","message":"The approved request body uses \"multipart/form-data\", which this export cannot represent faithfully, so no body is emitted and the test intent is not altered to fit."}]

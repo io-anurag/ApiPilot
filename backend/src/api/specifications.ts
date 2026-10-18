@@ -1,7 +1,6 @@
 import { Router } from "express";
-import { buildApiModel } from "../openapi/buildApiModel";
-import { parseYaml } from "../openapi/parseYaml";
-import { validateSpec } from "../openapi/validateSpec";
+import { loadApiInput } from "../apiInput";
+import { wipeUpload } from "../apiInput/wipeUpload";
 import { upload } from "../uploadMiddleware";
 import { createLogger } from "../logger";
 
@@ -29,11 +28,8 @@ specificationsRouter
         });
         return;
       }
-      const content = req.file.buffer.toString("utf-8");
-      const rawDoc = parseYaml(content);
-      const { document, issues } = await validateSpec(rawDoc);
-      const apiModel = buildApiModel(document, issues);
-      res.status(200).json({ apiModel });
+      const { apiModel, input } = await loadApiInput(req.file.buffer, req.file.originalname);
+      res.status(200).json({ apiModel, input });
       logger.info("request_succeeded", {
         method: req.method,
         path: req.path,
@@ -44,6 +40,9 @@ specificationsRouter
       // Parse/validation errors are logged once, generically, by app.ts's centralized
       // error handler (which receives the same req) rather than duplicated here.
       next(err);
+    } finally {
+      // The raw upload is not retained once analysis has finished or failed (specs/056 FR-049).
+      wipeUpload(req.file);
     }
   })
   .all((_req, res) => {
