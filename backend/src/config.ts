@@ -3,6 +3,8 @@
  * Reads process.env directly (populated by the shell, a `.env` file loader in
  * development, or the deployment environment) — no external dependency required.
  */
+import { loadInputLimits } from "./apiInput/limits";
+
 export interface AppConfig {
   backendPort: number;
   /** Interface the HTTP listener binds to. Loopback unless `BACKEND_HOST` is set explicitly. */
@@ -35,6 +37,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const debugLogRealClientIp = env.DEBUG_LOG_REAL_CLIENT_IP === "true";
 
   return { backendPort, backendHost, debugLogRealClientIp };
+}
+
+/**
+ * Validates the input-layer limits (specs/056 FR-045) so a malformed `INPUT_*` value fails startup
+ * with a typed error naming the variable, instead of being ignored.
+ */
+export function validateInputConfiguration(env: NodeJS.ProcessEnv = process.env): void {
+  loadInputLimits(env);
 }
 
 /** Validates AI settings that must fail fast when the backend is started. */

@@ -1,0 +1,147 @@
+{
+  "format": "apipilot.api-definition",
+  "version": 1,
+  "info": {
+    "title": "Orders API",
+    "version": "1.0.0",
+    "description": "Minimal ordering service."
+  },
+  "baseUrl": "https://api.example.test",
+  "authentication": [
+    {
+      "name": "bearerAuth",
+      "type": "http-bearer"
+    }
+  ],
+  "operations": [
+    {
+      "id": "createOrder",
+      "method": "POST",
+      "path": "/orders",
+      "description": "Create an order.",
+      "tags": [
+        "orders"
+      ],
+      "requestBody": {
+        "contentType": "application/json",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "required": [
+            "sku",
+            "quantity"
+          ],
+          "properties": {
+            "sku": {
+              "type": "string",
+              "minLength": 3
+            },
+            "quantity": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "examples": [
+          {
+            "name": "two widgets",
+            "value": {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          }
+        ]
+      },
+      "responses": [
+        {
+          "status": 201,
+          "description": "Order created.",
+          "contentType": "application/json",
+          "schema": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          "examples": [
+            {
+              "value": {
+                "id": "ord_1001"
+              }
+            }
+          ]
+        },
+        {
+          "status": 400,
+          "description": "Invalid order."
+        }
+      ],
+      "security": [
+        "basicAuth"
+      ]
+    },
+    {
+      "id": "getOrder",
+      "method": "GET",
+      "path": "/orders/{orderId}",
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": "ord_1001"
+        },
+        {
+          "name": "expand",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "items"
+            ]
+          }
+        }
+      ],
+      "responses": [
+        {
+          "status": "200",
+          "contentType": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "security": [
+        "bearerAuth"
+      ]
+    }
+  ],
+  "dependencyHints": [
+    {
+      "producer": {
+        "operation": "createOrder",
+        "field": "id"
+      },
+      "consumer": {
+        "operation": "getOrder",
+        "location": "path",
+        "field": "orderId"
+      },
+      "note": "The id returned by createOrder is the path parameter of getOrder."
+    }
+  ]
+}

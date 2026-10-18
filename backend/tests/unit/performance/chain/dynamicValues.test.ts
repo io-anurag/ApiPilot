@@ -66,6 +66,45 @@ describe("chain runtime dynamic values", () => {
     expect(valueOf("$randomJobTitle").split(" ")).toHaveLength(3);
   });
 
+  it("gives a positive integer for $randomInt, never zero", () => {
+    const seen = new Set<number>();
+    for (let iteration = 0; iteration < 2000; iteration += 1) {
+      const text = valueOf("$randomInt", 1 + (iteration % 7), iteration);
+      expect(text).toMatch(/^[1-9]\d*$/);
+      const value = Number(text);
+      expect(Number.isInteger(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(1);
+      expect(value).toBeLessThanOrEqual(1000);
+      seen.add(value);
+    }
+    expect(Math.min(...seen)).toBeLessThan(20);
+    expect(Math.max(...seen)).toBeGreaterThan(980);
+  });
+
+  it("gives a positive decimal with two places for $randomDecimal", () => {
+    const seen = new Set<string>();
+    for (let iteration = 0; iteration < 2000; iteration += 1) {
+      const text = valueOf("$randomDecimal", 1 + (iteration % 7), iteration);
+      expect(text).toMatch(/^\d{1,3}\.\d{2}$/);
+      const value = Number(text);
+      expect(value).toBeGreaterThanOrEqual(0.01);
+      expect(value).toBeLessThanOrEqual(999.99);
+      seen.add(text);
+    }
+    expect(seen.size).toBeGreaterThan(1500);
+  });
+
+  it("gives a plain one-sentence description for $randomDescription, safe in a URL, a form and a JSON string", () => {
+    const seen = new Set<string>();
+    for (let iteration = 0; iteration < 500; iteration += 1) {
+      const text = valueOf("$randomDescription", 1 + (iteration % 7), iteration);
+      expect(text).toMatch(/^[A-Z][a-z]+ [a-z ]+ designed for [a-z ]+\.$/);
+      expect(JSON.stringify(text).slice(1, -1)).toBe(text);
+      seen.add(text);
+    }
+    expect(seen.size).toBeGreaterThan(50);
+  });
+
   it("keeps coordinates in range and dates on the right side of now", () => {
     for (let iteration = 0; iteration < 50; iteration += 1) {
       const latitude = Number(valueOf("$randomLatitude", 1, iteration));

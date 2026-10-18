@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toOperationKey, type ApiModel, type ApiOperation } from "@apipilot/shared-domain";
 import { AnalysisSummary } from "./AnalysisSummary";
 import { ErrorState } from "./ErrorState";
+import { HarImportSummary } from "./HarImportSummary";
 import { OperationDetail } from "./OperationDetail";
 import { OperationList } from "./OperationList";
 import { Pagination, pageCount } from "./Pagination";
@@ -123,6 +124,13 @@ export function ApiReviewStage({
     >
       <Card className="space-y-4">
         <CardHeader title="Review Discovered APIs" />
+        {apiModel.importReport && <HarImportSummary report={apiModel.importReport} />}
+        {apiModel.declaredBaseUrl && (
+          <p data-testid="declared-base-url" className="text-xs text-text-secondary">
+            Declared base URL: <span className="break-all font-mono">{apiModel.declaredBaseUrl}</span>. It is informational
+            and is never used as a test target; you choose the environment when you run.
+          </p>
+        )}
         <AnalysisSummary summary={apiModel.summary} />
         {!readOnly && total > 0 && (
           <div

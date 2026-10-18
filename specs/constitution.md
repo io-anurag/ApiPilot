@@ -1,6 +1,48 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 3.1.0 → 3.2.0 (minor: observations from captured traffic and ApiPilot's inferences from
+them become two governed information categories)
+
+Trigger: the governance prerequisite for AP-056 (HAR and JSON API Input Support;
+specs/056-har-json-input-support, Assumptions "Governance prerequisite" and plan.md "Governance
+prerequisite"). AP-056 lets a user supply a HAR capture when no specification exists. A capture is
+evidence of what one session did, not a contract, so its facts fit none of the five existing
+categories: they are not specification content, not rule-derived tests, not AI inference, not user
+configuration and not runtime test results. Principle I names the specification as the only
+authority, and Principle XIII lists provenance values with no origin for observed or inferred facts.
+
+Bump reasoning: two categories and one governance rule are added and Principles I, XIII, XIV and XV
+gain guidance for them. No existing principle, category or exception is removed or redefined, and
+behaviour for specification-driven input is unchanged (MINOR).
+
+Added principles: none.
+Modified principles:
+  - Preamble: the list of information categories grows from five to seven, adding 6. Observations
+    (facts recorded from captured traffic) and 7. Inferences ApiPilot derives from observations.
+  - I. Specification Is the Source of Truth: states that a capture is evidence, not a contract.
+    Observed facts MUST be labelled observed, carry their supporting observation count, and never be
+    presented as documented or guaranteed. A status code, field, constraint or authentication scheme
+    that was not observed MUST NOT appear.
+  - XIII. Test Provenance and Traceability: adds OBSERVED and INFERRED as origins for facts and for
+    the evidence behind a scenario. A scenario's source stays RULE when deterministic generation made
+    it; its origin is carried alongside.
+  - XIV. No Silent Assumptions: an inference from observations MUST be marked as an inference and
+    never presented as a specification fact.
+  - XV. API Dependency Inference Must Be Conservative: value reuse seen in a capture supports at most
+    a likely relationship, and never a confirmed one on its own.
+Removed principles: none.
+Removed sections: none.
+Deferred TODOs:
+  - Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version on
+    2026-10-18 (AP-056 task T001).
+  - The concrete labels, thresholds (for example the minimum number of consistent observations) and
+    exclusion rules stay in specs/056-har-json-input-support by design.
+
+------------------------------------------------------------------------------------------------
+
+Sync Impact Report (previous amendment)
+==================
 Version change: 3.0.0 → 3.1.0 (minor: XVII's 2026-09-30 exception gains a Debug run of a supplied script)
 
 Trigger: the user asked for a Debug run on Run k6 Script, as on Performance (2026-10-15), and chose
@@ -456,6 +498,8 @@ ApiPilot MUST distinguish, at all times and without silently mixing them, betwee
 3. Test cases inferred by AI.
 4. User-provided assumptions or configuration.
 5. Runtime observations from executed tests.
+6. Observations: facts recorded from captured traffic (for example a HAR file).
+7. Inferences ApiPilot derives from observations (for example an inferred path parameter or schema).
 
 The initial executable artifact is a Postman collection, but the architecture MUST NOT be
 designed exclusively around Postman, one AI provider, one inference runtime, or one UI
@@ -473,6 +517,12 @@ ApiPilot MUST NOT fabricate endpoints, HTTP methods, request or response fields,
 codes, or authentication mechanisms that are not supported by the specification or explicit
 user configuration. When the specification is incomplete or ambiguous, ApiPilot MUST expose
 the uncertainty rather than silently assuming a value.
+
+When no specification exists and the user supplies a capture of traffic, the capture is
+evidence, not a contract. Observed facts MUST be labelled observed, MUST carry their supporting
+observation count, and MUST NOT be presented as documented or as the API's guaranteed behavior.
+A status code, field, constraint or authentication scheme that was not observed MUST NOT appear.
+Facts ApiPilot derives from observations are inferences and MUST be labelled as such.
 
 **Rationale**: Generated tests are only trustworthy if they reflect the real contract; any
 invented contract detail undermines the credibility of the entire platform.
@@ -609,7 +659,11 @@ confidence in the test suite without improving real coverage.
 ### XIII. Test Provenance and Traceability
 
 Every test scenario MUST be traceable to its origin using provenance values such as
-SPECIFICATION, RULE, AI, USER, WORKFLOW, or RUNTIME. Where practical, ApiPilot SHOULD
+SPECIFICATION, RULE, AI, USER, WORKFLOW, or RUNTIME. Facts derived from captured traffic MUST
+carry the origin OBSERVED or INFERRED, and a scenario built from them MUST state the origin and
+supporting observation count of the evidence it rests on. A scenario that deterministic generation
+produced keeps the source RULE; the observed or inferred origin is carried alongside it, not in its
+place. Where practical, ApiPilot SHOULD
 maintain a trace from test scenario → reason → source → underlying API/schema/rule/AI
 inference, supporting future specification-change impact analysis.
 
@@ -621,7 +675,9 @@ unexpected or low-value test scenarios.
 ApiPilot MUST NOT silently make material assumptions. When information is missing, the
 system MUST, in order of preference: use deterministic evidence if available; ask the user
 when necessary; mark an inference explicitly; and expose uncertainty. An AI-inferred value
-(with confidence) MUST never be presented as if it were part of the API contract.
+(with confidence) MUST never be presented as if it were part of the API contract. Likewise, an
+inference derived from observations MUST be marked as an inference and MUST never be presented as
+a specification fact.
 
 **Rationale**: Hidden assumptions produce tests that silently diverge from real API
 behavior, eroding trust in generated artifacts.
@@ -633,7 +689,9 @@ relationships. Only sufficiently confident relationships MAY automatically becom
 workflows. The system MUST NOT create workflows solely because two fields have similar
 names; dependency inference SHOULD use multiple signals where available, including field
 names, types, schema descriptions, endpoint semantics, request/response relationships, API
-tags, examples, and AI semantic similarity.
+tags, examples, and AI semantic similarity. A value that is reused between a response and a
+later request in a capture is one signal: on its own it supports at most a likely relationship,
+never a confirmed one.
 
 **Rationale**: Overconfident dependency inference can generate dangerous or incorrect
 workflows that QA engineers may not catch before execution.
@@ -1062,4 +1120,4 @@ inference modes) MUST be explicitly justified in the relevant plan's complexity/
 tracking, or rejected. Complexity introduced by a design MUST be justified against these
 principles.
 
-**Version**: 3.1.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-15
+**Version**: 3.2.0 | **Ratified**: 2026-08-26 | **Last Amended**: 2026-10-18

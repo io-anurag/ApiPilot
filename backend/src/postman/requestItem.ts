@@ -15,6 +15,7 @@ import {
   credentialKindForField,
   credentialKindForHeader,
   isBearerTokenValue,
+  redactionPlaceholderKind,
 } from "../testDesign/sensitiveValueDetection";
 import {
   BASE_URL_VARIABLE,
@@ -121,10 +122,18 @@ function substituteCredentialsInBody(
   if (Array.isArray(value)) {
     return value.map((entry) => substituteCredentialsInBody(entry, declared));
   }
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object") {
+    // A redaction placeholder from captured input (specs/056) is a credential wherever it appears.
+    const placeholderKind = redactionPlaceholderKind(value);
+    if (placeholderKind !== undefined) {
+      declared.push(credentialVariable(placeholderKind));
+      return `{{${placeholderKind}}}`;
+    }
+    return value;
+  }
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, nested]) => {
-      const kind = credentialKindForField(key, nested);
+      const kind = credentialKindForField(key, nested) ?? redactionPlaceholderKind(nested);
       if (kind !== undefined) {
         declared.push(credentialVariable(kind));
         return [key, `{{${kind}}}`];
@@ -156,7 +165,33 @@ export interface RequestItemResult {
 interface BodyResult {
   body?: PostmanBody;
   contentType?: string;
+  /** Multipart bodies carry their own boundary, so a captured `Content-Type` header must not be sent. */
+  omitContentTypeHeader?: boolean;
   limitations: GenerationLimitation[];
+}
+
+const FORM_URLENCODED_CONTENT_TYPE = /^application\/x-www-form-urlencoded$/i;
+const MULTIPART_CONTENT_TYPE = /^multipart\/form-data$/i;
+
+/**
+ * Form-style bodies are emitted only for operations that did not come from an OpenAPI document
+ * (specs/056 FR-056): observed or declared operations. A documented operation keeps the existing
+ * "this export cannot represent it" limitation, so every artifact generated from an OpenAPI input is
+ * byte-identical to what it was before (SC-002, FR-034).
+ */
+function emitsFormBodies(operation: ApiOperation): boolean {
+  return operation.provenance !== undefined && operation.provenance.origin !== "documented";
+}
+
+/** A flat object of scalar values as form entries (text), or undefined when the body is not flat. */
+function flatFormEntries(body: unknown): { key: string; value: string }[] | undefined {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return undefined;
+  const entries: { key: string; value: string }[] = [];
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (value !== null && typeof value === "object") return undefined;
+    entries.push({ key, value: toValueText(value) });
+  }
+  return entries;
 }
 
 function buildBody(
@@ -209,6 +244,20 @@ function buildBody(
     };
   }
 
+  if (emitsFormBodies(operation)) {
+    const entries = flatFormEntries(body);
+    if (entries !== undefined && FORM_URLENCODED_CONTENT_TYPE.test(contentType)) {
+      return { body: { mode: "urlencoded", urlencoded: entries }, contentType, limitations: [] };
+    }
+    if (entries !== undefined && MULTIPART_CONTENT_TYPE.test(contentType)) {
+      return {
+        body: { mode: "formdata", formdata: entries.map((entry) => ({ ...entry, type: "text" as const })) },
+        omitContentTypeHeader: true,
+        limitations: [],
+      };
+    }
+  }
+
   return {
     limitations: [
       {
@@ -245,6 +294,11 @@ function buildUrl(
    * make it more correct.
    */
   const urlValueText = (value: unknown, encode: boolean): string => {
+    const placeholderKind = redactionPlaceholderKind(value);
+    if (placeholderKind !== undefined) {
+      variables.push(credentialVariable(placeholderKind));
+      return `{{${placeholderKind}}}`;
+    }
     if (isBearerTokenValue(value)) {
       variables.push(credentialVariable("token"));
       return "{{token}}";
@@ -344,7 +398,7 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
   const headerLimitations: GenerationLimitation[] = [];
   const header: PostmanHeader[] = sortedEntries(scenario.request.headers).map(
     ([key, value]) => {
-      const kind = credentialKindForHeader(key, value);
+      const kind = credentialKindForHeader(key, value) ?? redactionPlaceholderKind(value);
       if (kind !== undefined) {
         credentialVariables.push(credentialVariable(kind));
         return { key, value: `{{${kind}}}` };
@@ -360,6 +414,11 @@ export function buildRequestItem(input: BuildRequestItemInput): RequestItemResul
       return { key, value: toValueText(value) };
     },
   );
+  if (bodyResult.omitContentTypeHeader) {
+    const kept = header.filter((entry) => entry.key.toLowerCase() !== "content-type");
+    header.length = 0;
+    header.push(...kept);
+  }
   if (bodyResult.contentType !== undefined && !hasHeader(header, "content-type")) {
     header.push({ key: "Content-Type", value: bodyResult.contentType });
   }

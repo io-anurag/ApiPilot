@@ -32,6 +32,16 @@ import { createK6Runner } from "./performance/k6/runner";
 import { versionRouter } from "./api/version";
 import { clientLogsRouter, CLIENT_LOGS_BODY_LIMIT } from "./api/clientLogs";
 import { InvalidYamlError, UnsupportedVersionError } from "./openapi/errors";
+import {
+  AmbiguousInputError,
+  InputLimitExceededError,
+  InvalidDefinitionError,
+  InvalidHarError,
+  InvalidJsonError,
+  NoOperationsDerivedError,
+  PostmanCollectionDetectedError,
+  UnrecognizedInputError,
+} from "./apiInput/errors";
 import { MAX_UPLOAD_BYTES } from "./uploadMiddleware";
 import { createLogger } from "./logger";
 import { sessionMiddleware } from "./session/sessionMiddleware";
@@ -184,6 +194,38 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
       statusCode = 400;
       errorCategory = "unsupported_version";
       body = { error: "unsupported_version", message: err.message };
+    } else if (err instanceof InvalidJsonError) {
+      statusCode = 400;
+      errorCategory = "invalid_json";
+      body = { error: "invalid_json", message: err.message };
+    } else if (err instanceof UnrecognizedInputError) {
+      statusCode = 400;
+      errorCategory = "unrecognized_input_format";
+      body = { error: "unrecognized_input_format", message: err.message };
+    } else if (err instanceof AmbiguousInputError) {
+      statusCode = 400;
+      errorCategory = "ambiguous_input_format";
+      body = { error: "ambiguous_input_format", message: err.message };
+    } else if (err instanceof PostmanCollectionDetectedError) {
+      statusCode = 400;
+      errorCategory = "postman_collection_detected";
+      body = { error: "postman_collection_detected", message: err.message, redirectTo: err.redirectTo };
+    } else if (err instanceof InvalidHarError) {
+      statusCode = 400;
+      errorCategory = "invalid_har";
+      body = { error: "invalid_har", message: err.message };
+    } else if (err instanceof InvalidDefinitionError) {
+      statusCode = 400;
+      errorCategory = "invalid_definition";
+      body = { error: "invalid_definition", message: err.message, problems: err.problems };
+    } else if (err instanceof NoOperationsDerivedError) {
+      statusCode = 400;
+      errorCategory = "no_operations_derived";
+      body = { error: "no_operations_derived", message: err.message, report: err.report };
+    } else if (err instanceof InputLimitExceededError) {
+      statusCode = 413;
+      errorCategory = "input_limit_exceeded";
+      body = { error: "input_limit_exceeded", message: err.message, limit: err.limit, maximum: err.maximum };
     } else if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
       statusCode = 413;
       errorCategory = "file_too_large";

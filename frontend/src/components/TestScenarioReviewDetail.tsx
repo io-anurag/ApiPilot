@@ -3,6 +3,7 @@ import type { ReviewScenarioWire } from "../services/reviewsClient";
 import { HttpMethodBadge } from "./HttpMethodBadge";
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 import { ProvenanceBadge } from "./ProvenanceBadge";
+import { AssertionBasis, ScenarioEvidence } from "./ScenarioEvidence";
 
 /** Mirrors `OperationDetail`'s own "Security" section (the one place this is otherwise shown, in
  * the earlier API Review stage) — `undefined` only when the matching operation could not be
@@ -139,6 +140,8 @@ export function TestScenarioReviewDetail({
         )}
       </section>
 
+      <ScenarioEvidence evidence={scenario.evidence} />
+
       <section>
         <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">
           Request
@@ -163,7 +166,9 @@ export function TestScenarioReviewDetail({
         </h5>
         {scenario.assertions.length === 0 ? (
           <p className="text-sm text-muted">
-            No documented response was available to assert against.
+            {scenario.evidence
+              ? "No response is asserted for this scenario: nothing in the input supports an expected outcome."
+              : "No documented response was available to assert against."}
           </p>
         ) : (
           <ul className="mt-1 space-y-1 text-sm text-text-secondary">
@@ -172,6 +177,7 @@ export function TestScenarioReviewDetail({
                 {assertion.type === "status-code"
                   ? `Status code: ${assertion.expectedStatusCode}`
                   : "Response schema conformance"}
+                <AssertionBasis assertion={assertion} />
               </li>
             ))}
           </ul>

@@ -217,6 +217,95 @@ percent-encoding rather than being JSON-stringified; unsupported styles (`matrix
 content-based) are reported as a limitation instead of guessed (AP-022,
 `backend/src/postman/parameterSerialization.ts`).
 
+## Input layer (AP-056)
+
+ApiPilot accepts four inputs: OpenAPI 3.x (YAML or JSON), a HAR capture, an ApiPilot API definition, and (to redirect, not
+import) a Postman collection. All of them end as one `ApiModel`, so every stage after upload (review, deterministic
+generation, AI enhancement, scenario review, dependency analysis, Postman generation, execution) is unchanged and has no
+second code path.
+
+```text
+upload bytes
+    ↓
+loadApiInput  (backend/src/apiInput/index.ts)
+    ↓
+detectFormat  (content only, never the file name)
+    ├── YAML / OpenAPI JSON ──→ existing openapi pipeline (parse, validate, analyze, build)   unchanged
+    ├── HAR ──────────────────→ apiInput/har/        extract, redact, classify, merge, infer, build
+    ├── API definition ───────→ apiInput/definition/ validate (Ajv, strict), then map
+    └── Postman collection ───→ typed error that redirects; nothing is imported
+    ↓
+{ apiModel, input: { format, label, filename } }
+```
+
+`loadApiInput` is the only entry point. Both upload routes and the workflow start call it, so the routes remain thin: they
+pass the buffer in, map the result to HTTP, and delegate every typed error (`UnrecognizedInputError`,
+`AmbiguousInputError`, `InvalidHarError`, `InvalidDefinitionError`, `NoOperationsDerivedError`,
+`InputLimitExceededError`, `PostmanCollectionDetectedError`) to the central error handler in `app.ts`. The raw upload buffer
+is overwritten when the request ends (`apiInput/wipeUpload.ts`), whether it succeeded or failed. The input layer logs only
+through `apiInput/logging.ts`, whose fields cannot hold free text, so a URL, header, body or credential cannot reach a log
+line.
+
+### Why a HAR is not converted into OpenAPI
+
+A capture is evidence of one session; an OpenAPI document is a contract. Converting one into the other would present
+inferred facts (a path parameter, a field's type, a status that happened to be seen) as documented ones, and everything
+downstream would then treat them as authoritative. So the HAR adapter builds the `ApiModel` directly and labels every fact
+with where it came from. All new `ApiModel` fields are additive and optional, and absent for OpenAPI input, which is why an
+OpenAPI upload produces a byte-identical model, scenario set, AI prompt and Postman artifact (pinned by golden tests).
+
+### Provenance and evidence
+
+`FactProvenance` (`documented`, `declared`, `observed`, `inferred`, with an observation count and a confidence for the last
+two) sits on operations, parameters, request bodies and responses. A generated `TestScenario` carries `evidence` (origin,
+count, derivation, a one-sentence summary) and each `Assertion` may carry a `basis`. The constitution (3.2.0) treats
+observations and inferences as categories of information in their own right, so the UI states them as text, never by colour
+alone, and the AI prompt carries one sentence noting that statuses are observed or declared, not documented guarantees. The
+prompt for an OpenAPI model is unchanged, and so is `AI_SCENARIO_RESPONSE_VERSION`.
+
+`generateTestModel` chooses the rules per operation from `provenance.origin`, still as pure functions of the model:
+
+| Origin | Rules |
+|---|---|
+| absent or `documented` | the existing rule list, unchanged |
+| `declared` | the existing rules over only what the definition stated (`schemaGroundedView`), plus `declaredExampleScenarios` |
+| `observed` | `observedExampleScenarios` only: positive scenarios for observed 2xx statuses, and missing-field and wrong-type negatives only where at least three observations support them |
+
+An operation that yields no scenario is reported with the reason (`generationNotes`) instead of being dropped.
+
+### Redaction placement and the exporter contract
+
+Credentials are redacted at extraction (`apiInput/redaction.ts`), before any value is retained: the HAR adapter never holds
+a credential in the model, the report, a log line, an AI prompt or an artifact. Detection reuses the predicates in
+`testDesign/sensitiveValueDetection.ts`, so there is one definition of "this is a credential". A redacted value is the
+placeholder `[redacted:<kind>]` (`token`, `apiKey`, `password`, `cookie`, `session`), and the model records only that a
+credential of that kind was seen, where, and how many times.
+
+The placeholder is a contract with the Postman exporter: `postman/requestItem.ts` recognizes the exact form and emits the
+same `{{variable}}` reference it emits for a credential-named field, the environment declares it as a secret variable, and
+`postman/validateCollection.ts` rejects a collection in which any `[redacted:` text would still be sent. A gap in
+substitution therefore fails generation instead of reaching a run.
+
+### Generated artifacts
+
+`PostmanBody` is a union of `raw`, `urlencoded` and `formdata` bodies. Form bodies are emitted only for observed or declared
+operations, so every existing OpenAPI output is unchanged. A `formdata` body cannot be represented in a request-chain step,
+and such a plan is refused with that reason. No address from a capture or a definition reaches an artifact: URLs are built
+from `{{baseUrl}}` and the environment you select at run time, the `baseUrl` of a definition is informational, and the
+README's wording for a capture that spans origins omits them. The execution safeguards (an environment must be selected;
+production and write operations need confirmation) apply to these workflows exactly as to OpenAPI ones.
+
+### Dependencies and limits
+
+For a capture, `har/detectDependencies.ts` compares digests of distinctive values (a value that exactly one operation and
+field returned and a later request of another operation sent). The result is a list of `DependencyHint`s that
+`dependencies/mergeRelationships.ts` turns into relationships: `POSSIBLE` for one use, `LIKELY` for two or more, never
+`CONFIRMED` on reuse alone. A declared hint is `CONFIRMED` only when both fields exist in the declared schemas. Hints merge
+with the deterministic analysis through the same disambiguation, so an existing confirming signal can still confirm a pair.
+
+The input limits (file size, HAR entries, body size, JSON depth, derived operations, examples kept) are listed in the
+[HTTP API reference](http-api.md#input-formats-and-upload-errors); three are environment variables validated at start-up.
+
 ## Workflow orchestration
 
 `testGenerationWorkflow/` coordinates the pipeline without reimplementing its domain rules. It
@@ -1095,7 +1184,7 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
     runDebugRun.ts      orchestrator: setup, chains in plan order, one shared scope, stop rules,
                         120 s cap, abort; observes every exchange, then builds the masked result
     resolveRequest.ts   reference filling and request building; numbers `{{$name}}` as the renderer does
-    dynamicValues.ts    the 48 dynamic variables, with an injected clock
+    dynamicValues.ts    the 50 dynamic variables (48 Postman plus `$randomDecimal` and `$randomDescription`), with an injected clock
     extraction.ts       extractors with the reason for a failure; statusOk
     checks.ts           check evaluation; `detail` never carries a value
     masker.ts           sensitive values -> MaskedText segments; secrets are never revealable

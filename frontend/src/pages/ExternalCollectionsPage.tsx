@@ -499,13 +499,14 @@ export function ExternalCollectionsPage({
               </button>
             </Banner>
           )}
-          <div className="grid items-start gap-4 lg:grid-cols-[320px_1fr]">
+          {/* 40% tree, 60% editor (`2fr`/`3fr`); `minmax(0, …)` keeps long content from changing the ratio. */}
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             {/* A fixed height rather than stretching to the right column: a large collection then
                 scrolls inside the tree (CollectionTreeView's own `overflow-y-auto` list) instead of
                 growing the whole page. */}
             <div className="flex h-128 flex-col gap-3">
               {/* The collection tree always stays in the sidebar (it's the primary navigation);
-                  variables get the full-width main pane below instead of this ~320px rail — their
+                  variables get the full-width main pane below instead of this half-width column — their
                   row layout (name + value + source label) doesn't fit a sidebar this narrow. The
                   "Variables" toggle lives in the tree's own header row, next to "+ Add request". */}
               <CollectionTreeView

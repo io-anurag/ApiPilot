@@ -18,7 +18,7 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
   "no-expected-outcome": "Scenarios with no expected outcome",
   "undocumented-status-code": "Responses the specification did not document concretely",
   "unsupported-auth-scheme": "Authentication schemes this export cannot configure",
-  "unsupported-content-type": "Request content types this export cannot represent",
+  "unsupported-content-type": "Request content types this export cannot represent (it writes JSON and text bodies, and URL-encoded and multipart text fields for operations from a capture or an API definition)",
   "unresolved-path-parameter": "Path parameters with no approved value",
   "specification-analysis-issue": "Operations carrying specification analysis issues",
   "alternative-auth-requirement-selected":

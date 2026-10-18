@@ -369,6 +369,9 @@ const RUN_TAG = typeof RUN_TAG_SETTING === "string" && /^[0-9a-f]{6}$/.test(RUN_
 const FIRST_NAMES = ["Ada", "Alan", "Barbara", "Claude", "Dennis", "Donald", "Edsger", "Frances", "Grace", "Hedy", "Ivan", "Jean", "Ken", "Katherine", "Leslie", "Linus", "Margaret", "Niklaus", "Radia", "Rosalind", "Sophie", "Tim", "Vint", "Whitfield"];
 const LAST_NAMES = ["Allen", "Babbage", "Backus", "Berners", "Cerf", "Diffie", "Dijkstra", "Engelbart", "Hamilton", "Hopper", "Johnson", "Kahn", "Knuth", "Lamarr", "Lamport", "Liskov", "Lovelace", "Perlman", "Ritchie", "Shannon", "Sutherland", "Thompson", "Turing", "Wirth"];
 const ALPHANUMERIC = "0123456789abcdefghijklmnopqrstuvwxyz";
+const DESCRIPTION_ADJECTIVES = ["Durable", "Compact", "Lightweight", "Reliable", "Versatile", "Elegant", "Portable", "Sturdy", "Efficient", "Practical", "Modern", "Flexible"];
+const DESCRIPTION_NOUNS = ["organiser", "kitchen set", "desk lamp", "travel bag", "water bottle", "storage box", "garden tool", "phone stand", "notebook", "backpack", "speaker", "toolkit"];
+const DESCRIPTION_USES = ["everyday use", "small spaces", "busy teams", "long journeys", "home offices", "outdoor trips", "quick repairs", "daily commutes"];
 const COLORS = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black", "white", "grey", "pink", "teal"];
 const ABBREVIATIONS = ["SQL", "TCP", "HTTP", "JSON", "XML", "SSL", "API", "CSS", "RAM", "SMS", "PCI", "USB"];
 const LOCALES = ["en", "de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ja", "ko", "zh"];
@@ -447,7 +450,9 @@ function dynamicValue(name) {
   }
   if (kind === "$timestamp") return String(Math.floor(Date.now() / 1000));
   if (kind === "$isoTimestamp") return new Date(Date.now()).toISOString();
-  if (kind === "$randomInt") return String(m % 1001);
+  if (kind === "$randomInt") return String(1 + (m % 1000));
+  if (kind === "$randomDecimal") return ((1 + (draw(1) % 99999)) / 100).toFixed(2);
+  if (kind === "$randomDescription") return pick(DESCRIPTION_ADJECTIVES, 1) + " " + pick(DESCRIPTION_NOUNS, 2) + " designed for " + pick(DESCRIPTION_USES, 3) + ".";
   if (kind === "$randomFirstName") return first;
   if (kind === "$randomLastName") return last;
   if (kind === "$randomFullName") return first + " " + last;

@@ -94,10 +94,25 @@ export interface PostmanUrl {
   variable: PostmanPathVariable[];
 }
 
-export interface PostmanBody {
+/** A request body as emitted into a generated collection. Every body ApiPilot generated before specs/056 is `raw`. */
+export type PostmanBody = PostmanRawBody | PostmanUrlencodedBody | PostmanFormdataBody;
+
+export interface PostmanRawBody {
   mode: "raw";
   raw: string;
   options: { raw: { language: string } };
+}
+
+/** A form-encoded body (specs/056 FR-056): one entry per field, values as text. */
+export interface PostmanUrlencodedBody {
+  mode: "urlencoded";
+  urlencoded: { key: string; value: string }[];
+}
+
+/** A multipart body of text fields (specs/056 FR-056). File parts are never emitted. */
+export interface PostmanFormdataBody {
+  mode: "formdata";
+  formdata: { key: string; value: string; type: "text" }[];
 }
 
 export interface PostmanRequest {

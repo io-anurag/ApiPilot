@@ -123,7 +123,7 @@ export function VariablePanel({
       {locked && (
         <Banner tone="warning" role="status" title="This collection is read-only while a run is in progress." />
       )}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {rows.map((row, index) => {
           const changedThisSession =
             initialValues.current[row.name] !== undefined &&
@@ -135,7 +135,7 @@ export function VariablePanel({
           // row, before saving.
           const hasValue = row.value.trim().length > 0;
           return (
-            <div key={index} className="flex flex-wrap items-center gap-2">
+            <div key={index} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
               {row.source === "new" ? (
                 <input
                   type="text"
@@ -144,11 +144,11 @@ export function VariablePanel({
                   value={row.name}
                   disabled={locked}
                   onChange={(event) => updateRow(index, { name: event.target.value })}
-                  className={`w-full shrink-0 font-mono sm:w-40 ${FIELD_STYLES}`}
+                  className={`w-full min-w-0 font-mono ${FIELD_STYLES}`}
                 />
               ) : (
                 <span
-                  className="w-full shrink-0 truncate font-mono text-sm text-text-primary sm:w-40"
+                  className="min-w-0 truncate font-mono text-sm text-text-primary"
                   title={row.name}
                 >
                   {row.name}
@@ -165,23 +165,8 @@ export function VariablePanel({
                 value={row.value}
                 disabled={locked}
                 onChange={(event) => updateRow(index, { value: event.target.value })}
-                className={`min-w-48 flex-1 rounded-md border px-2 py-1.5 font-mono text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border-control bg-surface" : "border-danger-600 bg-danger-50 dark:bg-danger-500/10"}`}
+                className={`w-full min-w-0 rounded-md border px-2 py-1.5 font-mono text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${hasValue ? "border-border-control bg-surface" : "border-danger-600 bg-danger-50 dark:bg-danger-500/10"}`}
               />
-              <span className="shrink-0 text-xs text-muted sm:w-32">
-                {SOURCE_LABEL[row.source]}
-              </span>
-              {changedThisSession && (
-                <span
-                  aria-label="Changed in this session"
-                  title="Changed in this session"
-                  className="h-2 w-2 shrink-0 rounded-full bg-brand-500"
-                />
-              )}
-              {!row.referenced && (
-                <span className="shrink-0 uppercase">
-                  <Pill tone="line">unreferenced</Pill>
-                </span>
-              )}
               <button
                 type="button"
                 aria-label={
@@ -195,6 +180,22 @@ export function VariablePanel({
               >
                 ✕
               </button>
+              {/* What the row is, on its own line under the value, so the three columns above line up. */}
+              <div className="col-start-2 col-end-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                <span>{SOURCE_LABEL[row.source]}</span>
+                {changedThisSession && (
+                  <span
+                    aria-label="Changed in this session"
+                    title="Changed in this session"
+                    className="h-2 w-2 shrink-0 rounded-full bg-brand-500"
+                  />
+                )}
+                {!row.referenced && (
+                  <span className="shrink-0 uppercase">
+                    <Pill tone="line">unreferenced</Pill>
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}

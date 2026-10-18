@@ -1,0 +1,11 @@
+{
+  "operations": [
+    {
+      "path": "/orders",
+      "method": "GET"
+    }
+  ],
+  "info": {
+    "title": "Looks like one"
+  }
+}

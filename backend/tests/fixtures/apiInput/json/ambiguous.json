@@ -1,0 +1,6 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Both families", "version": "1" },
+  "paths": {},
+  "log": { "version": "1.2", "entries": [] }
+}

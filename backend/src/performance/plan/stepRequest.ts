@@ -17,6 +17,7 @@ import { mapOperationAuth, planSchemeVariables, type SchemeVariablePlanEntry } f
 import { findCredentialProducers } from "../../postman/credentialProducers";
 import { itemIdForOAuth2TokenFetch } from "../../postman/identifiers";
 import { buildOAuth2SetupFolders } from "../../postman/oauth2TokenFetch";
+import { InvalidChainPlanError } from "../errors";
 import { buildRequestItem } from "../../postman/requestItem";
 import { compareCodeUnits } from "../../postman/ordering";
 import { selectPerformanceScenario } from "./selectScenario";
@@ -123,11 +124,37 @@ function templateFromItem(item: PostmanRequestItem): RequestTemplate {
     headers: item.request.header.map((header) => ({ key: header.key, value: header.value })),
     auth: authTemplate(item.request.auth),
   };
-  if (item.request.body) {
-    template.body = item.request.body.raw;
-    template.bodyKind = item.request.body.options?.raw.language === "json" ? "json" : "text";
+  const body = item.request.body;
+  if (body) {
+    if (body.mode === "raw") {
+      template.body = body.raw;
+      template.bodyKind = body.options?.raw.language === "json" ? "json" : "text";
+    } else if (body.mode === "urlencoded") {
+      // specs/056 FR-056: a form body becomes `name=value` pairs, the shape the request-chain seeding
+      // already reads as form fields; references stay unencoded so they can be filled at run time.
+      template.body = body.urlencoded.map((entry) => `${encodeFormPart(entry.key)}=${encodeFormPart(entry.value)}`).join("&");
+      template.bodyKind = "form";
+    } else {
+      throw new UnsupportedStepBodyError(body.mode);
+    }
   }
   return template;
+}
+
+/** Percent-encodes the literal parts of a form name or value and leaves `{{reference}}`s intact. */
+function encodeFormPart(text: string): string {
+  return text
+    .split(/(\{\{[^{}]+\}\})/)
+    .map((part) => (/^\{\{[^{}]+\}\}$/.test(part) ? part : encodeURIComponent(part)))
+    .join("");
+}
+
+/** A generated request body a request-chain step cannot represent (a multipart body). */
+class UnsupportedStepBodyError extends Error {
+  constructor(readonly mode: string) {
+    super(`A ${mode} request body cannot be represented in a request-chain step.`);
+    this.name = "UnsupportedStepBodyError";
+  }
 }
 
 function attributeValue(auth: { key: string; value: string }[], key: string): string {
@@ -302,7 +329,19 @@ export function buildStepRequest(
 
   const mapped = mapOperationAuth(operation, context.apiModel.securitySchemes, auth.schemePlan);
   const built = buildRequestItem({ scenario: effective, operation, requestName: operationKeyOf(operation), auth: mapped.auth });
-  const template = templateFromItem(built.item);
+  let template: RequestTemplate;
+  try {
+    template = templateFromItem(built.item);
+  } catch (error) {
+    // Explicit and actionable, never a silent drop or a different body (specs/056 FR-056, plan open item 4).
+    if (error instanceof UnsupportedStepBodyError) {
+      throw new InvalidChainPlanError(
+        "source",
+        `The request for ${operationKeyOf(operation)} uses a ${error.mode} body, which a request-chain plan cannot represent. Leave that operation out of the plan.`,
+      );
+    }
+    throw error;
+  }
 
   const schemeName = operation.security[0]?.schemes[0]?.name ?? null;
   const planEntry = schemeName ? auth.schemePlan.get(schemeName) : undefined;

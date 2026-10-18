@@ -1,4 +1,5 @@
 import type { TestScenario } from "@apipilot/shared-domain";
+import { AssertionBasis, ScenarioEvidence } from "./ScenarioEvidence";
 
 /** Shows a single scenario's category, provenance, generated request, and expected assertions (US2). */
 export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenario }>) {
@@ -32,6 +33,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
           {scenario.provenance.description}
         </p>
       </section>
+      <ScenarioEvidence evidence={scenario.evidence} />
       <section className="space-y-1">
         <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">Request</h5>
         <pre className="max-w-full overflow-x-auto rounded-lg border border-code-border bg-code-surface p-3 font-mono text-xs leading-5 text-code-text">
@@ -42,7 +44,9 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
         <h5 className="text-xs font-semibold uppercase tracking-wider text-muted">Expected Assertions</h5>
         {scenario.assertions.length === 0 ? (
           <p className="text-sm text-muted">
-            No documented response was available to assert against.
+            {scenario.evidence
+              ? "No response is asserted for this scenario: nothing in the input supports an expected outcome."
+              : "No documented response was available to assert against."}
           </p>
         ) : (
           <ul className="space-y-1 text-sm text-text-secondary">
@@ -51,6 +55,7 @@ export function TestScenarioDetail({ scenario }: Readonly<{ scenario: TestScenar
                 {assertion.type === "status-code"
                   ? `Status code: ${assertion.expectedStatusCode}`
                   : "Response schema conformance"}
+                <AssertionBasis assertion={assertion} />
               </li>
             ))}
           </ul>

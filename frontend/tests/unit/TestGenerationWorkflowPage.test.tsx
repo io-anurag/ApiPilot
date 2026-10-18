@@ -195,7 +195,7 @@ describe("TestGenerationWorkflowPage", () => {
     );
   });
 
-  it("rejects a non-YAML file chosen via the native file picker's 'All Files' filter", async () => {
+  it("rejects an unsupported file chosen via the native file picker's 'All Files' filter", async () => {
     stubFetch([]);
 
     render(<TestGenerationWorkflowPage />);
@@ -211,8 +211,9 @@ describe("TestGenerationWorkflowPage", () => {
       target: { files: [file] },
     });
 
+    // AP-056 (FR-002, FR-041): .json and .har are accepted too, so the message lists all four extensions.
     expect(await screen.findByTestId("upload-error")).toHaveTextContent(
-      "Only .yaml or .yml OpenAPI specification files are supported.",
+      "Supported files are .yaml, .yml, .json and .har",
     );
     expect(fetchMock.mock.calls.length).toBe(callsBefore);
   });

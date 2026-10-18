@@ -20,7 +20,7 @@ import {
 import { assembleWorkflows } from "./assembleWorkflows";
 import { computeDeterministicRelationships } from "./deterministicMatching";
 import { analysisRequestId } from "./identifiers";
-import { candidateToAIRelationship, mergeDeterministicAndAI } from "./mergeRelationships";
+import { candidateToAIRelationship, mergeDeterministicAndAI, mergeInputHints } from "./mergeRelationships";
 import {
   isDependencyCandidateShape,
   parseAIDependencyResponse,
@@ -345,7 +345,12 @@ export async function analyzeDependencies(
   const startedAt = Date.now();
   const requestId = analysisRequestId(apiModel);
   logger.info("analysis_start", { operationCount: apiModel.operations.length });
-  const deterministicRelationships = computeDeterministicRelationships(apiModel);
+  // Relationships an input's hints describe (specs/056: observed value reuse, declared hints) join the
+  // deterministic ones; an OpenAPI model has no hints, so nothing changes for it.
+  const deterministicRelationships = mergeInputHints(
+    computeDeterministicRelationships(apiModel),
+    apiModel.dependencyHints ?? [],
+  );
   if (Date.now() - startedAt > timeoutMs) {
     logger.error("analysis_error", {
       errorCategory: "timeout",

@@ -34,8 +34,8 @@ Modified principles:
 Removed principles: none.
 Removed sections: none.
 Deferred TODOs:
-  - TODO(MIRROR_SYNC): specs/constitution.md, the manually maintained copy, is still at 3.1.0. This
-    command writes only .specify/memory/constitution.md, so the copy is to be resynced separately.
+  - Mirror: specs/constitution.md, the manually maintained copy, was resynced to this version on
+    2026-10-18 (AP-056 task T001).
   - The concrete labels, thresholds (for example the minimum number of consistent observations) and
     exclusion rules stay in specs/056-har-json-input-support by design.
 
