@@ -8,6 +8,8 @@ import {
 import {
   TOP_DESTINATIONS,
   buildStageGroups,
+  destinationOfView,
+  viewOfDestination,
   guidedStageOf,
   headerTitleFor,
   titleOfDestination,
@@ -28,6 +30,7 @@ describe("sidebar destinations (AP-054)", () => {
       ["performance", "Performance"],
       ["k6", "Run k6 Script"],
       ["coverage", "Coverage"],
+      ["security", "Security Lab"],
     ]);
     expect(titleOfDestination("guided")).toBe("Guided Workflow");
     expect(titleOfDestination("home")).toBe("Home");
@@ -106,5 +109,24 @@ describe("headerTitleFor (AP-054 FR-004)", () => {
     expect(guidedStageOf({ view: "guided", stage: "upload" }, workflow)).toBe("upload");
     expect(guidedStageOf({ view: "guided" }, workflow)).toBe("analysis");
     expect(guidedStageOf({ view: "guided" }, null)).toBe("upload");
+  });
+});
+
+describe("Security Lab destination (AP-057 FR-001)", () => {
+  it("is placed directly after Coverage, beside Import & Run Collection, and titled Security Lab", () => {
+    const ids = TOP_DESTINATIONS.map((d) => d.id);
+    expect(ids.indexOf("security")).toBe(ids.indexOf("coverage") + 1);
+    expect(titleOfDestination("security")).toBe("Security Lab");
+  });
+
+  it("heads the page like the other results view, with or without an area", () => {
+    expect(headerTitleFor({ view: "security" }, null)).toEqual({ title: "Security Lab", parent: "Results" });
+    expect(headerTitleFor({ view: "security", area: "reports" }, null)).toEqual({ title: "Security Lab", parent: "Results" });
+  });
+
+  it("maps between the catalog view and the destination in both directions", () => {
+    expect(destinationOfView("security")).toBe("security");
+    expect(viewOfDestination("security")).toBe("security");
+    expect(destinationOfView("coverage")).toBe("coverage");
   });
 });

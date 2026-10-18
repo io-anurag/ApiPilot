@@ -88,8 +88,7 @@ prompt to do so), then open **Security Lab** in the sidebar (`#/security`).
 ### 3. Profile and safe run (Stories 3 and 6)
 
 1. Execution and Findings → **New profile**: choose an environment of tier `local` pointing at `http://127.0.0.1:4700`, allowed
-   host `127.0.0.1`, port `4700`, allowed address range `127.0.0.1/32`, two identities mapped to the environment's secret
-   variables, owned-resource test data, budget 40, concurrency 1, timeout 10 s, cleanup `delete-created-via-spec`.
+   host `127.0.0.1`, port `4700`, allowed address range `127.0.0.1/32`, two identities whose credentials are entered in write-only fields (the page then shows only "set"), owned-resource test data, budget 40, concurrency 1, timeout 10 s, cleanup `delete-created-via-spec`.
 2. Create a second profile with tier `production`: refused with `production_tier_refused`. A `staging` profile that lists a
    loopback range: refused.
 3. Select approved scenarios. **Preview** shows profile, tier, base URL, scenario and request counts, destructive scenarios, hosts,

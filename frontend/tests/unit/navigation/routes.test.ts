@@ -7,6 +7,7 @@ import {
 } from "@apipilot/shared-domain";
 import {
   DESTINATION_IDS,
+  SECURITY_AREAS,
   formatRoute,
   parseRoute,
   resolveRoute,
@@ -29,6 +30,7 @@ function workflowAt(active: WorkflowStageId, overrides: Partial<Record<WorkflowS
 const ALL_ROUTES: Route[] = [
   ...DESTINATION_IDS.map((view) => ({ view }) as Route),
   ...WORKFLOW_STAGE_ORDER.map((stage) => ({ view: "guided", stage }) as Route),
+  ...SECURITY_AREAS.map((area) => ({ view: "security", area }) as Route),
 ];
 
 describe("parseRoute and formatRoute (AP-054 FR-029)", () => {
@@ -56,6 +58,11 @@ describe("parseRoute and formatRoute (AP-054 FR-029)", () => {
     "#guided",
     "#/guided//",
     "#/coverage?x=1",
+    "#/security/Overview",
+    "#/security/unknown",
+    "#/security/scenarios/extra",
+    "#/security/",
+    "#/coverage/overview",
     "/guided",
   ])("rejects %s", (hash) => {
     expect(parseRoute(hash)).toBeNull();
@@ -116,5 +123,37 @@ describe("resolveRoute (AP-054 FR-029)", () => {
       expect(() => resolveRoute(route, none)).not.toThrow();
       expect(() => resolveRoute(route, { workflow: workflowAt("upload") })).not.toThrow();
     }
+  });
+});
+
+describe("Security Lab address (AP-057 FR-003, research R18)", () => {
+  it("accepts the bare destination and exactly the four areas", () => {
+    expect(parseRoute("#/security")).toEqual({ view: "security" });
+    expect(SECURITY_AREAS).toEqual(["overview", "scenarios", "execution", "reports"]);
+    for (const area of SECURITY_AREAS) expect(parseRoute(`#/security/${area}`)).toEqual({ view: "security", area });
+  });
+
+  it("formats an area-less route as the bare destination and an area route with its area", () => {
+    expect(formatRoute({ view: "security" })).toBe("#/security");
+    expect(formatRoute({ view: "security", area: "reports" })).toBe("#/security/reports");
+  });
+
+  it("does not let an area appear on any other destination", () => {
+    expect(parseRoute("#/import/overview")).toBeNull();
+    expect(parseRoute("#/performance/scenarios")).toBeNull();
+  });
+
+  it("shows a security route as asked, with or without a workflow", () => {
+    for (const requested of [{ view: "security" }, { view: "security", area: "scenarios" }] as Route[]) {
+      expect(resolveRoute(requested, { workflow: null })).toEqual({ route: requested, notice: null, replace: false });
+      expect(resolveRoute(requested, { workflow: workflowAt("upload") })).toEqual({ route: requested, notice: null, replace: false });
+    }
+  });
+
+  it("falls back to Home with a notice for an unknown area, because parseRoute returns null for it", () => {
+    const resolved = resolveRoute(parseRoute("#/security/nope"), { workflow: null });
+    expect(resolved.route).toEqual({ view: "home" });
+    expect(resolved.notice).toMatch(/does not match a screen/);
+    expect(resolved.replace).toBe(true);
   });
 });

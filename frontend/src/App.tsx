@@ -42,6 +42,7 @@ const UserScriptPage = lazy(() =>
   import("./pages/UserScriptPage").then((m) => ({ default: m.UserScriptPage })),
 );
 const CoveragePage = lazy(() => import("./pages/CoveragePage").then((m) => ({ default: m.CoveragePage })));
+const SecurityLabPage = lazy(() => import("./pages/SecurityLabPage").then((m) => ({ default: m.SecurityLabPage })));
 const PerformancePlanScaleMockPage = lazy(() =>
   import("./pages/PerformancePlanScaleMockPage").then((m) => ({ default: m.PerformancePlanScaleMockPage })),
 );
@@ -220,7 +221,7 @@ export function App() {
   function runCommand(command: Command) {
     setPaletteOpen(false);
     if (command.kind === "workflow") {
-      if (isResultsView(command.id)) handleOpenCoverage();
+      if (isResultsView(command.id)) navigate({ view: command.id });
       else handleSelect(command.id);
     } else if (command.kind === "go-home") {
       navigate({ view: "home" });
@@ -336,6 +337,17 @@ export function App() {
               <div hidden={view !== "coverage"}>
                 <LazyView>
                   <CoveragePage onOpenWorkflow={handleOpenWorkflowFromCoverage} />
+                </LazyView>
+              </div>
+            )}
+            {mounted.has("security") && (
+              <div hidden={view !== "security"}>
+                <LazyView>
+                  <SecurityLabPage
+                    specificationLoaded={snapshot.ready ? snapshot.workflow?.apiModel !== undefined : null}
+                    area={view === "security" ? route.area : undefined}
+                    onAreaChange={(area) => navigate({ view: "security", area })}
+                  />
                 </LazyView>
               </div>
             )}

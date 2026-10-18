@@ -18,7 +18,7 @@ assumptions are listed again in the final section. No `NEEDS CLARIFICATION` item
 | F6 | Execution uses Newman, one item per `newman.run()` (`backend/src/execution/newmanRunner.ts:102`). It follows redirects by default, has a fixed 30 s timeout, no request budget, no response-size cap, no host/port/IP validation, strictly sequential items, and cancellation only between items. No SSRF or private-range code exists anywhere (grep for `ssrf`, `rfc1918`, `isPrivate`, `dns.lookup`, `net.isIP`). | Newman cannot satisfy FR-036 to FR-044. A new guarded sender is required (R9, R10). |
 | F7 | `createFetchSender` (`backend/src/performance/chain/debug/sender.ts`) is the only in-process outbound client. It has manual redirects, a read cap and a per-hop origin check, but no IP validation, so a hostname that re-resolves to a private address passes. | Borrow its patterns; do not reuse it for the policy (R10). |
 | F8 | `findExecutionInProgress()` (`backend/src/execution/executionSlot.ts:15`) ORs five run kinds and says a new kind must add itself. | A Security Lab run joins the slot (R12). |
-| F9 | `Environment` holds `name, tier, baseUrl, variableValues, requestDelayMs`; values are AES-256-GCM encrypted at rest (`persistence/credentialCipher.ts`). Tiers: `local, dev, qa, staging, production`. Environment routes are gated by `requireEnvironmentAccess()` (`api/testGenerationWorkflow.ts:174`). | Profiles reference an environment and its encrypted variables rather than storing secrets again (R8). |
+| F9 | `Environment` holds `name, tier, baseUrl, variableValues, requestDelayMs`; values are AES-256-GCM encrypted at rest (`persistence/credentialCipher.ts`). Tiers: `local, dev, qa, staging, production`. Environment routes are gated by `requireEnvironmentAccess()` (`api/testGenerationWorkflow.ts:174`). | Profiles reference an environment for its target only; its variable values come back to the browser in plain text, so credentials go in a separate write-only store (R8, revised). |
 | F10 | Persistence has no migration framework: `initializeSchema()` appends `CREATE TABLE IF NOT EXISTS` blocks and `ensureColumn()`. Repositories are session-scoped singletons with `deleteBySession`, registered with `onExpire`. | New tables follow that convention (R13). |
 | F11 | Redaction helpers exist: `failureAnalysis/redaction.ts` (`redactHeaders`, `redactUrl`, `redactBody`, `redactFreeText`, `scanOutput`, `collectRedactedValues`), `apiInput/redaction.ts`, `testDesign/sensitiveValueDetection.ts`, `performance/chain/debug/masker.ts`. `logger.ts` applies no redaction and its convention is ids only. | Compose these into one evidence redactor; add a seeded-secret corpus test (R14). |
 | F12 | `specificationRevision(apiModel)` (`apiCoverage/specRevision.ts`) hashes operations (including effective security) and schemes; it ignores tags, descriptions, examples, provenance and `deprecated`. | Reuse it for the spec revision, and add a security basis hash for the extra facts (R3). |
@@ -194,30 +194,47 @@ binding. Per-scenario integer `revision` is the model; this adds immutability an
 **Alternatives rejected.** Extending `ReviewWorkspace` (three states, no version retention, tied to `TestScenario`). Allowing a
 filter-based batch (the user cannot identify the set).
 
-## R8. Execution profile layered on the existing environment
+## R8. Execution profile layered on the existing environment, credentials in a write-only store (revised during implementation)
 
-**Decision.** A `SecurityProfile` is a separate session-scoped record that references one existing `Environment` by id. The
-environment supplies `name`, `tier`, `baseUrl` and the encrypted variable store; the profile adds `allowedHosts`,
-`allowedPorts`, `allowedAddressRanges` (local only), `tlsPolicy`, `identities`, `testData`, `timeoutMs`, `maxRequests`,
-`maxConcurrency`, `permittedCategories`, `destructivePermitted`, `cleanup`. An identity holds a name, a role label and a
-map from security-scheme name to an **environment variable name**; the secret value lives only in the environment's
-encrypted `variableValues`, entered through the existing environment form. The profile therefore never stores a secret
-(FR-048), and no second credential store exists.
+**Revision note (2026-10-18, implementation).** Two premises of the first R8 were wrong, and both were found by reading code
+while building T026. (1) The existing environment routes return `variableValues` to the browser in plain text, and
+`EnvironmentForm` shows them in ordinary inputs, so storing an identity's credential as an environment variable would break
+FR-048 ("never returned to the interface after saving"). The "never shown again" behavior the first R8 relied on does not exist.
+(2) Opening the environment routes earlier would break an explicit AP-032 requirement and its test (an uploaded-only workflow
+must not open environments), which the spec for this feature does not ask to change (CLAUDE.md section 56). Both are fixed below,
+and the AP-032 gate is left exactly as it was.
+
+**Decision.** A `SecurityProfile` is a separate session-scoped record that references one existing `Environment` by id, but
+uses it **only for its target**: `name`, `tier` and `baseUrl`. The environment's `variableValues` are never read by Security
+Lab. The profile adds `allowedHosts`, `allowedPorts`, `allowedAddressRanges` (local only), `tlsPolicy`, `identities`,
+`testData`, `timeoutMs`, `maxRequests`, `maxConcurrency`, `permittedCategories`, `destructivePermitted`, `cleanup`.
+
+An identity holds a name, a role label and the **names of the security schemes it has a credential for** (and, separately, which
+it has a known-expired credential for). The credential values live in a new **write-only, session-scoped, encrypted store**
+(`security_credentials`, keyed by session, profile, identity, scheme and kind). They are accepted by a dedicated route, read only
+by the sender at send time, never returned by any route (the API reports only `set: true | false`), removed with the session,
+and never written to a log, evidence, finding, report or export. Exports use the placeholder variable
+`<identity>_<scheme>` with an empty value.
+
+Environments for a profile are created and edited through thin **Security Lab environment routes** (`/api/security-lab/environments`)
+that accept and return only `name`, `tier` and `baseUrl`. They write the same session-scoped environment store, so the
+environment is the ordinary one elsewhere in the product, created with no variables. The existing gate
+`requireEnvironmentAccess()` is unchanged.
 
 Tier policy: `local` → local profile (may name loopback or private ranges); `dev`, `qa`, `staging` → staging-like (no private
 ranges, confirmation, destructive gating); `production` → refused.
 
-A run copies the profile and the environment's `baseUrl` and tier into an immutable run snapshot, so later edits do not
-change a run in progress (spec edge case).
+A run copies the profile summary, the environment's `baseUrl` and tier, and the resolved credentials into an immutable in-memory
+run snapshot, so later edits do not change a run in progress (spec edge case). Credentials are held in memory for the run only.
 
-**Rationale.** F9: "reuse the existing target environment concept where possible". Storing identities as references to
-environment variables reuses encryption and the "never shown again" behavior.
+**Rationale.** FR-048 and F9: the target is the existing environment concept, which is "reuse where possible"; the credential is
+the one thing the existing store cannot keep write-only, so it gets its own small store. This is a smaller change than altering
+the environment routes' behavior for every feature, and it leaves AP-017, AP-032 and AP-034 untouched.
 
-**Alternatives rejected.** Extending `Environment` itself (bloats an AP-017 type and its UI for one feature). A second secret
-store (duplicates encryption and the redaction surface).
-
-**Required change.** `requireEnvironmentAccess()` must also open environment routes when a workflow with an `apiModel`
-exists, because Security Lab needs environments before the guided workflow reaches Postman generation.
+**Alternatives rejected.** Identities as references to environment variables (the first R8): the values come back through the
+existing routes. Masking values in the existing environment routes: changes behavior for every other feature. Opening the
+environment gate once a specification is loaded: conflicts with AP-032's requirement and test. Extending `Environment` itself
+(bloats an AP-017 type and its UI for one feature).
 
 ## R9. Destination policy (binding rules)
 
@@ -309,6 +326,7 @@ or **session-scoped** (keyed by `session_id`, deleted by the existing `onExpire`
 | `security_findings` | owner | one row per scenario version: status, severity history, confidence, remediation id, `occurrences` JSON (each with run, result id, time, observed summary) |
 | `security_settings` | owner | user-configured sensitive field names (names only) |
 | `security_profiles` | session | profile JSON (no secrets) and environment id |
+| `security_credentials` | session | write-only encrypted credential values per profile, identity, scheme and kind (R8); never returned by any route |
 | `security_evidence` | session | redacted evidence records per result, encrypted (paired `*_encrypted`/`*_iv` columns), with `owner_id`, `run_id`, `result_id` |
 
 Rules that follow from this split:
@@ -514,7 +532,7 @@ versions that test different things, hides which approved version failed).
 
 ## Assumptions carried (not verified in the repository)
 
-1. Node 24's `net.BlockList` and `http.request({ lookup })` behave as documented on Windows, including `localhost` resolving to `::1` and `127.0.0.1`. The first implementation task includes a Windows test of both.
+1. Node 24's `net.BlockList` and `http.request({ lookup })` behave as documented on Windows, including `localhost` resolving to `::1` and `127.0.0.1`. **Verified 2026-10-18 (task T005, Node v24.21.0, win32):** `BlockList.check` classified `127.0.0.1`, `::1`, `::ffff:127.0.0.1` (IPv4-mapped), `10.0.0.1`, `::ffff:10.0.0.1`, `169.254.169.254` and `fd00:ec2::254` as blocked and a public address as allowed; `localhost` resolved to `::1` first, then `127.0.0.1`; a custom `lookup` that errors fails the request with the error's code, and a `lookup` that returns only the IPv4 address succeeds. Implementation notes that follow: the custom `lookup` must honour `options.all` (Node's default `autoSelectFamily` calls it with `all: true`), and a local profile that names only `127.0.0.1` will, on Windows, still see `::1` offered first and must have it rejected by the policy, not by luck.
 2. The OWASP mapping of input validation to API8 as "related" is a judgement (R19), flagged for reviewer confirmation.
 3. Defaults in R11 are reasonable starting points and are expected to be tuned after the first real-target run.
 4. Constitution 3.3.0 (R1) is a draft awaiting the Governance review; if it is rejected the destination policy stays an engineering contract.

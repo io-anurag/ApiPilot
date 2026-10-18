@@ -201,7 +201,11 @@ export type GenerationLimitationKind =
   | "workflow-unsupported-extraction-path"
   | "workflow-unsupported-request-representation"
   | "unresolved-credential-producer"
-  | "unresolved-parameter-style";
+  | "unresolved-parameter-style"
+  // specs/057 Security Lab: an approved security scenario the exporter cannot express (never dropped silently).
+  | "security-repeat-not-expressible"
+  | "security-persisted-state-not-expressible"
+  | "security-condition-not-expressible";
 
 /**
  * One distinct security scheme's identified credential-obtaining operation

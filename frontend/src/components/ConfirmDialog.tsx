@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BUTTON_STYLES } from "./controlStyles";
 import { Dialog } from "./Dialog";
 
@@ -17,6 +17,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   confirmDisabledMessage,
   errorOnlyMessage,
+  details,
   onConfirm,
   onCancel,
 }: Readonly<{
@@ -28,6 +29,8 @@ export function ConfirmDialog({
   confirmDisabled?: boolean;
   confirmDisabledMessage?: string;
   errorOnlyMessage?: string;
+  /** Optional content shown under the count, for example the named list a destructive confirmation needs. */
+  details?: ReactNode;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
 }>) {
@@ -71,6 +74,7 @@ export function ConfirmDialog({
             <p data-testid="confirm-dialog-count" className="text-sm text-muted">
               {affectedCount} item{affectedCount === 1 ? "" : "s"} will be affected.
             </p>
+            {details}
             {confirmDisabledMessage && (
               <p role="alert" className="text-sm font-medium text-danger-700 dark:text-danger-200">
                 {confirmDisabledMessage}

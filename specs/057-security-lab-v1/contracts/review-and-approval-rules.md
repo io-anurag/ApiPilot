@@ -49,12 +49,20 @@ edit resets `executionStatus` to `not_run` for the new version; results stay att
 ## Batch rules
 
 - The request carries explicit `{id, version}` items. The server never expands a filter.
-- A batch `approve` is refused item by item (others proceed) for: a stale version (`stale_version`), a destructive scenario not named in
-  `destructiveConfirmations` (`destructive_confirmation_required`), an incomplete or stale or orphaned scenario
-  (`not_executable_content`), a wrong source state (`invalid_transition`).
+- A batch `approve` is refused item by item (others proceed) for: a version that is not the current one (`stale_version`), a
+  destructive scenario not named in `destructiveConfirmations` (`destructive_confirmation_required`), a scenario whose
+  operation is gone, whose operation basis changed, or that is read while no specification is loaded
+  (`not_executable_content`), a wrong source state (`invalid_transition`), and a rejection with no reason (`reason_required`).
+- **Approval does not depend on prerequisites** (revised during implementation). Prerequisites are derived from the selected profile,
+  which is session data, while an approval is retained work that outlives the session. Blocking approval until a profile
+  satisfies a scenario would force the profile to exist first and would make an approval's validity depend on state that
+  disappears. A scenario is *executable* only when it is approved at its current version **and** every prerequisite is met against
+  the selected profile at run time. An incomplete scenario can be approved and then waits.
 - The UI resolves the current filter through `GET /scenarios/ids`, shows the count and the list, excludes destructive and
-  incomplete scenarios from the batch by default with a visible count of each, and requires a second, named confirmation
-  to include destructive ones (FR-031, FR-033, XXXII).
+  incomplete scenarios from a batch **by default** with a visible count of each (a choice the engineer can reverse), and requires
+  a second, named confirmation to include destructive ones (FR-031, FR-033, XXXII).
+- Withdrawing an approval, or rejecting an approved scenario, keeps the approval record on its version and stamps it
+  `withdrawnAt`, so history shows what was approved when; an approval counts only while `withdrawnAt` is absent.
 - Per-item outcomes are returned and shown; a partial application is never reported as complete.
 
 ## Stale and orphaned handling

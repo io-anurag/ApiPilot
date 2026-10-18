@@ -26,8 +26,9 @@ that date (data lifetime, generation scope, finding identity) and constitution 3
    between items. A small `node:http(s)` sender validates the *connected* address in the socket `lookup`, revalidates every
    redirect, enforces budget, timeout and concurrency, and aborts in flight (R9, R10,
    [rules](contracts/execution-safety-rules.md)).
-6. **Profiles reference existing environments.** A profile adds allow-lists, identities, limits and cleanup to an `Environment`;
-   identities hold only the *names* of encrypted environment variables, so no second secret store exists (R8).
+6. **Profiles reference existing environments for their target only.** A profile adds allow-lists, identities, limits and cleanup to an
+   environment's name, tier and base URL. Credential values go in a small write-only encrypted store that no route returns, because the existing
+   environment routes return variable values in plain text (R8, revised during implementation). The AP-032 environment gate is left unchanged.
 7. **Deterministic evaluation, confidence and severity.** No model decides an outcome; only `failed` makes a finding; confidence
    follows a documented table (R15, [rules](contracts/evaluation-and-findings-rules.md)).
 8. **Export through an overlay on the existing Postman generator**, listing scenarios it cannot express rather than dropping them (R16,
@@ -50,7 +51,7 @@ AI is optional and last: a separate prompt and validator through `AIProvider`, p
 
 **Primary Dependencies**: Existing Express, better-sqlite3 (via the existing persistence layer), Ajv ^8.20 (already a backend dependency), Newman and the Postman SDK (exporter only), React, Vite, Tailwind v4, Vitest, Supertest, React Testing Library. **No new package** (R20). Node built-ins `net.BlockList`, `http`, `https`, `dns`, `crypto` supply the sender and policy.
 
-**Storage**: Local SQLite through the existing persistence layer. Eight new tables appended to `initializeSchema()` (R13): six owner-scoped (retained work) and two session-scoped (profiles, evidence). Credentials stay in the existing encrypted environment store; evidence is redacted, then stored encrypted in the session-scoped table. One new long-lived cookie, `apipilotOwner`, set only by Security Lab routes (R22).
+**Storage**: Local SQLite through the existing persistence layer. Nine new tables appended to `initializeSchema()` (R13): six owner-scoped (retained work) and three session-scoped (profiles, evidence, write-only credentials). Credentials stay in the existing encrypted environment store; evidence is redacted, then stored encrypted in the session-scoped table. One new long-lived cookie, `apipilotOwner`, set only by Security Lab routes (R22).
 
 **Testing**: Vitest unit tests per module (pure functions), Supertest integration tests per route group against a loopback sample target, a seeded-secret corpus test, determinism and byte-equality regression tests, React Testing Library for the UI. AI tests use a stub provider ([quickstart](quickstart.md)).
 
@@ -85,7 +86,7 @@ AI is optional and last: a separate prompt and validator through `AIProvider`, p
 | XV. Dependency Inference Conservative | Not applicable; no dependency inference is added. |
 | XVI. Executable Artifacts Deterministic | Pass. Export comes only from approved versions through fixed templates; same input gives equivalent output. |
 | XVII. Security and Privacy by Design | Pass against constitution 3.3.0 (see Governance below). No script is executed; ApiPilot builds every request, validates every destination, and every 3.3.0 condition has a contract rule and a test. Retained work holds no credential, raw body or profile (FR-051, R13). |
-| XVIII. Secrets Never in Artifacts | Pass. Identities hold variable names only; exports use empty secret variables; seeded-secret test over every output. |
+| XVIII. Secrets Never in Artifacts | Pass. Identities hold scheme names only; credential values live in a write-only encrypted store no route returns; exports use empty secret variables; seeded-secret test over every output. |
 | XIX. Fail Safely | Pass. Blocked, errored, inconclusive and not-run are distinct from passed; no scenario is fabricated when a prerequisite cannot be named. |
 | XX. Observability Without Sensitive Logging | Pass. Logs carry ids, stages, codes, durations; a test captures log output over the seeded corpus. |
 | XXI. Testability at Every Boundary | Pass. Sender and resolver are injected; sample target is loopback; no public network in tests. |
@@ -188,11 +189,12 @@ backend/src/
 │   ├── securityRunRepository.ts        # NEW, owner-scoped (runs + results + settings; in-progress lookup by session id)
 │   ├── securityFindingRepository.ts    # NEW, owner-scoped (findings + occurrences)
 │   ├── securityProfileRepository.ts    # NEW, session-scoped (deleteBySession via onExpire)
+│   ├── securityCredentialRepository.ts # NEW, session-scoped, write-only encrypted credential values (deleteBySession via onExpire)
 │   ├── securityEvidenceRepository.ts   # NEW, session-scoped (encrypted redacted evidence; deleteBySession via onExpire)
 │   └── connection.ts                   # MODIFY: append schema blocks
 ├── openapi/buildApiModel.ts       # MODIFY (additive): set the new optional model fields
 ├── execution/executionSlot.ts     # MODIFY: add the Security Lab in-progress branch
-├── api/testGenerationWorkflow.ts  # MODIFY: requireEnvironmentAccess() also opens when an apiModel exists
+│                                  # (api/testGenerationWorkflow.ts and requireEnvironmentAccess() are deliberately NOT changed: research R8, revised)
 ├── postman/
 │   ├── generateSecurityCollection.ts   # NEW
 │   └── securityOverlay.ts              # NEW (pure mutation application and assertion templates)
@@ -303,6 +305,6 @@ added; the diff contains no unrelated change. Per the user's standing preference
 | A new in-process HTTP sender instead of reusing Newman or `createFetchSender` | FR-036 to FR-044 require connect-time address validation, redirect revalidation, a hard budget, concurrency, and in-flight abort. | Newman follows redirects, has no address control or budget and cancels only between items. `createFetchSender` checks origin strings only, so a rebinding hostname passes. |
 | A bounded in-process worker pool | The profile exposes a concurrency setting (FR-034, FR-044) and the budget must hold under it. | Sequential-only execution would make the setting meaningless; a queue library would add a dependency (XXVII). |
 | A separate `SecurityScenario` type | `TestScenario` cannot express auth mutation, repetition or response conditions, and widening its closed unions touches AI, coverage and export consumers. | Extending `TestScenario` has a wide blast radius for no reuse gain; builders and provenance vocabulary are reused instead. |
-| Eight new tables (six owner-scoped, two session-scoped) | Scenarios, immutable versions, runs, results, findings and settings must outlive the session; profiles and evidence must not (FR-051). Each has different lifecycles and per-version queries. | One JSON document per session cannot support per-version approval, history, two lifetimes or concurrent updates. |
+| Nine new tables (six owner-scoped, three session-scoped) | Scenarios, immutable versions, runs, results, findings and settings must outlive the session; profiles and evidence must not (FR-051). Each has different lifecycles and per-version queries. | One JSON document per session cannot support per-version approval, history, two lifetimes or concurrent updates. |
 | A second cookie, `apipilotOwner`, set only by Security Lab routes | The clarified retention needs an owner key that survives idle expiry, backend restart and browser restart, and the session cookie is a browser-session cookie (F17). | Keying retained work by session id loses it when the browser closes. Making the session cookie persistent changes every feature and the eviction model. An account system is out of scope (XXVII). |
 | Optional additive fields on `ApiModel` | Effective-security distinctions cannot be recovered after the model is built (the raw document is not retained). | Re-parsing or a sentinel in `security` would break existing consumers or duplicate the parser. |

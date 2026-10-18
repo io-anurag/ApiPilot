@@ -154,8 +154,10 @@ only a `ProfileSummary` (see §6).
 `testData: TestDataEntry[]`, `timeoutMs`, `maxRequests`, `maxConcurrency`, `permittedCategories: string[]`,
 `destructivePermitted: boolean`, `cleanup: CleanupStrategy`, `createdAt`, `updatedAt`.
 
-`TestIdentity`: `name`, `role`, `credentialVariables: Record<schemeName, environmentVariableName>`,
-`expiredCredentialVariables?: Record<schemeName, environmentVariableName>`. **No secret value is a member.**
+`TestIdentity`: `name`, `role`, `credentialSchemes: string[]` (the security schemes the identity has a credential for) and
+`expiredCredentialSchemes?: string[]` (those it has a known-expired credential for). **No secret value is a member.** The values live in
+the write-only `security_credentials` store (research R8), keyed by profile, identity, scheme and kind (`active | expired`), and no
+route returns one. A profile response carries `credentialStatus: { identity, scheme, kind, set }[]` instead.
 
 `TestDataEntry`: `ownerIdentity`, `operationKey?`, `parameter`, `value` (a non-secret identifier, for example a resource id; a value
 that classifies as credential-like is refused).
@@ -164,8 +166,9 @@ that classifies as credential-like is refused).
 
 Validation (on save and on use): environment exists and tier ≠ `production`; base URL satisfies the destination policy;
 `allowedAddressRanges` empty unless tier = `local`; `tlsPolicy = "relaxed-local"` only on `local`; limits ≤ ceilings;
-categories ⊆ registry executable categories; each identity's variable names exist in the environment's `variableValues`
-and are marked secret-like; test data values are not credential-shaped.
+categories ⊆ registry executable categories; each scheme an identity names exists in `ApiModel.securitySchemes` when a specification
+is loaded; test data values are not credential-shaped. The environment is read for `name`, `tier` and `baseUrl` only; its
+`variableValues` are never read. A credential that is not yet set makes the prerequisites that need it `missing`, not the profile invalid.
 
 ## 6. Run, evidence, outcome
 
@@ -173,7 +176,7 @@ and are marked secret-like; test data values are not credential-shaped.
 is **session data**: stored apart from the result, removed with the session, and referenced by `resultId`. A retained result
 never embeds evidence bodies.
 
-**`ProfileSummary`** (kept on the run): `profileName`, `environmentName`, `tier`, `baseUrl`, `tlsPolicy`, `permittedCategories`,
+**`ProfileSummary`** (kept on the run): `profileId` (ties an in-progress run to its profile for `profile_in_use`; not a secret), `profileName`, `environmentName`, `tier`, `baseUrl`, `tlsPolicy`, `permittedCategories`,
 `limits`, `destructivePermitted`. No identities, test data, allowed-host lists or credentials.
 
 **`SecurityRun`**: `id`, `ownerId`, `sessionId` (the starting session, used for the execution slot), `status: "in-progress" | "completed" | "cancelled" | "failed"`, `cancelRequested`,
@@ -265,8 +268,9 @@ TEXT columns; evidence is encrypted JSON.
 | Scenarios, versions, approvals, review history | `owner_id` | engineer deletes (all, or one assessment) |
 | Runs, results (outcomes, reasons, observed summaries), cleanup results | `owner_id` | engineer deletes |
 | Findings and occurrences, settings | `owner_id` | engineer deletes |
-| Environments, credentials | session (existing) | session expiry |
+| Environments (target name, tier, base URL) | session (existing) | session expiry |
 | Profiles, identities, test data values | `session_id` | session expiry |
+| Identity credential values (write-only, encrypted) | `session_id` | session expiry |
 | Evidence records (bodies, headers, URLs, redacted) | `session_id` | session expiry |
 
 `ownerId` comes from the `apipilotOwner` cookie via a middleware mounted on the Security Lab router only. Caps per owner

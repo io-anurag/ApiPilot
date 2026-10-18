@@ -1,0 +1,302 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sample Orders API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.example.test/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key"
+      },
+      "unusedBasic": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "Order": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "shipped",
+              "cancelled"
+            ]
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string"
+          },
+          "apiToken": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "NewOrder": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "shipped",
+              "cancelled"
+            ]
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          },
+          "internalNote": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/public/status": {
+      "get": {
+        "operationId": "getStatus",
+        "summary": "Public status",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "up": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listOrders",
+        "summary": "List orders (inherits the root requirement)",
+        "responses": {
+          "200": {
+            "description": "orders",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "requests allowed per minute",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Order"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrder",
+        "summary": "Create an order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid"
+          }
+        }
+      }
+    },
+    "/orders/{orderId}": {
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getOrder",
+        "summary": "Read one order",
+        "responses": {
+          "200": {
+            "description": "order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden"
+          },
+          "404": {
+            "description": "not found"
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceOrder",
+        "summary": "Replace an order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "replaced"
+          },
+          "403": {
+            "description": "forbidden"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrder",
+        "summary": "Delete an order",
+        "responses": {
+          "204": {
+            "description": "deleted"
+          },
+          "403": {
+            "description": "forbidden"
+          }
+        }
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "operationId": "adminReports",
+        "summary": "Admin reports (overrides the root requirement)",
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "reports"
+          }
+        }
+      }
+    },
+    "/legacy/orders": {
+      "get": {
+        "operationId": "legacyOrders",
+        "summary": "Deprecated listing",
+        "deprecated": true,
+        "responses": {
+          "200": {
+            "description": "orders"
+          }
+        }
+      }
+    },
+    "/v1/export": {
+      "get": {
+        "operationId": "exportOrders",
+        "summary": "Export (no explicit error responses documented)",
+        "responses": {
+          "200": {
+            "description": "export"
+          }
+        }
+      }
+    }
+  }
+}

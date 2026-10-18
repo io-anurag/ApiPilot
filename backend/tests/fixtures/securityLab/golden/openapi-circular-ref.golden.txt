@@ -1,0 +1,7 @@
+revision edeeac10cb73b298e420d58251180ab325ae66c1bfeb306f8f223152704f3bba
+====
+scenarios {"scenarios":[{"id":"scenario-00001","operationPath":"/nodes","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{}}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}}]}
+====
+approved {"scenarios":[{"id":"scenario-00001","operationPath":"/nodes","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{}}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}}]}
+====
+export FAILURE unknown_variable

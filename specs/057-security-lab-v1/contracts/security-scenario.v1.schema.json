@@ -122,7 +122,8 @@
         "ruleId": { "type": "string" },
         "aiModel": { "type": "string" },
         "aiConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
-        "aiAssumptions": { "type": "array", "items": { "type": "string" } }
+        "aiAssumptions": { "type": "array", "items": { "type": "string" } },
+        "duplicateOfRules": { "type": "array", "items": { "type": "string" } }
       }
     },
     "evidenceOrigin": { "enum": ["documented", "declared", "observed", "inferred"] },

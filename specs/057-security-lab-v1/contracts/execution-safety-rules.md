@@ -8,7 +8,7 @@ only enforcement point (FR-036). A test that calls the service directly, bypassi
 
 The service builds each request from an approved `SecurityScenarioVersion` and the profile snapshot **only**: base URL from the
 environment snapshot, path from the operation, parameters and body from `baseRequest` after the scenario's typed
-mutations, credentials resolved by variable name from the environment. No model output, scenario field or imported content
+mutations, credentials read from the write-only credential store by profile, identity and scheme. No model output, scenario field or imported content
 names a URL, host, port, or a header chosen by content. A scenario whose content parses as a URL in any string field that
 is not a documented example value is rejected at validation (contracts/security-scenario-contract.md).
 
@@ -83,7 +83,7 @@ with the session. What the run keeps as retained work is the **observed summary*
 response header names with redacted values, and a deterministic statement, never a body excerpt. The run keeps a profile
 summary (name, tier, base URL, limits, TLS policy), never identities, test data values, host allow-lists or credentials.
 
-Credential values are read from the environment's encrypted `variableValues` at send time and held only in memory for the
+Credential values are read from the write-only, session-scoped credential store (research R8) at send time and held only in memory for the
 run. Evidence records are redacted at construction (headers, URL query, JSON and form fields by name and by shape, and every
 resolved credential value by literal match). Logs contain run id, scenario id, stage, outcome code, duration, error
 category and nothing else. Reports and exports are built only from stored redacted records and variable names.

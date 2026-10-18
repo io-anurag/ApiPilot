@@ -17,7 +17,7 @@ export type EntryChoice =
  * the command palette and the help dialog beside the four workflows, but not on the start screen:
  * a results view needs a specification and runs that a workflow produces first.
  */
-export type ResultsViewId = "coverage";
+export type ResultsViewId = "coverage" | "security";
 
 /** Anything the top tab menu can show. */
 export type TopLevelView = EntryChoice | ResultsViewId;
@@ -89,6 +89,13 @@ export const RESULTS_VIEWS: readonly ResultsViewEntry[] = [
     tabLabel: "Coverage",
     description:
       "See how much of the API your generated tests cover and how much real runs have verified, with the gaps to close next.",
+  },
+  {
+    id: "security",
+    title: "Security Lab",
+    tabLabel: "Security Lab",
+    description:
+      "Analyze a specification for security risks, review security test scenarios, run approved ones against a local or staging target, and track findings.",
   },
 ];
 

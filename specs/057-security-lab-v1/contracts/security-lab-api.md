@@ -47,12 +47,25 @@ and works without one; scenario responses then carry `specificationNotLoaded: tr
 | Method and path | Purpose | Success | Errors |
 |---|---|---|---|
 | `GET /profiles` | List with derived `valid` and `problems[]` | 200 | |
-| `POST /profiles` · `PUT /profiles/:id` | Create or replace. Body is `SecurityProfile` input (no secret values, only variable names) | 201 / 200 | `422 profile_invalid` with `violations[]` (for example `production_tier_refused`, `base_url_not_allowed`, `address_range_not_permitted_for_tier`, `limit_above_ceiling`, `credential_variable_missing`, `test_data_looks_secret`) |
+| `POST /profiles` · `PUT /profiles/:id` | Create or replace. Body is `SecurityProfile` input (no secret values; an identity names its schemes) | 201 / 200 | `422 profile_invalid` with `violations[]` (for example `production_tier_refused`, `base_url_not_allowed`, `address_range_not_permitted_for_tier`, `limit_above_ceiling`, `unknown_security_scheme`, `test_data_looks_secret`) |
 | `DELETE /profiles/:id` | Delete | 204 | `409 profile_in_use` while a run uses it |
 | `POST /profiles/:id/check` | Dry validation: re-validate the stored profile and resolve the base URL under the destination policy **without sending a request** | 200 `{ valid, problems[], destination: { host, port, resolvedClass } }` | Resolving DNS is allowed; connecting is not. |
 
-Environments themselves (and their encrypted variables) continue to use the existing `/api/test-generation-workflow/environments`
-routes, whose gate `requireEnvironmentAccess()` also opens when a workflow with an `apiModel` exists (research R8).
+| `PUT /profiles/:id/credentials` | Write-only. Body `{ identity, scheme, kind: "active" | "expired", value }`; an empty `value` clears it | 204 | `404 profile_not_found`, `422 profile_invalid` (unknown identity or scheme), `400 invalid_request` |
+| `GET /profiles/:id/credentials` | Which credentials are set: `{ credentialStatus: { identity, scheme, kind, set }[] }`. **Never a value** | 200 | `404 profile_not_found` |
+
+Credential values are accepted only by `PUT /profiles/:id/credentials`, are encrypted at rest, are never returned by any route, log line, evidence record, finding, report or export, and are removed with the session (FR-048, research R8).
+
+### Target environments
+
+A profile's target is an ordinary environment, created and edited through thin Security Lab routes that carry **only** `name`, `tier` and `baseUrl` (never `variableValues`):
+
+| Method and path | Purpose | Success | Errors |
+|---|---|---|---|
+| `GET /environments` | The session's environments as `{ id, name, tier, baseUrl }[]` | 200 | |
+| `POST /environments` · `PUT /environments/:id` | Create or replace one. Body `{ name, tier, baseUrl }` | 200 `{ environment }` | `400 invalid_request`, `409 duplicate_environment_name`, `404 environment_not_found` |
+
+They write the same session-scoped environment store as the rest of the product and leave `requireEnvironmentAccess()` and every existing environment route unchanged.
 
 ## Runs
 
@@ -108,7 +121,7 @@ scenario version or appends an occurrence; the reopening and `unreviewedOccurren
 
 ## Compatibility
 
-Additive. No existing route, request or response changes except the gate in `requireEnvironmentAccess()` (opens earlier, never
-closes) and the execution slot (a Security Lab run makes `execution/start` return `409 execution_in_progress`, as other run
-kinds already do). The `apipilotOwner` cookie is set only by responses from `/api/security-lab` routes; no other route sees
+Additive. No existing route, request or response changes, and `requireEnvironmentAccess()` is untouched (revised during implementation, research R8). The one
+observable effect on an existing route is the execution slot: a Security Lab run makes `execution/start` return `409 execution_in_progress`, as other run
+kinds already do. The `apipilotOwner` cookie is set only by responses from `/api/security-lab` routes; no other route sees
 or sets it.

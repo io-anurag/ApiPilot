@@ -28,7 +28,7 @@ function renderSidebar(route: Route, workflow: TestGenerationWorkflow | null = n
 }
 
 describe("Sidebar (AP-054 FR-002, FR-003)", () => {
-  it("lists the six destinations as links named by the workflow titles, and nothing else", () => {
+  it("lists the seven destinations as links named by the workflow titles, and nothing else", () => {
     const { nav } = renderSidebar({ view: "home" });
     expect(nav.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "Home",
@@ -37,6 +37,7 @@ describe("Sidebar (AP-054 FR-002, FR-003)", () => {
       "Performance",
       "Run k6 Script",
       "Coverage",
+      "Security Lab",
     ]);
     expect(nav.getByText("ApiPilot")).toBeInTheDocument();
   });
@@ -48,6 +49,8 @@ describe("Sidebar (AP-054 FR-002, FR-003)", () => {
     [{ view: "performance" }, "Performance"],
     [{ view: "k6" }, "Run k6 Script"],
     [{ view: "coverage" }, "Coverage"],
+    [{ view: "security" }, "Security Lab"],
+    [{ view: "security", area: "scenarios" }, "Security Lab"],
   ] as const)("marks %o as the current page, and only that one", (route, name) => {
     const { nav } = renderSidebar(route as Route);
     expect(nav.getAllByRole("link").filter((link) => link.getAttribute("aria-current") === "page").map((l) => l.textContent)).toEqual([name]);

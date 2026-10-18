@@ -42,3 +42,4 @@ export * from "./requestChain";
 export * from "./chainDebugRun";
 export * from "./liveRun";
 export * from "./coverage";
+export * from "./securityLab";

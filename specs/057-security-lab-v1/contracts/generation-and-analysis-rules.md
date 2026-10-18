@@ -28,7 +28,7 @@ with no override is `none-declared` with `rootExplicitlyEmpty = true`, stated in
 | `auth-scheme-unused` | informational | no operation references it |
 | `operation-uses-undeclared-scheme` | potential-risk (a specification inconsistency, not a runtime claim) | operation security pointer |
 | `effective-security-*` | as §1 | `securitySource` |
-| `sensitive-operation` | informational; `requires-context` when the effective security is public or none-declared | `method`, `path-token`, `identifier-parameter` (each named) |
+| `sensitive-operation` | informational when a requirement applies; `requires-context` when declared public or with nothing declared; `potential-risk` only for a state-changing operation declared public on purpose (to confirm, never a vulnerability claim); `not-measurable` when the input records no security | `method`, `path-token`, `identifier-parameter` (each named) |
 | `sensitive-property` | informational or `requires-context` | `format-password`, `write-only`, `user-configured`, `name-match` (name-match is never stronger than `requires-context`) |
 | `read-only-property-in-request` | informational (mass-assignment candidate) | `readOnly` flag in a request schema |
 | `documented-error-responses` | informational: protected operation with no documented 401 or 403 | responses pointer |

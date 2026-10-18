@@ -29,6 +29,15 @@ function CoverageIcon() {
   );
 }
 
+function SecurityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" aria-hidden="true">
+      <path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.2 7.5 9.5 4.4-1.3 7.5-5.1 7.5-9.5V6L12 3Z" />
+      <path d="m9.25 12 2 2 3.5-4" />
+    </svg>
+  );
+}
+
 const WORKFLOW_ICON: Readonly<Record<DestinationId, WorkflowIconName | null>> = {
   home: null,
   guided: "guided",
@@ -36,11 +45,13 @@ const WORKFLOW_ICON: Readonly<Record<DestinationId, WorkflowIconName | null>> = 
   performance: "performance",
   k6: "script",
   coverage: null,
+  security: null,
 };
 
 function Icon({ id }: Readonly<{ id: DestinationId }>) {
   if (id === "home") return <HomeIcon />;
   if (id === "coverage") return <CoverageIcon />;
+  if (id === "security") return <SecurityIcon />;
   return <WorkflowIcon name={WORKFLOW_ICON[id] as WorkflowIconName} className="h-5 w-5 shrink-0" />;
 }
 
