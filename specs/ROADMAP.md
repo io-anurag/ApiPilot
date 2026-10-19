@@ -4164,17 +4164,78 @@ Implementation
       `SECURITY_LAB_MAX_RETAINED_RUNS` (500), validated at startup. Nine tables were added to the existing SQLite schema, six
       owner-scoped and three session-scoped.
     - **Docs.** README, user manual (sidebar, section 6c, limitations), architecture (Security Lab), HTTP API, configuration, status.
-    - Tests: the full suite has 567 files and 6709 tests (6697 passed, 11 skipped, 1 failed), against 4965 passed, 11 skipped and 1
-      failed before the work; the one failure is the same before and after (`packages/shared-domain/tests/unit/requestChain.test.ts`,
-      `accepts every supported dynamic variable`, expected 48 names and found 50, from the uncommitted AP-056 follow-up and unrelated to
-      this feature). 86 files and 1699 tests concern Security Lab. New coverage includes the destination matrix, rebinding and redirects,
+    - Tests: the full suite has 567 files and 6709 tests (6698 passed, 11 skipped, 0 failed), against 4965 passed, 11 skipped and 1
+      failed before the work. The baseline failure (`packages/shared-domain/tests/unit/requestChain.test.ts`, `accepts every supported
+      dynamic variable`, expected 48 names, found 50) was a stale count left by the `$randomDecimal` and `$randomDescription` commit and
+      was corrected to 50; it was unrelated to this feature. 86 files and 1699 tests concern Security Lab. Two TLS-policy tests in
+      `guardedSender.test.ts` skip when `openssl` is not on the PATH. New coverage includes the destination matrix, rebinding and redirects,
       a bypass test that calls the service with no router, budget and cancel and cleanup-failure tests, a seeded-secret corpus over
       evidence, summaries, retained rows, findings, logs, report and export, the finding-occurrence rules, retention across forced session
       expiry, owner isolation, 2,000-scenario scale, and accessibility tests for every area. `npm run lint` and `npm run build` pass.
-    - Not covered: **the manual walkthrough in a real browser was not run**, including the light and dark theme and 375 px visual pass;
-      the owner cookie's survival across a browser restart and its absence in a private window were not checked in real browsers (spike
-      T004), so only its attributes are tested; no run was made against a real target, only loopback sample targets, and the default
-      limits are untuned; the AI suggestion was exercised only with a stub provider and has no evaluation corpus; generation cannot yet be
-      narrowed to hand-picked operations from the UI (the API accepts a custom scope; widening and category limits exist); OAuth2 token
-      exchange, sensitive business flows and SSRF have no executable scenarios; production targets are refused.
+    - **Browser walkthrough (2026-10-19).** Driven with Playwright against a headed Chromium (the cached Playwright build, on Windows),
+      the real backend and the loopback sample target in vulnerable mode: upload and a 3-of-9 selection, scope text and widening
+      (18 then 61 scenarios, regeneration 0 created), filters, batch submit and approve (15 included, 12 destructive and 5 incomplete
+      left out, the destructive dialog naming each), a local profile with two identities and four write-only credentials (no value in
+      the page or any input afterwards), the destination check, preview, attestation, a run (15 requests: 6 passed, 9 failed), nine
+      findings, redacted evidence, a rerun (nine findings, two occurrences each), the Overview counts, the HTML and JSON report and
+      the Postman export (five files scanned: none holds a credential; the secret variables are empty), retained work surviving a
+      backend restart with every spec-dependent control disabled and explained, a fresh context seeing none of the retained work,
+      and a typed-confirmation delete. The `apipilotOwner` cookie carried a 400-day expiry and survived many full browser restarts.
+      **The visual pass found two defects, both fixed:** the filter bars on Scenarios and Execution and the profile editor overflowed the
+      page at 375 px (396 and 498 px of content in 360), because fields in one-column grids took their widest option's width; they now
+      use `w-full min-w-0`. After the fix every area and state measured fits at 375 px in light and dark, and no layout was judged by a
+      person.
+    - Not covered: no person ran the walkthrough, and only Chromium was used (no Firefox, Safari or Edge); a run against a real target
+      was never made, only loopback sample targets, and the default limits are untuned; **the AI suggestion's success path was not seen
+      in a browser**: with the mock provider the answer is unusable and the control says so, and with the real default model
+      (Qwen3-1.7B on CPU) a request for all nine operations hit the 270 second inference timeout and ended as `503 ai_unavailable`,
+      while the workflow's own AI enhancement was also using the single inference queue; there is no evaluation corpus for it;
+      a session (and with it the profile and the loaded specification) was lost once mid-walkthrough with no backend restart, which was
+      not reproduced or explained (the persistent browser profile's session cookie is the likeliest cause, but it is unproven);
+      generation cannot yet be narrowed to hand-picked operations from the UI (the API accepts a custom scope; widening and category
+      limits exist); OAuth2 token exchange, sensitive business flows and SSRF have no executable scenarios; production targets are refused.
     - Version bumped to 19.60.0 (root, backend, frontend, shared-domain), after `AP-056` (entry 102, 19.59.0).
+
+104. **AP-058: Home, decluttered; version 19.61.0 (2026-10-19).**
+    - `specs/058-home-declutter`, amending `specs/054-sidebar-shell-redesign` FR-018 to FR-021. Frontend only: no endpoint, payload, stored
+      datum or shared-domain type changed. The engineer found Home ugly and hard to use: it showed the same four workflows twice, six
+      figure widgets that all read "Needs a specification" until one was loaded, a tall card for "Nothing is waiting on you", eight
+      near-identical recent runs and a full-width card for two words of AI status, and offered no way to Security Lab. The layout was chosen
+      from three previewed options (two-state, launcher only, keep and tidy).
+    - **Two states.** With no specification: "What are you starting from?" and three artifact cards, each listing the workflows that
+      accept it (each workflow once, Guided Workflow alone Recommended, Draft in progress in words), a link row to Coverage and Security
+      Lab, and a "Pick up where you left off" box only when something is pending. With a specification: one status card (name, file,
+      operation and scenario counts, the four coverage figures, the first next step as the one button), then "Start something else".
+      Both end with recent runs (three shown, the rest on request) and one line of AI status. The by-area and by-method widgets left Home.
+    - **Layout never flips.** Home holds its top section behind a loading state until the workflow read settles. Without that, the page
+      painted the no-specification launcher and then swapped to the status card, and a click on the launcher's button could land on an
+      element that had just been replaced; the existing App test "returning to Guided Workflow resumes it" caught this.
+    - Deviation: the chosen mock-up had the AI status in the header; it is one line on Home, because a header placement would read the
+      provider on every screen.
+    - Tests: the Home page tests went from 10 to 17 (two states, each workflow once, results links, loading, failure named, run list
+      expand), and the view-model tests for the removed helpers were deleted with them. The full suite has 567 files and 6714 tests
+      (6703 passed, 11 skipped, 0 failed); lint and build pass. Checked in a headed Chromium: both states, light and dark, at 1440
+      and 375 px, no horizontal overflow; no person has judged the visual design.
+    - Not covered: the AI status stays on Home rather than the header; Home's chart of coverage over runs and pass-rate trend remain
+      deferred as in AP-054; no change to the Coverage screen.
+    - Version bumped to 19.61.0 (root, backend, frontend, shared-domain), after `AP-057` (entry 103, 19.60.0).
+
+105. **AP-059: Home, redesigned from the approved mock-up; version 19.62.0 (2026-10-19).**
+    - `specs/059-home-redesign`, amending `specs/058-home-declutter` (FR-001 to FR-007, SC-001 to SC-003). Frontend only: no endpoint,
+      payload, stored datum or shared-domain type changed. The engineer supplied a light and dark mock-up and asked for it exactly: a
+      welcome hero, three numbered steps (artifact, launch, results), Next steps beside Recent runs, then the AI provider. One layout
+      replaces the two states of AP-058.
+    - **Departures, stated in the spec.** The mock-up's 78%, 62%, 12% and 24% are sample values: Home shows the snapshot's figure, or its
+      reason in words and no bar. No Settings entry and no Configure button, because no settings destination or in-app provider control
+      exists. Workflow wording comes from the shared catalog. Colours are AP-054 tokens (the pending bar is the neutral info colour, not
+      blue). Coverage and Security Lab stay as two links in the step 3 heading.
+    - **Reverses AP-058 on purpose.** Each workflow now appears twice (a start-from-artifact tag in step 1 and a tile in step 2), and the
+      figure panel is always present. The step 1 controls are named "Start <workflow> with <artifact>" so no two controls share a name.
+    - Tests: Home page tests rewritten for the new layout (hero buttons and Help dialog, step order, step 1 names, step 2 order and
+      Recommended description, one shared reason with no number, alert on failure, Next steps loading, five runs and View all, AI card
+      without controls); view-model tests for each bar's ratio. Full suite 564 files passed, 3 skipped (6709 tests passed, 11 skipped,
+      0 failed); lint and frontend build pass. Checked in headless Edge: light and dark at 1440 px, and 375 px with no horizontal
+      overflow. The mock-up itself was compared by eye; no person has accepted the visual match.
+    - Not covered: a Settings screen or any control to configure the AI provider; moving AI status to the header; no change to the
+      Coverage screen.
+    - Version bumped to 19.62.0 (root, backend, frontend, shared-domain), after `AP-058` (entry 104, 19.61.0).

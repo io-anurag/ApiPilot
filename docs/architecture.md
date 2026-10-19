@@ -1821,8 +1821,15 @@ specification and constitution take precedence.
 - **Patterns.** `components/patterns/` (`Card`, `Pill`, `TaskCard`, `Banner`, `StepTrail`, `DropZone`, `KeyValueGrid`, `tableStyles`) plus
   `StatTile` (highlight), `EmptyState`, `Pagination` and `controlStyles` (`FIELD_STYLES`). Import & Run, Performance and Run k6 Script
   steppers render through `StepTrail`. `?mock=pattern-library` (`pages/PatternLibraryPage`) shows one live example of each.
-- **Home.** `pages/HomePage` with `components/home`: figures from the same coverage snapshot as the Coverage screen
-  (`homeViewModel`), next steps derived from existing state, an AI status tile over the existing `GET /api/ai/status` (`aiStatusClient`;
-  state, provider and reason only) and Recent runs merged from Import & Run, Performance and Run k6 Script (`useRecentRuns`, at most ten
-  collections and ten plans read, one k6 list). It reads only while visible and never polls. Opening a run is a frontend request held in
-  `App` with a token (`importRunRequest`, `OpenPerformancePlanRequest.runId`, `UserScriptPage openRunRequest`).
+- **Home.** `pages/HomePage` with `components/home`, one layout in every state (AP-059, redesigning AP-058 and amending FR-018 to
+  FR-021): `HomeHero` (welcome, Get started, Learn more opening `HelpDialog`, a decorative token-coloured SVG), then three
+  `StepHeading` sections: `ArtifactStep` (three artifact cards, each choice named by what it starts and from what), `LaunchStep` (the four
+  workflows in sidebar order, `WorkflowActionIcon` glyphs on a halo that notches the tile's top border, Recommended said once in the
+  header and attached to the Guided Workflow tile with `aria-describedby`) and `InsightsStep` (the four figures from the same coverage
+  snapshot as the Coverage screen via `homeViewModel.summaryFigures`, each with a `ratio` computed from its own counts for its bar; with
+  no data a figure draws no bar and the panel says the one reason once). `NextStepsCard` waits for `useWorkflowSnapshot.ready` so it
+  never changes after first paint. `RecentRunsCard` and `AiProviderCard` complete the page. Recent runs are merged from Import & Run,
+  Performance and Run k6 Script (`useRecentRuns`, at most ten collections and ten plans read, one k6 list; five shown, the rest on
+  View all). AI status is read over the existing `GET /api/ai/status` (`aiStatusClient`; state, provider and reason only). Home reads only
+  while visible and never polls. Opening a run is a frontend request held in `App` with a token (`importRunRequest`,
+  `OpenPerformancePlanRequest.runId`, `UserScriptPage openRunRequest`). `App` passes `shortcutHint` for the Help dialog.

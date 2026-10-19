@@ -134,9 +134,9 @@ export function ProfileEditor({
         if (!saving) void save();
       }}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
         {field("name", "Profile name")}
-        <input id={`${base}-name`} type="text" value={draft.name} onChange={(event) => set("name", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} max-w-md`} />
+        <input id={`${base}-name`} type="text" value={draft.name} onChange={(event) => set("name", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0 max-w-md`} />
       </div>
 
       <fieldset className="space-y-2">
@@ -144,9 +144,9 @@ export function ProfileEditor({
         <p className="text-xs text-text-secondary">
           The target holds a name, a tier and a base URL only. Production targets are always refused.
         </p>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           {field("environment", "Target environment")}
-          <select id={`${base}-environment`} value={draft.environmentId} onChange={(event) => set("environmentId", event.target.value)} className={`${FIELD_STYLES} max-w-md`}>
+          <select id={`${base}-environment`} value={draft.environmentId} onChange={(event) => set("environmentId", event.target.value)} className={`${FIELD_STYLES} w-full min-w-0 max-w-md`}>
             <option value="">Choose a target</option>
             {environments.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
@@ -163,13 +163,13 @@ export function ProfileEditor({
         {targetForm ? (
           <div className="space-y-2 rounded-md border border-border p-3" role="group" aria-label="New target">
             <div className="grid gap-2 sm:grid-cols-3">
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor={`${base}-t-name`} className="text-xs font-medium text-text-secondary">Target name</label>
-                <input id={`${base}-t-name`} type="text" value={targetForm.name} onChange={(event) => setTargetForm({ ...targetForm, name: event.target.value })} className={FIELD_STYLES} />
+                <input id={`${base}-t-name`} type="text" value={targetForm.name} onChange={(event) => setTargetForm({ ...targetForm, name: event.target.value })} className={`${FIELD_STYLES} w-full min-w-0`} />
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor={`${base}-t-tier`} className="text-xs font-medium text-text-secondary">Tier</label>
-                <select id={`${base}-t-tier`} value={targetForm.tier} onChange={(event) => isTier(event.target.value) && setTargetForm({ ...targetForm, tier: event.target.value })} className={FIELD_STYLES}>
+                <select id={`${base}-t-tier`} value={targetForm.tier} onChange={(event) => isTier(event.target.value) && setTargetForm({ ...targetForm, tier: event.target.value })} className={`${FIELD_STYLES} w-full min-w-0`}>
                   {TARGET_TIERS.map((candidate) => (
                     <option key={candidate} value={candidate}>
                       {TIER_LABEL[candidate]}
@@ -177,9 +177,9 @@ export function ProfileEditor({
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-col gap-1">
                 <label htmlFor={`${base}-t-url`} className="text-xs font-medium text-text-secondary">Base URL (no credentials in it)</label>
-                <input id={`${base}-t-url`} type="url" value={targetForm.baseUrl} onChange={(event) => setTargetForm({ ...targetForm, baseUrl: event.target.value })} autoComplete="off" spellCheck={false} className={`${FIELD_STYLES} font-mono`} />
+                <input id={`${base}-t-url`} type="url" value={targetForm.baseUrl} onChange={(event) => setTargetForm({ ...targetForm, baseUrl: event.target.value })} autoComplete="off" spellCheck={false} className={`${FIELD_STYLES} w-full min-w-0 font-mono`} />
               </div>
             </div>
             {targetError && <ErrorState testId="target-error" message="The target was not created" detail={targetError} />}
@@ -202,28 +202,28 @@ export function ProfileEditor({
       <fieldset className="space-y-3">
         <legend className="text-sm font-semibold text-text-primary">Where requests may go</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("hosts", "Allowed hosts", "One per line. A bare host name or IP address: no scheme, port, path or wildcard.")}
-            <textarea id={`${base}-hosts`} rows={3} value={draft.allowedHosts} onChange={(event) => set("allowedHosts", event.target.value)} spellCheck={false} className={`${FIELD_STYLES} font-mono text-xs`} />
+            <textarea id={`${base}-hosts`} rows={3} value={draft.allowedHosts} onChange={(event) => set("allowedHosts", event.target.value)} spellCheck={false} className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`} />
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("ports", "Allowed ports", "Comma-separated, such as 443, 8443.")}
-            <input id={`${base}-ports`} type="text" value={draft.allowedPorts} onChange={(event) => set("allowedPorts", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} font-mono`} />
+            <input id={`${base}-ports`} type="text" value={draft.allowedPorts} onChange={(event) => set("allowedPorts", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0 font-mono`} />
           </div>
         </div>
         {allowsAddressRanges(tier) ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("ranges", "Allowed address ranges (local target only)", "One per line: an IP address or a CIDR range such as 127.0.0.1 or 10.0.0.0/8.")}
-            <textarea id={`${base}-ranges`} rows={2} value={draft.allowedAddressRanges} onChange={(event) => set("allowedAddressRanges", event.target.value)} spellCheck={false} className={`${FIELD_STYLES} font-mono text-xs`} />
+            <textarea id={`${base}-ranges`} rows={2} value={draft.allowedAddressRanges} onChange={(event) => set("allowedAddressRanges", event.target.value)} spellCheck={false} className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`} />
           </div>
         ) : (
           <p className="text-xs text-text-secondary" data-testid="ranges-local-only">
             Address ranges are offered for a local target only. Other tiers can never reach loopback, private or link-local addresses.
           </p>
         )}
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           {field("tls", "Certificate verification (TLS)")}
-          <select id={`${base}-tls`} value={allowsRelaxedTls(tier) ? draft.tlsPolicy : "verify"} onChange={(event) => set("tlsPolicy", event.target.value === "relaxed-local" ? "relaxed-local" : "verify")} className={`${FIELD_STYLES} max-w-md`}>
+          <select id={`${base}-tls`} value={allowsRelaxedTls(tier) ? draft.tlsPolicy : "verify"} onChange={(event) => set("tlsPolicy", event.target.value === "relaxed-local" ? "relaxed-local" : "verify")} className={`${FIELD_STYLES} w-full min-w-0 max-w-md`}>
             <option value="verify">Verify certificates</option>
             {allowsRelaxedTls(tier) && <option value="relaxed-local">Relaxed, for a local target with a self-signed certificate</option>}
           </select>
@@ -256,9 +256,9 @@ export function ProfileEditor({
         <p className="text-xs text-text-secondary">Non-secret values such as a resource id, shown back in plain text. A value that looks like a credential is refused.</p>
         {draft.testData.map((entry, index) => (
           <div key={entry.key} role="group" aria-label={`Test data ${index + 1}`} className="grid gap-2 rounded-md border border-border p-2 sm:grid-cols-4" data-testid="test-data-row">
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={`${base}-td-${entry.key}-owner`} className="text-xs font-medium text-text-secondary">Owned by identity</label>
-              <select id={`${base}-td-${entry.key}-owner`} value={entry.ownerIdentity} onChange={(event) => updateTestData(entry.key, { ownerIdentity: event.target.value })} className={FIELD_STYLES}>
+              <select id={`${base}-td-${entry.key}-owner`} value={entry.ownerIdentity} onChange={(event) => updateTestData(entry.key, { ownerIdentity: event.target.value })} className={`${FIELD_STYLES} w-full min-w-0`}>
                 <option value="">Choose an identity</option>
                 {identityNames.map((name) => (
                   <option key={name} value={name}>
@@ -267,17 +267,17 @@ export function ProfileEditor({
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={`${base}-td-${entry.key}-op`} className="text-xs font-medium text-text-secondary">Operation (optional)</label>
-              <input id={`${base}-td-${entry.key}-op`} type="text" value={entry.operationKey} onChange={(event) => updateTestData(entry.key, { operationKey: event.target.value })} className={`${FIELD_STYLES} font-mono text-xs`} />
+              <input id={`${base}-td-${entry.key}-op`} type="text" value={entry.operationKey} onChange={(event) => updateTestData(entry.key, { operationKey: event.target.value })} className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`} />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={`${base}-td-${entry.key}-param`} className="text-xs font-medium text-text-secondary">Parameter</label>
-              <input id={`${base}-td-${entry.key}-param`} type="text" value={entry.parameter} onChange={(event) => updateTestData(entry.key, { parameter: event.target.value })} className={`${FIELD_STYLES} font-mono text-xs`} />
+              <input id={`${base}-td-${entry.key}-param`} type="text" value={entry.parameter} onChange={(event) => updateTestData(entry.key, { parameter: event.target.value })} className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`} />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={`${base}-td-${entry.key}-value`} className="text-xs font-medium text-text-secondary">Value</label>
-              <input id={`${base}-td-${entry.key}-value`} type="text" value={entry.value} onChange={(event) => updateTestData(entry.key, { value: event.target.value })} autoComplete="off" className={`${FIELD_STYLES} font-mono text-xs`} />
+              <input id={`${base}-td-${entry.key}-value`} type="text" value={entry.value} onChange={(event) => updateTestData(entry.key, { value: event.target.value })} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`} />
             </div>
             <div className="sm:col-span-4">
               <button type="button" onClick={() => set("testData", draft.testData.filter((candidate) => candidate.key !== entry.key))} className={BUTTON_STYLES.secondary}>
@@ -295,17 +295,17 @@ export function ProfileEditor({
         <legend className="text-sm font-semibold text-text-primary">Limits</legend>
         <p className="text-xs text-text-secondary">A run can lower these but never raise them. A value above the server&apos;s ceiling is refused, and the refusal names the ceiling.</p>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("max-requests", "Most requests per run")}
-            <input id={`${base}-max-requests`} type="number" min={1} inputMode="numeric" value={draft.maxRequests} onChange={(event) => set("maxRequests", event.target.value)} className={FIELD_STYLES} />
+            <input id={`${base}-max-requests`} type="number" min={1} inputMode="numeric" value={draft.maxRequests} onChange={(event) => set("maxRequests", event.target.value)} className={`${FIELD_STYLES} w-full min-w-0`} />
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("max-concurrency", "Most requests at once")}
-            <input id={`${base}-max-concurrency`} type="number" min={1} inputMode="numeric" value={draft.maxConcurrency} onChange={(event) => set("maxConcurrency", event.target.value)} className={FIELD_STYLES} />
+            <input id={`${base}-max-concurrency`} type="number" min={1} inputMode="numeric" value={draft.maxConcurrency} onChange={(event) => set("maxConcurrency", event.target.value)} className={`${FIELD_STYLES} w-full min-w-0`} />
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("timeout", "Timeout per request (milliseconds)")}
-            <input id={`${base}-timeout`} type="number" min={1} inputMode="numeric" value={draft.timeoutMs} onChange={(event) => set("timeoutMs", event.target.value)} className={FIELD_STYLES} />
+            <input id={`${base}-timeout`} type="number" min={1} inputMode="numeric" value={draft.timeoutMs} onChange={(event) => set("timeoutMs", event.target.value)} className={`${FIELD_STYLES} w-full min-w-0`} />
           </div>
         </div>
       </fieldset>
@@ -330,17 +330,17 @@ export function ProfileEditor({
           <input type="checkbox" className="h-4 w-4 rounded border-border-control" checked={draft.destructivePermitted} onChange={(event) => set("destructivePermitted", event.target.checked)} />
           Permit destructive scenarios (each is still confirmed by name before a run)
         </label>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           {field("cleanup", "Cleanup after a run")}
-          <select id={`${base}-cleanup`} value={draft.cleanupStrategy} onChange={(event) => set("cleanupStrategy", event.target.value === "delete-created-via-spec" ? "delete-created-via-spec" : "none")} className={`${FIELD_STYLES} max-w-md`}>
+          <select id={`${base}-cleanup`} value={draft.cleanupStrategy} onChange={(event) => set("cleanupStrategy", event.target.value === "delete-created-via-spec" ? "delete-created-via-spec" : "none")} className={`${FIELD_STYLES} w-full min-w-0 max-w-md`}>
             <option value="none">No cleanup</option>
             <option value="delete-created-via-spec">Delete what a scenario creates, using the delete operation in the specification</option>
           </select>
         </div>
         {draft.cleanupStrategy === "delete-created-via-spec" && (
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             {field("cleanup-id", "Response field holding the id of what was created")}
-            <input id={`${base}-cleanup-id`} type="text" value={draft.cleanupIdField} onChange={(event) => set("cleanupIdField", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} max-w-md font-mono`} />
+            <input id={`${base}-cleanup-id`} type="text" value={draft.cleanupIdField} onChange={(event) => set("cleanupIdField", event.target.value)} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0 max-w-md font-mono`} />
           </div>
         )}
       </fieldset>

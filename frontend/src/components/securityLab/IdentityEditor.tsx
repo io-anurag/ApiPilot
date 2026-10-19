@@ -134,19 +134,19 @@ export function IdentityEditor({
     <fieldset className="space-y-3 rounded-lg border border-border-strong p-3" data-testid="identity-editor">
       <legend className="px-1 text-sm font-semibold text-text-primary">{label}</legend>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor={`${base}-name`} className="text-xs font-medium text-text-secondary">
             Identity name (letters, digits, . _ - and single spaces)
           </label>
-          <input id={`${base}-name`} type="text" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} autoComplete="off" className={FIELD_STYLES} />
+          <input id={`${base}-name`} type="text" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0`} />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor={`${base}-role`} className="text-xs font-medium text-text-secondary">
             Role (for example owner or other-user)
           </label>
-          <input id={`${base}-role`} type="text" value={draft.role} onChange={(event) => onChange({ ...draft, role: event.target.value })} autoComplete="off" className={FIELD_STYLES} />
+          <input id={`${base}-role`} type="text" value={draft.role} onChange={(event) => onChange({ ...draft, role: event.target.value })} autoComplete="off" className={`${FIELD_STYLES} w-full min-w-0`} />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor={`${base}-active`} className="text-xs font-medium text-text-secondary">
             Security schemes with an active credential (one per line, names from the specification)
           </label>
@@ -156,10 +156,10 @@ export function IdentityEditor({
             value={draft.credentialSchemes}
             onChange={(event) => onChange({ ...draft, credentialSchemes: event.target.value })}
             spellCheck={false}
-            className={`${FIELD_STYLES} font-mono text-xs`}
+            className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`}
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <label htmlFor={`${base}-expired`} className="text-xs font-medium text-text-secondary">
             Security schemes with a known-expired credential (one per line)
           </label>
@@ -169,7 +169,7 @@ export function IdentityEditor({
             value={draft.expiredCredentialSchemes}
             onChange={(event) => onChange({ ...draft, expiredCredentialSchemes: event.target.value })}
             spellCheck={false}
-            className={`${FIELD_STYLES} font-mono text-xs`}
+            className={`${FIELD_STYLES} w-full min-w-0 font-mono text-xs`}
           />
         </div>
       </div>

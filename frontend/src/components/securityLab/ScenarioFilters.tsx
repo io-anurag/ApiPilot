@@ -23,11 +23,11 @@ function FilterSelect({
 }: Readonly<{ label: string; value: string; onChange: (value: string) => void; options: ReadonlyArray<{ value: string; label: string }> }>) {
   const id = useId();
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium text-text-secondary">
         {label}
       </label>
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={FIELD_STYLES}>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className={`${FIELD_STYLES} w-full min-w-0`}>
         <option value="">Any</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>

@@ -278,7 +278,9 @@ export function App() {
                 <HomePage
                   active={view === "home"}
                   workflow={snapshot.workflow}
+                  workflowReady={snapshot.ready}
                   performanceDraft={performanceDraft}
+                  shortcutHint={shortcutHint}
                   onSelect={handleSelect}
                   onOpen={goTo}
                   onOpenRun={handleOpenRun}

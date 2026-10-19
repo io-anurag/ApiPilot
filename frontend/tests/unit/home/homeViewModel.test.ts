@@ -3,11 +3,9 @@ import type { ChainRunSummary, StageStatus, TestGenerationWorkflow, UserScriptRu
 import { WORKFLOW_STAGE_ORDER } from "@apipilot/shared-domain";
 import {
   aiStatusText,
-  categoryRows,
   importRuns,
   k6Runs,
   mergeRecentRuns,
-  methodCounts,
   nextSteps,
   performanceRuns,
   summaryFigures,
@@ -30,7 +28,18 @@ describe("summaryFigures (AP-054 FR-019, SC-006)", () => {
     expect(figure(figures, "spec-coverage")).toMatchObject({ state: "ready", value: "100%", sub: "4 of 4 operations" });
     expect(figure(figures, "runtime-verified")).toMatchObject({ state: "ready", value: "75%", sub: "3 of 4 operations" });
     expect(figure(figures, "open-gaps")).toMatchObject({ state: "ready", value: "1" });
-    expect(figure(figures, "pending-scenarios")).toMatchObject({ state: "ready", value: "3", sub: "30 scenarios in all" });
+    expect(figure(figures, "pending-scenarios")).toMatchObject({ state: "ready", value: "3", sub: "3 of 30 scenarios" });
+  });
+
+  it("fills each bar with the share its own counts give, never a made-up ratio", () => {
+    const figures = summaryFigures({ snapshot: snapshot({ gaps: [gap({ id: "g1", operationKey: "GET /a", priority: "high" }), gap({ id: "g2", operationKey: "GET /b", priority: "low" })] }), problem: NO_PROBLEM });
+    expect(figure(figures, "spec-coverage")).toMatchObject({ ratio: 1 });
+    expect(figure(figures, "runtime-verified")).toMatchObject({ ratio: 0.75 });
+    expect(figure(figures, "pending-scenarios")).toMatchObject({ ratio: 0.1 });
+    const gaps = figure(figures, "open-gaps");
+    if (gaps.state !== "ready") throw new Error("expected a ready figure");
+    expect(gaps.ratio).toBeGreaterThanOrEqual(0);
+    expect(gaps.ratio).toBeLessThanOrEqual(1);
   });
 
   it("equals the figures the Coverage screen's entry state reads from the same snapshot", () => {
@@ -65,29 +74,6 @@ describe("summaryFigures (AP-054 FR-019, SC-006)", () => {
   it("says not available when nothing is eligible, never 0%", () => {
     const empty = snapshot({ metrics: [metric("spec-operations", "specification", "Operations", 0, 0), metric("runtime-operations", "runtime", "Operations", 0, 0)] });
     expect(figure(summaryFigures({ snapshot: empty, problem: NO_PROBLEM }), "spec-coverage")).toMatchObject({ value: "not available" });
-  });
-});
-
-describe("categoryRows and methodCounts", () => {
-  it("gives each measurable area a percentage and an unmeasurable one its reason", () => {
-    const base = snapshot();
-    const rows = categoryRows({
-      ...base,
-      categoryCoverage: [
-        { group: "positive", available: true, eligible: 8, specCovered: 6, verified: 4, counts: base.operations[0].stateCounts },
-        { group: "security", available: false, eligible: 0, specCovered: 0, verified: 0, counts: base.operations[0].stateCounts, reason: "No security requirement is declared." },
-      ],
-    });
-    expect(rows[0]).toMatchObject({ label: "Positive", percentage: 75, reason: null });
-    expect(rows[1]).toMatchObject({ label: "Security", percentage: null, reason: "No security requirement is declared." });
-  });
-
-  it("counts operations by method in the usual order", () => {
-    expect(methodCounts(snapshot())).toEqual([
-      { method: "GET", count: 2 },
-      { method: "POST", count: 1 },
-      { method: "DELETE", count: 1 },
-    ]);
   });
 });
 

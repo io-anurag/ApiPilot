@@ -97,35 +97,38 @@ The header also has two shortcuts:
 
 ### Home
 
-**Home** begins with **Start with the artifact you have**. Three boxes name the kind of input you may already hold and the
-workflows that accept it:
+**Home** reads top to bottom and looks the same whether or not a specification is loaded.
 
-| You have | Workflows offered |
-|---|---|
-| An OpenAPI specification | Guided Workflow, Performance |
-| A Postman collection | Import & Run Collection |
-| A k6 script | Run k6 Script |
+1. **Welcome.** A short introduction with **Get started** (opens Guided Workflow, the recommended workflow) and **Learn more** (opens the
+   same Help dialog as the **?** button).
+2. **Step 1, Start with the artifact you have.** Three cards name the kind of input you may hold and the workflows that accept it:
 
-Each workflow name there is a button. Under **Launch a test session**, the four workflows also appear as cards, with
-**Guided Workflow** marked **Recommended**; a Performance test left unfinished says **Draft in progress**. A workflow opens the same
-way whether you choose it from an artifact box, its card, the sidebar or the command palette.
+   | You have | Workflows offered |
+   |---|---|
+   | An OpenAPI specification | Guided Workflow, Performance |
+   | A Postman collection | Import & Run Collection |
+   | A k6 script | Run k6 Script |
 
-Below the cards, Home shows only what ApiPilot already holds, and says in words when it holds nothing:
+   Choose a workflow tag (or, for a single-workflow card, the card) to start it.
+3. **Step 2, Launch a test session.** The four workflows in order, each with its icon and one-sentence description. **Recommended** marks
+   Guided Workflow, and a Performance test left unfinished says **Draft in progress**.
+4. **Step 3, Explore results and insights.** Four figures from the same data as the Coverage screen: specification coverage,
+   runtime-verified coverage, open high-priority gaps and scenarios pending review, each with a bar. With a specification loaded the step
+   names it (title, file, operation and scenario counts). A figure with no data is its reason in words, never a number or a bar
+   (**Needs a specification from the Guided Workflow.**, **No run yet**). **Coverage** and **Security Lab** are linked from the step heading.
+5. **Next steps.** The one thing waiting, as a button, for example **Continue Scenario Review** or **Review 12 pending scenarios**, with
+   further steps as links; **Nothing is waiting on you.** says so when nothing is.
+6. **Recent runs.** The runs Import & Run Collection, Performance and Run k6 Script hold for this session, newest first: the newest five,
+   and **View all** (shown only when there are more) for the rest. Each shows the workflow, what was run, when it started and its status
+   in words; **Open results** goes to that run. A Debug run is never listed (it creates no run record). If one workflow's runs cannot be
+   read, Home says so.
+7. **AI provider.** Whether local AI is ready, loading or unavailable (and why), and which provider is configured. The provider is
+   chosen by the server's configuration, so Home has no button to change it.
 
-- **Summary tiles**: specification coverage, runtime-verified coverage, open high-priority gaps and scenarios pending review, the
-  same figures as the Coverage screen. With no specification loaded they say **Needs a specification from the Guided Workflow.**
-  and show no number.
-- **Coverage by area** and **Operations in scope**, by HTTP method.
-- **Next steps**: for example **Continue Scenario Review**, **Review 12 pending scenarios**, **Cover 3 operations with no generated
-  tests**, **Finish the draft load test**; each opens the screen where it is done. **Nothing is waiting on you.** when nothing is.
-- **Recent runs**: the runs Import & Run Collection, Performance and Run k6 Script hold for this session, newest first, with the
-  workflow, what was run, when it started and its status in words; **Open results** goes to that run. A Debug run is never listed
-  (it creates no run record). If one workflow's runs cannot be read, Home says so.
-- **AI provider**: whether local AI is ready, loading or unavailable (and why), and which provider is configured.
-
-Home reads this once each time you open it and does not refresh on its own. Paragraph text is left-aligned. The
-**pattern library** (the same cards, chips, steppers, tables, banners, drop zones and dialogs every screen is built from) opens at
-`?mock=pattern-library` on ApiPilot's address.
+A workflow opens the same way whether you choose it from Home, the sidebar or the command palette. Home reads its data once each time
+you open it and does not refresh on its own. Paragraph text is left-aligned. The **pattern library** (the same cards, chips,
+steppers, tables, banners, drop zones and dialogs every screen is built from) opens at `?mock=pattern-library` on ApiPilot's
+address.
 
 ## 3. The guided workflow
 
