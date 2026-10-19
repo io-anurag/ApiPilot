@@ -73,7 +73,7 @@ describe("parseReferences", () => {
 
   it("accepts every supported dynamic variable", () => {
     const names = [...SUPPORTED_DYNAMIC_VARIABLES];
-    expect(names).toHaveLength(48);
+    expect(names).toHaveLength(50);
     for (const name of names) expect(parseReferences(`{{${name}}}`)).toEqual([{ kind: "dynamic", name, raw: `{{${name}}}` }]);
     // A name with a digit, such as $randomIPV6, is a name; an unknown one is still invalid.
     expect(parseReferences("{{$randomIPV6}}")).toEqual([{ kind: "dynamic", name: "$randomIPV6", raw: "{{$randomIPV6}}" }]);
