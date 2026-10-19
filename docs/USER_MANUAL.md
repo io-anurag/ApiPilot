@@ -71,7 +71,7 @@ enough to see clearly in both themes.
 ### The shell
 
 Every screen sits in one frame. The **sidebar** on the left lists **Home**, **Guided Workflow**, **Import & Run Collection**,
-**Performance**, **Run k6 Script** and **Coverage**, and marks the one you are on in words and with a lime highlight. Under
+**Performance**, **Run k6 Script**, **Coverage** and **Security Lab**, and marks the one you are on in words and with a lime highlight. Under
 **Guided Workflow** (the small arrow beside it opens or closes the list) are its eleven stages in four groups: Prepare, Design,
 Organize and Execute. Each stage shows a check when done, **Redo** when it must be redone, and a lock when it cannot be opened
 yet; point at or focus a locked stage to read why. The **page header** names the screen with its parent above it (for example
@@ -97,35 +97,38 @@ The header also has two shortcuts:
 
 ### Home
 
-**Home** begins with **Start with the artifact you have**. Three boxes name the kind of input you may already hold and the
-workflows that accept it:
+**Home** reads top to bottom and looks the same whether or not a specification is loaded.
 
-| You have | Workflows offered |
-|---|---|
-| An OpenAPI specification | Guided Workflow, Performance |
-| A Postman collection | Import & Run Collection |
-| A k6 script | Run k6 Script |
+1. **Welcome.** A short introduction with **Get started** (opens Guided Workflow, the recommended workflow) and **Learn more** (opens the
+   same Help dialog as the **?** button).
+2. **Step 1, Start with the artifact you have.** Three cards name the kind of input you may hold and the workflows that accept it:
 
-Each workflow name there is a button. Under **Launch a test session**, the four workflows also appear as cards, with
-**Guided Workflow** marked **Recommended**; a Performance test left unfinished says **Draft in progress**. A workflow opens the same
-way whether you choose it from an artifact box, its card, the sidebar or the command palette.
+   | You have | Workflows offered |
+   |---|---|
+   | An OpenAPI specification | Guided Workflow, Performance |
+   | A Postman collection | Import & Run Collection |
+   | A k6 script | Run k6 Script |
 
-Below the cards, Home shows only what ApiPilot already holds, and says in words when it holds nothing:
+   Choose a workflow tag (or, for a single-workflow card, the card) to start it.
+3. **Step 2, Launch a test session.** The four workflows in order, each with its icon and one-sentence description. **Recommended** marks
+   Guided Workflow, and a Performance test left unfinished says **Draft in progress**.
+4. **Step 3, Explore results and insights.** Four figures from the same data as the Coverage screen: specification coverage,
+   runtime-verified coverage, open high-priority gaps and scenarios pending review, each with a bar. With a specification loaded the step
+   names it (title, file, operation and scenario counts). A figure with no data is its reason in words, never a number or a bar
+   (**Needs a specification from the Guided Workflow.**, **No run yet**). **Coverage** and **Security Lab** are linked from the step heading.
+5. **Next steps.** The one thing waiting, as a button, for example **Continue Scenario Review** or **Review 12 pending scenarios**, with
+   further steps as links; **Nothing is waiting on you.** says so when nothing is.
+6. **Recent runs.** The runs Import & Run Collection, Performance and Run k6 Script hold for this session, newest first: the newest five,
+   and **View all** (shown only when there are more) for the rest. Each shows the workflow, what was run, when it started and its status
+   in words; **Open results** goes to that run. A Debug run is never listed (it creates no run record). If one workflow's runs cannot be
+   read, Home says so.
+7. **AI provider.** Whether local AI is ready, loading or unavailable (and why), and which provider is configured. The provider is
+   chosen by the server's configuration, so Home has no button to change it.
 
-- **Summary tiles**: specification coverage, runtime-verified coverage, open high-priority gaps and scenarios pending review, the
-  same figures as the Coverage screen. With no specification loaded they say **Needs a specification from the Guided Workflow.**
-  and show no number.
-- **Coverage by area** and **Operations in scope**, by HTTP method.
-- **Next steps**: for example **Continue Scenario Review**, **Review 12 pending scenarios**, **Cover 3 operations with no generated
-  tests**, **Finish the draft load test**; each opens the screen where it is done. **Nothing is waiting on you.** when nothing is.
-- **Recent runs**: the runs Import & Run Collection, Performance and Run k6 Script hold for this session, newest first, with the
-  workflow, what was run, when it started and its status in words; **Open results** goes to that run. A Debug run is never listed
-  (it creates no run record). If one workflow's runs cannot be read, Home says so.
-- **AI provider**: whether local AI is ready, loading or unavailable (and why), and which provider is configured.
-
-Home reads this once each time you open it and does not refresh on its own. Paragraph text is left-aligned. The
-**pattern library** (the same cards, chips, steppers, tables, banners, drop zones and dialogs every screen is built from) opens at
-`?mock=pattern-library` on ApiPilot's address.
+A workflow opens the same way whether you choose it from Home, the sidebar or the command palette. Home reads its data once each time
+you open it and does not refresh on its own. Paragraph text is left-aligned. The **pattern library** (the same cards, chips,
+steppers, tables, banners, drop zones and dialogs every screen is built from) opens at `?mock=pattern-library` on ApiPilot's
+address.
 
 ## 3. The guided workflow
 
@@ -1396,6 +1399,221 @@ circular references are listed as not measurable and left out of every denominat
 code and per whole-schema check, not per response property, and the designer asserts one status per scenario, so most
 documented error responses will show as not covered until you add scenarios for them.
 
+## 6c. Security Lab
+
+**Security Lab** reads a specification for security questions, generates security test scenarios, lets you review and approve
+them, runs the approved ones against a target you are allowed to test, and records what it finds. Open it from **Security
+Lab** in the sidebar, from `#/security`, or with Ctrl+K. Four areas are tabs (`#/security/overview`, `/scenarios`,
+`/execution` and `/reports`): **Overview**, **Scenarios**, **Execution and Findings** and **Reports**.
+
+It needs a specification from the guided workflow to analyze, generate, approve, run or export. Without one the page says so
+and offers the way to proceed. Everything you kept earlier stays readable: scenarios (marked "specification not loaded"),
+findings, run summaries, reports and the retained-data panel. Rejecting, withdrawing and deleting retained data still work;
+approving, editing a scenario's test, running and exporting need the specification, because they must be checked against it.
+
+### What it can and cannot conclude
+
+- **Specification analysis never proves a vulnerability.** It reports what the specification says and does not say about
+  security, as observations: *informational*, *potential risk* (a question for you to answer), *requires additional
+  context* or *not measurable*. No text in the analysis calls anything "vulnerable", "exploitable" or proven. A property is
+  treated as sensitive only for a stated reason (`format: password`, `writeOnly`, a name you configured); a name match alone is
+  never stronger than "requires additional context".
+- **Only a run can produce a finding**, and only from requests it actually sent, judged against an explicit expectation. A
+  report with no findings is not proof that the API is secure, and the Overview and the report say so.
+- Input from a HAR capture or an API definition records no security scheme, so authentication is reported as not
+  measurable, with the input's origin, rather than as "unauthenticated".
+
+The analysis covers every operation in the specification. Generation covers your scope: the operations you selected at API
+Review, or all of them when you selected none. The Scenarios area states the scope and how many operations it leaves out.
+**Widen to all operations and generate** covers the rest, and the category boxes limit generation to the categories you tick.
+Scenarios generated earlier are kept unchanged.
+
+### Categories and support levels
+
+The categories follow the OWASP API Security Top 10 (2023) edition shown in the Overview. Each category's support level is
+ApiPilot's own judgement, independent of the taxonomy: where a category only relates to an OWASP entry, the table says
+"related".
+
+| Category | Support | Scenarios generated | Can be run |
+|---|---|---|---|
+| Authentication | Supported | Yes | Yes |
+| Authorization | Supported | Yes, only where a role requirement is stated and two roles are configured | Yes |
+| Broken object level authorization | Supported | Yes; incomplete until two identities and owned test data exist | Yes |
+| Object property authorization and mass assignment | Supported | Yes | Yes |
+| Input validation | Supported | Yes | Yes |
+| Resource consumption and rate limiting | Supported | Yes, where a rate limit is documented or configured | Yes |
+| Sensitive data exposure | Supported | Yes, for fields classified for a stated reason | Yes |
+| Security misconfiguration and error handling | Supported | Yes | Yes |
+| Sensitive business flows | Limited | No: an observation and a limitation until you define a policy | Not generated |
+| SSRF and unsafe API consumption | Limited | No: URL-typed parameters are listed as candidates only | No |
+| API inventory | Analysis only | No | No |
+
+Scenarios are deterministic: the same specification and settings give the same scenarios, ids and order. ApiPilot does not
+invent a policy or a status code. Where the specification documents the status for a situation, the scenario cites it; otherwise
+a named product rule applies (for example "a request without valid authorization must not be processed as successful") and
+no status is invented. A cap per operation and category keeps the number reviewable; what a cap leaves out is reported.
+OAuth2 token exchange is not supported: a scenario that needs a token ApiPilot cannot obtain is shown as unsupported, and no
+token is guessed.
+
+### Reviewing scenarios
+
+A scenario moves Draft → In review → Approved → Executed → Evaluated, with Rejected as a side state. A scenario is a proposed
+test, not a result. Approval belongs to one **version** of one scenario:
+
+- Version 1 is the generated content and never changes. Every edit makes a new version.
+- A **material** edit (the operation, category, request, mutations, expected behavior, evaluation conditions, planned requests,
+  the destructive flag or the identities it needs) withdraws approval, and the editor says so before you save. A
+  **non-material** edit (title, objective, rationale, impact, suggested severity, limitations, manual inputs) keeps it.
+- The history shows each version with its author, time, whether it was material and the approval each applies to.
+- A scenario is **stale** when its operation changed since it was generated, **orphaned** when its operation is gone. Neither
+  can be approved or run, and nothing is silently re-pointed.
+- Approval does not depend on a profile. A scenario is *executable* when it is approved at its current version and every
+  prerequisite is met by the profile you choose at run time. A scenario that needs something you have not provided shows
+  exactly what is missing.
+
+Review in bulk from the current filter: the bar shows the count and the list, excludes destructive and incomplete scenarios by
+default (with a count of each), and asks for a separate, named confirmation to include destructive ones. Each scenario in
+the batch is named with its version, one that changed since you looked is refused by itself, and the outcome is reported per
+scenario, never as a single success when only some were applied. A rejection needs a reason, and a rejected scenario cannot be
+selected for a run.
+
+### Profiles and where tests may go
+
+A **profile** says who the tests act as and where they may send requests. It is session data: it, its identities and its
+credentials are removed with the session. It holds the target (an environment's name, tier and base URL), the **allowed hosts
+and ports**, identities, owned test data, limits, the categories that may run, whether destructive scenarios may run, the
+cleanup strategy and the TLS policy.
+
+| Tier | Treated as | To start a run | Notes |
+|---|---|---|---|
+| `local` | A machine of your own | Confirm the preview and attest you are authorized | May name address ranges (for example `127.0.0.1/32`) and, only here, relax TLS verification |
+| `dev`, `qa`, `staging` | A shared target | Also type the exact target name and base URL | Never reaches a private or loopback address |
+| `production` | Refused | Not possible | Refused when you save a profile and when you use one |
+
+Credentials are entered in **write-only** fields: the page then shows only "set" or "not set", and no route, log, report,
+export or finding ever returns a value. The environment's credentials and variable values are not used by Security Lab.
+
+Every request, and every redirect hop, is checked by one destination policy at the moment it is sent: the scheme is `http` or
+`https` with no user name or password; the host and port are in the profile's lists; and the address actually connected to is
+checked again, so a name that resolves somewhere new at connect time is blocked. A loopback, private or other non-public
+address is allowed only for a `local` profile that lists a range containing it. Cloud metadata addresses and the unspecified
+address are always blocked. A redirect is followed only if its target passes the same checks, at most three times, without
+credentials across origins. Proxy environment variables are ignored. No scenario, imported content or AI output can name a
+URL, host or port.
+
+### Running
+
+1. **Preview.** Choose a profile and approved scenarios, then preview. The preview sends nothing. It states the profile,
+   tier, base URL, scenario and request counts, every destructive scenario by operation and method, the hosts and ports that
+   will be contacted, the limits and TLS policy, and that real requests will be sent to the target. It refuses a plan that
+   exceeds the budget, uses a category the profile does not permit, or includes a stale, unapproved, rejected or incomplete
+   scenario, with each reason.
+2. **Confirm and start.** The confirmation is tied to the exact plan: if anything changes after the preview, the start is
+   refused ("plan changed"). A destructive scenario needs its own confirmation, at approval and again at the run. A run starts
+   only from this confirmation, never on a schedule and never as a retry.
+3. **Limits.** Defaults: 100 requests per run (cleanup included), concurrency 1, a 10 second timeout, three redirect hops, a
+   256 KiB response read cap. The operator sets ceilings (`SECURITY_LAB_*` in [Configuration](configuration.md)) that no
+   profile or run may exceed; a value above a ceiling is refused, never clamped. The budget is counted before each
+   request, so concurrency cannot overshoot it, and a request is never retried automatically.
+4. **Cancel** stops new requests and aborts those in flight. Results already recorded are kept, unstarted scenarios become
+   *not run*, and cleanup still runs. A run shares the session's one execution slot: while it runs, no other kind of run
+   (guided-workflow, imported collection, performance or k6) can start, and the reverse.
+5. **Cleanup.** With the strategy `delete-created-via-spec`, a resource a scenario created is deleted through the
+   specification's documented `DELETE`, through the same checks. With `none`, a scenario that would create data is treated as
+   destructive. A cleanup that fails is shown in the run, with what remains and how to remove it by hand.
+
+### Outcomes, evidence and findings
+
+Each scenario ends in one outcome: *passed*, *failed*, *inconclusive*, *blocked*, *errored* or *not run*. Only *failed*
+creates a finding. A block, a transport failure, a budget or cancellation stop, or a condition that cannot be decided is
+recorded as such and is **never** counted as passed.
+
+Evidence is the request and response, redacted when it is recorded: credential headers, query values, JSON and form fields by
+name and by shape, and every credential value used in the run by literal match. It is session data, shown only while the
+session lasts, after which a finding says "raw evidence no longer available". What is retained is a bounded **observed
+summary**: the status, a fixed set of response header names with redacted values, and a sentence ApiPilot builds. It never
+includes a body excerpt. A response that holds a secret-shaped value is described as "secret-like value present at <path>"
+and the value is never stored.
+
+A finding is one per scenario version. It states the expected behavior and its basis (documented, or a named product rule),
+each occurrence's observed summary, the suggested severity, the confidence and what it rests on, static remediation text, and
+links to the scenario version, run and specification element.
+
+- **Confidence** is assigned by rule, never by a model: *high* when a documented expectation is violated by one clear
+  response, *medium* for a named product rule, *low* when the violation is only visible across repeated requests or the
+  evidence was cut short near the deciding part.
+- **Severity** starts from a fixed suggestion by category and mutation and is never raised by a response. Omitting or
+  invalidating credentials, swapping identities and substituting another identity's resource id suggest *high* on a read and
+  *critical* on a write; a malformed or expired credential *medium* and *high*; adding a protected property *high*; a constraint
+  violation *low* and *medium*; an injection probe *medium* and *high*; a rate-limit probe *medium*; sensitive data in a
+  response *high*; an undocumented-method probe *low*. You can change the current severity with a note; the suggestion is
+  always shown.
+- **Status** is *open*, *accepted risk*, *false positive* or *resolved*, each change with a note, and any status can return to
+  open. A new failure of the same version adds an occurrence and keeps one finding. It reopens a *resolved* finding. It leaves
+  *accepted risk* and *false positive* alone but flags "unreviewed occurrence" until you acknowledge it. *Resolved* is
+  "engineer asserted" until a later run of the same version passes, then "verified by rerun". A material edit makes a new
+  version; if that fails, it is a separate finding that links to the earlier one. Counts are of findings; occurrences are
+  shown beside them and never added to them.
+
+### Overview and Reports
+
+The **Overview** keeps two groups apart and labels each with its evidence basis: *Potential risks (specification
+analysis)*, from the specification alone, and *Findings (from requests sent)*, from responses. Every count opens the list it
+counts, with the same total. It also shows the scope, the latest run, and high-priority operations nothing has tested, each with
+the reason.
+
+**Reports** builds a deterministic assessment from retained work, so it needs no specification and works after the session
+ended. It can be narrowed to some runs and downloaded as one self-contained HTML file or as JSON. It states the specification
+revision, category coverage and outcomes, findings with their status, each run's profile name, tier and target, the taxonomy
+edition, the categories not covered and why, and the limits of the assessment. It contains no secret.
+
+### Retention and deleting
+
+Scenarios (every version and approval), run results with their observed summaries, findings and your sensitive-field names
+are **retained**: they survive the session ending and a backend restart, until you delete them. Profiles, identities,
+credentials, test data and the raw evidence go with the session. Retained work is tied to the browser by a cookie
+(`apipilotOwner`, `HttpOnly`, kept for about 13 months): clearing cookies, or using another browser or profile, means this
+work can no longer be reached, although it stays stored until deleted or the cap is reached. Per-browser caps (configurable)
+refuse new scenarios or runs at the cap rather than discard anything.
+
+**Retained data** in Reports shows what is kept and what goes with the session. Delete one assessment by typing its label, or
+everything by typing `DELETE ALL`; both remove the data permanently and are refused while a run is in progress.
+
+### Export (Postman)
+
+**Export approved scenarios** in Reports produces a collection, an environment template and a README from the approved
+versions whose approval still matches their content. Credentials are empty variables, listed in the README, for you to fill
+in after importing; no secret is written. Output is deterministic. A scenario the collection cannot express (a repeated request,
+a check of persisted state, or an expected behavior with no assertion template) is listed under known limitations rather than
+dropped, and approved scenarios the specification has since left behind are named as left out. Exporting sends nothing to any
+target.
+
+### AI suggestions (optional)
+
+**Suggest scenarios** asks the local AI model for more scenarios. The model sees only the shape of some operations, through the
+same AI provider as the rest of ApiPilot, and nothing leaves your machine. Its suggestions pass the same checks as every
+scenario: one that names a URL or host, overrides a header, exceeds a limit, uses an unsupported action or refers to an unknown
+operation or field is rejected, with the reason shown. What passes is stored as a **draft** marked AI-suggested and still needs
+your review. The model never approves, runs or judges anything. If the model is unavailable the control says why, and every other
+part of Security Lab still works.
+
+### Trying it safely
+
+`npm run security:stub -w backend` starts a loopback sample target on `127.0.0.1:4700` that serves the sample orders API in
+`backend/tests/fixtures/securityLab/sample-api.yaml`. By default it behaves like a well-built service, so a run should pass.
+Set `SECURITY_STUB_MODE=vulnerable` to make it break its controls on purpose (reads need no credentials, any identity can
+read any order, a malformed body returns a stack trace, probe methods are accepted), so a run has findings to show, and
+`SECURITY_STUB_FAIL_DELETE=1` to make `DELETE /orders/{id}` fail, so a failed cleanup can be seen. `SECURITY_STUB_PORT` changes
+the port. It prints the fake credentials it accepts, which you enter in a profile; they open nothing real. Create a `local`
+profile for `http://127.0.0.1:4700` with host `127.0.0.1`, port `4700` and range `127.0.0.1/32`. Run only against a target you
+own or are authorized to test; a confirmation is not a permission.
+
+### What Security Lab does not do
+
+It does not test production, exchange OAuth2 tokens, follow business flows, test SSRF with a callback, or crawl an
+API. It is a bounded set of checks against the specification, not a penetration test, and a clean result is not a statement
+that the API is secure. The AI-suggestion feature has no evaluation corpus yet, so its quality is not measured.
+
 ## 7. Sessions
 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
@@ -1435,6 +1653,10 @@ Variable and credential values are encrypted before being stored.
 
 ## 9. Limitations to keep in mind
 
+- Security Lab (section 6c) checks a bounded set of security questions: it refuses production targets, sends only to the hosts,
+  ports and addresses a profile lists, cannot exchange OAuth2 tokens, and generates no scenario for sensitive business flows,
+  SSRF or API inventory. Its analysis cannot prove a vulnerability, and an assessment with no findings is not proof that an API
+  is secure. Retained work is reachable only from the browser that created it.
 - Coverage (section 6b) measures only what the scenario model can express: it cannot measure security coverage, cookie
   parameters, array item constraints or `oneOf`/`anyOf` branches, and it matches run results to scenarios only for runs of
   the collection generated from the current workflow.

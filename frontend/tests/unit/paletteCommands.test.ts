@@ -18,13 +18,14 @@ const key = (overrides: Partial<Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey
 });
 
 describe("buildCommands (AP-038 FR-015)", () => {
-  it("lists the four workflows in tab order, the Coverage results view (AP-046) and the opposite theme, with no Go to Home on Home itself", () => {
+  it("lists the four workflows in tab order, the Coverage (AP-046) and Security Lab (AP-057) results views and the opposite theme, with no Go to Home on Home itself", () => {
     expect(buildCommands({ homeShown: true, theme: "light" }).map((c) => c.label)).toEqual([
       "Guided Workflow",
       "Import & Run Collection",
       "Performance",
       "Run k6 Script",
       "API Test Coverage",
+      "Security Lab",
       "Switch to dark theme",
     ]);
   });

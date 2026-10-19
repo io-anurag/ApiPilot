@@ -1,0 +1,205 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the prompt (constitution XXIII) > is pinned: any change to its text, vocabulary or answer format must bump SECURITY_SUGGESTION_RESPONSE_VERSION 1`] = `"You suggest API security test scenarios. Your entire response must be one complete valid JSON object, starting with { and ending with }, with no markdown, backticks or commentary. Use only the operations, mutation kinds, condition kinds and rule ids you are given. Never invent operations, fields, URLs, hosts, headers, credentials or status codes. Each suggestion is only a proposal that a person will review."`;
+
+exports[`the prompt (constitution XXIII) > is pinned: any change to its text, vocabulary or answer format must bump SECURITY_SUGGESTION_RESPONSE_VERSION 2`] = `
+{
+  "answerFormat": {
+    "responseVersion": 1,
+    "suggestions": [
+      {
+        "assumptions": [
+          "<each assumption, as plain text>",
+        ],
+        "categoryId": "<categoryId from categories>",
+        "conditions": [
+          "<condition object from vocabulary.conditions>",
+        ],
+        "confidence": "<number between 0 and 1>",
+        "expected": {
+          "documentedStatusCodes": [
+            "<documented status code, or omit>",
+          ],
+          "kind": "<one of vocabulary.expectedKinds>",
+          "ruleId": "<id from vocabulary.productRules, or omit>",
+        },
+        "impact": "<what could go wrong if the service gets it wrong>",
+        "mutations": [
+          "<mutation object from vocabulary.mutations>",
+        ],
+        "objective": "<what the scenario checks>",
+        "operationKey": "<operationKey from operations>",
+        "rationale": "<why the specification makes this worth checking>",
+        "title": "<short title>",
+      },
+    ],
+  },
+  "categories": [
+    "authentication",
+    "input-validation",
+  ],
+  "operations": [
+    {
+      "bodyFields": [],
+      "documentedResponses": [
+        200,
+        401,
+      ],
+      "operationKey": "GET /orders",
+      "parameters": [],
+      "security": "requires bearerAuth",
+    },
+    {
+      "bodyFields": [
+        {
+          "path": "id",
+          "readOnly": true,
+          "required": false,
+          "type": "string",
+        },
+        {
+          "path": "status",
+          "readOnly": false,
+          "required": true,
+          "type": "string",
+        },
+        {
+          "path": "total",
+          "readOnly": false,
+          "required": false,
+          "type": "number",
+        },
+        {
+          "path": "password",
+          "readOnly": false,
+          "required": false,
+          "type": "string",
+        },
+        {
+          "path": "internalNote",
+          "readOnly": false,
+          "required": false,
+          "type": "string",
+        },
+      ],
+      "documentedResponses": [
+        201,
+        400,
+      ],
+      "operationKey": "POST /orders",
+      "parameters": [],
+      "security": "requires bearerAuth",
+    },
+  ],
+  "task": "Suggest up to five security test scenarios for the operations below, each exercising one idea the fixed scenario generator does not already cover well. Every suggestion names one operationKey from operations and one categoryId from categories, and uses only the mutation kinds and condition kinds in vocabulary. Ground each expected behavior either in a product rule id from vocabulary.productRules, or in status codes the operation documents (documentedStatusCodes must be among its documentedResponses). Put a confidence between 0 and 1 and a short list of the assumptions you made. If nothing useful can be suggested, answer with an empty suggestions array.",
+  "vocabulary": {
+    "conditions": [
+      {
+        "kind": "status.not-success",
+      },
+      {
+        "codes": [
+          "<status code>",
+        ],
+        "kind": "status.in-set",
+      },
+      {
+        "code": "<status code>",
+        "kind": "status.equals",
+      },
+      {
+        "code": "<status code>",
+        "kind": "status.not-equals",
+      },
+      {
+        "kind": "header.present",
+        "name": "<header name>",
+      },
+      {
+        "kind": "header.absent",
+        "name": "<header name>",
+      },
+      {
+        "kind": "body.field-absent",
+        "path": "<dotted path>",
+      },
+      {
+        "kind": "body.field-present",
+        "path": "<dotted path>",
+      },
+      {
+        "kind": "body.not-match-leak-pattern",
+        "patternId": "stack-trace | server-banner | internal-path | secret-shaped-value | sql-error",
+      },
+    ],
+    "expectedKinds": [
+      "rejected",
+      "allowed",
+      "limited",
+      "no-leak",
+      "header-policy",
+      "persisted-unchanged",
+    ],
+    "mutations": [
+      {
+        "kind": "auth.omit",
+      },
+      {
+        "kind": "auth.invalid-token",
+      },
+      {
+        "kind": "auth.malformed",
+      },
+      {
+        "identity": "<role label>",
+        "kind": "auth.expired",
+      },
+      {
+        "from": "<role label>",
+        "kind": "identity.swap",
+        "to": "<role label>",
+      },
+      {
+        "kind": "path-id.substitute",
+        "ownerIdentity": "<role label>",
+        "parameter": "<path parameter name>",
+      },
+      {
+        "kind": "body.add-property",
+        "name": "<property name>",
+        "path": "<dotted parent path or empty>",
+        "valueKind": "string | number | boolean | protected-example",
+      },
+      {
+        "constraint": "type | format | enum | minimum | maximum | minLength | maxLength | minItems | maxItems | required",
+        "kind": "field.violate-constraint",
+        "path": "<body:dotted.path | query:name | path:name | header:name>",
+      },
+      {
+        "kind": "method.probe",
+        "method": "HEAD | OPTIONS | TRACE",
+      },
+      {
+        "count": "<2 to 50>",
+        "kind": "request.repeat",
+      },
+      {
+        "kind": "input.injection-probe",
+        "path": "<query:name of a string query parameter>",
+        "probeId": "sql-quote | sql-comment | xss-angle | path-traversal-dots | template-braces | null-byte",
+      },
+    ],
+    "productRules": [
+      "SL-REJECT-NOT-SUCCESS",
+      "SL-REJECT-CROSS-IDENTITY",
+      "SL-REJECT-INSUFFICIENT-PERMISSION",
+      "SL-REJECT-PROTECTED-PROPERTY",
+      "SL-REJECT-CONSTRAINT-VIOLATION",
+      "SL-REJECT-UNDOCUMENTED-METHOD",
+      "SL-LIMIT-ENGAGED",
+      "SL-NO-LEAK-PATTERN",
+      "SL-NO-SENSITIVE-FIELD",
+    ],
+  },
+}
+`;

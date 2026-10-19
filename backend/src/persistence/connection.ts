@@ -308,6 +308,152 @@ export class SqliteConnection {
     // the time it was given. Nullable: a confirmation recorded before this column has no hash, so
     // it no longer counts and the collection asks again once (the safe direction).
     this.ensureColumn("uploaded_collections", "confirmed_scripts_sha256", "TEXT");
+
+    // AP-057 (specs/057-security-lab-v1 research R13, data-model "Ownership and lifetimes"): Security Lab
+    // data has two lifetimes (FR-051). RETAINED WORK is keyed by `owner_id`, the long-lived
+    // `apipilotOwner` cookie, and is never removed by session expiry: scenarios and their immutable
+    // versions, runs and their per-scenario results, findings with occurrences, and settings. Nothing in
+    // these tables holds a credential, a profile, a test data value or a raw evidence body; results keep
+    // only a bounded deterministic summary. SESSION DATA is keyed by `session_id` and removed by the
+    // existing onExpire listeners: profiles, and the redacted evidence records (encrypted, because a
+    // response excerpt can still hold personal data). Scenario and finding ids are derived from content,
+    // so they repeat across owners and every key includes `owner_id`.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS security_scenarios (
+        owner_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        assessment_key TEXT NOT NULL,
+        assessment_label TEXT NOT NULL,
+        current_version INTEGER NOT NULL,
+        review_state TEXT NOT NULL,
+        execution_status TEXT NOT NULL,
+        origin TEXT NOT NULL,
+        operation_key TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        destructive INTEGER NOT NULL DEFAULT 0,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (owner_id, id)
+      );
+      CREATE INDEX IF NOT EXISTS security_scenarios_assessment ON security_scenarios (owner_id, assessment_key);
+      CREATE INDEX IF NOT EXISTS security_scenarios_review ON security_scenarios (owner_id, review_state);
+      CREATE INDEX IF NOT EXISTS security_scenarios_category ON security_scenarios (owner_id, category_id);
+      CREATE INDEX IF NOT EXISTS security_scenarios_operation ON security_scenarios (owner_id, operation_key);
+      CREATE TABLE IF NOT EXISTS security_scenario_versions (
+        owner_id TEXT NOT NULL,
+        scenario_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        specification_revision TEXT NOT NULL,
+        security_basis_hash TEXT NOT NULL,
+        content TEXT NOT NULL,
+        author TEXT NOT NULL,
+        edit_note TEXT,
+        material_change INTEGER NOT NULL,
+        approval TEXT,
+        rejection TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (owner_id, scenario_id, version)
+      );
+      CREATE TABLE IF NOT EXISTS security_runs (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        assessment_key TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        cancel_reason TEXT,
+        profile_summary TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        plan_digest TEXT NOT NULL,
+        limits TEXT NOT NULL,
+        budget TEXT NOT NULL,
+        confirmation TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        cleanup TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS security_runs_owner ON security_runs (owner_id, started_at);
+      CREATE INDEX IF NOT EXISTS security_runs_session_status ON security_runs (session_id, status);
+      CREATE TABLE IF NOT EXISTS security_run_results (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        scenario_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        outcome TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        condition_results TEXT NOT NULL,
+        observed TEXT NOT NULL,
+        evidence_count INTEGER NOT NULL,
+        started_at TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS security_run_results_run ON security_run_results (owner_id, run_id);
+      CREATE INDEX IF NOT EXISTS security_run_results_scenario ON security_run_results (owner_id, scenario_id, version);
+      CREATE TABLE IF NOT EXISTS security_findings (
+        owner_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        assessment_key TEXT NOT NULL,
+        scenario_id TEXT NOT NULL,
+        scenario_version INTEGER NOT NULL,
+        operation_key TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        status TEXT NOT NULL,
+        unreviewed_occurrence INTEGER NOT NULL DEFAULT 0,
+        occurrence_count INTEGER NOT NULL,
+        first_failed_at TEXT NOT NULL,
+        latest_failed_at TEXT NOT NULL,
+        document TEXT NOT NULL,
+        PRIMARY KEY (owner_id, id)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS security_findings_version ON security_findings (owner_id, scenario_id, scenario_version);
+      CREATE INDEX IF NOT EXISTS security_findings_status ON security_findings (owner_id, status);
+      CREATE INDEX IF NOT EXISTS security_findings_assessment ON security_findings (owner_id, assessment_key);
+      CREATE TABLE IF NOT EXISTS security_settings (
+        owner_id TEXT PRIMARY KEY,
+        sensitive_fields TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS security_profiles (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        environment_id TEXT NOT NULL,
+        document TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS security_profiles_session ON security_profiles (session_id, updated_at);
+      CREATE TABLE IF NOT EXISTS security_credentials (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        profile_id TEXT NOT NULL,
+        identity TEXT NOT NULL,
+        scheme TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        value_encrypted BLOB NOT NULL,
+        value_iv BLOB NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS security_credentials_key ON security_credentials (session_id, profile_id, identity, scheme, kind);
+      CREATE TABLE IF NOT EXISTS security_evidence (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        result_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        evidence_encrypted BLOB NOT NULL,
+        evidence_iv BLOB NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS security_evidence_session ON security_evidence (session_id, result_id, position);
+      CREATE INDEX IF NOT EXISTS security_evidence_run ON security_evidence (session_id, run_id);
+    `);
   }
 
   /** Idempotent single-column migration helper (see the FR-017a comment above its call site). */

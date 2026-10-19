@@ -1,6 +1,7 @@
 import { getInProgressRun as getUploadedInProgressRun } from "../externalCollections/uploadedCollectionExecutionStore";
 import { getPerformanceInProgressRun } from "../performance/performanceRunStore";
 import { getPerformanceRunRepository } from "../persistence/performanceRunRepository";
+import { getSecurityRunRepository } from "../persistence/securityRunRepository";
 import { getUserScriptRunRepository } from "../persistence/userScriptRunRepository";
 import { getSessionId } from "../session/sessionContext";
 import { getInProgressRun as getGeneratedInProgressRun } from "./executionRunStore";
@@ -18,6 +19,7 @@ export function findExecutionInProgress(): { runId: string } | null {
     getUploadedInProgressRun() ??
     getPerformanceInProgressRun() ??
     getPerformanceRunRepository().getChainInProgress(getSessionId()) ??
-    getUserScriptRunRepository().getInProgress(getSessionId());
+    getUserScriptRunRepository().getInProgress(getSessionId()) ??
+    getSecurityRunRepository().getInProgress(getSessionId());
   return run ? { runId: run.id } : null;
 }

@@ -1,0 +1,2510 @@
+revision 966879dcb438bb30a6de2621f791c89473857d6f899ddf8edd1ac575308c2a3d
+====
+scenarios {"scenarios":[{"id":"scenario-00001","operationPath":"/auth/login","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"200"},{"type":"schema-conformance","expectedSchema":{"required":["accessToken"],"properties":{"accessToken":{"required":[],"properties":{},"type":"string"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00002","operationPath":"/auth/login","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"username\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00003","operationPath":"/auth/login","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":null,"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"username\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00004","operationPath":"/auth/login","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"","password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"username\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00005","operationPath":"/auth/login","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"password\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00006","operationPath":"/auth/login","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"password\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00007","operationPath":"/auth/login","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":""}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"password\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00008","operationPath":"/auth/login","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":12345,"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"username\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00009","operationPath":"/auth/login","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"password\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00010","operationPath":"/auth/logout","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00011","operationPath":"/orders","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{"state":"open"},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00012","operationPath":"/orders","operationMethod":"GET","category":"positive","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":"closed"},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"enum-positive-variant","description":"Happy-path request using declared enum value \"closed\" for query parameter \"state\".","duplicateOfRules":[]}},{"id":"scenario-00013","operationPath":"/orders","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"minimal-positive-scenario","description":"Happy-path request using only specification-required fields; optional fields omitted.","duplicateOfRules":[]}},{"id":"scenario-00014","operationPath":"/orders","operationMethod":"GET","category":"invalid-type","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":12345},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"query parameter \"state\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00015","operationPath":"/orders","operationMethod":"GET","category":"invalid-enum","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":"__INVALID_ENUM_VALUE__"},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-enum","description":"query parameter \"state\" set to a value outside its declared enum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00016","operationPath":"/orders","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":1}},"assertions":[{"type":"status-code","expectedStatusCode":"201"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{"reference":{"required":[],"properties":{},"type":"string","format":"uuid"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":["numeric-boundary-at-minimum"]}},{"id":"scenario-00017","operationPath":"/orders","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"customerEmail\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00018","operationPath":"/orders","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":null,"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"customerEmail\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00019","operationPath":"/orders","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"","quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"customerEmail\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00020","operationPath":"/orders","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"quantity\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00021","operationPath":"/orders","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"quantity\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00022","operationPath":"/orders","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":12345,"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"customerEmail\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00023","operationPath":"/orders","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":"not-a-number"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"quantity\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00024","operationPath":"/orders","operationMethod":"POST","category":"invalid-format","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"not-a-valid-email","quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-format","description":"body field \"customerEmail\" set to a value violating its declared format/pattern. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00025","operationPath":"/orders","operationMethod":"POST","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":0}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-below-minimum","description":"body field \"quantity\" set to a value below minimum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00026","operationPath":"/orders","operationMethod":"POST","category":"positive","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":100}},"assertions":[{"type":"status-code","expectedStatusCode":"201"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{"reference":{"required":[],"properties":{},"type":"string","format":"uuid"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"numeric-boundary-at-maximum","description":"body field \"quantity\" set to a value at maximum.","duplicateOfRules":[]}},{"id":"scenario-00027","operationPath":"/orders","operationMethod":"POST","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":101}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-above-maximum","description":"body field \"quantity\" set to a value above maximum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00028","operationPath":"/orders/{orderId}","operationMethod":"GET","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00029","operationPath":"/orders/{orderId}","operationMethod":"GET","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00030","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":["numeric-boundary-at-minimum"]}},{"id":"scenario-00031","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"missing-field","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"quantity\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00032","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"null-value","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"quantity\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00033","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"invalid-type","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":"not-a-number"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"quantity\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00034","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00035","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":0}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-below-minimum","description":"body field \"quantity\" set to a value below minimum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00036","operationPath":"/orders/{orderId}","operationMethod":"DELETE","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00037","operationPath":"/orders/{orderId}","operationMethod":"DELETE","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00038","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"note":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00039","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"minimal-positive-scenario","description":"Happy-path request using only specification-required fields; optional fields omitted.","duplicateOfRules":[]}},{"id":"scenario-00040","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"invalid-type","targetLocation":"body","targetField":"note","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"note":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"note\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00041","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{},"body":{"note":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00042","operationPath":"/products","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00043","operationPath":"/products","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"201"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00044","operationPath":"/products","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"title\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00045","operationPath":"/products","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"title\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00046","operationPath":"/products","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":""}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"title\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00047","operationPath":"/products","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"title\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00048","operationPath":"/products/{productId}","operationMethod":"GET","category":"positive","request":{"pathParameters":{"productId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00049","operationPath":"/products/{productId}","operationMethod":"GET","category":"invalid-type","targetLocation":"path","targetField":"productId","request":{"pathParameters":{"productId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"productId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00050","operationPath":"/products/{productId}","operationMethod":"DELETE","category":"positive","request":{"pathParameters":{"productId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00051","operationPath":"/products/{productId}","operationMethod":"DELETE","category":"invalid-type","targetLocation":"path","targetField":"productId","request":{"pathParameters":{"productId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"productId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00052","operationPath":"/status","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"503"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}}]}
+====
+approved {"scenarios":[{"id":"scenario-00001","operationPath":"/auth/login","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"200"},{"type":"schema-conformance","expectedSchema":{"required":["accessToken"],"properties":{"accessToken":{"required":[],"properties":{},"type":"string"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00002","operationPath":"/auth/login","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"username\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00003","operationPath":"/auth/login","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":null,"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"username\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00004","operationPath":"/auth/login","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"","password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"username\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00005","operationPath":"/auth/login","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"password\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00006","operationPath":"/auth/login","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"password\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00007","operationPath":"/auth/login","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":""}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"password\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00008","operationPath":"/auth/login","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"username","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":12345,"password":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"username\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00009","operationPath":"/auth/login","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"password","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"username":"a","password":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"password\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00010","operationPath":"/auth/logout","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00011","operationPath":"/orders","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{"state":"open"},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00012","operationPath":"/orders","operationMethod":"GET","category":"positive","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":"closed"},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"enum-positive-variant","description":"Happy-path request using declared enum value \"closed\" for query parameter \"state\".","duplicateOfRules":[]}},{"id":"scenario-00013","operationPath":"/orders","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"minimal-positive-scenario","description":"Happy-path request using only specification-required fields; optional fields omitted.","duplicateOfRules":[]}},{"id":"scenario-00014","operationPath":"/orders","operationMethod":"GET","category":"invalid-type","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":12345},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"query parameter \"state\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00015","operationPath":"/orders","operationMethod":"GET","category":"invalid-enum","targetLocation":"query","targetField":"state","request":{"pathParameters":{},"queryParameters":{"state":"__INVALID_ENUM_VALUE__"},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-enum","description":"query parameter \"state\" set to a value outside its declared enum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00016","operationPath":"/orders","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":1}},"assertions":[{"type":"status-code","expectedStatusCode":"201"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{"reference":{"required":[],"properties":{},"type":"string","format":"uuid"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":["numeric-boundary-at-minimum"]}},{"id":"scenario-00017","operationPath":"/orders","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"customerEmail\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00018","operationPath":"/orders","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":null,"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"customerEmail\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00019","operationPath":"/orders","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"","quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"customerEmail\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00020","operationPath":"/orders","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com"}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"quantity\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00021","operationPath":"/orders","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"quantity\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00022","operationPath":"/orders","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":12345,"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"customerEmail\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00023","operationPath":"/orders","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":"not-a-number"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"quantity\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00024","operationPath":"/orders","operationMethod":"POST","category":"invalid-format","targetLocation":"body","targetField":"customerEmail","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"not-a-valid-email","quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-format","description":"body field \"customerEmail\" set to a value violating its declared format/pattern. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00025","operationPath":"/orders","operationMethod":"POST","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":0}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-below-minimum","description":"body field \"quantity\" set to a value below minimum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00026","operationPath":"/orders","operationMethod":"POST","category":"positive","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":100}},"assertions":[{"type":"status-code","expectedStatusCode":"201"},{"type":"schema-conformance","expectedSchema":{"required":[],"properties":{"reference":{"required":[],"properties":{},"type":"string","format":"uuid"}},"type":"object"}}],"provenance":{"source":"RULE","rule":"numeric-boundary-at-maximum","description":"body field \"quantity\" set to a value at maximum.","duplicateOfRules":[]}},{"id":"scenario-00027","operationPath":"/orders","operationMethod":"POST","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"customerEmail":"user@example.com","quantity":101}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-above-maximum","description":"body field \"quantity\" set to a value above maximum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00028","operationPath":"/orders/{orderId}","operationMethod":"GET","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00029","operationPath":"/orders/{orderId}","operationMethod":"GET","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00030","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":["numeric-boundary-at-minimum"]}},{"id":"scenario-00031","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"missing-field","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"quantity\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00032","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"null-value","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"quantity\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00033","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"invalid-type","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":"not-a-number"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"quantity\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00034","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{},"body":{"quantity":1}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00035","operationPath":"/orders/{orderId}","operationMethod":"PUT","category":"numeric-boundary","targetLocation":"body","targetField":"quantity","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"quantity":0}},"assertions":[],"provenance":{"source":"RULE","rule":"numeric-boundary-below-minimum","description":"body field \"quantity\" set to a value below minimum. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00036","operationPath":"/orders/{orderId}","operationMethod":"DELETE","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00037","operationPath":"/orders/{orderId}","operationMethod":"DELETE","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00038","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"note":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00039","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"positive","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"minimal-positive-scenario","description":"Happy-path request using only specification-required fields; optional fields omitted.","duplicateOfRules":[]}},{"id":"scenario-00040","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"invalid-type","targetLocation":"body","targetField":"note","request":{"pathParameters":{"orderId":"a"},"queryParameters":{},"headers":{},"body":{"note":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"note\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00041","operationPath":"/orders/{orderId}","operationMethod":"PATCH","category":"invalid-type","targetLocation":"path","targetField":"orderId","request":{"pathParameters":{"orderId":12345},"queryParameters":{},"headers":{},"body":{"note":"a"}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"orderId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00042","operationPath":"/products","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00043","operationPath":"/products","operationMethod":"POST","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":"a"}},"assertions":[{"type":"status-code","expectedStatusCode":"201"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00044","operationPath":"/products","operationMethod":"POST","category":"missing-field","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-missing","description":"Required body field \"title\" omitted from the request. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00045","operationPath":"/products","operationMethod":"POST","category":"null-value","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":null}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-null","description":"Required body field \"title\" set to null. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00046","operationPath":"/products","operationMethod":"POST","category":"empty-value","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":""}},"assertions":[],"provenance":{"source":"RULE","rule":"required-field-empty","description":"Required body field \"title\" set to an empty value. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00047","operationPath":"/products","operationMethod":"POST","category":"invalid-type","targetLocation":"body","targetField":"title","request":{"pathParameters":{},"queryParameters":{},"headers":{},"body":{"title":12345}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"body field \"title\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00048","operationPath":"/products/{productId}","operationMethod":"GET","category":"positive","request":{"pathParameters":{"productId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00049","operationPath":"/products/{productId}","operationMethod":"GET","category":"invalid-type","targetLocation":"path","targetField":"productId","request":{"pathParameters":{"productId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"productId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00050","operationPath":"/products/{productId}","operationMethod":"DELETE","category":"positive","request":{"pathParameters":{"productId":"a"},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"200"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}},{"id":"scenario-00051","operationPath":"/products/{productId}","operationMethod":"DELETE","category":"invalid-type","targetLocation":"path","targetField":"productId","request":{"pathParameters":{"productId":12345},"queryParameters":{},"headers":{}},"assertions":[],"provenance":{"source":"RULE","rule":"invalid-type","description":"path parameter \"productId\" set to a value of an incompatible type. No documented error response was available to assert against; the expected outcome is not fabricated.","duplicateOfRules":[]}},{"id":"scenario-00052","operationPath":"/status","operationMethod":"GET","category":"positive","request":{"pathParameters":{},"queryParameters":{},"headers":{}},"assertions":[{"type":"status-code","expectedStatusCode":"503"}],"provenance":{"source":"RULE","rule":"positive-scenario","description":"Happy-path request using specification-conformant values.","duplicateOfRules":[]}}]}
+====
+export {
+  "info": {
+    "name": "Quick Performance Fixture",
+    "_postman_id": "5c8d157e-db04-5951-b123-b9390259fba7",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "auth",
+      "item": [
+        {
+          "id": "08ff6bc3-c5d3-5123-9303-34f437bc9772",
+          "name": "POST /auth/login — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const expectedSchema1 = {\n  \"type\": \"object\",\n  \"properties\": {\n    \"accessToken\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"accessToken\"\n  ]\n};",
+                  "pm.test(\"Response body conforms to the documented schema\", function () {",
+                  "  pm.response.to.have.jsonSchema(expectedSchema1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00001"
+          }
+        },
+        {
+          "id": "9dc5bde6-b477-5657-bcea-340babfa6013",
+          "name": "POST /auth/login — empty-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00004"
+          }
+        },
+        {
+          "id": "0d6e6ad1-b157-51cc-aa06-4f6b3521d54d",
+          "name": "POST /auth/login — empty-value (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00007"
+          }
+        },
+        {
+          "id": "06303c2e-d406-5615-9754-c1e3b1e35559",
+          "name": "POST /auth/login — invalid-type",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": 12345,\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00008"
+          }
+        },
+        {
+          "id": "a5ce1d64-814a-5aed-8bb0-9e4eb182108b",
+          "name": "POST /auth/login — invalid-type (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00009"
+          }
+        },
+        {
+          "id": "9046036a-2653-5e29-8095-173c4fcd3b97",
+          "name": "POST /auth/login — missing-field",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00002"
+          }
+        },
+        {
+          "id": "56366c82-f9d7-5682-890b-bb9921d764cf",
+          "name": "POST /auth/login — missing-field (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00005"
+          }
+        },
+        {
+          "id": "97e25575-04a4-5490-96ee-eb36c86cf4dd",
+          "name": "POST /auth/login — null-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": null,\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00003"
+          }
+        },
+        {
+          "id": "f7627d84-7b89-5578-87a2-12c7d2163319",
+          "name": "POST /auth/login — null-value (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00006"
+          }
+        },
+        {
+          "id": "6cc15a8c-7a70-558e-a640-6c6e23d20a7f",
+          "name": "POST /auth/logout — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00010"
+          }
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "item": [
+        {
+          "id": "dfa362c4-8f18-5ea2-a32d-c66cb6c0cacd",
+          "name": "POST /orders — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const expectedSchema1 = {\n  \"type\": \"object\",\n  \"properties\": {\n    \"reference\": {\n      \"type\": \"string\",\n      \"format\": \"uuid\"\n    }\n  }\n};",
+                  "pm.test(\"Response body conforms to the documented schema\", function () {",
+                  "  pm.response.to.have.jsonSchema(expectedSchema1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00016"
+          }
+        },
+        {
+          "id": "b38f1282-6bd2-59f4-a2cd-13ae013ca33a",
+          "name": "POST /orders — positive (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const expectedSchema1 = {\n  \"type\": \"object\",\n  \"properties\": {\n    \"reference\": {\n      \"type\": \"string\",\n      \"format\": \"uuid\"\n    }\n  }\n};",
+                  "pm.test(\"Response body conforms to the documented schema\", function () {",
+                  "  pm.response.to.have.jsonSchema(expectedSchema1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00026"
+          }
+        },
+        {
+          "id": "a6f08545-b322-52b9-8511-792cb6f8cad8",
+          "name": "POST /orders — empty-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00019"
+          }
+        },
+        {
+          "id": "b117203e-5e80-503a-b0c1-77b34b6b7b69",
+          "name": "POST /orders — invalid-format",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"not-a-valid-email\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00024"
+          }
+        },
+        {
+          "id": "01dc8bb6-20fc-55c6-a5ee-e9d7de71ef6d",
+          "name": "POST /orders — invalid-type",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": 12345,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00022"
+          }
+        },
+        {
+          "id": "ced4d9b7-e6aa-5797-b40f-a3b9c2c0f734",
+          "name": "POST /orders — invalid-type (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": \"not-a-number\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00023"
+          }
+        },
+        {
+          "id": "da84a50b-de3f-5b12-a8b4-589cc3889391",
+          "name": "POST /orders — missing-field",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00017"
+          }
+        },
+        {
+          "id": "fa013fea-8123-5ede-81e8-ea616885273e",
+          "name": "POST /orders — missing-field (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00020"
+          }
+        },
+        {
+          "id": "b8968af1-0e4b-5f0e-800b-5268ea629e7c",
+          "name": "POST /orders — null-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": null,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00018"
+          }
+        },
+        {
+          "id": "0e05979c-525e-564c-a792-702b8cff41c9",
+          "name": "POST /orders — null-value (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00021"
+          }
+        },
+        {
+          "id": "236f4245-459f-5fe7-b426-05377280f576",
+          "name": "POST /orders — numeric-boundary",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00025"
+          }
+        },
+        {
+          "id": "7f20982a-1bf0-5c6c-9714-95daff9ee06e",
+          "name": "POST /orders — numeric-boundary (2)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerEmail\": \"user@example.com\",\n  \"quantity\": 101\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00027"
+          }
+        },
+        {
+          "id": "26182a90-b802-5bb6-b2c6-f5e63f87384d",
+          "name": "GET /orders — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?state=open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "open"
+                }
+              ],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00011"
+          }
+        },
+        {
+          "id": "29a5d51a-ea33-5d48-8424-f001ffec3e63",
+          "name": "GET /orders — positive (2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?state=closed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "closed"
+                }
+              ],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00012"
+          }
+        },
+        {
+          "id": "81ccca6b-a069-5ec5-9635-2cc786e4189e",
+          "name": "GET /orders — positive (3)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00013"
+          }
+        },
+        {
+          "id": "9cddd44c-81b1-5ff9-b3f2-e576047bdfe0",
+          "name": "GET /orders — invalid-enum",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?state=__INVALID_ENUM_VALUE__",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "__INVALID_ENUM_VALUE__"
+                }
+              ],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00015"
+          }
+        },
+        {
+          "id": "9d054fe3-9def-5108-8146-02b338f3bfaf",
+          "name": "GET /orders — invalid-type",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders?state=12345",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "12345"
+                }
+              ],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00014"
+          }
+        },
+        {
+          "id": "aecc1882-8df2-56d7-9e74-3412677a95a7",
+          "name": "PUT /orders/{orderId} — positive",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00030"
+          }
+        },
+        {
+          "id": "d5494d5e-5816-58b5-81ec-f2c8e29db4a5",
+          "name": "PUT /orders/{orderId} — invalid-type",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": \"not-a-number\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00033"
+          }
+        },
+        {
+          "id": "e1e96c38-a680-5c65-9083-b65980b8028b",
+          "name": "PUT /orders/{orderId} — invalid-type (2)",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00034"
+          }
+        },
+        {
+          "id": "6d0dc1f2-c7e7-56c2-9492-53fac39618c7",
+          "name": "PUT /orders/{orderId} — missing-field",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00031"
+          }
+        },
+        {
+          "id": "d3ac6703-58aa-53b2-873e-4d95e9ab64dd",
+          "name": "PUT /orders/{orderId} — null-value",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00032"
+          }
+        },
+        {
+          "id": "158d2924-d587-5307-b003-ed8cf2e81190",
+          "name": "PUT /orders/{orderId} — numeric-boundary",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00035"
+          }
+        },
+        {
+          "id": "928df6f7-d735-50bb-b0fd-0b1462da13d8",
+          "name": "GET /orders/{orderId} — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00028"
+          }
+        },
+        {
+          "id": "bdcfe666-5a41-592e-b0ff-fd294e03bd16",
+          "name": "GET /orders/{orderId} — invalid-type",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00029"
+          }
+        },
+        {
+          "id": "6718f663-6298-53e7-bb5f-edb854f591bd",
+          "name": "DELETE /orders/{orderId} — positive",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00036"
+          }
+        },
+        {
+          "id": "7daefb53-dccc-5d52-8a0d-82309c86dab2",
+          "name": "DELETE /orders/{orderId} — invalid-type",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00037"
+          }
+        },
+        {
+          "id": "f45311c2-f35a-5b80-bb58-1c486bbdb4c0",
+          "name": "PATCH /orders/{orderId} — positive",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"a\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00038"
+          }
+        },
+        {
+          "id": "360e8c69-aee2-545b-95ef-66a1cf552e83",
+          "name": "PATCH /orders/{orderId} — positive (2)",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00039"
+          }
+        },
+        {
+          "id": "9fa83d05-e6ac-58a7-97a7-1a6c114c8aad",
+          "name": "PATCH /orders/{orderId} — invalid-type",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": 12345\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00040"
+          }
+        },
+        {
+          "id": "52f9ad0e-35de-514c-8757-62abac65d079",
+          "name": "PATCH /orders/{orderId} — invalid-type (2)",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                ":orderId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"a\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00041"
+          }
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "item": [
+        {
+          "id": "0126ef4b-5cd3-5038-b5ee-b9b379597509",
+          "name": "POST /products — positive",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"a\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00043"
+          }
+        },
+        {
+          "id": "da02765d-04cd-5e92-a6b0-a2acf4f00951",
+          "name": "POST /products — empty-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00046"
+          }
+        },
+        {
+          "id": "43503912-2019-5ddd-983a-68dabb0567d8",
+          "name": "POST /products — invalid-type",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": 12345\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00047"
+          }
+        },
+        {
+          "id": "e0f3dfb4-65df-5e44-a230-a22ce5d87929",
+          "name": "POST /products — missing-field",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00044"
+          }
+        },
+        {
+          "id": "ffc34c40-5d34-58f8-83a0-d18133a75bce",
+          "name": "POST /products — null-value",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00045"
+          }
+        },
+        {
+          "id": "b75a6259-f4a2-564b-bc40-89aebd9eebca",
+          "name": "GET /products — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00042"
+          }
+        },
+        {
+          "id": "1e49be88-4643-54bc-b108-ae07319099da",
+          "name": "GET /products/{productId} — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                ":productId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00048"
+          }
+        },
+        {
+          "id": "cc9f0c38-7f57-551b-a2e1-3d45218492b8",
+          "name": "GET /products/{productId} — invalid-type",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                ":productId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00049"
+          }
+        },
+        {
+          "id": "fd5d1c21-f6bd-5140-9242-7a56fd901c34",
+          "name": "DELETE /products/{productId} — positive",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                ":productId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "a"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00050"
+          }
+        },
+        {
+          "id": "6c8b375d-5d67-5324-95d4-c8b3f2e7f229",
+          "name": "DELETE /products/{productId} — invalid-type",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                ":productId"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "12345"
+                }
+              ]
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "provenance": {
+            "scenarioId": "scenario-00051"
+          }
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "item": [
+        {
+          "id": "28467c3e-d76b-5b1d-a402-90c93f438091",
+          "name": "GET /status — positive",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "status"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 503\", function () {",
+                  "  pm.response.to.have.status(503);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "provenance": {
+            "scenarioId": "scenario-00052"
+          }
+        }
+      ]
+    }
+  ]
+}
+
+----
+{
+  "name": "Quick Performance Fixture environment",
+  "_postman_variable_scope": "environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://qa.internal.example",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "t-1",
+      "type": "secret",
+      "enabled": true
+    }
+  ]
+}

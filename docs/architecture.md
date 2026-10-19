@@ -1448,6 +1448,67 @@ and every stored value are unchanged; the journey is merged, not the model. The 
 - **Recent runs.** There is no cross-plan runs read, so the entry screen reads the runs of the ten most recently updated plans and
   merges them by start time.
 
+## Security Lab (AP-057)
+
+`specs/057-security-lab-v1`. Analysis of a specification for security questions, reviewed scenarios, a guarded run against a target the
+engineer is allowed to test, deterministic evaluation, findings, reports and a Postman export. Everything on the decision path is
+deterministic and AI-free; the optional AI suggestion goes through `AIProvider` only.
+
+- **Layout.** `backend/src/securityLab/` holds one directory per concern behind a single façade, `securityLabService.ts`, which the thin
+  router `backend/src/api/securityLab.ts` calls and which the direct-bypass tests call with no router: `registry/` (the eleven
+  categories, their support levels and the OWASP API Top 10 2023 mapping), `analysis/` (effective-security resolution and pure
+  observation rules), `scenarios/` (generation rules, identity, validation against `security-scenario.v1.schema.json`, caps, dedupe),
+  `review/` (pure state machine, versioned edits, approval binding, batch), `profiles/`, `execution/` (destination policy, guarded
+  sender, planner, run service, cleanup), `evidence/`, `evaluation/`, `findings/`, `reports/`, `retention/`, `export/`, `ai/`,
+  `owner/`, `environments/` and `settings/`. The Postman export adds `postman/securityOverlay.ts`, `securityAssertionScripts.ts`
+  and `generateSecurityCollection.ts`, which reuse the existing request builder, auth mapping and validator.
+- **Shared contracts.** `packages/shared-domain/src/securityLab.ts` holds the types both sides use. `ApiModel` and `ApiOperation` gained
+  optional security facts (`rootSecurity`, `rootSecurityDeclared`, `securitySource`, `deprecated`, `readOnly`, `writeOnly`,
+  `bearerFormat`, `openIdConnectUrl`), and `GenerationLimitationKind` three `security-*-not-expressible` kinds. Existing outputs
+  (test model, review projection, collection, specification revision) are byte-identical, which `existingOutputsUnchanged.test.ts` pins.
+- **Two lifetimes, two keys.** *Retained work* is owner-scoped: `security_scenarios`, `security_scenario_versions`, `security_runs`,
+  `security_run_results`, `security_findings` and `security_settings`, keyed by an `owner_id` held in the `apipilotOwner` cookie
+  (`HttpOnly`, `SameSite=Lax`, 400 days, `Secure` over HTTPS) that `owner/ownerMiddleware.ts` issues only on `/api/security-lab`
+  responses, so no other route sees or sets it. It survives session expiry and restart and is removed only by an explicit delete or a
+  retention cap. *Session data* is session-scoped and removed with the session through `onExpire`: `security_profiles`,
+  `security_credentials` (write-only, encrypted, read only by the sender) and `security_evidence` (redacted, encrypted through the
+  existing cipher). Both lifetimes live in the existing SQLite file through the `initializeSchema()` convention; no migration
+  framework was added. A run keeps a bounded *observed summary* with each result, never a body excerpt, so findings and reports
+  outlive the evidence.
+- **Specification dependence.** Routes that must check against the model (`analysis`, `scope`, `generate`, `suggest`, edit, approve,
+  `runs/preview`, `runs`, `export/postman`) answer `409 no_specification` without a loaded workflow. Everything else reads retained
+  work, and scenarios then carry `specificationNotLoaded` instead of `stale` or `orphaned`.
+- **Versioned approval.** Version 1 is immutable and every edit inserts a version. An approval records the version and its
+  `contentHash` over the material fields; the run planner and the exporter accept a scenario only when its current version has a
+  live approval with a matching hash. A material edit, or a regeneration for a changed basis (`securityBasisHash` per operation),
+  produces a new version that needs review again. Approval does not depend on prerequisites, which come from a session-scoped profile.
+- **Destination policy.** `execution/destinationPolicy.ts` is one pure function, `evaluateDestination`, using `node:net` `BlockList`.
+  It is applied at profile save, at preview, at the connect step of every request and at every redirect hop: scheme and userinfo,
+  allowed host, allowed port, then the class of the address actually connected to. Non-public classes are allowed only for the `local`
+  tier within a listed range; metadata and unspecified addresses are always blocked; a production tier is refused. The sender
+  (`execution/guardedSender.ts`) uses `node:http`/`https` with a validating `lookup`, so each connect resolves and checks again
+  (DNS rebinding), follows redirects manually (at most three, credentials dropped across origins), ignores proxy variables, caps the
+  read and honours an `AbortSignal`. The `Sender` is injected, so tests use a stub and the real one is tested on loopback.
+- **Run.** `runSecurityRun` is a fixed-size worker pool over a precomputed plan with a shared budget counter decremented before each
+  send. `POST /runs/preview` sends nothing and returns a `planDigest` over the profile snapshot, the ordered `{id, version}` list and
+  the limits; `POST /runs` must echo it, so the confirmed plan is the executed plan. The run joins `findExecutionInProgress()`, so it
+  shares the session's one execution slot with every other run kind, and `markInterruptedRunsCancelled()` settles one left running at
+  startup. Cancel aborts in-flight requests and cleanup then runs once.
+- **Evaluation and findings.** Each condition evaluates to `satisfied`, `violated` or `indeterminate`, and the outcome follows a fixed
+  precedence (blocked, not run, errored, failed, inconclusive, passed). Only `failed` creates or extends a finding, one per scenario
+  version, with occurrences, a rule-assigned confidence and a severity that the engine never raises. Remediation is static text.
+  A finding's status changes carry a note and are kept in its history.
+- **Redaction.** Evidence is redacted when built, by header, query, JSON and form field name and shape, and by literal match of every
+  credential used in the run. Logs carry identifiers, stage, outcome code, duration and error category only. A seeded-secret corpus
+  test covers evidence, summaries, retained rows, findings, logs, the report and the export.
+- **AI.** `ai/suggestScenarios.ts` calls `getAIProvider()` only, sends the shape of some operations, and runs every suggestion through
+  the same `validateScenario`; it stores what passes as a `draft` with `origin: "ai"`. Nothing in analysis, evaluation, severity or
+  confidence reads a model.
+- **Frontend.** `pages/SecurityLabPage` hosts four areas as tabs addressed `#/security/<area>` (`navigation/routes`), and
+  `components/securityLab/` holds the areas and their parts. `services/securityLabClient.ts` follows the coverage client's discriminated
+  result and logs typed fields only. Status, severity, outcome and support level are typed variants in `securityViewModel.ts`, each with
+  a text label. The AI status read reuses `aiStatusClient`.
+
 ## Security, privacy, and operational constraints
 
 - Uploaded specifications are potentially sensitive. The system validates size/content and neither
@@ -1747,7 +1808,7 @@ specification and constitution take precedence.
   The layout switches in CSS only (no `matchMedia`); the drawer shares `hooks/useFocusTrap` with `Dialog`. The sidebar's stage list is
   built from `workflowStageViewModel` (`WORKFLOW_PHASES`, `getLockReason`) by `navigation/destinations`, never a second copy.
 - **Addresses.** `navigation/routes` (pure `parseRoute`, `formatRoute`, `resolveRoute`) and `navigation/useRoute` use the URL hash only
-  (`#/`, `#/guided/<stageId>`, `#/import`, `#/performance`, `#/k6`, `#/coverage`), so the query string (the AP-049 token, `?mock=`) is
+  (`#/`, `#/guided/<stageId>`, `#/import`, `#/performance`, `#/k6`, `#/coverage`, `#/security[/<area>]`), so the query string (the AP-049 token, `?mock=`) is
   untouched and no routing library is added. An address that cannot be shown resolves to the nearest valid one with a notice
   (`RouteNotice`). `hooks/useWorkflowSnapshot` reads the session's workflow once so the sidebar and address checks are right before the
   guided page has mounted; the page reports changes (`onWorkflowChange`, `onViewedStageChange`) and the address follows the stage on
@@ -1760,8 +1821,15 @@ specification and constitution take precedence.
 - **Patterns.** `components/patterns/` (`Card`, `Pill`, `TaskCard`, `Banner`, `StepTrail`, `DropZone`, `KeyValueGrid`, `tableStyles`) plus
   `StatTile` (highlight), `EmptyState`, `Pagination` and `controlStyles` (`FIELD_STYLES`). Import & Run, Performance and Run k6 Script
   steppers render through `StepTrail`. `?mock=pattern-library` (`pages/PatternLibraryPage`) shows one live example of each.
-- **Home.** `pages/HomePage` with `components/home`: figures from the same coverage snapshot as the Coverage screen
-  (`homeViewModel`), next steps derived from existing state, an AI status tile over the existing `GET /api/ai/status` (`aiStatusClient`;
-  state, provider and reason only) and Recent runs merged from Import & Run, Performance and Run k6 Script (`useRecentRuns`, at most ten
-  collections and ten plans read, one k6 list). It reads only while visible and never polls. Opening a run is a frontend request held in
-  `App` with a token (`importRunRequest`, `OpenPerformancePlanRequest.runId`, `UserScriptPage openRunRequest`).
+- **Home.** `pages/HomePage` with `components/home`, one layout in every state (AP-059, redesigning AP-058 and amending FR-018 to
+  FR-021): `HomeHero` (welcome, Get started, Learn more opening `HelpDialog`, a decorative token-coloured SVG), then three
+  `StepHeading` sections: `ArtifactStep` (three artifact cards, each choice named by what it starts and from what), `LaunchStep` (the four
+  workflows in sidebar order, `WorkflowActionIcon` glyphs on a halo that notches the tile's top border, Recommended said once in the
+  header and attached to the Guided Workflow tile with `aria-describedby`) and `InsightsStep` (the four figures from the same coverage
+  snapshot as the Coverage screen via `homeViewModel.summaryFigures`, each with a `ratio` computed from its own counts for its bar; with
+  no data a figure draws no bar and the panel says the one reason once). `NextStepsCard` waits for `useWorkflowSnapshot.ready` so it
+  never changes after first paint. `RecentRunsCard` and `AiProviderCard` complete the page. Recent runs are merged from Import & Run,
+  Performance and Run k6 Script (`useRecentRuns`, at most ten collections and ten plans read, one k6 list; five shown, the rest on
+  View all). AI status is read over the existing `GET /api/ai/status` (`aiStatusClient`; state, provider and reason only). Home reads only
+  while visible and never polls. Opening a run is a frontend request held in `App` with a token (`importRunRequest`,
+  `OpenPerformancePlanRequest.runId`, `UserScriptPage openRunRequest`). `App` passes `shortcutHint` for the Help dialog.

@@ -1,5 +1,5 @@
 import type { TestGenerationWorkflow, WorkflowStageId } from "@apipilot/shared-domain";
-import { RESULTS_VIEWS, WORKFLOWS, type EntryChoice, type TopLevelView } from "../components/workflowCatalog";
+import { RESULTS_VIEWS, WORKFLOWS, isResultsView, type EntryChoice, type TopLevelView } from "../components/workflowCatalog";
 import {
   STAGE_LABELS,
   WORKFLOW_PHASES,
@@ -30,7 +30,8 @@ const VIEW_OF_WORKFLOW: Readonly<Record<EntryChoice, DestinationId>> = {
 /** Workflow titles come from `workflowCatalog`, so "Import & Run Collection" is named in full everywhere. */
 export function titleOfDestination(id: DestinationId): string {
   if (id === "home") return "Home";
-  if (id === "coverage") return RESULTS_VIEWS[0].tabLabel;
+  const resultsView = RESULTS_VIEWS.find((view) => view.id === id);
+  if (resultsView) return resultsView.tabLabel;
   const workflow = WORKFLOWS.find((candidate) => VIEW_OF_WORKFLOW[candidate.id] === id);
   return workflow?.title ?? id;
 }
@@ -41,6 +42,8 @@ export const TOP_DESTINATIONS: readonly TopDestination[] = [
   { id: "performance", label: titleOfDestination("performance") },
   { id: "k6", label: titleOfDestination("k6") },
   { id: "coverage", label: titleOfDestination("coverage") },
+  // AP-057: directly after Coverage, the analysis destination, and beside Import & Run Collection, the execution one.
+  { id: "security", label: titleOfDestination("security") },
 ];
 
 export type StageState = "done" | "stale" | "available" | "locked";
@@ -116,6 +119,8 @@ export function headerTitleFor(route: Route, viewedStage: WorkflowStageId | null
       return { title: "Home", parent: "Workspace" };
     case "coverage":
       return { title: titleOfDestination("coverage"), parent: "Results" };
+    case "security":
+      return { title: titleOfDestination("security"), parent: "Results" };
     case "guided": {
       const stage = route.stage ?? viewedStage;
       if (stage === null) return { title: titleOfDestination("guided"), parent: "Workflows" };
@@ -131,7 +136,7 @@ export function headerTitleFor(route: Route, viewedStage: WorkflowStageId | null
 
 /** The sidebar destination a workflow or results view from the catalog leads to. */
 export function destinationOfView(view: TopLevelView): DestinationId {
-  return view === "coverage" ? "coverage" : VIEW_OF_WORKFLOW[view];
+  return isResultsView(view) ? view : VIEW_OF_WORKFLOW[view];
 }
 
 /** The catalog id a destination was known by before AP-054; "start" is Home. */

@@ -97,6 +97,35 @@ describe("PostmanExportLimitations", () => {
     expect(screen.getByText(/affects 3 requests/)).toBeInTheDocument();
     expect(screen.queryByText(/^a$|^b$|^c$/)).not.toBeInTheDocument();
   });
+
+  // specs/057 Security Lab (T143): an approved security scenario the export cannot express is listed under its own
+  // heading, never dropped, and the aggregation still collapses a repeated gap.
+  it.each([
+    ["security-repeat-not-expressible", "Security scenarios that repeat a request, which this export cannot represent"],
+    ["security-persisted-state-not-expressible", "Security scenarios that verify persisted state, which this export cannot represent"],
+    ["security-condition-not-expressible", "Security scenarios whose expected behavior has no assertion template in this export"],
+  ] as const)("lists a %s limitation under its own heading", (kind, heading) => {
+    render(
+      <PostmanExportLimitations
+        limitations={[{ kind, scenarioId: "ss-1", location: "POST /orders", message: "This scenario cannot be represented in the collection." }]}
+      />,
+    );
+    expect(screen.getByTestId(`export-limitation-${kind}`)).toHaveTextContent(`${heading} (1)`);
+    expect(screen.getByTestId("export-limitations")).toHaveTextContent("POST /orders");
+    expect(screen.getByTestId("export-limitations")).toHaveTextContent("ss-1");
+  });
+
+  it("collapses the same security limitation recorded for several scenarios at one location", () => {
+    const forScenario = (scenarioId: string): GenerationLimitation => ({
+      kind: "security-repeat-not-expressible",
+      scenarioId,
+      location: "GET /orders",
+      message: "This scenario repeats a request, which the collection cannot represent.",
+    });
+    render(<PostmanExportLimitations limitations={[forScenario("ss-1"), forScenario("ss-2")]} />);
+    expect(screen.getByTestId("export-limitation-security-repeat-not-expressible")).toHaveTextContent("(2)");
+    expect(screen.getByText(/\(2 scenarios\)/)).toBeInTheDocument();
+  });
 });
 
 function successResult(): ExportResult {

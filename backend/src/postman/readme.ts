@@ -32,6 +32,11 @@ const LIMITATION_HEADINGS: Record<GenerationLimitation["kind"], string> = {
   "unresolved-credential-producer":
     "Distinct credentials this export could not identify a producer request for",
   "unresolved-parameter-style": "Parameter serialization styles this export cannot represent",
+  "security-repeat-not-expressible": "Security scenarios that repeat a request, which this export cannot represent",
+  "security-persisted-state-not-expressible":
+    "Security scenarios that verify persisted state, which this export cannot represent",
+  "security-condition-not-expressible":
+    "Security scenarios whose expected behavior has no assertion template in this export",
 };
 
 function coverageSection(

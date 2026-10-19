@@ -1,0 +1,714 @@
+/**
+ * The draft-07 schema for Security Lab scenario content, version 1 (specs/057 contracts/security-scenario.v1.schema.json).
+ * It is a TypeScript constant, like the API-definition schema, so it ships with the backend; a test asserts that it is
+ * deep-equal to the published contract file, so the two cannot drift apart.
+ */
+export const SECURITY_SCENARIO_SCHEMA_V1: Record<string, unknown> = {
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apipilot.local/schemas/security-scenario.v1.schema.json",
+  "title": "SecurityScenarioContent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operationKey",
+    "operationMethod",
+    "operationPath",
+    "categoryId",
+    "taxonomy",
+    "title",
+    "objective",
+    "rationale",
+    "prerequisites",
+    "requiredIdentities",
+    "baseRequest",
+    "mutations",
+    "expected",
+    "conditions",
+    "impact",
+    "suggestedSeverity",
+    "destructive",
+    "plannedRequestCount",
+    "limitations",
+    "manualInputs",
+    "provenance"
+  ],
+  "properties": {
+    "operationKey": {
+      "type": "string",
+      "pattern": "^[A-Z]+ /"
+    },
+    "operationMethod": {
+      "type": "string",
+      "pattern": "^[A-Z]+$"
+    },
+    "operationPath": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "categoryId": {
+      "enum": [
+        "authentication",
+        "authorization",
+        "broken-object-level-authorization",
+        "object-property-authorization",
+        "input-validation",
+        "resource-consumption",
+        "sensitive-data-exposure",
+        "security-misconfiguration",
+        "sensitive-business-flows"
+      ]
+    },
+    "taxonomy": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "edition",
+          "id",
+          "relation"
+        ],
+        "properties": {
+          "edition": {
+            "const": "owasp-api-top10-2023"
+          },
+          "id": {
+            "enum": [
+              "API1",
+              "API2",
+              "API3",
+              "API4",
+              "API5",
+              "API6",
+              "API7",
+              "API8",
+              "API9",
+              "API10"
+            ]
+          },
+          "relation": {
+            "enum": [
+              "primary",
+              "related"
+            ]
+          }
+        }
+      }
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "prerequisites": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "identity",
+              "role",
+              "test-data",
+              "ownership",
+              "threshold",
+              "expired-credential",
+              "persisted-read"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "requiredIdentities": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "label"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      }
+    },
+    "baseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pathParameters",
+        "queryParameters",
+        "headers"
+      ],
+      "properties": {
+        "pathParameters": {
+          "type": "object"
+        },
+        "queryParameters": {
+          "type": "object"
+        },
+        "headers": {
+          "type": "object"
+        },
+        "body": {}
+      }
+    },
+    "mutations": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "auth.omit",
+                  "auth.invalid-token",
+                  "auth.malformed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "identity"
+            ],
+            "properties": {
+              "kind": {
+                "const": "auth.expired"
+              },
+              "identity": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ],
+            "properties": {
+              "kind": {
+                "const": "identity.swap"
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "parameter",
+              "ownerIdentity"
+            ],
+            "properties": {
+              "kind": {
+                "const": "path-id.substitute"
+              },
+              "parameter": {
+                "type": "string"
+              },
+              "ownerIdentity": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "name",
+              "valueKind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "body.add-property"
+              },
+              "path": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "valueKind": {
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "protected-example"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "constraint"
+            ],
+            "properties": {
+              "kind": {
+                "const": "field.violate-constraint"
+              },
+              "path": {
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "type",
+                  "format",
+                  "enum",
+                  "minimum",
+                  "maximum",
+                  "minLength",
+                  "maxLength",
+                  "minItems",
+                  "maxItems",
+                  "required"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "method"
+            ],
+            "properties": {
+              "kind": {
+                "const": "method.probe"
+              },
+              "method": {
+                "enum": [
+                  "HEAD",
+                  "OPTIONS",
+                  "TRACE"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "count"
+            ],
+            "properties": {
+              "kind": {
+                "const": "request.repeat"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 50
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "probeId"
+            ],
+            "properties": {
+              "kind": {
+                "const": "input.injection-probe"
+              },
+              "path": {
+                "type": "string"
+              },
+              "probeId": {
+                "enum": [
+                  "sql-quote",
+                  "sql-comment",
+                  "xss-angle",
+                  "path-traversal-dots",
+                  "template-braces",
+                  "null-byte"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "statement",
+        "basis"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "rejected",
+            "allowed",
+            "limited",
+            "no-leak",
+            "header-policy",
+            "persisted-unchanged"
+          ]
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "basis": {
+          "enum": [
+            "documented",
+            "product-rule"
+          ]
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "documentedStatusCodes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          }
+        },
+        "citation": {
+          "type": "string"
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "status.not-success"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "codes"
+            ],
+            "properties": {
+              "kind": {
+                "const": "status.in-set"
+              },
+              "codes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 599
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "code"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "status.equals",
+                  "status.not-equals"
+                ]
+              },
+              "code": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "header.present",
+                  "header.absent"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9-]+$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name",
+              "token"
+            ],
+            "properties": {
+              "kind": {
+                "const": "header.value-not-contains"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9-]+$"
+              },
+              "token": {
+                "type": "string",
+                "maxLength": 64
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "body.field-absent",
+                  "body.field-present",
+                  "persisted.field-unchanged"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "patternId"
+            ],
+            "properties": {
+              "kind": {
+                "const": "body.not-match-leak-pattern"
+              },
+              "patternId": {
+                "enum": [
+                  "stack-trace",
+                  "server-banner",
+                  "internal-path",
+                  "secret-shaped-value",
+                  "sql-error"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "withinRequests"
+            ],
+            "properties": {
+              "kind": {
+                "const": "repeat.limit-engaged"
+              },
+              "withinRequests": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 50
+              }
+            }
+          }
+        ]
+      }
+    },
+    "impact": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "suggestedSeverity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "destructive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flag",
+        "reasons"
+      ],
+      "properties": {
+        "flag": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "plannedRequestCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "manualInputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationKey",
+        "specElementPointer"
+      ],
+      "properties": {
+        "operationKey": {
+          "type": "string"
+        },
+        "specElementPointer": {
+          "type": "string"
+        },
+        "observationId": {
+          "type": "string"
+        },
+        "ruleId": {
+          "type": "string"
+        },
+        "aiModel": {
+          "type": "string"
+        },
+        "aiConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "aiAssumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duplicateOfRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidenceOrigin": {
+      "enum": [
+        "documented",
+        "declared",
+        "observed",
+        "inferred"
+      ]
+    },
+    "observationCount": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+};

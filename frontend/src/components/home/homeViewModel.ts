@@ -1,6 +1,5 @@
 import type {
   ChainRunSummary,
-  CoverageCategoryGroup,
   CoverageSnapshot,
   PerformanceRunStatus,
   TestGenerationWorkflow,
@@ -14,7 +13,7 @@ import { entryPercentage } from "../apiCoverage/coverageViewModel";
 import { STAGE_LABELS, WORKFLOW_PHASES } from "../workflowStageViewModel";
 
 /**
- * What Home shows and why (AP-054 FR-018 to FR-021, contracts/home-data.md): pure functions over
+ * What Home shows and why (AP-054 FR-018 to FR-021, contracts/home-data.md, amended by AP-058): pure functions over
  * data the application already holds. A figure with no data is a text reason and never a number;
  * nothing here estimates, defaults to zero or invents a value.
  */
@@ -26,9 +25,10 @@ export interface CoverageSource {
   readonly problem: { kind: "no-workflow" | "error"; message: string } | null;
 }
 
+/** `description` says what the figure means. `ratio` (0 to 1) is the filled share of its bar, computed from the same counts as `value`. */
 export type FigureView =
-  | { id: string; label: string; state: "ready"; value: string; sub?: string }
-  | { id: string; label: string; state: "unavailable"; reason: string };
+  | { id: string; label: string; description: string; state: "ready"; value: string; ratio: number; sub?: string }
+  | { id: string; label: string; description: string; state: "unavailable"; reason: string };
 
 function unavailable(source: CoverageSource): string {
   if (source.problem?.kind === "no-workflow") return "Needs a specification from the Guided Workflow.";
@@ -40,22 +40,26 @@ function metricOf(snapshot: CoverageSnapshot, id: string) {
   return snapshot.metrics.find((metric) => metric.id === id) ?? null;
 }
 
-/** The four summary tiles, from the same snapshot the Coverage screen shows (SC-006). */
+function share(numerator: number, denominator: number): number {
+  return denominator > 0 ? Math.min(1, Math.max(0, numerator / denominator)) : 0;
+}
+
+/** The four summary figures, from the same snapshot the Coverage screen shows (SC-006). */
 export function summaryFigures(source: CoverageSource): FigureView[] {
   const { snapshot } = source;
-  const labels = {
-    spec: "Specification coverage",
-    runtime: "Runtime-verified",
-    gaps: "Open gaps, high priority",
-    pending: "Scenarios pending review",
+  const meta = {
+    spec: { id: "spec-coverage", label: "Specification coverage", description: "Requirements covered by generated scenarios." },
+    runtime: { id: "runtime-verified", label: "Runtime-verified", description: "Validated with live API runs." },
+    gaps: { id: "open-gaps", label: "Open gaps, high priority", description: "Endpoints that need tests." },
+    pending: { id: "pending-scenarios", label: "Scenarios pending review", description: "AI-generated scenarios awaiting your review." },
   } as const;
   if (snapshot === null) {
     const reason = unavailable(source);
     return [
-      { id: "spec-coverage", label: labels.spec, state: "unavailable", reason },
-      { id: "runtime-verified", label: labels.runtime, state: "unavailable", reason },
-      { id: "open-gaps", label: labels.gaps, state: "unavailable", reason },
-      { id: "pending-scenarios", label: labels.pending, state: "unavailable", reason },
+      { ...meta.spec, state: "unavailable", reason },
+      { ...meta.runtime, state: "unavailable", reason },
+      { ...meta.gaps, state: "unavailable", reason },
+      { ...meta.pending, state: "unavailable", reason },
     ];
   }
   const spec = metricOf(snapshot, "spec-operations");
@@ -65,64 +69,14 @@ export function summaryFigures(source: CoverageSource): FigureView[] {
   const { scenarioCounts } = snapshot.context;
   return [
     spec === null
-      ? { id: "spec-coverage", label: labels.spec, state: "unavailable", reason: "Not available." }
-      : { id: "spec-coverage", label: labels.spec, state: "ready", value: entryPercentage(spec), sub: `${spec.numerator} of ${spec.denominator} operations` },
+      ? { ...meta.spec, state: "unavailable", reason: "Not available." }
+      : { ...meta.spec, state: "ready", value: entryPercentage(spec), ratio: share(spec.numerator, spec.denominator), sub: `${spec.numerator} of ${spec.denominator} operations` },
     runtime === null || !hasRun
-      ? { id: "runtime-verified", label: labels.runtime, state: "unavailable", reason: "No run yet" }
-      : { id: "runtime-verified", label: labels.runtime, state: "ready", value: entryPercentage(runtime), sub: `${runtime.numerator} of ${runtime.denominator} operations` },
-    { id: "open-gaps", label: labels.gaps, state: "ready", value: String(highGaps), sub: `${snapshot.totals.gaps} open gaps in all` },
-    { id: "pending-scenarios", label: labels.pending, state: "ready", value: String(scenarioCounts.pending), sub: `${scenarioCounts.total} scenarios in all` },
+      ? { ...meta.runtime, state: "unavailable", reason: "No run yet" }
+      : { ...meta.runtime, state: "ready", value: entryPercentage(runtime), ratio: share(runtime.numerator, runtime.denominator), sub: `${runtime.numerator} of ${runtime.denominator} operations` },
+    { ...meta.gaps, state: "ready", value: String(highGaps), ratio: share(highGaps, snapshot.totals.gaps), sub: `${highGaps} of ${snapshot.totals.gaps} open gaps` },
+    { ...meta.pending, state: "ready", value: String(scenarioCounts.pending), ratio: share(scenarioCounts.pending, scenarioCounts.total), sub: `${scenarioCounts.pending} of ${scenarioCounts.total} scenarios` },
   ];
-}
-
-// ---- Coverage by area and operations by method -------------------------------------------
-
-export interface CategoryRow {
-  readonly group: CoverageCategoryGroup;
-  readonly label: string;
-  /** Null when the area cannot be measured; `reason` then says why. */
-  readonly percentage: number | null;
-  readonly detail: string;
-  readonly reason: string | null;
-}
-
-const CATEGORY_LABELS: Readonly<Record<CoverageCategoryGroup, string>> = {
-  positive: "Positive",
-  negative: "Negative",
-  boundary: "Boundary",
-  security: "Security",
-};
-
-export function categoryRows(snapshot: CoverageSnapshot): CategoryRow[] {
-  return snapshot.categoryCoverage.map((entry) => {
-    const measurable = entry.available && entry.eligible > 0;
-    return {
-      group: entry.group,
-      label: CATEGORY_LABELS[entry.group],
-      percentage: measurable ? Math.round((entry.specCovered / entry.eligible) * 100) : null,
-      detail: measurable ? `${entry.specCovered} of ${entry.eligible} requirements covered by a scenario` : "",
-      reason: measurable ? null : (entry.reason ?? "Nothing to measure in this specification."),
-    };
-  });
-}
-
-const METHOD_ORDER = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
-
-export interface MethodCount {
-  readonly method: string;
-  readonly count: number;
-}
-
-/** Operations in scope by HTTP method, in the usual order, with any other method after them. */
-export function methodCounts(snapshot: CoverageSnapshot): MethodCount[] {
-  const counts = new Map<string, number>();
-  for (const operation of snapshot.operations) {
-    const method = operation.method.toUpperCase();
-    counts.set(method, (counts.get(method) ?? 0) + 1);
-  }
-  const known = METHOD_ORDER.filter((method) => counts.has(method));
-  const others = [...counts.keys()].filter((method) => !(METHOD_ORDER as readonly string[]).includes(method)).sort();
-  return [...known, ...others].map((method) => ({ method, count: counts.get(method) as number }));
 }
 
 // ---- Next steps ----------------------------------------------------------------------------
@@ -208,7 +162,9 @@ export interface RecentRun {
   readonly target: { workflow: RunWorkflow; ownerId: string; runId: string };
 }
 
+/** Runs read and kept for Home; the card shows the first `RECENT_RUNS_VISIBLE` and the rest on request. */
 export const RECENT_RUNS_SHOWN = 8;
+export const RECENT_RUNS_VISIBLE = 5;
 /** Owners (collections, plans) read per source. */
 export const RECENT_RUN_OWNER_LIMIT = 10;
 

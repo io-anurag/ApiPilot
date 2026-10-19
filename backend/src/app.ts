@@ -21,6 +21,8 @@ import {
 } from "./api/testGenerationWorkflow";
 import { externalCollectionsRouter } from "./api/externalCollections";
 import { coverageRouter } from "./api/coverage";
+import { createSecurityLabRouter, securityLabRouter } from "./api/securityLab";
+import { createSecurityLabService, type SecurityLabDependencies } from "./securityLab/securityLabService";
 import { createFailureAnalysisRouter, failureAnalysisRouter } from "./api/failureAnalysis";
 import { createPerformanceTestingRouter, type PerformanceTestingDependencies } from "./api/performanceTesting";
 import { createQuickPerformanceRouter } from "./api/quickPerformance";
@@ -63,6 +65,11 @@ export interface CreateAppOptions {
    * runner here so `npm test` never needs k6.
    */
   performance?: Partial<PerformanceTestingDependencies>;
+  /**
+   * AP-057: replaces the Security Lab clock, workflow getter, limits, sender or resolver. Tests inject
+   * fakes here so `npm test` never sends a request to a real network.
+   */
+  securityLab?: Partial<SecurityLabDependencies>;
 }
 
 function defaultPerformanceDependencies(): PerformanceTestingDependencies {
@@ -159,6 +166,14 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // no active TestGenerationWorkflow is required for any endpoint below.
   app.use("/api", externalCollectionsRouter);
   app.use("/api", coverageRouter);
+  // AP-057: Security Lab. Retained work is keyed by the `apipilotOwner` cookie, which only this router sets
+  // (specs/057 research R22); session data keeps the session id. Nothing here runs unless the user starts it.
+  app.use(
+    "/api",
+    options?.securityLab || provider
+      ? createSecurityLabRouter(createSecurityLabService({ ...(provider ? { getAIProvider: () => provider } : {}), ...options?.securityLab }))
+      : securityLabRouter,
+  );
   const performanceDependencies = { ...defaultPerformanceDependencies(), ...options?.performance };
   // AP-029, AP-032 and AP-036: the runs recorded from the guided, quick and collection plans, read
   // only since AP-037 phase two retired those plans (specs/037-request-chain-performance FR-037).

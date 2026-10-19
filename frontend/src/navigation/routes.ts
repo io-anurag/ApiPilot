@@ -12,13 +12,19 @@ import { getLockReason } from "../components/workflowStageViewModel";
  * carries identifiers only: never names, content, values, ids or tokens.
  */
 
-export const DESTINATION_IDS = ["home", "guided", "import", "performance", "k6", "coverage"] as const;
+export const DESTINATION_IDS = ["home", "guided", "import", "performance", "k6", "coverage", "security"] as const;
 export type DestinationId = (typeof DESTINATION_IDS)[number];
+
+/** The four areas of Security Lab (AP-057 FR-003), addressable as `#/security/<area>`. A closed list. */
+export const SECURITY_AREAS = ["overview", "scenarios", "execution", "reports"] as const;
+export type SecurityArea = (typeof SECURITY_AREAS)[number];
 
 export interface Route {
   readonly view: DestinationId;
   /** Only with `view = "guided"`. */
   readonly stage?: WorkflowStageId;
+  /** Only with `view = "security"`. */
+  readonly area?: SecurityArea;
 }
 
 export interface RouteResolution {
@@ -42,6 +48,7 @@ const SEGMENT_TO_VIEW: Readonly<Record<string, DestinationId>> = {
   performance: "performance",
   k6: "k6",
   coverage: "coverage",
+  security: "security",
 };
 
 /** Returns null for anything that does not match the grammar exactly: no partial matches. */
@@ -52,7 +59,12 @@ export function parseRoute(hash: string): Route | null {
   const view = SEGMENT_TO_VIEW[segments[0]];
   if (view === undefined) return null;
   if (segments.length === 1) return { view };
-  if (view !== "guided" || segments.length !== 2) return null;
+  if (segments.length !== 2) return null;
+  if (view === "security") {
+    const area = SECURITY_AREAS.find((id) => id === segments[1]);
+    return area === undefined ? null : { view, area };
+  }
+  if (view !== "guided") return null;
   const stage = WORKFLOW_STAGE_ORDER.find((id) => id === segments[1]);
   return stage === undefined ? null : { view, stage };
 }
@@ -61,11 +73,12 @@ export function parseRoute(hash: string): Route | null {
 export function formatRoute(route: Route): string {
   if (route.view === "home") return "#/";
   if (route.view === "guided" && route.stage !== undefined) return `#/guided/${route.stage}`;
+  if (route.view === "security" && route.area !== undefined) return `#/security/${route.area}`;
   return `#/${route.view}`;
 }
 
 export function routesEqual(a: Route, b: Route): boolean {
-  return a.view === b.view && a.stage === b.stage;
+  return a.view === b.view && a.stage === b.stage && a.area === b.area;
 }
 
 /**

@@ -182,6 +182,39 @@ Under `/api/chain-plans` (`specs/037-request-chain-performance/contracts/chain-p
 | `POST`                 | `/runs/:runId/cancel`, `/runs/:runId/restore`                | Stop a run in progress (`202`); restore its chains and steps into the plan or a new plan.                                                  |
 | `GET`                  | `/runs/:runId/report`                                        | The self-contained HTML report; `?download=true` adds `Content-Disposition`.                                                               |
 
+## Security Lab endpoints
+
+Under `/api/security-lab` (`specs/057-security-lab-v1/contracts/security-lab-api.md`). Routes are scoped by the session cookie and by an owner cookie, `apipilotOwner` (`HttpOnly`, `SameSite=Lax`, 400 days), which only these routes issue or read; no id appears in a URL, header or body. Lists are paginated (`page`, `pageSize`, at most 100) and return `total`. Routes marked **M** need a loaded specification and answer `409 no_specification` without one; every other route reads retained work and works without it, and scenario replies then carry `specificationNotLoaded: true`. A run starts only on `POST /runs`, after a preview, and only with the confirmation the preview calls for.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/categories` | The registry: the eleven categories with support level, whether each can be generated or run, prerequisites and the taxonomy edition with each id and its relation (`primary` or `related`). |
+| `GET` | `/analysis` **M** | The specification analysis: effective security per operation and the classified observations. Deterministic; covers every operation. |
+| `GET`, `PUT` | `/settings` | The sensitive field names you configured (at most 100, names only, retained). |
+| `GET` | `/scope` **M** | The default generation scope: `{ mode: "selection" \| "all", selectedCount, totalCount }`. |
+| `POST` | `/scenarios/generate` **M** | Deterministic generation. Body `{ scope?, categories?, profileId? }`; `scope` defaults to the guided workflow's selection. Returns the applied scope, counts created, kept and versioned, rejected and capped scenarios and notes. `409 retention_limit_reached` at the cap. |
+| `POST` | `/scenarios/suggest` **M** | Optional AI suggestions, stored as drafts. Body `{ operationKeys?, categories? }`; returns `{ accepted, rejected, model, ignored }`. `503 ai_unavailable` with the readiness reason when no model is usable. |
+| `GET` | `/scenarios`, `/scenarios/ids`, `/scenarios/:id` | List with filters (`q`, `operation`, `category`, `severity`, `reviewState`, `executionStatus`, `flag`, `profileId`); the ids and current versions a filter matches (capped at 5,000); one scenario with its versions, approvals, flags and prerequisites. |
+| `PATCH` | `/scenarios/:id` **M** | Edit with `{ expectedVersion, changes, note? }`. `409 stale_version`, `409 scenario_rejected`, `422 scenario_invalid` with each violation as a JSON Pointer. |
+| `POST` | `/scenarios/review` | `{ action, items: [{ id, version }], reason?, destructiveConfirmations? }`. Items are explicit; a filter is never accepted. Replies `{ applied, refused }` with a reason code per item. Submit, approve and reopen need the specification. |
+| `GET`, `POST` | `/profiles` | List with `valid` and `problems`; create (`201`). `422 profile_invalid` carries each violation by code. |
+| `PUT`, `DELETE` | `/profiles/:id` | Replace; delete (`204`, `409 profile_in_use` while a run uses it). |
+| `POST` | `/profiles/:id/check` | Re-validate and resolve the base URL under the destination policy **without sending a request**. |
+| `PUT`, `GET` | `/profiles/:id/credentials` | Write-only `{ identity, scheme, kind, value }` (`204`; an empty value clears it). `GET` returns which credentials are set, never a value. |
+| `GET`, `POST`, `PUT` | `/environments`, `/environments/:environmentId` | The session's target environments as `{ id, name, tier, baseUrl }`, never variable values. |
+| `POST` | `/runs/preview` **M** | Validates what a run would and sends nothing. Returns the summary and a `planDigest`. `422 run_plan_invalid`. |
+| `POST` | `/runs` **M** | Start (`202`). Body repeats the preview's input and adds `planDigest` and `confirmation { targetName, targetBaseUrl, authorizationAttested, destructiveScenarioIds }`. `409 plan_changed`, `409 confirmation_required`, `409 execution_in_progress`, `422 run_plan_invalid`. |
+| `GET` | `/runs`, `/runs/:id` | Summaries; one run with outcomes, observed summaries and cleanup results. `?evidence=true&scenarioId=` adds the redacted evidence, `available: false` once the session has expired. |
+| `POST` | `/runs/:id/cancel` | Request cancellation (`202`); `409 no_run_in_progress`. |
+| `GET`, `PATCH` | `/findings`, `/findings/:id` | List (filters `severity`, `status`, `category`, `operation`, `runId`, `assessment`, `unreviewed`) and read one finding. `PATCH` takes `{ status?, severity?, acknowledgeOccurrences?, note }`; a note is required for a status or severity change (`422 invalid_finding_update`). Findings are created only by a run, never by a route. |
+| `GET` | `/findings/:id/occurrences/:resultId/evidence` | The redacted evidence of one occurrence, `{ available, records }`. |
+| `GET` | `/overview` | Counts that each open a matching list, scope, latest run and untested high-priority operations. |
+| `GET` | `/report?format=html\|json&runIds=` | The assessment as an attachment (`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`). `409 nothing_to_report`. Needs no specification. |
+| `GET` | `/export/postman` **M** | The approved scenarios as `{ collection, environment, readme, validation, limitations, summary, excluded }`. Optional `baseUrl` and `collectionName`. `409 no_approved_scenarios`, `422 export_failed`. |
+| `GET`, `DELETE` | `/data`, `/assessments/:assessmentKey`, `/data` | What is retained and what goes with the session; delete one assessment (body `{ confirm: "<label>" }`) or everything (`{ confirm: "DELETE ALL" }`), `204`. `409 execution_in_progress`, `422 confirmation_mismatch`, `404 assessment_not_found`. |
+
+Errors are `{ error, message, ...details }` with no stack, path or secret. The codes are `no_specification`, `invalid_request`, `category_not_generatable`, `scenario_not_found`, `stale_version`, `scenario_invalid`, `scenario_rejected`, `invalid_transition`, `destructive_confirmation_required`, `not_executable_content`, `profile_invalid`, `profile_in_use`, `run_plan_invalid`, `plan_changed`, `confirmation_required`, `execution_in_progress`, `no_run_in_progress`, `run_not_found`, `finding_not_found`, `invalid_finding_update`, `ai_unavailable`, `nothing_to_report`, `no_approved_scenarios`, `export_failed`, `retention_limit_reached`, `assessment_not_found` and `confirmation_mismatch`; an unexpected failure is a safe `500 internal_server_error`. While a Security Lab run is in progress, `execution/start` and every other run-start route answer `409 execution_in_progress`, and the reverse.
+
 ## External collection endpoints
 
 Mounted independently of the guided-workflow routes above — no active workflow is required for any endpoint below.

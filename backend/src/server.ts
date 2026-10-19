@@ -2,10 +2,12 @@ import "./loadEnv";
 import { createApp } from "./app";
 import { loadConfig, validateAIConfiguration, validateInputConfiguration } from "./config";
 import { createLogger } from "./logger";
+import { validateSecurityLabConfiguration } from "./securityLab/config";
 import { isLoopbackBindAddress } from "./security/localHostGuard";
 import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
+import { getSecurityRunRepository } from "./persistence/securityRunRepository";
 import { getUploadedCollectionRunRepository } from "./persistence/uploadedCollectionRunRepository";
 import { recoverPerformanceRunsAtStartup, recoverUserScriptRunsAtStartup } from "./performance/startup";
 
@@ -42,6 +44,7 @@ if (currentMajor < MIN_SUPPORTED_NODE_MAJOR) {
 const config = loadConfig();
 validateAIConfiguration();
 validateInputConfiguration();
+validateSecurityLabConfiguration();
 
 // Opens (and, on first run, initializes) the local persistence layer before anything else
 // starts, so a corrupted/unreadable database file fails startup explicitly rather than
@@ -75,6 +78,9 @@ getUploadedCollectionRunRepository().markInterruptedRunsCancelled();
 recoverPerformanceRunsAtStartup();
 // Same guard for an AP-034 user-script run (specs/034-run-user-k6-script FR-023).
 recoverUserScriptRunsAtStartup();
+// Same guard for an AP-057 Security Lab run (specs/057-security-lab-v1 research R12): it is never resumed, and what it
+// already recorded stays. It settles as cancelled/"backend-restart".
+getSecurityRunRepository().markInterruptedRunsCancelled(new Date().toISOString());
 
 const loopbackOnly = isLoopbackBindAddress(config.backendHost);
 

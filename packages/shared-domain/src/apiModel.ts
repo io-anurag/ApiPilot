@@ -25,6 +25,14 @@ export interface ApiModel {
   dependencyHints?: DependencyHint[];
   /** Definition input only. Informational, shown in review, never an execution target (specs/056 FR-052). */
   declaredBaseUrl?: string;
+  /**
+   * OpenAPI input only (specs/057 research R2): the document's root `security`, exactly as written. Together
+   * with `ApiOperation.securitySource` it lets Security Lab tell "inherited", "explicitly public" and
+   * "none declared" apart, which `ApiOperation.security` alone cannot.
+   */
+  rootSecurity?: SecurityRequirement[];
+  /** OpenAPI input only: whether the root declared `security` at all (`[]` counts as declared). */
+  rootSecurityDeclared?: boolean;
 }
 
 export interface ApiOperation {
@@ -41,6 +49,14 @@ export interface ApiOperation {
   requestBody: RequestBody | undefined;
   responses: Response[];
   security: SecurityRequirement[];
+  /**
+   * OpenAPI input only (specs/057 research R2): how `security` was determined. `operation` is the operation's own
+   * non-empty requirement, `explicit-public` its own `security: []`, `root` an inherited root requirement and
+   * `none-declared` neither. Unset for HAR and definition input, where it is not measurable.
+   */
+  securitySource?: "operation" | "root" | "explicit-public" | "none-declared";
+  /** OpenAPI input only: the operation's `deprecated` flag, when the specification sets it. */
+  deprecated?: boolean;
   tags: string[];
 }
 
@@ -105,6 +121,9 @@ export interface SchemaConstraint {
   maxLength?: number;
   minItems?: number;
   maxItems?: number;
+  /** OpenAPI input only, and only when the specification sets it (specs/057 R2). Never defaulted. */
+  readOnly?: boolean;
+  writeOnly?: boolean;
 }
 
 /** One requirement set (AND); ApiOperation.security is a list of these (OR). */
@@ -117,6 +136,10 @@ export interface SecuritySchemeDefinition {
   scheme?: string;
   in?: string;
   name?: string;
+  /** Only when the specification declares it (specs/057 R2), for example `JWT` on an HTTP bearer scheme. */
+  bearerFormat?: string;
+  /** Only for `type: "openIdConnect"`, verbatim from the specification. Never fetched. */
+  openIdConnectUrl?: string;
   /** Present only for `type: "oauth2"` when the specification declares a `clientCredentials`
    *  flow; absent for every other scheme and for an oauth2 scheme with no such flow. Read
    *  verbatim from the specification — never inferred. */

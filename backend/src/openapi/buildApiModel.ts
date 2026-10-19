@@ -63,6 +63,9 @@ function extractSchemaConstraint(
   if (typeof node.maxLength === "number") constraint.maxLength = node.maxLength;
   if (typeof node.minItems === "number") constraint.minItems = node.minItems;
   if (typeof node.maxItems === "number") constraint.maxItems = node.maxItems;
+  // specs/057 research R2: carried only when the specification sets them, never defaulted.
+  if (typeof node.readOnly === "boolean") constraint.readOnly = node.readOnly;
+  if (typeof node.writeOnly === "boolean") constraint.writeOnly = node.writeOnly;
   if (isPlainObject(node.properties)) {
     for (const [key, value] of Object.entries(node.properties)) {
       constraint.properties[key] = extractSchemaConstraint(value, seen, depth + 1);
@@ -116,6 +119,9 @@ function mergeSchemaConstraint(into: SchemaConstraint, branch: SchemaConstraint)
   into.minItems ??= branch.minItems;
   into.maxItems ??= branch.maxItems;
   into.items ??= branch.items;
+  // Assigned only when defined, so a merge never adds an own `undefined` key to a model that had none.
+  if (into.readOnly === undefined && branch.readOnly !== undefined) into.readOnly = branch.readOnly;
+  if (into.writeOnly === undefined && branch.writeOnly !== undefined) into.writeOnly = branch.writeOnly;
 }
 
 
@@ -267,6 +273,20 @@ function extractSecurity(rawSecurity: unknown): SecurityRequirement[] {
   return requirements;
 }
 
+/**
+ * How an operation's effective security was determined (specs/057 research R2). An operation's own
+ * `security` array always wins; an own `[]` means public by declaration. Without one, a non-empty root
+ * requirement is inherited, and an absent or empty root leaves nothing declared.
+ */
+function resolveSecuritySource(
+  operationSecurity: unknown,
+  rootSecurity: unknown,
+): NonNullable<ApiOperation["securitySource"]> {
+  if (Array.isArray(operationSecurity)) return operationSecurity.length === 0 ? "explicit-public" : "operation";
+  if (Array.isArray(rootSecurity) && rootSecurity.length > 0) return "root";
+  return "none-declared";
+}
+
 /** The document's `info.title`/`info.version`, when `info.title` is a non-empty string (never fabricated). */
 function extractInfo(document: Record<string, unknown>): ApiInfo | undefined {
   const info = document.info;
@@ -314,6 +334,10 @@ function extractSecuritySchemes(document: Record<string, unknown>): Record<strin
       scheme: typeof value.scheme === "string" ? value.scheme : undefined,
       in: typeof value.in === "string" ? value.in : undefined,
       name: typeof value.name === "string" ? value.name : undefined,
+      ...(typeof value.bearerFormat === "string" ? { bearerFormat: value.bearerFormat } : {}),
+      ...(value.type === "openIdConnect" && typeof value.openIdConnectUrl === "string"
+        ? { openIdConnectUrl: value.openIdConnectUrl }
+        : {}),
       ...(flows ? { flows } : {}),
     };
   }
@@ -385,6 +409,7 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
         // Explicit operation-level security (including an empty array override) always
         // wins over the document-level default; only fall back when truly absent.
         const security = extractSecurity(operation.security ?? document.security);
+        const securitySource = resolveSecuritySource(operation.security, document.security);
 
         operations.push({
           path,
@@ -394,6 +419,8 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
           requestBody,
           responses,
           security,
+          securitySource,
+          ...(typeof operation.deprecated === "boolean" ? { deprecated: operation.deprecated } : {}),
           tags: Array.isArray(operation.tags)
             ? (operation.tags as unknown[]).filter((t): t is string => typeof t === "string")
             : [],
@@ -418,5 +445,13 @@ export function buildApiModel(document: Record<string, unknown>, priorIssues: An
     schemaCount: summary.schemaCount,
     issueCount: summary.issues.length,
   });
-  return { operations, securitySchemes, summary, info: extractInfo(document) };
+  const rootSecurityDeclared = Array.isArray(document.security);
+  return {
+    operations,
+    securitySchemes,
+    summary,
+    info: extractInfo(document),
+    rootSecurityDeclared,
+    ...(rootSecurityDeclared ? { rootSecurity: extractSecurity(document.security) } : {}),
+  };
 }
