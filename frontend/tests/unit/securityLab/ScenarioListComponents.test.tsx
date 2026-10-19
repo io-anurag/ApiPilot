@@ -230,6 +230,30 @@ describe("ScopeBanner (T075, FR-004, FR-018)", () => {
     expect(onGenerated).toHaveBeenCalledTimes(1);
   });
 
+  it("offers to widen a narrower selection to every operation, and generates for all of them (FR-018)", async () => {
+    fetchScope.mockResolvedValue({ ok: true, data: { mode: "selection", selectedCount: 1, totalCount: 9 } });
+    generateScenarios.mockResolvedValue({ ok: true, data: { ...reply, scope: { mode: "all", included: 9, excluded: 0 } } });
+    const onGenerated = vi.fn();
+    renderActive(<ScopeBanner categories={CATEGORIES} onGenerated={onGenerated} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Widen to all 9 operations and generate" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Generated for 9 operations (0 left out)");
+    expect(generateScenarios).toHaveBeenCalledWith({ scope: { mode: "all" } });
+    expect(onGenerated).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no widening when the scope already covers every operation, or the selection is all of them", async () => {
+    fetchScope.mockResolvedValue({ ok: true, data: { mode: "all", selectedCount: 9, totalCount: 9 } });
+    const { unmount } = renderActive(<ScopeBanner categories={CATEGORIES} onGenerated={vi.fn()} />);
+    await screen.findByTestId("scope-text");
+    expect(screen.queryByRole("button", { name: /Widen to all/ })).not.toBeInTheDocument();
+    unmount();
+
+    fetchScope.mockResolvedValue({ ok: true, data: { mode: "selection", selectedCount: 9, totalCount: 9 } });
+    renderActive(<ScopeBanner categories={CATEGORIES} onGenerated={vi.fn()} />);
+    await screen.findByTestId("scope-text");
+    expect(screen.queryByRole("button", { name: /Widen to all/ })).not.toBeInTheDocument();
+  });
+
   it("limits generation to the ticked categories, and to all when none is ticked", async () => {
     fetchScope.mockResolvedValue({ ok: true, data: { mode: "all", selectedCount: 9, totalCount: 9 } });
     generateScenarios.mockResolvedValue({ ok: true, data: reply });

@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import { Tabs, type TabItem } from "../components/Tabs";
+import { ExecutionArea } from "../components/securityLab/ExecutionArea";
 import { OverviewArea } from "../components/securityLab/OverviewArea";
+import { ReportsArea } from "../components/securityLab/ReportsArea";
 import { ScenariosArea } from "../components/securityLab/ScenariosArea";
+import { areaForIntent, type SecurityLabIntent } from "../components/securityLab/navigationIntent";
 import { SpecNotLoadedNotice } from "../components/securityLab/SpecNotLoadedNotice";
 import { RESULTS_VIEWS } from "../components/workflowCatalog";
 import { SECURITY_AREAS, type SecurityArea } from "../navigation/routes";
@@ -30,8 +34,19 @@ export interface SecurityLabPageProps {
  * shown (the shell hides it), so a run's progress and unsaved edits survive moving around the product.
  */
 export function SecurityLabPage({ specificationLoaded, area, onAreaChange }: Readonly<SecurityLabPageProps>) {
+  const [intent, setIntent] = useState<SecurityLabIntent | null>(null);
   const active: SecurityArea = area ?? "overview";
   if (!SECURITY_AREAS.includes(active)) return null;
+
+  // Choosing an area by its tab always starts unfiltered; only an intent (a count or a link) opens a filtered list.
+  const chooseArea = (next: SecurityArea) => {
+    setIntent(null);
+    onAreaChange(next);
+  };
+  const open = (next: SecurityLabIntent) => {
+    setIntent(next);
+    onAreaChange(areaForIntent(next));
+  };
 
   return (
     <div data-testid="security-lab-page" className="space-y-4">
@@ -42,7 +57,7 @@ export function SecurityLabPage({ specificationLoaded, area, onAreaChange }: Rea
 
       {specificationLoaded === false && <SpecNotLoadedNotice />}
 
-      <Tabs tabs={AREA_TABS} activeTab={active} onChange={onAreaChange} label="Security Lab areas" />
+      <Tabs tabs={AREA_TABS} activeTab={active} onChange={chooseArea} label="Security Lab areas" />
 
       {specificationLoaded === null ? (
         <div role="status" aria-label="Loading Security Lab" className="space-y-3">
@@ -51,17 +66,27 @@ export function SecurityLabPage({ specificationLoaded, area, onAreaChange }: Rea
         </div>
       ) : (
         <section aria-label={AREA_TABS.find((tab) => tab.id === active)?.label} data-testid={`security-area-${active}`}>
-          <AreaContent area={active} />
+          <AreaContent area={active} intent={intent} onOpen={open} specificationLoaded={specificationLoaded} />
         </section>
       )}
     </div>
   );
 }
 
-/** The content of one area. Areas not built yet say so plainly; each later step replaces its entry here. */
-function AreaContent({ area }: Readonly<{ area: SecurityArea }>) {
-  if (area === "overview") return <OverviewArea />;
-  if (area === "scenarios") return <ScenariosArea />;
+/** The content of one area. */
+function AreaContent({
+  area,
+  intent,
+  onOpen,
+  specificationLoaded,
+}: Readonly<{ area: SecurityArea; intent: SecurityLabIntent | null; onOpen: (intent: SecurityLabIntent) => void; specificationLoaded: boolean | null }>) {
+  if (area === "overview") return <OverviewArea onOpen={onOpen} />;
+  if (area === "scenarios") {
+    const scenarios = intent?.kind === "scenarios" ? intent : undefined;
+    return <ScenariosArea initialFilters={scenarios?.filters} initialSelectedId={scenarios?.selectScenarioId ?? null} specificationLoaded={specificationLoaded !== false} />;
+  }
+  if (area === "execution") return <ExecutionArea intent={intent} onNavigate={onOpen} specificationLoaded={specificationLoaded} />;
+  if (area === "reports") return <ReportsArea specificationLoaded={specificationLoaded !== false} />;
   const label = AREA_TABS.find((tab) => tab.id === area)?.label ?? "This area";
   return <EmptyState message={`${label} is not available yet.`} description="It is built in a later step of this feature." />;
 }

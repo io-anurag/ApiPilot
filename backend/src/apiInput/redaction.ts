@@ -39,6 +39,8 @@ const EXACT_FIELD_KINDS: Readonly<Record<string, CredentialKind>> = {
   auth: "token",
   authorization: "token",
   jwt: "token",
+  cookie: "cookie",
+  cookies: "cookie",
   code: "token",
 };
 

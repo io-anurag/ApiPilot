@@ -79,6 +79,10 @@ export function createSecurityLabRouter(service: SecurityLabService = createSecu
     "/security-lab/scenarios/generate",
     handle((req) => service.generate(req.body)),
   );
+  router.post(
+    "/security-lab/scenarios/suggest",
+    handle((req) => service.suggest(req.body)),
+  );
   router.get(
     "/security-lab/scenarios/ids",
     handle((req) => service.listScenarioIds(req.query)),
@@ -136,6 +140,91 @@ export function createSecurityLabRouter(service: SecurityLabService = createSecu
   router.get(
     "/security-lab/profiles/:id/credentials",
     handle((req) => service.getCredentials(req.params.id)),
+  );
+  router.get(
+    "/security-lab/export/postman",
+    handle((req) => service.exportPostman(req.query)),
+  );
+  router.get(
+    "/security-lab/overview",
+    handle(() => service.getOverview()),
+  );
+  router.get(
+    "/security-lab/report",
+    handle((req, res) => {
+      const report = service.getReport(req.query);
+      res
+        .status(200)
+        .set({
+          "Content-Type": report.format === "html" ? "text/html; charset=utf-8" : "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${report.fileName}"`,
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        })
+        .send(report.body);
+    }),
+  );
+  router.get(
+    "/security-lab/data",
+    handle(() => service.getRetainedData()),
+  );
+  router.delete(
+    "/security-lab/assessments/:assessmentKey",
+    handle((req, res) => {
+      service.deleteAssessment(req.params.assessmentKey, req.body);
+      res.status(204).end();
+    }),
+  );
+  router.delete(
+    "/security-lab/data",
+    handle((req, res) => {
+      service.deleteEverything(req.body);
+      res.status(204).end();
+    }),
+  );
+  router.get(
+    "/security-lab/findings",
+    handle((req) => service.listFindings(req.query)),
+  );
+  router.get(
+    "/security-lab/findings/:id",
+    handle((req) => service.getFinding(req.params.id)),
+  );
+  router.get(
+    "/security-lab/findings/:id/occurrences/:resultId/evidence",
+    handle((req) => service.getFindingEvidence(req.params.id, req.params.resultId)),
+  );
+  router.patch(
+    "/security-lab/findings/:id",
+    handle((req) => service.patchFinding(req.params.id, req.body)),
+  );
+  router.post(
+    "/security-lab/runs/preview",
+    handle((req) => service.previewRun(req.body)),
+  );
+  router.post(
+    "/security-lab/runs",
+    handle((req, res) => {
+      const started = service.startRun(req.body);
+      res.status(202);
+      return started;
+    }),
+  );
+  router.get(
+    "/security-lab/runs",
+    handle(() => service.listRuns()),
+  );
+  router.get(
+    "/security-lab/runs/:id",
+    handle((req) => service.getRun(req.params.id, req.query)),
+  );
+  router.post(
+    "/security-lab/runs/:id/cancel",
+    handle((req, res) => {
+      const cancelled = service.cancelRun(req.params.id);
+      res.status(202);
+      return cancelled;
+    }),
   );
   router.get(
     "/security-lab/environments",

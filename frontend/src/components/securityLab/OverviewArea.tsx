@@ -10,6 +10,8 @@ import { Card, CardHeader } from "../patterns/Card";
 import { Skeleton } from "../Skeleton";
 import { StatTile } from "../StatTile";
 import { CategoryTable } from "./CategoryTable";
+import type { SecurityLabIntent } from "./navigationIntent";
+import { OverviewSummary } from "./OverviewSummary";
 import { ObservationList } from "./ObservationList";
 import { SensitiveFieldsEditor } from "./SensitiveFieldsEditor";
 import { classificationVariant } from "./securityViewModel";
@@ -17,14 +19,26 @@ import { classificationVariant } from "./securityViewModel";
 type Filter = "all" | Exclude<ObservationClass, "potential-risk">;
 
 /**
- * The Overview area (specs/057 FR-060). This step shows the specification analysis: counts by
- * classification, the potential risks as their own labelled group, the other observations, the category
- * registry and the sensitive-field setting. Potential risks come from the specification alone and are never
- * shown as findings, which only a run can produce.
+ * The Overview area (specs/057 FR-060). Two labelled halves that are never added together: the retained work (scenario
+ * and finding counts that open their lists, the latest run, what nothing has tested) and the specification analysis
+ * (potential risks and other observations, which prove nothing about a running service, the category registry and the
+ * sensitive-field setting). Each half has its own loading, error and empty state, so one failing never hides the other,
+ * and the retained half needs no specification.
  */
-export function OverviewArea() {
-  const analysis = useSecurityResource((signal) => fetchAnalysis({ signal }));
+export function OverviewArea({ onOpen }: Readonly<{ onOpen?: (intent: SecurityLabIntent) => void }> = {}) {
   const categories = useSecurityResource((signal) => fetchCategories({ signal }));
+  const names = useMemo(() => Object.fromEntries((categories.data?.categories ?? []).map((category) => [category.id, category.name])), [categories.data]);
+  return (
+    <div className="space-y-6" data-testid="security-overview-root">
+      <OverviewSummary categoryNames={names} onOpen={onOpen ?? (() => undefined)} />
+      <AnalysisSection categories={categories.data} />
+    </div>
+  );
+}
+
+/** Potential risks and other observations from the specification analysis: evidence from the specification alone, not from requests sent. */
+function AnalysisSection({ categories }: Readonly<{ categories: CategoriesReply | null }>) {
+  const analysis = useSecurityResource((signal) => fetchAnalysis({ signal }));
   const [filter, setFilter] = useState<Filter>("all");
 
   const observations = analysis.data?.analysis.observations ?? [];
@@ -48,7 +62,7 @@ export function OverviewArea() {
     return (
       <div className="space-y-4">
         <EmptyState message="There is no analysis to show yet." description="Security analysis needs a specification. Upload one in the Guided Workflow." testId="security-analysis-empty" />
-        {categories.data && <CategoriesCard categories={categories.data} />}
+        {categories && <CategoriesCard categories={categories} />}
       </div>
     );
   }
@@ -133,7 +147,7 @@ export function OverviewArea() {
         <ObservationList observations={others} caption="Other observations from the specification" testId="security-observation-list" />
       </Card>
 
-      {categories.data && <CategoriesCard categories={categories.data} />}
+      {categories && <CategoriesCard categories={categories} />}
 
       <Card as="section" aria-labelledby="security-fields-heading">
         <CardHeader title="Sensitive fields you configure" titleId="security-fields-heading" />

@@ -14,6 +14,7 @@ import { ScenarioFilters } from "./ScenarioFilters";
 import { ScenarioList } from "./ScenarioList";
 import { ScenarioReviewActions } from "./ScenarioReviewActions";
 import { ScopeBanner } from "./ScopeBanner";
+import { SuggestPanel } from "./SuggestPanel";
 import { EMPTY_FILTERS, activeFilterCount } from "./scenarioViewModel";
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -25,18 +26,22 @@ const DEFAULT_PAGE_SIZE = 25;
  * a specification are unavailable, each with its reason. After any change the list, the open scenario and the batch
  * set are read again, so nothing on screen is older than the change that was just made.
  */
-export function ScenariosArea() {
+export function ScenariosArea({
+  initialFilters = EMPTY_FILTERS,
+  initialSelectedId = null,
+  specificationLoaded = true,
+}: Readonly<{ initialFilters?: ScenarioFilterQuery; initialSelectedId?: string | null; specificationLoaded?: boolean }> = {}) {
   const categories = useSecurityResource((signal) => fetchCategories({ signal }));
-  const [filters, setFilters] = useState<ScenarioFilterQuery>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<ScenarioFilterQuery>(initialFilters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [editing, setEditing] = useState(false);
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);
   const detailRef = useRef<HTMLDivElement>(null);
-  const focusDetail = useRef(false);
+  const focusDetail = useRef(initialSelectedId !== null);
   const headingId = useId();
 
   const list = useSecurityResource((signal) => listScenarios(filters, { page, pageSize }, { signal }), [filters, page, pageSize]);
@@ -203,6 +208,8 @@ export function ScenariosArea() {
       </Banner>
 
       <ScopeBanner categories={categories.data?.categories ?? []} onGenerated={refreshAll} />
+
+      <SuggestPanel specificationLoaded={specificationLoaded} categoryNames={categoryNames} onSuggested={refreshAll} />
 
       <Card as="section" aria-labelledby="scenarios-heading">
         <CardHeader title="Scenarios" titleId="scenarios-heading" subtitle={list.data ? `${list.data.total} matching the current filters` : undefined} />

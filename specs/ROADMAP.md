@@ -4121,3 +4121,60 @@ Implementation
       model but not held to the three-observation threshold; the dark-mode and responsive visual pass of the new screens and the
       hand run of the quickstart in a browser were not done in this session.
     - Version bumped to 19.59.0 (root, backend, frontend, shared-domain), after `AP-055` (entry 101, 19.58.0).
+
+103. **AP-057: Security Lab, V1; version 19.60.0 (2026-10-19).**
+    - `specs/057-security-lab-v1`. A new destination, **Security Lab** (`#/security`, areas `#/security/overview`, `/scenarios`,
+      `/execution`, `/reports`), that analyzes a specification for security questions, generates security scenarios, takes them through
+      version-bound review and approval, runs the approved ones against a target the engineer may test, evaluates the evidence
+      deterministically, records findings, reports and exports. Analysis, generation, evaluation, severity and confidence are pure and
+      AI-free; the one AI feature goes through `AIProvider` only. Existing outputs (test model, review projection, Postman collection,
+      specification revision) are byte-identical, pinned by `existingOutputsUnchanged.test.ts`, which was captured before any code change.
+    - Constitution amended 3.2.0 to 3.3.0 (Principle XVII: binding guidance for outbound security testing). Every 3.3.0 condition has a
+      contract rule and a test.
+    - Clarifications settled with the user (2026-10-18): scenarios, versions, findings and report-relevant run summaries survive session
+      expiry for the same browser until deleted, while credentials, profiles and raw evidence go with the session (two lifetimes, an
+      owner cookie `apipilotOwner`); analysis and the Overview cover every operation while generation defaults to the guided workflow's
+      selection and can be widened; one finding per scenario version, a repeat failure adds an occurrence and reopens a resolved finding.
+      Two design decisions changed during implementation and are recorded in the spec: credentials are held in a write-only,
+      session-scoped, encrypted store, so no existing environment route or its AP-032 gate changed (research R8); and approval does not
+      depend on a profile's prerequisites, which are session data, so an incomplete scenario can be approved and then waits.
+    - **Overview.** Counts of retained work that each open the list they count, kept apart from the specification analysis and labelled
+      with their evidence basis ("Potential risks (specification analysis)", "Findings (from requests sent)"); the latest run; the
+      high-priority operations nothing has tested, with the reason; the standing note that analysis cannot prove a vulnerability.
+    - **Scenarios.** Eleven categories mapped to the OWASP API Top 10 2023 with ApiPilot's own support level (eight supported, two
+      limited, one analysis only); schema-validated deterministic generation with stable ids, caps that report what they left out and
+      named product rules where the specification documents no status; scope control; immutable version 1, versioned edits and an
+      approval bound to a content hash, so a material edit withdraws it; batch review over explicit `{id, version}` items that excludes
+      destructive and incomplete scenarios by default; stale and orphaned handling; optional AI suggestions stored as drafts.
+    - **Execution and findings.** Target profiles with allowed hosts and ports, tiers (production refused), write-only credentials and a
+      destination policy evaluated at connect time and on every redirect hop (rebinding, metadata and unspecified addresses, non-public
+      addresses only for a local profile that lists them); a preview that sends nothing and a start bound to its digest; bounded,
+      cancellable runs with a budget counted before each send and cleanup reported when it fails; redacted evidence kept for the
+      session and a bounded observed summary kept after it; outcomes that never count a block, error or cancellation as a pass; one
+      finding per scenario version with occurrences, rule-assigned confidence, a suggested severity that is never raised, and status
+      changes with notes.
+    - **Reports and retention.** A deterministic HTML or JSON report built from retained work that needs no specification; retained-data
+      management with typed-confirmation delete per assessment or of everything; per-browser caps. **Export:** a deterministic, secret-free
+      Postman collection of approved versions, with scenarios it cannot express (repeat, persisted state, condition) listed as limitations.
+    - **Added late in this session.** The Suggest control (`SuggestPanel`) and the export action (`SecurityExportPanel`), the three new
+      limitation headings, and a **Widen to all operations and generate** action, because FR-018 requires widening and the Scenarios
+      area offered only the current scope. `SuggestReply` and `SecurityExportReply` moved to shared-domain.
+    - **Configuration.** `SECURITY_LAB_MAX_REQUESTS_CEILING` (500), `SECURITY_LAB_MAX_CONCURRENCY_CEILING` (4),
+      `SECURITY_LAB_TIMEOUT_MS_CEILING` (30000), `SECURITY_LAB_MAX_REPEAT_CEILING` (50), `SECURITY_LAB_MAX_RETAINED_SCENARIOS` (20000),
+      `SECURITY_LAB_MAX_RETAINED_RUNS` (500), validated at startup. Nine tables were added to the existing SQLite schema, six
+      owner-scoped and three session-scoped.
+    - **Docs.** README, user manual (sidebar, section 6c, limitations), architecture (Security Lab), HTTP API, configuration, status.
+    - Tests: the full suite has 567 files and 6709 tests (6697 passed, 11 skipped, 1 failed), against 4965 passed, 11 skipped and 1
+      failed before the work; the one failure is the same before and after (`packages/shared-domain/tests/unit/requestChain.test.ts`,
+      `accepts every supported dynamic variable`, expected 48 names and found 50, from the uncommitted AP-056 follow-up and unrelated to
+      this feature). 86 files and 1699 tests concern Security Lab. New coverage includes the destination matrix, rebinding and redirects,
+      a bypass test that calls the service with no router, budget and cancel and cleanup-failure tests, a seeded-secret corpus over
+      evidence, summaries, retained rows, findings, logs, report and export, the finding-occurrence rules, retention across forced session
+      expiry, owner isolation, 2,000-scenario scale, and accessibility tests for every area. `npm run lint` and `npm run build` pass.
+    - Not covered: **the manual walkthrough in a real browser was not run**, including the light and dark theme and 375 px visual pass;
+      the owner cookie's survival across a browser restart and its absence in a private window were not checked in real browsers (spike
+      T004), so only its attributes are tested; no run was made against a real target, only loopback sample targets, and the default
+      limits are untuned; the AI suggestion was exercised only with a stub provider and has no evaluation corpus; generation cannot yet be
+      narrowed to hand-picked operations from the UI (the API accepts a custom scope; widening and category limits exist); OAuth2 token
+      exchange, sensitive business flows and SSRF have no executable scenarios; production targets are refused.
+    - Version bumped to 19.60.0 (root, backend, frontend, shared-domain), after `AP-056` (entry 102, 19.59.0).

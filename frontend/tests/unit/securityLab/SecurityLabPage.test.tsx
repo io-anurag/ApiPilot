@@ -34,6 +34,18 @@ describe("SecurityLabPage shell (FR-001 to FR-004)", () => {
     expect(screen.getByTestId("security-area-reports")).toBeInTheDocument();
   });
 
+  it("shows the Scenarios area, not a placeholder", () => {
+    renderPage({ area: "scenarios" });
+    expect(within(screen.getByTestId("security-area-scenarios")).getByTestId("security-scenarios")).toBeInTheDocument();
+    expect(screen.queryByText("Scenarios is not available yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows the Execution and Findings area, not a placeholder", () => {
+    renderPage({ area: "execution" });
+    expect(within(screen.getByTestId("security-area-execution")).getByTestId("security-execution")).toBeInTheDocument();
+    expect(screen.queryByText("Execution and Findings is not available yet.")).not.toBeInTheDocument();
+  });
+
   it("asks the shell to change the address when an area is chosen", () => {
     const { onAreaChange } = renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Scenarios" }));

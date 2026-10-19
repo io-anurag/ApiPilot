@@ -170,7 +170,9 @@ export function createApp(provider?: AIProvider, options?: CreateAppOptions) {
   // (specs/057 research R22); session data keeps the session id. Nothing here runs unless the user starts it.
   app.use(
     "/api",
-    options?.securityLab ? createSecurityLabRouter(createSecurityLabService(options.securityLab)) : securityLabRouter,
+    options?.securityLab || provider
+      ? createSecurityLabRouter(createSecurityLabService({ ...(provider ? { getAIProvider: () => provider } : {}), ...options?.securityLab }))
+      : securityLabRouter,
   );
   const performanceDependencies = { ...defaultPerformanceDependencies(), ...options?.performance };
   // AP-029, AP-032 and AP-036: the runs recorded from the guided, quick and collection plans, read

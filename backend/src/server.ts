@@ -7,6 +7,7 @@ import { isLoopbackBindAddress } from "./security/localHostGuard";
 import { getSharedConnection } from "./persistence/connection";
 import { PersistenceInitializationError } from "./persistence/errors";
 import { getExecutionRunRepository } from "./persistence/executionRunRepository";
+import { getSecurityRunRepository } from "./persistence/securityRunRepository";
 import { getUploadedCollectionRunRepository } from "./persistence/uploadedCollectionRunRepository";
 import { recoverPerformanceRunsAtStartup, recoverUserScriptRunsAtStartup } from "./performance/startup";
 
@@ -77,6 +78,9 @@ getUploadedCollectionRunRepository().markInterruptedRunsCancelled();
 recoverPerformanceRunsAtStartup();
 // Same guard for an AP-034 user-script run (specs/034-run-user-k6-script FR-023).
 recoverUserScriptRunsAtStartup();
+// Same guard for an AP-057 Security Lab run (specs/057-security-lab-v1 research R12): it is never resumed, and what it
+// already recorded stays. It settles as cancelled/"backend-restart".
+getSecurityRunRepository().markInterruptedRunsCancelled(new Date().toISOString());
 
 const loopbackOnly = isLoopbackBindAddress(config.backendHost);
 

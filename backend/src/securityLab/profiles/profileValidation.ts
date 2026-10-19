@@ -1,4 +1,14 @@
-import type { ApiModel, CleanupStrategy, EnvironmentTier, SecurityProfileInput, TestDataEntry, TestIdentity, TlsPolicy } from "@apipilot/shared-domain";
+import type {
+  ApiModel,
+  CleanupStrategy,
+  EnvironmentTier,
+  ProfileViolation,
+  ProfileViolationCode,
+  SecurityProfileInput,
+  TestDataEntry,
+  TestIdentity,
+  TlsPolicy,
+} from "@apipilot/shared-domain";
 import { operationKeyOf } from "../analysis/effectiveSecurity";
 import { PROFILE_DEFAULTS, type SecurityLabLimits } from "../config";
 import { SecurityLabError, invalidRequest } from "../errors";
@@ -14,39 +24,6 @@ import { allowsRelaxedTls, allowsRestrictedAddresses, isProductionTier } from ".
  * the engineer can fix them in one pass. Validation runs on save and again on use, because the specification and
  * the environment can change between the two.
  */
-
-export const PROFILE_VIOLATION_CODES = [
-  "production_tier_refused",
-  "base_url_blocked",
-  "allowed_host_invalid",
-  "address_ranges_local_only",
-  "invalid_address_range",
-  "relaxed_tls_local_only",
-  "limit_above_ceiling",
-  "limit_too_low",
-  "unknown_category",
-  "category_not_executable",
-  "identity_name_duplicate",
-  "identity_scheme_unknown",
-  "test_data_identity_unknown",
-  "test_data_operation_unknown",
-  "test_data_credential_shaped",
-  // Raised by the profile service rather than the pure rules: they need the store, the session or the network.
-  "environment_not_found",
-  "name_duplicate",
-  "credential_identity_unknown",
-  "credential_scheme_not_declared",
-  "host_not_resolved",
-  "destination_blocked",
-] as const;
-export type ProfileViolationCode = (typeof PROFILE_VIOLATION_CODES)[number];
-
-export interface ProfileViolation {
-  /** A path into the submitted profile, such as `identities[1].credentialSchemes[0]`. */
-  field: string;
-  code: ProfileViolationCode;
-  message: string;
-}
 
 export interface ProfileValidationContext {
   readonly environment: { readonly name: string; readonly tier: EnvironmentTier; readonly baseUrl: string };

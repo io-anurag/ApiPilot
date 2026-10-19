@@ -156,6 +156,11 @@ export function ScopeBanner({ categories, onGenerated }: Readonly<{ categories: 
         <button type="button" onClick={() => void generate(mode)} disabled={generating} className={BUTTON_STYLES.primary}>
           {generating ? "Generating..." : "Generate scenarios"}
         </button>
+        {mode === "selection" && selectedCount < totalCount && (
+          <button type="button" onClick={() => void generate("all")} disabled={generating} className={BUTTON_STYLES.secondary}>
+            Widen to all {totalCount} operations and generate
+          </button>
+        )}
       </div>
       {error && (
         <div className="mt-3">

@@ -13,7 +13,7 @@ export const SECRET_COOKIE_VALUE = "sl-seed-cookie-9d8c7b6a5f4e3d2c1b0a";
 export const SECRET_PASSWORD_FIELD = "sl-seed-password-field-Hn4$wP8&rL1y";
 export const SECRET_JSON_TOKEN = "sl-seed-json-token-e1d2c3b4a5968778695a4b3c";
 export const SECRET_ERROR_TEXT = "sl-seed-error-secret-0f1e2d3c4b5a69788796a5b4";
-export const SECRET_SHAPED_RESPONSE_FIELD = "sl-seed-shaped-eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2VlZA";
+export const SECRET_SHAPED_RESPONSE_FIELD = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzbC1zZWVkLXNoYXBlZCJ9.c2wtc2VlZC1zaGFwZWQtc2ln";
 
 /** Every seeded value, for exhaustive assertions. */
 export const ALL_SECRETS: readonly string[] = [

@@ -284,6 +284,7 @@ export function outcomeSummary(action: SecurityReviewAction, applied: number, re
   const total = applied + refused;
   const noun = total === 1 ? "scenario" : "scenarios";
   if (refused === 0) return `${applied} of ${total} ${noun} ${applied === 1 ? "was" : "were"} ${pastTense(action)}.`;
+  if (applied === 0 && total === 1) return `The scenario was not ${pastTense(action)}: it was refused.`;
   if (applied === 0) return `None of the ${total} ${noun} ${total === 1 ? "was" : "were"} ${pastTense(action)}; ${refused === 1 ? "it was" : "all were"} refused.`;
   return `${applied} of ${total} scenarios ${applied === 1 ? "was" : "were"} ${pastTense(action)}; ${refused} ${refused === 1 ? "was" : "were"} refused.`;
 }

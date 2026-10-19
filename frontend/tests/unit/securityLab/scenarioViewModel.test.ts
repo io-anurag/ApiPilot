@@ -254,6 +254,7 @@ describe("outcomeSummary", () => {
     expect(outcomeSummary("approve", 3, 2)).toBe("3 of 5 scenarios were approved; 2 were refused.");
     expect(outcomeSummary("approve", 5, 0)).toBe("5 of 5 scenarios were approved.");
     expect(outcomeSummary("reject", 0, 2)).toBe("None of the 2 scenarios were rejected; all were refused.");
+    expect(outcomeSummary("submit", 0, 1)).toBe("The scenario was not submitted for review: it was refused.");
     expect(outcomeSummary("submit", 1, 0)).toBe("1 of 1 scenario was submitted for review.");
     expect(outcomeSummary("withdraw", 1, 2)).toBe("1 of 3 scenarios was withdrawn; 2 were refused.");
   });

@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import {
   SECURITY_REVIEW_ACTIONS,
   TAXONOMY_EDITION,
+  type AIProvider,
   type ScenarioDetail,
   type SecurityProfile,
   type SecurityReviewAction,
@@ -9,6 +11,8 @@ import {
 import { specificationRevision } from "../apiCoverage/specRevision";
 import { getSecurityCredentialRepository } from "../persistence/securityCredentialRepository";
 import { getSecurityProfileRepository } from "../persistence/securityProfileRepository";
+import { getSecurityEvidenceRepository } from "../persistence/securityEvidenceRepository";
+import { getSecurityFindingRepository } from "../persistence/securityFindingRepository";
 import { getSecurityRunRepository } from "../persistence/securityRunRepository";
 import { getSecurityScenarioRepository } from "../persistence/securityScenarioRepository";
 import { getSessionId } from "../session/sessionContext";
@@ -21,6 +25,20 @@ import { invalidRequest, noSpecification, profileNotFound, scenarioNotFound } fr
 import { getOwnerId } from "./owner/ownerContext";
 import { listCategories } from "./registry/categories";
 import { TAXONOMY_EDITIONS } from "./registry/taxonomy";
+import { evaluateScenario } from "./evaluation/evaluateScenario";
+import { getAIProvider } from "../ai";
+import { parseSuggestRequest, suggestScenarios } from "./ai/suggestScenarios";
+import { exportPostman, parseExportQuery } from "./export/exportService";
+import { buildOverview, type OverviewContext } from "./reports/overview";
+import { renderSecurityReportHtml, securityReportFileName } from "./reports/renderSecurityReportHtml";
+import { buildReport, parseRunIds } from "./reports/reportService";
+import { deleteAssessment, deleteEverything, getRetainedData, type RetentionContext } from "./retention/retainedDataService";
+import { listFindings, parseFindingQuery, presentFinding, readFinding, readOccurrenceEvidence, type FindingReadContext } from "./findings/findingQueries";
+import { parseFindingPatch, updateFinding } from "./findings/findingService";
+import type { Evaluator } from "./evaluation/types";
+import { createGuardedSender } from "./execution/guardedSender";
+import { cancelRun, getRun, listRuns, previewRun, startRun, type RunLifecycleContext } from "./execution/runService";
+import type { Sender } from "./execution/types";
 import {
   checkProfile,
   createProfile,
@@ -65,6 +83,13 @@ export interface SecurityLabDependencies {
   limits: SecurityLabLimits;
   /** Resolves a host name for `POST /profiles/:id/check`. Injected so tests never touch a network. */
   resolveName: NameResolver;
+  /** The only thing that opens a connection. Tests inject a fake or a guarded sender over a loopback target. */
+  sender: Sender;
+  /** Judges the responses of a scenario. Injected so a run is testable with no model. */
+  evaluator: Evaluator;
+  newId: () => string;
+  /** The provider optional suggestions go through, and nothing else in Security Lab. */
+  getAIProvider: () => AIProvider;
 }
 
 export function defaultSecurityLabDependencies(): SecurityLabDependencies {
@@ -73,11 +98,18 @@ export function defaultSecurityLabDependencies(): SecurityLabDependencies {
     now: () => new Date(),
     limits: loadSecurityLabLimits(),
     resolveName: systemNameResolver,
+    sender: createGuardedSender(),
+    evaluator: evaluateScenario,
+    newId: randomUUID,
+    getAIProvider,
   };
 }
 
 export function createSecurityLabService(overrides: Partial<SecurityLabDependencies> = {}) {
-  const deps: SecurityLabDependencies = { ...defaultSecurityLabDependencies(), ...overrides };
+  const merged: SecurityLabDependencies = { ...defaultSecurityLabDependencies(), ...overrides };
+  // One resolver feeds both the profile check and the sender, so a name judged at check time is judged by the same
+  // answers at connect time (and a test that injects a resolver controls both).
+  const deps: SecurityLabDependencies = overrides.sender ? merged : { ...merged, sender: createGuardedSender(merged.resolveName) };
 
   /** The loaded specification, or the typed error that routes marked "needs a specification" return. */
   function requireWorkflow(): TestGenerationWorkflow & { apiModel: NonNullable<TestGenerationWorkflow["apiModel"]> } {
@@ -131,6 +163,50 @@ export function createSecurityLabService(overrides: Partial<SecurityLabDependenc
       runs: getSecurityRunRepository(),
       getEnvironment: (id) => environmentService.get(id),
       resolveName: deps.resolveName,
+      apiModel: deps.getWorkflow()?.apiModel,
+    };
+  }
+
+  function overviewContext(): OverviewContext {
+    const context = scenarioContext();
+    return { scenario: context, findings: getSecurityFindingRepository(), runs: getSecurityRunRepository(), configuredSensitiveFields: context.configuredSensitiveFields };
+  }
+
+  function retentionContext(): RetentionContext {
+    return {
+      ownerId: getOwnerId(),
+      sessionId: getSessionId(),
+      limits: deps.limits,
+      scenarios: getSecurityScenarioRepository(),
+      runs: getSecurityRunRepository(),
+      findings: getSecurityFindingRepository(),
+      evidence: getSecurityEvidenceRepository(),
+      profiles: getSecurityProfileRepository(),
+      credentials: getSecurityCredentialRepository(),
+    };
+  }
+
+  function findingContext(): FindingReadContext {
+    return { ownerId: getOwnerId(), repo: getSecurityFindingRepository(), now: deps.now, actor: ACTOR, sessionId: getSessionId(), evidence: getSecurityEvidenceRepository() };
+  }
+
+  function runContext(): RunLifecycleContext {
+    return {
+      ownerId: getOwnerId(),
+      sessionId: getSessionId(),
+      limits: deps.limits,
+      deps: {
+        sender: deps.sender,
+        evaluator: deps.evaluator,
+        now: deps.now,
+        newId: deps.newId,
+        runs: getSecurityRunRepository(),
+        scenarios: getSecurityScenarioRepository(),
+        evidence: getSecurityEvidenceRepository(),
+        findings: getSecurityFindingRepository(),
+      },
+      profileContext: profileContext(),
+      credentials: getSecurityCredentialRepository(),
       apiModel: deps.getWorkflow()?.apiModel,
     };
   }
@@ -294,6 +370,74 @@ export function createSecurityLabService(overrides: Partial<SecurityLabDependenc
     /** Which credentials are set. Never a value. */
     getCredentials(id: string) {
       return getCredentialStatus(profileContext(), id);
+    },
+
+    /** `POST /scenarios/suggest`: optional AI suggestions, stored as drafts. Answers 503 ai_unavailable when there is no provider. */
+    suggest(body: unknown) {
+      return suggestScenarios(scenarioContext(), { provider: deps.getAIProvider(), newId: deps.newId }, parseSuggestRequest(body));
+    },
+
+    /** `GET /export/postman`: approved scenarios as a deterministic, secret-free collection. Needs a specification. */
+    exportPostman(query: Record<string, unknown>) {
+      return exportPostman(scenarioContext(), parseExportQuery(query));
+    },
+
+    /** `GET /overview`: counts that each open a matching list. Works with no specification loaded. */
+    getOverview() {
+      return buildOverview(overviewContext());
+    },
+    /** `GET /report`: a deterministic assessment from retained work, as JSON or as one self-contained HTML file. */
+    getReport(query: Record<string, unknown>): { format: "html" | "json"; fileName: string; body: string } {
+      const format = query.format ?? "json";
+      if (format !== "html" && format !== "json") throw invalidRequest("'format' must be html or json.");
+      const report = buildReport({ ...overviewContext(), now: deps.now }, parseRunIds(query.runIds));
+      return {
+        format,
+        fileName: securityReportFileName(report, format),
+        body: format === "html" ? renderSecurityReportHtml(report) : JSON.stringify(report, null, 2),
+      };
+    },
+    getRetainedData() {
+      return getRetainedData(retentionContext());
+    },
+    deleteAssessment(assessmentKey: string, body: unknown): void {
+      deleteAssessment(retentionContext(), assessmentKey, (body as { confirm?: unknown } | undefined)?.confirm);
+    },
+    deleteEverything(body: unknown): void {
+      deleteEverything(retentionContext(), (body as { confirm?: unknown } | undefined)?.confirm);
+    },
+
+    /** Findings are retained work: readable with no specification and after the session that gathered the evidence has gone. */
+    listFindings(query: Record<string, unknown>) {
+      return listFindings(findingContext(), parseFindingQuery(query));
+    },
+    getFinding(id: string) {
+      return readFinding(findingContext(), id);
+    },
+    getFindingEvidence(id: string, resultId: string) {
+      return readOccurrenceEvidence(findingContext(), id, resultId);
+    },
+    patchFinding(id: string, body: unknown) {
+      const context = findingContext();
+      return presentFinding(context, updateFinding(context, id, parseFindingPatch(body)));
+    },
+
+    /** `POST /runs/preview`: judges everything a run would and sends nothing. */
+    previewRun(body: unknown) {
+      return previewRun(runContext(), body);
+    },
+    /** `POST /runs`: starts a confirmed plan. The only way a run starts. */
+    startRun(body: unknown) {
+      return startRun(runContext(), body);
+    },
+    listRuns() {
+      return listRuns(runContext());
+    },
+    getRun(id: string, query: Record<string, unknown>) {
+      return getRun(runContext(), id, { evidence: query.evidence === "true", scenarioId: typeof query.scenarioId === "string" ? query.scenarioId : undefined });
+    },
+    cancelRun(id: string) {
+      return cancelRun(runContext(), id);
     },
 
     /** `GET /categories`: the registry with its taxonomy edition (FR-012 to FR-015). Static. */

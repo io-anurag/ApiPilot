@@ -1,6 +1,26 @@
 import type {
+  CredentialStatus,
+  FindingEvidenceReply,
+  FindingListReply,
+  FindingStatus,
+  RetainedDataSummary,
+  SecurityFinding,
+  SecurityExportReply,
+  SecurityOverview,
+  SecurityReport,
+  SuggestReply,
   ExecutionStatus,
   GenerationReply,
+  ProfileCheck,
+  ProfileView,
+  RunDetail,
+  RunPreview,
+  RunRequestInput,
+  SecurityProfileInput,
+  SecurityRunView,
+  StartRunInput,
+  TargetEnvironment,
+  TargetEnvironmentInput,
   ScenarioDetail,
   ScenarioEditReply,
   ScenarioIdsReply,
@@ -158,6 +178,8 @@ export interface ScenarioFilterQuery {
   reviewState?: SecurityReviewState;
   executionStatus?: ExecutionStatus;
   flag?: ScenarioFlagFilter;
+  /** Judge each scenario's prerequisites and executability against this profile (session data). */
+  profileId?: string;
 }
 
 export interface ScenarioPaging {
@@ -179,6 +201,7 @@ export function scenarioQueryString(filters: ScenarioFilterQuery, paging: Scenar
     ["reviewState", filters.reviewState],
     ["executionStatus", filters.executionStatus],
     ["flag", filters.flag],
+    ["profileId", filters.profileId],
     ["page", paging.page],
     ["pageSize", paging.pageSize],
   ];
@@ -284,4 +307,305 @@ export interface ReviewScenariosBody {
 
 export function reviewScenarios(body: ReviewScenariosBody, options?: RequestOptions): Promise<ApiResult<ScenarioReviewReply>> {
   return securityLabRequest("reviewScenarios", "POST", "/scenarios/review", isReviewReply, body, options);
+}
+
+// --- AI suggestions (US8) ------------------------------------------------------------------------
+
+const isSuggestReply = (body: unknown): body is SuggestReply =>
+  isRecord(body) && Array.isArray(body.accepted) && Array.isArray(body.rejected) && typeof body.model === "string" && typeof body.ignored === "number";
+
+export interface SuggestRequestBody {
+  operationKeys?: string[];
+  categories?: string[];
+}
+
+/**
+ * Asks the local AI provider for scenario suggestions. Accepted ones are stored as drafts marked as AI-origin;
+ * rejected ones come back with their reasons. 503 `ai_unavailable` carries the readiness reason, and nothing else in
+ * Security Lab depends on this call.
+ */
+export function suggestScenarios(body: SuggestRequestBody = {}, options?: RequestOptions): Promise<ApiResult<SuggestReply>> {
+  return securityLabRequest("suggestScenarios", "POST", "/scenarios/suggest", isSuggestReply, body, options);
+}
+
+// --- Target environments (US6) -------------------------------------------------------------------
+
+const isEnvironment = (value: unknown): value is TargetEnvironment =>
+  isRecord(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.tier === "string" && typeof value.baseUrl === "string";
+
+const isEnvironmentsReply = (body: unknown): body is { environments: TargetEnvironment[] } =>
+  isRecord(body) && Array.isArray(body.environments) && body.environments.every(isEnvironment);
+
+const isEnvironmentReply = (body: unknown): body is { environment: TargetEnvironment } => isRecord(body) && isEnvironment(body.environment);
+
+export function listEnvironments(options?: RequestOptions): Promise<ApiResult<{ environments: TargetEnvironment[] }>> {
+  return securityLabRequest("listEnvironments", "GET", "/environments", isEnvironmentsReply, undefined, options);
+}
+
+/** Name, tier and base URL only: these routes never carry variables. */
+export function createEnvironment(input: TargetEnvironmentInput, options?: RequestOptions): Promise<ApiResult<{ environment: TargetEnvironment }>> {
+  return securityLabRequest("createEnvironment", "POST", "/environments", isEnvironmentReply, input, options);
+}
+
+export function updateEnvironment(id: string, input: TargetEnvironmentInput, options?: RequestOptions): Promise<ApiResult<{ environment: TargetEnvironment }>> {
+  return securityLabRequest("updateEnvironment", "PUT", `/environments/${encodeURIComponent(id)}`, isEnvironmentReply, input, options);
+}
+
+// --- Profiles (US6) ------------------------------------------------------------------------------
+
+const isProfileView = (value: unknown): value is ProfileView =>
+  isRecord(value) && isRecord(value.profile) && Array.isArray(value.credentialStatus) && typeof value.valid === "boolean" && Array.isArray(value.problems);
+
+const isProfilesReply = (body: unknown): body is { profiles: ProfileView[] } => isRecord(body) && Array.isArray(body.profiles) && body.profiles.every(isProfileView);
+
+export function listProfiles(options?: RequestOptions): Promise<ApiResult<{ profiles: ProfileView[] }>> {
+  return securityLabRequest("listProfiles", "GET", "/profiles", isProfilesReply, undefined, options);
+}
+
+export function createProfile(input: SecurityProfileInput, options?: RequestOptions): Promise<ApiResult<ProfileView>> {
+  return securityLabRequest("createProfile", "POST", "/profiles", isProfileView, input, options);
+}
+
+export function updateProfile(id: string, input: SecurityProfileInput, options?: RequestOptions): Promise<ApiResult<ProfileView>> {
+  return securityLabRequest("updateProfile", "PUT", `/profiles/${encodeURIComponent(id)}`, isProfileView, input, options);
+}
+
+/** A 204: the reply has no body, so it validates as an empty object. */
+export function deleteProfile(id: string, options?: RequestOptions): Promise<ApiResult<Record<string, unknown>>> {
+  return securityLabRequest("deleteProfile", "DELETE", `/profiles/${encodeURIComponent(id)}`, isRecord, undefined, options);
+}
+
+const isProfileCheck = (body: unknown): body is ProfileCheck => isRecord(body) && typeof body.valid === "boolean" && Array.isArray(body.problems);
+
+/** Re-validates the profile and resolves its host under the destination policy. Sends no request to the target. */
+export function checkProfile(id: string, options?: RequestOptions): Promise<ApiResult<ProfileCheck>> {
+  return securityLabRequest("checkProfile", "POST", `/profiles/${encodeURIComponent(id)}/check`, isProfileCheck, undefined, options);
+}
+
+export interface CredentialInput {
+  identity: string;
+  scheme: string;
+  kind: "active" | "expired";
+  /** Write-only. An empty string clears the credential. It is sent once and never read back, kept or logged. */
+  value: string;
+}
+
+/** A 204. The value goes to the server and nothing returns it; the only read path is `fetchCredentialStatus`. */
+export function setCredential(profileId: string, input: CredentialInput, options?: RequestOptions): Promise<ApiResult<Record<string, unknown>>> {
+  return securityLabRequest("setCredential", "PUT", `/profiles/${encodeURIComponent(profileId)}/credentials`, isRecord, input, options);
+}
+
+const isCredentialStatusReply = (body: unknown): body is { credentialStatus: CredentialStatus[] } => isRecord(body) && Array.isArray(body.credentialStatus);
+
+export function fetchCredentialStatus(profileId: string, options?: RequestOptions): Promise<ApiResult<{ credentialStatus: CredentialStatus[] }>> {
+  return securityLabRequest("fetchCredentialStatus", "GET", `/profiles/${encodeURIComponent(profileId)}/credentials`, isCredentialStatusReply, undefined, options);
+}
+
+// --- Runs (US3) ----------------------------------------------------------------------------------
+
+const isRunPreview = (body: unknown): body is RunPreview =>
+  isRecord(body) && isRecord(body.summary) && Array.isArray(body.scenarios) && typeof body.planDigest === "string" && Array.isArray(body.problems);
+
+/** Judges everything a run would and sends nothing to the target. */
+export function previewRun(body: RunRequestInput, options?: RequestOptions): Promise<ApiResult<RunPreview>> {
+  return securityLabRequest("previewRun", "POST", "/runs/preview", isRunPreview, body, options);
+}
+
+const isRunView = (value: unknown): value is SecurityRunView =>
+  isRecord(value) && typeof value.id === "string" && typeof value.status === "string" && Array.isArray(value.plan);
+
+const isRunReply = (body: unknown): body is { run: SecurityRunView } => isRecord(body) && isRunView(body.run);
+
+/** The only way a run starts: a confirmed plan, with the digest the preview returned. */
+export function startRun(body: StartRunInput, options?: RequestOptions): Promise<ApiResult<{ run: SecurityRunView }>> {
+  return securityLabRequest("startRun", "POST", "/runs", isRunReply, body, options);
+}
+
+const isRunsReply = (body: unknown): body is { runs: SecurityRunView[] } => isRecord(body) && Array.isArray(body.runs) && body.runs.every(isRunView);
+
+export function listRuns(options?: RequestOptions): Promise<ApiResult<{ runs: SecurityRunView[] }>> {
+  return securityLabRequest("listRuns", "GET", "/runs", isRunsReply, undefined, options);
+}
+
+const isRunDetail = (body: unknown): body is RunDetail =>
+  isRecord(body) && isRunView(body.run) && Array.isArray(body.results) && isRecord(body.progress);
+
+export function fetchRun(id: string, options?: RequestOptions): Promise<ApiResult<RunDetail>> {
+  return securityLabRequest("fetchRun", "GET", `/runs/${encodeURIComponent(id)}`, isRunDetail, undefined, options);
+}
+
+export function cancelRun(id: string, options?: RequestOptions): Promise<ApiResult<{ run: SecurityRunView }>> {
+  return securityLabRequest("cancelRun", "POST", `/runs/${encodeURIComponent(id)}/cancel`, isRunReply, undefined, options);
+}
+
+// --- Findings (US4) ------------------------------------------------------------------------------
+
+/** The filters of a finding list. An absent field is not applied. */
+export interface FindingFilterQuery {
+  severity?: Severity;
+  status?: FindingStatus;
+  category?: string;
+  operation?: string;
+  /** A scenario id. */
+  scenario?: string;
+  /** True: only findings with an occurrence not yet reviewed. */
+  unreviewed?: boolean;
+  assessment?: string;
+}
+
+/** The query string for a finding list: only fields that are set, in a fixed order so the address is stable. */
+export function findingQueryString(filters: FindingFilterQuery, paging: ScenarioPaging = {}): string {
+  const params = new URLSearchParams();
+  const entries: Array<[string, string | number | boolean | undefined]> = [
+    ["severity", filters.severity],
+    ["status", filters.status],
+    ["category", filters.category],
+    ["operation", filters.operation],
+    ["scenario", filters.scenario],
+    ["unreviewed", filters.unreviewed],
+    ["assessment", filters.assessment],
+    ["page", paging.page],
+    ["pageSize", paging.pageSize],
+  ];
+  for (const [key, value] of entries) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const text = params.toString();
+  return text === "" ? "" : `?${text}`;
+}
+
+const isFinding = (value: unknown): value is SecurityFinding =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  isRecord(value.severity) &&
+  Array.isArray(value.occurrences) &&
+  typeof value.occurrenceCount === "number" &&
+  typeof value.status === "string";
+
+const isFindingListReply = (body: unknown): body is FindingListReply =>
+  isRecord(body) && Array.isArray(body.items) && body.items.every(isFinding) && isNumber(body.total) && isNumber(body.page) && isNumber(body.pageSize) && isRecord(body.counts);
+
+export function listFindings(filters: FindingFilterQuery, paging: ScenarioPaging = {}, options?: RequestOptions): Promise<ApiResult<FindingListReply>> {
+  return securityLabRequest("listFindings", "GET", `/findings${findingQueryString(filters, paging)}`, isFindingListReply, undefined, options);
+}
+
+export function fetchFinding(id: string, options?: RequestOptions): Promise<ApiResult<SecurityFinding>> {
+  return securityLabRequest("fetchFinding", "GET", `/findings/${encodeURIComponent(id)}`, isFinding, undefined, options);
+}
+
+const isEvidenceReply = (body: unknown): body is FindingEvidenceReply => isRecord(body) && typeof body.available === "boolean" && Array.isArray(body.records);
+
+/** The redacted evidence behind one occurrence. Session data: `available: false` once the session that held it has ended. */
+export function fetchFindingEvidence(findingId: string, resultId: string, options?: RequestOptions): Promise<ApiResult<FindingEvidenceReply>> {
+  return securityLabRequest(
+    "fetchFindingEvidence",
+    "GET",
+    `/findings/${encodeURIComponent(findingId)}/occurrences/${encodeURIComponent(resultId)}/evidence`,
+    isEvidenceReply,
+    undefined,
+    options,
+  );
+}
+
+export interface FindingPatchBody {
+  status?: FindingStatus;
+  severity?: Severity;
+  /** Required by the server for a status or a severity change. */
+  note?: string;
+  acknowledgeOccurrences?: boolean;
+}
+
+export function patchFinding(id: string, body: FindingPatchBody, options?: RequestOptions): Promise<ApiResult<SecurityFinding>> {
+  return securityLabRequest("patchFinding", "PATCH", `/findings/${encodeURIComponent(id)}`, isFinding, body, options);
+}
+
+// --- Overview, report, retained data (US5) ---------------------------------------------------------
+
+const isOverview = (body: unknown): body is SecurityOverview =>
+  isRecord(body) &&
+  typeof body.specificationLoaded === "boolean" &&
+  isRecord(body.observationCounts) &&
+  isRecord(body.scenarioCounts) &&
+  isRecord(body.findingCounts) &&
+  Array.isArray(body.untestedHighPriority);
+
+export function fetchOverview(options?: RequestOptions): Promise<ApiResult<SecurityOverview>> {
+  return securityLabRequest("fetchOverview", "GET", "/overview", isOverview, undefined, options);
+}
+
+const isReport = (body: unknown): body is SecurityReport =>
+  isRecord(body) && typeof body.generatedAt === "string" && isRecord(body.overview) && Array.isArray(body.categoryCoverage) && Array.isArray(body.findings) && Array.isArray(body.runs) && typeof body.limitsStatement === "string";
+
+const reportPath = (format: "html" | "json", runIds: readonly string[] | undefined): string => {
+  const params = new URLSearchParams({ format });
+  if (runIds && runIds.length > 0) params.set("runIds", runIds.join(","));
+  return `/report?${params.toString()}`;
+};
+
+/** The report as data, to show on screen. Built from retained work, so it needs no specification. 409 `nothing_to_report` when there is nothing yet. */
+export function fetchReport(runIds?: readonly string[], options?: RequestOptions): Promise<ApiResult<SecurityReport>> {
+  return securityLabRequest("fetchReport", "GET", reportPath("json", runIds), isReport, undefined, options);
+}
+
+export interface ReportFile {
+  blob: Blob;
+  fileName: string;
+}
+
+const FILE_NAME = /filename="([^"]+)"/;
+
+/**
+ * The report as a file to save (HTML is one self-contained file). The download is requested here, with the same error
+ * handling as every call, so a refusal such as `nothing_to_report` arrives as a message and not as a broken download.
+ */
+export async function downloadReport(format: "html" | "json", runIds?: readonly string[], options: RequestOptions = {}): Promise<ApiResult<ReportFile>> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${reportPath(format, runIds)}`, { method: "GET", cache: "no-store", signal: options.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    return networkFailure("downloadReport", err);
+  }
+  if (!response.ok) return httpFailure("downloadReport", response.status, await response.json().catch(() => null));
+  const blob = await response.blob();
+  const fileName = FILE_NAME.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? `security-report.${format}`;
+  return { ok: true, data: { blob, fileName } };
+}
+
+// --- Postman export of approved scenarios (US7) ---------------------------------------------------
+
+const isExportReply = (body: unknown): body is SecurityExportReply =>
+  isRecord(body) &&
+  isRecord(body.collection) &&
+  isRecord(body.environment) &&
+  typeof body.readme === "string" &&
+  Array.isArray(body.limitations) &&
+  isRecord(body.summary) &&
+  Array.isArray(body.excluded);
+
+/**
+ * `GET /export/postman`: the approved scenarios, at their approved versions, as a collection, an environment and a README.
+ * Credentials are empty variables in the environment. 409 `no_approved_scenarios` and 422 `export_failed` arrive as
+ * messages, with the generator's problems in `details`. Needs a loaded specification (409 `no_specification`).
+ */
+export function exportSecurityPostman(baseUrl?: string, options?: RequestOptions): Promise<ApiResult<SecurityExportReply>> {
+  const query = baseUrl && baseUrl.trim() !== "" ? `?${new URLSearchParams({ baseUrl: baseUrl.trim() }).toString()}` : "";
+  return securityLabRequest("exportSecurityPostman", "GET", `/export/postman${query}`, isExportReply, undefined, options);
+}
+
+const isRetainedData = (body: unknown): body is RetainedDataSummary =>
+  isRecord(body) && Array.isArray(body.assessments) && isRecord(body.totals) && isRecord(body.caps) && Array.isArray(body.removedWithSession) && Array.isArray(body.retained);
+
+export function fetchRetainedData(options?: RequestOptions): Promise<ApiResult<RetainedDataSummary>> {
+  return securityLabRequest("fetchRetainedData", "GET", "/data", isRetainedData, undefined, options);
+}
+
+/** A 204. `confirm` must be the assessment's label, typed back; the server refuses anything else. */
+export function deleteAssessment(assessmentKey: string, confirm: string, options?: RequestOptions): Promise<ApiResult<Record<string, unknown>>> {
+  return securityLabRequest("deleteAssessment", "DELETE", `/assessments/${encodeURIComponent(assessmentKey)}`, isRecord, { confirm }, options);
+}
+
+/** A 204. `confirm` must be `DELETE ALL`. */
+export function deleteAllRetainedData(confirm: string, options?: RequestOptions): Promise<ApiResult<Record<string, unknown>>> {
+  return securityLabRequest("deleteAllRetainedData", "DELETE", "/data", isRecord, { confirm }, options);
 }

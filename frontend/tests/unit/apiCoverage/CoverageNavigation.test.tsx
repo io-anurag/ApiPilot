@@ -40,7 +40,7 @@ async function openCoverageFromPalette(): Promise<void> {
 
 describe("Coverage in the results section (AP-046)", () => {
   it("is a results view, not a start-screen workflow", () => {
-    expect(RESULTS_VIEWS.map((v) => v.id)).toEqual(["coverage"]);
+    expect(RESULTS_VIEWS.map((v) => v.id)).toEqual(["coverage", "security"]);
     expect(isResultsView("coverage")).toBe(true);
     expect(isResultsView("guided-workflow")).toBe(false);
   });

@@ -52,7 +52,11 @@ export const NO_OUTPUT: RuleOutput = Object.freeze({ contents: [], notes: [] }) 
 
 /** Whether the operation's effective requirement makes credentials necessary, and which schemes it names. */
 export function requirementOf(context: GenerationContext, operation: ApiOperation): { requiresCredentials: boolean; schemes: string[] } {
-  const effective = context.effective.get(operationKeyOf(operation));
+  return credentialRequirementOf(context.effective.get(operationKeyOf(operation)));
+}
+
+/** The same decision from an operation's resolved effective security, for code that has no generation context. */
+export function credentialRequirementOf(effective: EffectiveSecurity | undefined): { requiresCredentials: boolean; schemes: string[] } {
   if (!effective || (effective.source !== "operation" && effective.source !== "root")) return { requiresCredentials: false, schemes: [] };
   if (effective.requirement.length === 0 || effective.requirement.some((entry) => entry.schemes.length === 0)) {
     return { requiresCredentials: false, schemes: [] };
@@ -64,7 +68,12 @@ export function requirementOf(context: GenerationContext, operation: ApiOperatio
 const SUPPORTED_HTTP_SCHEMES = new Set(["bearer", "basic"]);
 
 export function isExpressibleScheme(context: GenerationContext, name: string): boolean {
-  const definition = context.apiModel.securitySchemes[name];
+  return isExpressibleSchemeIn(context.apiModel, name);
+}
+
+/** The same rule for code that has a model but no generation context, such as the request builder. */
+export function isExpressibleSchemeIn(apiModel: ApiModel, name: string): boolean {
+  const definition = apiModel.securitySchemes[name];
   if (!definition) return false;
   switch (definition.type) {
     case "http":

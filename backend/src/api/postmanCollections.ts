@@ -24,6 +24,8 @@ const FAILURE_STATUS: Record<ExportFailureCode, number> = {
   unknown_variable: 400,
   workflow_intent_unsupported: 400,
   collection_validation_failed: 500,
+  empty_approved_set: 409,
+  unapproved_version: 409,
 };
 
 function isApiModel(value: unknown): value is ApiModel {

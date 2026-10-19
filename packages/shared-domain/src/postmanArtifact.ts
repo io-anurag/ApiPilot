@@ -121,6 +121,8 @@ export interface PostmanRequest {
   header: PostmanHeader[];
   body?: PostmanBody;
   auth?: PostmanAuth;
+  /** Only Security Lab export items carry one (specs/057): the scenario id, version, taxonomy and expected behavior, as text. */
+  description?: string;
 }
 
 export interface PostmanEvent {
@@ -357,7 +359,10 @@ export type ExportFailureCode =
   | "unknown_operation"
   | "unknown_variable"
   | "workflow_intent_unsupported"
-  | "collection_validation_failed";
+  | "collection_validation_failed"
+  // specs/057 Security Lab export: an empty approved set, or a version whose approval no longer matches its content.
+  | "empty_approved_set"
+  | "unapproved_version";
 
 export interface ExportFailure {
   code: ExportFailureCode;

@@ -4,17 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActiveViewContext } from "../../../src/components/requestChain/activeView";
 import { OverviewArea } from "../../../src/components/securityLab/OverviewArea";
 import * as client from "../../../src/services/securityLabClient";
-import { analysisReply, categoriesReply, observation } from "./securityFixtures";
+import { analysisReply, categoriesReply, observation, overview } from "./securityFixtures";
 
 vi.mock("../../../src/services/securityLabClient", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/services/securityLabClient")>()),
   fetchAnalysis: vi.fn(),
   fetchCategories: vi.fn(),
+  fetchOverview: vi.fn(),
   saveSettings: vi.fn(),
 }));
 
 const fetchAnalysis = vi.mocked(client.fetchAnalysis);
 const fetchCategories = vi.mocked(client.fetchCategories);
+const fetchOverview = vi.mocked(client.fetchOverview);
 
 function renderActive(ui: ReactElement) {
   return render(<ActiveViewContext.Provider value="security">{ui}</ActiveViewContext.Provider>);
@@ -28,6 +30,8 @@ const UNMEASURABLE = observation({ id: "n1", ruleId: "effective-security-none-de
 beforeEach(() => {
   fetchAnalysis.mockReset();
   fetchCategories.mockReset();
+  fetchOverview.mockReset();
+  fetchOverview.mockResolvedValue({ ok: true, data: overview() });
   fetchCategories.mockResolvedValue({ ok: true, data: categoriesReply });
 });
 

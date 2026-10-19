@@ -1,19 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import type { AddressClass, ApiModel, CredentialStatus, SecurityProfile, SecurityProfileInput } from "@apipilot/shared-domain";
+import type {
+  ApiModel,
+  CredentialStatus,
+  ProfileCheck,
+  ProfileView,
+  ProfileViolation,
+  SecurityProfile,
+  SecurityProfileInput,
+  TargetEnvironment,
+} from "@apipilot/shared-domain";
 import type { CredentialKind, SecurityCredentialRepository } from "../../persistence/securityCredentialRepository";
 import type { SecurityProfileRepository } from "../../persistence/securityProfileRepository";
 import type { SecurityRunRepository } from "../../persistence/securityRunRepository";
 import type { SecurityLabLimits } from "../config";
 import { SecurityLabError, invalidRequest, profileNotFound } from "../errors";
-import type { TargetEnvironment } from "../environments/environmentService";
 import { classifyAddress, describeBlockReason, evaluateDestination, selectAllowedAddress } from "../execution/destinationPolicy";
-import {
-  ProfileInvalidError,
-  parseProfileInput,
-  validateProfile,
-  type ProfileViolation,
-} from "./profileValidation";
+import { ProfileInvalidError, parseProfileInput, validateProfile } from "./profileValidation";
 
 /**
  * Profile CRUD and the write-only credential path (specs/057 FR-034 to FR-040, FR-048, research R8). A profile is
@@ -44,15 +47,6 @@ export interface ProfileContext {
   readonly newId?: () => string;
   /** The loaded specification, when there is one. */
   readonly apiModel?: ApiModel;
-}
-
-export interface ProfileView {
-  profile: SecurityProfile;
-  /** The target the profile points at, or undefined when that environment no longer exists. */
-  environment?: { name: string; tier: string; baseUrl: string };
-  credentialStatus: CredentialStatus[];
-  valid: boolean;
-  problems: ProfileViolation[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -256,22 +250,6 @@ export function getCredentialStatus(context: ProfileContext, id: string): { cred
 // ---------------------------------------------------------------------------------------------
 // Check (dry validation; resolves, never connects)
 // ---------------------------------------------------------------------------------------------
-
-export interface ProfileCheck {
-  valid: boolean;
-  problems: ProfileViolation[];
-  destination?: {
-    host: string;
-    port: number;
-    /** The class of the address a request would connect to, or of the first address when none is allowed. */
-    resolvedClass?: AddressClass;
-    addresses: Array<{ address: string; addressClass?: AddressClass; allowed: boolean; reason?: string; explanation?: string }>;
-    /** The address a request would connect to, if any is allowed. */
-    connectTo?: string;
-    blockedReason?: string;
-    explanation?: string;
-  };
-}
 
 /**
  * Re-validates the stored profile and resolves the base URL's host under the destination policy **without sending a

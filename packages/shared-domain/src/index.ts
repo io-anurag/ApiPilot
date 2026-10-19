@@ -43,3 +43,5 @@ export * from "./chainDebugRun";
 export * from "./liveRun";
 export * from "./coverage";
 export * from "./securityLab";
+export * from "./securityProfiles";
+export * from "./securityRuns";

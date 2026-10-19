@@ -1,4 +1,4 @@
-import type { Environment, EnvironmentTier } from "@apipilot/shared-domain";
+import type { Environment, EnvironmentTier, TargetEnvironment, TargetEnvironmentInput } from "@apipilot/shared-domain";
 import {
   DuplicateEnvironmentNameError,
   EnvironmentNotFoundError,
@@ -18,19 +18,6 @@ import { SecurityLabError, invalidRequest } from "../errors";
  * in plain text and Security Lab credentials must never be returned (FR-048). The existing environment gate
  * and routes are untouched. An edit keeps whatever variables the environment already holds.
  */
-
-export interface TargetEnvironment {
-  id: string;
-  name: string;
-  tier: EnvironmentTier;
-  baseUrl: string;
-}
-
-export interface TargetEnvironmentInput {
-  name: string;
-  tier: EnvironmentTier;
-  baseUrl: string;
-}
 
 const TIERS: readonly EnvironmentTier[] = ["local", "dev", "qa", "staging", "production"];
 const MAX_NAME_LENGTH = 100;

@@ -1,4 +1,5 @@
 import type { FactOrigin } from "./apiInput";
+import type { ExportResult } from "./postmanArtifact";
 import type { GeneratedRequest } from "./testModel";
 
 /**
@@ -716,6 +717,36 @@ export interface GenerationReply {
   notes: GenerationNoteView[];
 }
 
+/** `POST /scenarios/suggest` (FR-064): one AI suggestion that passed validation and was stored as a draft. */
+export interface AcceptedSuggestion {
+  readonly id: string;
+  readonly title: string;
+  readonly operationKey: string;
+  readonly categoryId: string;
+}
+
+/** One AI suggestion that was not stored, with the first reason as one sentence and every violation. */
+export interface RejectedSuggestion {
+  readonly index: number;
+  readonly operationKey?: string;
+  readonly title?: string;
+  readonly reason: string;
+  readonly violations: ReadonlyArray<{ pointer: string; code: string; message: string }>;
+}
+
+export interface SuggestReply {
+  readonly accepted: AcceptedSuggestion[];
+  readonly rejected: RejectedSuggestion[];
+  readonly model: string;
+  /** Suggestions beyond the cap that were not looked at. */
+  readonly ignored: number;
+}
+
+/** `GET /export/postman` (FR-063): the standard export result plus the approved scenarios left out because the specification changed under them. */
+export interface SecurityExportReply extends ExportResult {
+  excluded: Array<{ scenarioId: string; reason: "stale" | "orphaned" }>;
+}
+
 /** The facets of a scenario list, over everything the filters (other than the derived flag) match, so a facet never lies about the filtered set. */
 export interface ScenarioListCounts {
   byReviewState: Record<string, number>;
@@ -774,4 +805,30 @@ export interface ScenarioEditReply {
 export interface ScenarioReviewReply {
   applied: ReviewItemOutcome[];
   refused: ReviewItemOutcome[];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Finding API replies (specs/057 contracts/security-lab-api.md "Findings")
+// ---------------------------------------------------------------------------------------------
+
+/** Counts over everything the finding filters match, so a facet never lies about the filtered set. Findings and occurrences are counted apart. */
+export interface FindingListCounts {
+  byStatus: Record<string, number>;
+  bySeverity: Record<string, number>;
+  occurrences: number;
+  withUnreviewedOccurrence: number;
+}
+
+export interface FindingListReply {
+  items: SecurityFinding[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: FindingListCounts;
+}
+
+/** The redacted evidence behind one occurrence, or `available: false` once the session that held it has gone. */
+export interface FindingEvidenceReply {
+  available: boolean;
+  records: EvidenceRecord[];
 }
