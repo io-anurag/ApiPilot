@@ -215,6 +215,20 @@ export function acceleratorLabelForPlatform(platform: NodeJS.Platform): string {
 }
 
 /**
+ * Token count of `text` under the engine's own tokenizer, or undefined when the engine cannot count
+ * or the count is unusable. Never throws, so a tokenizer failure cannot turn a finished inference
+ * into a failed one. For a prompt this counts the request input before any chat framing, so it is a
+ * close lower bound on what the model actually read.
+ */
+function countTokensSafely(engine: TextGenerationEngine, text: string): number | undefined {
+  try {
+    return usableTokenCount(engine.countTokens?.(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * End-to-end rate of the verification inference, in output tokens per second, or undefined when it
  * cannot be computed honestly: the engine cannot count tokens, the duration is not positive, or the
  * result is not a positive finite number. Never throws, so a tokenizer failure cannot turn a passed
@@ -552,15 +566,27 @@ export class LocalProvider implements AIProvider {
       });
       const content = await withTimeout(generation, timeoutMs);
       const durationMs = Date.now() - startedAt;
-      this.recordObservedRates(
-        request.input.length,
-        content.length,
-        Date.now() - generationStartedAt,
-      );
+      const generationMs = Date.now() - generationStartedAt;
+      this.recordObservedRates(request.input.length, content.length, generationMs);
+      // Sizes only, never the text (constitution XX). They are what separates "this request was slow
+      // because its prompt was large" from "slow although small", and "the reply stopped at its
+      // limit" (likely cut off) from "the model finished".
+      const promptTokens = countTokensSafely(engine, request.input);
+      const outputTokens = countTokensSafely(engine, content);
       logger.info("inference_success", {
         requestId: request.requestId,
         modelId: this.config.modelId,
         durationMs,
+        generationMs,
+        promptChars: request.input.length,
+        outputChars: content.length,
+        promptTokens,
+        outputTokens,
+        maxOutputTokens: request.maxOutputTokens,
+        outputReachedLimit:
+          outputTokens !== undefined && request.maxOutputTokens !== undefined
+            ? outputTokens >= request.maxOutputTokens
+            : undefined,
       });
       return {
         contractVersion: 1,

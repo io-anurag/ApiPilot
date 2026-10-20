@@ -4,6 +4,7 @@ import { userScriptClient } from "../services/userScriptClient";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
+import { EntryFeatureIcon, type EntryFeatureIconName } from "../components/EntryFeatureIcon";
 import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { CREDENTIALS_NOTE, ScriptEditor } from "../components/userScript/ScriptEditor";
@@ -12,9 +13,8 @@ import { ScriptProblems } from "../components/userScript/ScriptProblems";
 import { DocumentGlyph, PlusGlyph, SCRIPT_INPUT, UploadGlyph, WITH_ICON } from "../components/userScript/ScriptPanel";
 import { ScriptWorkspace } from "../components/userScript/ScriptWorkspace";
 import { Banner } from "../components/patterns/Banner";
-import { Card, CardHeader } from "../components/patterns/Card";
 import { DropZone } from "../components/patterns/DropZone";
-import { KeyValueGrid, type KeyValueItem } from "../components/patterns/KeyValueGrid";
+import { FramedPanel } from "../components/patterns/FramedPanel";
 import { Pill } from "../components/patterns/Pill";
 import { StepTrail, type StepTrailItem } from "../components/patterns/StepTrail";
 
@@ -41,10 +41,10 @@ const USER_SCRIPT_STEPS: readonly StepTrailItem[] = [
   { id: "run", label: "Run", hint: "Runs with your own k6", lockReason: "Runs with your own k6, once a script is confirmed" },
 ];
 
-const USER_SCRIPT_FEATURES: readonly KeyValueItem[] = [
-  { label: "Checked", value: "Only allowed k6 modules" },
-  { label: "Confirmed", value: "You approve its exact content" },
-  { label: "Local", value: "Runs with your own k6" },
+const USER_SCRIPT_FEATURES: ReadonlyArray<{ label: string; value: string; icon: EntryFeatureIconName }> = [
+  { label: "Checked", value: "Only allowed k6 modules", icon: "direct" },
+  { label: "Confirmed", value: "You approve its exact content", icon: "review" },
+  { label: "Local", value: "Runs with your own k6", icon: "local" },
 ];
 
 export function UserScriptPage({ openRunRequest }: Readonly<{ openRunRequest?: Readonly<{ scriptId: string; runId: string; token: number }> }> = {}) {
@@ -160,29 +160,38 @@ export function UserScriptPage({ openRunRequest }: Readonly<{ openRunRequest?: R
       {list.kind === "loading" && <Skeleton className="h-40 w-full rounded bg-surface-strong" />}
 
       {list.kind !== "loading" && !working && (
-        <section aria-labelledby="user-script-title" className="space-y-5">
-          <Card>
-            <StepTrail ariaLabel="Run k6 Script progress" columns={4} items={USER_SCRIPT_STEPS} currentId="script" onSelect={() => undefined} />
-          </Card>
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <div className="space-y-5">
-              <div className="space-y-3">
-                <p className="inline-flex items-center gap-2 rounded bg-lime-pale px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-brand-700">
-                  Bring your own k6 script
+        <section aria-labelledby="user-script-title" className="relative isolate overflow-hidden">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
+          />
+          <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_30rem] lg:gap-x-16">
+            <div className="flex min-w-0 flex-col gap-8">
+              <div className="space-y-4">
+                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
+                  <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                  <span>Bring your own k6 script</span>
                 </p>
-                <h2 id="user-script-title" className="font-display text-2xl font-bold text-text-primary">
+                <h2 id="user-script-title" className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl">
                   Run k6 Script
                 </h2>
-                <p className="max-w-2xl text-sm text-text-secondary">
+                <p className="max-w-2xl text-base leading-7 text-muted">
                   Run a k6 script you supply with the k6 installed on this machine. ApiPilot checks that it uses only allowed k6 modules and nothing that reads local files, asks you to
                   confirm its exact content, and runs it only when you press the trigger.
                 </p>
                 <p className="max-w-2xl text-sm text-muted">{CREDENTIALS_NOTE}</p>
               </div>
-              <KeyValueGrid items={USER_SCRIPT_FEATURES} />
+              <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
+                {USER_SCRIPT_FEATURES.map(({ label, value, icon }, index) => (
+                  <div key={label} className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}>
+                    <EntryFeatureIcon name={icon} />
+                    <dt className="font-mono text-xs uppercase text-brand-700 dark:text-brand-300">{label}</dt>
+                    <dd className="text-xs text-muted">{value}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
-            <Card>
-              <CardHeader title="Add a k6 script" subtitle="JavaScript · checked before it is stored" />
+            <FramedPanel title="Add a k6 script" subtitle="JavaScript · checked before it is stored">
               <div className="space-y-4">
                 <DropZone
                   active={dragging}
@@ -212,7 +221,10 @@ export function UserScriptPage({ openRunRequest }: Readonly<{ openRunRequest?: R
                   )}
                 </div>
               </div>
-            </Card>
+            </FramedPanel>
+            <div className="col-span-full border-t border-border pt-4">
+              <StepTrail ariaLabel="Run k6 Script progress" columns={4} items={USER_SCRIPT_STEPS} currentId="script" onSelect={() => undefined} />
+            </div>
           </div>
         </section>
       )}

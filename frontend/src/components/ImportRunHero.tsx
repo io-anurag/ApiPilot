@@ -16,39 +16,66 @@ const FEATURES = [
 }>;
 
 /**
- * The Import & Run Collection header. Full on the Collection step, where it frames the import card
- * (`aside`); on later steps the same header shrinks to its eyebrow and headline so the work starts
- * at the top of the screen instead of below a full-height hero (AP-042).
+ * The Import & Run Collection header. Full on the Collection step, where it frames the import panel
+ * (`aside`) beside the headline, centred in the viewport like the Upload screen; on later steps the
+ * same header shrinks to its eyebrow and headline so the work starts at the top of the screen
+ * instead of below a full-height hero (AP-042).
  */
 export function ImportRunHero({
   compact,
   aside,
   extra,
+  footer,
 }: Readonly<{
   compact: boolean;
   aside?: ReactNode;
   /** Shown under the feature list on the full header only (AP-046: the coverage entry). */
   extra?: ReactNode;
+  /** Shown across the bottom of the full header only (the step trail). */
+  footer?: ReactNode;
 }>) {
   return (
-    <header data-testid="import-run-hero" data-compact={compact}>
-      <div className={compact ? "py-1" : "grid items-start gap-4 xl:grid-cols-2"}>
-        <div className={compact ? "space-y-1" : "flex min-w-0 flex-col gap-4"}>
-          <div className={compact ? "space-y-1" : "space-y-2"}>
-            <p className="inline-flex items-center gap-2 rounded bg-lime-pale px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-brand-700">
-              Bring your own collection
-            </p>
+    <header
+      data-testid="import-run-hero"
+      data-compact={compact}
+      className={compact ? undefined : "relative isolate overflow-hidden"}
+    >
+      <div
+        className={
+          compact
+            ? "py-1"
+            : "grid min-h-[calc(100vh-9rem)] grid-cols-1 content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_30rem] lg:gap-x-16"
+        }
+      >
+        {!compact && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[32rem] w-[32rem] -translate-x-1/3 -translate-y-1/4 rounded-full bg-brand-500/10 blur-3xl"
+          />
+        )}
+        <div className={compact ? "space-y-1" : "flex min-w-0 flex-col gap-8"}>
+          <div className={compact ? "space-y-1" : "space-y-4"}>
+            {compact ? (
+              <p className="inline-flex items-center gap-2 rounded bg-lime-pale px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-brand-700">
+                Bring your own collection
+              </p>
+            ) : (
+              <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
+                <span aria-hidden="true" className="h-3 w-1 rounded-full bg-brand-500" />
+                <span>Bring your own collection</span>
+              </p>
+            )}
             <h2
               className={
                 compact
                   ? "font-display text-2xl font-semibold tracking-tight text-text-primary"
-                  : "max-w-3xl font-display text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+                  : "max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-text-primary sm:text-5xl"
               }
             >
               Run an existing collection against your API
             </h2>
             {!compact && (
-              <p className="max-w-2xl text-sm text-text-secondary">
+              <p className="max-w-2xl text-base leading-7 text-muted">
                 Import a Postman collection and environment without first uploading an OpenAPI
                 specification. Review its requests, choose an order, and explicitly trigger each
                 run.
@@ -56,16 +83,15 @@ export function ImportRunHero({
             )}
           </div>
           {!compact && (
-            <dl className="grid gap-3 sm:grid-cols-3">
-              {FEATURES.map(({ label, description, icon }) => (
-                <div key={label} className="flex min-w-0 flex-col gap-1 rounded-xl bg-surface-subtle p-3">
-                  <dt className="flex items-center gap-2 font-mono text-xs font-semibold text-text-primary">
-                    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-mint">
-                      <EntryFeatureIcon name={icon} />
-                    </span>
-                    {label}
-                  </dt>
-                  <dd className="text-xs text-text-secondary">{description}</dd>
+            <dl className="flex max-w-2xl flex-wrap gap-x-6 gap-y-4">
+              {FEATURES.map(({ label, description, icon }, index) => (
+                <div
+                  key={label}
+                  className={`flex min-w-[130px] flex-1 flex-col gap-1.5 ${index > 0 ? "sm:border-l sm:border-border sm:pl-6" : ""}`}
+                >
+                  <EntryFeatureIcon name={icon} />
+                  <dt className="font-mono text-xs text-brand-700 dark:text-brand-300">{label}</dt>
+                  <dd className="text-xs text-muted">{description}</dd>
                 </div>
               ))}
             </dl>
@@ -74,6 +100,7 @@ export function ImportRunHero({
         </div>
         {/* Kept mounted when compact (hidden, not removed) so the aside's form state survives. */}
         {aside && <div className={compact ? "hidden" : "min-w-0"}>{aside}</div>}
+        {!compact && footer && <div className="col-span-full border-t border-border pt-4">{footer}</div>}
       </div>
     </header>
   );

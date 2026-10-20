@@ -118,11 +118,10 @@ interface BatchScenarioResult {
 
 interface BatchRunContext {
   outcomes: AICandidateOutcomes;
-  candidateIds: Set<string>;
   retryAttempt: number;
   /**
    * When aborted, the run has stopped waiting for this batch. `runOneBatch` then discards a late
-   * response before touching `outcomes` or `candidateIds`, so abandoned work can never alter a
+   * response before touching `outcomes`, so abandoned work can never alter a
    * result the run has already returned (specs/013-ai-enhancement-viability FR-020, FR-021).
    */
   cancelSignal?: AbortSignal;
@@ -203,7 +202,15 @@ async function runOneBatch(
   context: BatchRunContext,
   batchIndex?: number,
 ): Promise<BatchScenarioResult[]> {
-  const { outcomes, candidateIds, retryAttempt } = context;
+  const { outcomes, retryAttempt } = context;
+  // Candidate IDs must be unique within ONE response, not across the run. The prompt's worked
+  // example carries `candidateId: "c1"`, and with one operation per unit the model reuses it in every
+  // unit's reply; a run-wide set rejected every reply after the first as `duplicate`, discarding
+  // 17 of 20 units' worth of inference in a measured run. A scenario's own ID is a hash of the whole
+  // candidate, so the same candidate ID in two units cannot collide as a scenario, and
+  // `provenance.aiBatchIndex` says which unit proposed it. `retryOneBatch` has always scoped the
+  // check to its single response.
+  const candidateIds = new Set<string>();
   const request = buildAIScenarioRequest(
     requestId,
     withOperations(apiModel, batch.operations),
@@ -230,14 +237,32 @@ async function runOneBatch(
     throw error;
   }
   const aiScenarios: BatchScenarioResult[] = [];
+  // Why this unit kept what it kept: every candidate the model returned lands in exactly one of
+  // these buckets (or is retained), so an empty unit can be told apart from a unit whose candidates
+  // were all refused (`unit_candidates` below).
+  const tally = {
+    rejectedShape: 0,
+    rejectedDuplicateId: 0,
+    nonExecutable: 0,
+    unmatchedOperation: 0,
+    malformed: 0,
+  };
+  const findingCodes = new Map<string, number>();
   for (const rawCandidate of parsed.candidates) {
     const shapeFindings = validateAICandidateShape(rawCandidate);
     if (shapeFindings.length > 0) {
+      tally.rejectedShape += 1;
+      countFindingCodes(findingCodes, shapeFindings);
       outcomes.rejected.push({ candidate: rawCandidate, findings: shapeFindings });
       continue;
     }
-    if (!isCandidateShape(rawCandidate)) continue;
+    if (!isCandidateShape(rawCandidate)) {
+      tally.malformed += 1;
+      continue;
+    }
     if (candidateIds.has(rawCandidate.candidateId)) {
+      tally.rejectedDuplicateId += 1;
+      countFindingCodes(findingCodes, [{ code: "duplicate" }]);
       outcomes.rejected.push({
         candidate: rawCandidate,
         findings: [
@@ -259,10 +284,10 @@ async function runOneBatch(
     const { candidate: validatedCandidate, strippedAssertions } =
       stripUndocumentedStatusAssertions(rawCandidate, apiModel);
     if (validateAICandidateSemantics(validatedCandidate, apiModel).length > 0) {
-      outcomes.nonExecutable.push({
-        candidate: rawCandidate,
-        findings: validateAICandidateSemantics(rawCandidate, apiModel),
-      });
+      const rawFindings = validateAICandidateSemantics(rawCandidate, apiModel);
+      tally.nonExecutable += 1;
+      countFindingCodes(findingCodes, rawFindings);
+      outcomes.nonExecutable.push({ candidate: rawCandidate, findings: rawFindings });
       continue;
     }
     const operation = apiModel.operations.find(
@@ -270,7 +295,10 @@ async function runOneBatch(
         item.path === rawCandidate.operationPath &&
         item.method.toUpperCase() === rawCandidate.operationMethod.toUpperCase(),
     );
-    if (!operation) continue;
+    if (!operation) {
+      tally.unmatchedOperation += 1;
+      continue;
+    }
     aiScenarios.push({
       candidate: validatedCandidate,
       scenario: candidateToScenario(
@@ -284,7 +312,40 @@ async function runOneBatch(
       strippedAssertions,
     });
   }
+  logger.info("unit_candidates", {
+    requestId,
+    candidatesReturned: parsed.candidates.length,
+    retainedCount: aiScenarios.length,
+    ...tally,
+    findingCodes: formatFindingCodes(findingCodes),
+    baselineScenarioCount: testModel.scenarios.length,
+  });
   return aiScenarios;
+}
+
+/** Adds each finding's code to a per-unit count, for the `unit_candidates` diagnostic. */
+function countFindingCodes(
+  counts: Map<string, number>,
+  findings: readonly { code: string }[],
+): void {
+  for (const finding of findings) {
+    counts.set(finding.code, (counts.get(finding.code) ?? 0) + 1);
+  }
+}
+
+/**
+ * Finding codes and counts as one stable string (`code:count,…`, sorted by code), because log fields
+ * are flat. Codes only — never candidate text, operation names or response content (constitution
+ * XX). In `unit_candidates`, `requestId` is the batch's id, the same one the provider's inference
+ * events carry, so it joins to that unit's prompt size and output length; `candidatesReturned: 0`
+ * is the model sending an empty list, and a positive count with `retainedCount: 0` means every
+ * candidate was refused, with this string saying why.
+ */
+function formatFindingCodes(counts: ReadonlyMap<string, number>): string {
+  return [...counts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([code, count]) => `${code}:${count}`)
+    .join(",");
 }
 
 /**
@@ -339,7 +400,7 @@ export async function retryOneBatch(
       scopeBaselineToOperations(testModel, operations),
       requestId,
       provider,
-      { outcomes, candidateIds: new Set(), retryAttempt: 0 },
+      { outcomes, retryAttempt: 0 },
       batchIndex,
     );
   } catch (error) {
@@ -453,7 +514,6 @@ export async function enhanceTestModel(
     nonExecutable: [],
   });
   const outcomes = emptyOutcomes();
-  const candidateIds = new Set<string>();
 
   // `getInputBudget()` loads the engine if it is not already loaded, so this await is where a
   // first run's model download and load actually happen. Signalling afterwards lets the caller
@@ -584,7 +644,7 @@ export async function enhanceTestModel(
         scopeBaselineToOperations(testModel, batch.operations),
         batchRequestId,
         provider,
-        { outcomes, candidateIds, retryAttempt, cancelSignal: options.cancelSignal },
+        { outcomes, retryAttempt, cancelSignal: options.cancelSignal },
         index,
       ).then((result) => {
         batchScenariosByIndex[index] = result;

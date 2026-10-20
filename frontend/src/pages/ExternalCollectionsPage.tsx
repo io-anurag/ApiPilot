@@ -32,13 +32,13 @@ import { VariablePanel } from "../components/VariablePanel";
 import { ErrorState } from "../components/ErrorState";
 import { EmptyState } from "../components/EmptyState";
 import { Banner } from "../components/patterns/Banner";
-import { Card, CardHeader } from "../components/patterns/Card";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { CoverageEntryCard } from "../components/apiCoverage/CoverageEntryCard";
 import type { CoverageEntryState } from "../components/apiCoverage/coverageViewModel";
 import { ImportRunCollectionBar, ImportRunHero } from "../components/ImportRunHero";
+import { FramedPanel } from "../components/patterns/FramedPanel";
 import { ImportRunStepper } from "../components/ImportRunStepper";
 import { resolveStep, type ImportRunStepId } from "../components/importRunSteps";
 import type { ImportPreload } from "../services/importPreload";
@@ -421,22 +421,25 @@ export function ExternalCollectionsPage({
       <CoverageEntryCard entry={coverage} onOpen={onOpenCoverage} variant="inline" />
     ) : undefined;
 
+  const stepper = <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />;
+
   return (
     <div className="space-y-5">
       {runLookupNotice && <Banner tone="warning" role="status" testId="run-lookup-notice" title={runLookupNotice} />}
-      <ImportRunStepper current={step} progress={progress} onSelect={setRequestedStep} />
+      {/* On the Collection step the trail closes the full-height header, as the Upload screen's path
+          does; on later steps the header is compact, so the trail leads the page. */}
+      {step !== "collection" && stepper}
       <ImportRunHero
         compact={step !== "collection"}
         extra={coverageEntry}
+        footer={stepper}
         // Always mounted (hidden by the hero on later steps), so a half-filled upload form and the
         // list's selection survive a visit to another step.
         aside={
-          <Card className="flex h-full flex-col gap-5">
-            <CardHeader
-              level={3}
-              title="Import a Postman collection"
-              subtitle="Collection + environment JSON · exported from Postman, shared by a teammate, or hand-authored"
-            />
+          <FramedPanel
+            title="Import a Postman collection"
+            subtitle="Collection + environment JSON · exported from Postman, shared by a teammate, or hand-authored"
+          >
             <ExternalCollectionUpload onUploaded={handleUploaded} preload={preload} />
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
@@ -461,7 +464,7 @@ export function ExternalCollectionsPage({
                 </button>
               </div>
             )}
-          </Card>
+          </FramedPanel>
         }
       />
 
