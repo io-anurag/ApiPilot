@@ -32,7 +32,9 @@ describe("OpenAPI YAML and JSON twins are equivalent (SC-001, FR-008)", () => {
       expect(fromJson.input.format).toBe("openapi-json");
       expect(fromJson.apiModel).toEqual(fromYaml.apiModel);
       expect(normalized(generateTestModel(fromJson.apiModel))).toEqual(normalized(generateTestModel(fromYaml.apiModel)));
-    });
+      // The large paypal fixture alone takes ~2 s (it is loaded and generated twice); the default 5 s
+      // limit is exceeded when the full suite runs many workers in parallel.
+    }, 30_000);
   }
 
   it("gives a Swagger 2.0 document as JSON the identical unsupported-version outcome as YAML", async () => {

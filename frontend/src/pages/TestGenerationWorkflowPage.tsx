@@ -38,6 +38,8 @@ import { ErrorState } from "../components/ErrorState";
 import { Skeleton } from "../components/Skeleton";
 import { BUTTON_STYLES } from "../components/controlStyles";
 import { WorkflowPathPreview } from "../components/WorkflowPathPreview";
+import { Card, CardHeader } from "../components/patterns/Card";
+import { DropZone } from "../components/patterns/DropZone";
 import { useWorkflowStageRefresh } from "../hooks/useWorkflowStageRefresh";
 
 /** High-level pipeline shown before a workflow starts (CLAUDE.md §28's north-star diagram). The
@@ -480,12 +482,8 @@ export function TestGenerationWorkflowPage({
           <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 content-center items-center gap-10 py-4 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-x-16">
             <div className="space-y-8">
               <div className="space-y-4">
-                <p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase text-brand-700 dark:text-brand-300">
-                  <span
-                    aria-hidden="true"
-                    className="h-3 w-1 rounded-full bg-brand-500"
-                  />
-                  <span>Specification to executable tests</span>
+                <p className="inline-flex items-center gap-2 rounded bg-lime-pale px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-brand-700">
+                  Specification to executable tests
                 </p>
                 <h2 className="max-w-3xl font-display text-4xl font-semibold tracking-tight leading-[1.1] text-text-primary sm:text-5xl">
                   Turn an OpenAPI specification into a test suite
@@ -515,52 +513,35 @@ export function TestGenerationWorkflowPage({
                 ))}
               </dl>
             </div>
-            <div className="overflow-hidden rounded-xl border border-border-strong bg-surface shadow-[6px_6px_0_0_var(--color-border)]">
-              <div className="h-1 bg-brand-600" />
-              <div className="flex items-center justify-between border-b border-border bg-surface-subtle px-5 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">
-                    New test generation run
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">
-                    OpenAPI 3.x (YAML or JSON), HAR or API definition · up to 10 MB
-                  </p>
-                </div>
-                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-brand-500" />
-              </div>
-              <div className="space-y-4 p-5 sm:p-6">
+            <Card>
+              <CardHeader
+                title="Upload specification"
+                subtitle="OpenAPI 3.x (YAML or JSON), HAR or API definition · up to 10 MB"
+              />
+              <div className="space-y-4">
                 <div className="space-y-1">
-                  <h3 className="font-display text-lg font-semibold text-text-primary">
-                    Upload specification
-                  </h3>
-                  <p className="text-sm leading-6 text-muted">
+                  <p className="text-sm text-text-secondary">
                     The document stays in your local workflow and is never sent to a cloud
                     AI provider.
                   </p>
-                  <p id="home-spec-upload-formats" className="text-xs leading-5 text-muted">
+                  <p id="home-spec-upload-formats" className="text-xs text-muted">
                     Accepted: an OpenAPI 3.x specification (.yaml, .yml or .json), a HAR capture
                     (.har), or an ApiPilot API definition (.json). The format is recognized from
                     the file&apos;s content.
                   </p>
                 </div>
-                <label
+                <DropZone
                   htmlFor="home-spec-upload"
+                  active={dragActive}
+                  disabled={uploading}
+                  icon={<UploadIcon className="h-5 w-5" />}
+                  title="Drag and drop your specification here"
+                  hint="or click to browse your files"
+                  className="relative"
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`relative flex flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
-                    dragActive
-                      ? "border-brand-500 bg-brand-50 dark:bg-brand-500/15"
-                      : "border-border-strong bg-surface-subtle hover:border-brand-400 hover:bg-brand-50/40 dark:hover:bg-brand-500/10"
-                  } ${uploading ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-200 bg-surface text-brand-700 dark:border-brand-500 dark:text-brand-300">
-                    <UploadIcon className="h-5 w-5" />
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">
-                    Drag and drop your specification here
-                  </p>
-                  <p className="text-xs text-muted">or click to browse your files</p>
                   <input
                     id="home-spec-upload"
                     type="file"
@@ -571,9 +552,9 @@ export function TestGenerationWorkflowPage({
                     disabled={uploading}
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   />
-                </label>
+                </DropZone>
               </div>
-            </div>
+            </Card>
             <WorkflowPathPreview steps={PIPELINE_PREVIEW_STEPS} />
           </div>
         </div>

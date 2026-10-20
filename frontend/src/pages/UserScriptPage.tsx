@@ -167,7 +167,9 @@ export function UserScriptPage({ openRunRequest }: Readonly<{ openRunRequest?: R
           <div className="grid items-start gap-5 lg:grid-cols-2">
             <div className="space-y-5">
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Bring your own k6 script</p>
+                <p className="inline-flex items-center gap-2 rounded bg-lime-pale px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider text-brand-700">
+                  Bring your own k6 script
+                </p>
                 <h2 id="user-script-title" className="font-display text-2xl font-bold text-text-primary">
                   Run k6 Script
                 </h2>
