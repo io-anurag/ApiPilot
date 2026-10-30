@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => {
     10,
   );
   // Loopback unless FRONTEND_DEV_HOST says otherwise (specs/049-lan-dev-access-token). Any other
-  // address turns on the access-token guard below; there is no setting to turn it off, and an
-  // invalid value throws here so the dev server refuses to start.
+  // address turns on the per-device access guard below (specs/060-per-device-dev-access); there is
+  // no setting to turn it off, and an invalid value throws here so the dev server refuses to start.
   const listenAddress = resolveListenAddress(
     process.env.FRONTEND_DEV_HOST ?? rootEnv.FRONTEND_DEV_HOST,
   );
@@ -34,13 +34,15 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      ...(listenAddress.protected ? [devAccessPlugin({ backendPort, address: listenAddress })] : []),
+      ...(listenAddress.protected
+        ? [devAccessPlugin({ backendPort, address: listenAddress })]
+        : []),
     ],
     server: {
       // Loopback by default. `host: true` would expose the dev server on every interface, and
       // because its proxy reaches the backend over loopback it would hand LAN clients a way around
       // the backend's loopback bind. A non-loopback FRONTEND_DEV_HOST is allowed only together
-      // with the per-launch access token (devAccessPlugin), which gates the proxy as well.
+      // with the per-device access guard (devAccessPlugin), which gates the proxy as well.
       host: listenAddress.host,
       port: frontendDevPort,
       proxy: {

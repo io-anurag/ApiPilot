@@ -51,9 +51,11 @@ dependencies and run `npm run dev`. Once running:
 
 By default only the machine running ApiPilot can open it. To use it from another device on a
 network you trust, set `FRONTEND_DEV_HOST` (for example `0.0.0.0`) in `.env` and restart
-`npm run dev`. The terminal then prints an address that includes a one-time-per-launch access token:
-open that address on the other device. It stops working when ApiPilot restarts, and anyone who has it can
-use ApiPilot until then, so treat it like a password. The connection is not encrypted; see
+`npm run dev`. The terminal then prints the addresses to open. Each user just opens one on their own
+device: that browser is given a token of its own automatically, so there is nothing to share or
+confirm. The token works only from that device's network address and stops working when
+ApiPilot restarts. Anyone on your private network can request one, so use this only on a network
+you trust. The connection is not encrypted; see
 [Opening ApiPilot from another device](configuration.md#opening-apipilot-from-another-device)
 for the limits, for calling the API from scripts, and for safer alternatives such as an SSH tunnel.
 
@@ -103,13 +105,14 @@ The header also has two shortcuts:
    same Help dialog as the **?** button).
 2. **Step 1, Start with the artifact you have.** Three cards name the kind of input you may hold and the workflows that accept it:
 
-   | You have | Workflows offered |
-   |---|---|
+   | You have                 | Workflows offered            |
+   | ------------------------ | ---------------------------- |
    | An OpenAPI specification | Guided Workflow, Performance |
-   | A Postman collection | Import & Run Collection |
-   | A k6 script | Run k6 Script |
+   | A Postman collection     | Import & Run Collection      |
+   | A k6 script              | Run k6 Script                |
 
    Choose a workflow tag (or, for a single-workflow card, the card) to start it.
+
 3. **Step 2, Launch a test session.** The four workflows in order, each with its icon and one-sentence description. **Recommended** marks
    Guided Workflow, and a Performance test left unfinished says **Draft in progress**.
 4. **Step 3, Explore results and insights.** Four figures from the same data as the Coverage screen: specification coverage,
@@ -171,12 +174,12 @@ completed**.
 On Home or in the sidebar, choose **Guided Workflow**, then choose a file (up to 10 MB). ApiPilot recognizes what the file
 is from its content, not its name, so `.yaml`, `.yml`, `.json` and `.har` files are all accepted:
 
-| What you upload | How it is used |
-|---|---|
-| OpenAPI 3.x, YAML or JSON | The documented contract. Everything works as it always has, and a YAML file and its JSON twin give the same result. Swagger 2.0 is rejected. |
-| HAR capture | Requests and responses recorded by a browser or proxy. ApiPilot works out the operations from what was observed (section 3.1a). |
-| ApiPilot API definition (`.json`) | A small, strictly validated file you write yourself for an API that has neither an OpenAPI document nor a capture (section 3.1b). |
-| Postman collection | Not used by the guided workflow. ApiPilot says so and points you to **Import & Run Collection**; nothing is imported. |
+| What you upload                   | How it is used                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAPI 3.x, YAML or JSON         | The documented contract. Everything works as it always has, and a YAML file and its JSON twin give the same result. Swagger 2.0 is rejected. |
+| HAR capture                       | Requests and responses recorded by a browser or proxy. ApiPilot works out the operations from what was observed (section 3.1a).              |
+| ApiPilot API definition (`.json`) | A small, strictly validated file you write yourself for an API that has neither an OpenAPI document nor a capture (section 3.1b).            |
+| Postman collection                | Not used by the guided workflow. ApiPilot says so and points you to **Import & Run Collection**; nothing is imported.                        |
 
 The detected format is shown next to the file name for the whole workflow. If the file cannot be understood, an explicit
 error says why before anything else runs: a JSON file that matches none of the formats, or more than one, is refused and
@@ -226,11 +229,11 @@ name and password. The counts always add up: imported plus excluded plus malform
 **Reading the labels.** Every operation, parameter, status code, example and schema fact shows where it comes from, in
 words as well as colour:
 
-| Label | Meaning |
-|---|---|
-| **Documented** | Stated by an OpenAPI document you supplied. |
-| **Declared** | Stated by an API definition you wrote. |
-| **Observed ×N** | Seen in N entries of the capture. Not a promise that the API behaves that way. |
+| Label           | Meaning                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------- |
+| **Documented**  | Stated by an OpenAPI document you supplied.                                             |
+| **Declared**    | Stated by an API definition you wrote.                                                  |
+| **Observed ×N** | Seen in N entries of the capture. Not a promise that the API behaves that way.          |
 | **Inferred ×N** | Worked out by ApiPilot from N observations, such as a path parameter or a field's type. |
 
 The word beside the count is the confidence: **high** for three or more consistent observations, **medium** for two, **low**
@@ -241,22 +244,22 @@ path parameters are always required).
 
 These rules are fixed and deterministic: the same file gives the same operations, in the same order, every time.
 
-*Entries that are left out.* Each entry gets exactly one reason, from the first of these rules that applies:
+_Entries that are left out._ Each entry gets exactly one reason, from the first of these rules that applies:
 
-| # | Reason | Entries |
-|---|---|---|
-| 1 | Malformed | No usable URL (missing, relative or invalid), no method, no response status, or not an object. Counted separately and listed by position. |
-| 2 | Not HTTP | A scheme other than `http` or `https` (for example `data:` or `blob:`). |
-| 3 | CORS preflight | An `OPTIONS` request that carries `Access-Control-Request-Method`. |
-| 4 | Streaming | A WebSocket, or a server-sent-events response (`text/event-stream`). |
-| 5 | Failed request | No response was received (status 0). |
-| 6 | Not modified | Status 304. |
-| 7 | Redirect | Any other 3xx status. Redirects and 304 are never recorded as an operation's statuses. |
-| 8 | Analytics or telemetry | A host on the list below, or a subdomain of one. |
-| 9 | Static asset | A `GET` or `HEAD` for an image, font, stylesheet or script, by content type or by file extension (`js`, `mjs`, `css`, `map`, `png`, `jpg`, `jpeg`, `gif`, `svg`, `ico`, `webp`, `woff`, `woff2`, `ttf`, `otf`, `eot`). |
-| 10 | HTML document | A response whose content type is `text/html` (a page navigation). |
-| 11 | Third-party origin | An origin whose site name (the last two host labels, or three for suffixes such as `co.uk`) matches neither a page the capture was taken on nor the origin with the most API-like requests. |
-| 12 | Duplicate on another origin | The same method and path was seen on a second origin. The origin with more observations is kept (on a tie, the one that sorts first) and the other is excluded, with a `duplicate-operation` issue. An operation is one method and path, whichever server answered. |
+| #   | Reason                      | Entries                                                                                                                                                                                                                                                             |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Malformed                   | No usable URL (missing, relative or invalid), no method, no response status, or not an object. Counted separately and listed by position.                                                                                                                           |
+| 2   | Not HTTP                    | A scheme other than `http` or `https` (for example `data:` or `blob:`).                                                                                                                                                                                             |
+| 3   | CORS preflight              | An `OPTIONS` request that carries `Access-Control-Request-Method`.                                                                                                                                                                                                  |
+| 4   | Streaming                   | A WebSocket, or a server-sent-events response (`text/event-stream`).                                                                                                                                                                                                |
+| 5   | Failed request              | No response was received (status 0).                                                                                                                                                                                                                                |
+| 6   | Not modified                | Status 304.                                                                                                                                                                                                                                                         |
+| 7   | Redirect                    | Any other 3xx status. Redirects and 304 are never recorded as an operation's statuses.                                                                                                                                                                              |
+| 8   | Analytics or telemetry      | A host on the list below, or a subdomain of one.                                                                                                                                                                                                                    |
+| 9   | Static asset                | A `GET` or `HEAD` for an image, font, stylesheet or script, by content type or by file extension (`js`, `mjs`, `css`, `map`, `png`, `jpg`, `jpeg`, `gif`, `svg`, `ico`, `webp`, `woff`, `woff2`, `ttf`, `otf`, `eot`).                                              |
+| 10  | HTML document               | A response whose content type is `text/html` (a page navigation).                                                                                                                                                                                                   |
+| 11  | Third-party origin          | An origin whose site name (the last two host labels, or three for suffixes such as `co.uk`) matches neither a page the capture was taken on nor the origin with the most API-like requests.                                                                         |
+| 12  | Duplicate on another origin | The same method and path was seen on a second origin. The origin with more observations is kept (on a tie, the one that sorts first) and the other is excluded, with a `duplicate-operation` issue. An operation is one method and path, whichever server answered. |
 
 The first-party rule is approximate by design. It can leave out a real API that lives on an unrelated domain, which is why
 every exclusion is reported with its reason; if that happens, upload a capture that contains only that traffic.
@@ -266,29 +269,29 @@ google-analytics.com, googlesyndication.com, googletagmanager.com, heapanalytics
 mixpanel.com, newrelic.com, nr-data.net, optimizely.com, px.ads.linkedin.com, segment.com, segment.io, sentry.io and
 snowplowanalytics.com.
 
-*URLs and paths.* The host is compared without case. In the path, `.` and `..` segments are resolved as text, repeated
+_URLs and paths._ The host is compared without case. In the path, `.` and `..` segments are resolved as text, repeated
 slashes are collapsed, a trailing slash is dropped and percent-encoding is normalized, so `/v1/orders/` and `/v1//orders`
 are the same path. The query string is not part of an operation's identity: its names become query parameters.
 
-*Path parameters.* A path segment is a parameter only when the capture shows at least two different identifier-like values
+_Path parameters._ A path segment is a parameter only when the capture shows at least two different identifier-like values
 at that position across otherwise identical paths for the same method. Identifier-like means: all digits, a UUID, a
 hexadecimal string of 8 or more characters, a ULID, an ISO date (`2026-01-31`), or a token of 12 or more letters, digits,
 `_` or `-` that mixes letters and digits. A single value, or a segment that is not identifier-like, stays literal, and a
 lone identifier-like value is reported as an ambiguous path instead of being guessed. The parameter is named after the
 preceding word (`/orders/…` gives `orderId`), or `id` when there is none.
 
-*Statuses, bodies and examples.* An operation lists only the statuses it was seen to return. Up to five distinct request
+_Statuses, bodies and examples._ An operation lists only the statuses it was seen to return. Up to five distinct request
 examples are kept per operation. JSON bodies give field names, types and how often each field was present; URL-encoded and
 multipart bodies give their text fields. Compressed bodies are not decompressed and a multipart file part cannot be
 reproduced; both are recorded as unavailable, with the reason, and never guessed. A body above the size limit is skipped and
 reported.
 
-*Credentials.* Credential values (in headers, cookies, query strings, JSON and form fields, and the user name and password
+_Credentials._ Credential values (in headers, cookies, query strings, JSON and form fields, and the user name and password
 in a URL) are replaced by a placeholder such as `[redacted:token]` before anything else is kept. ApiPilot records that a
 credential was seen, where and of what kind, never its value. In generated tests the placeholder becomes a variable
 reference such as `{{token}}`, whose value you supply when you run.
 
-*Generated tests.* For an observed operation, deterministic generation produces:
+_Generated tests._ For an observed operation, deterministic generation produces:
 
 - one positive scenario for each observed 2xx status, replaying the most-observed request for that status and asserting
   only that status code, labelled **Observed**. No header, body or schema assertion is ever generated from a capture;
@@ -313,17 +316,17 @@ field produced are considered.
 
 **Limits.** Captures and definitions are bounded so that a large or hostile file cannot exhaust the machine:
 
-| Limit | Value | Setting | When it is exceeded |
-|---|---|---|---|
-| File size | 10 MB | fixed | The upload is refused. |
-| Entries in a HAR | 5,000 | `INPUT_HAR_MAX_ENTRIES` | The upload is refused; capture a narrower session. |
-| Size of one body analyzed | 1 MiB | `INPUT_MAX_BODY_BYTES` | That body is skipped and reported. |
-| JSON nesting depth | 128 | `INPUT_MAX_JSON_DEPTH` | The upload is refused. |
-| Operations derived from one capture | 2,000 | fixed | The upload is refused. |
-| Request examples kept per operation | 5 | fixed | The rest are counted, not kept. |
-| Values listed for one path parameter | 10 | fixed | The rest are counted, not listed. |
-| Nesting depth inside an embedded body | 32 | fixed | That body is skipped and reported. |
-| Analysis issues listed per kind | 200 | fixed | The rest are summarized in one line. |
+| Limit                                 | Value | Setting                 | When it is exceeded                                |
+| ------------------------------------- | ----- | ----------------------- | -------------------------------------------------- |
+| File size                             | 10 MB | fixed                   | The upload is refused.                             |
+| Entries in a HAR                      | 5,000 | `INPUT_HAR_MAX_ENTRIES` | The upload is refused; capture a narrower session. |
+| Size of one body analyzed             | 1 MiB | `INPUT_MAX_BODY_BYTES`  | That body is skipped and reported.                 |
+| JSON nesting depth                    | 128   | `INPUT_MAX_JSON_DEPTH`  | The upload is refused.                             |
+| Operations derived from one capture   | 2,000 | fixed                   | The upload is refused.                             |
+| Request examples kept per operation   | 5     | fixed                   | The rest are counted, not kept.                    |
+| Values listed for one path parameter  | 10    | fixed                   | The rest are counted, not listed.                  |
+| Nesting depth inside an embedded body | 32    | fixed                   | That body is skipped and reported.                 |
+| Analysis issues listed per kind       | 200   | fixed                   | The rest are summarized in one line.               |
 
 The three settings are environment variables; see [Configuration](configuration.md).
 
@@ -386,18 +389,18 @@ Click **Generate Baseline Test Suite**. ApiPilot produces, for every operation y
 selected, one or two positive scenarios and a set of rule-based negative/boundary scenarios. These never
 depend on AI and are fully reproducible from the same spec. The categories are:
 
-| Category | What it tests |
-|---|---|
-| `positive` | A valid request that should succeed — the full happy-path request, a second happy-path request with every optional field/parameter omitted (when the operation has any), and any at-minimum/at-maximum boundary value, since all are equally schema-conformant |
-| `missing-field` | A required field omitted |
-| `null-value` | A field explicitly set to `null` |
-| `empty-value` | A field set to an empty string/array |
-| `invalid-type` | A field given the wrong JSON type |
-| `invalid-format` | A field violating its declared format (e.g. not a valid date) |
-| `invalid-enum` | A field set to a value outside its enum |
-| `numeric-boundary` | A number just past its min/max (below minimum or above maximum) |
-| `string-boundary` | A string just past its min/max length (below minimum or above maximum) |
-| `array-boundary` | An array just past its min/max item count (below minimum or above maximum) |
+| Category           | What it tests                                                                                                                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `positive`         | A valid request that should succeed — the full happy-path request, a second happy-path request with every optional field/parameter omitted (when the operation has any), and any at-minimum/at-maximum boundary value, since all are equally schema-conformant |
+| `missing-field`    | A required field omitted                                                                                                                                                                                                                                       |
+| `null-value`       | A field explicitly set to `null`                                                                                                                                                                                                                               |
+| `empty-value`      | A field set to an empty string/array                                                                                                                                                                                                                           |
+| `invalid-type`     | A field given the wrong JSON type                                                                                                                                                                                                                              |
+| `invalid-format`   | A field violating its declared format (e.g. not a valid date)                                                                                                                                                                                                  |
+| `invalid-enum`     | A field set to a value outside its enum                                                                                                                                                                                                                        |
+| `numeric-boundary` | A number just past its min/max (below minimum or above maximum)                                                                                                                                                                                                |
+| `string-boundary`  | A string just past its min/max length (below minimum or above maximum)                                                                                                                                                                                         |
+| `array-boundary`   | An array just past its min/max item count (below minimum or above maximum)                                                                                                                                                                                     |
 
 Path parameters only receive the type/format/enum/boundary variants, not
 missing/null/empty, since an omitted path parameter is a routing concern rather than a
@@ -458,12 +461,12 @@ This is where you decide what actually ships. You'll see:
 
 Actions available:
 
-| Action | Where | Notes |
-|---|---|---|
-| Accept | Per-scenario or bulk | Bulk actions are grouped as **Filtered** (all rows matching the current filters) and **Selected** (your checked rows), each with a confirmation dialog showing the affected count |
-| Reject | Per-scenario or bulk | Requires a free-text reason; bulk reject requires one shared justification |
-| Edit | Per-scenario | Edits the request body JSON directly; invalid JSON is rejected inline and the last valid version is kept; an edited scenario is marked "User-modified" |
-| Regenerate with AI | Per-scenario, AI-derived only | Replaces the scenario with a new AI candidate, or reports a failure — it never silently approves anything |
+| Action             | Where                         | Notes                                                                                                                                                                             |
+| ------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accept             | Per-scenario or bulk          | Bulk actions are grouped as **Filtered** (all rows matching the current filters) and **Selected** (your checked rows), each with a confirmation dialog showing the affected count |
+| Reject             | Per-scenario or bulk          | Requires a free-text reason; bulk reject requires one shared justification                                                                                                        |
+| Edit               | Per-scenario                  | Edits the request body JSON directly; invalid JSON is rejected inline and the last valid version is kept; an edited scenario is marked "User-modified"                            |
+| Regenerate with AI | Per-scenario, AI-derived only | Replaces the scenario with a new AI candidate, or reports a failure — it never silently approves anything                                                                         |
 
 When you're done, click **Finalize Review**:
 
@@ -511,7 +514,7 @@ Optionally enter a base address, then click **Generate Postman Collection**. On 
 you get:
 
 - **A Postman collection** — one request per accepted single-operation scenario, plus
-  one ordered request sequence per *approved* workflow (with response values wired into
+  one ordered request sequence per _approved_ workflow (with response values wired into
   variables consumed by later steps), organized into folders by the spec's tags. Beyond
   approved workflows, a standalone scenario with an unresolved path parameter (e.g. an
   `{id}` no workflow covers) is automatically chained to a confirmed/likely producer's
@@ -742,13 +745,13 @@ own order unless you changed it) — including everything inside nested folders.
 While running, you see a live summary and a **Cancel run** button. Each request's row
 shows an outcome:
 
-| Outcome | Meaning |
-|---|---|
-| Passed | The request completed and none of its tests failed |
-| Assertion failed | The request completed but one or more of its tests failed |
-| Connectivity failure | The request could not reach the target at all |
-| Timed out | No response within the allotted time |
-| Cancelled / Run ended before this request | The run was stopped before this request was sent |
+| Outcome                                   | Meaning                                                   |
+| ----------------------------------------- | --------------------------------------------------------- |
+| Passed                                    | The request completed and none of its tests failed        |
+| Assertion failed                          | The request completed but one or more of its tests failed |
+| Connectivity failure                      | The request could not reach the target at all             |
+| Timed out                                 | No response within the allotted time                      |
+| Cancelled / Run ended before this request | The run was stopped before this request was sent          |
 
 An uploaded-collection run sends every selected request in order. A request that needs a value
 an earlier request failed to produce is still sent, and records its own outcome.
@@ -807,6 +810,7 @@ The result contains:
   When no rule fits, you see **Not enough evidence to name a likely cause** and "No rule
   matched the recorded evidence." ApiPilot deliberately doesn't guess on ambiguous signals,
   such as a 404 (wrong address, or a route that differs from the specification) or a bare 500.
+
 - **Evidence for this cause**: the recorded facts that triggered the rule, such as the
   status code, a failed test's message, or, for a Local-tier run, the response body. Facts
   from the specification are marked "from the specification". Everything else is under a
@@ -850,6 +854,7 @@ API. One screen covers the whole journey, from a source to a running k6 test. It
 reports are unchanged. Nothing is sent to any system until you press **Start** on the last step.
 
 **The entry screen.** It shows four sources side by side with your work:
+
 - **OpenAPI specification**: one step for each operation you choose, from its generated positive
   scenario.
 - **Guided workflow**: one chain for each approved workflow, then one step for each other operation.
@@ -866,6 +871,7 @@ the sources and an introduction are shown.
 **Load** and **Run**. The step you are on is marked, steps you have finished are ticked, and any step you
 have reached can be selected again. **Next** is unavailable until the step is complete, and the reason is
 written beside it; **Back** moves without discarding anything.
+
 - A specification opens on **Operations** when one is already uploaded in this session (**Source** stays
   one click away), and on **Source** with the upload ready when it is not.
 - The guided workflow and a collection open on **Workflows** and **Requests**.
@@ -889,6 +895,7 @@ exists, the source is fixed and this step only shows what the plan was seeded fr
 start a new test from the entry screen.
 
 **2. Operations, Workflows or Requests.**
+
 - For a specification, every analyzed operation is listed with a checkbox, all checked at first. **Filter**
   by path, operation ID or method, **Select all** to clear or restore the whole list, and **Select shown**
   or **Clear shown** to act on the rows the filter leaves. Credential requests the checked operations need
@@ -904,6 +911,7 @@ start a new test from the entry screen.
 **3. Plan.** Name the plan and edit its chains and steps exactly as described in
 [section 5b](#5b-performance-plans-request-chains). Every edit is saved as you make it, and the header
 shows **Saved**, **Saving…** or **Not saved**. For a plan seeded from a specification:
+
 - **Change operations…** lists the specification's operations with the plan's current selection. **Apply to
   plan** removes the operations you deselected, adds the newly selected ones at the end, and keeps your edits
   to the steps that stay, in your order. Cancelling changes nothing. If applying would remove a step you
@@ -987,6 +995,7 @@ note "Recorded before request-chain plans: you can open the report, but it canno
 restored." **View report** opens each report exactly as it was rendered.
 
 **Starting from something you already have.** Each existing entry point can seed a first draft:
+
 - **Performance, OpenAPI specification**: upload a specification and choose the operations. You get one
   single-step chain per chosen operation, from its positive scenario.
 - **Guided workflow**: on the Performance Testing stage, choose **Create request-chain plan**. If
@@ -1024,6 +1033,7 @@ opens itself while a problem blocks the script, and **Go to step** brings the st
 On a narrow screen the list and the editor stack and the page scrolls.
 
 **A step.** Each step has:
+
 - a method, a URL and ordered query parameters, headers and a body (none, raw text with a content
   type, or form fields). Start the URL with `{{baseUrl}}`, the target environment's base URL, or
   with a full `http://` or `https://` address. Pasting a URL with a query splits it into rows.
@@ -1039,6 +1049,7 @@ On a narrow screen the list and the editor stack and the page scrolls.
 - a think time after it, or the plan's default.
 
 **Values.** Type `{{` in any field to pick a value. A `{{name}}` is filled from, in order:
+
 - a value an earlier step extracted for the same virtual user (the latest extraction wins);
 - the current row of a data set with that column;
 - the target environment.
@@ -1054,6 +1065,7 @@ are meant to be unique (`$guid`, `$randomEmail`, `$randomUserName`) differ for e
 not on the list is flagged by the plan check. Values extracted by every-iteration steps are cleared at the start of each iteration.
 
 **The plan check** lists what must be fixed before a script can be generated:
+
 - a value used before any step extracts it (move the step; moving is never refused);
 - a Once before load step that uses a load step's value;
 - a host taken from a variable other than `{{baseUrl}}`;
@@ -1097,6 +1109,7 @@ both runs. A chain that only has **Once before load** steps is marked, because t
 and the Debug run does not. It runs every chain **once**, in order, and shows here each
 request that was sent and each response that came back, so you can see what the target really
 returned.
+
 - **It sends real requests**, including writes, to the target environment, from the machine running
   ApiPilot. The card names the environment, its tier and base URL, the chains,
   the hosts and every write step, and nothing is sent until you press **Start debug run**. **Cancel
@@ -1342,16 +1355,16 @@ Two kinds of coverage are always shown apart, and generating a test never counts
 Every figure shows its count and percentage (a zero denominator shows "not available", never a number). Hover a metric's label
 for exactly what is counted. There is no overall score, because averaging unrelated percentages would mean nothing.
 
-**Two levels.** *Operation-level counts* answer "how many operations": eligible operations, with generated scenarios, with
+**Two levels.** _Operation-level counts_ answer "how many operations": eligible operations, with generated scenarios, with
 passing verification (at least one scenario passed), with execution failures (at least one failed) and with no scenarios. An
 operation can be in both "passing verification" and "execution failures", and neither means the operation is complete: one
-generated scenario makes it count as having scenarios while most of its requirements may still be uncovered. *Requirements*
+generated scenario makes it count as having scenarios while most of its requirements may still be uncovered. _Requirements_
 (a parameter, a request property or constraint, a documented response code or schema) are what completeness is read from, and
 each has its own state.
 
-**States.** Each requirement is in exactly one state: *Not covered* (no scenario), *Generated, not executed*, *Executed,
-failed* (a failing test is never called untested), *Verified*, *Inconclusive* (it ran but nothing relevant was evaluated, no
-response arrived, or the request was edited before the run) or *Stale: re-run required* (evidence exists but the requirement's
+**States.** Each requirement is in exactly one state: _Not covered_ (no scenario), _Generated, not executed_, _Executed,
+failed_ (a failing test is never called untested), _Verified_, _Inconclusive_ (it ran but nothing relevant was evaluated, no
+response arrived, or the request was edited before the run) or _Stale: re-run required_ (evidence exists but the requirement's
 contract changed after the run; reserved, this version does not produce it, and it is never shown as not executed). A failure
 outranks a pass when one requirement has both, and the requirement shows how many of its scenarios passed, failed or have not
 run. Each state also shows a cause: assertion failed, no response, a check could not be evaluated, request edited, blocked by a
@@ -1362,7 +1375,7 @@ passed and whose schema check failed verifies the parameters and the success cod
 schema. A failing scenario never changes a requirement it did not exercise, and a passing one never hides another's failure.
 The happy path and exercised parameters are proved only by scenarios that send a valid request.
 
-**Categories.** *Coverage by scenario category* shows positive, negative and boundary coverage, each as specification
+**Categories.** _Coverage by scenario category_ shows positive, negative and boundary coverage, each as specification
 coverage and runtime-verified coverage over that category's own requirements (never scenarios, so duplicates cannot inflate
 it), with the state counts under a bar. Documented responses such as `default`, `5xx` and ranges are listed as unclassified:
 they stay in response-code coverage but are in no category. Security and authorization is shown as unavailable, not as zero.
@@ -1414,8 +1427,8 @@ approving, editing a scenario's test, running and exporting need the specificati
 ### What it can and cannot conclude
 
 - **Specification analysis never proves a vulnerability.** It reports what the specification says and does not say about
-  security, as observations: *informational*, *potential risk* (a question for you to answer), *requires additional
-  context* or *not measurable*. No text in the analysis calls anything "vulnerable", "exploitable" or proven. A property is
+  security, as observations: _informational_, _potential risk_ (a question for you to answer), _requires additional
+  context_ or _not measurable_. No text in the analysis calls anything "vulnerable", "exploitable" or proven. A property is
   treated as sensitive only for a stated reason (`format: password`, `writeOnly`, a name you configured); a name match alone is
   never stronger than "requires additional context".
 - **Only a run can produce a finding**, and only from requests it actually sent, judged against an explicit expectation. A
@@ -1434,19 +1447,19 @@ The categories follow the OWASP API Security Top 10 (2023) edition shown in the 
 ApiPilot's own judgement, independent of the taxonomy: where a category only relates to an OWASP entry, the table says
 "related".
 
-| Category | Support | Scenarios generated | Can be run |
-|---|---|---|---|
-| Authentication | Supported | Yes | Yes |
-| Authorization | Supported | Yes, only where a role requirement is stated and two roles are configured | Yes |
-| Broken object level authorization | Supported | Yes; incomplete until two identities and owned test data exist | Yes |
-| Object property authorization and mass assignment | Supported | Yes | Yes |
-| Input validation | Supported | Yes | Yes |
-| Resource consumption and rate limiting | Supported | Yes, where a rate limit is documented or configured | Yes |
-| Sensitive data exposure | Supported | Yes, for fields classified for a stated reason | Yes |
-| Security misconfiguration and error handling | Supported | Yes | Yes |
-| Sensitive business flows | Limited | No: an observation and a limitation until you define a policy | Not generated |
-| SSRF and unsafe API consumption | Limited | No: URL-typed parameters are listed as candidates only | No |
-| API inventory | Analysis only | No | No |
+| Category                                          | Support       | Scenarios generated                                                       | Can be run    |
+| ------------------------------------------------- | ------------- | ------------------------------------------------------------------------- | ------------- |
+| Authentication                                    | Supported     | Yes                                                                       | Yes           |
+| Authorization                                     | Supported     | Yes, only where a role requirement is stated and two roles are configured | Yes           |
+| Broken object level authorization                 | Supported     | Yes; incomplete until two identities and owned test data exist            | Yes           |
+| Object property authorization and mass assignment | Supported     | Yes                                                                       | Yes           |
+| Input validation                                  | Supported     | Yes                                                                       | Yes           |
+| Resource consumption and rate limiting            | Supported     | Yes, where a rate limit is documented or configured                       | Yes           |
+| Sensitive data exposure                           | Supported     | Yes, for fields classified for a stated reason                            | Yes           |
+| Security misconfiguration and error handling      | Supported     | Yes                                                                       | Yes           |
+| Sensitive business flows                          | Limited       | No: an observation and a limitation until you define a policy             | Not generated |
+| SSRF and unsafe API consumption                   | Limited       | No: URL-typed parameters are listed as candidates only                    | No            |
+| API inventory                                     | Analysis only | No                                                                        | No            |
 
 Scenarios are deterministic: the same specification and settings give the same scenarios, ids and order. ApiPilot does not
 invent a policy or a status code. Where the specification documents the status for a situation, the scenario cites it; otherwise
@@ -1467,7 +1480,7 @@ test, not a result. Approval belongs to one **version** of one scenario:
 - The history shows each version with its author, time, whether it was material and the approval each applies to.
 - A scenario is **stale** when its operation changed since it was generated, **orphaned** when its operation is gone. Neither
   can be approved or run, and nothing is silently re-pointed.
-- Approval does not depend on a profile. A scenario is *executable* when it is approved at its current version and every
+- Approval does not depend on a profile. A scenario is _executable_ when it is approved at its current version and every
   prerequisite is met by the profile you choose at run time. A scenario that needs something you have not provided shows
   exactly what is missing.
 
@@ -1484,11 +1497,11 @@ credentials are removed with the session. It holds the target (an environment's 
 and ports**, identities, owned test data, limits, the categories that may run, whether destructive scenarios may run, the
 cleanup strategy and the TLS policy.
 
-| Tier | Treated as | To start a run | Notes |
-|---|---|---|---|
-| `local` | A machine of your own | Confirm the preview and attest you are authorized | May name address ranges (for example `127.0.0.1/32`) and, only here, relax TLS verification |
-| `dev`, `qa`, `staging` | A shared target | Also type the exact target name and base URL | Never reaches a private or loopback address |
-| `production` | Refused | Not possible | Refused when you save a profile and when you use one |
+| Tier                   | Treated as            | To start a run                                    | Notes                                                                                       |
+| ---------------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `local`                | A machine of your own | Confirm the preview and attest you are authorized | May name address ranges (for example `127.0.0.1/32`) and, only here, relax TLS verification |
+| `dev`, `qa`, `staging` | A shared target       | Also type the exact target name and base URL      | Never reaches a private or loopback address                                                 |
+| `production`           | Refused               | Not possible                                      | Refused when you save a profile and when you use one                                        |
 
 Credentials are entered in **write-only** fields: the page then shows only "set" or "not set", and no route, log, report,
 export or finding ever returns a value. The environment's credentials and variable values are not used by Security Lab.
@@ -1516,7 +1529,7 @@ URL, host or port.
    profile or run may exceed; a value above a ceiling is refused, never clamped. The budget is counted before each
    request, so concurrency cannot overshoot it, and a request is never retried automatically.
 4. **Cancel** stops new requests and aborts those in flight. Results already recorded are kept, unstarted scenarios become
-   *not run*, and cleanup still runs. A run shares the session's one execution slot: while it runs, no other kind of run
+   _not run_, and cleanup still runs. A run shares the session's one execution slot: while it runs, no other kind of run
    (guided-workflow, imported collection, performance or k6) can start, and the reverse.
 5. **Cleanup.** With the strategy `delete-created-via-spec`, a resource a scenario created is deleted through the
    specification's documented `DELETE`, through the same checks. With `none`, a scenario that would create data is treated as
@@ -1524,7 +1537,7 @@ URL, host or port.
 
 ### Outcomes, evidence and findings
 
-Each scenario ends in one outcome: *passed*, *failed*, *inconclusive*, *blocked*, *errored* or *not run*. Only *failed*
+Each scenario ends in one outcome: _passed_, _failed_, _inconclusive_, _blocked_, _errored_ or _not run_. Only _failed_
 creates a finding. A block, a transport failure, a budget or cancellation stop, or a condition that cannot be decided is
 recorded as such and is **never** counted as passed.
 
@@ -1539,26 +1552,26 @@ A finding is one per scenario version. It states the expected behavior and its b
 each occurrence's observed summary, the suggested severity, the confidence and what it rests on, static remediation text, and
 links to the scenario version, run and specification element.
 
-- **Confidence** is assigned by rule, never by a model: *high* when a documented expectation is violated by one clear
-  response, *medium* for a named product rule, *low* when the violation is only visible across repeated requests or the
+- **Confidence** is assigned by rule, never by a model: _high_ when a documented expectation is violated by one clear
+  response, _medium_ for a named product rule, _low_ when the violation is only visible across repeated requests or the
   evidence was cut short near the deciding part.
 - **Severity** starts from a fixed suggestion by category and mutation and is never raised by a response. Omitting or
-  invalidating credentials, swapping identities and substituting another identity's resource id suggest *high* on a read and
-  *critical* on a write; a malformed or expired credential *medium* and *high*; adding a protected property *high*; a constraint
-  violation *low* and *medium*; an injection probe *medium* and *high*; a rate-limit probe *medium*; sensitive data in a
-  response *high*; an undocumented-method probe *low*. You can change the current severity with a note; the suggestion is
+  invalidating credentials, swapping identities and substituting another identity's resource id suggest _high_ on a read and
+  _critical_ on a write; a malformed or expired credential _medium_ and _high_; adding a protected property _high_; a constraint
+  violation _low_ and _medium_; an injection probe _medium_ and _high_; a rate-limit probe _medium_; sensitive data in a
+  response _high_; an undocumented-method probe _low_. You can change the current severity with a note; the suggestion is
   always shown.
-- **Status** is *open*, *accepted risk*, *false positive* or *resolved*, each change with a note, and any status can return to
-  open. A new failure of the same version adds an occurrence and keeps one finding. It reopens a *resolved* finding. It leaves
-  *accepted risk* and *false positive* alone but flags "unreviewed occurrence" until you acknowledge it. *Resolved* is
+- **Status** is _open_, _accepted risk_, _false positive_ or _resolved_, each change with a note, and any status can return to
+  open. A new failure of the same version adds an occurrence and keeps one finding. It reopens a _resolved_ finding. It leaves
+  _accepted risk_ and _false positive_ alone but flags "unreviewed occurrence" until you acknowledge it. _Resolved_ is
   "engineer asserted" until a later run of the same version passes, then "verified by rerun". A material edit makes a new
   version; if that fails, it is a separate finding that links to the earlier one. Counts are of findings; occurrences are
   shown beside them and never added to them.
 
 ### Overview and Reports
 
-The **Overview** keeps two groups apart and labels each with its evidence basis: *Potential risks (specification
-analysis)*, from the specification alone, and *Findings (from requests sent)*, from responses. Every count opens the list it
+The **Overview** keeps two groups apart and labels each with its evidence basis: _Potential risks (specification
+analysis)_, from the specification alone, and _Findings (from requests sent)_, from responses. Every count opens the list it
 counts, with the same total. It also shows the scope, the latest run, and high-priority operations nothing has tested, each with
 the reason.
 
@@ -1619,7 +1632,7 @@ that the API is secure. The AI-suggestion feature has no evaluation corpus yet, 
 ApiPilot has no login. Each browser is assigned its own private session automatically (a
 random cookie), so two people working from different browsers never see or affect each
 other's uploads, reviews, or runs. Reloading the page, or opening a second tab in the
-*same* browser, resumes the same in-progress workflow. If a session sits idle for more
+_same_ browser, resumes the same in-progress workflow. If a session sits idle for more
 than 60 minutes, its workflow is discarded and the next visit shows an explicit
 "session expired" notice rather than silently starting over. A backend restart also clears
 the in-progress guided run (it is held in memory only); the next visit shows a notice saying the
@@ -1739,50 +1752,50 @@ Variable and credential values are encrypted before being stored.
 
 ## 10. Troubleshooting
 
-| Symptom | Likely cause | What to do |
-|---|---|---|
-| "Something went wrong and this page could not be shown." | The page hit an unexpected error while displaying something | Choose **Reload page**. Saved collections, environments and run history are not affected. If it happens again, open **Technical details** (or choose **Copy details**) and report the message; it is also recorded in the backend log |
-| Upload rejected immediately | The file exceeds 10 MB, or its extension is not `.yaml`, `.yml`, `.json` or `.har` | Check the file size and extension |
-| "The JSON file was not recognized" | A JSON file with no OpenAPI, HAR, API definition or Postman marker | Check that it is one of the supported formats; an API definition must start with `"format": "apipilot.api-definition"` |
-| "matches more than one supported format" | A JSON file carries markers of two formats | Remove the extra markers so the file is only one of them |
-| "This file is a Postman collection" | A Postman collection was uploaded to the guided workflow | Open **Import & Run Collection** and import it there; nothing was imported |
-| "The API definition is not valid for version 1" | The definition breaks a rule | Fix each listed problem (the location is before the colon) and upload again; every problem is listed at once |
-| "No API operations could be derived from this capture" | Every entry was excluded or malformed | Read the counts by reason in the message: a capture of page loads, redirects or third-party traffic has no API calls; capture a session that exercises the API |
-| "The file exceeds the limit INPUT_HAR_MAX_ENTRIES" (or another `INPUT_` limit) | The capture is larger than the limit | Capture a narrower session, or raise the limit in the environment (see [Configuration](configuration.md)) |
-| "Invalid YAML" / "Unsupported version" error | File isn't valid YAML, or isn't OpenAPI 3.x | Validate the file locally; Swagger 2.0 must be converted to OpenAPI 3.x first |
-| An operation from a capture has no scenarios | Too little evidence: no successful response, or no usable request | Read the reason listed under the scenarios; capture more requests for it |
-| Analysis issues listed after upload | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs | Review the listed locations; generation still proceeds but treat affected operations' tests with caution |
-| "Enhance with AI" stays on "Preparing the local model" a long time | First run needs to download/load the model | Wait for first-run provisioning to finish (see the README's Install section and [Configuration](configuration.md#configuration)); subsequent runs are faster |
-| AI Enhancement ends "Partially completed" | Spec has more operations than fit the run's time budget | Use the per-batch **Retry batch N** buttons, or **Retry AI enhancement** if retryable |
-| **Continue** on API Review is disabled | No operation is checked | Check at least one operation, or use **Select all** |
-| "Finalize Review" is blocked | No scenarios have been accepted yet, or a decision is still being saved | Accept at least one scenario; wait a moment for pending decisions to finish |
-| Scenario Review controls are greyed out | The review is being finalized and dependency analysis is running | Wait for finalizing to finish; the workflow moves on to Workflow Review automatically |
-| Postman generation fails | Approved scenarios/workflows contain unresolved data ApiPilot cannot faithfully render | Read the listed validation problems and address them in Scenario/Workflow Review, then regenerate |
-| Confirmation appears after **Start run** in Import & Run | The collection is unverified (not generated by ApiPilot) and this is its first run | Read the notice, then confirm if intended; it is not asked again for that collection |
-| "Your previous session expired due to inactivity" | Session was idle over 60 minutes | Start a new upload; prior workflow state cannot be recovered |
-| "The backend was restarted, so any in-progress guided run was cleared" | Workflow generation state is in-memory only by design | Re-run the workflow from Upload; your uploaded collections and past run history are unaffected and still there |
-| "Import & Run Collection" tab refuses my collection/environment file | File isn't valid JSON, or the collection has no requests at all | Fix the file locally; ApiPilot never attempts to repair a malformed upload |
-| A request fails with an unresolved `{{variable}}` in what it sent | No value was supplied, and no earlier request's script captured one | Set the value in the **Variables** panel (the red dot shows which are missing), or check the script that should capture it |
-| Collection/variable editor won't let me make a change | A run of that collection is currently in progress | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does |
-| **Analyze failure** is disabled on every request | Another failure analysis is already running in your session | Wait for it to finish; the buttons re-enable automatically |
-| Failure analysis stays on "Waiting for the local AI" | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins |
-| Failure analysis shows "AI explanation unavailable" | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` ([Configuration](configuration.md#configuration)). An earlier explanation is kept |
-| Performance run trigger is disabled with "k6 was not found" | k6 is not installed on the backend machine, or not on `PATH` | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script |
-| "k6 is installed but not supported" | The installed k6 is older than 1.0.0 | Upgrade k6, then choose **Check again** |
-| **Generate script** stays disabled | **Plan check** on the Plan step lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the header says **Not saved** | Choose **Go to step** in Plan check to go to the problem, or fix the error shown under the plan's name |
-| Performance: uploading a different specification asks to replace the current one | A session holds one uploaded specification at a time | Confirm to replace it; plans created from it, runs and reports are kept |
-| Performance: **Change operations…** is disabled | The uploaded specification is not the one the plan was seeded from, or none is uploaded (the reason is shown beside the button) | Upload the specification the plan was seeded from, from the entry screen, then open the plan again |
-| Performance: **Draft in progress** on Home | A test with no plan yet was left | Choose Performance and **Resume**, or **Discard** it |
-| Performance report shows a step as "Missing data" | The chosen environment has no value for a name the step needs | Edit the environment's values; the plan check lists which are missing |
-| Performance report shows many authentication failures | A token expired with no stated lifetime, or token refreshes failed | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens |
-| Run k6 Script: "Imports a module from a URL" | The script imports from `https://…`, such as jslib.k6.io | Copy the helper you need into the script; remote code is never loaded |
-| Run k6 Script: "Reads a property by a key built at run time" | The script reads `obj[key]` with a string key | Use a `Map` (`map.get(key)`), a `const` lookup table, or a numeric index; see section 6 |
-| Run k6 Script: "Exports `handleSummary`" | k6 would write the summary to files | Remove `handleSummary`; ApiPilot's report covers the run |
-| Run k6 Script: the load profile option is disabled | The script has no default function, only named scenarios | It runs with its own load settings; add a default function to use a profile |
-| Run k6 Script: the run trigger says the script has not been confirmed | The content changed (a save or a replacement upload) since it was confirmed | Choose **Review and confirm**; any change needs a new confirmation |
-| Run k6 Script: a name cannot be mapped | It starts with `K6_`, is a name k6 needs to start, or has other characters | Read the value under another name in the script |
-| Run k6 Script: a run failed with k6's message | An error in the script's start-up code, or k6 refused its options | Read the message on the run's page, fix the script, confirm it again, and run |
-| Failure analysis says "Not enough evidence to name a likely cause" | No rule matched the recorded result, for example a 404 or a 500 with no recorded body | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply |
+| Symptom                                                                          | Likely cause                                                                                                                                                               | What to do                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Something went wrong and this page could not be shown."                         | The page hit an unexpected error while displaying something                                                                                                                | Choose **Reload page**. Saved collections, environments and run history are not affected. If it happens again, open **Technical details** (or choose **Copy details**) and report the message; it is also recorded in the backend log |
+| Upload rejected immediately                                                      | The file exceeds 10 MB, or its extension is not `.yaml`, `.yml`, `.json` or `.har`                                                                                         | Check the file size and extension                                                                                                                                                                                                     |
+| "The JSON file was not recognized"                                               | A JSON file with no OpenAPI, HAR, API definition or Postman marker                                                                                                         | Check that it is one of the supported formats; an API definition must start with `"format": "apipilot.api-definition"`                                                                                                                |
+| "matches more than one supported format"                                         | A JSON file carries markers of two formats                                                                                                                                 | Remove the extra markers so the file is only one of them                                                                                                                                                                              |
+| "This file is a Postman collection"                                              | A Postman collection was uploaded to the guided workflow                                                                                                                   | Open **Import & Run Collection** and import it there; nothing was imported                                                                                                                                                            |
+| "The API definition is not valid for version 1"                                  | The definition breaks a rule                                                                                                                                               | Fix each listed problem (the location is before the colon) and upload again; every problem is listed at once                                                                                                                          |
+| "No API operations could be derived from this capture"                           | Every entry was excluded or malformed                                                                                                                                      | Read the counts by reason in the message: a capture of page loads, redirects or third-party traffic has no API calls; capture a session that exercises the API                                                                        |
+| "The file exceeds the limit INPUT_HAR_MAX_ENTRIES" (or another `INPUT_` limit)   | The capture is larger than the limit                                                                                                                                       | Capture a narrower session, or raise the limit in the environment (see [Configuration](configuration.md))                                                                                                                             |
+| "Invalid YAML" / "Unsupported version" error                                     | File isn't valid YAML, or isn't OpenAPI 3.x                                                                                                                                | Validate the file locally; Swagger 2.0 must be converted to OpenAPI 3.x first                                                                                                                                                         |
+| An operation from a capture has no scenarios                                     | Too little evidence: no successful response, or no usable request                                                                                                          | Read the reason listed under the scenarios; capture more requests for it                                                                                                                                                              |
+| Analysis issues listed after upload                                              | Spec has unresolved/external `$ref`s, circular references, or unsupported constructs                                                                                       | Review the listed locations; generation still proceeds but treat affected operations' tests with caution                                                                                                                              |
+| "Enhance with AI" stays on "Preparing the local model" a long time               | First run needs to download/load the model                                                                                                                                 | Wait for first-run provisioning to finish (see the README's Install section and [Configuration](configuration.md#configuration)); subsequent runs are faster                                                                          |
+| AI Enhancement ends "Partially completed"                                        | Spec has more operations than fit the run's time budget                                                                                                                    | Use the per-batch **Retry batch N** buttons, or **Retry AI enhancement** if retryable                                                                                                                                                 |
+| **Continue** on API Review is disabled                                           | No operation is checked                                                                                                                                                    | Check at least one operation, or use **Select all**                                                                                                                                                                                   |
+| "Finalize Review" is blocked                                                     | No scenarios have been accepted yet, or a decision is still being saved                                                                                                    | Accept at least one scenario; wait a moment for pending decisions to finish                                                                                                                                                           |
+| Scenario Review controls are greyed out                                          | The review is being finalized and dependency analysis is running                                                                                                           | Wait for finalizing to finish; the workflow moves on to Workflow Review automatically                                                                                                                                                 |
+| Postman generation fails                                                         | Approved scenarios/workflows contain unresolved data ApiPilot cannot faithfully render                                                                                     | Read the listed validation problems and address them in Scenario/Workflow Review, then regenerate                                                                                                                                     |
+| Confirmation appears after **Start run** in Import & Run                         | The collection is unverified (not generated by ApiPilot) and this is its first run                                                                                         | Read the notice, then confirm if intended; it is not asked again for that collection                                                                                                                                                  |
+| "Your previous session expired due to inactivity"                                | Session was idle over 60 minutes                                                                                                                                           | Start a new upload; prior workflow state cannot be recovered                                                                                                                                                                          |
+| "The backend was restarted, so any in-progress guided run was cleared"           | Workflow generation state is in-memory only by design                                                                                                                      | Re-run the workflow from Upload; your uploaded collections and past run history are unaffected and still there                                                                                                                        |
+| "Import & Run Collection" tab refuses my collection/environment file             | File isn't valid JSON, or the collection has no requests at all                                                                                                            | Fix the file locally; ApiPilot never attempts to repair a malformed upload                                                                                                                                                            |
+| A request fails with an unresolved `{{variable}}` in what it sent                | No value was supplied, and no earlier request's script captured one                                                                                                        | Set the value in the **Variables** panel (the red dot shows which are missing), or check the script that should capture it                                                                                                            |
+| Collection/variable editor won't let me make a change                            | A run of that collection is currently in progress                                                                                                                          | Wait for the run to finish (or cancel it); the editor unlocks automatically once it does                                                                                                                                              |
+| **Analyze failure** is disabled on every request                                 | Another failure analysis is already running in your session                                                                                                                | Wait for it to finish; the buttons re-enable automatically                                                                                                                                                                            |
+| Failure analysis stays on "Waiting for the local AI"                             | The model is loading, or other AI work (such as AI enhancement) is ahead in the queue                                                                                      | Wait; the timer shows how long it has waited, and the time limit starts only once generation begins                                                                                                                                   |
+| Failure analysis shows "AI explanation unavailable"                              | The local model did not finish in time, was not ready, would take longer than the limit, or gave an answer ApiPilot could not use                                          | The cause and evidence are still valid; choose **Analyze again**, or ask your operator about the model and `AI_INFERENCE_TIMEOUT_MS` ([Configuration](configuration.md#configuration)). An earlier explanation is kept                |
+| Performance run trigger is disabled with "k6 was not found"                      | k6 is not installed on the backend machine, or not on `PATH`                                                                                                               | Install k6 1.0.0 or later yourself, or set `K6_BINARY_PATH`, then choose **Check again**. You can still download the script                                                                                                           |
+| "k6 is installed but not supported"                                              | The installed k6 is older than 1.0.0                                                                                                                                       | Upgrade k6, then choose **Check again**                                                                                                                                                                                               |
+| **Generate script** stays disabled                                               | **Plan check** on the Plan step lists a plan problem, such as a step with no expected status or a value used before any step extracts it, or the header says **Not saved** | Choose **Go to step** in Plan check to go to the problem, or fix the error shown under the plan's name                                                                                                                                |
+| Performance: uploading a different specification asks to replace the current one | A session holds one uploaded specification at a time                                                                                                                       | Confirm to replace it; plans created from it, runs and reports are kept                                                                                                                                                               |
+| Performance: **Change operations…** is disabled                                  | The uploaded specification is not the one the plan was seeded from, or none is uploaded (the reason is shown beside the button)                                            | Upload the specification the plan was seeded from, from the entry screen, then open the plan again                                                                                                                                    |
+| Performance: **Draft in progress** on Home                                       | A test with no plan yet was left                                                                                                                                           | Choose Performance and **Resume**, or **Discard** it                                                                                                                                                                                  |
+| Performance report shows a step as "Missing data"                                | The chosen environment has no value for a name the step needs                                                                                                              | Edit the environment's values; the plan check lists which are missing                                                                                                                                                                 |
+| Performance report shows many authentication failures                            | A token expired with no stated lifetime, or token refreshes failed                                                                                                         | Check the report's token refresh section; a provider that revokes older tokens or rate-limits token requests needs fewer virtual users or longer-lived tokens                                                                         |
+| Run k6 Script: "Imports a module from a URL"                                     | The script imports from `https://…`, such as jslib.k6.io                                                                                                                   | Copy the helper you need into the script; remote code is never loaded                                                                                                                                                                 |
+| Run k6 Script: "Reads a property by a key built at run time"                     | The script reads `obj[key]` with a string key                                                                                                                              | Use a `Map` (`map.get(key)`), a `const` lookup table, or a numeric index; see section 6                                                                                                                                               |
+| Run k6 Script: "Exports `handleSummary`"                                         | k6 would write the summary to files                                                                                                                                        | Remove `handleSummary`; ApiPilot's report covers the run                                                                                                                                                                              |
+| Run k6 Script: the load profile option is disabled                               | The script has no default function, only named scenarios                                                                                                                   | It runs with its own load settings; add a default function to use a profile                                                                                                                                                           |
+| Run k6 Script: the run trigger says the script has not been confirmed            | The content changed (a save or a replacement upload) since it was confirmed                                                                                                | Choose **Review and confirm**; any change needs a new confirmation                                                                                                                                                                    |
+| Run k6 Script: a name cannot be mapped                                           | It starts with `K6_`, is a name k6 needs to start, or has other characters                                                                                                 | Read the value under another name in the script                                                                                                                                                                                       |
+| Run k6 Script: a run failed with k6's message                                    | An error in the script's start-up code, or k6 refused its options                                                                                                          | Read the message on the run's page, fix the script, confirm it again, and run                                                                                                                                                         |
+| Failure analysis says "Not enough evidence to name a likely cause"               | No rule matched the recorded result, for example a 404 or a 500 with no recorded body                                                                                      | Check the evidence shown yourself; a Local-tier run records request and response excerpts, which let more rules apply                                                                                                                 |
 
 ## 11. Where to look next
 

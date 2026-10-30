@@ -1,40 +1,25 @@
 /**
- * Pure access-control logic for the token-protected dev server (specs/049-lan-dev-access-token).
- * Nothing here logs, stores or returns a presented credential; the token exists only in the memory
- * of the plugin instance that created it (FR-003, FR-008).
+ * Pure access-control logic for the per-device-token dev server (specs/060-per-device-dev-access,
+ * which supersedes the shared token of specs/049-lan-dev-access-token). Whether a token is valid
+ * for a client is decided by the `TokenCheck` the caller supplies; nothing here stores or logs a
+ * presented credential.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-
 export const ACCESS_COOKIE_NAME = "apipilot_dev_access";
-export const TOKEN_QUERY_PARAM = "token";
+/** Where a device asks for its own token. Only `POST` is special; everything else follows the normal rules. */
+export const ENROLL_PATH = "/__apipilot/access";
 /**
  * For clients that are not a browser (scripts, `curl`, CI): the token can be sent on every request
- * in this header instead of going through the cookie exchange. Node lowercases incoming header names.
+ * in this header instead of the cookie. Node lowercases incoming header names.
  */
 export const ACCESS_HEADER_NAME = "x-apipilot-token";
 
-/** One message for every refusal, so a response never reveals why the credential failed (FR-007, FR-012). */
+/** One message for every refusal, so a response never reveals why the credential failed (FR-007). */
 export const REFUSAL_MESSAGE =
-  "Access token required. Open the address printed in the terminal where the dev server was started.";
+  "Access denied. Browsers on a private network get a token automatically when they open a page; scripts request one with POST /__apipilot/access.";
 
-/** 32 random bytes as base64url: 43 characters, 256 bits, above the 128-bit floor in FR-003. */
-export function createAccessToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
-function digest(value: string): Buffer {
-  return createHash("sha256").update(value).digest();
-}
-
-/**
- * Compares a presented value with the real token without the time depending on how many leading
- * characters match (FR-010). Both sides are hashed first so they are the same length, which
- * `timingSafeEqual` requires and which hides the real token's length.
- */
-export function tokensMatch(presented: string, expected: string): boolean {
-  return timingSafeEqual(digest(presented), digest(expected));
-}
+/** Whether a presented token is valid for the client making the request. */
+export type TokenCheck = (token: string) => boolean;
 
 /** Not readable by page scripts (HttpOnly), not sent cross-site (SameSite=Strict), a session cookie. No `Secure`: the connection is plain HTTP. */
 export function buildAccessCookie(token: string): string {
@@ -54,27 +39,33 @@ export function readAccessCookie(cookieHeader: string | undefined): string | und
   return undefined;
 }
 
-/** True when a `Cookie` header carries the access cookie with the real token. */
-export function hasValidAccessCookie(cookieHeader: string | undefined, token: string): boolean {
+/** True when a `Cookie` header carries the access cookie with a valid token. */
+export function hasValidAccessCookie(
+  cookieHeader: string | undefined,
+  check: TokenCheck,
+): boolean {
   const presented = readAccessCookie(cookieHeader);
-  return presented !== undefined && tokensMatch(presented, token);
+  return presented !== undefined && check(presented);
 }
 
 type HeaderValue = string | string[] | undefined;
 
-/** True when the access header carries the real token. An array (repeated header) never matches. */
-export function hasValidAccessHeader(headerValue: HeaderValue, token: string): boolean {
-  return typeof headerValue === "string" && tokensMatch(headerValue.trim(), token);
+/** True when the access header carries a valid token. An array (repeated header) never matches. */
+export function hasValidAccessHeader(
+  headerValue: HeaderValue,
+  check: TokenCheck,
+): boolean {
+  return typeof headerValue === "string" && check(headerValue.trim());
 }
 
-/** True when either the cookie or the access header carries the real token. Used where no token parameter applies (WebSocket upgrades). */
+/** True when either the cookie or the access header carries a valid token. Used for WebSocket upgrades. */
 export function hasValidCredential(
   headers: { cookie?: string; [ACCESS_HEADER_NAME]?: HeaderValue },
-  token: string,
+  check: TokenCheck,
 ): boolean {
   return (
-    hasValidAccessCookie(headers.cookie, token) ||
-    hasValidAccessHeader(headers[ACCESS_HEADER_NAME], token)
+    hasValidAccessCookie(headers.cookie, check) ||
+    hasValidAccessHeader(headers[ACCESS_HEADER_NAME], check)
   );
 }
 
@@ -89,52 +80,56 @@ export interface AccessRequest {
   cookieHeader: string | undefined;
   /** The value of the `X-ApiPilot-Token` header, if any. */
   tokenHeader?: HeaderValue;
+  accept?: string;
+  secFetchDest?: string;
+  secFetchSite?: string;
 }
 
 export type AccessDecision =
   | { kind: "allow" }
-  | { kind: "exchange"; location: string; cookie: string }
+  | { kind: "enroll" }
+  | { kind: "enroll-browser" }
   | { kind: "refuse"; api: boolean };
 
+/** A top-level page load a user started (typed address, link, bookmark), not a script or a cross-site subresource. */
+function isBrowserNavigation(request: AccessRequest): boolean {
+  return (
+    (request.method ?? "").toUpperCase() === "GET" &&
+    (request.accept ?? "").includes("text/html") &&
+    (request.secFetchDest === undefined || request.secFetchDest === "document") &&
+    (request.secFetchSite === undefined || request.secFetchSite !== "cross-site")
+  );
+}
+
 /**
- * Decides what to do with one request.
- *
- * A `token` query parameter is honoured only on a non-API path with `GET` or `HEAD`: a match
- * becomes an `exchange` (redirect without the parameter, issuing the cookie), anything else is
- * refused even if a valid cookie is also present. On an API path the parameter means nothing to this
- * guard (the application's own requests may use such a name). Otherwise a valid cookie (a browser
- * that has exchanged the token) or a valid `X-ApiPilot-Token` header (a script) allows the request.
+ * Decides what to do with one request. A `POST` to the enrolment path (scripts asking for a token)
+ * is handled by the caller. A request with a valid cookie or `X-ApiPilot-Token` header is allowed.
+ * A browser page load without one gets a token issued automatically (`enroll-browser`). Anything
+ * else is refused. There is no query-parameter credential.
  */
-export function decideAccess(request: AccessRequest, token: string): AccessDecision {
-  const api = isApiRequest(request.url);
-  const refuse: AccessDecision = { kind: "refuse", api };
-
-  if (!api) {
-    let parsed: URL;
-    try {
-      // The base is only a parser anchor for an origin-form request target; nothing connects to it.
-      parsed = new URL(request.url ?? "/", "http://dev-server.invalid");
-    } catch {
-      return refuse;
-    }
-    if (parsed.searchParams.has(TOKEN_QUERY_PARAM)) {
-      const method = (request.method ?? "GET").toUpperCase();
-      const presented = parsed.searchParams.get(TOKEN_QUERY_PARAM) ?? "";
-      if ((method === "GET" || method === "HEAD") && tokensMatch(presented, token)) {
-        parsed.searchParams.delete(TOKEN_QUERY_PARAM);
-        return {
-          kind: "exchange",
-          location: `${parsed.pathname}${parsed.search}`,
-          cookie: buildAccessCookie(token),
-        };
-      }
-      return refuse;
-    }
+export function decideAccess(request: AccessRequest, check: TokenCheck): AccessDecision {
+  const path = (request.url ?? "").split("?")[0];
+  if ((request.method ?? "").toUpperCase() === "POST" && path === ENROLL_PATH) {
+    return { kind: "enroll" };
   }
+  if (hasValidAccessCookie(request.cookieHeader, check)) return { kind: "allow" };
+  if (hasValidAccessHeader(request.tokenHeader, check)) return { kind: "allow" };
+  if (isBrowserNavigation(request)) return { kind: "enroll-browser" };
+  return { kind: "refuse", api: isApiRequest(request.url) };
+}
 
-  if (hasValidAccessCookie(request.cookieHeader, token)) return { kind: "allow" };
-  if (hasValidAccessHeader(request.tokenHeader, token)) return { kind: "allow" };
-  return refuse;
+/** True when the request's `Origin`, if it has one, is the dev server's own origin. A cross-site page cannot enrol a visitor's browser. */
+export function isSameOrigin(
+  origin: string | undefined,
+  host: string | undefined,
+): boolean {
+  if (origin === undefined) return true;
+  if (host === undefined) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host.toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 /** The refusal body for the response form the decision selected. */

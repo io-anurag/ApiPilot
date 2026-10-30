@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-15
 
-**Status**: Draft
+**Status**: Draft. The shared per-launch token, the `?token=` exchange and the printed token (FR-003 to FR-005, FR-012, FR-016) are superseded by `specs/060-per-device-dev-access`. The listen-address rules (FR-001, FR-002, FR-011) and the backend rules (FR-009) still apply.
 
 **Input**: User description: "Optional per-launch access token that lets the dev server listen on a non-loopback address without exposing the unauthenticated backend API. Today the dev server listens on loopback only, because its API proxy reaches the backend over loopback and would let any machine on the network use the whole API, bypassing the backend's loopback bind. Add an opt-in setting for the address the dev server listens on (default unchanged). When it is not loopback, protection is mandatory: a random token is generated at every launch, shown once in the terminal as a ready-to-open address, remembered by the browser without being readable by page scripts, and required on every request; requests without it get no application content and no API data. The backend's own loopback bind and host check stay as they are. Plain HTTP on a network lets an observer on that network read the token, which must be stated, with a trusted network, TLS or an SSH/VPN tunnel recommended. Out of scope: user accounts, multi-user authentication, TLS termination, persisting tokens."
 
@@ -24,7 +24,7 @@ This feature does not add user accounts or any notion of "who" is using ApiPilot
 - Q: How does a script, `curl` or a CI job call the API through the dev server when it cannot do the browser's address-then-cookie exchange? → A: It sends the token on each request in an `X-ApiPilot-Token` header (FR-016, Story 1 scenario 6). The header is checked exactly like the cookie and is never forwarded to the backend. A `token` query parameter is honoured only to open a page in a browser; on an API path it has no meaning to the guard, because the application's own API requests may use that name.
 - Q: Should the token be optionally enabled on loopback too? → A: No. On loopback nothing changes (FR-001, Story 3). Protection is tied to the listen address, so there is no switch that can be set wrongly.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Open ApiPilot from another device with the printed address (Priority: P1)
 
@@ -109,7 +109,7 @@ When the engineer enables a network address, both the terminal and the documenta
 - **Direct requests to the backend.** The backend is not reachable from the network by this feature. A direct request to it with a network `Host` or `Origin` is rejected as it is today (FR-009).
 - **The production-style preview and the backend's own start command.** They are outside this feature and keep their present behaviour.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -137,7 +137,7 @@ When the engineer enables a network address, both the terminal and the documenta
 - **Access Header**: The `X-ApiPilot-Token` request header by which a script presents the token on every request, in place of a remembered authorisation.
 - **Remembered Authorisation**: What the browser holds after it has presented a valid token once. It is not readable by page scripts, is not sent on cross-site requests, and is valid only for the launch that issued it.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

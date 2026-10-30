@@ -8,39 +8,39 @@ Copy `.env.example` to `.env` to override defaults. The root `.env` is loaded by
 
 `.env.example` leaves the tuning variables (timeouts, batch sizes, run budgets, throughput estimates) empty or commented out, so the defaults in `backend/src/ai/modelConfig.ts` apply; set one only to override it. Relative paths in `AI_MODEL_CACHE_DIR` and `APIPILOT_DB_PATH` resolve from the backend's working directory, which is `backend/` under the npm scripts; the example's `models` and `db/apipilot.db` therefore land in the git-ignored `backend/models/` and `backend/db/`.
 
-| Variable                             | Purpose                                                                         | Default                                 |
-| ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------- |
-| `BACKEND_PORT`                       | Express listener port                                                           | `4000`                                  |
-| `BACKEND_HOST`                       | Interface the backend binds to; non-loopback values expose an unauthenticated server | `127.0.0.1`                        |
-| `FRONTEND_DEV_PORT`                  | Vite development server port                                                    | `5173`                                  |
-| `FRONTEND_DEV_HOST`                  | Address the Vite dev server listens on; any non-loopback value turns on the access token (see below) | `127.0.0.1`                |
-| `GIT_COMMIT`                         | Commit value returned by `/api/version`                                         | Detected from Git, otherwise `unknown`  |
-| `DEBUG_LOG_REAL_CLIENT_IP`           | Opt in to using the Vite proxy's forwarded client IP in diagnostics             | `false`                                 |
-| `AI_PROVIDER_MODE`                   | `local` or deterministic `mock`                                                 | `mock` in tests, `local` otherwise      |
-| `AI_MODEL_ID`                        | Hugging Face Transformers.js model identifier                                   | `onnx-community/Qwen3-1.7B-ONNX`        |
-| `AI_MODEL_CACHE_DIR`                 | Local model cache directory                                                     | `~/.apipilot/models`                    |
-| `AI_MODEL_DTYPE`                     | Optional ONNX precision/quantization                                            | Unset; fp32 is the measured CPU default |
-| `AI_INFERENCE_TIMEOUT_MS`            | Per-request local inference timeout, including one failure-analysis explanation | `120000`                                |
-| `AI_MODEL_CONTEXT_FLOOR_TOKENS`      | Conservative context estimate when a model reports none                         | `2048`                                  |
-| `AI_USE_ACCELERATOR`                 | Experimental hardware acceleration; verified after load, may be slower          | `false`                                 |
-| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT` | Operations per scenario-enhancement batch                                       | `1`                                     |
-| `AI_ENHANCEMENT_RUN_BUDGET_MS`       | Whole enhancement run wall-clock ceiling                                        | `300000` (5 minutes)                    |
-| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`  | Operations per AI dependency batch                                              | `3`                                     |
-| `AI_DEPENDENCY_RUN_BUDGET_MS`        | Whole AI dependency pass ceiling                                                | `120000`                                |
-| `AI_PREFILL_MS_PER_TOKEN`            | Optional viability estimate override                                            | Code default                            |
-| `AI_DECODE_MS_PER_TOKEN`             | Optional viability estimate override                                            | Code default                            |
-| `AI_VIABILITY_SAFETY_FACTOR`         | Optional viability margin override                                              | Code default                            |
-| `APIPILOT_DB_PATH`                   | SQLite database path                                                            | `~/.apipilot/apipilot.db`               |
-| `K6_BINARY_PATH`                     | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded                 | Unset: the first `k6` on `PATH`         |
-| `INPUT_HAR_MAX_ENTRIES`              | Most entries a HAR capture may hold before the upload is refused                | `5000`                                  |
-| `INPUT_MAX_BODY_BYTES`               | Largest request or response body analyzed from a capture; larger bodies are skipped and reported | `1048576` (1 MiB)         |
-| `INPUT_MAX_JSON_DEPTH`               | Deepest object or array nesting a JSON upload may have before it is refused     | `128`                                   |
-| `SECURITY_LAB_MAX_REQUESTS_CEILING`  | Most requests one Security Lab run may send, cleanup included (1 to 5000)       | `500`                                   |
-| `SECURITY_LAB_MAX_CONCURRENCY_CEILING` | Most Security Lab requests in flight at once (1 to 16)                        | `4`                                     |
-| `SECURITY_LAB_TIMEOUT_MS_CEILING`    | Longest per-request timeout in a Security Lab run, in ms (1000 to 120000)       | `30000`                                 |
-| `SECURITY_LAB_MAX_REPEAT_CEILING`    | Most repetitions of one request in a rate-limit scenario (2 to 50)              | `50`                                    |
-| `SECURITY_LAB_MAX_RETAINED_SCENARIOS` | Security Lab scenario rows kept per browser (100 to 1000000); generation is refused at the cap | `20000`                |
-| `SECURITY_LAB_MAX_RETAINED_RUNS`     | Security Lab run records kept per browser (1 to 100000); a new run is refused at the cap | `500`                          |
+| Variable                               | Purpose                                                                                                      | Default                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| `BACKEND_PORT`                         | Express listener port                                                                                        | `4000`                                  |
+| `BACKEND_HOST`                         | Interface the backend binds to; non-loopback values expose an unauthenticated server                         | `127.0.0.1`                             |
+| `FRONTEND_DEV_PORT`                    | Vite development server port                                                                                 | `5173`                                  |
+| `FRONTEND_DEV_HOST`                    | Address the Vite dev server listens on; any non-loopback value turns on per-device access tokens (see below) | `127.0.0.1`                             |
+| `GIT_COMMIT`                           | Commit value returned by `/api/version`                                                                      | Detected from Git, otherwise `unknown`  |
+| `DEBUG_LOG_REAL_CLIENT_IP`             | Opt in to using the Vite proxy's forwarded client IP in diagnostics                                          | `false`                                 |
+| `AI_PROVIDER_MODE`                     | `local` or deterministic `mock`                                                                              | `mock` in tests, `local` otherwise      |
+| `AI_MODEL_ID`                          | Hugging Face Transformers.js model identifier                                                                | `onnx-community/Qwen3-1.7B-ONNX`        |
+| `AI_MODEL_CACHE_DIR`                   | Local model cache directory                                                                                  | `~/.apipilot/models`                    |
+| `AI_MODEL_DTYPE`                       | Optional ONNX precision/quantization                                                                         | Unset; fp32 is the measured CPU default |
+| `AI_INFERENCE_TIMEOUT_MS`              | Per-request local inference timeout, including one failure-analysis explanation                              | `120000`                                |
+| `AI_MODEL_CONTEXT_FLOOR_TOKENS`        | Conservative context estimate when a model reports none                                                      | `2048`                                  |
+| `AI_USE_ACCELERATOR`                   | Experimental hardware acceleration; verified after load, may be slower                                       | `false`                                 |
+| `AI_ENHANCEMENT_OPERATIONS_PER_UNIT`   | Operations per scenario-enhancement batch                                                                    | `1`                                     |
+| `AI_ENHANCEMENT_RUN_BUDGET_MS`         | Whole enhancement run wall-clock ceiling                                                                     | `300000` (5 minutes)                    |
+| `AI_DEPENDENCY_OPERATIONS_PER_UNIT`    | Operations per AI dependency batch                                                                           | `3`                                     |
+| `AI_DEPENDENCY_RUN_BUDGET_MS`          | Whole AI dependency pass ceiling                                                                             | `120000`                                |
+| `AI_PREFILL_MS_PER_TOKEN`              | Optional viability estimate override                                                                         | Code default                            |
+| `AI_DECODE_MS_PER_TOKEN`               | Optional viability estimate override                                                                         | Code default                            |
+| `AI_VIABILITY_SAFETY_FACTOR`           | Optional viability margin override                                                                           | Code default                            |
+| `APIPILOT_DB_PATH`                     | SQLite database path                                                                                         | `~/.apipilot/apipilot.db`               |
+| `K6_BINARY_PATH`                       | Optional path to a k6 (≥ 1.0.0) you installed; never downloaded                                              | Unset: the first `k6` on `PATH`         |
+| `INPUT_HAR_MAX_ENTRIES`                | Most entries a HAR capture may hold before the upload is refused                                             | `5000`                                  |
+| `INPUT_MAX_BODY_BYTES`                 | Largest request or response body analyzed from a capture; larger bodies are skipped and reported             | `1048576` (1 MiB)                       |
+| `INPUT_MAX_JSON_DEPTH`                 | Deepest object or array nesting a JSON upload may have before it is refused                                  | `128`                                   |
+| `SECURITY_LAB_MAX_REQUESTS_CEILING`    | Most requests one Security Lab run may send, cleanup included (1 to 5000)                                    | `500`                                   |
+| `SECURITY_LAB_MAX_CONCURRENCY_CEILING` | Most Security Lab requests in flight at once (1 to 16)                                                       | `4`                                     |
+| `SECURITY_LAB_TIMEOUT_MS_CEILING`      | Longest per-request timeout in a Security Lab run, in ms (1000 to 120000)                                    | `30000`                                 |
+| `SECURITY_LAB_MAX_REPEAT_CEILING`      | Most repetitions of one request in a rate-limit scenario (2 to 50)                                           | `50`                                    |
+| `SECURITY_LAB_MAX_RETAINED_SCENARIOS`  | Security Lab scenario rows kept per browser (100 to 1000000); generation is refused at the cap               | `20000`                                 |
+| `SECURITY_LAB_MAX_RETAINED_RUNS`       | Security Lab run records kept per browser (1 to 100000); a new run is refused at the cap                     | `500`                                   |
 
 The six `SECURITY_LAB_*` variables are validated at startup: a value that is not an integer inside its range stops the backend with a message naming the variable. The first four are **ceilings**: no profile or run may ask for more, and a value above one is refused, never clamped. The run defaults inside them (100 requests, concurrency 1, a 10 second timeout) are fixed in code. The last two bound how far retained work can grow, because it is kept until you delete it. The loopback sample target for trying Security Lab, `npm run security:stub -w backend`, is configured by its own variables (`SECURITY_STUB_PORT`, `SECURITY_STUB_MODE=vulnerable`, `SECURITY_STUB_FAIL_DELETE=1`) and is not part of the application.
 
@@ -50,10 +50,10 @@ It was measured slower than CPU for the models ApiPilot ships (2026-10-17, one W
 
 After an accelerator loads, ApiPilot runs one small fixed check inference and keeps the accelerator only if the reply is usable. If the accelerator fails to load, or loads but fails the check (`unusable-reply`, `timeout` or `inference-error`), ApiPilot falls back to CPU and records why in `reason`; it never falls back to another provider. `GET /api/ai/status` reports the device in use (`inferenceDevice`), a descriptive `acceleratorLabel` (`DirectML` on Windows, the generic `Accelerator` elsewhere), `acceleratorAdapter` (always `null`: the runtime does not expose the adapter) and `acceleratorVerification`. Its `tokensPerSecond` is a coarse, cold, single end-to-end sample that includes prompt prefill, for noticing order-of-magnitude differences rather than benchmarking, and the status does not itself compare against CPU. Reference rates measured the same way on the same laptop's CPU:
 
-| Configuration                                    | Reported rate                       |
-| ------------------------------------------------ | ----------------------------------- |
-| Qwen2.5-0.5B, CPU                                | about 8.9 tokens/s (4 tokens, 0.45 s) |
-| Qwen3-1.7B, CPU                                  | about 2.9 tokens/s (4 tokens, 1.4 s)  |
+| Configuration                                    | Reported rate                                        |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| Qwen2.5-0.5B, CPU                                | about 8.9 tokens/s (4 tokens, 0.45 s)                |
+| Qwen3-1.7B, CPU                                  | about 2.9 tokens/s (4 tokens, 1.4 s)                 |
 | Qwen2.5-0.5B, DirectML, as the status reports it | median about 4.0 tokens/s (2.2 to 4.5 over 20 loads) |
 
 The default local model is roughly 1.7 GB on disk and measured at about 2.75 GB peak process RSS on the reference CPU profile; actual requirements depend on the selected model and dtype.
@@ -71,7 +71,7 @@ There is no login or account system. Each browser receives an unguessable UUID i
 - Session-owned environments and their execution run history.
 - Session-owned uploaded collections, their runs, and AI failure analyses (one encrypted analysis per failed result, replaced atomically when the result is analyzed again). Analyses stored by the earlier AI-decided version are removed at startup, with the count logged, because their cause was chosen by the AI.
 - AI readiness history and benchmark diagnostics, which are process-wide rather than session-owned.
-- Security Lab (AP-057) in two lifetimes. *Retained work* (scenarios with every version and approval, run results with their observed summaries, findings, and the sensitive field names you configured) is owner-scoped: it is keyed by a random id in the `apipilotOwner` cookie (`HttpOnly`, `SameSite=Lax`, 400 days; `Secure` over HTTPS), survives session expiry and a restart, and is removed only when you delete it in Reports or a retention cap is reached. Clearing cookies or using another browser or profile means this work can no longer be reached, although it stays in the database until deleted. *Session data* (target profiles, identities and test data, the write-only credentials you enter, and the redacted evidence behind results) is session-owned, encrypted where it is sensitive, and removed with the session. A run left in progress by a restart is recorded as cancelled.
+- Security Lab (AP-057) in two lifetimes. _Retained work_ (scenarios with every version and approval, run results with their observed summaries, findings, and the sensitive field names you configured) is owner-scoped: it is keyed by a random id in the `apipilotOwner` cookie (`HttpOnly`, `SameSite=Lax`, 400 days; `Secure` over HTTPS), survives session expiry and a restart, and is removed only when you delete it in Reports or a retention cap is reached. Clearing cookies or using another browser or profile means this work can no longer be reached, although it stays in the database until deleted. _Session data_ (target profiles, identities and test data, the write-only credentials you enter, and the redacted evidence behind results) is session-owned, encrypted where it is sensitive, and removed with the session. A run left in progress by a restart is recorded as cancelled.
 
 Environment variable and credential-like values are encrypted with AES-256-GCM. The key is stored in a sibling `${APIPILOT_DB_PATH}.key` file, so the database and key must be backed up together. Threat model: the file key protects against a copied database file only; the file's `0o600` mode has no effect on Windows, so anyone who can read the data directory can read both. Set `APIPILOT_KEY` (64 hex characters or base64 of 32 bytes) to supply the key from the environment instead; it takes precedence, no key file is created, and a malformed value fails startup. Changing the key makes previously stored values undecryptable. A corrupted or unreadable database fails startup explicitly. Runs left in progress during a backend restart are recorded as cancelled with a backend-restart reason.
 
@@ -86,27 +86,27 @@ ApiPilot is a single-user tool meant to run on your own machine. It has no authe
 
 ### Opening ApiPilot from another device
 
-The dev server forwards `/api` to the backend from your own machine, so letting it listen on a network address would give every device on that network the whole backend. That is why it listens on loopback only. `FRONTEND_DEV_HOST` lets you opt in to a network address, and when you do, an access token is mandatory. There is no setting that turns the token off, and none that turns it on for loopback.
+The dev server forwards `/api` to the backend from your own machine, so letting it listen on a network address would give every device on that network the whole backend. That is why it listens on loopback only. `FRONTEND_DEV_HOST` lets you opt in to a network address, and when you do, a per-device access token is mandatory. There is no setting that turns the token off, and none that turns it on for loopback.
 
-| `FRONTEND_DEV_HOST` | Result |
-| --- | --- |
-| Unset, `127.0.0.1`, `localhost` or `::1` | Unchanged: loopback only, no token. |
-| `0.0.0.0` or `::` | Listens on every interface; the token is required. |
-| A specific address or a host name | Listens on that address; the token is required. |
+| `FRONTEND_DEV_HOST`                            | Result                                                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Unset, `127.0.0.1`, `localhost` or `::1`       | Unchanged: loopback only, no token.                                                              |
+| `0.0.0.0` or `::`                              | Listens on every interface; a per-device token is required.                                      |
+| A specific address or a host name              | Listens on that address; a per-device token is required.                                         |
 | Anything that is not an address or a host name | The dev server refuses to start and names the setting. It does not fall back to another address. |
 
 When the token is required:
 
-- A new 256-bit random token is generated every time the dev server starts, including an automatic restart after `vite.config.ts` changes. It is held in memory only: it is never written to a file or to any log, and it cannot be set in `.env`.
-- The terminal prints it once, as a ready-to-open address per network address of the machine, for example `http://192.168.1.20:5173/?token=…`. The notice is written to the terminal only, not to `logs/frontend.log`.
-- Open that address once on the device you want to use. The dev server stores a session cookie (`HttpOnly`, `SameSite=Strict`) that page scripts cannot read, and redirects to the same address without the token, so it does not stay in the address bar. Reloads and new tabs on that device keep working.
-- Every request is checked: pages, assets, `/api` and the live-reload connection. A request without a valid credential gets `401` and nothing else, with the same body whatever the reason.
-- **Scripts and CI** cannot do the browser exchange. Send the token on each request in an `X-ApiPilot-Token` header, for example `curl -H "X-ApiPilot-Token: <token>" http://192.168.1.20:5173/api/health`. The header is checked like the cookie and is never forwarded to the backend. A `?token=` query parameter only opens a page; it has no effect on `/api` paths.
-- A restart invalidates every earlier token and cookie. Open the newly printed address.
+- There is no shared token and nothing to hand out or confirm. The terminal prints only the addresses to open. When a user opens one in a browser, the dev server issues a new 256-bit random token to that browser as a session cookie (`HttpOnly`, `SameSite=Strict`) that page scripts cannot read, and the page opens. Every later request from that browser, including `/api` calls from the application, uses that cookie. Opening an `/api/...` address directly in the browser works the same way. Only a page load the user started counts: subresources, cross-site loads and requests that do not ask for HTML are not issued a token.
+- A token is bound to the network address the device connected from, as seen by the dev server's socket (`X-Forwarded-For` is ignored). Copied to another device, or used from another address, it is refused exactly like no token.
+- Tokens are held in memory only, as digests. They are never written to a file or log, and a restart invalidates every one; the browser is simply issued a new one on its next page load. At most 10 tokens per address are kept (the oldest is replaced) and 1000 in total (further requests get `503` until a restart).
+- Only clients on loopback, private (`10/8`, `172.16/12`, `192.168/16`), link-local, shared (`100.64/10`) or IPv6 unique-local addresses can obtain a token. Everyone else gets `401` (or `403` from the script endpoint) and no token. The script endpoint also refuses cross-site requests.
+- Every request is checked: pages, assets, `/api` and the live-reload connection. A request without a valid token for its address gets `401` and nothing else, with the same body whatever the reason.
+- **Scripts and CI** request a token with `curl -X POST -H "Accept: application/json" http://192.168.1.20:5173/__apipilot/access`, which answers `{"token":"..."}`, then send it on each request in an `X-ApiPilot-Token` header, for example `curl -H "X-ApiPilot-Token: <token>" http://192.168.1.20:5173/api/health`. The token is bound to the script host's address. The header is never forwarded to the backend. A `?token=` query parameter has no effect.
 - The backend is not changed. It still listens on loopback and still applies its `Host` and `Origin` check to direct callers. A request that has passed the token check is presented to it as a same-machine request (the dev server rewrites the browser's network `Origin` to the backend's own loopback origin and removes the token).
 - To browse by a machine name instead of an IP address, add that name to `server.allowedHosts` in `frontend/vite.config.ts`; Vite blocks unknown host names.
 
-**Limits you must understand.** The connection is plain HTTP, so anyone who can read traffic on that network can read the token, and anyone who has the printed address can use ApiPilot until the next restart. There is no sign-out and no per-device identity. Use this only on a network you trust. For anything else, put TLS in front of the dev server, or skip this feature and use an SSH or VPN tunnel to the loopback address instead, for example `ssh -N -L 5173:127.0.0.1:5173 user@host`.
+**Limits you must understand.** There is no gatekeeper: anyone who can reach the dev server from a private network address can get a token and use ApiPilot until the next restart. The token stops a copied token, a device outside the private networks and a request with no token. It does not stop another person on your network. Clients behind one shared NAT or proxy present one address and so share the address binding (their browsers still hold separate tokens). The connection is plain HTTP, so anyone who can read traffic on that network can read a token and replay it from the same address. Use this only on a network you trust. For anything else, put TLS in front of the dev server, or skip this feature and use an SSH or VPN tunnel to the loopback address instead, for example `ssh -N -L 5173:127.0.0.1:5173 user@host`.
 
 Only the development server is covered. `vite preview` and the backend's own start command keep their loopback behaviour.
 

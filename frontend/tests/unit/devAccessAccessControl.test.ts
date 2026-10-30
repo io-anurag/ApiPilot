@@ -3,42 +3,29 @@ import { describe, expect, it } from "vitest";
 import {
   ACCESS_COOKIE_NAME,
   ACCESS_HEADER_NAME,
+  ENROLL_PATH,
   REFUSAL_MESSAGE,
   buildAccessCookie,
-  createAccessToken,
   decideAccess,
   hasValidAccessCookie,
   hasValidCredential,
   isApiRequest,
+  isSameOrigin,
   presentToBackend,
   readAccessCookie,
   refusalBody,
-  tokensMatch,
 } from "../../devAccess/accessControl";
 
-const TOKEN = createAccessToken();
+const TOKEN = "T".repeat(43);
 const cookie = `${ACCESS_COOKIE_NAME}=${TOKEN}`;
-
-describe("access token", () => {
-  it("is 43 base64url characters (256 bits) and differs every time", () => {
-    const tokens = new Set(Array.from({ length: 50 }, () => createAccessToken()));
-    expect(tokens.size).toBe(50);
-    for (const value of tokens) expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/);
-  });
-
-  it("matches only itself, including values of a different length", () => {
-    expect(tokensMatch(TOKEN, TOKEN)).toBe(true);
-    expect(tokensMatch(TOKEN.slice(0, -1), TOKEN)).toBe(false);
-    expect(tokensMatch(`${TOKEN}x`, TOKEN)).toBe(false);
-    expect(tokensMatch("", TOKEN)).toBe(false);
-    expect(tokensMatch(`${TOKEN.slice(0, -1)}${TOKEN.endsWith("A") ? "B" : "A"}`, TOKEN)).toBe(false);
-  });
-});
+const check = (presented: string) => presented === TOKEN;
 
 describe("access cookie", () => {
   it("is HttpOnly, SameSite=Strict, site-wide and a session cookie, without Secure", () => {
     const value = buildAccessCookie(TOKEN);
-    expect(value).toBe(`${ACCESS_COOKIE_NAME}=${TOKEN}; HttpOnly; SameSite=Strict; Path=/`);
+    expect(value).toBe(
+      `${ACCESS_COOKIE_NAME}=${TOKEN}; HttpOnly; SameSite=Strict; Path=/`,
+    );
     expect(value).not.toMatch(/Max-Age|Expires|Secure/i);
   });
 
@@ -47,9 +34,9 @@ describe("access cookie", () => {
     expect(readAccessCookie(undefined)).toBeUndefined();
     expect(readAccessCookie("")).toBeUndefined();
     expect(readAccessCookie("garbage; other=1")).toBeUndefined();
-    expect(hasValidAccessCookie(cookie, TOKEN)).toBe(true);
-    expect(hasValidAccessCookie(`${ACCESS_COOKIE_NAME}=wrong`, TOKEN)).toBe(false);
-    expect(hasValidAccessCookie(undefined, TOKEN)).toBe(false);
+    expect(hasValidAccessCookie(cookie, check)).toBe(true);
+    expect(hasValidAccessCookie(`${ACCESS_COOKIE_NAME}=wrong`, check)).toBe(false);
+    expect(hasValidAccessCookie(undefined, check)).toBe(false);
   });
 });
 
@@ -67,91 +54,104 @@ describe("isApiRequest", () => {
   });
 });
 
-describe("decideAccess (specs/049 FR-005 to FR-007)", () => {
-  const request = (url: string, options: { method?: string; cookieHeader?: string } = {}) =>
-    decideAccess({ method: options.method ?? "GET", url, cookieHeader: options.cookieHeader }, TOKEN);
+describe("decideAccess (specs/060 FR-006, FR-007)", () => {
+  const request = (
+    url: string,
+    options: { method?: string; cookieHeader?: string } = {},
+  ) =>
+    decideAccess(
+      { method: options.method ?? "GET", url, cookieHeader: options.cookieHeader },
+      check,
+    );
 
   it("allows a valid cookie on pages and on the API", () => {
     expect(request("/", { cookieHeader: cookie })).toEqual({ kind: "allow" });
-    expect(request("/api/x", { method: "POST", cookieHeader: cookie })).toEqual({ kind: "allow" });
-  });
-
-  it("exchanges a valid token on GET and HEAD, removing it from the address and issuing the cookie", () => {
-    for (const method of ["GET", "HEAD"]) {
-      expect(request(`/?token=${TOKEN}`, { method })).toEqual({
-        kind: "exchange",
-        location: "/",
-        cookie: buildAccessCookie(TOKEN),
-      });
-    }
-    expect(request(`/reports/1?a=2&token=${TOKEN}&b=3`)).toMatchObject({
-      kind: "exchange",
-      location: "/reports/1?a=2&b=3",
+    expect(request("/api/x", { method: "POST", cookieHeader: cookie })).toEqual({
+      kind: "allow",
     });
   });
 
-  it("never puts the token or another origin in the redirect target", () => {
-    const decision = request(`//evil.example/path?token=${TOKEN}`);
-    expect(decision.kind).toBe("exchange");
-    if (decision.kind === "exchange") {
-      expect(decision.location.startsWith("/")).toBe(true);
-      expect(decision.location).not.toContain("evil.example");
-      expect(decision.location).not.toContain(TOKEN);
-    }
-  });
-
-  it("refuses a missing, wrong, truncated or stale credential", () => {
+  it("refuses a missing, wrong or stale credential", () => {
     expect(request("/")).toEqual({ kind: "refuse", api: false });
-    expect(request("/?token=wrong")).toEqual({ kind: "refuse", api: false });
-    expect(request(`/?token=${TOKEN.slice(1)}`)).toEqual({ kind: "refuse", api: false });
-    expect(request("/", { cookieHeader: `${ACCESS_COOKIE_NAME}=${createAccessToken()}` })).toEqual({
+    expect(request("/", { cookieHeader: `${ACCESS_COOKIE_NAME}=wrong` })).toEqual({
       kind: "refuse",
       api: false,
     });
     expect(request("/api/x")).toEqual({ kind: "refuse", api: true });
   });
 
-  it("refuses a wrong token parameter even when a valid cookie is also sent", () => {
-    expect(request("/?token=wrong", { cookieHeader: cookie })).toEqual({ kind: "refuse", api: false });
+  it("gives a browser page load without a credential a token automatically, on a page or an API address", () => {
+    const html = "text/html,application/xhtml+xml,*/*;q=0.8";
+    const navigate = (
+      url: string,
+      extra: Partial<Parameters<typeof decideAccess>[0]> = {},
+    ) =>
+      decideAccess(
+        { method: "GET", url, cookieHeader: undefined, accept: html, ...extra },
+        check,
+      );
+    expect(navigate("/")).toEqual({ kind: "enroll-browser" });
+    expect(navigate("/api/health")).toEqual({ kind: "enroll-browser" });
+    expect(navigate("/", { secFetchDest: "document", secFetchSite: "none" })).toEqual({
+      kind: "enroll-browser",
+    });
   });
 
-  it("refuses a token parameter on a method that cannot exchange it", () => {
-    expect(request(`/?token=${TOKEN}`, { method: "POST" })).toEqual({ kind: "refuse", api: false });
-    expect(request(`/?token=${TOKEN}`, { method: "DELETE", cookieHeader: cookie })).toEqual({
+  it("does not enrol subresources, cross-site loads, other methods or non-browser clients", () => {
+    const html = "text/html";
+    const attempt = (extra: Partial<Parameters<typeof decideAccess>[0]>) =>
+      decideAccess(
+        { method: "GET", url: "/", cookieHeader: undefined, accept: html, ...extra },
+        check,
+      );
+    expect(attempt({ secFetchDest: "script" }).kind).toBe("refuse");
+    expect(attempt({ secFetchDest: "iframe" }).kind).toBe("refuse");
+    expect(attempt({ secFetchSite: "cross-site" }).kind).toBe("refuse");
+    expect(attempt({ method: "POST" }).kind).toBe("refuse");
+    expect(attempt({ accept: "*/*" }).kind).toBe("refuse");
+    expect(attempt({ accept: "application/json" }).kind).toBe("refuse");
+    expect(attempt({ accept: undefined }).kind).toBe("refuse");
+  });
+
+  it("has no query-parameter credential", () => {
+    expect(request(`/?token=${TOKEN}`)).toEqual({ kind: "refuse", api: false });
+    expect(request(`/api/x?token=${TOKEN}`)).toEqual({ kind: "refuse", api: true });
+  });
+
+  it("routes only a POST to the enrolment path to enrolment, whatever the credential", () => {
+    expect(request(ENROLL_PATH, { method: "POST" })).toEqual({ kind: "enroll" });
+    expect(
+      request(`${ENROLL_PATH}?x=1`, { method: "post", cookieHeader: cookie }),
+    ).toEqual({ kind: "enroll" });
+    expect(request(ENROLL_PATH, { method: "GET" })).toEqual({
+      kind: "refuse",
+      api: false,
+    });
+    expect(request(`${ENROLL_PATH}/more`, { method: "POST" })).toEqual({
       kind: "refuse",
       api: false,
     });
   });
-
-  it("ignores a token parameter on an API path: the cookie alone decides", () => {
-    expect(request(`/api/x?token=${TOKEN}`)).toEqual({ kind: "refuse", api: true });
-    expect(request("/api/x?token=anything", { cookieHeader: cookie })).toEqual({ kind: "allow" });
-  });
 });
 
 describe("the access header, for clients that are not a browser", () => {
-  const request = (url: string, tokenHeader: string | string[] | undefined, method = "GET") =>
-    decideAccess({ method, url, cookieHeader: undefined, tokenHeader }, TOKEN);
+  const request = (
+    url: string,
+    tokenHeader: string | string[] | undefined,
+    method = "GET",
+  ) => decideAccess({ method, url, cookieHeader: undefined, tokenHeader }, check);
 
-  it("allows a request that carries the token, on pages and on the API, with any method", () => {
+  it("allows a request that carries a valid token, on pages and on the API, with any method", () => {
     expect(request("/api/x", TOKEN, "POST")).toEqual({ kind: "allow" });
     expect(request("/api/x", `  ${TOKEN}  `, "DELETE")).toEqual({ kind: "allow" });
     expect(request("/", TOKEN)).toEqual({ kind: "allow" });
   });
 
-  it("refuses a wrong, truncated, empty or repeated header", () => {
+  it("refuses a wrong, empty or repeated header", () => {
     expect(request("/api/x", "wrong")).toEqual({ kind: "refuse", api: true });
-    expect(request("/api/x", TOKEN.slice(1))).toEqual({ kind: "refuse", api: true });
     expect(request("/api/x", "")).toEqual({ kind: "refuse", api: true });
     expect(request("/api/x", [TOKEN, TOKEN])).toEqual({ kind: "refuse", api: true });
     expect(request("/api/x", undefined)).toEqual({ kind: "refuse", api: true });
-  });
-
-  it("is not a way around the token-parameter rules on a page", () => {
-    // A wrong ?token= is refused even when the header is right, exactly as with a valid cookie.
-    expect(
-      decideAccess({ method: "GET", url: "/?token=wrong", cookieHeader: undefined, tokenHeader: TOKEN }, TOKEN),
-    ).toEqual({ kind: "refuse", api: false });
   });
 
   it("is removed before the request reaches the backend", () => {
@@ -164,18 +164,37 @@ describe("the access header, for clients that are not a browser", () => {
   });
 
   it("counts as a credential for a WebSocket upgrade alongside the cookie", () => {
-    expect(hasValidCredential({ [ACCESS_HEADER_NAME]: TOKEN }, TOKEN)).toBe(true);
-    expect(hasValidCredential({ cookie }, TOKEN)).toBe(true);
-    expect(hasValidCredential({ [ACCESS_HEADER_NAME]: "wrong", cookie: "x=1" }, TOKEN)).toBe(false);
-    expect(hasValidCredential({}, TOKEN)).toBe(false);
+    expect(hasValidCredential({ [ACCESS_HEADER_NAME]: TOKEN }, check)).toBe(true);
+    expect(hasValidCredential({ cookie }, check)).toBe(true);
+    expect(
+      hasValidCredential({ [ACCESS_HEADER_NAME]: "wrong", cookie: "x=1" }, check),
+    ).toBe(false);
+    expect(hasValidCredential({}, check)).toBe(false);
   });
 });
 
-describe("refusalBody (specs/049 FR-007)", () => {
-  it("is JSON for the API and plain text elsewhere, with one message", () => {
+describe("enrolment request checks (specs/060 FR-004, FR-005)", () => {
+  it("accepts a request with no Origin or with the dev server's own Origin", () => {
+    expect(isSameOrigin(undefined, "192.168.1.20:5173")).toBe(true);
+    expect(isSameOrigin("http://192.168.1.20:5173", "192.168.1.20:5173")).toBe(true);
+  });
+
+  it("rejects another origin, a malformed one and an opaque one", () => {
+    expect(isSameOrigin("http://evil.example", "192.168.1.20:5173")).toBe(false);
+    expect(isSameOrigin("http://192.168.1.20:9999", "192.168.1.20:5173")).toBe(false);
+    expect(isSameOrigin("null", "192.168.1.20:5173")).toBe(false);
+    expect(isSameOrigin("http://192.168.1.20:5173", undefined)).toBe(false);
+  });
+});
+
+describe("refusalBody (specs/060 FR-007)", () => {
+  it("is JSON for the API and plain text elsewhere", () => {
     const api = refusalBody(true);
     expect(api.contentType).toBe("application/json");
-    expect(JSON.parse(api.body)).toEqual({ error: "unauthorized", message: REFUSAL_MESSAGE });
+    expect(JSON.parse(api.body)).toEqual({
+      error: "unauthorized",
+      message: REFUSAL_MESSAGE,
+    });
     const page = refusalBody(false);
     expect(page.contentType).toBe("text/plain; charset=utf-8");
     expect(page.body).toBe(REFUSAL_MESSAGE);
@@ -183,20 +202,23 @@ describe("refusalBody (specs/049 FR-007)", () => {
 
   it("is identical for every refusal reason", () => {
     const bodies = [
-      decideAccess({ method: "GET", url: "/", cookieHeader: undefined }, TOKEN),
-      decideAccess({ method: "GET", url: "/?token=wrong", cookieHeader: undefined }, TOKEN),
-      decideAccess({ method: "GET", url: "/", cookieHeader: `${ACCESS_COOKIE_NAME}=stale` }, TOKEN),
-    ].map((decision) => (decision.kind === "refuse" ? refusalBody(decision.api).body : "not refused"));
+      decideAccess({ method: "GET", url: "/", cookieHeader: undefined }, check),
+      decideAccess(
+        { method: "GET", url: "/?token=wrong", cookieHeader: undefined },
+        check,
+      ),
+      decideAccess(
+        { method: "GET", url: "/", cookieHeader: `${ACCESS_COOKIE_NAME}=stale` },
+        check,
+      ),
+    ].map((decision) =>
+      decision.kind === "refuse" ? refusalBody(decision.api).body : "not refused",
+    );
     expect(new Set(bodies).size).toBe(1);
-  });
-
-  it("does not contain the token", () => {
-    expect(refusalBody(true).body).not.toContain(TOKEN);
-    expect(refusalBody(false).body).not.toContain(TOKEN);
   });
 });
 
-describe("presentToBackend (specs/049 FR-009)", () => {
+describe("presentToBackend (specs/049 FR-009, kept by specs/060 FR-010)", () => {
   const backend = "http://127.0.0.1:4000";
 
   it("rewrites a network Origin to the backend's loopback origin", () => {
@@ -235,7 +257,9 @@ describe("presentToBackend (specs/049 FR-009)", () => {
   });
 
   it("handles a cookie header split into several values", () => {
-    const headers: Record<string, string | string[] | undefined> = { cookie: ["a=1", cookie] };
+    const headers: Record<string, string | string[] | undefined> = {
+      cookie: ["a=1", cookie],
+    };
     presentToBackend(headers, backend);
     expect(headers.cookie).toBe("a=1");
   });

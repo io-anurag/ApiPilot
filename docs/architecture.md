@@ -58,27 +58,27 @@ model lifecycle, batching, request queueing, and diagnostics.
 
 ## Repository topology
 
-| Path                                  | Ownership and responsibility                                                                                                                   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/src/app.ts`                  | Express application composition, middleware, routes, and centralized error mapping.                                                            |
-| `backend/src/server.ts`               | Environment loading, configuration, process startup, and HTTP listening.                                                                       |
-| `backend/src/api/`                    | Thin HTTP adaptation: parse/validate request shape, invoke domain capability, map result.                                                      |
-| `backend/src/openapi/`                | YAML parsing, OpenAPI validation, internal reference resolution, normalization, analysis, and `ApiModel` construction. Independent of Express. |
-| `backend/src/testDesign/`             | Pure deterministic rules, values, assertions, deduplication, AI scenario validation/enhancement, and review-facing test transformations.       |
-| `backend/src/ai/`                     | `AIProvider` implementations, configuration, readiness, serial queue, model loading, batching utilities, local inference, and benchmarks.      |
-| `backend/src/dependencies/`           | Conservative relationship classification, evidence capture, dependency graph, and workflow assembly.                                           |
-| `backend/src/postman/`                | Collection/environment/document rendering and collection validation.                                                                           |
-| `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle — keyed per session by `backend/src/session/`.       |
-| `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation). |
-| `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).            |
+| Path                                  | Ownership and responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/src/app.ts`                  | Express application composition, middleware, routes, and centralized error mapping.                                                                                                                                                                                                                                                                                                                                                                              |
+| `backend/src/server.ts`               | Environment loading, configuration, process startup, and HTTP listening.                                                                                                                                                                                                                                                                                                                                                                                         |
+| `backend/src/api/`                    | Thin HTTP adaptation: parse/validate request shape, invoke domain capability, map result.                                                                                                                                                                                                                                                                                                                                                                        |
+| `backend/src/openapi/`                | YAML parsing, OpenAPI validation, internal reference resolution, normalization, analysis, and `ApiModel` construction. Independent of Express.                                                                                                                                                                                                                                                                                                                   |
+| `backend/src/testDesign/`             | Pure deterministic rules, values, assertions, deduplication, AI scenario validation/enhancement, and review-facing test transformations.                                                                                                                                                                                                                                                                                                                         |
+| `backend/src/ai/`                     | `AIProvider` implementations, configuration, readiness, serial queue, model loading, batching utilities, local inference, and benchmarks.                                                                                                                                                                                                                                                                                                                        |
+| `backend/src/dependencies/`           | Conservative relationship classification, evidence capture, dependency graph, and workflow assembly.                                                                                                                                                                                                                                                                                                                                                             |
+| `backend/src/postman/`                | Collection/environment/document rendering and collection validation.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `backend/src/testGenerationWorkflow/` | In-memory orchestration state machine, stage gating, invalidation, and workflow lifecycle — keyed per session by `backend/src/session/`.                                                                                                                                                                                                                                                                                                                         |
+| `backend/src/session/`                | Per-browser session identity: unguessable cookie issuance, `AsyncLocalStorage` request context, and idle-session eviction (specs/017-session-workflow-isolation).                                                                                                                                                                                                                                                                                                |
+| `backend/src/execution/`              | Environment/execution-run domain logic and stores; delegates durable reads/writes to `backend/src/persistence/` repositories (specs/018, specs/025).                                                                                                                                                                                                                                                                                                             |
 | `backend/src/externalCollections/`    | Standalone upload/store/execute path for an externally-authored Postman collection/environment pair, sibling to `execution/` rather than an extension of it (specs/026-external-collection-execution). Reuses `execution/newmanRunner.ts`'s dispatch unchanged; maps results through its own, narrower mapper rather than `execution/mapNewmanResult.ts`, since an uploaded collection's arbitrary named tests have no `TestScenario` to interpret them against. |
-| `backend/src/failureAnalysis/`        | On-demand AI analysis of one failed uploaded-collection result (specs/030-ai-failure-analysis): deterministic evidence extraction, redaction, specification-context matching against the current guided workflow, versioned prompt, response parsing/validation, and the per-session in-progress registry. Reaches the model only through `AIProvider` and never calls the target API. |
-| `backend/src/performance/`            | k6 performance testing (specs/031-k6-performance-testing): pure plan building and reorder validation (`plan/`), the only k6-aware code (`k6/`: script rendering, readiness probe, process runner, metrics stream), and pure aggregation, thresholds, findings and HTML report rendering (`report/`). Reuses the Postman request builders unchanged. |
-| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, failure analyses, performance runs, and AI readiness/benchmark diagnostics; at-rest encryption of credential values and analyses (specs/025-local-persistence-layer, specs/026-external-collection-execution, specs/030-ai-failure-analysis). |
-| `frontend/src/pages/`                 | Composition roots for the guided workflow and the collection import/editing/execution view.                                                    |
-| `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                |
-| `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                               |
-| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, Postman artifact, execution, uploaded-collection, failure-analysis, and performance-testing concepts. |
+| `backend/src/failureAnalysis/`        | On-demand AI analysis of one failed uploaded-collection result (specs/030-ai-failure-analysis): deterministic evidence extraction, redaction, specification-context matching against the current guided workflow, versioned prompt, response parsing/validation, and the per-session in-progress registry. Reaches the model only through `AIProvider` and never calls the target API.                                                                           |
+| `backend/src/performance/`            | k6 performance testing (specs/031-k6-performance-testing): pure plan building and reorder validation (`plan/`), the only k6-aware code (`k6/`: script rendering, readiness probe, process runner, metrics stream), and pure aggregation, thresholds, findings and HTML report rendering (`report/`). Reuses the Postman request builders unchanged.                                                                                                              |
+| `backend/src/persistence/`            | SQLite (`better-sqlite3`) connection, schema initialization, and repositories for environments, execution run history, uploaded collections/runs, failure analyses, performance runs, and AI readiness/benchmark diagnostics; at-rest encryption of credential values and analyses (specs/025-local-persistence-layer, specs/026-external-collection-execution, specs/030-ai-failure-analysis).                                                                  |
+| `frontend/src/pages/`                 | Composition roots for the guided workflow and the collection import/editing/execution view.                                                                                                                                                                                                                                                                                                                                                                      |
+| `frontend/src/components/`            | Reusable and stage-specific accessible presentation and interaction components.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `frontend/src/services/`              | HTTP clients and backend result adaptation. Components do not scatter API calls.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/shared-domain/src/`         | Canonical framework-neutral contracts: API, test model, AI provider, review, dependency, workflow, Postman artifact, execution, uploaded-collection, failure-analysis, and performance-testing concepts.                                                                                                                                                                                                                                                         |
 
 ## Domain pipeline
 
@@ -265,11 +265,11 @@ prompt for an OpenAPI model is unchanged, and so is `AI_SCENARIO_RESPONSE_VERSIO
 
 `generateTestModel` chooses the rules per operation from `provenance.origin`, still as pure functions of the model:
 
-| Origin | Rules |
-|---|---|
-| absent or `documented` | the existing rule list, unchanged |
-| `declared` | the existing rules over only what the definition stated (`schemaGroundedView`), plus `declaredExampleScenarios` |
-| `observed` | `observedExampleScenarios` only: positive scenarios for observed 2xx statuses, and missing-field and wrong-type negatives only where at least three observations support them |
+| Origin                 | Rules                                                                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| absent or `documented` | the existing rule list, unchanged                                                                                                                                             |
+| `declared`             | the existing rules over only what the definition stated (`schemaGroundedView`), plus `declaredExampleScenarios`                                                               |
+| `observed`             | `observedExampleScenarios` only: positive scenarios for observed 2xx statuses, and missing-field and wrong-type negatives only where at least three observations support them |
 
 An operation that yields no scenario is reported with the reason (`generationNotes`) instead of being dropped.
 
@@ -528,7 +528,7 @@ status code the operation documents. A candidate may omit an empty `pathParamete
 `queryParameters` or `headers` map; the parser reads an omitted map as empty. Everything is still
 validated against the full `ApiModel`, and AI scenarios still enter review as pending. An operation with no
 parameters and no request body is told to leave out its target, regenerating a scenario asks for a
-*replacement* rather than "one more", and a candidate that sends a body for an operation that takes none is
+_replacement_ rather than "one more", and a candidate that sends a body for an operation that takes none is
 rejected.
 
 Cancelling an AI enhancement run releases its request immediately: the batch in flight is abandoned
@@ -616,7 +616,7 @@ passed alongside its `auth`. Before this, the bare item ran with only the collec
 folder auth, folder scripts and collection scripts were silently skipped, contrary to specs/026
 FR-008. ApiPilot's own generated items pass no folder chain, so that path is unchanged.
 
-Result *interpretation* is not shared with the generated-collection path: `mapUploadedResult.ts`
+Result _interpretation_ is not shared with the generated-collection path: `mapUploadedResult.ts`
 reads `testOutcomes` directly off Newman's own `execution.assertions[]`, naming each test exactly
 as the collection's own `pm.test(...)` script named it, rather than forcing it through
 `mapNewmanResult.ts`'s `TestScenario`-typed `"status-code"`/`"schema-conformance"` vocabulary — an
@@ -782,6 +782,7 @@ originating scenario. AP-017's API-only runs are out of scope.
 Logs carry run id, result index, status, rule id, explanation status, error category, evidence
 count, and duration only. Prompts, model output, evidence, and summaries are never logged
 (constitution XX). Provenance is split:
+
 - the cause carries `RULE` provenance: the rule id and the rule-set version;
 - an available explanation carries `AI` provenance: provider, model and response version.
 
@@ -975,6 +976,7 @@ approved plan, with extra conditions this design meets.
   - a `{{name}}` reference in every `format: password` field.
 
   Refusals are `InvalidBodyEditError`, mapped to their 400 codes in `performanceHttp.ts`.
+
 - **References.** For an edited step, `buildStepRequest` skips a body consumer whose field the edit
   removed, because `applyWorkflowSubstitutions` would create the field again. Dropped consumers and
   unique fields become `plan.bodyEditNotices`. A name only the engineer's body refers to is listed
@@ -987,6 +989,7 @@ approved plan, with extra conditions this design meets.
 
   Warnings come back with the preview (`bodyEdit.mismatches`) and never block anything. The
   preview also lists the fields ApiPilot fills at run time (`bodyEdit.replacements`).
+
 - **Carry-over.** An edit is kept while its step exists with the same scenario, or while its
   operation is removed. Content-derived step ids give a restored operation its edit back.
   `rebuildPlan` records discarded edits in `discardedBodyEdits`, until the next plan edit.
@@ -1059,7 +1062,7 @@ POST /collection-performance {collectionId, orderedRequestIds}
   them for a collection plan. A handle may also have a `gate`, checked first by `POST /script` and
   `POST /runs` (collection: out of date, conversion not reviewed).
 - **Renderer inputs.** `renderScript(plan, context)` is `renderScriptFrom(plan,
-  scriptInputsFromContext(plan, context))`; a collection plan supplies its own `ScriptInputs`
+scriptInputsFromContext(plan, context))`; a collection plan supplies its own `ScriptInputs`
   (steps, token sources, unique and dynamic tokens), so both render through one function.
 - **One runtime, extended once.** The fixed runtime reads a `DYNAMIC` table (values from the
   virtual user, iteration, occurrence and the `APIPILOT_RUN_TAG` run setting, never randomness),
@@ -1161,7 +1164,7 @@ report/renderChainReport.ts     self-contained report; reuses renderHtmlReport's
   setup tab is three parts: `RunLaunchCard` (readiness headline, the load-run and Debug-run buttons,
   a facts strip and the write banner; the Debug run's state is `useChainDebugRun`, split from
   `ChainDebugPanel` so the button and the output can sit apart), a Configuration card of `SetupItem
-  variant="row"` rows (optional rows are `collapsible` and keep their content mounted while hidden),
+variant="row"` rows (optional rows are `collapsible` and keep their content mounted while hidden),
   in one full-width column. The launch card also lists the chains, hosts, data sets and every write
   operation, from the plan analysis.
   A plain "Script generated." confirmation is announced to screen readers only, because the script
@@ -1286,6 +1289,7 @@ upload / editor save
   It also lists absolute-URL hosts and `__ENV` names, including those read through a literal
   table, which is how a generated script's `VALUE_ENV` maps itself. The rule is the same for
   every script: AP-029's template was amended (FR-022a) to pass it rather than being exempted.
+
 - **Storage.** `user_scripts` holds the content and confirmed hosts encrypted.
   `user_script_runs` holds the snapshot, result and k6 message encrypted. The settings column
   (mapping names, load, thresholds) holds no values. Both tables are deleted with the session.
@@ -1466,14 +1470,14 @@ deterministic and AI-free; the optional AI suggestion goes through `AIProvider` 
   optional security facts (`rootSecurity`, `rootSecurityDeclared`, `securitySource`, `deprecated`, `readOnly`, `writeOnly`,
   `bearerFormat`, `openIdConnectUrl`), and `GenerationLimitationKind` three `security-*-not-expressible` kinds. Existing outputs
   (test model, review projection, collection, specification revision) are byte-identical, which `existingOutputsUnchanged.test.ts` pins.
-- **Two lifetimes, two keys.** *Retained work* is owner-scoped: `security_scenarios`, `security_scenario_versions`, `security_runs`,
+- **Two lifetimes, two keys.** _Retained work_ is owner-scoped: `security_scenarios`, `security_scenario_versions`, `security_runs`,
   `security_run_results`, `security_findings` and `security_settings`, keyed by an `owner_id` held in the `apipilotOwner` cookie
   (`HttpOnly`, `SameSite=Lax`, 400 days, `Secure` over HTTPS) that `owner/ownerMiddleware.ts` issues only on `/api/security-lab`
   responses, so no other route sees or sets it. It survives session expiry and restart and is removed only by an explicit delete or a
-  retention cap. *Session data* is session-scoped and removed with the session through `onExpire`: `security_profiles`,
+  retention cap. _Session data_ is session-scoped and removed with the session through `onExpire`: `security_profiles`,
   `security_credentials` (write-only, encrypted, read only by the sender) and `security_evidence` (redacted, encrypted through the
   existing cipher). Both lifetimes live in the existing SQLite file through the `initializeSchema()` convention; no migration
-  framework was added. A run keeps a bounded *observed summary* with each result, never a body excerpt, so findings and reports
+  framework was added. A run keeps a bounded _observed summary_ with each result, never a body excerpt, so findings and reports
   outlive the evidence.
 - **Specification dependence.** Routes that must check against the model (`analysis`, `scope`, `generate`, `suggest`, edit, approve,
   `runs/preview`, `runs`, `export/postman`) answer `409 no_specification` without a loaded workflow. Everything else reads retained
@@ -1536,14 +1540,18 @@ deterministic and AI-free; the optional AI suggestion goes through `AIProvider` 
   session layer runs. The Vite dev server also binds to loopback by default. `FRONTEND_DEV_HOST`
   opts in to a network address, and any non-loopback value makes `frontend/devAccess/` (a Vite
   plugin, with the address policy derived from the setting so there is no way to turn protection
-  off) require a per-launch 256-bit token on every request and WebSocket upgrade the dev server
-  receives: a browser exchanges it once for an `HttpOnly`, `SameSite=Strict` session cookie, a script
-  sends it in `X-ApiPilot-Token`, and anything else gets a uniform `401`. The token is in memory only
-  and is printed once to the terminal (not through Vite's logger, which feeds `logs/frontend.log`).
-  The backend is untouched: an accepted `/api` request has its network `Origin` rewritten to the
-  backend's loopback origin and the token removed before the proxy forwards it, so the backend's
-  `localHostGuard` stays exactly as strict for direct callers. The connection is plain HTTP, so
-  the token can be read by anyone who can read traffic on that network (specs/049).
+  off) require a per-device 256-bit token on every request and WebSocket upgrade the dev server
+  receives. A browser page load without a token is issued its own automatically (self-service, limited to
+  loopback, private, link-local, shared-address-space and unique-local client addresses, and to
+  user-initiated, non-cross-site navigations), and a script requests one with
+  `POST /__apipilot/access` (`Accept: application/json`). The browser receives it as an `HttpOnly`,
+  `SameSite=Strict` session cookie; a script sends it in
+  `X-ApiPilot-Token`. The token is bound to the socket address it was issued to (never a forwarding
+  header), is kept in memory as a digest, and ends at restart; anything else gets a uniform `401`.
+  Nothing is printed or logged. The backend is untouched: an accepted `/api` request has its network
+  `Origin` rewritten to the backend's loopback origin and the token removed before the proxy forwards
+  it, so the backend's `localHostGuard` stays exactly as strict for direct callers. Enrolment has no
+  gatekeeper and the connection is plain HTTP (specs/060, superseding the shared token of specs/049).
 - ApiPilot does not call the target APIs described in a specification during analysis, generation,
   review, dependency detection, export, or AI failure analysis. Generating a collection is not
   authorization to execute it.
@@ -1566,6 +1574,7 @@ deterministic and AI-free; the optional AI suggestion goes through `AIProvider` 
 
   ApiPilot cannot restrict which hosts such a script contacts, and says so at confirmation and
   at the trigger.
+
 - AI failure analysis redacts captured request/response content before it reaches the prompt or
   storage and stores analyses encrypted. Target-controlled response text still reaches the model,
   so prompt injection is a known, bounded risk: the answer is limited to a closed cause set,

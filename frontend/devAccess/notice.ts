@@ -1,8 +1,7 @@
 /**
- * The one-time terminal notice for a protected dev server (specs/049-lan-dev-access-token FR-004,
- * FR-014; contracts/dev-server-access.md section 3). Pure: the interface table is an argument so
- * tests do not depend on the machine. The caller writes the result to the terminal directly, never
- * through Vite's logger, which also feeds `logs/frontend.log`.
+ * The one-time terminal notice for a protected dev server (specs/060-per-device-dev-access FR-011).
+ * Pure: the interface table is an argument so tests do not depend on the machine. It contains no
+ * secret, but the caller still writes it to the terminal directly rather than through Vite's logger.
  */
 
 import type { NetworkInterfaceInfo } from "node:os";
@@ -40,30 +39,32 @@ function authority(address: string, port: number): string {
 export interface NoticeInput {
   addresses: readonly string[];
   port: number;
-  token: string;
 }
 
-/** The notice text. Contains the token, so it must go to the terminal and nowhere else. */
-export function buildNotice({ addresses, port, token }: NoticeInput): string {
+/** The notice text. Contains no secret: every user obtains a token for their own device. */
+export function buildNotice({ addresses, port }: NoticeInput): string {
   const lines = [
-    "ApiPilot dev server is listening on a network address and is protected by an access token.",
+    "ApiPilot dev server is listening on a network address; each device needs its own access token.",
   ];
   if (addresses.length === 0) {
-    lines.push("No network address was found on this machine, so there is no address to open from another device.");
+    lines.push(
+      "No network address was found on this machine, so there is no address to open from another device.",
+    );
   } else {
     lines.push(
-      "Open one of these addresses on the device you want to use. Keep them secret; they stop working when the server restarts:",
+      "Users just open one of these addresses; their browser is given its own token automatically:",
       "",
-      ...addresses.map((address) => `  http://${authority(address, port)}/?token=${token}`),
+      ...addresses.map((address) => `  http://${authority(address, port)}/`),
       "",
-      "Scripts and other non-browser clients: send the token on every request in an X-ApiPilot-Token header, for example:",
-      `  curl -H "X-ApiPilot-Token: ${token}" http://${authority(addresses[0], port)}/api/health`,
+      "Scripts and other non-browser clients request a token, then send it on every request in an X-ApiPilot-Token header:",
+      `  curl -X POST -H "Accept: application/json" http://${authority(addresses[0], port)}/__apipilot/access`,
     );
   }
   lines.push(
     "",
-    "The connection is plain HTTP: anyone who can read traffic on this network can read the token.",
-    "Use a trusted network, put TLS in front, or use an SSH or VPN tunnel. See docs/configuration.md.",
+    "A token works only from the network address it was issued to, and stops working when the server restarts.",
+    "Only private-network addresses can request one. Anyone on that network can, so use a trusted network.",
+    "The connection is plain HTTP: put TLS in front, or use an SSH or VPN tunnel, for anything less. See docs/configuration.md.",
     "",
   );
   return lines.join("\n");
