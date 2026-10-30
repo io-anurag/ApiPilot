@@ -24,11 +24,11 @@ import {
   isSameOrigin,
   presentToBackend,
   refusalBody,
-} from "./accessControl.ts";
-import { AccessStore } from "./accessStore.ts";
-import { isIntranetAddress, normalizeClientAddress } from "./clientAddress.ts";
-import type { ListenAddress } from "./listenAddress.ts";
-import { buildNotice, listNoticeAddresses, type InterfaceTable } from "./notice.ts";
+} from "./accessControl";
+import { AccessStore } from "./accessStore";
+import { isIntranetAddress, normalizeClientAddress } from "./clientAddress";
+import type { ListenAddress } from "./listenAddress";
+import { buildNotice, listNoticeAddresses, type InterfaceTable } from "./notice";
 
 export const DEV_ACCESS_PLUGIN_NAME = "apipilot-dev-access";
 
